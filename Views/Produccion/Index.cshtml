@@ -3719,6 +3719,86 @@
                                 return query ? `${baseUrl}?${query}` : baseUrl;
                             }
 
+                            // ============================================================
+                            // FILTROS DEL PANEL DE EJECUCIONES CARGADO POR AJAX
+                            // El parcial se inserta con innerHTML, por lo que sus <script>
+                            // internos no se ejecutan automaticamente. Esta funcion vive
+                            // en Index y controla los botones de estado mediante delegacion.
+                            // ============================================================
+                            function aplicarFiltroEjecuciones(panelEjecuciones, filtro) {
+                                if (!panelEjecuciones) return;
+
+                                const tabs = Array.from(
+                                    panelEjecuciones.querySelectorAll('[data-filtro-operativo]')
+                                );
+
+                                const rows = Array.from(
+                                    panelEjecuciones.querySelectorAll('.js-ejec-row')
+                                );
+
+                                const machines = Array.from(
+                                    panelEjecuciones.querySelectorAll('.js-ejec-machine')
+                                );
+
+                                const visibleNumber =
+                                    panelEjecuciones.querySelector('.js-ejec-visible-number');
+
+                                const emptyFilter =
+                                    panelEjecuciones.querySelector('.js-ejec-empty-filter');
+
+                                let totalVisible = 0;
+
+                                rows.forEach(row => {
+                                    const categoria =
+                                        row.getAttribute('data-categoria-operativa') || '';
+
+                                    const esOperativa =
+                                        row.getAttribute('data-es-operativa') === '1';
+
+                                    const mostrar = filtro === 'TODAS'
+                                        ? esOperativa
+                                        : categoria === filtro;
+
+                                    row.style.display = mostrar ? '' : 'none';
+
+                                    if (mostrar) totalVisible++;
+                                });
+
+                                machines.forEach(machine => {
+                                    const machineRows = Array.from(
+                                        machine.querySelectorAll('.js-ejec-row')
+                                    );
+
+                                    const visiblesMaquina = machineRows.filter(row =>
+                                        row.style.display !== 'none'
+                                    ).length;
+
+                                    machine.style.display = visiblesMaquina > 0 ? '' : 'none';
+
+                                    const contador =
+                                        machine.querySelector('.js-machine-visible-count');
+
+                                    if (contador) {
+                                        contador.textContent = visiblesMaquina.toString();
+                                    }
+                                });
+
+                                tabs.forEach(tab => {
+                                    tab.classList.toggle(
+                                        'is-active',
+                                        (tab.getAttribute('data-filtro-operativo') || '') === filtro
+                                    );
+                                });
+
+                                if (visibleNumber) {
+                                    visibleNumber.textContent = totalVisible.toString();
+                                }
+
+                                if (emptyFilter) {
+                                    emptyFilter.style.display = totalVisible === 0 ? '' : 'none';
+                                }
+                            }
+
                             async function cargarPanel(panel, url = null, maquinaForzada = null) {
                                 if (!contenidoProduccion) return;
 
@@ -3758,6 +3838,16 @@
                                     }
 
                                     contenidoProduccion.innerHTML = await response.text();
+
+                                    // Inicializa el filtro despues de cargar el parcial por AJAX.
+                                    if (panel === 'ejecuciones') {
+                                        const panelEjecuciones =
+                                            contenidoProduccion.querySelector('#panelEjecucionesOperativo');
+
+                                        if (panelEjecuciones) {
+                                            aplicarFiltroEjecuciones(panelEjecuciones, 'TODAS');
+                                        }
+                                    }
                                 }
                                 catch (error) {
                                     if (error?.name === 'AbortError') return;
@@ -3788,6 +3878,25 @@
                             });
 
                             document.addEventListener('click', event => {
+                                // Los filtros viven dentro de un parcial cargado por AJAX.
+                                // Se manejan aqui mediante delegacion para que siempre funcionen.
+                                const tabEjecucion = event.target.closest('[data-filtro-operativo]');
+                                if (tabEjecucion && contenidoProduccion?.contains(tabEjecucion)) {
+                                    event.preventDefault();
+
+                                    const panelEjecuciones =
+                                        tabEjecucion.closest('#panelEjecucionesOperativo');
+
+                                    if (panelEjecuciones) {
+                                        const filtro =
+                                            tabEjecucion.getAttribute('data-filtro-operativo') || 'TODAS';
+
+                                        aplicarFiltroEjecuciones(panelEjecuciones, filtro);
+                                    }
+
+                                    return;
+                                }
+
                                 const reintentar = event.target.closest('#btnReintentarPanel');
                                 if (reintentar) {
                                     cargarPanel(panelActivo);

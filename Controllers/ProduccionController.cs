@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using static ERP.NSQuell.Models.ProduccionEjecucionVm;
 
 
@@ -103,8 +105,11 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
         {
-            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            if (id <= 0) return NotFound();
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
+            if (id <= 0)
+                return NotFound();
 
             var usuarioId = ObtenerUsuarioID();
 
@@ -112,9 +117,14 @@ namespace ERP.NSQuell.Controllers
             await cn.OpenAsync();
 
             var ejecucion = await ObtenerEjecucionAsync(id, cn);
-            if (ejecucion == null) return NotFound();
 
-            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
+            if (ejecucion == null)
+                return NotFound();
+
+            var permisos =
+                await ObtenerPermisosProduccionUsuarioAsync(
+                    usuarioId,
+                    cn);
 
             ViewBag.UsuarioProduccionID = permisos.UsuarioID;
             ViewBag.PersonaProduccionID = permisos.PersonaID;
@@ -135,7 +145,8 @@ namespace ERP.NSQuell.Controllers
             ViewBag.PuedeCapturarHora = permisos.PuedeCapturarHora;
             ViewBag.PuedeGestionarSugerenciaCambioTurno = permisos.PuedeGestionarSugerenciaCambioTurno;
 
-            ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
+            ViewBag.OperadoresProduccion =
+                await CargarOperadoresProduccionAsync(cn);
 
             ProduccionMonitoreoTurnoAvisoVm? monitoreoTurnoActual = null;
 
@@ -144,42 +155,144 @@ namespace ERP.NSQuell.Controllers
                 ejecucion.EstatusID == ProduccionEstatus.EnProduccion ||
                 ejecucion.EstatusID == ProduccionEstatus.Pausado;
 
-            if (ejecucionActivaParaMonitoreo && ejecucion.SolicitudProduccionID.HasValue && ejecucion.SolicitudProduccionID.Value > 0)
+            if (ejecucionActivaParaMonitoreo &&
+                ejecucion.SolicitudProduccionID.HasValue &&
+                ejecucion.SolicitudProduccionID.Value > 0)
             {
-                await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+                await using var tx =
+                    (SqlTransaction)await cn.BeginTransactionAsync();
 
                 try
                 {
-                    var checklistPerifericosId = await ObtenerOCrearChecklistPerifericosTurnoAsync(ejecucion, DateTime.Now, usuarioId, cn, tx);
+                    var checklistPerifericosId =
+                        await ObtenerOCrearChecklistPerifericosTurnoAsync(
+                            ejecucion,
+                            DateTime.Now,
+                            usuarioId,
+                            cn,
+                            tx);
+
                     await tx.CommitAsync();
-                    monitoreoTurnoActual = await ObtenerAvisoMonitoreoTurnoAsync(checklistPerifericosId, cn);
+
+                    monitoreoTurnoActual =
+                        await ObtenerAvisoMonitoreoTurnoAsync(
+                            checklistPerifericosId,
+                            cn);
                 }
                 catch (Exception ex)
                 {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "No fue posible preparar el monitoreo de periféricos del turno actual: " + ex.Message;
+                    try
+                    {
+                        await tx.RollbackAsync();
+                    }
+                    catch
+                    {
+                    }
+
+                    TempData["Error"] =
+                        "No fue posible preparar el monitoreo de periféricos del turno actual: " +
+                        ex.Message;
                 }
             }
 
-            var calidadResumen = await ObtenerResumenCalidadAsync(id, cn);
+            var calidadResumen =
+                await ObtenerResumenCalidadAsync(
+                    id,
+                    cn);
 
             var vm = new ProduccionDetalleVm
             {
                 Ejecucion = ejecucion,
-                RegistrosHora = await ObtenerRegistrosHoraAsync(id, cn),
-                Paros = await ObtenerParosAsync(id, cn),
-                MotivosParo = await CargarMotivosParoAsync(cn),
-                ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn),
-                CalidadResumen = calidadResumen,
-                MonitoreoTurnoActual = monitoreoTurnoActual,
-                CambioTurnoTecnico = await ConstruirCambioTurnoTecnicoAsync(ejecucion, cn)
+
+                RegistrosHora =
+                    await ObtenerRegistrosHoraAsync(
+                        id,
+                        cn),
+
+                Paros =
+                    await ObtenerParosAsync(
+                        id,
+                        cn),
+
+                MotivosParo =
+                    await CargarMotivosParoAsync(
+                        cn),
+
+                ChecklistResumen =
+                    await ObtenerResumenChecklistArranqueAsync(
+                        id,
+                        cn),
+
+                CalidadResumen =
+                    calidadResumen,
+
+                MonitoreoTurnoActual =
+                    monitoreoTurnoActual,
+
+                CambioTurnoTecnico =
+                    await ConstruirCambioTurnoTecnicoAsync(
+                        ejecucion,
+                        cn)
             };
 
-            vm.RecepcionesOF = await ObtenerEntregasAlmacenOFAsync(ejecucion, cn, null);
+            // ============================================================
+            // CONFIGURACIÓN REAL DE PRODUCCIÓN
+            //
+            // Aquí cargamos:
+            // - cavidades definidas por el técnico
+            // - ciclo real
+            // - objetivo real calculado
+            // - contador base
+            // - configuración vigente
+            // - historial de configuraciones
+            // ============================================================
+            var contextoConfiguracion =
+                await ObtenerContextoConfiguracionCorridaAsync(
+                    id,
+                    cn);
+
+            if (contextoConfiguracion != null)
+            {
+                vm.ConfiguracionTiempoReal =
+                    await ConstruirConfiguracionTecnicoAsync(
+                        contextoConfiguracion,
+                        cn);
+
+                ViewBag.PuedeGestionarConfiguracionCorrida =
+                    PuedeModificarConfiguracionCorrida(
+                        permisos,
+                        contextoConfiguracion)
+                    &&
+                    EjecucionPermiteConfiguracionCorrida(
+                        contextoConfiguracion);
+            }
+            else
+            {
+                vm.ConfiguracionTiempoReal = null;
+
+                ViewBag.PuedeGestionarConfiguracionCorrida = false;
+            }
+
+            // Esta bandera nos servirá en la vista para avisar
+            // que falta la configuración del técnico.
+            ViewBag.FaltaConfiguracionCorrida =
+                ejecucionActivaParaMonitoreo &&
+                (
+                    vm.ConfiguracionTiempoReal == null ||
+                    !vm.ConfiguracionTiempoReal.TieneConfiguracionActual
+                );
+
+            vm.RecepcionesOF =
+                await ObtenerEntregasAlmacenOFAsync(
+                    ejecucion,
+                    cn,
+                    null);
 
             ViewBag.EsReinicioSerie =
                 ejecucion.EstatusID == ProduccionEstatus.EnPreparacion &&
-                await EsReinicioSeriePendienteAsync(id, cn);
+                await EsReinicioSeriePendienteAsync(
+                    id,
+                    cn);
 
             return View(vm);
         }
@@ -1914,7 +2027,10 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                     return RedirectToAction(
                         nameof(Detalle),
-                        new { id = ejecucionProduccionId });
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
                 }
 
                 if (ejecucion.EstatusID !=
@@ -1928,7 +2044,10 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                     return RedirectToAction(
                         nameof(Detalle),
-                        new { id = ejecucionProduccionId });
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
                 }
 
                 var tieneParoAbierto =
@@ -1947,9 +2066,94 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                     return RedirectToAction(
                         nameof(Detalle),
-                        new { id = ejecucionProduccionId });
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
                 }
 
+                // ============================================================
+                // CONFIGURACIÓN REAL OBLIGATORIA
+                //
+                // Antes de iniciar serie el técnico debe confirmar:
+                //
+                // - cavidades realmente utilizadas
+                // - ciclo real
+                // - contador base actual de la máquina
+                //
+                // El operador NO captura estos datos.
+                // ============================================================
+                var configuracionCorrida =
+                    await ObtenerConfiguracionActualAsync(
+                        ejecucionProduccionId,
+                        cn,
+                        tx);
+
+                if (configuracionCorrida == null)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "Antes de iniciar Producción en serie, el Técnico de Producción debe confirmar " +
+                        "las cavidades que realmente se utilizarán, el tiempo de ciclo real y el contador actual de la máquina.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
+                }
+
+                if (configuracionCorrida.CavidadesUsadas <= 0)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La configuración real de Producción no tiene un número válido de cavidades.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
+                }
+
+                if (configuracionCorrida.TiempoCicloSegundos <= 0)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La configuración real de Producción no tiene un tiempo de ciclo válido.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
+                }
+
+                if (!configuracionCorrida.ContadorInicioVigencia.HasValue)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La configuración real de Producción no tiene contador base. " +
+                        "El Técnico de Producción debe confirmar el contador actual de la máquina.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
+                }
+
+                // ============================================================
+                // CALIDAD
+                // ============================================================
                 var validacionCalidad =
                     await ValidarInicioSerieCalidadAsync(
                         ejecucionProduccionId,
@@ -1965,7 +2169,10 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                     return RedirectToAction(
                         nameof(Detalle),
-                        new { id = ejecucionProduccionId });
+                        new
+                        {
+                            id = ejecucionProduccionId
+                        });
                 }
 
                 var contextoReinicio =
@@ -1975,7 +2182,8 @@ ORDER BY e.EjecucionProduccionID DESC;";
                         tx);
 
                 var ahora =
-                    NormalizarFechaMinuto(DateTime.Now);
+                    NormalizarFechaMinuto(
+                        DateTime.Now);
 
                 var esReinicio =
                     contextoReinicio != null;
@@ -1986,7 +2194,7 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 {
                     /*
                      * El reinicio de Producción es la fuente de verdad.
-                     * No usamos únicamente FechaFinParo porque después del paro
+                     * No usamos únicamente FechaFinParo porque después
                      * puede existir espera de primeras piezas / Calidad.
                      */
                     programasRecorridos =
@@ -2030,20 +2238,34 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                 await tx.CommitAsync();
 
-                TempData["Success"] =
-                    esReinicio
-                        ? "Producción reiniciada correctamente. " +
-                          "Se recalculó la OF afectada y se recorrieron " +
-                          programasRecorridos +
-                          " programa(s) adicionales por cola de máquina y/o " +
-                          "ocupación de molde. Las capturas horarias continuarán " +
-                          "desde la hora real de reinicio."
-                        : "Producción en serie iniciada correctamente. " +
-                          "Ya puedes registrar piezas por hora.";
+                if (esReinicio)
+                {
+                    TempData["Success"] =
+                        "Producción reiniciada correctamente. " +
+                        "Se recalculó la OF afectada y se recorrieron " +
+                        programasRecorridos +
+                        " programa(s) adicionales por cola de máquina y/o ocupación de molde. " +
+                        $"Configuración vigente: {configuracionCorrida.CavidadesUsadas:N0} cavidad(es), " +
+                        $"{configuracionCorrida.TiempoCicloSegundos:0.####} s de ciclo, " +
+                        $"objetivo aproximado {configuracionCorrida.ObjetivoHoraOperativo:N0} pzas/h. " +
+                        "Las capturas continuarán desde el contador de máquina.";
+                }
+                else
+                {
+                    TempData["Success"] =
+                        "Producción en serie iniciada correctamente. " +
+                        $"Configuración confirmada: {configuracionCorrida.CavidadesUsadas:N0} cavidad(es), " +
+                        $"{configuracionCorrida.TiempoCicloSegundos:0.####} s de ciclo, " +
+                        $"objetivo aproximado {configuracionCorrida.ObjetivoHoraOperativo:N0} pzas/h. " +
+                        "El operador ya puede registrar el contador de máquina por hora.";
+                }
 
                 return RedirectToAction(
                     nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+                    new
+                    {
+                        id = ejecucionProduccionId
+                    });
             }
             catch (Exception ex)
             {
@@ -2061,10 +2283,12 @@ ORDER BY e.EjecucionProduccionID DESC;";
 
                 return RedirectToAction(
                     nameof(Detalle),
-                    new { id = ejecucionProduccionId });
+                    new
+                    {
+                        id = ejecucionProduccionId
+                    });
             }
         }
-
         private async Task<int> DesplazarYReacomodarCalendarioPorInterrupcionAsync(
     int programaProduccionId,
     int ejecucionProduccionId,
@@ -12172,6 +12396,7 @@ ORDER BY
             });
         }
 
+       
         private static async Task<bool>
             PersonaEsTecnicoProduccionActivoAsync(
                 int personaId,

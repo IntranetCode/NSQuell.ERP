@@ -72,175 +72,697 @@ namespace ERP.NSQuell.Controllers
             return View(programas);
         }
 
-
         [HttpGet]
         public async Task<IActionResult> Captura(int id)
         {
-            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            if (id <= 0) return NotFound();
-            await using var cn = new SqlConnection(ConnectionString);
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
+            if (id <= 0)
+                return NotFound();
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
-            var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
-            var vm = await ObtenerTabletVmAsync(id, cn);
-            if (vm == null) return NotFound();
-            vm.MotivosParo = await CargarMotivosParoAsync(cn);
-            vm.HorasCaptura = await ObtenerFilasCapturaHoraAsync(vm.EjecucionProduccionID, vm.ProgramaProduccionID, cn);
-            vm.HistorialCambiosTurno = await ObtenerHistorialCambiosTurnoAsync(vm.EjecucionProduccionID, cn);
-            vm.HistorialTurnos = ConstruirHistorialTurnos(vm.HorasCaptura, vm.HistorialCambiosTurno);
-            var primeraPendiente = vm.HorasCaptura.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).FirstOrDefault();
+
+            var usuarioId =
+                ObtenerUsuarioID();
+
+            if (!await UsuarioEsOperadorAsync(
+                    usuarioId,
+                    cn))
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            var personaId =
+                await ObtenerPersonaIDUsuarioAsync(
+                    usuarioId,
+                    cn);
+
+            if (!personaId.HasValue ||
+                personaId.Value <= 0)
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            var estaAsignado =
+                await PersonaAsignadaAEjecucionAsync(
+                    id,
+                    personaId.Value,
+                    cn);
+
+            if (!estaAsignado)
+            {
+                TempData["Error"] =
+                    "Esta ejecución no se encuentra asignada al operador conectado.";
+
+                return RedirectToAction(nameof(Index));
+            }
+
+            var vm =
+                await ObtenerTabletVmAsync(
+                    id,
+                    cn);
+
+            if (vm == null)
+                return NotFound();
+
+            // =========================================================
+            // CONFIGURACIÓN REAL DEFINIDA POR EL TÉCNICO
+            // =========================================================
+            vm.ConfiguracionActual =
+                await ObtenerConfiguracionActualOperadorAsync(
+                    id,
+                    cn);
+
+            // =========================================================
+            // ÚLTIMA LECTURA DEL CONTADOR
+            // =========================================================
+            vm.UltimoContadorMaquina =
+                await ObtenerUltimaLecturaContadorMaquinaAsync(
+                    id,
+                    cn);
+
+          
+            vm.BonusOperadorActual =
+                await ObtenerBonusOperadorActualAsync(
+                    personaId.Value,
+                    cn);
+
+            vm.MotivosParo =
+                await CargarMotivosParoAsync(
+                    cn);
+
+            vm.HorasCaptura =
+                await ObtenerFilasCapturaHoraAsync(
+                    vm.EjecucionProduccionID,
+                    vm.ProgramaProduccionID,
+                    cn);
+
+            vm.HistorialCambiosTurno =
+                await ObtenerHistorialCambiosTurnoAsync(
+                    vm.EjecucionProduccionID,
+                    cn);
+
+            vm.HistorialTurnos =
+                ConstruirHistorialTurnos(
+                    vm.HorasCaptura,
+                    vm.HistorialCambiosTurno);
+
+            var primeraPendiente =
+                vm.HorasCaptura
+                    .Where(x => !x.Capturada)
+                    .OrderBy(x => x.NumeroHora)
+                    .FirstOrDefault();
+
             if (primeraPendiente != null)
             {
-                vm.FechaProduccion = primeraPendiente.FechaProduccion;
-                vm.HoraInicioSugerida = primeraPendiente.HoraInicio;
-                vm.HoraFinSugerida = primeraPendiente.HoraFin;
+                vm.FechaProduccion =
+                    primeraPendiente.FechaProduccion;
+
+                vm.HoraInicioSugerida =
+                    primeraPendiente.HoraInicio;
+
+                vm.HoraFinSugerida =
+                    primeraPendiente.HoraFin;
             }
+
             return View(vm);
         }
 
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RegistrarHora(ProduccionRegistroHoraPostVm vm)
+        public async Task<IActionResult> RegistrarHora(
+     ProduccionRegistroHoraPostVm vm)
         {
-            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
             if (vm.EjecucionProduccionID <= 0)
             {
-                TempData["Error"] = "No se recibió la ejecución de producción.";
+                TempData["Error"] =
+                    "No se recibió la ejecución de producción.";
+
                 return RedirectToAction(nameof(Index));
             }
-            if (!TimeSpan.TryParse(vm.HoraInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(vm.HoraFin, out var horaFinEnviada))
+
+            if (!TimeSpan.TryParse(
+                    vm.HoraInicio,
+                    out var horaInicioEnviada) ||
+                !TimeSpan.TryParse(
+                    vm.HoraFin,
+                    out var horaFinEnviada))
             {
-                TempData["Error"] = "El rango de hora no es válido.";
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                TempData["Error"] =
+                    "El rango de hora no es válido.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
-            var horaInicio = new TimeSpan(horaInicioEnviada.Hours, horaInicioEnviada.Minutes, 0);
-            var horaFin = new TimeSpan(horaFinEnviada.Hours, horaFinEnviada.Minutes, 0);
-            var fechaInicioSolicitada = vm.FechaProduccion.Date.Add(horaInicio);
-            var fechaFinSolicitada = vm.FechaProduccion.Date.Add(horaFin);
-            if (fechaFinSolicitada <= fechaInicioSolicitada) fechaFinSolicitada = fechaFinSolicitada.AddDays(1);
+
+            var horaInicio =
+                new TimeSpan(
+                    horaInicioEnviada.Hours,
+                    horaInicioEnviada.Minutes,
+                    0);
+
+            var horaFin =
+                new TimeSpan(
+                    horaFinEnviada.Hours,
+                    horaFinEnviada.Minutes,
+                    0);
+
+            var fechaInicioSolicitada =
+                vm.FechaProduccion.Date
+                    .Add(horaInicio);
+
+            var fechaFinSolicitada =
+                vm.FechaProduccion.Date
+                    .Add(horaFin);
+
+            if (fechaFinSolicitada <=
+                fechaInicioSolicitada)
+            {
+                fechaFinSolicitada =
+                    fechaFinSolicitada.AddDays(1);
+            }
+
             if (DateTime.Now < fechaFinSolicitada)
             {
-                TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar este bloque a partir de {fechaFinSolicitada:HH:mm}.";
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                TempData["Error"] =
+                    $"La hora todavía no ha terminado. " +
+                    $"Podrás capturar este bloque a partir de " +
+                    $"{fechaFinSolicitada:HH:mm}.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
-            var duracionBloque = fechaFinSolicitada - fechaInicioSolicitada;
-            if (duracionBloque <= TimeSpan.Zero || duracionBloque > TimeSpan.FromMinutes(61))
+
+            if (fechaFinSolicitada <=
+                fechaInicioSolicitada)
             {
-                TempData["Error"] = "El rango de captura debe corresponder a un bloque de una hora.";
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                TempData["Error"] =
+                    "El periodo de captura no es válido.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
-            if (vm.CantidadOK < 0 || vm.CantidadSospechosa < 0 || vm.CantidadScrap < 0)
+
+            // =========================================================
+            // CONTADOR DE MÁQUINA
+            // =========================================================
+            if (!vm.ContadorMaquinaActual.HasValue)
             {
-                TempData["Error"] = "Las cantidades no pueden ser negativas.";
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                TempData["Error"] =
+                    "Captura el contador de la máquina correspondiente al cierre de esta hora.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
-            if (vm.CantidadOK == 0 && vm.CantidadSospechosa == 0 && vm.CantidadScrap == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+
+            if (vm.ContadorMaquinaActual.Value < 0)
             {
-                TempData["Error"] = "Captura al menos una cantidad o explica en observaciones por qué no hubo producción.";
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                TempData["Error"] =
+                    "El contador de la máquina no puede ser negativo.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
-            await using var cn = new SqlConnection(ConnectionString);
+
+            // =========================================================
+            // CLASIFICACIÓN DEL OPERADOR
+            // =========================================================
+            if (vm.CantidadOK < 0 ||
+                vm.CantidadSospechosa < 0 ||
+                vm.CantidadScrap < 0)
+            {
+                TempData["Error"] =
+                    "Las cantidades OK, sospechoso y scrap no pueden ser negativas.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
+            }
+
+            if (vm.CantidadOK == 0 &&
+                vm.CantidadSospechosa == 0 &&
+                vm.CantidadScrap == 0 &&
+                string.IsNullOrWhiteSpace(
+                    vm.Observaciones))
+            {
+                TempData["Error"] =
+                    "Si no hubo producción, indica el motivo en observaciones.";
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
+            }
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
-            var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            var usuarioId =
+                ObtenerUsuarioID();
+
+            if (!await UsuarioEsOperadorAsync(
+                    usuarioId,
+                    cn))
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            var personaId =
+                await ObtenerPersonaIDUsuarioAsync(
+                    usuarioId,
+                    cn);
+
+            if (!personaId.HasValue ||
+                personaId.Value <= 0)
+            {
+                return AccesoDenegadoOperador();
+            }
+
+            await using var tx =
+                (SqlTransaction)
+                await cn.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
             try
             {
-                var ejecucion = await ObtenerEjecucionOperadorAsync(vm.EjecucionProduccionID, cn, tx);
+                var ejecucion =
+                    await ObtenerEjecucionOperadorAsync(
+                        vm.EjecucionProduccionID,
+                        cn,
+                        tx);
+
                 if (ejecucion == null)
                 {
                     await tx.RollbackAsync();
                     return NotFound();
                 }
-                if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
+
+                var estaAsignado =
+                    await PersonaAsignadaAEjecucionAsync(
+                        vm.EjecucionProduccionID,
+                        personaId.Value,
+                        cn,
+                        tx);
+
+                if (!estaAsignado)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Solo puedes capturar piezas cuando la producción está en serie.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "La ejecución ya no se encuentra asignada al operador conectado.";
+
+                    return RedirectToAction(
+                        nameof(Index));
                 }
-                if (ejecucion.FechaLiberacionMaquina.HasValue)
+
+                if (ejecucion.EstatusID !=
+                    ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La máquina fue liberada por el técnico el {ejecucion.FechaLiberacionMaquina.Value:dd/MM/yyyy HH:mm}. Ya no se pueden registrar nuevas horas de producción.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "Solo puedes capturar producción cuando la corrida se encuentra en serie.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
-                if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx))
+
+                if (ejecucion
+                    .FechaLiberacionMaquina
+                    .HasValue)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "No puedes capturar piezas mientras exista un paro abierto.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        $"La máquina fue liberada por el técnico el " +
+                        $"{ejecucion.FechaLiberacionMaquina.Value:dd/MM/yyyy HH:mm}. " +
+                        "Ya no se pueden registrar nuevas horas.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
-                var filasPermitidas = await ObtenerFilasCapturaHoraAsync(ejecucion.EjecucionProduccionID, ejecucion.ProgramaProduccionID, cn, tx);
-                var filaSolicitada = filasPermitidas.FirstOrDefault(x => x.FechaProduccion.Date == vm.FechaProduccion.Date && x.HoraInicio.Hours == horaInicio.Hours && x.HoraInicio.Minutes == horaInicio.Minutes);
+
+                if (await TieneParoAbiertoAsync(
+                        vm.EjecucionProduccionID,
+                        cn,
+                        tx))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "No puedes capturar producción mientras exista un paro abierto.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
+                }
+
+                // =====================================================
+                // LA CONFIGURACIÓN REAL DEL TÉCNICO ES OBLIGATORIA
+                // =====================================================
+                var configuracionActual =
+                    await ObtenerConfiguracionActualOperadorAsync(
+                        vm.EjecucionProduccionID,
+                        cn,
+                        tx);
+
+                if (configuracionActual == null)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La corrida no tiene configuración técnica vigente. " +
+                        "El Técnico de Producción debe confirmar cavidades y ciclo.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
+                }
+
+                var filasPermitidas =
+                    await ObtenerFilasCapturaHoraAsync(
+                        ejecucion.EjecucionProduccionID,
+                        ejecucion.ProgramaProduccionID,
+                        cn,
+                        tx);
+
+                var filaSolicitada =
+                    filasPermitidas.FirstOrDefault(
+                        x =>
+                            x.FechaProduccion.Date ==
+                            vm.FechaProduccion.Date &&
+                            x.HoraInicio.Hours ==
+                            horaInicio.Hours &&
+                            x.HoraInicio.Minutes ==
+                            horaInicio.Minutes);
+
                 if (filaSolicitada == null)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La hora enviada no pertenece a los bloques generados para esta producción.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "La hora enviada no pertenece a los bloques generados para esta producción.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
+
                 if (filaSolicitada.Capturada)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Esta hora ya fue capturada.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "Esta hora ya fue capturada.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
+
                 if (!filaSolicitada.Disponible)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Debes capturar primero la hora pendiente anterior.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "Debes capturar primero la hora pendiente anterior.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
-                var fechaInicioFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraInicio);
-                var fechaFinFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraFin);
-                if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
-                var diferenciaInicioSegundos = Math.Abs((fechaInicioFila - fechaInicioSolicitada).TotalSeconds);
+
+                var fechaInicioFila =
+                    filaSolicitada.FechaProduccion.Date
+                        .Add(
+                            filaSolicitada.HoraInicio);
+
+                var fechaFinFila =
+                    filaSolicitada.FechaProduccion.Date
+                        .Add(
+                            filaSolicitada.HoraFin);
+
+                if (fechaFinFila <= fechaInicioFila)
+                {
+                    fechaFinFila =
+                        fechaFinFila.AddDays(1);
+                }
+
+                var diferenciaInicioSegundos =
+                    Math.Abs(
+                        (
+                            fechaInicioFila -
+                            fechaInicioSolicitada
+                        ).TotalSeconds);
+
                 if (diferenciaInicioSegundos >= 60)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La hora inicial enviada no coincide con el bloque horario de producción.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "La hora inicial enviada no coincide con el bloque de producción.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
-                var diferenciaFinSegundos = Math.Abs((fechaFinFila - fechaFinSolicitada).TotalSeconds);
+
+                var diferenciaFinSegundos =
+                    Math.Abs(
+                        (
+                            fechaFinFila -
+                            fechaFinSolicitada
+                        ).TotalSeconds);
+
                 if (diferenciaFinSegundos >= 60)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "El rango enviado no coincide con el bloque horario de producción.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "El rango enviado no coincide con el bloque de producción.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
+
                 if (DateTime.Now < fechaFinFila)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar este bloque a partir de {fechaFinFila:HH:mm}.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        $"La hora todavía no ha terminado. " +
+                        $"Podrás capturar a partir de " +
+                        $"{fechaFinFila:HH:mm}.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
-                var fechaProduccionReal = filaSolicitada.FechaProduccion.Date;
-                var horaInicioReal = new TimeSpan(filaSolicitada.HoraInicio.Hours, filaSolicitada.HoraInicio.Minutes, 0);
-                var horaFinReal = new TimeSpan(filaSolicitada.HoraFin.Hours, filaSolicitada.HoraFin.Minutes, 0);
-                if (await ExisteRegistroHoraAsync(vm.EjecucionProduccionID, fechaProduccionReal, horaInicioReal, cn, tx))
+
+                var fechaProduccionReal =
+                    filaSolicitada
+                        .FechaProduccion
+                        .Date;
+
+                var horaInicioReal =
+                    new TimeSpan(
+                        filaSolicitada.HoraInicio.Hours,
+                        filaSolicitada.HoraInicio.Minutes,
+                        0);
+
+                var horaFinReal =
+                    new TimeSpan(
+                        filaSolicitada.HoraFin.Hours,
+                        filaSolicitada.HoraFin.Minutes,
+                        0);
+
+                if (await ExisteRegistroHoraAsync(
+                        vm.EjecucionProduccionID,
+                        fechaProduccionReal,
+                        horaInicioReal,
+                        cn,
+                        tx))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La hora seleccionada ya fue capturada. Actualiza la pantalla para consultar el registro.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                    TempData["Error"] =
+                        "La hora seleccionada ya fue capturada. Actualiza la pantalla.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
                 }
-                vm.FechaProduccion = fechaProduccionReal;
-                vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
-                vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
-                var personaOperador = await ObtenerPersonaOperadorAsync(usuarioId, cn, tx);
-                var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaOperador.PersonaID, usuarioId, filaSolicitada.ObjetivoHora, filaSolicitada.ObjetivoBloque, cn, tx);
-                await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
-                await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
+
+                // =====================================================
+                // CÁLCULO POR CONTADOR + CAVIDADES REALES
+                // =====================================================
+                var calculo =
+                    await CalcularProduccionContadorHoraAsync(
+                        vm.EjecucionProduccionID,
+                        fechaInicioFila,
+                        fechaFinFila,
+                        vm.ContadorMaquinaActual.Value,
+                        cn,
+                        tx);
+
+                var totalClasificado =
+                    (long)vm.CantidadOK +
+                    vm.CantidadSospechosa +
+                    vm.CantidadScrap;
+
+                // =====================================================
+                // LA CLASIFICACIÓN DEBE CUADRAR CONTRA LA MÁQUINA
+                // =====================================================
+                if (totalClasificado !=
+                    calculo.PiezasCalculadas)
+                {
+                    await tx.RollbackAsync();
+
+                    var diferencia =
+                        calculo.PiezasCalculadas -
+                        totalClasificado;
+
+                    TempData["Error"] =
+                        $"El contador de máquina indica " +
+                        $"{calculo.PiezasCalculadas:N0} pieza(s) producidas, " +
+                        $"pero la clasificación capturada suma " +
+                        $"{totalClasificado:N0}. " +
+                        $"Diferencia: {diferencia:N0}. " +
+                        "Revisa OK, sospechoso, scrap o el contador antes de guardar.";
+
+                    return RedirectToAction(
+                        nameof(Captura),
+                        new { id = vm.EjecucionProduccionID });
+                }
+
+                vm.FechaProduccion =
+                    fechaProduccionReal;
+
+                vm.HoraInicio =
+                    horaInicioReal.ToString(
+                        @"hh\:mm");
+
+                vm.HoraFin =
+                    horaFinReal.ToString(
+                        @"hh\:mm");
+
+                var registroHoraId =
+                    await InsertarRegistroHoraAsync(
+                        ejecucion,
+                        vm,
+                        horaInicioReal,
+                        horaFinReal,
+                        personaId.Value,
+                        usuarioId,
+                        calculo,
+                        cn,
+                        tx);
+
+                await InsertarSegmentosRegistroHoraAsync(
+                    registroHoraId,
+                    ejecucion.EjecucionProduccionID,
+                    calculo,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await RegistrarLecturaContadorHoraAsync(
+                    ejecucion,
+                    registroHoraId,
+                    personaId.Value,
+                    usuarioId,
+                    fechaFinFila,
+                    vm.ContadorMaquinaActual.Value,
+                    calculo,
+                    cn,
+                    tx);
+
+                // =====================================================
+                // BONUS:
+                // solamente las piezas OK se abonan de inicio.
+                // Calidad hará ajustes posteriores mediante movimientos.
+                // =====================================================
+                await RegistrarBonusProduccionHoraAsync(
+                    personaId.Value,
+                    ejecucion.EjecucionProduccionID,
+                    registroHoraId,
+                    vm.CantidadOK,
+                    calculo.PiezasCalculadas,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                // =====================================================
+                // CALIDAD CONSERVA OK / SOSPECHOSO / SCRAP
+                // =====================================================
+                await VincularRegistroHoraConCalidadAsync(
+                    ejecucion,
+                    vm,
+                    horaInicioReal,
+                    horaFinReal,
+                    registroHoraId,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await RecalcularTotalesEjecucionAsync(
+                    vm.EjecucionProduccionID,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 await tx.CommitAsync();
-                var mensaje = ConstruirMensajeCumplimientoHora(filaSolicitada, vm.CantidadOK);
-                if (vm.CantidadSospechosa > 0 || vm.CantidadScrap > 0)
-                    mensaje += " El material sospechoso o scrap reportado quedó pendiente de revisión de Calidad.";
-                TempData["Success"] = mensaje;
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+
+                var mensaje =
+                    ConstruirMensajeCumplimientoHora(
+                        filaSolicitada.NumeroHora,
+                        vm.CantidadOK,
+                        vm.CantidadSospechosa,
+                        vm.CantidadScrap,
+                        vm.ContadorMaquinaActual.Value,
+                        calculo);
+
+                TempData["Success"] =
+                    mensaje;
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync();
-                TempData["Error"] = "No fue posible guardar la producción: " + ex.Message;
-                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] =
+                    "No fue posible guardar la producción: " +
+                    ex.Message;
+
+                return RedirectToAction(
+                    nameof(Captura),
+                    new { id = vm.EjecucionProduccionID });
             }
         }
 
@@ -3107,17 +3629,40 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
                 Activo = Booleano(rd, "Activo")
             };
         }
-        private async Task<int> InsertarRegistroHoraAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int operadorPersonaId, int usuarioId, int? objetivoHora, int? objetivoBloque, SqlConnection cn, SqlTransaction tx)
+
+        private async Task<int> InsertarRegistroHoraAsync(
+    ProduccionEjecucionVm ejecucion,
+    ProduccionRegistroHoraPostVm vm,
+    TimeSpan horaInicio,
+    TimeSpan horaFin,
+    int operadorPersonaId,
+    int usuarioId,
+    CalculoProduccionContadorHora calculo,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
             bool? cumplioObjetivo = null;
             int? diferenciaObjetivo = null;
             decimal? porcentajeCumplimiento = null;
-            if (objetivoBloque.HasValue && objetivoBloque.Value > 0)
+
+            if (calculo.ObjetivoBloque > 0)
             {
-                diferenciaObjetivo = vm.CantidadOK - objetivoBloque.Value;
-                cumplioObjetivo = vm.CantidadOK >= objetivoBloque.Value;
-                porcentajeCumplimiento = Math.Round((decimal)vm.CantidadOK * 100m / objetivoBloque.Value, 2);
+                diferenciaObjetivo =
+                    vm.CantidadOK -
+                    calculo.ObjetivoBloque;
+
+                cumplioObjetivo =
+                    vm.CantidadOK >=
+                    calculo.ObjetivoBloque;
+
+                porcentajeCumplimiento =
+                    Math.Round(
+                        (decimal)vm.CantidadOK *
+                        100m /
+                        calculo.ObjetivoBloque,
+                        2);
             }
+
             const string sql = @"
 INSERT INTO dbo.Produccion_RegistroHora
 (
@@ -3129,14 +3674,24 @@ INSERT INTO dbo.Produccion_RegistroHora
     FechaProduccion,
     HoraInicio,
     HoraFin,
+
     CantidadOK,
     CantidadSospechosa,
     CantidadScrap,
+
     ObjetivoHora,
     ObjetivoBloque,
     CumplioObjetivo,
     DiferenciaObjetivo,
     PorcentajeCumplimiento,
+
+    PiezasCalculadasContador,
+    MinutosProductivos,
+    EsTiempoExtra,
+    TipoBloque,
+    TieneCambioConfiguracion,
+    TieneReinicioContador,
+
     Observaciones,
     UsuarioCreacionID,
     FechaCreacion,
@@ -3153,55 +3708,269 @@ VALUES
     @FechaProduccion,
     @HoraInicio,
     @HoraFin,
+
     @CantidadOK,
     @CantidadSospechosa,
     @CantidadScrap,
+
     @ObjetivoHora,
     @ObjetivoBloque,
     @CumplioObjetivo,
     @DiferenciaObjetivo,
     @PorcentajeCumplimiento,
+
+    @PiezasCalculadasContador,
+    @MinutosProductivos,
+    @EsTiempoExtra,
+    @TipoBloque,
+    @TieneCambioConfiguracion,
+    @TieneReinicioContador,
+
     @Observaciones,
     @UsuarioID,
-    GETDATE(),
+    SYSDATETIME(),
     1
 );";
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
-            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
-            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
-            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)ejecucion.MaquinaID ?? DBNull.Value;
-            cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = operadorPersonaId;
-            cmd.Parameters.Add("@FechaProduccion", SqlDbType.Date).Value = vm.FechaProduccion.Date;
-            cmd.Parameters.Add("@HoraInicio", SqlDbType.Time).Value = horaInicio;
-            cmd.Parameters.Add("@HoraFin", SqlDbType.Time).Value = horaFin;
-            cmd.Parameters.Add("@CantidadOK", SqlDbType.Int).Value = vm.CantidadOK;
-            cmd.Parameters.Add("@CantidadSospechosa", SqlDbType.Int).Value = vm.CantidadSospechosa;
-            cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = vm.CantidadScrap;
-            cmd.Parameters.Add("@ObjetivoHora", SqlDbType.Int).Value = (object?)objetivoHora ?? DBNull.Value;
-            cmd.Parameters.Add("@ObjetivoBloque", SqlDbType.Int).Value = (object?)objetivoBloque ?? DBNull.Value;
-            cmd.Parameters.Add("@CumplioObjetivo", SqlDbType.Bit).Value = (object?)cumplioObjetivo ?? DBNull.Value;
-            cmd.Parameters.Add("@DiferenciaObjetivo", SqlDbType.Int).Value = (object?)diferenciaObjetivo ?? DBNull.Value;
-            var pPorcentaje = cmd.Parameters.Add("@PorcentajeCumplimiento", SqlDbType.Decimal);
+
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucion.EjecucionProduccionID;
+
+            cmd.Parameters.Add(
+                "@ProgramaProduccionID",
+                SqlDbType.Int).Value =
+                ejecucion.ProgramaProduccionID;
+
+            cmd.Parameters.Add(
+                "@SolicitudProduccionID",
+                SqlDbType.Int).Value =
+                (object?)ejecucion.SolicitudProduccionID ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@MaquinaID",
+                SqlDbType.Int).Value =
+                (object?)ejecucion.MaquinaID ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@OperadorID",
+                SqlDbType.Int).Value =
+                operadorPersonaId;
+
+            cmd.Parameters.Add(
+                "@FechaProduccion",
+                SqlDbType.Date).Value =
+                vm.FechaProduccion.Date;
+
+            cmd.Parameters.Add(
+                "@HoraInicio",
+                SqlDbType.Time).Value =
+                horaInicio;
+
+            cmd.Parameters.Add(
+                "@HoraFin",
+                SqlDbType.Time).Value =
+                horaFin;
+
+            cmd.Parameters.Add(
+                "@CantidadOK",
+                SqlDbType.Int).Value =
+                vm.CantidadOK;
+
+            cmd.Parameters.Add(
+                "@CantidadSospechosa",
+                SqlDbType.Int).Value =
+                vm.CantidadSospechosa;
+
+            cmd.Parameters.Add(
+                "@CantidadScrap",
+                SqlDbType.Int).Value =
+                vm.CantidadScrap;
+
+            cmd.Parameters.Add(
+                "@ObjetivoHora",
+                SqlDbType.Int).Value =
+                calculo.ObjetivoHora;
+
+            cmd.Parameters.Add(
+                "@ObjetivoBloque",
+                SqlDbType.Int).Value =
+                calculo.ObjetivoBloque;
+
+            cmd.Parameters.Add(
+                "@CumplioObjetivo",
+                SqlDbType.Bit).Value =
+                (object?)cumplioObjetivo ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@DiferenciaObjetivo",
+                SqlDbType.Int).Value =
+                (object?)diferenciaObjetivo ??
+                DBNull.Value;
+
+            var pPorcentaje =
+                cmd.Parameters.Add(
+                    "@PorcentajeCumplimiento",
+                    SqlDbType.Decimal);
+
             pPorcentaje.Precision = 8;
             pPorcentaje.Scale = 2;
-            pPorcentaje.Value = (object?)porcentajeCumplimiento ?? DBNull.Value;
-            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.Observaciones) ? DBNull.Value : vm.Observaciones.Trim();
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-            var resultado = await cmd.ExecuteScalarAsync();
-            if (resultado == null || resultado == DBNull.Value) throw new InvalidOperationException("No fue posible obtener el identificador del registro horario.");
-            return Convert.ToInt32(resultado);
+            pPorcentaje.Value =
+                (object?)porcentajeCumplimiento ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@PiezasCalculadasContador",
+                SqlDbType.Int).Value =
+                calculo.PiezasCalculadas;
+
+            var pMinutos =
+                cmd.Parameters.Add(
+                    "@MinutosProductivos",
+                    SqlDbType.Decimal);
+
+            pMinutos.Precision = 10;
+            pMinutos.Scale = 2;
+            pMinutos.Value =
+                calculo.MinutosProductivos;
+
+            cmd.Parameters.Add(
+                "@EsTiempoExtra",
+                SqlDbType.Bit).Value =
+                vm.EsTiempoExtra;
+
+            cmd.Parameters.Add(
+                "@TipoBloque",
+                SqlDbType.NVarChar,
+                30).Value =
+                vm.EsTiempoExtra
+                    ? "TIEMPO_EXTRA"
+                    : "NORMAL";
+
+            cmd.Parameters.Add(
+                "@TieneCambioConfiguracion",
+                SqlDbType.Bit).Value =
+                calculo.TieneCambioConfiguracion;
+
+            cmd.Parameters.Add(
+                "@TieneReinicioContador",
+                SqlDbType.Bit).Value =
+                calculo.TieneReinicioContador;
+
+            cmd.Parameters.Add(
+                "@Observaciones",
+                SqlDbType.NVarChar,
+                500).Value =
+                string.IsNullOrWhiteSpace(
+                    vm.Observaciones)
+                    ? DBNull.Value
+                    : vm.Observaciones.Trim();
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            if (resultado == null ||
+                resultado == DBNull.Value)
+            {
+                throw new InvalidOperationException(
+                    "No fue posible obtener el identificador del registro horario.");
+            }
+
+            return Convert.ToInt32(
+                resultado);
         }
 
-        private static string ConstruirMensajeCumplimientoHora(ProduccionCapturaHoraFilaVm fila, int cantidadOK)
+        private static string ConstruirMensajeCumplimientoHora(
+    int numeroHora,
+    int cantidadOK,
+    int cantidadSospechosa,
+    int cantidadScrap,
+    long contadorActual,
+    CalculoProduccionContadorHora calculo)
         {
-            var objetivo = fila.ObjetivoBloque ?? fila.ObjetivoHora;
-            if (!objetivo.HasValue || objetivo.Value <= 0) return $"Hora {fila.NumeroHora} guardada. Esta parte no tiene objetivo por hora configurado.";
-            var porcentaje = Math.Round((decimal)cantidadOK * 100m / objetivo.Value, 1);
-            var diferencia = cantidadOK - objetivo.Value;
-            if (diferencia > 0) return $"Hora {fila.NumeroHora} guardada. Alcanzaste el objetivo por hora: {porcentaje:0.#}%. Superaste el objetivo por {diferencia:N0} pieza(s).";
-            if (diferencia == 0) return $"Hora {fila.NumeroHora} guardada. Alcanzaste exactamente el objetivo por hora: 100%.";
-            return $"Hora {fila.NumeroHora} guardada. No alcanzaste el objetivo por hora: {porcentaje:0.#}%. Faltaron {Math.Abs(diferencia):N0} pieza(s).";
+            var mensaje =
+                $"Hora {numeroHora} guardada. " +
+                $"Contador: {contadorActual:N0}. " +
+                $"Producción física calculada: " +
+                $"{calculo.PiezasCalculadas:N0} pieza(s). " +
+                $"Clasificación: " +
+                $"{cantidadOK:N0} OK, " +
+                $"{cantidadSospechosa:N0} sospechosa(s), " +
+                $"{cantidadScrap:N0} posible scrap.";
+
+            if (calculo.ObjetivoBloque > 0)
+            {
+                var porcentaje =
+                    Math.Round(
+                        (decimal)cantidadOK *
+                        100m /
+                        calculo.ObjetivoBloque,
+                        1);
+
+                var diferencia =
+                    cantidadOK -
+                    calculo.ObjetivoBloque;
+
+                if (diferencia > 0)
+                {
+                    mensaje +=
+                        $" Objetivo: {calculo.ObjetivoBloque:N0}. " +
+                        $"Cumplimiento {porcentaje:0.#}%. " +
+                        $"Superaste el objetivo por " +
+                        $"{diferencia:N0} pieza(s) OK.";
+                }
+                else if (diferencia == 0)
+                {
+                    mensaje +=
+                        $" Objetivo: {calculo.ObjetivoBloque:N0}. " +
+                        "Cumplimiento 100%.";
+                }
+                else
+                {
+                    mensaje +=
+                        $" Objetivo: {calculo.ObjetivoBloque:N0}. " +
+                        $"Cumplimiento {porcentaje:0.#}%. " +
+                        $"Faltaron {Math.Abs(diferencia):N0} " +
+                        "pieza(s) OK.";
+                }
+            }
+
+            if (cantidadOK > 0)
+            {
+                mensaje +=
+                    $" Se abonaron provisionalmente " +
+                    $"+{cantidadOK:N0} pieza(s) al bonus del operador.";
+            }
+
+            if (cantidadSospechosa > 0 ||
+                cantidadScrap > 0)
+            {
+                mensaje +=
+                    " El material sospechoso o posible scrap " +
+                    "queda pendiente de resolución por Calidad.";
+            }
+
+            if (calculo.TieneReinicioContador)
+            {
+                mensaje +=
+                    " Se detectó un reinicio del contador de máquina.";
+            }
+
+            return mensaje;
         }
 
         private static async Task VincularRegistroHoraConCalidadAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int registroHoraId, int usuarioId, SqlConnection cn, SqlTransaction tx)
@@ -5901,20 +6670,28 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
             vm.HoraFinSugerida = fin;
         }
 
-        private async Task<List<ProduccionCapturaHoraFilaVm>> ObtenerFilasCapturaHoraAsync(int ejecucionProduccionId, int programaProduccionId, SqlConnection cn, SqlTransaction? tx = null)
+        private async Task<List<ProduccionCapturaHoraFilaVm>> ObtenerFilasCapturaHoraAsync(
+       int ejecucionProduccionId,
+       int programaProduccionId,
+       SqlConnection cn,
+       SqlTransaction? tx = null)
         {
             var filas = new List<ProduccionCapturaHoraFilaVm>();
+
             DateTime? inicioReal = null;
             DateTime? finReal = null;
             int? objetivoHora = null;
             int cantidadPlaneada = 0;
+
             const string sqlPrograma = @"
 SELECT TOP(1)
     COALESCE(
         (
-            SELECT TOP(1) h.FechaMovimiento
+            SELECT TOP(1)
+                h.FechaMovimiento
             FROM dbo.Calidad_InspeccionHistorial h
-            INNER JOIN dbo.Calidad_Inspecciones ci ON ci.InspeccionID=h.InspeccionID
+            INNER JOIN dbo.Calidad_Inspecciones ci
+                ON ci.InspeccionID=h.InspeccionID
             WHERE ci.EjecucionProduccionID=e.EjecucionProduccionID
               AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
             ORDER BY h.FechaMovimiento
@@ -5922,42 +6699,114 @@ SELECT TOP(1)
         pp.FechaInicioReal,
         e.FechaInicioReal
     ) AS FechaInicioReal,
-    COALESCE(pp.FechaFinReal,e.FechaFinReal) AS FechaFinReal,
-    ISNULL(e.CantidadPlaneada,0) AS CantidadPlaneada,
+
+    COALESCE(
+        pp.FechaFinReal,
+        e.FechaFinReal
+    ) AS FechaFinReal,
+
+    ISNULL(
+        e.CantidadPlaneada,
+        0
+    ) AS CantidadPlaneada,
+
     dt.ObjetivoHora
+
 FROM dbo.Produccion_Ejecucion e
+
 INNER JOIN dbo.Planeacion_ProgramaProduccion pp
     ON pp.ProgramaProduccionID=e.ProgramaProduccionID
    AND pp.Activo=1
+
 OUTER APPLY
 (
-    SELECT TOP(1) dt0.ObjetivoHora
+    SELECT TOP(1)
+        dt0.ObjetivoHora
     FROM dbo.ERP_ParteDatosTecnicos dt0
     WHERE dt0.ParteID=e.ParteID
       AND dt0.Activo=1
     ORDER BY dt0.ParteDatoTecnicoID DESC
 ) dt
+
 WHERE e.EjecucionProduccionID=@EjecucionProduccionID
   AND e.ProgramaProduccionID=@ProgramaProduccionID
   AND e.Activo=1;";
-            await using (var cmd = tx == null ? new SqlCommand(sqlPrograma, cn) : new SqlCommand(sqlPrograma, cn, tx))
+
+            await using (var cmd =
+                tx == null
+                    ? new SqlCommand(sqlPrograma, cn)
+                    : new SqlCommand(sqlPrograma, cn, tx))
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
-                await using var rd = await cmd.ExecuteReaderAsync();
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                cmd.Parameters.Add(
+                    "@ProgramaProduccionID",
+                    SqlDbType.Int).Value =
+                    programaProduccionId;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
                 if (await rd.ReadAsync())
                 {
-                    inicioReal = rd["FechaInicioReal"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioReal"]);
-                    finReal = rd["FechaFinReal"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinReal"]);
-                    cantidadPlaneada = rd["CantidadPlaneada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadPlaneada"]);
-                    objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? null : Convert.ToInt32(rd["ObjetivoHora"]);
+                    inicioReal =
+                        rd["FechaInicioReal"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(
+                                rd["FechaInicioReal"]);
+
+                    finReal =
+                        rd["FechaFinReal"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(
+                                rd["FechaFinReal"]);
+
+                    cantidadPlaneada =
+                        rd["CantidadPlaneada"] == DBNull.Value
+                            ? 0
+                            : Convert.ToInt32(
+                                rd["CantidadPlaneada"]);
+
+                    objetivoHora =
+                        rd["ObjetivoHora"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(
+                                rd["ObjetivoHora"]);
                 }
             }
-            if (!inicioReal.HasValue) return filas;
-            DateTime AlMinuto(DateTime value) => new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, value.Kind);
-            var inicio = AlMinuto(inicioReal.Value);
-            var ahora = DateTime.Now;
-            var registros = new List<ProduccionRegistroHoraVm>();
+
+            if (!inicioReal.HasValue)
+                return filas;
+
+            DateTime AlMinuto(DateTime value)
+            {
+                return new DateTime(
+                    value.Year,
+                    value.Month,
+                    value.Day,
+                    value.Hour,
+                    value.Minute,
+                    0,
+                    value.Kind);
+            }
+
+            var inicio =
+                AlMinuto(
+                    inicioReal.Value);
+
+            var ahora =
+                DateTime.Now;
+
+            // ============================================================
+            // REGISTROS HORARIOS YA CAPTURADOS
+            // ============================================================
+
+            var registros =
+                new List<ProduccionRegistroHoraVm>();
+
             const string sqlRegistros = @"
 SELECT
     RegistroHoraID,
@@ -5986,253 +6835,1137 @@ SELECT
 FROM dbo.Produccion_RegistroHora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
-ORDER BY FechaProduccion,HoraInicio;";
-            await using (var cmd = tx == null ? new SqlCommand(sqlRegistros, cn) : new SqlCommand(sqlRegistros, cn, tx))
+ORDER BY
+    FechaProduccion,
+    HoraInicio;";
+
+            await using (var cmd =
+                tx == null
+                    ? new SqlCommand(sqlRegistros, cn)
+                    : new SqlCommand(sqlRegistros, cn, tx))
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                await using var rd = await cmd.ExecuteReaderAsync();
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
                 while (await rd.ReadAsync())
                 {
-                    registros.Add(new ProduccionRegistroHoraVm
-                    {
-                        RegistroHoraID = Convert.ToInt32(rd["RegistroHoraID"]),
-                        EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
-                        ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
-                        SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
-                        MaquinaID = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]),
-                        OperadorID = rd["OperadorID"] == DBNull.Value ? null : Convert.ToInt32(rd["OperadorID"]),
-                        FechaProduccion = Convert.ToDateTime(rd["FechaProduccion"]),
-                        HoraInicio = (TimeSpan)rd["HoraInicio"],
-                        HoraFin = (TimeSpan)rd["HoraFin"],
-                        CantidadOK = Convert.ToInt32(rd["CantidadOK"]),
-                        CantidadSospechosa = Convert.ToInt32(rd["CantidadSospechosa"]),
-                        CantidadScrap = Convert.ToInt32(rd["CantidadScrap"]),
-                        ObjetivoHora = rd["ObjetivoHora"] == DBNull.Value ? null : Convert.ToInt32(rd["ObjetivoHora"]),
-                        ObjetivoBloque = rd["ObjetivoBloque"] == DBNull.Value ? null : Convert.ToInt32(rd["ObjetivoBloque"]),
-                        CumplioObjetivo = rd["CumplioObjetivo"] == DBNull.Value ? null : Convert.ToBoolean(rd["CumplioObjetivo"]),
-                        DiferenciaObjetivo = rd["DiferenciaObjetivo"] == DBNull.Value ? null : Convert.ToInt32(rd["DiferenciaObjetivo"]),
-                        PorcentajeCumplimiento = rd["PorcentajeCumplimiento"] == DBNull.Value ? null : Convert.ToDecimal(rd["PorcentajeCumplimiento"]),
-                        Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"].ToString(),
-                        UsuarioCreacionID = rd["UsuarioCreacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioCreacionID"]),
-                        FechaCreacion = Convert.ToDateTime(rd["FechaCreacion"]),
-                        UsuarioModificacionID = rd["UsuarioModificacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioModificacionID"]),
-                        FechaModificacion = rd["FechaModificacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaModificacion"]),
-                        Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"])
-                    });
+                    registros.Add(
+                        new ProduccionRegistroHoraVm
+                        {
+                            RegistroHoraID =
+                                Convert.ToInt32(
+                                    rd["RegistroHoraID"]),
+
+                            EjecucionProduccionID =
+                                Convert.ToInt32(
+                                    rd["EjecucionProduccionID"]),
+
+                            ProgramaProduccionID =
+                                Convert.ToInt32(
+                                    rd["ProgramaProduccionID"]),
+
+                            SolicitudProduccionID =
+                                rd["SolicitudProduccionID"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["SolicitudProduccionID"]),
+
+                            MaquinaID =
+                                rd["MaquinaID"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["MaquinaID"]),
+
+                            OperadorID =
+                                rd["OperadorID"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["OperadorID"]),
+
+                            FechaProduccion =
+                                Convert.ToDateTime(
+                                    rd["FechaProduccion"]),
+
+                            HoraInicio =
+                                (TimeSpan)rd["HoraInicio"],
+
+                            HoraFin =
+                                (TimeSpan)rd["HoraFin"],
+
+                            CantidadOK =
+                                Convert.ToInt32(
+                                    rd["CantidadOK"]),
+
+                            CantidadSospechosa =
+                                Convert.ToInt32(
+                                    rd["CantidadSospechosa"]),
+
+                            CantidadScrap =
+                                Convert.ToInt32(
+                                    rd["CantidadScrap"]),
+
+                            ObjetivoHora =
+                                rd["ObjetivoHora"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["ObjetivoHora"]),
+
+                            ObjetivoBloque =
+                                rd["ObjetivoBloque"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["ObjetivoBloque"]),
+
+                            CumplioObjetivo =
+                                rd["CumplioObjetivo"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToBoolean(
+                                        rd["CumplioObjetivo"]),
+
+                            DiferenciaObjetivo =
+                                rd["DiferenciaObjetivo"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["DiferenciaObjetivo"]),
+
+                            PorcentajeCumplimiento =
+                                rd["PorcentajeCumplimiento"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToDecimal(
+                                        rd["PorcentajeCumplimiento"]),
+
+                            Observaciones =
+                                rd["Observaciones"] ==
+                                DBNull.Value
+                                    ? null
+                                    : rd["Observaciones"]
+                                        .ToString(),
+
+                            UsuarioCreacionID =
+                                rd["UsuarioCreacionID"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["UsuarioCreacionID"]),
+
+                            FechaCreacion =
+                                Convert.ToDateTime(
+                                    rd["FechaCreacion"]),
+
+                            UsuarioModificacionID =
+                                rd["UsuarioModificacionID"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt32(
+                                        rd["UsuarioModificacionID"]),
+
+                            FechaModificacion =
+                                rd["FechaModificacion"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToDateTime(
+                                        rd["FechaModificacion"]),
+
+                            Activo =
+                                rd["Activo"] !=
+                                DBNull.Value &&
+                                Convert.ToBoolean(
+                                    rd["Activo"])
+                        });
                 }
             }
+
+            // ============================================================
+            // HORAS TEÓRICAS
+            // ============================================================
+
             var horasRequeridas = 0;
-            if (cantidadPlaneada > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
-                horasRequeridas = (int)Math.Ceiling((decimal)cantidadPlaneada / objetivoHora.Value);
+
+            if (cantidadPlaneada > 0 &&
+                objetivoHora.HasValue &&
+                objetivoHora.Value > 0)
+            {
+                horasRequeridas =
+                    (int)Math.Ceiling(
+                        (decimal)cantidadPlaneada /
+                        objetivoHora.Value);
+            }
+
             if (horasRequeridas <= 0)
-                horasRequeridas = Math.Max(1, registros.Count + 1);
-            if (registros.Count > horasRequeridas)
-                horasRequeridas = registros.Count;
-            var nombresOperadores = new Dictionary<int, string>();
-            var operadoresRegistro = registros.Where(x => x.OperadorID.HasValue && x.OperadorID.Value > 0).Select(x => x.OperadorID!.Value).Distinct().ToList();
+            {
+                horasRequeridas =
+                    Math.Max(
+                        1,
+                        registros.Count + 1);
+            }
+
+            // ============================================================
+            // NOMBRES DE OPERADORES DE REGISTROS EXISTENTES
+            // ============================================================
+
+            var nombresOperadores =
+                new Dictionary<int, string>();
+
+            var operadoresRegistro =
+                registros
+                    .Where(x =>
+                        x.OperadorID.HasValue &&
+                        x.OperadorID.Value > 0)
+                    .Select(x =>
+                        x.OperadorID!.Value)
+                    .Distinct()
+                    .ToList();
+
             if (operadoresRegistro.Count > 0)
             {
-                var parametros = new List<string>();
-                await using var cmd = tx == null ? new SqlCommand() : new SqlCommand(string.Empty, cn, tx);
+                var parametros =
+                    new List<string>();
+
+                await using var cmd =
+                    tx == null
+                        ? new SqlCommand()
+                        : new SqlCommand(
+                            string.Empty,
+                            cn,
+                            tx);
+
                 cmd.Connection = cn;
-                for (var i = 0; i < operadoresRegistro.Count; i++)
+
+                for (var i = 0;
+                     i < operadoresRegistro.Count;
+                     i++)
                 {
-                    var nombreParametro = "@Operador" + i;
-                    parametros.Add(nombreParametro);
-                    cmd.Parameters.Add(nombreParametro, SqlDbType.Int).Value = operadoresRegistro[i];
+                    var nombreParametro =
+                        "@Operador" + i;
+
+                    parametros.Add(
+                        nombreParametro);
+
+                    cmd.Parameters
+                        .Add(
+                            nombreParametro,
+                            SqlDbType.Int)
+                        .Value =
+                        operadoresRegistro[i];
                 }
+
                 cmd.CommandText = $@"
 SELECT
     PersonaID,
-    LTRIM(RTRIM(CONCAT(ISNULL(Nombre,N''),N' ',ISNULL(ApellidoPaterno,N''),N' ',ISNULL(ApellidoMaterno,N'')))) AS NombreCompleto
+    LTRIM(
+        RTRIM(
+            CONCAT(
+                ISNULL(Nombre,N''),
+                N' ',
+                ISNULL(ApellidoPaterno,N''),
+                N' ',
+                ISNULL(ApellidoMaterno,N'')
+            )
+        )
+    ) AS NombreCompleto
 FROM dbo.Persona
-WHERE PersonaID IN({string.Join(",", parametros)});";
-                await using var rd = await cmd.ExecuteReaderAsync();
+WHERE PersonaID IN(
+    {string.Join(",", parametros)}
+);";
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
                 while (await rd.ReadAsync())
                 {
-                    var personaId = Convert.ToInt32(rd["PersonaID"]);
-                    var nombre = rd["NombreCompleto"]?.ToString()?.Trim();
-                    nombresOperadores[personaId] = string.IsNullOrWhiteSpace(nombre) ? $"Operador {personaId}" : nombre;
+                    var personaId =
+                        Convert.ToInt32(
+                            rd["PersonaID"]);
+
+                    var nombre =
+                        rd["NombreCompleto"]
+                            ?.ToString()
+                            ?.Trim();
+
+                    nombresOperadores[personaId] =
+                        string.IsNullOrWhiteSpace(
+                            nombre)
+                            ? $"Operador {personaId}"
+                            : nombre;
                 }
             }
-            var paros = new List<(int ParoID, DateTime Inicio, DateTime? Fin, bool MayorA15)>();
+
+            // ============================================================
+            // PAROS
+            // ============================================================
+
+            var paros =
+                new List<(
+                    int ParoID,
+                    DateTime Inicio,
+                    DateTime? Fin,
+                    bool MayorA15)>();
+
             const string sqlParos = @"
-SELECT ParoID,FechaInicioParo,FechaFinParo,ISNULL(EsMayorA15Minutos,0) AS EsMayorA15Minutos
+SELECT
+    ParoID,
+    FechaInicioParo,
+    FechaFinParo,
+    CASE
+        WHEN ISNULL(EsMayorA15Minutos,0)=1
+            THEN CAST(1 AS BIT)
+
+        WHEN FechaFinParo IS NOT NULL
+         AND DATEDIFF(
+                SECOND,
+                FechaInicioParo,
+                FechaFinParo
+             ) > 900
+            THEN CAST(1 AS BIT)
+
+        ELSE CAST(0 AS BIT)
+    END AS EsMayorA15Minutos
 FROM dbo.Produccion_Paros
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
-ORDER BY FechaInicioParo,ParoID;";
-            await using (var cmd = tx == null ? new SqlCommand(sqlParos, cn) : new SqlCommand(sqlParos, cn, tx))
+ORDER BY
+    FechaInicioParo,
+    ParoID;";
+
+            await using (var cmd =
+                tx == null
+                    ? new SqlCommand(sqlParos, cn)
+                    : new SqlCommand(sqlParos, cn, tx))
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                await using var rd = await cmd.ExecuteReaderAsync();
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
                 while (await rd.ReadAsync())
                 {
-                    paros.Add((Convert.ToInt32(rd["ParoID"]), Convert.ToDateTime(rd["FechaInicioParo"]), rd["FechaFinParo"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinParo"]), rd["EsMayorA15Minutos"] != DBNull.Value && Convert.ToBoolean(rd["EsMayorA15Minutos"])));
+                    paros.Add(
+                        (
+                            Convert.ToInt32(
+                                rd["ParoID"]),
+
+                            Convert.ToDateTime(
+                                rd["FechaInicioParo"]),
+
+                            rd["FechaFinParo"] ==
+                            DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rd["FechaFinParo"]),
+
+                            rd["EsMayorA15Minutos"] !=
+                            DBNull.Value &&
+                            Convert.ToBoolean(
+                                rd["EsMayorA15Minutos"])
+                        ));
                 }
             }
-            var confirmacionesSerie = new List<DateTime>();
+
+            // ============================================================
+            // CONFIRMACIONES DE INICIO / REINICIO DE SERIE
+            // ============================================================
+
+            var confirmacionesSerie =
+                new List<DateTime>();
+
             const string sqlConfirmaciones = @"
-SELECT h.FechaMovimiento
+SELECT
+    h.FechaMovimiento
 FROM dbo.Calidad_InspeccionHistorial h
-INNER JOIN dbo.Calidad_Inspecciones ci ON ci.InspeccionID=h.InspeccionID
+INNER JOIN dbo.Calidad_Inspecciones ci
+    ON ci.InspeccionID=h.InspeccionID
 WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
   AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
-ORDER BY h.FechaMovimiento;";
-            await using (var cmd = tx == null ? new SqlCommand(sqlConfirmaciones, cn) : new SqlCommand(sqlConfirmaciones, cn, tx))
+ORDER BY
+    h.FechaMovimiento;";
+
+            await using (var cmd =
+                tx == null
+                    ? new SqlCommand(
+                        sqlConfirmaciones,
+                        cn)
+                    : new SqlCommand(
+                        sqlConfirmaciones,
+                        cn,
+                        tx))
             {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                await using var rd = await cmd.ExecuteReaderAsync();
-                while (await rd.ReadAsync()) confirmacionesSerie.Add(Convert.ToDateTime(rd["FechaMovimiento"]));
-            }
-            var registrosDisponibles = registros.ToList();
-            ProduccionRegistroHoraVm? BuscarRegistroBloque(DateTime bloqueInicio, DateTime bloqueFin)
-            {
-                foreach (var item in registrosDisponibles.ToList())
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
                 {
-                    var registroInicio = item.FechaProduccion.Date.Add(item.HoraInicio);
-                    var registroFin = item.FechaProduccion.Date.Add(item.HoraFin);
-                    if (registroFin <= registroInicio) registroFin = registroFin.AddDays(1);
-                    registroInicio = AlMinuto(registroInicio);
-                    registroFin = AlMinuto(registroFin);
-                    if (registroInicio == bloqueInicio && registroFin == bloqueFin)
+                    confirmacionesSerie.Add(
+                        Convert.ToDateTime(
+                            rd["FechaMovimiento"]));
+                }
+            }
+
+            // ============================================================
+            // CONSTRUIR INTERVALOS NO PRODUCTIVOS
+            //
+            // PARO CORTO:
+            // Inicio paro -> Fin paro
+            //
+            // PARO > 15:
+            // Inicio paro -> Nueva confirmación de serie
+            //
+            // PARO ABIERTO / SIN RELIBERACIÓN:
+            // Inicio paro -> indefinido
+            // ============================================================
+
+            var interrupciones =
+                new List<(
+                    DateTime Inicio,
+                    DateTime? Fin)>();
+
+            foreach (var paro in paros)
+            {
+                var inicioParo =
+                    AlMinuto(
+                        paro.Inicio);
+
+                if (paro.Fin.HasValue)
+                {
+                    var finParo =
+                        AlMinuto(
+                            paro.Fin.Value);
+
+                    if (finParo <
+                        inicioParo)
                     {
-                        registrosDisponibles.Remove(item);
+                        finParo =
+                            inicioParo;
+                    }
+
+                    if (!paro.MayorA15)
+                    {
+                        // Paro corto:
+                        // solamente el periodo real del paro es no productivo.
+                        interrupciones.Add(
+                            (
+                                inicioParo,
+                                finParo
+                            ));
+
+                        continue;
+                    }
+
+                    // Paro > 15:
+                    // Producción no vuelve a ser productiva
+                    // hasta que exista nueva confirmación de serie.
+                    var confirmacion =
+                        confirmacionesSerie
+                            .Where(x =>
+                                AlMinuto(x) >=
+                                finParo)
+                            .OrderBy(x => x)
+                            .Select(AlMinuto)
+                            .FirstOrDefault();
+
+                    if (confirmacion ==
+                        DateTime.MinValue)
+                    {
+                        interrupciones.Add(
+                            (
+                                inicioParo,
+                                null
+                            ));
+                    }
+                    else
+                    {
+                        interrupciones.Add(
+                            (
+                                inicioParo,
+                                confirmacion
+                            ));
+                    }
+
+                    continue;
+                }
+
+                // Paro todavía abierto.
+                interrupciones.Add(
+                    (
+                        inicioParo,
+                        null
+                    ));
+            }
+
+            // ============================================================
+            // NORMALIZAR Y FUSIONAR PAROS TRASLAPADOS
+            //
+            // Con esto evitamos que datos duplicados/solapados generen
+            // falsos huecos productivos entre dos registros de paro.
+            // ============================================================
+
+            var interrupcionesNormalizadas =
+                interrupciones
+                    .Where(x =>
+                        !x.Fin.HasValue ||
+                        x.Fin.Value >
+                        inicio)
+                    .Select(x =>
+                        (
+                            Inicio:
+                                x.Inicio < inicio
+                                    ? inicio
+                                    : x.Inicio,
+
+                            Fin:
+                                x.Fin
+                        ))
+                    .OrderBy(x =>
+                        x.Inicio)
+                    .ToList();
+
+            var interrupcionesFusionadas =
+                new List<(
+                    DateTime Inicio,
+                    DateTime? Fin)>();
+
+            foreach (var actual in
+                     interrupcionesNormalizadas)
+            {
+                if (interrupcionesFusionadas.Count == 0)
+                {
+                    interrupcionesFusionadas.Add(
+                        actual);
+
+                    continue;
+                }
+
+                var ultimo =
+                    interrupcionesFusionadas[
+                        interrupcionesFusionadas.Count - 1
+                    ];
+
+                // Si el anterior es abierto, ya cubre todo lo posterior.
+                if (!ultimo.Fin.HasValue)
+                    continue;
+
+                if (actual.Inicio <=
+                    ultimo.Fin.Value)
+                {
+                    DateTime? nuevoFin;
+
+                    if (!actual.Fin.HasValue)
+                    {
+                        nuevoFin = null;
+                    }
+                    else
+                    {
+                        nuevoFin =
+                            actual.Fin.Value >
+                            ultimo.Fin.Value
+                                ? actual.Fin.Value
+                                : ultimo.Fin.Value;
+                    }
+
+                    interrupcionesFusionadas[
+                        interrupcionesFusionadas.Count - 1
+                    ] =
+                        (
+                            ultimo.Inicio,
+                            nuevoFin
+                        );
+
+                    continue;
+                }
+
+                interrupcionesFusionadas.Add(
+                    actual);
+            }
+
+            // ============================================================
+            // LÍMITE DE GENERACIÓN
+            // ============================================================
+
+            var limiteSeguridad =
+                inicio.AddHours(500);
+
+            DateTime limite;
+
+            if (finReal.HasValue)
+            {
+                limite =
+                    AlMinuto(
+                        finReal.Value);
+            }
+            else
+            {
+                var minutosInterrupcionesCerradas =
+                    interrupcionesFusionadas
+                        .Where(x =>
+                            x.Fin.HasValue)
+                        .Sum(x =>
+                            Math.Max(
+                                0,
+                                (
+                                    x.Fin!.Value -
+                                    x.Inicio
+                                ).TotalMinutes));
+
+                /*
+                 * Las interrupciones cerradas desplazan el tiempo
+                 * necesario para completar las horas productivas.
+                 */
+                var limiteTeorico =
+                    inicio
+                        .AddHours(
+                            horasRequeridas)
+                        .AddMinutes(
+                            minutosInterrupcionesCerradas);
+
+                /*
+                 * Si la ejecución está tardando más que lo teórico,
+                 * debemos seguir permitiendo nuevas capturas.
+                 *
+                 * Dejamos preparada como máximo una hora hacia adelante
+                 * respecto del momento actual.
+                 */
+                var limitePorOperacion =
+                    AlMinuto(ahora)
+                        .AddHours(1);
+
+                limite =
+                    limiteTeorico >
+                    limitePorOperacion
+                        ? limiteTeorico
+                        : limitePorOperacion;
+            }
+
+            if (limite >
+                limiteSeguridad)
+            {
+                limite =
+                    limiteSeguridad;
+            }
+
+            if (limite <= inicio)
+            {
+                limite =
+                    inicio.AddHours(1);
+            }
+
+            // ============================================================
+            // BUSCAR UN REGISTRO EXISTENTE PARA UNA FILA GENERADA
+            // ============================================================
+
+            var registrosDisponibles =
+                registros.ToList();
+
+            ProduccionRegistroHoraVm?
+                BuscarRegistroBloque(
+                    DateTime bloqueInicio,
+                    DateTime bloqueFin)
+            {
+                foreach (var item in
+                         registrosDisponibles.ToList())
+                {
+                    var registroInicio =
+                        item.FechaProduccion.Date
+                            .Add(
+                                item.HoraInicio);
+
+                    var registroFin =
+                        item.FechaProduccion.Date
+                            .Add(
+                                item.HoraFin);
+
+                    if (registroFin <=
+                        registroInicio)
+                    {
+                        registroFin =
+                            registroFin.AddDays(1);
+                    }
+
+                    registroInicio =
+                        AlMinuto(
+                            registroInicio);
+
+                    registroFin =
+                        AlMinuto(
+                            registroFin);
+
+                    if (registroInicio ==
+                            bloqueInicio &&
+                        registroFin ==
+                            bloqueFin)
+                    {
+                        registrosDisponibles.Remove(
+                            item);
+
                         return item;
                     }
                 }
-                ProduccionRegistroHoraVm? mejorRegistro = null;
-                var mejorTraslapeMinutos = 0d;
-                foreach (var item in registrosDisponibles)
+
+                ProduccionRegistroHoraVm?
+                    mejorRegistro = null;
+
+                var mejorTraslapeMinutos =
+                    0d;
+
+                foreach (var item in
+                         registrosDisponibles)
                 {
-                    var registroInicio = item.FechaProduccion.Date.Add(item.HoraInicio);
-                    var registroFin = item.FechaProduccion.Date.Add(item.HoraFin);
-                    if (registroFin <= registroInicio) registroFin = registroFin.AddDays(1);
-                    var inicioTraslape = registroInicio > bloqueInicio ? registroInicio : bloqueInicio;
-                    var finTraslape = registroFin < bloqueFin ? registroFin : bloqueFin;
-                    var minutosTraslape = Math.Max(0, (finTraslape - inicioTraslape).TotalMinutes);
-                    if (minutosTraslape > mejorTraslapeMinutos)
+                    var registroInicio =
+                        item.FechaProduccion.Date
+                            .Add(
+                                item.HoraInicio);
+
+                    var registroFin =
+                        item.FechaProduccion.Date
+                            .Add(
+                                item.HoraFin);
+
+                    if (registroFin <=
+                        registroInicio)
                     {
-                        mejorTraslapeMinutos = minutosTraslape;
-                        mejorRegistro = item;
+                        registroFin =
+                            registroFin.AddDays(1);
+                    }
+
+                    var inicioTraslape =
+                        registroInicio >
+                        bloqueInicio
+                            ? registroInicio
+                            : bloqueInicio;
+
+                    var finTraslape =
+                        registroFin <
+                        bloqueFin
+                            ? registroFin
+                            : bloqueFin;
+
+                    var minutosTraslape =
+                        Math.Max(
+                            0,
+                            (
+                                finTraslape -
+                                inicioTraslape
+                            ).TotalMinutes);
+
+                    if (minutosTraslape >
+                        mejorTraslapeMinutos)
+                    {
+                        mejorTraslapeMinutos =
+                            minutosTraslape;
+
+                        mejorRegistro =
+                            item;
                     }
                 }
-                var duracionBloqueMinutos = Math.Max(1, (bloqueFin - bloqueInicio).TotalMinutes);
-                var traslapeMinimo = Math.Min(30, duracionBloqueMinutos / 2.0);
-                if (mejorRegistro == null || mejorTraslapeMinutos < traslapeMinimo) return null;
-                registrosDisponibles.Remove(mejorRegistro);
+
+                var duracionBloqueMinutos =
+                    Math.Max(
+                        1,
+                        (
+                            bloqueFin -
+                            bloqueInicio
+                        ).TotalMinutes);
+
+                var traslapeMinimo =
+                    Math.Min(
+                        30,
+                        duracionBloqueMinutos /
+                        2d);
+
+                if (mejorRegistro == null ||
+                    mejorTraslapeMinutos <
+                    traslapeMinimo)
+                {
+                    return null;
+                }
+
+                registrosDisponibles.Remove(
+                    mejorRegistro);
+
                 return mejorRegistro;
             }
-            var limiteSeguridad = inicio.AddHours(500);
-            var limite = finReal.HasValue ? AlMinuto(finReal.Value) : limiteSeguridad;
-            if (!finReal.HasValue)
+
+            // ============================================================
+            // GENERAR FILAS ÚNICAMENTE DE TIEMPO PRODUCTIVO
+            // ============================================================
+
+            var numeroHora =
+                1;
+
+            void AgregarSegmentoProductivo(
+                DateTime segmentoInicio,
+                DateTime segmentoFin)
             {
-                var minutosParosCerrados = paros.Where(x => x.Fin.HasValue).Sum(x => Math.Max(0, (x.Fin!.Value - x.Inicio).TotalMinutes));
-                limite = inicio.AddHours(horasRequeridas).AddMinutes(minutosParosCerrados).AddHours(24);
-                if (limite > limiteSeguridad) limite = limiteSeguridad;
-            }
-            if (limite <= inicio) limite = inicio.AddHours(1);
-            var numeroHora = 1;
-            void AgregarSegmentoProductivo(DateTime segmentoInicio, DateTime segmentoFin)
-            {
-                segmentoInicio = AlMinuto(segmentoInicio);
-                segmentoFin = AlMinuto(segmentoFin);
-                if (segmentoFin <= segmentoInicio) return;
-                var inicioBloque = segmentoInicio;
-                while (inicioBloque < segmentoFin && inicioBloque < limite && numeroHora <= horasRequeridas)
+                segmentoInicio =
+                    AlMinuto(
+                        segmentoInicio);
+
+                segmentoFin =
+                    AlMinuto(
+                        segmentoFin);
+
+                if (segmentoFin <=
+                    segmentoInicio)
                 {
-                    var finBloque = inicioBloque.AddHours(1);
-                    if (finBloque > segmentoFin) finBloque = segmentoFin;
-                    if (finBloque > limite) finBloque = limite;
-                    if (finReal.HasValue && finBloque > AlMinuto(finReal.Value)) finBloque = AlMinuto(finReal.Value);
-                    if (finBloque <= inicioBloque) break;
-                    var registro = BuscarRegistroBloque(inicioBloque, finBloque);
-                    var capturada = registro != null;
-                    var bloqueTerminado = ahora >= finBloque;
-                    var minutosBloque = (finBloque - inicioBloque).TotalMinutes;
-                    int? objetivoBloqueCalculado = null;
-                    if (objetivoHora.HasValue && objetivoHora.Value > 0 && minutosBloque > 0)
-                        objetivoBloqueCalculado = (int)Math.Round(objetivoHora.Value * minutosBloque / 60d, MidpointRounding.AwayFromZero);
-                    var objetivoHoraFila = capturada ? (registro!.ObjetivoHora ?? objetivoHora) : objetivoHora;
-                    var objetivoBloqueFila = capturada ? (registro!.ObjetivoBloque ?? objetivoBloqueCalculado) : objetivoBloqueCalculado;
-                    var operadorRegistroId = registro?.OperadorID;
-                    string? operadorRegistroNombre = null;
-                    if (operadorRegistroId.HasValue && nombresOperadores.TryGetValue(operadorRegistroId.Value, out var nombreEncontrado))
-                        operadorRegistroNombre = nombreEncontrado;
-                    filas.Add(new ProduccionCapturaHoraFilaVm
+                    return;
+                }
+
+                var inicioBloque =
+                    segmentoInicio;
+
+                while (inicioBloque <
+                       segmentoFin)
+                {
+                    var finBloque =
+                        inicioBloque
+                            .AddHours(1);
+
+                    /*
+                     * Si el segmento productivo termina por un paro,
+                     * se conserva el bloque parcial.
+                     *
+                     * Ejemplo:
+                     * Producción 12:00 - 12:03
+                     * Paro inicia 12:03
+                     *
+                     * Resultado:
+                     * fila de 3 minutos productivos.
+                     */
+                    if (finBloque >
+                        segmentoFin)
                     {
-                        NumeroHora = numeroHora,
-                        FechaProduccion = inicioBloque.Date,
-                        HoraInicio = inicioBloque.TimeOfDay,
-                        HoraFin = finBloque.TimeOfDay,
-                        RegistroHoraID = registro?.RegistroHoraID,
-                        OperadorID = operadorRegistroId,
-                        OperadorNombre = operadorRegistroNombre,
-                        CantidadOK = registro?.CantidadOK ?? 0,
-                        CantidadSospechosa = registro?.CantidadSospechosa ?? 0,
-                        CantidadScrap = registro?.CantidadScrap ?? 0,
-                        ObjetivoHora = objetivoHoraFila,
-                        ObjetivoBloque = objetivoBloqueFila,
-                        Observaciones = registro?.Observaciones,
-                        Capturada = capturada,
-                        Disponible = !capturada && bloqueTerminado,
-                        Vencida = !capturada && bloqueTerminado
-                    });
-                    inicioBloque = finBloque;
+                        finBloque =
+                            segmentoFin;
+                    }
+
+                    if (finBloque >
+                        limite)
+                    {
+                        finBloque =
+                            limite;
+                    }
+
+                    if (finReal.HasValue &&
+                        finBloque >
+                        AlMinuto(
+                            finReal.Value))
+                    {
+                        finBloque =
+                            AlMinuto(
+                                finReal.Value);
+                    }
+
+                    if (finBloque <=
+                        inicioBloque)
+                    {
+                        break;
+                    }
+
+                    /*
+                     * PROTECCIÓN EXTRA:
+                     * una fila productiva jamás puede traslaparse
+                     * con un paro.
+                     */
+                    var traslapaParo =
+                        interrupcionesFusionadas
+                            .Any(x =>
+                            {
+                                var finInterrupcion =
+                                    x.Fin ??
+                                    limiteSeguridad;
+
+                                return
+                                    x.Inicio <
+                                        finBloque &&
+                                    finInterrupcion >
+                                        inicioBloque;
+                            });
+
+                    if (traslapaParo)
+                    {
+                        throw new InvalidOperationException(
+                            $"Se intentó generar un bloque productivo " +
+                            $"{inicioBloque:dd/MM HH:mm} - " +
+                            $"{finBloque:dd/MM HH:mm} " +
+                            "que se traslapa con un paro. " +
+                            "La captura fue bloqueada para evitar contabilizar tiempo detenido.");
+                    }
+
+                    var registro =
+                        BuscarRegistroBloque(
+                            inicioBloque,
+                            finBloque);
+
+                    var capturada =
+                        registro != null;
+
+                    var bloqueTerminado =
+                        ahora >=
+                        finBloque;
+
+                    var minutosBloque =
+                        (
+                            finBloque -
+                            inicioBloque
+                        ).TotalMinutes;
+
+                    int?
+                        objetivoBloqueCalculado =
+                            null;
+
+                    if (objetivoHora.HasValue &&
+                        objetivoHora.Value > 0 &&
+                        minutosBloque > 0)
+                    {
+                        objetivoBloqueCalculado =
+                            (int)Math.Round(
+                                objetivoHora.Value *
+                                minutosBloque /
+                                60d,
+                                MidpointRounding
+                                    .AwayFromZero);
+                    }
+
+                    var objetivoHoraFila =
+                        capturada
+                            ? registro!.ObjetivoHora ??
+                              objetivoHora
+                            : objetivoHora;
+
+                    var objetivoBloqueFila =
+                        capturada
+                            ? registro!.ObjetivoBloque ??
+                              objetivoBloqueCalculado
+                            : objetivoBloqueCalculado;
+
+                    var operadorRegistroId =
+                        registro?.OperadorID;
+
+                    string?
+                        operadorRegistroNombre =
+                            null;
+
+                    if (operadorRegistroId
+                            .HasValue &&
+                        nombresOperadores
+                            .TryGetValue(
+                                operadorRegistroId.Value,
+                                out var nombreEncontrado))
+                    {
+                        operadorRegistroNombre =
+                            nombreEncontrado;
+                    }
+
+                    filas.Add(
+                        new ProduccionCapturaHoraFilaVm
+                        {
+                            NumeroHora =
+                                numeroHora,
+
+                            FechaProduccion =
+                                inicioBloque.Date,
+
+                            HoraInicio =
+                                inicioBloque.TimeOfDay,
+
+                            HoraFin =
+                                finBloque.TimeOfDay,
+
+                            RegistroHoraID =
+                                registro?.RegistroHoraID,
+
+                            OperadorID =
+                                operadorRegistroId,
+
+                            OperadorNombre =
+                                operadorRegistroNombre,
+
+                            CantidadOK =
+                                registro?.CantidadOK ??
+                                0,
+
+                            CantidadSospechosa =
+                                registro
+                                    ?.CantidadSospechosa ??
+                                0,
+
+                            CantidadScrap =
+                                registro?.CantidadScrap ??
+                                0,
+
+                            ObjetivoHora =
+                                objetivoHoraFila,
+
+                            ObjetivoBloque =
+                                objetivoBloqueFila,
+
+                            Observaciones =
+                                registro?.Observaciones,
+
+                            Capturada =
+                                capturada,
+
+                            Disponible =
+                                !capturada &&
+                                bloqueTerminado,
+
+                            Vencida =
+                                !capturada &&
+                                bloqueTerminado
+                        });
+
+                    inicioBloque =
+                        finBloque;
+
                     numeroHora++;
                 }
             }
-            var cursorProductivo = inicio;
-            foreach (var paro in paros)
+
+            // ============================================================
+            // GENERAR EL COMPLEMENTO PRODUCTIVO DE LOS PAROS
+            // ============================================================
+
+            var cursorProductivo =
+                inicio;
+
+            foreach (var interrupcion in
+                     interrupcionesFusionadas)
             {
-                if (numeroHora > horasRequeridas) break;
-                var inicioParo = AlMinuto(paro.Inicio);
-                if (inicioParo >= limite) break;
-                if (inicioParo < inicio) continue;
-                if (inicioParo > cursorProductivo)
-                    AgregarSegmentoProductivo(cursorProductivo, inicioParo);
-                if (numeroHora > horasRequeridas) break;
-                if (!paro.Fin.HasValue)
+                var inicioInterrupcion =
+                    interrupcion.Inicio;
+
+                if (inicioInterrupcion >=
+                    limite)
                 {
-                    cursorProductivo = limite;
                     break;
                 }
-                var finParo = AlMinuto(paro.Fin.Value);
-                DateTime? reinicioReal;
-                if (paro.MayorA15)
+
+                /*
+                 * Todo lo que exista ANTES del paro sí es producción.
+                 */
+                if (inicioInterrupcion >
+                    cursorProductivo)
                 {
-                    var confirmacion = confirmacionesSerie.Where(x => AlMinuto(x) >= finParo).OrderBy(x => x).Select(AlMinuto).FirstOrDefault();
-                    reinicioReal = confirmacion == DateTime.MinValue ? null : confirmacion;
-                    if (!reinicioReal.HasValue)
-                    {
-                        cursorProductivo = limite;
-                        break;
-                    }
+                    var finProductivo =
+                        inicioInterrupcion >
+                        limite
+                            ? limite
+                            : inicioInterrupcion;
+
+                    AgregarSegmentoProductivo(
+                        cursorProductivo,
+                        finProductivo);
                 }
-                else
+
+                /*
+                 * PARO ABIERTO:
+                 * no existe producción después de él todavía.
+                 */
+                if (!interrupcion.Fin.HasValue)
                 {
-                    reinicioReal = finParo;
+                    cursorProductivo =
+                        limite;
+
+                    break;
                 }
-                if (reinicioReal.Value > cursorProductivo)
-                    cursorProductivo = reinicioReal.Value;
+
+                /*
+                 * Saltamos COMPLETAMENTE el periodo detenido.
+                 *
+                 * Ejemplo:
+                 *
+                 * paro 12:29 - 12:32
+                 *
+                 * cursor pasa directamente a 12:32.
+                 * JAMÁS se genera 12:29 - 12:32.
+                 */
+                if (interrupcion.Fin.Value >
+                    cursorProductivo)
+                {
+                    cursorProductivo =
+                        interrupcion.Fin.Value;
+                }
             }
-            if (cursorProductivo < limite && numeroHora <= horasRequeridas)
-                AgregarSegmentoProductivo(cursorProductivo, limite);
-            var primeraPendiente = filas.Where(x => !x.Capturada && x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
-            foreach (var fila in filas.Where(x => !x.Capturada))
+
+            /*
+             * Después del último paro, continúa la producción.
+             */
+            if (cursorProductivo <
+                limite)
             {
-                fila.Disponible = primeraPendiente != null && fila.NumeroHora == primeraPendiente.NumeroHora;
+                AgregarSegmentoProductivo(
+                    cursorProductivo,
+                    limite);
+            }
+
+            // ============================================================
+            // SOLAMENTE LA PRIMERA HORA PENDIENTE TERMINADA SE HABILITA
+            // ============================================================
+
+            var primeraPendiente =
+                filas
+                    .Where(x =>
+                        !x.Capturada &&
+                        x.Disponible)
+                    .OrderBy(x =>
+                        x.NumeroHora)
+                    .FirstOrDefault();
+
+            foreach (var fila in
+                     filas.Where(x =>
+                         !x.Capturada))
+            {
+                fila.Disponible =
+                    primeraPendiente != null &&
+                    fila.NumeroHora ==
+                    primeraPendiente.NumeroHora;
+
                 if (!fila.Disponible)
                 {
-                    var fechaInicioFila = fila.FechaProduccion.Date.Add(fila.HoraInicio);
-                    var fechaFinFila = fila.FechaProduccion.Date.Add(fila.HoraFin);
-                    if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
-                    fila.Vencida = ahora >= fechaFinFila;
+                    var fechaInicioFila =
+                        fila.FechaProduccion.Date
+                            .Add(
+                                fila.HoraInicio);
+
+                    var fechaFinFila =
+                        fila.FechaProduccion.Date
+                            .Add(
+                                fila.HoraFin);
+
+                    if (fechaFinFila <=
+                        fechaInicioFila)
+                    {
+                        fechaFinFila =
+                            fechaFinFila.AddDays(1);
+                    }
+
+                    fila.Vencida =
+                        ahora >=
+                        fechaFinFila;
                 }
             }
+
             return filas;
         }
-
 
         private bool UsuarioEnSesion()
         {
@@ -6690,7 +8423,1437 @@ SELECT CAST(CASE WHEN EXISTS
                 : Convert.ToDateTime(rd.GetValue(ordinal));
         }
 
-        private static bool Booleano(SqlDataReader rd, string columna)
+        private sealed class ConfiguracionPeriodoContador
+        {
+            public int ConfiguracionCorridaID { get; set; }
+
+            public int CavidadesUsadas { get; set; }
+
+            public decimal TiempoCicloSegundos { get; set; }
+
+            public decimal ObjetivoHoraCalculado { get; set; }
+
+            public long? ContadorInicioVigencia { get; set; }
+
+            public long? ContadorFinVigencia { get; set; }
+
+            public DateTime FechaInicioVigencia { get; set; }
+
+            public DateTime? FechaFinVigencia { get; set; }
+        }
+
+        private sealed class CalculoProduccionContadorHora
+        {
+            public long ContadorInicialReferencia { get; set; }
+
+            public long ContadorFinal { get; set; }
+
+            public int PiezasCalculadas { get; set; }
+
+            public int ObjetivoHora { get; set; }
+
+            public int ObjetivoBloque { get; set; }
+
+            public decimal MinutosProductivos { get; set; }
+
+            public bool TieneCambioConfiguracion { get; set; }
+
+            public bool TieneReinicioContador { get; set; }
+
+            public List<ProduccionRegistroHoraSegmentoVm>
+                Segmentos
+            { get; set; } = new();
+        }
+
+        private async Task<CalculoProduccionContadorHora>
+    CalcularProduccionContadorHoraAsync(
+        int ejecucionProduccionId,
+        DateTime fechaInicio,
+        DateTime fechaFin,
+        long contadorActual,
+        SqlConnection cn,
+        SqlTransaction tx)
+        {
+            if (ejecucionProduccionId <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La ejecución no es válida.");
+            }
+
+            if (fechaFin <= fechaInicio)
+            {
+                throw new InvalidOperationException(
+                    "El periodo de producción no es válido.");
+            }
+
+            if (contadorActual < 0)
+            {
+                throw new InvalidOperationException(
+                    "El contador actual no puede ser negativo.");
+            }
+
+            var configuraciones =
+                new List<ConfiguracionPeriodoContador>();
+
+            const string sqlConfiguraciones = @"
+SELECT
+    ConfiguracionCorridaID,
+    CavidadesUsadas,
+    TiempoCicloSegundos,
+    ObjetivoHoraCalculado,
+    ContadorInicioVigencia,
+    ContadorFinVigencia,
+    FechaInicioVigencia,
+    FechaFinVigencia
+FROM dbo.Produccion_ConfiguracionCorrida WITH(UPDLOCK,HOLDLOCK)
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaInicioVigencia < @FechaFin
+  AND
+  (
+      FechaFinVigencia IS NULL
+      OR FechaFinVigencia > @FechaInicio
+  )
+ORDER BY
+    FechaInicioVigencia,
+    ConfiguracionCorridaID;";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlConfiguraciones,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                cmd.Parameters.Add(
+                    "@FechaInicio",
+                    SqlDbType.DateTime2).Value =
+                    fechaInicio;
+
+                cmd.Parameters.Add(
+                    "@FechaFin",
+                    SqlDbType.DateTime2).Value =
+                    fechaFin;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    configuraciones.Add(
+                        new ConfiguracionPeriodoContador
+                        {
+                            ConfiguracionCorridaID =
+                                Convert.ToInt32(
+                                    rd["ConfiguracionCorridaID"]),
+
+                            CavidadesUsadas =
+                                Convert.ToInt32(
+                                    rd["CavidadesUsadas"]),
+
+                            TiempoCicloSegundos =
+                                Convert.ToDecimal(
+                                    rd["TiempoCicloSegundos"]),
+
+                            ObjetivoHoraCalculado =
+                                Convert.ToDecimal(
+                                    rd["ObjetivoHoraCalculado"]),
+
+                            ContadorInicioVigencia =
+                                rd["ContadorInicioVigencia"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt64(
+                                        rd["ContadorInicioVigencia"]),
+
+                            ContadorFinVigencia =
+                                rd["ContadorFinVigencia"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToInt64(
+                                        rd["ContadorFinVigencia"]),
+
+                            FechaInicioVigencia =
+                                Convert.ToDateTime(
+                                    rd["FechaInicioVigencia"]),
+
+                            FechaFinVigencia =
+                                rd["FechaFinVigencia"] ==
+                                DBNull.Value
+                                    ? null
+                                    : Convert.ToDateTime(
+                                        rd["FechaFinVigencia"])
+                        });
+                }
+            }
+
+            if (configuraciones.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No existe una configuración técnica para el periodo capturado.");
+            }
+
+            long? ultimaLecturaAnterior = null;
+
+            const string sqlLecturaAnterior = @"
+SELECT TOP(1)
+    ValorContador
+FROM dbo.Produccion_ContadorMaquinaLecturas WITH(UPDLOCK,HOLDLOCK)
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaLectura<=@FechaInicio
+ORDER BY
+    FechaLectura DESC,
+    LecturaContadorID DESC;";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlLecturaAnterior,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                cmd.Parameters.Add(
+                    "@FechaInicio",
+                    SqlDbType.DateTime2).Value =
+                    fechaInicio;
+
+                var valor =
+                    await cmd.ExecuteScalarAsync();
+
+                if (valor != null &&
+                    valor != DBNull.Value)
+                {
+                    ultimaLecturaAnterior =
+                        Convert.ToInt64(
+                            valor);
+                }
+            }
+
+            var configuracionInicio =
+                configuraciones
+                    .FirstOrDefault(
+                        x =>
+                            x.FechaInicioVigencia <=
+                                fechaInicio.AddMinutes(1) &&
+                            (
+                                !x.FechaFinVigencia.HasValue ||
+                                x.FechaFinVigencia.Value >
+                                fechaInicio
+                            ));
+
+            if (configuracionInicio == null)
+            {
+                throw new InvalidOperationException(
+                    "No fue posible identificar la configuración técnica al inicio del bloque.");
+            }
+
+            var contadorInicialReferencia =
+                ultimaLecturaAnterior ??
+                configuracionInicio.ContadorInicioVigencia;
+
+            if (!contadorInicialReferencia.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "No existe una lectura base del contador para calcular esta hora.");
+            }
+
+            // =========================================================
+            // PAROS QUE TRASLAPAN EL PERIODO
+            // =========================================================
+            var paros =
+                new List<(DateTime Inicio, DateTime Fin)>();
+
+            const string sqlParos = @"
+SELECT
+    FechaInicioParo,
+    COALESCE(FechaFinParo,@FechaFin) AS FechaFinParo
+FROM dbo.Produccion_Paros
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaInicioParo < @FechaFin
+  AND COALESCE(FechaFinParo,@FechaFin) > @FechaInicio
+ORDER BY FechaInicioParo;";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlParos,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                cmd.Parameters.Add(
+                    "@FechaInicio",
+                    SqlDbType.DateTime2).Value =
+                    fechaInicio;
+
+                cmd.Parameters.Add(
+                    "@FechaFin",
+                    SqlDbType.DateTime2).Value =
+                    fechaFin;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    paros.Add(
+                        (
+                            Convert.ToDateTime(
+                                rd["FechaInicioParo"]),
+
+                            Convert.ToDateTime(
+                                rd["FechaFinParo"])
+                        ));
+                }
+            }
+
+            decimal CalcularMinutosProductivos(
+                DateTime inicioSegmento,
+                DateTime finSegmento)
+            {
+                var minutos =
+                    (decimal)
+                    (finSegmento -
+                     inicioSegmento)
+                    .TotalMinutes;
+
+                foreach (var paro in paros)
+                {
+                    var inicioTraslape =
+                        paro.Inicio >
+                        inicioSegmento
+                            ? paro.Inicio
+                            : inicioSegmento;
+
+                    var finTraslape =
+                        paro.Fin <
+                        finSegmento
+                            ? paro.Fin
+                            : finSegmento;
+
+                    if (finTraslape <=
+                        inicioTraslape)
+                    {
+                        continue;
+                    }
+
+                    minutos -=
+                        (decimal)
+                        (finTraslape -
+                         inicioTraslape)
+                        .TotalMinutes;
+                }
+
+                if (minutos < 0)
+                    minutos = 0;
+
+                return Math.Round(
+                    minutos,
+                    2);
+            }
+
+            var resultado =
+                new CalculoProduccionContadorHora
+                {
+                    ContadorInicialReferencia =
+                        contadorInicialReferencia.Value,
+
+                    ContadorFinal =
+                        contadorActual
+                };
+
+            var contadorCursor =
+                contadorInicialReferencia.Value;
+
+            var fechaCursor =
+                fechaInicio;
+
+            long piezasTotal = 0;
+
+            decimal objetivoBloqueTotal = 0;
+
+            var numeroSegmento = 1;
+
+            for (var i = 0;
+                 i < configuraciones.Count;
+                 i++)
+            {
+                var configuracion =
+                    configuraciones[i];
+
+                var inicioSegmento =
+                    configuracion.FechaInicioVigencia >
+                    fechaCursor
+                        ? configuracion.FechaInicioVigencia
+                        : fechaCursor;
+
+                // La configuración y el inicio de serie pueden quedar
+                // separados por algunos segundos debido a normalización.
+                if (inicioSegmento >
+                    fechaCursor)
+                {
+                    var diferencia =
+                        (inicioSegmento -
+                         fechaCursor)
+                        .TotalSeconds;
+
+                    if (diferencia <= 60)
+                    {
+                        inicioSegmento =
+                            fechaCursor;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException(
+                            "Existe un intervalo sin configuración técnica dentro de la hora capturada.");
+                    }
+                }
+
+                var finSegmento =
+                    configuracion
+                        .FechaFinVigencia
+                        .HasValue &&
+                    configuracion
+                        .FechaFinVigencia
+                        .Value <
+                    fechaFin
+                        ? configuracion
+                            .FechaFinVigencia
+                            .Value
+                        : fechaFin;
+
+                if (finSegmento <=
+                    inicioSegmento)
+                {
+                    continue;
+                }
+
+                var esPrimerSegmento =
+                    numeroSegmento == 1;
+
+                var esUltimoSegmento =
+                    finSegmento >=
+                    fechaFin.AddSeconds(-1);
+
+                long contadorInicioSegmento;
+
+                if (esPrimerSegmento)
+                {
+                    contadorInicioSegmento =
+                        contadorCursor;
+                }
+                else if (configuracion
+                         .ContadorInicioVigencia
+                         .HasValue)
+                {
+                    contadorInicioSegmento =
+                        configuracion
+                            .ContadorInicioVigencia
+                            .Value;
+                }
+                else
+                {
+                    contadorInicioSegmento =
+                        contadorCursor;
+                }
+
+                long contadorFinSegmento;
+
+                if (esUltimoSegmento)
+                {
+                    contadorFinSegmento =
+                        contadorActual;
+                }
+                else if (configuracion
+                         .ContadorFinVigencia
+                         .HasValue)
+                {
+                    contadorFinSegmento =
+                        configuracion
+                            .ContadorFinVigencia
+                            .Value;
+                }
+                else
+                {
+                    var siguiente =
+                        i + 1 <
+                        configuraciones.Count
+                            ? configuraciones[i + 1]
+                            : null;
+
+                    if (siguiente == null ||
+                        !siguiente
+                            .ContadorInicioVigencia
+                            .HasValue)
+                    {
+                        throw new InvalidOperationException(
+                            "No existe una lectura de contador para cerrar uno de los cambios de configuración.");
+                    }
+
+                    contadorFinSegmento =
+                        siguiente
+                            .ContadorInicioVigencia
+                            .Value;
+                }
+
+                var reinicioContador =
+                    contadorFinSegmento <
+                    contadorInicioSegmento;
+
+                long contadorInicialCalculo =
+                    contadorInicioSegmento;
+
+                if (reinicioContador)
+                {
+                    /*
+                     * Regla operativa:
+                     *
+                     * Si el contador actual es menor al anterior,
+                     * interpretamos que la máquina fue reiniciada.
+                     *
+                     * Por tanto:
+                     * ciclos = contador actual - 0
+                     */
+                    contadorInicialCalculo = 0;
+
+                    resultado
+                        .TieneReinicioContador =
+                        true;
+                }
+
+                var ciclos =
+                    contadorFinSegmento -
+                    contadorInicialCalculo;
+
+                if (ciclos < 0)
+                {
+                    throw new InvalidOperationException(
+                        "No fue posible calcular los ciclos de máquina del periodo.");
+                }
+
+                var piezasSegmento =
+                    checked(
+                        ciclos *
+                        (long)
+                        configuracion
+                            .CavidadesUsadas);
+
+                piezasTotal =
+                    checked(
+                        piezasTotal +
+                        piezasSegmento);
+
+                var minutosProductivos =
+                    CalcularMinutosProductivos(
+                        inicioSegmento,
+                        finSegmento);
+
+                if (minutosProductivos <= 0 &&
+                    piezasSegmento > 0)
+                {
+                    throw new InvalidOperationException(
+                        "El contador indica producción en un periodo sin minutos productivos disponibles.");
+                }
+
+                var objetivoSegmento =
+                    configuracion
+                        .ObjetivoHoraCalculado *
+                    minutosProductivos /
+                    60m;
+
+                objetivoBloqueTotal +=
+                    objetivoSegmento;
+
+                if (minutosProductivos > 0)
+                {
+                    resultado.Segmentos.Add(
+                        new ProduccionRegistroHoraSegmentoVm
+                        {
+                            EjecucionProduccionID =
+                                ejecucionProduccionId,
+
+                            ConfiguracionCorridaID =
+                                configuracion
+                                    .ConfiguracionCorridaID,
+
+                            NumeroSegmento =
+                                numeroSegmento,
+
+                            FechaHoraInicio =
+                                inicioSegmento,
+
+                            FechaHoraFin =
+                                finSegmento,
+
+                            MinutosProductivos =
+                                minutosProductivos,
+
+                            ContadorInicial =
+                                contadorInicialCalculo,
+
+                            ContadorFinal =
+                                contadorFinSegmento,
+
+                            CiclosPeriodo =
+                                ciclos,
+
+                            CavidadesUsadas =
+                                configuracion
+                                    .CavidadesUsadas,
+
+                            TiempoCicloSegundos =
+                                configuracion
+                                    .TiempoCicloSegundos,
+
+                            PiezasCalculadas =
+                                piezasSegmento,
+
+                            ObjetivoHoraCalculado =
+                                configuracion
+                                    .ObjetivoHoraCalculado,
+
+                            ObjetivoSegmentoCalculado =
+                                Math.Round(
+                                    objetivoSegmento,
+                                    4),
+
+                            Observaciones =
+                                reinicioContador
+                                    ? "Reinicio del contador detectado automáticamente."
+                                    : null,
+
+                            Activo = true
+                        });
+
+                    numeroSegmento++;
+                }
+
+                contadorCursor =
+                    contadorFinSegmento;
+
+                fechaCursor =
+                    finSegmento;
+
+                if (esUltimoSegmento)
+                    break;
+            }
+
+            if (fechaCursor <
+                fechaFin.AddSeconds(-1))
+            {
+                throw new InvalidOperationException(
+                    "No existe configuración técnica para cubrir todo el periodo capturado.");
+            }
+
+            if (piezasTotal >
+                int.MaxValue)
+            {
+                throw new InvalidOperationException(
+                    "La cantidad calculada de piezas excede el máximo permitido.");
+            }
+
+            if (resultado.Segmentos.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No fue posible generar los segmentos productivos del periodo.");
+            }
+
+            resultado.PiezasCalculadas =
+                Convert.ToInt32(
+                    piezasTotal);
+
+            resultado.MinutosProductivos =
+                resultado.Segmentos.Sum(
+                    x => x.MinutosProductivos);
+
+            resultado.ObjetivoBloque =
+                objetivoBloqueTotal > 0
+                    ? (int)Math.Round(
+                        objetivoBloqueTotal,
+                        0,
+                        MidpointRounding.AwayFromZero)
+                    : 0;
+
+            var ultimaConfiguracion =
+                configuraciones
+                    .Last();
+
+            resultado.ObjetivoHora =
+                ultimaConfiguracion
+                    .ObjetivoHoraCalculado >
+                0
+                    ? (int)Math.Round(
+                        ultimaConfiguracion
+                            .ObjetivoHoraCalculado,
+                        0,
+                        MidpointRounding.AwayFromZero)
+                    : 0;
+
+            resultado.TieneCambioConfiguracion =
+                resultado.Segmentos
+                    .Select(
+                        x =>
+                            x.ConfiguracionCorridaID)
+                    .Distinct()
+                    .Count() > 1;
+
+            return resultado;
+        }
+
+        private static async Task InsertarSegmentosRegistroHoraAsync(
+    int registroHoraId,
+    int ejecucionProduccionId,
+    CalculoProduccionContadorHora calculo,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            if (registroHoraId <= 0)
+            {
+                throw new InvalidOperationException(
+                    "El registro horario no es válido.");
+            }
+
+            const string sql = @"
+INSERT INTO dbo.Produccion_RegistroHoraSegmentos
+(
+    RegistroHoraID,
+    EjecucionProduccionID,
+    ConfiguracionCorridaID,
+    NumeroSegmento,
+    FechaHoraInicio,
+    FechaHoraFin,
+    MinutosProductivos,
+    ContadorInicial,
+    ContadorFinal,
+    CavidadesUsadas,
+    TiempoCicloSegundos,
+    ObjetivoHoraCalculado,
+    ObjetivoSegmentoCalculado,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+VALUES
+(
+    @RegistroHoraID,
+    @EjecucionProduccionID,
+    @ConfiguracionCorridaID,
+    @NumeroSegmento,
+    @FechaHoraInicio,
+    @FechaHoraFin,
+    @MinutosProductivos,
+    @ContadorInicial,
+    @ContadorFinal,
+    @CavidadesUsadas,
+    @TiempoCicloSegundos,
+    @ObjetivoHoraCalculado,
+    @ObjetivoSegmentoCalculado,
+    @Observaciones,
+    @UsuarioID,
+    SYSDATETIME(),
+    1
+);";
+
+            foreach (var segmento in
+                     calculo.Segmentos)
+            {
+                await using var cmd =
+                    new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+                cmd.Parameters.Add(
+                    "@RegistroHoraID",
+                    SqlDbType.Int).Value =
+                    registroHoraId;
+
+                cmd.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                cmd.Parameters.Add(
+                    "@ConfiguracionCorridaID",
+                    SqlDbType.Int).Value =
+                    segmento.ConfiguracionCorridaID;
+
+                cmd.Parameters.Add(
+                    "@NumeroSegmento",
+                    SqlDbType.Int).Value =
+                    segmento.NumeroSegmento;
+
+                cmd.Parameters.Add(
+                    "@FechaHoraInicio",
+                    SqlDbType.DateTime2).Value =
+                    segmento.FechaHoraInicio;
+
+                cmd.Parameters.Add(
+                    "@FechaHoraFin",
+                    SqlDbType.DateTime2).Value =
+                    segmento.FechaHoraFin;
+
+                var pMinutos =
+                    cmd.Parameters.Add(
+                        "@MinutosProductivos",
+                        SqlDbType.Decimal);
+
+                pMinutos.Precision = 10;
+                pMinutos.Scale = 2;
+                pMinutos.Value =
+                    segmento.MinutosProductivos;
+
+                cmd.Parameters.Add(
+                    "@ContadorInicial",
+                    SqlDbType.BigInt).Value =
+                    segmento.ContadorInicial;
+
+                cmd.Parameters.Add(
+                    "@ContadorFinal",
+                    SqlDbType.BigInt).Value =
+                    segmento.ContadorFinal;
+
+                cmd.Parameters.Add(
+                    "@CavidadesUsadas",
+                    SqlDbType.Int).Value =
+                    segmento.CavidadesUsadas;
+
+                var pCiclo =
+                    cmd.Parameters.Add(
+                        "@TiempoCicloSegundos",
+                        SqlDbType.Decimal);
+
+                pCiclo.Precision = 18;
+                pCiclo.Scale = 4;
+                pCiclo.Value =
+                    segmento.TiempoCicloSegundos;
+
+                var pObjetivoHora =
+                    cmd.Parameters.Add(
+                        "@ObjetivoHoraCalculado",
+                        SqlDbType.Decimal);
+
+                pObjetivoHora.Precision = 18;
+                pObjetivoHora.Scale = 4;
+                pObjetivoHora.Value =
+                    segmento.ObjetivoHoraCalculado;
+
+                var pObjetivoSegmento =
+                    cmd.Parameters.Add(
+                        "@ObjetivoSegmentoCalculado",
+                        SqlDbType.Decimal);
+
+                pObjetivoSegmento.Precision = 18;
+                pObjetivoSegmento.Scale = 4;
+                pObjetivoSegmento.Value =
+                    (object?)
+                    segmento
+                        .ObjetivoSegmentoCalculado ??
+                    DBNull.Value;
+
+                cmd.Parameters.Add(
+                    "@Observaciones",
+                    SqlDbType.NVarChar,
+                    500).Value =
+                    string.IsNullOrWhiteSpace(
+                        segmento.Observaciones)
+                        ? DBNull.Value
+                        : segmento
+                            .Observaciones
+                            .Trim();
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        private static async Task RegistrarLecturaContadorHoraAsync(
+    ProduccionEjecucionVm ejecucion,
+    int registroHoraId,
+    int operadorPersonaId,
+    int usuarioId,
+    DateTime fechaLectura,
+    long valorContador,
+    CalculoProduccionContadorHora calculo,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            if (calculo.Segmentos.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No existe un segmento técnico para relacionar la lectura del contador.");
+            }
+
+            var configuracionFinalId =
+                calculo.Segmentos
+                    .OrderByDescending(
+                        x => x.NumeroSegmento)
+                    .First()
+                    .ConfiguracionCorridaID;
+
+            var tipoLectura =
+                calculo.TieneReinicioContador
+                    ? ProduccionTipoLecturaContador.ReinicioContador
+                    : ProduccionTipoLecturaContador.FinBloque;
+
+            var motivoReinicio =
+                calculo.TieneReinicioContador
+                    ? "El contador capturado fue menor a la lectura anterior. El sistema interpretó un reinicio del contador."
+                    : null;
+
+            const string sql = @"
+INSERT INTO dbo.Produccion_ContadorMaquinaLecturas
+(
+    EjecucionProduccionID,
+    ConfiguracionCorridaID,
+    MaquinaID,
+    OperadorID,
+    TipoLectura,
+    ValorContador,
+    FechaLectura,
+    EsReinicioContador,
+    MotivoReinicio,
+    Observaciones,
+    RegistroHoraID,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+VALUES
+(
+    @EjecucionProduccionID,
+    @ConfiguracionCorridaID,
+    @MaquinaID,
+    @OperadorID,
+    @TipoLectura,
+    @ValorContador,
+    @FechaLectura,
+    @EsReinicioContador,
+    @MotivoReinicio,
+    @Observaciones,
+    @RegistroHoraID,
+    @UsuarioID,
+    SYSDATETIME(),
+    1
+);";
+
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucion.EjecucionProduccionID;
+
+            cmd.Parameters.Add(
+                "@ConfiguracionCorridaID",
+                SqlDbType.Int).Value =
+                configuracionFinalId;
+
+            cmd.Parameters.Add(
+                "@MaquinaID",
+                SqlDbType.Int).Value =
+                (object?)ejecucion.MaquinaID ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@OperadorID",
+                SqlDbType.Int).Value =
+                operadorPersonaId;
+
+            cmd.Parameters.Add(
+                "@TipoLectura",
+                SqlDbType.NVarChar,
+                50).Value =
+                tipoLectura;
+
+            cmd.Parameters.Add(
+                "@ValorContador",
+                SqlDbType.BigInt).Value =
+                valorContador;
+
+            cmd.Parameters.Add(
+                "@FechaLectura",
+                SqlDbType.DateTime2).Value =
+                fechaLectura;
+
+            cmd.Parameters.Add(
+                "@EsReinicioContador",
+                SqlDbType.Bit).Value =
+                calculo.TieneReinicioContador;
+
+            cmd.Parameters.Add(
+                "@MotivoReinicio",
+                SqlDbType.NVarChar,
+                500).Value =
+                (object?)motivoReinicio ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@Observaciones",
+                SqlDbType.NVarChar,
+                500).Value =
+                $"Lectura asociada al RegistroHoraID {registroHoraId}.";
+
+            cmd.Parameters.Add(
+                "@RegistroHoraID",
+                SqlDbType.Int).Value =
+                registroHoraId;
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private static async Task RegistrarBonusProduccionHoraAsync(
+    int operadorId,
+    int ejecucionProduccionId,
+    int registroHoraId,
+    int cantidadOK,
+    int piezasFisicas,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            if (cantidadOK <= 0)
+                return;
+
+            var referenciaEvento =
+                $"REGISTRO_HORA:{registroHoraId}:PRODUCCION_OK";
+
+            var motivo =
+                $"Abono provisional por captura horaria. " +
+                $"RegistroHoraID {registroHoraId}. " +
+                $"Piezas físicas calculadas por contador: {piezasFisicas:N0}. " +
+                $"Piezas reportadas OK por el operador: {cantidadOK:N0}.";
+
+            if (motivo.Length > 1000)
+                motivo = motivo[..1000];
+
+            const string sql = @"
+INSERT INTO dbo.Produccion_BonusOperadorMovimientos
+(
+    OperadorID,
+    EjecucionProduccionID,
+    RegistroHoraID,
+    MonitoreoID,
+    DisposicionID,
+    TipoMovimiento,
+    PiezasMovimiento,
+    PiezasReferencia,
+    Motivo,
+    ReferenciaEvento,
+    UsuarioCreacionID,
+    FechaMovimiento,
+    Activo
+)
+SELECT
+    @OperadorID,
+    @EjecucionProduccionID,
+    @RegistroHoraID,
+    NULL,
+    NULL,
+    @TipoMovimiento,
+    @PiezasMovimiento,
+    @PiezasReferencia,
+    @Motivo,
+    @ReferenciaEvento,
+    @UsuarioID,
+    SYSDATETIME(),
+    1
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.Produccion_BonusOperadorMovimientos
+    WHERE ReferenciaEvento=@ReferenciaEvento
+      AND Activo=1
+);";
+
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
+
+            cmd.Parameters.Add(
+                "@OperadorID",
+                SqlDbType.Int).Value =
+                operadorId;
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            cmd.Parameters.Add(
+                "@RegistroHoraID",
+                SqlDbType.Int).Value =
+                registroHoraId;
+
+            cmd.Parameters.Add(
+                "@TipoMovimiento",
+                SqlDbType.NVarChar,
+                60).Value =
+                ProduccionTipoMovimientoBonus
+                    .ProduccionHoraProvisional;
+
+            cmd.Parameters.Add(
+                "@PiezasMovimiento",
+                SqlDbType.Int).Value =
+                cantidadOK;
+
+            cmd.Parameters.Add(
+                "@PiezasReferencia",
+                SqlDbType.Int).Value =
+                piezasFisicas;
+
+            cmd.Parameters.Add(
+                "@Motivo",
+                SqlDbType.NVarChar,
+                1000).Value =
+                motivo;
+
+            cmd.Parameters.Add(
+                "@ReferenciaEvento",
+                SqlDbType.NVarChar,
+                200).Value =
+                referenciaEvento;
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private static async Task<bool> PersonaAsignadaAEjecucionAsync(
+    int ejecucionProduccionId,
+    int personaId,
+    SqlConnection cn,
+    SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT
+    CASE
+        WHEN EXISTS
+        (
+            SELECT 1
+            FROM dbo.Produccion_Ejecucion e
+            INNER JOIN dbo.Planeacion_ProgramaOperadores po
+                ON po.ProgramaProduccionID=e.ProgramaProduccionID
+               AND po.Activo=1
+            WHERE e.EjecucionProduccionID=@EjecucionProduccionID
+              AND e.Activo=1
+              AND po.PersonaID=@PersonaID
+              AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))
+                  IN(N'PRINCIPAL',N'AUXILIAR')
+        )
+        THEN CAST(1 AS BIT)
+        ELSE CAST(0 AS BIT)
+    END;";
+
+            await using var cmd =
+                tx == null
+                    ? new SqlCommand(
+                        sql,
+                        cn)
+                    : new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            cmd.Parameters.Add(
+                "@PersonaID",
+                SqlDbType.Int).Value =
+                personaId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            return resultado != null &&
+                   resultado != DBNull.Value &&
+                   Convert.ToBoolean(
+                       resultado);
+        }
+
+        private static async Task<ProduccionConfiguracionCorridaVm?>
+            ObtenerConfiguracionActualOperadorAsync(
+                int ejecucionProduccionId,
+                SqlConnection cn,
+                SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    ConfiguracionCorridaID,
+    EjecucionProduccionID,
+    CavidadesUsadas,
+    TiempoCicloSegundos,
+    ObjetivoHoraCalculado,
+    ContadorInicioVigencia,
+    ContadorFinVigencia,
+    FechaInicioVigencia,
+    FechaFinVigencia,
+    EsConfiguracionInicial,
+    MotivoCambio,
+    TecnicoProduccionID,
+    UsuarioCreacionID,
+    FechaCreacion,
+    UsuarioModificacionID,
+    FechaModificacion,
+    Activo
+FROM dbo.Produccion_ConfiguracionCorrida
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaFinVigencia IS NULL
+ORDER BY ConfiguracionCorridaID DESC;";
+
+            await using var cmd =
+                tx == null
+                    ? new SqlCommand(
+                        sql,
+                        cn)
+                    : new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new ProduccionConfiguracionCorridaVm
+            {
+                ConfiguracionCorridaID =
+                    Convert.ToInt32(
+                        rd["ConfiguracionCorridaID"]),
+
+                EjecucionProduccionID =
+                    Convert.ToInt32(
+                        rd["EjecucionProduccionID"]),
+
+                CavidadesUsadas =
+                    Convert.ToInt32(
+                        rd["CavidadesUsadas"]),
+
+                TiempoCicloSegundos =
+                    Convert.ToDecimal(
+                        rd["TiempoCicloSegundos"]),
+
+                ObjetivoHoraCalculado =
+                    Convert.ToDecimal(
+                        rd["ObjetivoHoraCalculado"]),
+
+                ContadorInicioVigencia =
+                    rd["ContadorInicioVigencia"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToInt64(
+                            rd["ContadorInicioVigencia"]),
+
+                ContadorFinVigencia =
+                    rd["ContadorFinVigencia"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToInt64(
+                            rd["ContadorFinVigencia"]),
+
+                FechaInicioVigencia =
+                    Convert.ToDateTime(
+                        rd["FechaInicioVigencia"]),
+
+                FechaFinVigencia =
+                    rd["FechaFinVigencia"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToDateTime(
+                            rd["FechaFinVigencia"]),
+
+                EsConfiguracionInicial =
+                    Convert.ToBoolean(
+                        rd["EsConfiguracionInicial"]),
+
+                MotivoCambio =
+                    rd["MotivoCambio"] ==
+                    DBNull.Value
+                        ? null
+                        : rd["MotivoCambio"]?.ToString(),
+
+                TecnicoProduccionID =
+                    rd["TecnicoProduccionID"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["TecnicoProduccionID"]),
+
+                UsuarioCreacionID =
+                    rd["UsuarioCreacionID"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["UsuarioCreacionID"]),
+
+                FechaCreacion =
+                    Convert.ToDateTime(
+                        rd["FechaCreacion"]),
+
+                UsuarioModificacionID =
+                    rd["UsuarioModificacionID"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["UsuarioModificacionID"]),
+
+                FechaModificacion =
+                    rd["FechaModificacion"] ==
+                    DBNull.Value
+                        ? null
+                        : Convert.ToDateTime(
+                            rd["FechaModificacion"]),
+
+                Activo =
+                    Convert.ToBoolean(
+                        rd["Activo"])
+            };
+        }
+
+        private static async Task<long?>
+            ObtenerUltimaLecturaContadorMaquinaAsync(
+                int ejecucionProduccionId,
+                SqlConnection cn,
+                SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    ValorContador
+FROM dbo.Produccion_ContadorMaquinaLecturas
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+ORDER BY
+    FechaLectura DESC,
+    LecturaContadorID DESC;";
+
+            await using var cmd =
+                tx == null
+                    ? new SqlCommand(
+                        sql,
+                        cn)
+                    : new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                ejecucionProduccionId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            if (resultado == null ||
+                resultado == DBNull.Value)
+            {
+                return null;
+            }
+
+            return Convert.ToInt64(
+                resultado);
+        }
+
+        private static async Task<int>
+            ObtenerBonusOperadorActualAsync(
+                int operadorId,
+                SqlConnection cn,
+                SqlTransaction? tx = null)
+        {
+            const string sql = @"
+SELECT
+    ISNULL(
+        SUM(
+            CONVERT(
+                BIGINT,
+                PiezasMovimiento
+            )
+        ),
+        0
+    )
+FROM dbo.Produccion_BonusOperadorMovimientos
+WHERE OperadorID=@OperadorID
+  AND Activo=1;";
+
+            await using var cmd =
+                tx == null
+                    ? new SqlCommand(
+                        sql,
+                        cn)
+                    : new SqlCommand(
+                        sql,
+                        cn,
+                        tx);
+
+            cmd.Parameters.Add(
+                "@OperadorID",
+                SqlDbType.Int).Value =
+                operadorId;
+
+            var resultado =
+                await cmd.ExecuteScalarAsync();
+
+            var total =
+                resultado == null ||
+                resultado == DBNull.Value
+                    ? 0L
+                    : Convert.ToInt64(
+                        resultado);
+
+            if (total > int.MaxValue)
+                return int.MaxValue;
+
+            if (total < int.MinValue)
+                return int.MinValue;
+
+            return Convert.ToInt32(
+                total);
+        }
+        private static bool Booleano(SqlDataReader rd, string columna) 
         {
             var ordinal = rd.GetOrdinal(columna);
 

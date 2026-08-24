@@ -14,7 +14,11 @@
     var historialCambiosTurno = Model.HistorialCambiosTurno?.OrderBy(x => x.FechaEntrega).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCambioTurnoHistorialVm>();
     var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
     var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
-    var objetivoHora = Model.ObjetivoHora;
+    var objetivoHora = Model.ObjetivoHoraEnUso ?? Model.ObjetivoHora;
+    var cavidadesEnUso = Model.CavidadesEnUso;
+    var cicloEnUso = Model.CicloEnUso;
+    var ultimoContador = Model.UltimoContadorMaquina;
+    var bonusActual = Model.BonusOperadorActual;
     var mensajeSuccess = TempData["Success"]?.ToString();
     var mensajeObjetivoNoCumplido = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("No alcanzaste el objetivo por hora", StringComparison.OrdinalIgnoreCase);
     var mensajeSinObjetivo = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("no tiene objetivo por hora configurado", StringComparison.OrdinalIgnoreCase);
@@ -38,11 +42,13 @@
         return "status-future";
     }
 }
-@{ ViewData["Title"] = "Captura por hora | Producción"; }
+@{
+    ViewData["Title"] = "Captura por hora | Producción";
+}
 
 @section Styles {
     <style>
-:root {
+        :root {
             --blue: #004aad;
             --blue-dark: #00347a;
             --green: #107c41;
@@ -250,6 +256,12 @@
                 outline: none;
                 border-color: var(--blue);
                 box-shadow: 0 0 0 .2rem rgba(0,74,173,.12)
+            }
+
+            .hour-input.counter {
+                color: var(--blue-dark);
+                background: #f5f9ff;
+                min-width: 120px
             }
 
             .hour-input.ok {
@@ -499,6 +511,71 @@
             font-size: 1.35rem;
             font-weight: 950;
             color: var(--blue-dark)
+        }
+
+        .counter-capture-card {
+            border: 1px solid #b9ccff;
+            background: linear-gradient(180deg,#f8fbff,#eef4ff);
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 14px
+        }
+
+        .counter-capture-grid {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+            gap: 12px;
+            align-items: end
+        }
+
+        .counter-value-input {
+            width: 100%;
+            height: 72px;
+            border: 2px solid #93b4e8;
+            border-radius: 16px;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 950;
+            color: var(--blue-dark);
+            background: #fff
+        }
+
+            .counter-value-input:focus {
+                outline: none;
+                border-color: var(--blue);
+                box-shadow: 0 0 0 .2rem rgba(0,74,173,.12)
+            }
+
+        .counter-reference {
+            border-radius: 13px;
+            background: #fff;
+            border: 1px solid var(--border);
+            padding: 11px 12px;
+            min-height: 72px
+        }
+
+            .counter-reference .k {
+                color: var(--muted);
+                font-size: .7rem;
+                font-weight: 900;
+                text-transform: uppercase
+            }
+
+            .counter-reference .v {
+                margin-top: 3px;
+                color: var(--blue-dark);
+                font-size: 1.25rem;
+                font-weight: 950
+            }
+
+        .counter-feedback {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #fff;
+            color: #475467;
+            font-size: .82rem;
+            font-weight: 800
         }
 
         .modal-grid {
@@ -1116,7 +1193,7 @@
             }
 
             .hour-table {
-                min-width: 950px
+                min-width: 1120px
             }
 
             .table-wrap {
@@ -1137,6 +1214,10 @@
                 grid-template-columns: 1fr
             }
 
+            .counter-capture-grid {
+                grid-template-columns: 1fr
+            }
+
             .modal-qty {
                 height: 62px
             }
@@ -1149,729 +1230,783 @@
 }
 
 <div class="page">
-        <section class="hero">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                <div><h1><i class="fa-solid fa-table-list me-2"></i>Captura de producción por hora</h1><p>Captura cada fila como en AppSheet. La Hora 1 comienza cuando inicia producción en serie.</p></div>
-                <div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero"><i class="fa-solid fa-arrow-left"></i>Kiosco</a><a href="@Url.Action("Captura", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero"><i class="fa-solid fa-rotate-right"></i>Actualizar</a></div>
-            </div>
-        </section>
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div><h1><i class="fa-solid fa-table-list me-2"></i>Captura de producción por hora</h1><p>Captura cada fila como en AppSheet. La Hora 1 comienza cuando inicia producción en serie.</p></div>
+            <div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero"><i class="fa-solid fa-arrow-left"></i>Kiosco</a><a href="@Url.Action("Captura", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero"><i class="fa-solid fa-rotate-right"></i>Actualizar</a></div>
+        </div>
+    </section>
 
-        @if (!string.IsNullOrWhiteSpace(mensajeSuccess))
+    @if (!string.IsNullOrWhiteSpace(mensajeSuccess))
+    {
+        var claseResultadoGuardado = mensajeObjetivoNoCumplido ? "danger" : mensajeSinObjetivo ? "neutral" : "success";
+        var iconoResultadoGuardado = mensajeObjetivoNoCumplido ? "fa-arrow-trend-down" : mensajeSinObjetivo ? "fa-circle-info" : "fa-circle-check";
+        <div class="saved-goal-result @claseResultadoGuardado">
+            <i class="fa-solid @iconoResultadoGuardado me-2"></i>@mensajeSuccess
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger rounded-4 fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["Error"]</div>
+    }
+
+    <section class="summary-grid">
+
+        <div class="summary">
+            <div class="k">Máquina</div>
+            <div class="v">
+                @Txt(Model.MaquinaCodigo)
+            </div>
+            <div class="text-muted small">
+                @Txt(Model.MaquinaNombre)
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="k">Parte</div>
+            <div class="v">
+                @Txt(
+                Model.ReferenciaSAP
+                ?? Model.NumeroParte)
+            </div>
+            <div class="text-muted small">
+                @Txt(Model.DescripcionParte)
+            </div>
+        </div>
+
+        <div class="summary objective-summary">
+            <div class="k">
+                Meta de la OF
+            </div>
+
+            <div class="v">
+                @(planeada > 0
+                                ? Numero(planeada)
+                                : "-")
+            </div>
+
+            <div class="text-muted small">
+                @(planeada > 0
+                                ? "Piezas requeridas"
+                                : "Sin cantidad planeada")
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="k">
+                OK acumulado
+            </div>
+
+            <div class="v text-success">
+                @Numero(Model.CantidadOKTotal)
+            </div>
+
+            <div class="text-muted small">
+                @avance.ToString("0.##")% de la OF
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="k">
+                Pendiente OF
+            </div>
+
+            <div class="v @(pendiente > 0
+                                                                       ? "text-primary"
+                                                                       : "text-success")">
+                @Numero(pendiente)
+            </div>
+
+            <div class="text-muted small">
+                @(pendiente > 0
+                                ? "Piezas OK por producir"
+                                : "Meta alcanzada")
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="k">
+                Sospechosos
+            </div>
+
+            <div class="v text-warning">
+                @Numero(
+                                Model.CantidadSospechosaTotal)
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="k">
+                Scrap
+            </div>
+
+            <div class="v text-danger">
+                @Numero(
+                                Model.CantidadScrapTotal)
+            </div>
+        </div>
+
+        <div class="summary objective-summary">
+            <div class="k">
+                Objetivo por hora
+            </div>
+
+            <div class="v">
+                @(objetivoHora.HasValue &&
+                                objetivoHora.Value > 0
+                                ? Numero(objetivoHora.Value)
+                                : "-")
+            </div>
+
+            <div class="text-muted small">
+                @(objetivoHora.HasValue &&
+                                objetivoHora.Value > 0
+                                ? "PZA / H"
+                                : "Sin objetivo configurado")
+
+                @if (cicloEnUso.HasValue)
+                {
+                    <span>
+                        · Ciclo
+                        @cicloEnUso.Value.ToString("0.##") s
+                    </span>
+                }
+
+                @if (cavidadesEnUso.HasValue)
+                {
+                    <span>
+                        · @cavidadesEnUso.Value cav.
+                    </span>
+                }
+            </div>
+        </div>
+
+        <div class="summary objective-summary">
+            <div class="k">Configuración en uso</div>
+            <div class="v">
+                @(cavidadesEnUso.HasValue ? $"{cavidadesEnUso.Value:N0} cav." : "-")
+            </div>
+            <div class="text-muted small">
+                @(cicloEnUso.HasValue ? $"Ciclo {cicloEnUso.Value:0.##} s" : "Sin ciclo confirmado")
+                @(Model.TieneConfiguracionReal ? " · Técnico" : " · Valor de referencia")
+            </div>
+        </div>
+
+        <div class="summary objective-summary">
+            <div class="k">Último contador</div>
+            <div class="v">
+                @(ultimoContador.HasValue? ultimoContador.Value.ToString("N0") : "-")
+            </div>
+            <div class="text-muted small">
+                @(ultimoContador.HasValue ? "Última lectura registrada" : "Pendiente de lectura base")
+            </div>
+        </div>
+
+        <div class="summary objective-summary">
+            <div class="k">Bonus provisional</div>
+            <div class="v text-success">@bonusActual.ToString("N0")</div>
+            <div class="text-muted small">Piezas OK abonadas, sujetas a ajustes de Calidad</div>
+        </div>
+
+    </section>
+
+    <section class="turn-toolbar">
+        <div>
+            <div class="turn-title">
+                <i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Entrega de turno
+            </div>
+            <div class="turn-subtitle">
+                Entrega la producción al siguiente operador. El cambio será efectivo únicamente cuando el operador entrante confirme la recepción.
+            </div>
+        </div>
+        @if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
         {
-            var claseResultadoGuardado = mensajeObjetivoNoCumplido ? "danger" : mensajeSinObjetivo ? "neutral" : "success";
-            var iconoResultadoGuardado = mensajeObjetivoNoCumplido ? "fa-arrow-trend-down" : mensajeSinObjetivo ? "fa-circle-info" : "fa-circle-check";
-            <div class="saved-goal-result @claseResultadoGuardado">
-                <i class="fa-solid @iconoResultadoGuardado me-2"></i>@mensajeSuccess
-            </div>
+            <button type="button"
+                    class="btn-turn"
+                    id="btnAbrirCambioTurno"
+                    @(Model.TieneParoAbierto ? "disabled" : "")>
+                <i class="fa-solid fa-right-from-bracket"></i>
+                Entregar turno
+            </button>
         }
-        @if (TempData["Error"] != null)
+        else
         {
-            <div class="alert alert-danger rounded-4 fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["Error"]</div>
+            <button type="button" class="btn-turn" disabled>
+                <i class="fa-solid fa-right-from-bracket"></i>
+                Entregar turno
+            </button>
         }
+    </section>
 
-        <section class="summary-grid">
-
-            <div class="summary">
-                <div class="k">Máquina</div>
-                <div class="v">
-                    @Txt(Model.MaquinaCodigo)
-                </div>
-                <div class="text-muted small">
-                    @Txt(Model.MaquinaNombre)
-                </div>
+    <section class="paro-toolbar @(Model.TieneParoAbierto ? "open" : "")">
+        <div>
+            <div class="paro-title">
+                <i class="fa-solid @(Model.TieneParoAbierto ? "fa-circle-pause text-danger" : "fa-triangle-exclamation text-warning") me-2"></i>
+                @(Model.TieneParoAbierto ? "Paro de máquina activo" : "Control de paro de máquina")
             </div>
-
-            <div class="summary">
-                <div class="k">Parte</div>
-                <div class="v">
-                    @Txt(
-                    Model.ReferenciaSAP
-                    ?? Model.NumeroParte)
-                </div>
-                <div class="text-muted small">
-                    @Txt(Model.DescripcionParte)
-                </div>
+            <div class="paro-subtitle">
+                @(Model.TieneParoAbierto
+                                ? "La producción está pausada. Finaliza el paro cuando la máquina esté lista para continuar."
+                                : "El operador puede reportar un paro cuando la máquina o el proceso deban detenerse.")
             </div>
+        </div>
 
-            <div class="summary objective-summary">
-                <div class="k">
-                    Meta de la OF
-                </div>
+        @if (Model.TieneParoAbierto && Model.ParoAbiertoID.HasValue)
+        {
+            <button type="button"
+                    class="btn-paro-close"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalCerrarParo">
+                <i class="fa-solid fa-play"></i>
+                Finalizar paro
+            </button>
+        }
+        else if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+        {
+            <button type="button"
+                    class="btn-paro-start"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalIniciarParo">
+                <i class="fa-solid fa-stop"></i>
+                Reportar paro
+            </button>
+        }
+    </section>
 
-                <div class="v">
-                    @(planeada > 0
-                                        ? Numero(planeada)
-                                        : "-")
-                </div>
-
-                <div class="text-muted small">
-                    @(planeada > 0
-                                        ? "Piezas requeridas"
-                                        : "Sin cantidad planeada")
-                </div>
-            </div>
-
-            <div class="summary">
-                <div class="k">
-                    OK acumulado
-                </div>
-
-                <div class="v text-success">
-                    @Numero(Model.CantidadOKTotal)
-                </div>
-
-                <div class="text-muted small">
-                    @avance.ToString("0.##")% de la OF
-                </div>
-            </div>
-
-            <div class="summary">
-                <div class="k">
-                    Pendiente OF
-                </div>
-
-                <div class="v @(pendiente > 0
-                                                      ? "text-primary"
-                                                      : "text-success")">
-                    @Numero(pendiente)
-                </div>
-
-                <div class="text-muted small">
-                    @(pendiente > 0
-                                        ? "Piezas OK por producir"
-                                        : "Meta alcanzada")
-                </div>
-            </div>
-
-            <div class="summary">
-                <div class="k">
-                    Sospechosos
-                </div>
-
-                <div class="v text-warning">
-                    @Numero(
-                                        Model.CantidadSospechosaTotal)
-                </div>
-            </div>
-
-            <div class="summary">
-                <div class="k">
-                    Scrap
-                </div>
-
-                <div class="v text-danger">
-                    @Numero(
-                                        Model.CantidadScrapTotal)
-                </div>
-            </div>
-
-            <div class="summary objective-summary">
-                <div class="k">
-                    Objetivo por hora
-                </div>
-
-                <div class="v">
-                    @(objetivoHora.HasValue &&
-                                        objetivoHora.Value > 0
-                                        ? Numero(objetivoHora.Value)
-                                        : "-")
-                </div>
-
-                <div class="text-muted small">
-                    @(objetivoHora.HasValue &&
-                                        objetivoHora.Value > 0
-                                        ? "PZA / H"
-                                        : "Sin objetivo configurado")
-
-                    @if (Model.Ciclo.HasValue)
-                    {
-                        <span>
-                            · Ciclo
-                            @Model.Ciclo.Value.ToString("0.##")
-                        </span>
-                    }
-
-                    @if (Model.Cavidades.HasValue)
-                    {
-                        <span>
-                            · @Model.Cavidades.Value cav.
-                        </span>
-                    }
-                </div>
-            </div>
-
-        </section>
-
-        <section class="turn-toolbar">
-            <div>
-                <div class="turn-title">
-                    <i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Entrega de turno
-                </div>
-                <div class="turn-subtitle">
-                    Entrega la producción al siguiente operador. El cambio será efectivo únicamente cuando el operador entrante confirme la recepción.
-                </div>
-            </div>
-            @if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+    <section class="panel">
+        <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="fa-solid fa-clock me-2"></i>Registro por horas</span><span class="badge bg-primary">
+                OF @Numero(Model.CantidadOKTotal)
+                / @Numero(planeada)
+                · @avance.ToString("0.##")%
+                · Faltan @Numero(pendiente)
+            </span>
+        </div>
+        <div class="panel-body">
+            @if (Model.TieneParoAbierto)
             {
-                <button type="button"
-                        class="btn-turn"
-                        id="btnAbrirCambioTurno"
-                        @(Model.TieneParoAbierto ? "disabled" : "")>
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    Entregar turno
-                </button>
+                <div class="alert alert-danger fw-bold"><i class="fa-solid fa-circle-pause me-1"></i>Existe un paro abierto. Cierra el paro antes de capturar horas.</div>
+            }
+            else if (Model.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            {
+
+                <div class="alert alert-warning fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>La captura se habilita cuando inicia producción en serie.</div>
             }
             else
             {
-                <button type="button" class="btn-turn" disabled>
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    Entregar turno
-                </button>
+
+                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual de la máquina</strong> y clasifica las piezas como <strong>OK, Sospechosas o posible Scrap</strong>. El servidor calcula la producción física con el contador y las cavidades vigentes, y valida que la clasificación corresponda. Las horas futuras permanecen bloqueadas.</div>
             }
-        </section>
 
-        <section class="paro-toolbar @(Model.TieneParoAbierto ? "open" : "")">
-            <div>
-                <div class="paro-title">
-                    <i class="fa-solid @(Model.TieneParoAbierto ? "fa-circle-pause text-danger" : "fa-triangle-exclamation text-warning") me-2"></i>
-                    @(Model.TieneParoAbierto ? "Paro de máquina activo" : "Control de paro de máquina")
-                </div>
-                <div class="paro-subtitle">
-                    @(Model.TieneParoAbierto
-                                        ? "La producción está pausada. Finaliza el paro cuando la máquina esté lista para continuar."
-                                        : "El operador puede reportar un paro cuando la máquina o el proceso deban detenerse.")
-                </div>
-            </div>
-
-            @if (Model.TieneParoAbierto && Model.ParoAbiertoID.HasValue)
+            @if (horas.Count == 0)
             {
-                <button type="button"
-                        class="btn-paro-close"
-                        data-bs-toggle="modal"
-                        data-bs-target="#modalCerrarParo">
-                    <i class="fa-solid fa-play"></i>
-                    Finalizar paro
-                </button>
+                <div class="alert alert-secondary mb-0">No se generaron las filas horarias. El controlador debe cargar <strong>Model.HorasCaptura</strong> desde la hora real de inicio de producción.</div>
             }
-            else if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+            else
             {
-                <button type="button"
-                        class="btn-paro-start"
-                        data-bs-toggle="modal"
-                        data-bs-target="#modalIniciarParo">
-                    <i class="fa-solid fa-stop"></i>
-                    Reportar paro
-                </button>
-            }
-        </section>
-
-        <section class="panel">
-            <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span><i class="fa-solid fa-clock me-2"></i>Registro por horas</span><span class="badge bg-primary">
-                    OF @Numero(Model.CantidadOKTotal)
-                    / @Numero(planeada)
-                    · @avance.ToString("0.##")%
-                    · Faltan @Numero(pendiente)
-                </span>
-            </div>
-            <div class="panel-body">
-                @if (Model.TieneParoAbierto)
+                <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
+                    <table class="hour-table">
+                        <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Contador</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                        <tbody>
+                            @foreach (var fila in horasPendientesVisibles)
+                            {
+                                var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
+                                var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
+                                var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
+                                <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@(fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora ?? 0)" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                    <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
+                                    <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                    <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
+                                    <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
+                                    <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
+                                    <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
+                                    <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
+                                    <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
+                                    <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
+                                    <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (horasPendientesAdicionales.Count > 0)
                 {
-                    <div class="alert alert-danger fw-bold"><i class="fa-solid fa-circle-pause me-1"></i>Existe un paro abierto. Cierra el paro antes de capturar horas.</div>
-                }
-                else if (Model.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
-                {
-
-                    <div class="alert alert-warning fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>La captura se habilita cuando inicia producción en serie.</div>
-                }
-                else
-                {
-
-                    <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Escribe los números directamente en la fila. El objetivo de cada bloque se calcula desde ObjetivoHora y se ajusta al tiempo productivo real cuando el bloque es menor a 60 minutos. Las horas futuras permanecen bloqueadas.</div>
-                }
-
-                @if (horas.Count == 0)
-                {
-                    <div class="alert alert-secondary mb-0">No se generaron las filas horarias. El controlador debe cargar <strong>Model.HorasCaptura</strong> desde la hora real de inicio de producción.</div>
-                }
-                else
-                {
-                    <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
-                        <table class="hour-table">
-                            <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
-                            <tbody>
-                                @foreach (var fila in horasPendientesVisibles)
-                                {
-                                    var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
-                                    var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
-                                    var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
-                                    <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@(fila.ObjetivoBloque ?? fila.ObjetivoHora ?? 0)" data-obligatoria="@(esObligatoria ? "true" : "false")">
-                                        <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
-                                        <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
-                                        <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
-                                        <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
-                                        <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
-                                        <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
-                                        <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
-                                        <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
-                                        <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                    @if (horasPendientesAdicionales.Count > 0)
-                    {
-                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#pendientesAdicionales" aria-expanded="false" aria-controls="pendientesAdicionales"><span><i class="fa-solid fa-list me-2"></i>Ver más horas pendientes (@horasPendientesAdicionales.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
-                        <div class="collapse history-box" id="pendientesAdicionales">
-                            <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
-                                <table class="hour-table">
-                                    <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
-                                    <tbody>
-                                        @foreach (var fila in horasPendientesAdicionales)
-                                        {
-                                            var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
-                                            var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
-                                            var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
-                                            <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@(fila.ObjetivoBloque ?? fila.ObjetivoHora ?? 0)" data-obligatoria="@(esObligatoria ? "true" : "false")">
-                                                <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
-                                                <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
-                                                <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
-                                                <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
-                                                <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
-                                                <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
-                                                <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
-                                                <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
-                                                <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    }
-                    @if (historialTurnos.Count > 0)
-                    {
-                        <div class="shift-history">
-                            <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialPorTurnos" aria-expanded="false" aria-controls="historialPorTurnos">
-                                <span><i class="fa-solid fa-people-arrows-left-right me-2"></i>Historial de producción por turnos (@historialTurnos.Count)</span>
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </button>
-                            <div class="collapse history-box" id="historialPorTurnos">
-                                <div class="accordion shift-accordion" id="accordionTurnosProduccion">
-                                    @foreach (var turno in historialTurnos)
+                    <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#pendientesAdicionales" aria-expanded="false" aria-controls="pendientesAdicionales"><span><i class="fa-solid fa-list me-2"></i>Ver más horas pendientes (@horasPendientesAdicionales.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="collapse history-box" id="pendientesAdicionales">
+                        <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
+                            <table class="hour-table">
+                                <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Contador</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                                <tbody>
+                                    @foreach (var fila in horasPendientesAdicionales)
                                     {
-                                        var idTurno = $"turnoProduccion_{turno.NumeroTurno}";
-                                        var horasTurno = turno.Horas?.OrderBy(x => x.FechaProduccion).ThenBy(x => x.HoraInicio).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
-                                        var textoFinTurno = turno.FechaFin.HasValue ? turno.FechaFin.Value.ToString("dd/MM/yyyy HH:mm") : "En curso";
-                                        <div class="accordion-item">
-                                            <h2 class="accordion-header" id="heading_@idTurno">
-                                                <button class="accordion-button @(turno.NumeroTurno == historialTurnos.Last().NumeroTurno ? "" : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#@idTurno" aria-expanded="@(turno.NumeroTurno == historialTurnos.Last().NumeroTurno ? "true" : "false")" aria-controls="@idTurno">
-                                                    <div class="shift-head-main">
-                                                        <span class="shift-name"><i class="fa-solid fa-user-clock me-1"></i>@Txt(turno.TurnoNombre)</span>
-                                                        <span class="shift-operator">@Txt(turno.OperadorNombre)</span>
-                                                        <span class="shift-range">@turno.FechaInicio.ToString("dd/MM/yyyy HH:mm") → @textoFinTurno</span>
-                                                        <span class="shift-badges">
-                                                            <span class="shift-badge ok">OK @Numero(turno.CantidadOK)</span>
-                                                            <span class="shift-badge sos">SOS @Numero(turno.CantidadSospechosa)</span>
-                                                            <span class="shift-badge scrap">SCRAP @Numero(turno.CantidadScrap)</span>
-                                                            <span class="shift-badge goal">@turno.PorcentajeCumplimiento.ToString("0.#")%</span>
-                                                        </span>
-                                                    </div>
-                                                </button>
-                                            </h2>
-                                            <div id="@idTurno" class="accordion-collapse collapse @(turno.NumeroTurno == historialTurnos.Last().NumeroTurno ? "show" : "")" aria-labelledby="heading_@idTurno" data-bs-parent="#accordionTurnosProduccion">
-                                                <div class="accordion-body">
-                                                    <div class="shift-summary">
-                                                        <div class="shift-summary-card"><div class="k">Operador</div><div class="v">@Txt(turno.OperadorNombre)</div></div>
-                                                        <div class="shift-summary-card"><div class="k">Horas capturadas</div><div class="v">@horasTurno.Count</div></div>
-                                                        <div class="shift-summary-card"><div class="k">Objetivo acumulado</div><div class="v">@Numero(turno.ObjetivoTotal)</div></div>
-                                                        <div class="shift-summary-card"><div class="k">OK acumulado</div><div class="v text-success">@Numero(turno.CantidadOK)</div></div>
-                                                        <div class="shift-summary-card"><div class="k">Cumplimiento</div><div class="v @(turno.CumplioObjetivo ? "text-success" : "text-danger")">@turno.PorcentajeCumplimiento.ToString("0.#")%</div></div>
-                                                    </div>
-                                                    <div class="table-wrap">
-                                                        <table class="hour-table">
-                                                            <thead>
-                                                                <tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Cumplimiento</th><th>Observaciones</th><th>Estado</th></tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                @for (var i = 0; i < horasTurno.Count; i++)
-                                                                {
-                                                                    var fila = horasTurno[i];
-                                                                    var claseHistorial = fila.ObjetivoBloque.HasValue && fila.ObjetivoBloque.Value > 0 && !fila.CumplioObjetivo ? "row-goal-fail" : "row-complete";
-                                                                    <tr class="@claseHistorial">
-                                                                        <td>
-                                                                            <div class="hour-label">Hora @(i + 1)</div>
-                                                                            <div class="small text-muted">Global #@fila.NumeroHora</div>
-                                                                        </td>
-                                                                        <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
-                                                                        <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">PZA</span></td>
-                                                                        <td><span class="status-pill status-complete">@Numero(fila.CantidadOK)</span></td>
-                                                                        <td><span class="status-pill status-ready">@Numero(fila.CantidadSospechosa)</span></td>
-                                                                        <td><span class="status-pill status-overdue">@Numero(fila.CantidadScrap)</span></td>
-                                                                        <td>
-                                                                            @if (!fila.ObjetivoBloque.HasValue || fila.ObjetivoBloque.Value <= 0)
-                                                                            {
-                                                                                <span class="goal-result goal-neutral"><span class="history-goal-title"><i class="fa-solid fa-circle-info me-1"></i>Sin objetivo</span><span class="history-goal-detail">No se pudo evaluar esta hora</span></span>
-                                                                            }
-                                                                            else if (fila.CumplioObjetivo)
-                                                                            {
-                                                                                <span class="goal-result goal-success"><span class="history-goal-title"><i class="fa-solid fa-circle-check me-1"></i>Cumplió</span><span class="history-goal-detail">@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</span><span class="history-goal-detail">@(fila.PiezasSobreObjetivo > 0 ? $"Superó por {fila.PiezasSobreObjetivo:N0} pieza(s)" : "Objetivo exacto")</span></span>
-                                                                            }
-                                                                            else
-                                                                            {
-                                                                                <span class="goal-result goal-danger"><span class="history-goal-title"><i class="fa-solid fa-circle-xmark me-1"></i>No cumplió</span><span class="history-goal-detail">@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</span><span class="history-goal-detail">Faltaron @fila.PiezasFaltantes.ToString("N0") pieza(s)</span></span>
-                                                                            }
-                                                                        </td>
-                                                                        <td>@Txt(fila.Observaciones)</td>
-                                                                        <td><span class="status-pill status-complete"><i class="fa-solid fa-check"></i> Capturada</span></td>
-                                                                    </tr>
-                                                                }
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
+                                        var editable = capturaHabilitada && !fila.Capturada && fila.Disponible;
+                                        var claseFila = fila.Vencida ? "row-overdue" : fila.Disponible ? "row-ready" : "";
+                                        var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora;
+                                        <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@(fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora ?? 0)" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                            <td><div class="hour-label">Hora @fila.NumeroHora</div></td>
+                                            <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                            <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
+                                            <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
+                                            <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
+                                            <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
+                                            <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
+                                            <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
+                                            <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
+                                            <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                @if (historialTurnos.Count > 0)
+                {
+                    <div class="shift-history">
+                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialPorTurnos" aria-expanded="false" aria-controls="historialPorTurnos">
+                            <span><i class="fa-solid fa-people-arrows-left-right me-2"></i>Historial de producción por turnos (@historialTurnos.Count)</span>
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <div class="collapse history-box" id="historialPorTurnos">
+                            <div class="accordion shift-accordion" id="accordionTurnosProduccion">
+                                @foreach (var turno in historialTurnos)
+                                {
+                                    var idTurno = $"turnoProduccion_{turno.NumeroTurno}";
+                                    var horasTurno = turno.Horas?.OrderBy(x => x.FechaProduccion).ThenBy(x => x.HoraInicio).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
+                                    var textoFinTurno = turno.FechaFin.HasValue ? turno.FechaFin.Value.ToString("dd/MM/yyyy HH:mm") : "En curso";
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="heading_@idTurno">
+                                            <button class="accordion-button @(turno.NumeroTurno == historialTurnos.Last().NumeroTurno ? "" : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#@idTurno" aria-expanded="@(turno.NumeroTurno == historialTurnos.Last().NumeroTurno ? "true" : "false")" aria-controls="@idTurno">
+                                                <div class="shift-head-main">
+                                                    <span class="shift-name"><i class="fa-solid fa-user-clock me-1"></i>@Txt(turno.TurnoNombre)</span>
+                                                    <span class="shift-operator">@Txt(turno.OperadorNombre)</span>
+                                                    <span class="shift-range">@turno.FechaInicio.ToString("dd/MM/yyyy HH:mm") → @textoFinTurno</span>
+                                                    <span class="shift-badges">
+                                                        <span class="shift-badge ok">OK @Numero(turno.CantidadOK)</span>
+                                                        <span class="shift-badge sos">SOS @Numero(turno.CantidadSospechosa)</span>
+                                                        <span class="shift-badge scrap">SCRAP @Numero(turno.CantidadScrap)</span>
+                                                        <span class="shift-badge goal">@turno.PorcentajeCumplimiento.ToString("0.#")%</span>
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        </h2>
+                                        <div id="@idTurno" class="accordion-collapse collapse @(turno.NumeroTurno == historialTurnos.Last().NumeroTurno ? "show" : "")" aria-labelledby="heading_@idTurno" data-bs-parent="#accordionTurnosProduccion">
+                                            <div class="accordion-body">
+                                                <div class="shift-summary">
+                                                    <div class="shift-summary-card"><div class="k">Operador</div><div class="v">@Txt(turno.OperadorNombre)</div></div>
+                                                    <div class="shift-summary-card"><div class="k">Horas capturadas</div><div class="v">@horasTurno.Count</div></div>
+                                                    <div class="shift-summary-card"><div class="k">Objetivo acumulado</div><div class="v">@Numero(turno.ObjetivoTotal)</div></div>
+                                                    <div class="shift-summary-card"><div class="k">OK acumulado</div><div class="v text-success">@Numero(turno.CantidadOK)</div></div>
+                                                    <div class="shift-summary-card"><div class="k">Cumplimiento</div><div class="v @(turno.CumplioObjetivo ? "text-success" : "text-danger")">@turno.PorcentajeCumplimiento.ToString("0.#")%</div></div>
+                                                </div>
+                                                <div class="table-wrap">
+                                                    <table class="hour-table">
+                                                        <thead>
+                                                            <tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Cumplimiento</th><th>Observaciones</th><th>Estado</th></tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @for (var i = 0; i < horasTurno.Count; i++)
+                                                            {
+                                                                var fila = horasTurno[i];
+                                                                var claseHistorial = fila.ObjetivoBloque.HasValue && fila.ObjetivoBloque.Value > 0 && !fila.CumplioObjetivo ? "row-goal-fail" : "row-complete";
+                                                                <tr class="@claseHistorial">
+                                                                    <td>
+                                                                        <div class="hour-label">Hora @(i + 1)</div>
+                                                                        <div class="small text-muted">Global #@fila.NumeroHora</div>
+                                                                    </td>
+                                                                    <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                                                    <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">PZA</span></td>
+                                                                    <td><span class="status-pill status-complete">@Numero(fila.CantidadOK)</span></td>
+                                                                    <td><span class="status-pill status-ready">@Numero(fila.CantidadSospechosa)</span></td>
+                                                                    <td><span class="status-pill status-overdue">@Numero(fila.CantidadScrap)</span></td>
+                                                                    <td>
+                                                                        @if (!fila.ObjetivoBloque.HasValue || fila.ObjetivoBloque.Value <= 0)
+                                                                        {
+                                                                            <span class="goal-result goal-neutral"><span class="history-goal-title"><i class="fa-solid fa-circle-info me-1"></i>Sin objetivo</span><span class="history-goal-detail">No se pudo evaluar esta hora</span></span>
+                                                                        }
+                                                                        else if (fila.CumplioObjetivo)
+                                                                        {
+                                                                            <span class="goal-result goal-success"><span class="history-goal-title"><i class="fa-solid fa-circle-check me-1"></i>Cumplió</span><span class="history-goal-detail">@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</span><span class="history-goal-detail">@(fila.PiezasSobreObjetivo > 0 ? $"Superó por {fila.PiezasSobreObjetivo:N0} pieza(s)" : "Objetivo exacto")</span></span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="goal-result goal-danger"><span class="history-goal-title"><i class="fa-solid fa-circle-xmark me-1"></i>No cumplió</span><span class="history-goal-detail">@fila.PorcentajeCumplimiento.ToString("0.#")% del objetivo</span><span class="history-goal-detail">Faltaron @fila.PiezasFaltantes.ToString("N0") pieza(s)</span></span>
+                                                                        }
+                                                                    </td>
+                                                                    <td>@Txt(fila.Observaciones)</td>
+                                                                    <td><span class="status-pill status-complete"><i class="fa-solid fa-check"></i> Capturada</span></td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                             </div>
                                         </div>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    }
-                    else if (horasCapturadas.Count > 0)
-                    {
-                        <div class="alert alert-warning rounded-4 fw-bold mt-3 mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i>Existen horas capturadas, pero todavía no se pudo construir el historial por turnos. Revisa que cada hora tenga OperadorID/OperadorNombre y que Captura cargue Model.HistorialTurnos.</div>
-                    }
-
-                    @if (historialCambiosTurno.Count > 0)
-                    {
-                        <div class="shift-history">
-                            <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialCambiosTurno" aria-expanded="false" aria-controls="historialCambiosTurno">
-                                <span><i class="fa-solid fa-right-left me-2"></i>Historial de cambios de turno (@historialCambiosTurno.Count)</span>
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </button>
-                            <div class="collapse history-box" id="historialCambiosTurno">
-                                @foreach (var cambio in historialCambiosTurno.OrderByDescending(x => x.FechaEntrega))
-                                {
-                                    var estadoClase = string.Equals(cambio.Estado, "RECIBIDO", StringComparison.OrdinalIgnoreCase) ? "status-complete" : string.Equals(cambio.Estado, "CANCELADO", StringComparison.OrdinalIgnoreCase) ? "status-overdue" : "status-ready";
-                                    <div class="turn-change-card">
-                                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                                            <div class="fw-bold text-primary"><i class="fa-solid fa-arrow-right-arrow-left me-1"></i>Cambio #@cambio.CambioTurnoID</div>
-                                            <div class="d-flex gap-2 flex-wrap">
-                                                <span class="status-pill @estadoClase">@Txt(cambio.Estado)</span>
-                                                <span class="status-pill status-future">
-                                                    @(string.Equals(cambio.OrigenOperadorEntrante, "TECNICO", StringComparison.OrdinalIgnoreCase)
-                                                                                            ? "Técnico"
-                                                                                            : string.Equals(cambio.OrigenOperadorEntrante, "ESCALA", StringComparison.OrdinalIgnoreCase)
-                                                                                            ? "Escala"
-                                                                                            : "Manual")
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="turn-change-flow">
-                                <div class="turn-change-person">
-                                    <div class="k">Entrega</div>
-                                    <div class="v">@Txt(cambio.OperadorSalienteNombre)</div>
-                                    <div class="small text-muted">@Txt(cambio.TurnoSalienteNombre)</div>
-                                </div>
-                                <div class="turn-change-arrow"><i class="fa-solid fa-arrow-right"></i></div>
-                                <div class="turn-change-person">
-                                    <div class="k">Recibe</div>
-                                    <div class="v">@Txt(cambio.OperadorEntranteNombre)</div>
-                                    <div class="small text-muted">@Txt(cambio.TurnoEntranteNombre)</div>
-                                </div>
-                            </div>
-                            <div class="turn-change-meta">
-                                <div class="turn-card"><div class="label">Fecha entrega</div><div class="value">@cambio.FechaEntrega.ToString("dd/MM/yyyy HH:mm")</div></div>
-                                <div class="turn-card"><div class="label">Fecha recepción</div><div class="value">@(cambio.FechaRecepcion.HasValue? cambio.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</div></div>
-                                <div class="turn-card"><div class="label">Producción entregada</div><div class="value">OK @Numero(cambio.CantidadOK)</div><div class="small text-muted">SOS @Numero(cambio.CantidadSospechosa) · Scrap @Numero(cambio.CantidadScrap)</div></div>
-                                <div class="turn-card"><div class="label">Cajas</div><div class="value">@Numero(cambio.TotalCajasEntregadas) / @Numero(cambio.TotalCajas)</div><div class="small text-muted">Pendientes @Numero(cambio.TotalCajasPendientes)</div></div>
-                            </div>
-                            <div class="turn-change-obs">
-                                <div><div class="k">Observaciones de entrega</div><div class="v">@Txt(cambio.ObservacionesEntrega)</div></div>
-                                <div><div class="k">Observaciones de recepción</div><div class="v">@Txt(cambio.ObservacionesRecepcion)</div></div>
-                            </div>
-                        </div>
-                                                }
-                            </div>
-                        </div>
-                    }
-                }
-            </div>
-        </section>
-    </div>
-
-    <div class="modal fade modal-turn" id="modalCambioTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Entrega de turno
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <form method="post" action="@Url.Action("EntregarTurno","ProduccionOperador")" id="formCambioTurno">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
-                    <div class="modal-body p-4">
-                        <div id="cambioTurnoLoading" class="turn-loading">
-                            <i class="fa-solid fa-spinner fa-spin fa-2x mb-3"></i>
-                            <div>Consultando información del turno...</div>
-                        </div>
-                        <div id="cambioTurnoContenido" class="d-none">
-                            <div id="mensajeCambioTurno" class="turn-validation error d-none"></div>
-                            <div class="turn-summary-grid">
-                                <div class="turn-card">
-                                    <div class="label">Máquina</div>
-                                    <div class="value" id="turnMaquina">-</div>
-                                </div>
-                                <div class="turn-card">
-                                    <div class="label">Parte</div>
-                                    <div class="value" id="turnParte">-</div>
-                                </div>
-                                <div class="turn-card">
-                                    <div class="label">Última hora registrada</div>
-                                    <div class="value" id="turnUltimaHora">-</div>
-                                </div>
-                            </div>
-                            <div class="turn-person">
-                                <div class="turn-person-label">Operador saliente</div>
-                                <div class="turn-person-name" id="turnOperadorSaliente">-</div>
-                            </div>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-4">
-                                    <div class="turn-card h-100">
-                                        <div class="label">Producción OK</div>
-                                        <div class="value text-success" id="turnCantidadOK">0</div>
                                     </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="turn-card h-100">
-                                        <div class="label">Sospechoso</div>
-                                        <div class="value text-warning" id="turnCantidadSospechosa">0</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="turn-card h-100">
-                                        <div class="label">Scrap</div>
-                                        <div class="value text-danger" id="turnCantidadScrap">0</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="turn-card mb-3">
-                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                                    <div>
-                                        <div class="label">Estado de cajas</div>
-                                        <div class="value"><span id="turnTotalCajas">0</span> caja(s)</div>
-                                    </div>
-                                </div>
-                                <div class="turn-box-state mb-0">
-                                    <span class="ok">
-                                        <i class="fa-solid fa-circle-check me-1"></i>
-                                        Entregadas: <strong id="turnCajasEntregadas">0</strong>
-                                    </span>
-                                    <span class="danger" id="badgeCajasPendientes">
-                                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                                        Pendientes: <strong id="turnCajasPendientes">0</strong>
-                                    </span>
-                                </div>
-                            </div>
-                            <div id="turnValidacionEntrega" class="turn-validation ok">
-                                <i class="fa-solid fa-circle-check me-1"></i>
-                                La producción está lista para entregar el turno.
-                            </div>
-                            <div class="turn-person suggested d-none" id="turnSugeridoBox">
-                                <div class="turn-person-label" id="turnSugeridoLabel">Operador sugerido</div>
-                                <div class="turn-person-name" id="turnOperadorSugerido">-</div>
-                                <div class="turn-source">
-                                    <i class="fa-solid fa-calendar-check" id="turnSugeridoIcono"></i>
-                                    <span id="turnSugeridoDetalle">Escala</span>
-                                </div>
-                                <div class="turn-technician-meta d-none" id="turnTecnicoMeta"></div>
-                                <div class="turn-technician-observation d-none" id="turnTecnicoObservacion"></div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="operadorEntranteID" class="form-label fw-bold">
-                                    Operador entrante
-                                </label>
-                                <select class="form-select turn-select"
-                                        id="operadorEntranteID"
-                                        name="OperadorEntranteID"
-                                        required>
-                                    <option value="">Selecciona operador</option>
-                                </select>
-                                <div class="turn-option-help" id="turnAyudaOperador">
-                                    Si el técnico dejó una sugerencia, aparecerá preseleccionada. Puedes cambiarla por otro operador autorizado si las condiciones del turno cambiaron.
-                                </div>
-                            </div>
-                            <div id="turnInfoSeleccionado" class="turn-person d-none">
-                                <div class="turn-person-label">Operador seleccionado</div>
-                                <div class="turn-person-name" id="turnSeleccionadoNombre">-</div>
-                                <div class="small text-muted fw-bold mt-1" id="turnSeleccionadoDetalle"></div>
-                            </div>
-                            <div class="mb-0">
-                                <label for="observacionesCambioTurno" class="form-label fw-bold">Observaciones de entrega</label>
-                                <textarea name="Observaciones"
-                                          id="observacionesCambioTurno"
-                                          rows="3"
-                                          maxlength="1000"
-                                          class="form-control"
-                                          placeholder="Ejemplo: máquina estable, pendiente seguimiento de una incidencia, material en proceso, etc."></textarea>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer border-0 px-4 pb-4">
-                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">
-                            Cancelar
-                        </button>
-                        <button type="submit"
-                                class="btn btn-primary fw-bold"
-                                id="btnConfirmarCambioTurno"
-                                disabled>
-                            <i class="fa-solid fa-paper-plane me-1"></i>
-                            Enviar turno para recepción
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade modal-paro" id="modalIniciarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar paro de máquina</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <form method="post" action="@Url.Action("IniciarParo", "ProduccionOperador")" id="formIniciarParo">
-                    @Html.AntiForgeryToken()
-                    <div class="modal-body p-4">
-                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
-
-                        <div class="paro-warning mb-3">
-                            <i class="fa-solid fa-circle-info me-1"></i>
-                            Al confirmar, la ejecución quedará pausada y se bloqueará la captura por hora hasta cerrar el paro.
-                        </div>
-                        <div id="mensajeParo" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Motivo del paro</label>
-                            <select name="MotivoParoID" id="motivoParoId" class="form-select form-select-lg">
-                                @foreach (var motivo in Model.MotivosParo ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>())
-                                {
-                                    <option value="@motivo.Value">@motivo.Text</option>
                                 }
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Otro motivo</label>
-                            <input type="text"
-                                   name="MotivoParoTexto"
-                                   id="motivoParoTexto"
-                                   maxlength="200"
-                                   class="form-control"
-                                   placeholder="Úsalo cuando el motivo no esté en el catálogo" />
-                        </div>
-
-                        <div>
-                            <label class="form-label fw-bold">Descripción</label>
-                            <textarea name="Descripcion"
-                                      id="descripcionParo"
-                                      rows="4"
-                                      maxlength="500"
-                                      class="form-control"
-                                      placeholder="Describe brevemente qué ocurrió"></textarea>
+                            </div>
                         </div>
                     </div>
-                    <div class="modal-footer border-0 px-4 pb-4">
-                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-danger fw-bold" id="btnConfirmarParo">
-                            <i class="fa-solid fa-stop me-1"></i>Iniciar paro
+                }
+                else if (horasCapturadas.Count > 0)
+                {
+                    <div class="alert alert-warning rounded-4 fw-bold mt-3 mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i>Existen horas capturadas, pero todavía no se pudo construir el historial por turnos. Revisa que cada hora tenga OperadorID/OperadorNombre y que Captura cargue Model.HistorialTurnos.</div>
+                }
+
+                @if (historialCambiosTurno.Count > 0)
+                {
+                    <div class="shift-history">
+                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialCambiosTurno" aria-expanded="false" aria-controls="historialCambiosTurno">
+                            <span><i class="fa-solid fa-right-left me-2"></i>Historial de cambios de turno (@historialCambiosTurno.Count)</span>
+                            <i class="fa-solid fa-chevron-down"></i>
                         </button>
+                        <div class="collapse history-box" id="historialCambiosTurno">
+                            @foreach (var cambio in historialCambiosTurno.OrderByDescending(x => x.FechaEntrega))
+                            {
+                                var estadoClase = string.Equals(cambio.Estado, "RECIBIDO", StringComparison.OrdinalIgnoreCase) ? "status-complete" : string.Equals(cambio.Estado, "CANCELADO", StringComparison.OrdinalIgnoreCase) ? "status-overdue" : "status-ready";
+                                <div class="turn-change-card">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                        <div class="fw-bold text-primary"><i class="fa-solid fa-arrow-right-arrow-left me-1"></i>Cambio #@cambio.CambioTurnoID</div>
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <span class="status-pill @estadoClase">@Txt(cambio.Estado)</span>
+                                            <span class="status-pill status-future">
+                                                @(string.Equals(cambio.OrigenOperadorEntrante, "TECNICO", StringComparison.OrdinalIgnoreCase)
+                                                                                    ? "Técnico"
+                                                                                    : string.Equals(cambio.OrigenOperadorEntrante, "ESCALA", StringComparison.OrdinalIgnoreCase)
+                                                                                    ? "Escala"
+                                                                                    : "Manual")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="turn-change-flow">
+                            <div class="turn-change-person">
+                                <div class="k">Entrega</div>
+                                <div class="v">@Txt(cambio.OperadorSalienteNombre)</div>
+                                <div class="small text-muted">@Txt(cambio.TurnoSalienteNombre)</div>
+                            </div>
+                            <div class="turn-change-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                            <div class="turn-change-person">
+                                <div class="k">Recibe</div>
+                                <div class="v">@Txt(cambio.OperadorEntranteNombre)</div>
+                                <div class="small text-muted">@Txt(cambio.TurnoEntranteNombre)</div>
+                            </div>
+                        </div>
+                        <div class="turn-change-meta">
+                            <div class="turn-card"><div class="label">Fecha entrega</div><div class="value">@cambio.FechaEntrega.ToString("dd/MM/yyyy HH:mm")</div></div>
+                            <div class="turn-card"><div class="label">Fecha recepción</div><div class="value">@(cambio.FechaRecepcion.HasValue? cambio.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</div></div>
+                            <div class="turn-card"><div class="label">Producción entregada</div><div class="value">OK @Numero(cambio.CantidadOK)</div><div class="small text-muted">SOS @Numero(cambio.CantidadSospechosa) · Scrap @Numero(cambio.CantidadScrap)</div></div>
+                            <div class="turn-card"><div class="label">Cajas</div><div class="value">@Numero(cambio.TotalCajasEntregadas) / @Numero(cambio.TotalCajas)</div><div class="small text-muted">Pendientes @Numero(cambio.TotalCajasPendientes)</div></div>
+                        </div>
+                        <div class="turn-change-obs">
+                            <div><div class="k">Observaciones de entrega</div><div class="v">@Txt(cambio.ObservacionesEntrega)</div></div>
+                            <div><div class="k">Observaciones de recepción</div><div class="v">@Txt(cambio.ObservacionesRecepcion)</div></div>
+                        </div>
                     </div>
-                </form>
-            </div>
+                                        }
+                        </div>
+                    </div>
+                }
+            }
         </div>
-    </div>
+    </section>
+</div>
 
-    <div class="modal fade modal-reanudar" id="modalCerrarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fa-solid fa-play me-2"></i>Finalizar paro de máquina</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <form method="post" action="@Url.Action("CerrarParo", "ProduccionOperador")" id="formCerrarParo">
-                    @Html.AntiForgeryToken()
-                    <div class="modal-body p-4">
-                        <input type="hidden" name="ParoID" value="@Model.ParoAbiertoID" />
-
-                        <div class="alert alert-success fw-bold rounded-4">
+<div class="modal fade modal-turn" id="modalCambioTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Entrega de turno
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="@Url.Action("EntregarTurno","ProduccionOperador")" id="formCambioTurno">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                <div class="modal-body p-4">
+                    <div id="cambioTurnoLoading" class="turn-loading">
+                        <i class="fa-solid fa-spinner fa-spin fa-2x mb-3"></i>
+                        <div>Consultando información del turno...</div>
+                    </div>
+                    <div id="cambioTurnoContenido" class="d-none">
+                        <div id="mensajeCambioTurno" class="turn-validation error d-none"></div>
+                        <div class="turn-summary-grid">
+                            <div class="turn-card">
+                                <div class="label">Máquina</div>
+                                <div class="value" id="turnMaquina">-</div>
+                            </div>
+                            <div class="turn-card">
+                                <div class="label">Parte</div>
+                                <div class="value" id="turnParte">-</div>
+                            </div>
+                            <div class="turn-card">
+                                <div class="label">Última hora registrada</div>
+                                <div class="value" id="turnUltimaHora">-</div>
+                            </div>
+                        </div>
+                        <div class="turn-person">
+                            <div class="turn-person-label">Operador saliente</div>
+                            <div class="turn-person-name" id="turnOperadorSaliente">-</div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="turn-card h-100">
+                                    <div class="label">Producción OK</div>
+                                    <div class="value text-success" id="turnCantidadOK">0</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="turn-card h-100">
+                                    <div class="label">Sospechoso</div>
+                                    <div class="value text-warning" id="turnCantidadSospechosa">0</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="turn-card h-100">
+                                    <div class="label">Scrap</div>
+                                    <div class="value text-danger" id="turnCantidadScrap">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="turn-card mb-3">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <div>
+                                    <div class="label">Estado de cajas</div>
+                                    <div class="value"><span id="turnTotalCajas">0</span> caja(s)</div>
+                                </div>
+                            </div>
+                            <div class="turn-box-state mb-0">
+                                <span class="ok">
+                                    <i class="fa-solid fa-circle-check me-1"></i>
+                                    Entregadas: <strong id="turnCajasEntregadas">0</strong>
+                                </span>
+                                <span class="danger" id="badgeCajasPendientes">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                    Pendientes: <strong id="turnCajasPendientes">0</strong>
+                                </span>
+                            </div>
+                        </div>
+                        <div id="turnValidacionEntrega" class="turn-validation ok">
                             <i class="fa-solid fa-circle-check me-1"></i>
-                            Confirma que la máquina está lista para continuar.
+                            La producción está lista para entregar el turno.
                         </div>
-
-                        <div class="paro-warning mb-3">
-                            <i class="fa-solid fa-clock me-1"></i>
-                            Si el paro duró más de 15 minutos, el sistema regresará la producción a preparación y solicitará reliberación de Calidad.
+                        <div class="turn-person suggested d-none" id="turnSugeridoBox">
+                            <div class="turn-person-label" id="turnSugeridoLabel">Operador sugerido</div>
+                            <div class="turn-person-name" id="turnOperadorSugerido">-</div>
+                            <div class="turn-source">
+                                <i class="fa-solid fa-calendar-check" id="turnSugeridoIcono"></i>
+                                <span id="turnSugeridoDetalle">Escala</span>
+                            </div>
+                            <div class="turn-technician-meta d-none" id="turnTecnicoMeta"></div>
+                            <div class="turn-technician-observation d-none" id="turnTecnicoObservacion"></div>
                         </div>
-
-                        <div>
-                            <label class="form-label fw-bold">Observaciones de cierre</label>
-                            <textarea name="ObservacionesCierre"
-                                      rows="4"
-                                      maxlength="500"
+                        <div class="mb-3">
+                            <label for="operadorEntranteID" class="form-label fw-bold">
+                                Operador entrante
+                            </label>
+                            <select class="form-select turn-select"
+                                    id="operadorEntranteID"
+                                    name="OperadorEntranteID"
+                                    required>
+                                <option value="">Selecciona operador</option>
+                            </select>
+                            <div class="turn-option-help" id="turnAyudaOperador">
+                                Si el técnico dejó una sugerencia, aparecerá preseleccionada. Puedes cambiarla por otro operador autorizado si las condiciones del turno cambiaron.
+                            </div>
+                        </div>
+                        <div id="turnInfoSeleccionado" class="turn-person d-none">
+                            <div class="turn-person-label">Operador seleccionado</div>
+                            <div class="turn-person-name" id="turnSeleccionadoNombre">-</div>
+                            <div class="small text-muted fw-bold mt-1" id="turnSeleccionadoDetalle"></div>
+                        </div>
+                        <div class="mb-0">
+                            <label for="observacionesCambioTurno" class="form-label fw-bold">Observaciones de entrega</label>
+                            <textarea name="Observaciones"
+                                      id="observacionesCambioTurno"
+                                      rows="3"
+                                      maxlength="1000"
                                       class="form-control"
-                                      placeholder="Describe la corrección o condición para reanudar"></textarea>
+                                      placeholder="Ejemplo: máquina estable, pendiente seguimiento de una incidencia, material en proceso, etc."></textarea>
                         </div>
                     </div>
-                    <div class="modal-footer border-0 px-4 pb-4">
-                        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-success fw-bold" id="btnConfirmarCierreParo">
-                            <i class="fa-solid fa-play me-1"></i>Finalizar y continuar
-                        </button>
-                    </div>
-                </form>
-            </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary fw-bold"
+                            id="btnConfirmarCambioTurno"
+                            disabled>
+                        <i class="fa-solid fa-paper-plane me-1"></i>
+                        Enviar turno para recepción
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <div class="modal fade" id="modalCapturaHora" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title"><i class="fa-solid fa-bell me-2"></i>Captura horaria pendiente</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
-                <form method="post" action="@Url.Action("RegistrarHora","ProduccionOperador")" id="formModalHora">
-                    @Html.AntiForgeryToken()
-                    <div class="modal-body p-4">
-                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
-                        <input type="hidden" name="FechaProduccion" id="modalFecha" />
-                        <input type="hidden" name="HoraInicio" id="modalInicio" />
-                        <input type="hidden" name="HoraFin" id="modalFin" />
-                        <div class="text-center mb-3"><div class="text-muted fw-bold">Debes completar</div><div class="modal-hour" id="modalTituloHora">Hora pendiente</div><div class="text-muted" id="modalRangoHora"></div></div>
-                        <div class="modal-goal">
-                            <div class="goal-label">Objetivo de este bloque</div>
-                            <div class="goal-value"><span id="modalObjetivo">-</span> <small>PZA</small></div>
-                            <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura las piezas OK para comparar contra el objetivo.</div>
-                        </div>
-                        <div id="mensajeCapturaHora" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
-                        <div class="modal-grid mb-3">
-                            <div><div class="modal-label text-success">OK</div><input type="number" min="0" value="" placeholder="0" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" /></div>
-                            <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
-                            <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" /></div>
-                        </div>
-                        <label class="form-label fw-bold">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Necesaria cuando no hubo producción o para explicar incidencias"></textarea>
-                        <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i>Puedes cerrar este aviso durante las pruebas, pero la siguiente hora seguirá bloqueada hasta capturar la anterior.</div>
-                    </div>
-                    <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
-                </form>
+<div class="modal fade modal-paro" id="modalIniciarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar paro de máquina</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
+            <form method="post" action="@Url.Action("IniciarParo", "ProduccionOperador")" id="formIniciarParo">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+
+                    <div class="paro-warning mb-3">
+                        <i class="fa-solid fa-circle-info me-1"></i>
+                        Al confirmar, la ejecución quedará pausada y se bloqueará la captura por hora hasta cerrar el paro.
+                    </div>
+                    <div id="mensajeParo" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Motivo del paro</label>
+                        <select name="MotivoParoID" id="motivoParoId" class="form-select form-select-lg">
+                            @foreach (var motivo in Model.MotivosParo ?? new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>())
+                            {
+                                <option value="@motivo.Value">@motivo.Text</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Otro motivo</label>
+                        <input type="text"
+                               name="MotivoParoTexto"
+                               id="motivoParoTexto"
+                               maxlength="200"
+                               class="form-control"
+                               placeholder="Úsalo cuando el motivo no esté en el catálogo" />
+                    </div>
+
+                    <div>
+                        <label class="form-label fw-bold">Descripción</label>
+                        <textarea name="Descripcion"
+                                  id="descripcionParo"
+                                  rows="4"
+                                  maxlength="500"
+                                  class="form-control"
+                                  placeholder="Describe brevemente qué ocurrió"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger fw-bold" id="btnConfirmarParo">
+                        <i class="fa-solid fa-stop me-1"></i>Iniciar paro
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+</div>
+
+<div class="modal fade modal-reanudar" id="modalCerrarParo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-play me-2"></i>Finalizar paro de máquina</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="@Url.Action("CerrarParo", "ProduccionOperador")" id="formCerrarParo">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <input type="hidden" name="ParoID" value="@Model.ParoAbiertoID" />
+
+                    <div class="alert alert-success fw-bold rounded-4">
+                        <i class="fa-solid fa-circle-check me-1"></i>
+                        Confirma que la máquina está lista para continuar.
+                    </div>
+
+                    <div class="paro-warning mb-3">
+                        <i class="fa-solid fa-clock me-1"></i>
+                        Si el paro duró más de 15 minutos, el sistema regresará la producción a preparación y solicitará reliberación de Calidad.
+                    </div>
+
+                    <div>
+                        <label class="form-label fw-bold">Observaciones de cierre</label>
+                        <textarea name="ObservacionesCierre"
+                                  rows="4"
+                                  maxlength="500"
+                                  class="form-control"
+                                  placeholder="Describe la corrección o condición para reanudar"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold" id="btnConfirmarCierreParo">
+                        <i class="fa-solid fa-play me-1"></i>Finalizar y continuar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalCapturaHora" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title"><i class="fa-solid fa-bell me-2"></i>Captura horaria pendiente</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+            <form method="post" action="@Url.Action("RegistrarHora","ProduccionOperador")" id="formModalHora">
+                @Html.AntiForgeryToken()
+                <div class="modal-body p-4">
+                    <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                    <input type="hidden" name="FechaProduccion" id="modalFecha" />
+                    <input type="hidden" name="HoraInicio" id="modalInicio" />
+                    <input type="hidden" name="HoraFin" id="modalFin" />
+                    <div class="text-center mb-3"><div class="text-muted fw-bold">Debes completar</div><div class="modal-hour" id="modalTituloHora">Hora pendiente</div><div class="text-muted" id="modalRangoHora"></div></div>
+                    <div class="modal-goal">
+                        <div class="goal-label">Objetivo de este bloque</div>
+                        <div class="goal-value"><span id="modalObjetivo">-</span> <small>PZA</small></div>
+                        <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura las piezas OK para comparar contra el objetivo.</div>
+                    </div>
+
+                    <div class="counter-capture-card">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                            <div>
+                                <div class="fw-bold text-primary"><i class="fa-solid fa-gauge-high me-1"></i>Contador de máquina</div>
+                                <div class="small text-muted fw-semibold">Escribe la lectura que muestra físicamente la máquina al cierre de este bloque.</div>
+                            </div>
+                            <span class="badge bg-primary">@(cavidadesEnUso.HasValue ? $"{cavidadesEnUso.Value:N0} cavidad(es) en uso" : "Cavidades pendientes")</span>
+                        </div>
+                        <div class="counter-capture-grid">
+                            <div>
+                                <label for="modalContador" class="form-label fw-bold">Contador actual</label>
+                                <input type="number" min="0" step="1" value="" placeholder="Ej. 12850" name="ContadorMaquinaActual" id="modalContador" class="counter-value-input empty-number" inputmode="numeric" autocomplete="off" />
+                            </div>
+                            <div class="counter-reference">
+                                <div class="k">Último contador registrado</div>
+                                <div class="v">@(ultimoContador.HasValue? ultimoContador.Value.ToString("N0") : "Sin lectura previa")</div>
+                                <div class="small text-muted mt-1">@(cicloEnUso.HasValue ? $"Ciclo vigente: {cicloEnUso.Value:0.##} s" : "El servidor tomará la configuración técnica vigente")</div>
+                            </div>
+                        </div>
+                        <div class="counter-feedback" id="modalContadorFeedback">
+                            El contador determina la producción física. Después clasifica esas piezas en OK, Sospechosas y posible Scrap.
+                        </div>
+                    </div>
+
+                    <div id="mensajeCapturaHora" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
+                    <div class="modal-grid mb-3">
+                        <div><div class="modal-label text-success">OK</div><input type="number" min="0" value="" placeholder="0" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" /></div>
+                        <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
+                        <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" /></div>
+                    </div>
+                    <label class="form-label fw-bold">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Necesaria cuando no hubo producción o para explicar incidencias"></textarea>
+                    <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i>El contador indica cuántas piezas físicas salieron; <strong>OK + Sospechosas + Scrap</strong> es la clasificación del operador. El servidor volverá a calcular y validar ambos datos antes de guardar.</div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
+            </form>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
-<script>
+    <script>
         document.addEventListener('DOMContentLoaded',function(){
             const modalElement=document.getElementById('modalCapturaHora');
             const modal=modalElement?bootstrap.Modal.getOrCreateInstance(modalElement):null;
@@ -1885,11 +2020,13 @@
                 document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
                 document.getElementById('modalObjetivo').textContent=Number(row.dataset.objetivo||0)>0?Number(row.dataset.objetivo).toLocaleString('es-MX'):'-';
                 document.getElementById('modalOK').dataset.objetivo=row.dataset.objetivo||'0';
+                document.getElementById('modalContador').value=row.querySelector('[data-field="counter"]')?.value||'';
                 document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
                 document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'';
                 document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'';
                 document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
                 actualizarComparacionObjetivo();
+                actualizarResumenContador();
             }
             function actualizarComparacionObjetivo(){
                 const input=document.getElementById('modalOK');
@@ -1924,6 +2061,72 @@
                 feedback.innerHTML='<i class="fa-solid fa-circle-xmark me-1"></i>No alcanzaste el objetivo: <strong>'+porcentaje.toLocaleString('es-MX')+'%</strong>. Faltaron '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s).';
             }
             document.getElementById('modalOK')?.addEventListener('input',actualizarComparacionObjetivo);
+
+            const ultimoContadorServidor = @(ultimoContador.HasValue? ultimoContador.Value.ToString() : "null");
+            const cavidadesServidor = @(cavidadesEnUso.HasValue? cavidadesEnUso.Value.ToString() : "0");
+
+            function actualizarResumenContador(){
+                const feedback=document.getElementById('modalContadorFeedback');
+                const contadorInput=document.getElementById('modalContador');
+                const okInput=document.getElementById('modalOK');
+                const yellowInput=document.getElementById('modalYellow');
+                const scrapInput=document.getElementById('modalScrap');
+                if(!feedback||!contadorInput)return;
+
+                const raw=(contadorInput.value||'').trim();
+                const ok=Number(okInput?.value||0);
+                const yellow=Number(yellowInput?.value||0);
+                const scrap=Number(scrapInput?.value||0);
+                const clasificado=ok+yellow+scrap;
+
+                if(raw===''){
+                    feedback.className='counter-feedback';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura la lectura actual del contador. La clasificación suma <strong>'+clasificado.toLocaleString('es-MX')+'</strong> pieza(s).';
+                    return;
+                }
+
+                const actual=Number(raw);
+                if(!Number.isFinite(actual)||actual<0){
+                    feedback.className='counter-feedback text-danger';
+                    feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>El contador debe ser un número entero mayor o igual a cero.';
+                    return;
+                }
+
+                if(ultimoContadorServidor===null||ultimoContadorServidor===undefined){
+                    feedback.className='counter-feedback';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Lectura actual: <strong>'+actual.toLocaleString('es-MX')+'</strong>. El servidor usará el contador base técnico para calcular la producción física. Clasificación capturada: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>.';
+                    return;
+                }
+
+                if(actual<Number(ultimoContadorServidor)){
+                    feedback.className='counter-feedback text-warning';
+                    feedback.innerHTML='<i class="fa-solid fa-rotate-left me-1"></i>La lectura actual es menor a la anterior. Puede existir un reinicio del contador. El servidor validará el evento antes de guardar. Clasificación: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>.';
+                    return;
+                }
+
+                const ciclos=actual-Number(ultimoContadorServidor);
+                if(cavidadesServidor>0){
+                    const estimado=ciclos*cavidadesServidor;
+                    const diferencia=estimado-clasificado;
+                    let detalle='Estimación visual: <strong>'+ciclos.toLocaleString('es-MX')+'</strong> ciclo(s) × <strong>'+Number(cavidadesServidor).toLocaleString('es-MX')+'</strong> cav. = <strong>'+estimado.toLocaleString('es-MX')+'</strong> pieza(s). Clasificación: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>.';
+                    if(diferencia===0){
+                        detalle+=' <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Coinciden.</span>';
+                    }else{
+                        detalle+=' <span class="text-warning">Diferencia estimada: '+diferencia.toLocaleString('es-MX')+'.</span>';
+                    }
+                    feedback.className='counter-feedback';
+                    feedback.innerHTML=detalle+' <span class="text-muted">El cálculo definitivo lo hace el servidor con todos los segmentos y cambios de configuración.</span>';
+                    return;
+                }
+
+                feedback.className='counter-feedback';
+                feedback.innerHTML='Lectura actual: <strong>'+actual.toLocaleString('es-MX')+'</strong>. Clasificación: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>. El servidor calculará las piezas con la configuración técnica vigente.';
+            }
+
+            ['modalContador','modalOK','modalYellow','modalScrap'].forEach(function(id){
+                document.getElementById(id)?.addEventListener('input',actualizarResumenContador);
+            });
+
             const capturaHabilitada = @capturaHabilitada.ToString().ToLowerInvariant();
             const tieneParoAbierto = @Model.TieneParoAbierto.ToString().ToLowerInvariant();
 
@@ -1947,10 +2150,18 @@
             }
             form?.addEventListener('submit',function(e){
                 limpiarMensajeCaptura();
+                const contadorRaw=(document.getElementById('modalContador').value||'').trim();
+                const contador=Number(contadorRaw);
                 const ok=Number(document.getElementById('modalOK').value||0);
                 const yellow=Number(document.getElementById('modalYellow').value||0);
                 const scrap=Number(document.getElementById('modalScrap').value||0);
                 const obs=(document.getElementById('modalObs').value||'').trim();
+                if(contadorRaw===''||!Number.isFinite(contador)||contador<0){
+                    e.preventDefault();
+                    mostrarMensajeCaptura('Captura el contador actual de la máquina antes de guardar la hora.');
+                    document.getElementById('modalContador')?.focus();
+                    return;
+                }
                 if(ok<0||yellow<0||scrap<0){
                     e.preventDefault();
                     mostrarMensajeCaptura('Las cantidades no pueden ser negativas. Revisa OK, Sospechosos y Scrap.');

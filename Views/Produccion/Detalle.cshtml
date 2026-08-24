@@ -9,6 +9,26 @@
     var puedeGestionarCajas = ViewBag.PuedeGestionarCajas is bool gestionarCajas && gestionarCajas;
     var puedeVerCapturasHora = ViewBag.PuedeVerCapturasHora is bool verCapturasHora && verCapturasHora;
     var puedeGestionarSugerenciaCambioTurno = ViewBag.PuedeGestionarSugerenciaCambioTurno is bool gestionarSugerenciaTurno && gestionarSugerenciaTurno;
+    var puedeGestionarConfiguracionCorrida = ViewBag.PuedeGestionarConfiguracionCorrida is bool gestionarConfiguracionCorrida && gestionarConfiguracionCorrida;
+
+    var configuracionTiempoReal = Model.ConfiguracionTiempoReal;
+    var configuracionActual = configuracionTiempoReal?.ConfiguracionActual;
+    var tieneConfiguracionCorrida = configuracionActual?.EstaVigente == true;
+
+    var cavidadesReferencia = configuracionActual?.CavidadesUsadas ?? configuracionTiempoReal?.CavidadesBD;
+    var cicloReferencia = configuracionActual?.TiempoCicloSegundos ?? configuracionTiempoReal?.TiempoCicloBD;
+
+    decimal? objetivoReferencia = null;
+
+    if (cavidadesReferencia.HasValue &&
+        cavidadesReferencia.Value > 0 &&
+        cicloReferencia.HasValue &&
+        cicloReferencia.Value > 0)
+    {
+        objetivoReferencia =
+            (3600m / cicloReferencia.Value) *
+            cavidadesReferencia.Value;
+    }
 
     var horaInicio = new TimeSpan(DateTime.Now.Hour, 0, 0);
     var horaFin = horaInicio.Add(TimeSpan.FromHours(1));
@@ -55,6 +75,10 @@
     else if (Model.ChecklistResumen == null)
     {
         accionActual = "GENERAR_CHECKLIST";
+    }
+    else if (esPreparacion && !tieneConfiguracionCorrida)
+    {
+        accionActual = "CONFIGURAR_CORRIDA";
     }
     else if (esPreparacion && Model.CalidadResumen?.PuedeIniciarSerie != true)
     {
@@ -669,6 +693,96 @@
                 font-weight: 800;
             }
 
+        .config-run-card {
+            border: 1px solid #c7d7f2;
+            border-left: 6px solid #0d6efd;
+            border-radius: 16px;
+            background: linear-gradient(135deg,#f4f8ff,#ffffff 72%);
+            padding: 14px;
+        }
+
+            .config-run-card.is-pending {
+                border-color: #ffe69c;
+                border-left-color: #ffc107;
+                background: linear-gradient(135deg,#fff9e8,#ffffff 72%);
+            }
+
+            .config-run-card.is-active {
+                border-color: #badbcc;
+                border-left-color: #198754;
+                background: linear-gradient(135deg,#f1fff7,#ffffff 72%);
+            }
+
+        .config-reference-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .config-reference-item {
+            border: 1px solid #e5eaf3;
+            border-radius: 12px;
+            background: #fff;
+            padding: 10px;
+        }
+
+        .config-reference-value {
+            color: #102a56;
+            font-weight: 900;
+            font-size: 1.05rem;
+            margin-top: 3px;
+        }
+
+        .config-form-box {
+            border: 1px dashed #b8c7dc;
+            border-radius: 14px;
+            padding: 14px;
+            background: rgba(248,250,252,.72);
+        }
+
+        .config-formula {
+            border-radius: 12px;
+            background: #eef4ff;
+            color: #1d4ed8;
+            padding: 10px 12px;
+            font-weight: 800;
+            font-size: .84rem;
+        }
+
+        .config-history {
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .config-history-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+            .config-history-item:last-child {
+                border-bottom: 0;
+            }
+
+        .config-validation {
+            display: none;
+            border-radius: 10px;
+            padding: 9px 10px;
+            background: #fef3f2;
+            color: #b42318;
+            font-size: .8rem;
+            font-weight: 800;
+        }
+
+            .config-validation.is-visible {
+                display: block;
+            }
+
+        @@media (max-width: 768px) {
+            .config-reference-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @@media (max-width: 992px) {
             .page-shell {
                 padding: 14px;
@@ -889,6 +1003,48 @@
             background: #17345c;
             color: #9dcaff;
         }
+
+        html[data-nsq-theme="dark"] .config-run-card {
+            background: linear-gradient(135deg,#102b4c,#111b2d 72%);
+            border-color: #28598b;
+            border-left-color: #5ba6f5;
+        }
+
+            html[data-nsq-theme="dark"] .config-run-card.is-pending {
+                background: linear-gradient(135deg,#2b2313,#111b2d 72%);
+                border-color: #76571e;
+                border-left-color: #f6cc6d;
+            }
+
+            html[data-nsq-theme="dark"] .config-run-card.is-active {
+                background: linear-gradient(135deg,#102a20,#111b2d 72%);
+                border-color: #286446;
+                border-left-color: #79e3a8;
+            }
+
+        html[data-nsq-theme="dark"] .config-reference-item,
+        html[data-nsq-theme="dark"] .config-form-box {
+            background: #101a2b;
+            border-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .config-reference-value {
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"] .config-formula {
+            background: #17345c;
+            color: #9dcaff;
+        }
+
+        html[data-nsq-theme="dark"] .config-history-item {
+            border-bottom-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"] .config-validation {
+            background: #351719;
+            color: #ff9aa5;
+        }
     </style>
 </head>
 
@@ -926,1006 +1082,1217 @@
                         Volver
                     </a>
                 </div>
-                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show">
+            <i class="bi bi-check-circle me-1"></i>
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["Info"] != null)
+    {
+        <div class="alert alert-info alert-dismissible fade show">
+            <i class="bi bi-info-circle me-1"></i>
+            @TempData["Info"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg">
+            <div class="metric-card">
+                <div class="metric-label">Planeado</div>
+                <div class="metric-value">@(e.CantidadPlaneada?.ToString("N0") ?? "-")</div>
             </div>
         </div>
 
-        @if (TempData["Success"] != null)
-        {
-            <div class="alert alert-success alert-dismissible fade show">
-                <i class="bi bi-check-circle me-1"></i>
-                @TempData["Success"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        }
-
-        @if (TempData["Error"] != null)
-        {
-            <div class="alert alert-danger alert-dismissible fade show">
-                <i class="bi bi-exclamation-triangle me-1"></i>
-                @TempData["Error"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        }
-
-        @if (TempData["Info"] != null)
-        {
-            <div class="alert alert-info alert-dismissible fade show">
-                <i class="bi bi-info-circle me-1"></i>
-                @TempData["Info"]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        }
-
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Planeado</div>
-                    <div class="metric-value">@(e.CantidadPlaneada?.ToString("N0") ?? "-")</div>
-                </div>
-            </div>
-
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">OK</div>
-                    <div class="metric-value text-success">@Model.TotalOK.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Sospechoso</div>
-                    <div class="metric-value text-warning">@Model.TotalSospechoso.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Scrap</div>
-                    <div class="metric-value text-danger">@Model.TotalScrap.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Pendiente</div>
-                    <div class="metric-value">@e.CantidadPendiente.ToString("N0")</div>
-                </div>
-            </div>
-
-            <div class="col-6 col-lg">
-                <div class="metric-card">
-                    <div class="metric-label">Avance</div>
-                    <div class="metric-value">@e.PorcentajeAvance.ToString("0.##")%</div>
-                </div>
+        <div class="col-6 col-lg">
+            <div class="metric-card">
+                <div class="metric-label">OK</div>
+                <div class="metric-value text-success">@Model.TotalOK.ToString("N0")</div>
             </div>
         </div>
 
-        <div class="panel mb-4">
-            <div class="panel-body">
-                <div class="d-flex justify-content-between small mb-1">
-                    <span class="fw-bold text-primary">Avance de producción</span>
-                    <span>@e.PorcentajeAvance.ToString("0.##")%</span>
-                </div>
-                <div class="progress">
-                    <div class="progress-bar"
-                         style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
-                    </div>
-                </div>
+        <div class="col-6 col-lg">
+            <div class="metric-card">
+                <div class="metric-label">Sospechoso</div>
+                <div class="metric-value text-warning">@Model.TotalSospechoso.ToString("N0")</div>
             </div>
         </div>
 
-        <section class="next-action mb-4 @(accionActual == "CERRAR_PARO" ? "is-danger" : accionActual == "MONITOREO_TURNO" || accionActual == "ESPERAR_CALIDAD" ? "is-warning" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" || accionActual == "TERMINAR" ? "is-success" : "")">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                <div class="d-flex align-items-start gap-3">
-                    <div class="next-action-icon">
-                        <i class="bi @(accionActual == "CERRAR_PARO" ? "bi-pause-circle" : accionActual == "MONITOREO_TURNO" ? "bi-arrow-repeat" : accionActual == "GENERAR_CHECKLIST" ? "bi-clipboard-check" : accionActual == "ESPERAR_CALIDAD" ? "bi-hourglass-split" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-fill" : accionActual == "TERMINAR" ? "bi-flag" : "bi-activity")"></i>
-                    </div>
-                    <div>
-                        <div class="data-label">Acción requerida ahora</div>
-
-                        @if (accionActual == "CERRAR_PARO")
-                        {
-                            <h2 class="next-action-title">Cerrar el paro antes de continuar</h2>
-                            <p class="next-action-text">La ejecución permanece detenida mientras exista un paro abierto.</p>
-                        }
-                        else if (accionActual == "MONITOREO_TURNO")
-                        {
-                            <h2 class="next-action-title">Completar el monitoreo del turno</h2>
-                            <p class="next-action-text">Registra las verificaciones de periféricos y la entrega-recepción del turno actual.</p>
-                        }
-                        else if (accionActual == "GENERAR_CHECKLIST")
-                        {
-                            <h2 class="next-action-title">Generar el checklist de arranque</h2>
-                            <p class="next-action-text">La preparación debe documentarse antes de enviar la corrida a Calidad.</p>
-                        }
-                        else if (accionActual == "ESPERAR_CALIDAD")
-                        {
-                            <h2 class="next-action-title">Atender o esperar la liberación de Calidad</h2>
-                            <p class="next-action-text">La producción en serie permanece bloqueada hasta recibir etiqueta verde.</p>
-                        }
-                        else if (accionActual == "REINICIAR_SERIE")
-                        {
-                            <h2 class="next-action-title">Reiniciar producción en serie</h2>
-                            <p class="next-action-text">Calidad autorizó la reliberación. Confirma el reinicio real para reanudar las capturas horarias desde este momento.</p>
-                        }
-                        else if (accionActual == "INICIAR_SERIE")
-                        {
-                            <h2 class="next-action-title">Iniciar producción en serie</h2>
-                            <p class="next-action-text">La preparación está lista y Calidad ya permite continuar.</p>
-                        }
-                        else if (accionActual == "TERMINAR")
-                        {
-                            <h2 class="next-action-title">Revisar y terminar la producción</h2>
-                            <p class="next-action-text">La ejecución está en condiciones de pasar al cierre de producción.</p>
-                        }
-                        else
-                        {
-                            <h2 class="next-action-title">Continuar seguimiento de la ejecución</h2>
-                            <p class="next-action-text">Revisa capturas, materiales y paros conforme avance el turno.</p>
-                        }
-                    </div>
-                </div>
-
-                <a class="btn btn-primary btn-strong"
-                   href="#@(accionActual == "CERRAR_PARO" ? "panelParo" : accionActual == "MONITOREO_TURNO" ? "panelMonitoreoTurno" : accionActual == "GENERAR_CHECKLIST" ? "panelChecklist" : accionActual == "ESPERAR_CALIDAD" ? "panelCalidad" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "panelIniciarSerie" : accionActual == "TERMINAR" ? "panelTerminar" : "panelCapturas")"
-                   data-open-target>
-                    <i class="bi @(accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-circle" : "bi-arrow-down-circle") me-1"></i>
-                    @(accionActual == "REINICIAR_SERIE" ? "Reiniciar ahora" : accionActual == "INICIAR_SERIE" ? "Iniciar ahora" : "Ir a la acción")
-                </a>
+        <div class="col-6 col-lg">
+            <div class="metric-card">
+                <div class="metric-label">Scrap</div>
+                <div class="metric-value text-danger">@Model.TotalScrap.ToString("N0")</div>
             </div>
-        </section>
+        </div>
 
-        @if (esProduccion || e.MaquinaLiberada)
-        {
-            <section class="machine-release-card mb-4 @(e.MaquinaLiberada ? "is-released" : Model.TieneParoAbierto ? "is-blocked" : "")" id="panelLiberarMaquina">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                    <div class="d-flex align-items-start gap-3 flex-grow-1">
-                        <div class="machine-release-icon">
-                            <i class="bi @(e.MaquinaLiberada ? "bi-check-circle-fill" : Model.TieneParoAbierto ? "bi-exclamation-triangle" : "bi-unlock")"></i>
-                        </div>
-                        <div>
-                            <div class="data-label">Disponibilidad física de máquina</div>
-                            @if (e.MaquinaLiberada)
-                            {
-                                <h2 class="machine-release-title">Máquina liberada para la siguiente OF</h2>
-                                <p class="machine-release-text">La ejecución continúa abierta para cajas, Calidad, GP12 y cierre documental, pero esta máquina ya no bloquea el siguiente programa.</p>
-                                <div class="d-flex flex-wrap gap-2 mt-2">
-                                    <span class="badge bg-success">
-                                        <i class="bi bi-clock me-1"></i>
-                                        @(e.FechaLiberacionMaquina?.ToString("dd/MM/yyyy HH:mm") ?? "Liberada")
-                                    </span>
-                                    @if (e.UsuarioLiberacionMaquinaID.HasValue)
-                                    {
-                                        <span class="badge bg-secondary">Usuario @e.UsuarioLiberacionMaquinaID.Value</span>
-                                    }
-                                </div>
-                                @if (!string.IsNullOrWhiteSpace(e.ObservacionesLiberacionMaquina))
-                                {
-                                    <div class="muted-small mt-2"><strong>Observaciones:</strong> @e.ObservacionesLiberacionMaquina</div>
-                                }
-                            }
-                            else if (Model.TieneParoAbierto)
-                            {
-                                <h2 class="machine-release-title">La máquina no puede liberarse con un paro abierto</h2>
-                                <p class="machine-release-text">Cierra primero el paro actual. Después podrás registrar el fin físico de la corrida sin esperar a que concluyan Calidad, cajas o GP12.</p>
-                            }
-                            else
-                            {
-                                <h2 class="machine-release-title">Liberar máquina al terminar la corrida física</h2>
-                                <p class="machine-release-text">Usa esta acción cuando ya salió la última pieza y no habrá más producción en esta máquina para la OF. El sistema validará las capturas horarias requeridas antes de liberar.</p>
-                            }
-                        </div>
-                    </div>
-                    @if (!e.MaquinaLiberada)
+        <div class="col-6 col-lg">
+            <div class="metric-card">
+                <div class="metric-label">Pendiente</div>
+                <div class="metric-value">@e.CantidadPendiente.ToString("N0")</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg">
+            <div class="metric-card">
+                <div class="metric-label">Avance</div>
+                <div class="metric-value">@e.PorcentajeAvance.ToString("0.##")%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel mb-4">
+        <div class="panel-body">
+            <div class="d-flex justify-content-between small mb-1">
+                <span class="fw-bold text-primary">Avance de producción</span>
+                <span>@e.PorcentajeAvance.ToString("0.##")%</span>
+            </div>
+            <div class="progress">
+                <div class="progress-bar"
+                     style="width:@avancePct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="next-action mb-4 @(accionActual == "CERRAR_PARO" ? "is-danger" : accionActual == "MONITOREO_TURNO" || accionActual == "ESPERAR_CALIDAD" || accionActual == "CONFIGURAR_CORRIDA" ? "is-warning" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" || accionActual == "TERMINAR" ? "is-success" : "")">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-start gap-3">
+                <div class="next-action-icon">
+                    <i class="bi @(accionActual == "CERRAR_PARO" ? "bi-pause-circle" : accionActual == "MONITOREO_TURNO" ? "bi-arrow-repeat" : accionActual == "GENERAR_CHECKLIST" ? "bi-clipboard-check" : accionActual == "CONFIGURAR_CORRIDA" ? "bi-sliders" : accionActual == "ESPERAR_CALIDAD" ? "bi-hourglass-split" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-fill" : accionActual == "TERMINAR" ? "bi-flag" : "bi-activity")"></i>
+                </div>
+                <div>
+                    <div class="data-label">Acción requerida ahora</div>
+
+                    @if (accionActual == "CERRAR_PARO")
                     {
-                        <form method="post" action="@Url.Action("LiberarMaquina", "Produccion")" class="machine-release-form">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-                            <label class="form-label" for="ObservacionesLiberacionMaquina">Observaciones de liberación</label>
-                            <textarea class="form-control mb-2" id="ObservacionesLiberacionMaquina" name="Observaciones" rows="2" maxlength="500" placeholder="Opcional: última pieza, entrega a siguiente OF, condición de máquina, etc." disabled="@Model.TieneParoAbierto"></textarea>
-                            <button type="submit" class="btn @(Model.TieneParoAbierto ? "btn-warning" : "btn-primary") w-100 btn-strong" disabled="@Model.TieneParoAbierto">
-                                <i class="bi bi-unlock me-1"></i>
-                                Liberar máquina
-                            </button>
-                            @if (!Model.TieneParoAbierto)
-                            {
-                                <div class="form-text mt-2">Esta acción no termina la ejecución ni cierra Calidad.</div>
-                            }
-                        </form>
+                        <h2 class="next-action-title">Cerrar el paro antes de continuar</h2>
+                        <p class="next-action-text">La ejecución permanece detenida mientras exista un paro abierto.</p>
+                    }
+                    else if (accionActual == "MONITOREO_TURNO")
+                    {
+                        <h2 class="next-action-title">Completar el monitoreo del turno</h2>
+                        <p class="next-action-text">Registra las verificaciones de periféricos y la entrega-recepción del turno actual.</p>
+                    }
+                    else if (accionActual == "GENERAR_CHECKLIST")
+                    {
+                        <h2 class="next-action-title">Generar el checklist de arranque</h2>
+                        <p class="next-action-text">La preparación debe documentarse antes de enviar la corrida a Calidad.</p>
+                    }
+                    else if (accionActual == "CONFIGURAR_CORRIDA")
+                    {
+                        <h2 class="next-action-title">Confirmar configuración real de la corrida</h2>
+                        <p class="next-action-text">El técnico debe confirmar cavidades, ciclo y contador base. Si no modifica cavidades o ciclo, se conservarán los valores de referencia disponibles en BD.</p>
+                    }
+                    else if (accionActual == "ESPERAR_CALIDAD")
+                    {
+                        <h2 class="next-action-title">Atender o esperar la liberación de Calidad</h2>
+                        <p class="next-action-text">La producción en serie permanece bloqueada hasta recibir etiqueta verde.</p>
+                    }
+                    else if (accionActual == "REINICIAR_SERIE")
+                    {
+                        <h2 class="next-action-title">Reiniciar producción en serie</h2>
+                        <p class="next-action-text">Calidad autorizó la reliberación. Confirma el reinicio real para reanudar las capturas horarias desde este momento.</p>
+                    }
+                    else if (accionActual == "INICIAR_SERIE")
+                    {
+                        <h2 class="next-action-title">Iniciar producción en serie</h2>
+                        <p class="next-action-text">La preparación está lista y Calidad ya permite continuar.</p>
+                    }
+                    else if (accionActual == "TERMINAR")
+                    {
+                        <h2 class="next-action-title">Revisar y terminar la producción</h2>
+                        <p class="next-action-text">La ejecución está en condiciones de pasar al cierre de producción.</p>
+                    }
+                    else
+                    {
+                        <h2 class="next-action-title">Continuar seguimiento de la ejecución</h2>
+                        <p class="next-action-text">Revisa capturas, materiales y paros conforme avance el turno.</p>
                     }
                 </div>
-            </section>
-        }
+            </div>
 
-        @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
-        {
-            <section class="primary-series-action mb-4 @(Model.CalidadResumen?.PuedeIniciarSerie == true ? "" : "is-blocked")" id="panelIniciarSerie">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                    <div class="d-flex align-items-start gap-3 flex-grow-1">
-                        <div class="next-action-icon">
-                            <i class="bi bi-play-fill"></i>
-                        </div>
+            <a class="btn btn-primary btn-strong"
+               href="#@(accionActual == "CERRAR_PARO" ? "panelParo" : accionActual == "MONITOREO_TURNO" ? "panelMonitoreoTurno" : accionActual == "GENERAR_CHECKLIST" ? "panelChecklist" : accionActual == "CONFIGURAR_CORRIDA" ? "panelConfiguracionCorrida" : accionActual == "ESPERAR_CALIDAD" ? "panelCalidad" : accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "panelIniciarSerie" : accionActual == "TERMINAR" ? "panelTerminar" : "panelCapturas")"
+               data-open-target>
+                <i class="bi @(accionActual == "INICIAR_SERIE" || accionActual == "REINICIAR_SERIE" ? "bi-play-circle" : "bi-arrow-down-circle") me-1"></i>
+                @(accionActual == "CONFIGURAR_CORRIDA" ? "Configurar corrida" : accionActual == "REINICIAR_SERIE" ? "Reiniciar ahora" : accionActual == "INICIAR_SERIE" ? "Iniciar ahora" : "Ir a la acción")
+            </a>
+        </div>
+    </section>
 
-                        <div>
-                            <div class="data-label">
-                                @(esReinicioSerie ? "Acción principal" : "Inicio de serie")
+    @if (esProduccion || e.MaquinaLiberada)
+    {
+        <section class="machine-release-card mb-4 @(e.MaquinaLiberada ? "is-released" : Model.TieneParoAbierto ? "is-blocked" : "")" id="panelLiberarMaquina">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-start gap-3 flex-grow-1">
+                    <div class="machine-release-icon">
+                        <i class="bi @(e.MaquinaLiberada ? "bi-check-circle-fill" : Model.TieneParoAbierto ? "bi-exclamation-triangle" : "bi-unlock")"></i>
+                    </div>
+                    <div>
+                        <div class="data-label">Disponibilidad física de máquina</div>
+                        @if (e.MaquinaLiberada)
+                        {
+                            <h2 class="machine-release-title">Máquina liberada para la siguiente OF</h2>
+                            <p class="machine-release-text">La ejecución continúa abierta para cajas, Calidad, GP12 y cierre documental, pero esta máquina ya no bloquea el siguiente programa.</p>
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <span class="badge bg-success">
+                                    <i class="bi bi-clock me-1"></i>
+                                    @(e.FechaLiberacionMaquina?.ToString("dd/MM/yyyy HH:mm") ?? "Liberada")
+                                </span>
+                                @if (e.UsuarioLiberacionMaquinaID.HasValue)
+                                {
+                                    <span class="badge bg-secondary">Usuario @e.UsuarioLiberacionMaquinaID.Value</span>
+                                }
                             </div>
+                            @if (!string.IsNullOrWhiteSpace(e.ObservacionesLiberacionMaquina))
+                            {
+                                <div class="muted-small mt-2"><strong>Observaciones:</strong> @e.ObservacionesLiberacionMaquina</div>
+                            }
+                        }
+                        else if (Model.TieneParoAbierto)
+                        {
+                            <h2 class="machine-release-title">La máquina no puede liberarse con un paro abierto</h2>
+                            <p class="machine-release-text">Cierra primero el paro actual. Después podrás registrar el fin físico de la corrida sin esperar a que concluyan Calidad, cajas o GP12.</p>
+                        }
+                        else
+                        {
+                            <h2 class="machine-release-title">Liberar máquina al terminar la corrida física</h2>
+                            <p class="machine-release-text">Usa esta acción cuando ya salió la última pieza y no habrá más producción en esta máquina para la OF. El sistema validará las capturas horarias requeridas antes de liberar.</p>
+                        }
+                    </div>
+                </div>
+                @if (!e.MaquinaLiberada)
+                {
+                    <form method="post" action="@Url.Action("LiberarMaquina", "Produccion")" class="machine-release-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+                        <label class="form-label" for="ObservacionesLiberacionMaquina">Observaciones de liberación</label>
+                        <textarea class="form-control mb-2" id="ObservacionesLiberacionMaquina" name="Observaciones" rows="2" maxlength="500" placeholder="Opcional: última pieza, entrega a siguiente OF, condición de máquina, etc." disabled="@Model.TieneParoAbierto"></textarea>
+                        <button type="submit" class="btn @(Model.TieneParoAbierto ? "btn-warning" : "btn-primary") w-100 btn-strong" disabled="@Model.TieneParoAbierto">
+                            <i class="bi bi-unlock me-1"></i>
+                            Liberar máquina
+                        </button>
+                        @if (!Model.TieneParoAbierto)
+                        {
+                            <div class="form-text mt-2">Esta acción no termina la ejecución ni cierra Calidad.</div>
+                        }
+                    </form>
+                }
+            </div>
+        </section>
+    }
 
-                            <h2 class="series-title">
-                                @(esReinicioSerie ? "Reiniciar producción en serie" : "Iniciar producción en serie")
-                            </h2>
+    @if (e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion && !Model.TieneParoAbierto)
+    {
+        var puedeIniciarSerieCompleto =
+        Model.CalidadResumen?.PuedeIniciarSerie == true &&
+        tieneConfiguracionCorrida;
 
-                            <p class="series-text">
-                                @if (esReinicioSerie)
-                                {
-                                    <text>
-                                        Calidad ya autorizó la reliberación. Al confirmar se tomará la hora actual como reinicio real y las capturas horarias posteriores se reconstruirán desde este momento.
-                                    </text>
-                                }
-                                else
-                                {
-                                    <text>
-                                        Confirma el inicio de producción en serie cuando Calidad haya liberado las primeras piezas.
-                                    </text>
-                                }
-                            </p>
-                        </div>
+        <section class="primary-series-action mb-4 @(puedeIniciarSerieCompleto ? "" : "is-blocked")" id="panelIniciarSerie">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-start gap-3 flex-grow-1">
+                    <div class="next-action-icon">
+                        <i class="bi bi-play-fill"></i>
                     </div>
 
-                    <div class="series-status">
-                        <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
-                            @Html.AntiForgeryToken()
+                    <div>
+                        <div class="data-label">
+                            @(esReinicioSerie ? "Acción principal" : "Inicio de serie")
+                        </div>
 
-                            <input type="hidden"
-                                   name="ejecucionProduccionId"
-                                   value="@e.EjecucionProduccionID" />
+                        <h2 class="series-title">
+                            @(esReinicioSerie ? "Reiniciar producción en serie" : "Iniciar producción en serie")
+                        </h2>
 
-                            <button type="submit"
-                                    class="btn btn-success w-100 btn-strong"
-                                    disabled="@(Model.CalidadResumen?.PuedeIniciarSerie != true)"
-                                    onclick="return confirm('@(esReinicioSerie ? "¿Confirmas reiniciar la producción en serie? La hora actual se tomará como reinicio real." : "¿Confirmas iniciar producción en serie?")');">
-                                <i class="bi bi-play-fill me-1"></i>
-                                @(esReinicioSerie ? "Reiniciar serie ahora" : "Iniciar serie")
-                            </button>
-
-                            @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
+                        <p class="series-text">
+                            @if (esReinicioSerie)
                             {
-                                <div class="text-warning-emphasis fw-bold small mt-2 text-center">
-                                    <i class="bi bi-hourglass-split me-1"></i>
-                                    Pendiente de liberación verde por Calidad.
+                                <text>
+                                    Calidad ya autorizó la reliberación. La configuración técnica vigente se conservará y las capturas posteriores continuarán con el contador de máquina.
+                                </text>
+                            }
+                            else
+                            {
+                                <text>
+                                    Para iniciar serie se requiere liberación de Calidad y una configuración técnica vigente de cavidades, ciclo y contador base.
+                                </text>
+                            }
+                        </p>
+                    </div>
+                </div>
+
+                <div class="series-status">
+                    <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden"
+                               name="ejecucionProduccionId"
+                               value="@e.EjecucionProduccionID" />
+
+                        <button type="submit"
+                                class="btn btn-success w-100 btn-strong"
+                                disabled="@(!puedeIniciarSerieCompleto)"
+                                onclick="return confirm('@(esReinicioSerie ? "¿Confirmas reiniciar la producción en serie? La hora actual se tomará como reinicio real." : "¿Confirmas iniciar producción en serie?")');">
+                            <i class="bi bi-play-fill me-1"></i>
+                            @(esReinicioSerie ? "Reiniciar serie ahora" : "Iniciar serie")
+                        </button>
+
+                        @if (!tieneConfiguracionCorrida)
+                        {
+                            <div class="text-warning-emphasis fw-bold small mt-2 text-center">
+                                <i class="bi bi-sliders me-1"></i>
+                                Pendiente de configuración técnica de la corrida.
+                            </div>
+                        }
+
+                        @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
+                        {
+                            <div class="text-warning-emphasis fw-bold small mt-2 text-center">
+                                <i class="bi bi-hourglass-split me-1"></i>
+                                Pendiente de liberación verde por Calidad.
+                            </div>
+                        }
+
+                        @if (puedeIniciarSerieCompleto)
+                        {
+                            <div class="text-success fw-bold small mt-2 text-center">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Calidad y configuración técnica listas.
+                            </div>
+                        }
+                    </form>
+                </div>
+            </div>
+        </section>
+    }
+
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
+
+            <div class="panel mb-4">
+                <div class="panel-header">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Datos de ejecución
+                </div>
+
+                <div class="panel-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="data-label">Máquina</div>
+                            <div class="data-value">@e.MaquinaCodigo</div>
+                            <div class="muted-small">@e.MaquinaNombre</div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="data-label">Molde</div>
+                            <div class="data-value">@(e.MoldeCodigo ?? "Sin molde")</div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="data-label">Parte</div>
+                            <div class="data-value">@e.TituloPrograma</div>
+                            <div class="muted-small">@e.DescripcionParte</div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="operator-line">
+                                <div>
+                                    <div class="data-label">Operador principal</div>
+                                    <div class="data-value">@e.TextoOperador</div>
+                                    <div class="muted-small mt-1">
+                                        <strong>Auxiliar:</strong>
+                                        @(string.IsNullOrWhiteSpace(e.OperadorAuxiliarNombre)
+                                                                                ? "Sin auxiliar"
+                                                                                : e.OperadorAuxiliarNombre)
+                                    </div>
+                                </div>
+
+                                @if (e.PuedePausar || Model.TieneParoAbierto)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-primary fw-bold"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalCambiarOperador">
+                                        <i class="bi bi-people me-1"></i>
+                                        Cambiar
+                                    </button>
+                                }
+                            </div>
+
+                            @if (e.OperadoresModificadosManual)
+                            {
+                                <div class="alert alert-info py-2 px-3 mt-2 mb-0">
+                                    <strong>Asignación modificada durante el turno.</strong>
+                                    @if (!string.IsNullOrWhiteSpace(e.MotivoCambioOperadores))
+                                    {
+                                        <div class="small mt-1">@e.MotivoCambioOperadores</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="col-6">
+                            <div class="data-label">Inicio real</div>
+                            <div class="data-value">
+                                @(e.FechaInicioReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="data-label">Fin real</div>
+                            <div class="data-value">
+                                @(e.FechaFinReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="data-label">Estado físico de máquina</div>
+                            @if (e.MaquinaLiberada)
+                            {
+                                <div class="data-value text-success">
+                                    <i class="bi bi-unlock me-1"></i>
+                                    Liberada el @(e.FechaLiberacionMaquina?.ToString("dd/MM/yyyy HH:mm") ?? "-")
                                 </div>
                             }
                             else
                             {
-                                <div class="text-success fw-bold small mt-2 text-center">
-                                    <i class="bi bi-check-circle me-1"></i>
-                                    Calidad autorizó continuar.
+                                <div class="data-value text-primary">
+                                    <i class="bi bi-lock me-1"></i>
+                                    Ocupada por esta ejecución
                                 </div>
                             }
+                        </div>
+
+                        <div class="col-6">
+                            <div class="data-label">Programa</div>
+                            <div class="data-value">@e.ProgramaProduccionID</div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="data-label">Ejecución</div>
+                            <div class="data-value">@e.EjecucionProduccionID</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (configuracionTiempoReal != null)
+            {
+                var cfg = configuracionTiempoReal.ConfiguracionActual;
+                var accionConfiguracion = tieneConfiguracionCorrida
+                ? Url.Action("CambiarConfiguracionCorrida", "Produccion")
+                : Url.Action("GuardarConfiguracionCorrida", "Produccion");
+
+                var cavidadesDefaultFormulario = tieneConfiguracionCorrida
+                ? cfg?.CavidadesUsadas
+                : configuracionTiempoReal.CavidadesBD;
+
+                var cicloDefaultFormulario = tieneConfiguracionCorrida
+                ? cfg?.TiempoCicloSegundos
+                : configuracionTiempoReal.TiempoCicloBD;
+
+                <div class="panel mb-4" id="panelConfiguracionCorrida" data-collapsible data-default-open="@(!tieneConfiguracionCorrida ? "true" : "false")">
+                    <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+                        <span>
+                            <i class="bi bi-sliders me-1"></i>
+                            Configuración real de la corrida
+                        </span>
+
+                        @if (tieneConfiguracionCorrida)
+                        {
+                            <span class="badge bg-success">Configuración activa</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark">Pendiente técnico</span>
+                        }
+                </div>
+
+                <div class="panel-body">
+                    <div class="config-run-card mb-3 @(tieneConfiguracionCorrida ? "is-active" : "is-pending")">
+                        <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                            <div>
+                                <div class="data-label">
+                                    @(tieneConfiguracionCorrida ? "Configuración vigente" : "Configuración requerida")
+                                </div>
+                                <div class="data-value fs-5">
+                                    @(tieneConfiguracionCorrida
+                                                                        ? cfg?.TextoConfiguracion
+                                                                        : "El técnico debe confirmar la corrida")
+                                                                                                             </div>
+                                                                                                         </div>
+                                                                                                         <i class="bi @(tieneConfiguracionCorrida ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-warning") fs-4"></i>
+                                                                                                     </div>
+
+                        <div class="muted-small">
+                            El operador no modifica cavidades ni ciclo. Estos valores pertenecen al Técnico de Producción y se utilizan para calcular automáticamente el objetivo y las piezas reales.
+                        </div>
+                    </div>
+
+                    <div class="data-label mb-2">Valores de referencia</div>
+                    <div class="config-reference-grid mb-3">
+                        <div class="config-reference-item">
+                            <div class="data-label">Cavidades BD</div>
+                            <div class="config-reference-value">
+                                @(configuracionTiempoReal.CavidadesBD?.ToString("N0") ?? "Sin dato")
+                            </div>
+                            <div class="muted-small">Sugerencia inicial</div>
+                        </div>
+
+                        <div class="config-reference-item">
+                            <div class="data-label">Ciclo BD</div>
+                            <div class="config-reference-value">
+                                @(configuracionTiempoReal.TiempoCicloBD.HasValue
+                                                                ? configuracionTiempoReal.TiempoCicloBD.Value.ToString("0.####") + " s"
+                                                                : "Sin dato")
+                                                                         </div>
+                                                                         <div class="muted-small">Se interpreta aunque el valor legado tenga “seg”.</div>
+                                                                     </div>
+
+                        <div class="config-reference-item">
+                            <div class="data-label">Objetivo referencia</div>
+                            <div class="config-reference-value">
+                                @(objetivoReferencia.HasValue
+                                                                ? Math.Round(objetivoReferencia.Value, 0, MidpointRounding.AwayFromZero).ToString("N0") + " pzas/h"
+                                                                : "Sin cálculo")
+                            </div>
+                            <div class="muted-small">3600 / ciclo × cavidades</div>
+                        </div>
+                    </div>
+
+                    @if (tieneConfiguracionCorrida && cfg != null)
+                        {
+                            <div class="soft-box mb-3">
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="data-label">Cavidades en uso</div>
+                                        <div class="data-value fs-5">@cfg.CavidadesUsadas.ToString("N0")</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="data-label">Ciclo real</div>
+                                        <div class="data-value fs-5">@cfg.TiempoCicloSegundos.ToString("0.####") s</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="data-label">Objetivo real</div>
+                                        <div class="data-value fs-5">@cfg.ObjetivoHoraOperativo.ToString("N0") pzas/h</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="data-label">Contador base</div>
+                                        <div class="data-value fs-5">@(cfg.ContadorInicioVigencia?.ToString("N0") ?? "-")</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="data-label">Última lectura conocida</div>
+                                        <div class="data-value">@(configuracionTiempoReal.UltimoContadorMaquina?.ToString("N0") ?? "Sin lectura")</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (puedeGestionarConfiguracionCorrida)
+                        {
+                            <div class="config-form-box mb-3">
+                                <div class="fw-bold mb-1">
+                                    <i class="bi bi-person-badge me-1"></i>
+                                    @(tieneConfiguracionCorrida ? "Cambiar configuración técnica" : "Confirmar configuración inicial")
+                                </div>
+                                <div class="muted-small mb-3">
+                                    Si no cambias cavidades o ciclo, se utilizarán automáticamente los valores mostrados como referencia. El contador actual sí debe capturarse porque no existe un valor seguro por defecto.
+                                </div>
+
+                                <form method="post"
+                                      action="@accionConfiguracion"
+                                      data-config-form
+                                      novalidate>
+                                    @Html.AntiForgeryToken()
+
+                                    <input type="hidden"
+                                           name="EjecucionProduccionID"
+                                           value="@e.EjecucionProduccionID" />
+
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label" for="CavidadesUsadasConfig">
+                                                Cavidades utilizadas
+                                            </label>
+                                            <input type="number"
+                                                   min="1"
+                                                   step="1"
+                                                   class="form-control"
+                                                   id="CavidadesUsadasConfig"
+                                                   name="CavidadesUsadas"
+                                                   value="@(cavidadesDefaultFormulario?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+                                                   data-config-cavidades
+                                                   data-default-value="@(cavidadesDefaultFormulario?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+                                                   placeholder="@(configuracionTiempoReal.CavidadesBD?.ToString() ?? "Capturar cavidades")" />
+                                            <div class="form-text">
+                                                Déjalo sin cambios para conservar el valor por defecto.
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label" for="TiempoCicloSegundosConfig">
+                                                Tiempo de ciclo real (segundos)
+                                            </label>
+                                            <input type="number"
+                                                   min="0.0001"
+                                                   step="0.0001"
+                                                   class="form-control"
+                                                   id="TiempoCicloSegundosConfig"
+                                                   name="TiempoCicloSegundos"
+                                                   value="@(cicloDefaultFormulario?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+                                                   data-config-ciclo
+                                                   data-default-value="@(cicloDefaultFormulario?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+                                                   placeholder="@(configuracionTiempoReal.TiempoCicloBD?.ToString("0.####") ?? "Capturar ciclo")" />
+                                            <div class="form-text">
+                                                Captura solo el número; el ERP lo guarda en segundos.
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label" for="ContadorMaquinaActualConfig">
+                                                Contador actual de la máquina *
+                                            </label>
+                                            <input type="number"
+                                                   min="0"
+                                                   step="1"
+                                                   class="form-control"
+                                                   id="ContadorMaquinaActualConfig"
+                                                   name="ContadorMaquinaActual"
+                                                   data-config-contador
+                                                   placeholder="Ej. 12850" />
+                                            <div class="form-text">
+                                                Este dato es obligatorio. Si la máquina fue reiniciada, captura el valor que muestra físicamente en este momento.
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <div class="config-formula" data-config-objetivo>
+                                                Objetivo estimado: @(objetivoReferencia.HasValue? Math.Round(objetivoReferencia.Value, 0, MidpointRounding.AwayFromZero).ToString("N0") + " pzas/h" : "pendiente de datos")
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label" for="MotivoCambioConfiguracion">
+                                                @(tieneConfiguracionCorrida ? "Motivo del cambio *" : "Observaciones")
+                                            </label>
+                                            <textarea class="form-control"
+                                              id="MotivoCambioConfiguracion"
+                                              name="MotivoCambio"
+                                              rows="2"
+                                              maxlength="500"
+                                              placeholder="@(tieneConfiguracionCorrida ? "Ej. se bloqueó una cavidad, ajuste de proceso, cambio real de ciclo, etc." : "Opcional: condición inicial de la corrida")"></textarea>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <div class="config-validation" data-config-validation></div>
+                                        </div>
+
+                                        <div class="col-12 d-grid">
+                                            <button type="submit" class="btn @(tieneConfiguracionCorrida ? "btn-primary" : "btn-warning") btn-strong">
+                                                <i class="bi @(tieneConfiguracionCorrida ? "bi-arrow-repeat" : "bi-check2-circle") me-1"></i>
+                                                @(tieneConfiguracionCorrida ? "Aplicar nueva configuración" : "Confirmar configuración técnica")
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-secondary mb-3">
+                                <i class="bi bi-lock me-1"></i>
+                                Solo el Técnico de Producción asignado, el Encargado de Producción o un Administrador pueden modificar cavidades y ciclo.
+                            </div>
+                        }
+
+                        @if (configuracionTiempoReal.HistorialConfiguraciones != null &&
+                                            configuracionTiempoReal.HistorialConfiguraciones.Any())
+                        {
+                            <div class="data-label mb-2">Historial técnico</div>
+                            <div class="config-history">
+                                @foreach (var h in configuracionTiempoReal.HistorialConfiguraciones)
+                                {
+                                    <div class="config-history-item">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                                            <div>
+                                                <div class="fw-bold">
+                                                    @h.CavidadesUsadas.ToString("N0") cav. · @h.TiempoCicloSegundos.ToString("0.####") s · @h.ObjetivoHoraOperativo.ToString("N0") pzas/h
+                                                </div>
+                                                <div class="muted-small">
+                                                    @h.FechaInicioVigencia.ToString("dd/MM/yyyy HH:mm")
+                                                    → @(h.FechaFinVigencia?.ToString("dd/MM/yyyy HH:mm") ?? "Vigente")
+                                                </div>
+                                            </div>
+                                            <span class="badge @(h.EstaVigente ? "bg-success" : "bg-secondary")">
+                                                @(h.EstaVigente ? "Actual" : "Cerrada")
+                                            </span>
+                                        </div>
+
+                                        <div class="muted-small mt-1">
+                                            Contador: @(h.ContadorInicioVigencia?.ToString("N0") ?? "-")
+                                            → @(h.ContadorFinVigencia?.ToString("N0") ?? "-")
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(h.TecnicoProduccionNombre))
+                                        {
+                                            <div class="muted-small mt-1">
+                                                <strong>Técnico:</strong> @h.TecnicoProduccionNombre
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(h.MotivoCambio))
+                                        {
+                                            <div class="small mt-1">
+                                                <strong>Motivo:</strong> @h.MotivoCambio
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (cambioTurnoTecnico != null)
+            {
+                <div class="panel mb-4" id="panelCambioTurnoTecnico" data-collapsible data-default-open="true">
+                    <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+                        <span>
+                            <i class="bi bi-person-badge me-1"></i>
+                            Sugerencia para cambio de turno
+                        </span>
+                        @if (cambioTurnoTecnico.TieneSugerencia)
+                        {
+                            <span class="badge bg-primary">Sugerencia activa</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Sin sugerencia</span>
+                        }
+                    </div>
+                    <div class="panel-body">
+                        <div class="turn-tech-card mb-3">
+                            <div class="data-label">Operador actual</div>
+                            <div class="data-value fs-5">@cambioTurnoTecnico.TextoOperadorActual</div>
+                            <div class="muted-small mt-1">
+                                @cambioTurnoTecnico.TextoMaquina · @cambioTurnoTecnico.TextoParte
+                            </div>
+                        </div>
+
+                        @if (cambioTurnoTecnico.SugerenciaActual != null && cambioTurnoTecnico.SugerenciaActual.EstaVigente)
+                        {
+                            var sug = cambioTurnoTecnico.SugerenciaActual;
+                            <div class="turn-tech-current mb-3">
+                                <div class="data-label">Sugerencia vigente</div>
+                                <div class="data-value fs-5">@sug.TextoOperador</div>
+                                <div class="muted-small mt-1">
+                                    @if (!string.IsNullOrWhiteSpace(sug.TurnoNombre))
+                                    {
+                                        <span>Turno @sug.TurnoNombre</span>
+                                    }
+                                    @if (sug.NivelPolivalencia.HasValue)
+                                    {
+                                        <span> · Nivel N@sug.NivelPolivalencia.Value</span>
+                                    }
+                                    <span> · @(sug.EnEscala ? "Programado en escala" : "Fuera de escala actual")</span>
+                                </div>
+                                <div class="muted-small mt-1">
+                                    Sugerida el @sug.TextoFecha
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(sug.Observaciones))
+                                {
+                                    <div class="small mt-2">@sug.Observaciones</div>
+                                }
+                            </div>
+                        }
+
+                        @if (cambioTurnoTecnico.Operadores != null && cambioTurnoTecnico.Operadores.Any())
+                        {
+                            <form method="post" action="@Url.Action("GuardarSugerenciaCambioTurno","Produccion")">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+
+                                <div class="mb-3">
+                                    <label class="form-label" for="OperadorSugeridoID">Operador recomendado para el siguiente turno</label>
+                                    <select class="form-select" id="OperadorSugeridoID" name="OperadorSugeridoID" required>
+                                        <option value="">-- Seleccionar operador --</option>
+                                        @foreach (var op in cambioTurnoTecnico.Operadores)
+                                        {
+                                            var seleccionado = cambioTurnoTecnico.SugerenciaActual?.OperadorSugeridoID == op.PersonaID;
+                                            <option value="@op.PersonaID" selected="@seleccionado">
+                                                @op.Nombre@(op.Nivel.HasValue ? $" · N{op.Nivel.Value}" : "")@(string.IsNullOrWhiteSpace(op.TurnoNombre) ? "" : $" · {op.TurnoNombre}")@(op.EnEscala ? " · ESCALA" : "")
+                                            </option>
+                                        }
+                                    </select>
+                                    <div class="form-text">
+                                        Esta selección es una sugerencia para el operador saliente. El operador podrá cambiarla al momento real de entregar el turno.
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label" for="ObservacionesSugerenciaTurno">Observaciones</label>
+                                    <textarea class="form-control"
+                                      id="ObservacionesSugerenciaTurno"
+                                      name="Observaciones"
+                                      rows="3"
+                                      maxlength="500"
+                                      placeholder="Ej. dejar a este operador por experiencia en la pieza, continuidad de máquina, cobertura del siguiente turno, etc.">@cambioTurnoTecnico.SugerenciaActual?.Observaciones</textarea>
+                                </div>
+
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-primary btn-strong">
+                                        <i class="bi bi-person-check me-1"></i>
+                                        @(cambioTurnoTecnico.TieneSugerencia ? "Actualizar sugerencia" : "Guardar sugerencia")
+                                    </button>
+                                </div>
+                            </form>
+
+                            @if (cambioTurnoTecnico.TieneSugerencia)
+                            {
+                                <form method="post" action="@Url.Action("CancelarSugerenciaCambioTurno","Produccion")" class="mt-2">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="ejecucionProduccionId" value="@e.EjecucionProduccionID" />
+                                    <button type="submit" class="btn btn-outline-secondary w-100 btn-strong">
+                                        <i class="bi bi-x-circle me-1"></i>
+                                        Retirar sugerencia
+                                    </button>
+                                </form>
+                            }
+
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                No existen operadores candidatos disponibles para sugerir en este momento.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="panel mb-4" id="panelChecklist" data-collapsible data-default-open="@(esPreparacion || Model.ChecklistResumen == null ? "true" : "false")">
+                <div class="panel-header">
+                    <i class="bi bi-clipboard2-check me-1"></i>
+                    Checklist de arranque
+                </div>
+
+                <div class="panel-body">
+                    @if (Model.ChecklistResumen == null)
+                    {
+                        <div class="alert alert-secondary mb-3">
+                            <strong>Sin checklist generado.</strong><br />
+                            Abre el checklist para generarlo y comenzar la captura de arranque.
+                        </div>
+
+                        <a href="@Url.Action("ChecklistArranque", "Produccion", new { ejecucionProduccionId = e.EjecucionProduccionID })"
+                           class="btn btn-primary w-100 btn-strong">
+                            <i class="bi bi-clipboard-check me-1"></i>
+                            Generar checklist de arranque
+                        </a>
+                    }
+                    else
+                    {
+                        var checklist = Model.ChecklistResumen;
+
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <div class="data-label">Estatus checklist</div>
+                                <div class="mt-1">
+                                    <span class="badge @checklist.EstatusClase fs-6">
+                                        @checklist.EstatusNombre
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="data-label">Formato</div>
+                                <div class="data-value">
+                                    @checklist.CodigoFormato @checklist.VersionFormato
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="data-label">Fecha</div>
+                                <div class="data-value">
+                                    @checklist.FechaChecklist.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <div class="mini-stat">
+                                    <div class="mini-stat-label">Preguntas</div>
+                                    <div class="mini-stat-value">@checklist.TotalPreguntas</div>
+                                </div>
+                            </div>
+
+                            <div class="col-4">
+                                <div class="mini-stat">
+                                    <div class="mini-stat-label">Respondidas</div>
+                                    <div class="mini-stat-value text-success">@checklist.TotalRespondidas</div>
+                                </div>
+                            </div>
+
+                            <div class="col-4">
+                                <div class="mini-stat">
+                                    <div class="mini-stat-label">NOK</div>
+                                    <div class="mini-stat-value text-danger">@checklist.TotalNOK</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (checklist.TotalNOK > 0)
+                        {
+                            <div class="alert alert-warning mb-3">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Este checklist tiene respuestas NOK. Revisa que tengan observación.
+                            </div>
+                        }
+
+                        <a href="@Url.Action("ChecklistArranque", "Produccion", new { ejecucionProduccionId = e.EjecucionProduccionID })"
+                           class="btn btn-primary w-100 btn-strong">
+                            <i class="bi bi-clipboard-check me-1"></i>
+                            Abrir checklist de arranque
+                        </a>
+                    }
+                </div>
+            </div>
+
+            @if (monitoreoTurno != null)
+            {
+                var porcentajeMonitoreo = monitoreoTurno.PorcentajeAvance;
+                <div class="panel mb-4 @(Model.MostrarAvisoMonitoreoTurno ? "turno-monitor-card" : "")" id="panelMonitoreoTurno" data-collapsible data-default-open="@(Model.MostrarAvisoMonitoreoTurno ? "true" : "false")">
+                    <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+                        <span><i class="bi bi-cpu me-1"></i>Monitoreo de periféricos</span>
+                        <span class="badge @(Model.MostrarAvisoMonitoreoTurno ? "bg-warning text-dark" : "bg-success")">@(Model.MostrarAvisoMonitoreoTurno ? "Pendiente" : "Completo")</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="d-flex align-items-start gap-3 mb-3">
+                            <div class="turno-monitor-icon"><i class="bi bi-arrow-repeat"></i></div>
+                            <div class="flex-grow-1">
+                                <div class="data-label">Turno actual</div>
+                                <div class="data-value fs-5">@Txt(monitoreoTurno.TurnoNombre)</div>
+                                <div class="muted-small">Fecha operativa: @monitoreoTurno.FechaOperacion.ToString("dd/MM/yyyy")</div>
+                                <div class="muted-small">Máquina: @Txt(monitoreoTurno.MaquinaCodigo) · @Txt(monitoreoTurno.MaquinaNombre)</div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between small mb-1"><span class="fw-bold text-primary">Verificaciones</span><span>@monitoreoTurno.TotalConfirmadas / @monitoreoTurno.TotalPreguntas</span></div>
+                        <div class="progress turno-monitor-progress mb-3"><div class="progress-bar" style="width:@porcentajeMonitoreo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div></div>
+                        <div class="soft-box mb-3"><div class="d-flex justify-content-between align-items-center gap-2"><span class="fw-bold"><i class="bi bi-people me-1"></i>Entrega y recepción</span><span class="badge @(monitoreoTurno.EntregaTurnoRegistrada ? "bg-success" : "bg-warning text-dark")">@(monitoreoTurno.EntregaTurnoRegistrada ? "Registrada" : "Pendiente")</span></div></div>
+                        <a href="@Url.Action("ChecklistFormato", "Produccion", new { id = monitoreoTurno.ChecklistArranqueID })" class="btn @(Model.MostrarAvisoMonitoreoTurno ? "btn-warning" : "btn-outline-primary") w-100 btn-strong"><i class="bi bi-clipboard-check me-1"></i>@(Model.MostrarAvisoMonitoreoTurno ? "Realizar monitoreo del turno" : "Consultar monitoreo del turno")</a>
+                    </div>
+                </div>
+            }
+
+            <div class="panel mb-4" id="panelCalidad" data-collapsible data-default-open="@((calidadRequiereAtencion && Model.CalidadResumen?.PuedeIniciarSerie != true) ? "true" : "false")">
+                <div class="panel-header">
+                    <i class="bi bi-patch-check me-1"></i>
+                    Liberación de Calidad
+                </div>
+
+                <div class="panel-body">
+                    @if (Model.CalidadResumen == null)
+                    {
+                        <div class="alert alert-secondary mb-0">
+                            El checklist todavía no ha sido enviado a Calidad.
+                        </div>
+                    }
+                    else
+                    {
+                        var calidad = Model.CalidadResumen;
+
+                        <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+                            <div>
+                                <div class="data-label">Estado de Calidad</div>
+                                <span class="badge @calidad.ClaseBadge fs-6 mt-1">
+                                    @calidad.EstadoTexto
+                                </span>
+                            </div>
+
+                            <div>
+                                <div class="data-label">Notificación</div>
+                                <div class="data-value">
+                                    @(calidad.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="data-label">Etiqueta verde</div>
+                                <div class="data-value">
+                                    @(calidad.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(calidad.MotivoDevolucion))
+                        {
+                            <div class="alert alert-danger mb-3">
+                                <strong>Corrección solicitada por Calidad:</strong><br />
+                                @calidad.MotivoDevolucion
+                            </div>
+                        }
+
+                        @if (calidad.ConfiguracionInvalidada)
+                        {
+                            <div class="alert alert-danger mb-3">
+                                La configuración de la corrida fue invalidada por cambios en Planeación.
+                            </div>
+                        }
+
+                    }
+                </div>
+            </div>
+
+            @if (Model.TieneParoAbierto)
+            {
+                var paroAbierto = Model.ParoAbierto;
+
+                <div class="panel mb-4 border-danger" id="panelParo">
+                    <div class="panel-header text-danger">
+                        <i class="bi bi-pause-circle me-1"></i>
+                        Paro abierto
+                    </div>
+
+                    <div class="panel-body">
+                        <p class="mb-1">
+                            <strong>Motivo:</strong> @(paroAbierto?.MotivoParoTexto ?? "Sin motivo")
+                        </p>
+
+                        <p class="mb-3">
+                            <strong>Duración:</strong> @(paroAbierto?.DuracionTexto ?? "-")
+                        </p>
+
+                        <form method="post" action="@Url.Action("CerrarParo", "Produccion")">
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="ParoID" value="@paroAbierto?.ParoID" />
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Observaciones de cierre</label>
+                                <textarea name="ObservacionesCierre" rows="2" maxlength="500" class="form-control"></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 btn-strong">
+                                <i class="bi bi-play-circle me-1"></i>
+                                Cerrar paro y reanudar
+                            </button>
                         </form>
                     </div>
                 </div>
-            </section>
-        }
-
-        <div class="row g-4">
-            <div class="col-12 col-xl-4">
-
-                <div class="panel mb-4">
+            }
+            else if (e.PuedePausar)
+            {
+                <div class="panel mb-4" id="panelParo" data-collapsible data-default-open="false">
                     <div class="panel-header">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Datos de ejecución
+                        <i class="bi bi-pause-circle me-1"></i>
+                        Registrar paro
                     </div>
 
                     <div class="panel-body">
-                        <div class="row g-3">
-                            <div class="col-6">
-                                <div class="data-label">Máquina</div>
-                                <div class="data-value">@e.MaquinaCodigo</div>
-                                <div class="muted-small">@e.MaquinaNombre</div>
-                            </div>
+                        <form method="post" action="@Url.Action("IniciarParo", "Produccion")">
+                            @Html.AntiForgeryToken()
 
-                            <div class="col-6">
-                                <div class="data-label">Molde</div>
-                                <div class="data-value">@(e.MoldeCodigo ?? "Sin molde")</div>
-                            </div>
+                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
 
-                            <div class="col-12">
-                                <div class="data-label">Parte</div>
-                                <div class="data-value">@e.TituloPrograma</div>
-                                <div class="muted-small">@e.DescripcionParte</div>
-                            </div>
-
-                            <div class="col-12">
-                                <div class="operator-line">
-                                    <div>
-                                        <div class="data-label">Operador principal</div>
-                                        <div class="data-value">@e.TextoOperador</div>
-                                        <div class="muted-small mt-1">
-                                            <strong>Auxiliar:</strong>
-                                            @(string.IsNullOrWhiteSpace(e.OperadorAuxiliarNombre)
-                                                                                        ? "Sin auxiliar"
-                                                                                        : e.OperadorAuxiliarNombre)
-                                        </div>
-                                    </div>
-
-                                    @if (e.PuedePausar || Model.TieneParoAbierto)
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Motivo</label>
+                                <select name="MotivoParoID" class="form-select">
+                                    @foreach (var item in Model.MotivosParo)
                                     {
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-primary fw-bold"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#modalCambiarOperador">
-                                            <i class="bi bi-people me-1"></i>
-                                            Cambiar
-                                        </button>
+                                        <option value="@item.Value">@item.Text</option>
                                     }
-                                </div>
-
-                                @if (e.OperadoresModificadosManual)
-                                {
-                                    <div class="alert alert-info py-2 px-3 mt-2 mb-0">
-                                        <strong>Asignación modificada durante el turno.</strong>
-                                        @if (!string.IsNullOrWhiteSpace(e.MotivoCambioOperadores))
-                                        {
-                                            <div class="small mt-1">@e.MotivoCambioOperadores</div>
-                                        }
-                                    </div>
-                                }
+                                </select>
                             </div>
 
-                            <div class="col-6">
-                                <div class="data-label">Inicio real</div>
-                                <div class="data-value">
-                                    @(e.FechaInicioReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Descripción</label>
+                                <textarea name="Descripcion" rows="2" maxlength="500" class="form-control"></textarea>
                             </div>
 
-                            <div class="col-6">
-                                <div class="data-label">Fin real</div>
-                                <div class="data-value">
-                                    @(e.FechaFinReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <div class="data-label">Estado físico de máquina</div>
-                                @if (e.MaquinaLiberada)
-                                {
-                                    <div class="data-value text-success">
-                                        <i class="bi bi-unlock me-1"></i>
-                                        Liberada el @(e.FechaLiberacionMaquina?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="data-value text-primary">
-                                        <i class="bi bi-lock me-1"></i>
-                                        Ocupada por esta ejecución
-                                    </div>
-                                }
-                            </div>
-
-                            <div class="col-6">
-                                <div class="data-label">Programa</div>
-                                <div class="data-value">@e.ProgramaProduccionID</div>
-                            </div>
-
-                            <div class="col-6">
-                                <div class="data-label">Ejecución</div>
-                                <div class="data-value">@e.EjecucionProduccionID</div>
-                            </div>
-                        </div>
+                            <button type="submit" class="btn btn-warning w-100 btn-strong">
+                                <i class="bi bi-pause-fill me-1"></i>
+                                Iniciar paro
+                            </button>
+                        </form>
                     </div>
                 </div>
+            }
 
-                @if (cambioTurnoTecnico != null)
-                {
-                    <div class="panel mb-4" id="panelCambioTurnoTecnico" data-collapsible data-default-open="true">
-                        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
-                            <span>
-                                <i class="bi bi-person-badge me-1"></i>
-                                Sugerencia para cambio de turno
-                            </span>
-                            @if (cambioTurnoTecnico.TieneSugerencia)
-                            {
-                                <span class="badge bg-primary">Sugerencia activa</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary">Sin sugerencia</span>
-                            }
-                        </div>
-                        <div class="panel-body">
-                            <div class="turn-tech-card mb-3">
-                                <div class="data-label">Operador actual</div>
-                                <div class="data-value fs-5">@cambioTurnoTecnico.TextoOperadorActual</div>
-                                <div class="muted-small mt-1">
-                                    @cambioTurnoTecnico.TextoMaquina · @cambioTurnoTecnico.TextoParte
-                                </div>
-                            </div>
-
-                            @if (cambioTurnoTecnico.SugerenciaActual != null && cambioTurnoTecnico.SugerenciaActual.EstaVigente)
-                            {
-                                var sug = cambioTurnoTecnico.SugerenciaActual;
-                                <div class="turn-tech-current mb-3">
-                                    <div class="data-label">Sugerencia vigente</div>
-                                    <div class="data-value fs-5">@sug.TextoOperador</div>
-                                    <div class="muted-small mt-1">
-                                        @if (!string.IsNullOrWhiteSpace(sug.TurnoNombre))
-                                        {
-                                            <span>Turno @sug.TurnoNombre</span>
-                                        }
-                                        @if (sug.NivelPolivalencia.HasValue)
-                                        {
-                                            <span> · Nivel N@sug.NivelPolivalencia.Value</span>
-                                        }
-                                        <span> · @(sug.EnEscala ? "Programado en escala" : "Fuera de escala actual")</span>
-                                    </div>
-                                    <div class="muted-small mt-1">
-                                        Sugerida el @sug.TextoFecha
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(sug.Observaciones))
-                                    {
-                                        <div class="small mt-2">@sug.Observaciones</div>
-                                    }
-                                </div>
-                            }
-
-                            @if (cambioTurnoTecnico.Operadores != null && cambioTurnoTecnico.Operadores.Any())
-                            {
-                                <form method="post" action="@Url.Action("GuardarSugerenciaCambioTurno","Produccion")">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-
-                                    <div class="mb-3">
-                                        <label class="form-label" for="OperadorSugeridoID">Operador recomendado para el siguiente turno</label>
-                                        <select class="form-select" id="OperadorSugeridoID" name="OperadorSugeridoID" required>
-                                            <option value="">-- Seleccionar operador --</option>
-                                            @foreach (var op in cambioTurnoTecnico.Operadores)
-                                            {
-                                                var seleccionado = cambioTurnoTecnico.SugerenciaActual?.OperadorSugeridoID == op.PersonaID;
-                                                <option value="@op.PersonaID" selected="@seleccionado">
-                                                    @op.Nombre@(op.Nivel.HasValue ? $" · N{op.Nivel.Value}" : "")@(string.IsNullOrWhiteSpace(op.TurnoNombre) ? "" : $" · {op.TurnoNombre}")@(op.EnEscala ? " · ESCALA" : "")
-                                                </option>
-                                            }
-                                        </select>
-                                        <div class="form-text">
-                                            Esta selección es una sugerencia para el operador saliente. El operador podrá cambiarla al momento real de entregar el turno.
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label" for="ObservacionesSugerenciaTurno">Observaciones</label>
-                                        <textarea class="form-control"
-                                          id="ObservacionesSugerenciaTurno"
-                                          name="Observaciones"
-                                          rows="3"
-                                          maxlength="500"
-                                          placeholder="Ej. dejar a este operador por experiencia en la pieza, continuidad de máquina, cobertura del siguiente turno, etc.">@cambioTurnoTecnico.SugerenciaActual?.Observaciones</textarea>
-                                    </div>
-
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-primary btn-strong">
-                                            <i class="bi bi-person-check me-1"></i>
-                                            @(cambioTurnoTecnico.TieneSugerencia ? "Actualizar sugerencia" : "Guardar sugerencia")
-                                        </button>
-                                    </div>
-                                </form>
-
-                                @if (cambioTurnoTecnico.TieneSugerencia)
-                                {
-                                    <form method="post" action="@Url.Action("CancelarSugerenciaCambioTurno","Produccion")" class="mt-2">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="ejecucionProduccionId" value="@e.EjecucionProduccionID" />
-                                        <button type="submit" class="btn btn-outline-secondary w-100 btn-strong">
-                                            <i class="bi bi-x-circle me-1"></i>
-                                            Retirar sugerencia
-                                        </button>
-                                    </form>
-                                }
-
-                            }
-                            else
-                            {
-                                <div class="alert alert-warning mb-0">
-                                    <i class="bi bi-exclamation-triangle me-1"></i>
-                                    No existen operadores candidatos disponibles para sugerir en este momento.
-                                </div>
-                            }
-                        </div>
-                    </div>
-                }
-
-                <div class="panel mb-4" id="panelChecklist" data-collapsible data-default-open="@(esPreparacion || Model.ChecklistResumen == null ? "true" : "false")">
+            @if (e.PuedeTerminar && !Model.TieneParoAbierto)
+            {
+                <div class="panel" id="panelTerminar">
                     <div class="panel-header">
-                        <i class="bi bi-clipboard2-check me-1"></i>
-                        Checklist de arranque
+                        <i class="bi bi-flag me-1"></i>
+                        Terminar producción
                     </div>
 
                     <div class="panel-body">
-                        @if (Model.ChecklistResumen == null)
-                        {
-                            <div class="alert alert-secondary mb-3">
-                                <strong>Sin checklist generado.</strong><br />
-                                Abre el checklist para generarlo y comenzar la captura de arranque.
+                        <form method="post" action="@Url.Action("Terminar", "Produccion")">
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="TerminarParcial"
+                                       value="true"
+                                       id="TerminarParcial" />
+                                <label class="form-check-label fw-bold" for="TerminarParcial">
+                                    Terminar parcial
+                                </label>
                             </div>
 
-                            <a href="@Url.Action("ChecklistArranque", "Produccion", new { ejecucionProduccionId = e.EjecucionProduccionID })"
-                               class="btn btn-primary w-100 btn-strong">
-                                <i class="bi bi-clipboard-check me-1"></i>
-                                Generar checklist de arranque
-                            </a>
-                        }
-                        else
-                        {
-                            var checklist = Model.ChecklistResumen;
-
-                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
-                                <div>
-                                    <div class="data-label">Estatus checklist</div>
-                                    <div class="mt-1">
-                                        <span class="badge @checklist.EstatusClase fs-6">
-                                            @checklist.EstatusNombre
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div class="data-label">Formato</div>
-                                    <div class="data-value">
-                                        @checklist.CodigoFormato @checklist.VersionFormato
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div class="data-label">Fecha</div>
-                                    <div class="data-value">
-                                        @checklist.FechaChecklist.ToString("dd/MM/yyyy HH:mm")
-                                    </div>
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Observaciones</label>
+                                <textarea name="Observaciones" rows="2" maxlength="500" class="form-control"></textarea>
                             </div>
 
-                            <div class="row g-2 mb-3">
-                                <div class="col-4">
-                                    <div class="mini-stat">
-                                        <div class="mini-stat-label">Preguntas</div>
-                                        <div class="mini-stat-value">@checklist.TotalPreguntas</div>
-                                    </div>
-                                </div>
-
-                                <div class="col-4">
-                                    <div class="mini-stat">
-                                        <div class="mini-stat-label">Respondidas</div>
-                                        <div class="mini-stat-value text-success">@checklist.TotalRespondidas</div>
-                                    </div>
-                                </div>
-
-                                <div class="col-4">
-                                    <div class="mini-stat">
-                                        <div class="mini-stat-label">NOK</div>
-                                        <div class="mini-stat-value text-danger">@checklist.TotalNOK</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            @if (checklist.TotalNOK > 0)
-                            {
-                                <div class="alert alert-warning mb-3">
-                                    <i class="bi bi-exclamation-triangle me-1"></i>
-                                    Este checklist tiene respuestas NOK. Revisa que tengan observación.
-                                </div>
-                            }
-
-                            <a href="@Url.Action("ChecklistArranque", "Produccion", new { ejecucionProduccionId = e.EjecucionProduccionID })"
-                               class="btn btn-primary w-100 btn-strong">
-                                <i class="bi bi-clipboard-check me-1"></i>
-                                Abrir checklist de arranque
-                            </a>
-                        }
+                            <button type="submit" class="btn btn-danger w-100 btn-strong">
+                                <i class="bi bi-check2-circle me-1"></i>
+                                Terminar producción
+                            </button>
+                        </form>
                     </div>
                 </div>
+            }
+        </div>
 
-                @if (monitoreoTurno != null)
-                {
-                    var porcentajeMonitoreo = monitoreoTurno.PorcentajeAvance;
-                    <div class="panel mb-4 @(Model.MostrarAvisoMonitoreoTurno ? "turno-monitor-card" : "")" id="panelMonitoreoTurno" data-collapsible data-default-open="@(Model.MostrarAvisoMonitoreoTurno ? "true" : "false")">
-                        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
-                            <span><i class="bi bi-cpu me-1"></i>Monitoreo de periféricos</span>
-                            <span class="badge @(Model.MostrarAvisoMonitoreoTurno ? "bg-warning text-dark" : "bg-success")">@(Model.MostrarAvisoMonitoreoTurno ? "Pendiente" : "Completo")</span>
-                        </div>
-                        <div class="panel-body">
-                            <div class="d-flex align-items-start gap-3 mb-3">
-                                <div class="turno-monitor-icon"><i class="bi bi-arrow-repeat"></i></div>
-                                <div class="flex-grow-1">
-                                    <div class="data-label">Turno actual</div>
-                                    <div class="data-value fs-5">@Txt(monitoreoTurno.TurnoNombre)</div>
-                                    <div class="muted-small">Fecha operativa: @monitoreoTurno.FechaOperacion.ToString("dd/MM/yyyy")</div>
-                                    <div class="muted-small">Máquina: @Txt(monitoreoTurno.MaquinaCodigo) · @Txt(monitoreoTurno.MaquinaNombre)</div>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-between small mb-1"><span class="fw-bold text-primary">Verificaciones</span><span>@monitoreoTurno.TotalConfirmadas / @monitoreoTurno.TotalPreguntas</span></div>
-                            <div class="progress turno-monitor-progress mb-3"><div class="progress-bar" style="width:@porcentajeMonitoreo.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></div></div>
-                            <div class="soft-box mb-3"><div class="d-flex justify-content-between align-items-center gap-2"><span class="fw-bold"><i class="bi bi-people me-1"></i>Entrega y recepción</span><span class="badge @(monitoreoTurno.EntregaTurnoRegistrada ? "bg-success" : "bg-warning text-dark")">@(monitoreoTurno.EntregaTurnoRegistrada ? "Registrada" : "Pendiente")</span></div></div>
-                            <a href="@Url.Action("ChecklistFormato", "Produccion", new { id = monitoreoTurno.ChecklistArranqueID })" class="btn @(Model.MostrarAvisoMonitoreoTurno ? "btn-warning" : "btn-outline-primary") w-100 btn-strong"><i class="bi bi-clipboard-check me-1"></i>@(Model.MostrarAvisoMonitoreoTurno ? "Realizar monitoreo del turno" : "Consultar monitoreo del turno")</a>
-                        </div>
-                    </div>
-                }
+        <div class="col-12 col-xl-8">
 
-                <div class="panel mb-4" id="panelCalidad" data-collapsible data-default-open="@((calidadRequiereAtencion && Model.CalidadResumen?.PuedeIniciarSerie != true) ? "true" : "false")">
-                    <div class="panel-header">
-                        <i class="bi bi-patch-check me-1"></i>
-                        Liberación de Calidad
-                    </div>
+            <div class="panel mb-4" id="panelMateriales" data-collapsible data-default-open="false">
+                <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span>
+                        <i class="bi bi-box-seam me-1"></i>
+                        Entregas de Almacén contra OF
+                    </span>
 
-                    <div class="panel-body">
-                        @if (Model.CalidadResumen == null)
-                        {
-                            <div class="alert alert-secondary mb-0">
-                                El checklist todavía no ha sido enviado a Calidad.
-                            </div>
-                        }
-                        else
-                        {
-                            var calidad = Model.CalidadResumen;
-
-                            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
-                                <div>
-                                    <div class="data-label">Estado de Calidad</div>
-                                    <span class="badge @calidad.ClaseBadge fs-6 mt-1">
-                                        @calidad.EstadoTexto
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <div class="data-label">Notificación</div>
-                                    <div class="data-value">
-                                        @(calidad.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div class="data-label">Etiqueta verde</div>
-                                    <div class="data-value">
-                                        @(calidad.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "-")
-                                    </div>
-                                </div>
-                            </div>
-
-                            @if (!string.IsNullOrWhiteSpace(calidad.MotivoDevolucion))
-                            {
-                                <div class="alert alert-danger mb-3">
-                                    <strong>Corrección solicitada por Calidad:</strong><br />
-                                    @calidad.MotivoDevolucion
-                                </div>
-                            }
-
-                            @if (calidad.ConfiguracionInvalidada)
-                            {
-                                <div class="alert alert-danger mb-3">
-                                    La configuración de la corrida fue invalidada por cambios en Planeación.
-                                </div>
-                            }
-
-                        }
-                    </div>
+                    <span class="badge bg-primary">
+                        @(Model.RecepcionesOF?.Count ?? 0) movimiento(s)
+                    </span>
                 </div>
 
-                @if (Model.TieneParoAbierto)
-                {
-                    var paroAbierto = Model.ParoAbierto;
-
-                    <div class="panel mb-4 border-danger" id="panelParo">
-                        <div class="panel-header text-danger">
-                            <i class="bi bi-pause-circle me-1"></i>
-                            Paro abierto
-                        </div>
-
-                        <div class="panel-body">
-                            <p class="mb-1">
-                                <strong>Motivo:</strong> @(paroAbierto?.MotivoParoTexto ?? "Sin motivo")
-                            </p>
-
-                            <p class="mb-3">
-                                <strong>Duración:</strong> @(paroAbierto?.DuracionTexto ?? "-")
-                            </p>
-
-                            <form method="post" action="@Url.Action("CerrarParo", "Produccion")">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden" name="ParoID" value="@paroAbierto?.ParoID" />
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Observaciones de cierre</label>
-                                    <textarea name="ObservacionesCierre" rows="2" maxlength="500" class="form-control"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn btn-primary w-100 btn-strong">
-                                    <i class="bi bi-play-circle me-1"></i>
-                                    Cerrar paro y reanudar
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                }
-                else if (e.PuedePausar)
-                {
-                    <div class="panel mb-4" id="panelParo" data-collapsible data-default-open="false">
-                        <div class="panel-header">
-                            <i class="bi bi-pause-circle me-1"></i>
-                            Registrar paro
-                        </div>
-
-                        <div class="panel-body">
-                            <form method="post" action="@Url.Action("IniciarParo", "Produccion")">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Motivo</label>
-                                    <select name="MotivoParoID" class="form-select">
-                                        @foreach (var item in Model.MotivosParo)
-                                        {
-                                            <option value="@item.Value">@item.Text</option>
-                                        }
-                                    </select>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Descripción</label>
-                                    <textarea name="Descripcion" rows="2" maxlength="500" class="form-control"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn btn-warning w-100 btn-strong">
-                                    <i class="bi bi-pause-fill me-1"></i>
-                                    Iniciar paro
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                }
-
-                @if (e.PuedeTerminar && !Model.TieneParoAbierto)
-                {
-                    <div class="panel" id="panelTerminar">
-                        <div class="panel-header">
-                            <i class="bi bi-flag me-1"></i>
-                            Terminar producción
-                        </div>
-
-                        <div class="panel-body">
-                            <form method="post" action="@Url.Action("Terminar", "Produccion")">
-                                @Html.AntiForgeryToken()
-
-                                <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-
-                                <div class="form-check form-switch mb-3">
-                                    <input class="form-check-input"
-                                           type="checkbox"
-                                           name="TerminarParcial"
-                                           value="true"
-                                           id="TerminarParcial" />
-                                    <label class="form-check-label fw-bold" for="TerminarParcial">
-                                        Terminar parcial
-                                    </label>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Observaciones</label>
-                                    <textarea name="Observaciones" rows="2" maxlength="500" class="form-control"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn btn-danger w-100 btn-strong">
-                                    <i class="bi bi-check2-circle me-1"></i>
-                                    Terminar producción
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                }
-            </div>
-
-            <div class="col-12 col-xl-8">
-
-                <div class="panel mb-4" id="panelMateriales" data-collapsible data-default-open="false">
-                    <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                        <span>
-                            <i class="bi bi-box-seam me-1"></i>
-                            Entregas de Almacén contra OF
-                        </span>
-
-                        <span class="badge bg-primary">
-                            @(Model.RecepcionesOF?.Count ?? 0) movimiento(s)
-                        </span>
-                    </div>
-
-                    <div class="panel-body">
-                        <div class="almacen-note mb-3">
-                            <i class="bi bi-arrow-repeat me-1"></i>
-                            Esta información se obtiene automáticamente de los movimientos de Almacén.
-                            Las salidas y consumos representan entregas a Producción; los retornos se muestran con cantidad negativa.
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Tipo</th>
-                                        <th>Movimiento</th>
-                                        <th>Código / descripción</th>
-                                        <th>Lote / tipo MP</th>
-                                        <th class="text-end">Cantidad</th>
-                                        <th>Entregó / recibió</th>
-                                        <th>Fecha</th>
-                                        <th>OF / referencia</th>
-                                        <th>Observaciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @if (Model.RecepcionesOF == null || !Model.RecepcionesOF.Any())
-                                    {
-                                        <tr>
-                                            <td colspan="9" class="text-center text-muted py-4">
-                                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
-                                                Almacén todavía no registra entregas para esta OF.
-                                            </td>
-                                        </tr>
-                                    }
-                                    else
-                                    {
-                                        foreach (var r in Model.RecepcionesOF)
-                                        {
-                                            var esRetorno = string.Equals(
-                                            r.TipoMovimiento,
-                                            "Retorno",
-                                            StringComparison.OrdinalIgnoreCase);
-
-                                            var claseMovimiento = esRetorno
-                                            ? "badge bg-warning text-dark"
-                                            : string.Equals(r.TipoMovimiento, "Consumo", StringComparison.OrdinalIgnoreCase)
-                                            ? "badge bg-info text-dark"
-                                            : "badge bg-success";
-
-                                            <tr class="@(esRetorno ? "movimiento-retorno" : "")">
-                                                <td>
-                                                    <span class="@TipoClase(r.TipoRecepcion)">
-                                                        @r.TextoTipo
-                                                    </span>
-                                                </td>
-
-                                                <td>
-                                                    <span class="@claseMovimiento">
-                                                        @Txt(r.TipoMovimiento)
-                                                    </span>
-                                                    <div class="text-muted small mt-1">
-                                                        Movimiento #@r.MovimientoID
-                                                    </div>
-                                                </td>
-
-                                                <td>
-                                                    <div class="fw-bold">@Txt(r.Codigo)</div>
-                                                    <div class="text-muted small">@Txt(r.Descripcion)</div>
-                                                </td>
-
-                                                <td>
-                                                    <div><strong>Lote:</strong> @Txt(r.Lote)</div>
-                                                    <div class="text-muted small">
-                                                        <strong>Tipo MP:</strong> @Txt(r.NumeroUI)
-                                                    </div>
-                                                </td>
-
-                                                <td class="text-end fw-bold @(esRetorno ? "text-danger" : "text-success")">
-                                                    @Dec4(r.Cantidad)
-                                                    <div class="text-muted small">@Txt(r.Unidad)</div>
-                                                </td>
-
-                                                <td>
-                                                    <div><strong>Entregó:</strong> @Txt(r.EntregadoPor)</div>
-                                                    <div class="text-muted small">
-                                                        <strong>Recibió:</strong> @Txt(r.RecibidoPor)
-                                                    </div>
-                                                </td>
-
-                                                <td>
-                                                    @r.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")
-                                                </td>
-
-                                                <td>
-                                                    <div><strong>OF:</strong> @Txt(r.NumeroOF)</div>
-                                                    <div class="text-muted small text-break">
-                                                        <strong>Ref.:</strong> @Txt(r.ReferenciaOperacion)
-                                                    </div>
-                                                </td>
-
-                                                <td>
-                                                    @Txt(r.Observaciones)
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="panel mb-4" id="panelCapturas" data-collapsible data-default-open="true">
-                    <div class="panel-header">
-                        <i class="bi bi-clock-history me-1"></i>
-                        Capturas por hora y objetivos del operador
+                <div class="panel-body">
+                    <div class="almacen-note mb-3">
+                        <i class="bi bi-arrow-repeat me-1"></i>
+                        Esta información se obtiene automáticamente de los movimientos de Almacén.
+                        Las salidas y consumos representan entregas a Producción; los retornos se muestran con cantidad negativa.
                     </div>
 
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0 align-middle">
+                        <table class="table table-hover align-middle mb-0">
                             <thead>
                                 <tr>
+                                    <th>Tipo</th>
+                                    <th>Movimiento</th>
+                                    <th>Código / descripción</th>
+                                    <th>Lote / tipo MP</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th>Entregó / recibió</th>
                                     <th>Fecha</th>
-                                    <th>Hora</th>
-                                    <th class="text-center">Objetivo</th>
-                                    <th class="text-center">OK</th>
-                                    <th class="text-center">Sospechoso</th>
-                                    <th class="text-center">Scrap</th>
-                                    <th>Cumplimiento</th>
+                                    <th>OF / referencia</th>
                                     <th>Observaciones</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @if (!Model.RegistrosHora.Any())
+                                @if (Model.RecepcionesOF == null || !Model.RecepcionesOF.Any())
                                 {
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted py-4">
-                                            Sin capturas por hora.
+                                        <td colspan="9" class="text-center text-muted py-4">
+                                            <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                            Almacén todavía no registra entregas para esta OF.
                                         </td>
                                     </tr>
                                 }
                                 else
                                 {
-                                    foreach (var r in Model.RegistrosHora)
+                                    foreach (var r in Model.RecepcionesOF)
                                     {
-                                        var objetivoRegistro = r.ObjetivoBloque ?? r.ObjetivoHora;
-                                        var porcentajeRegistro = r.PorcentajeCumplimiento;
-                                        var cumplioRegistro = r.CumplioObjetivo;
-                                        <tr>
-                                            <td>@r.FechaProduccion.ToString("dd/MM/yyyy")</td>
-                                            <td class="fw-bold">@r.RangoHora</td>
-                                            <td class="text-center">
-                                                @if (objetivoRegistro.HasValue && objetivoRegistro.Value > 0)
-                                                {
-                                                    <span class="objective-pill">@objetivoRegistro.Value.ToString("N0") PZA</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted">-</span>
-                                                }
-                                            </td>
-                                            <td class="text-center fw-bold text-success">@r.CantidadOK.ToString("N0")</td>
-                                            <td class="text-center fw-bold text-warning">@r.CantidadSospechosa.ToString("N0")</td>
-                                            <td class="text-center fw-bold text-danger">@r.CantidadScrap.ToString("N0")</td>
+                                        var esRetorno = string.Equals(
+                                        r.TipoMovimiento,
+                                        "Retorno",
+                                        StringComparison.OrdinalIgnoreCase);
+
+                                        var claseMovimiento = esRetorno
+                                        ? "badge bg-warning text-dark"
+                                        : string.Equals(r.TipoMovimiento, "Consumo", StringComparison.OrdinalIgnoreCase)
+                                        ? "badge bg-info text-dark"
+                                        : "badge bg-success";
+
+                                        <tr class="@(esRetorno ? "movimiento-retorno" : "")">
                                             <td>
-                                                @if (!objetivoRegistro.HasValue || objetivoRegistro.Value <= 0)
-                                                {
-                                                    <span class="objective-result neutral">
-                                                        Sin objetivo
-                                                        <small>No evaluable</small>
-                                                    </span>
-                                                }
-                                                else if (cumplioRegistro == true)
-                                                {
-                                                    <span class="objective-result ok">
-                                                        <span><i class="bi bi-check-circle me-1"></i>Cumplió</span>
-                                                        <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="objective-result fail">
-                                                        <span><i class="bi bi-x-circle me-1"></i>No cumplió</span>
-                                                        <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
-                                                    </span>
-                                                }
+                                                <span class="@TipoClase(r.TipoRecepcion)">
+                                                    @r.TextoTipo
+                                                </span>
                                             </td>
-                                            <td>@r.Observaciones</td>
+
+                                            <td>
+                                                <span class="@claseMovimiento">
+                                                    @Txt(r.TipoMovimiento)
+                                                </span>
+                                                <div class="text-muted small mt-1">
+                                                    Movimiento #@r.MovimientoID
+                                                </div>
+                                            </td>
+
+                                            <td>
+                                                <div class="fw-bold">@Txt(r.Codigo)</div>
+                                                <div class="text-muted small">@Txt(r.Descripcion)</div>
+                                            </td>
+
+                                            <td>
+                                                <div><strong>Lote:</strong> @Txt(r.Lote)</div>
+                                                <div class="text-muted small">
+                                                    <strong>Tipo MP:</strong> @Txt(r.NumeroUI)
+                                                </div>
+                                            </td>
+
+                                            <td class="text-end fw-bold @(esRetorno ? "text-danger" : "text-success")">
+                                                @Dec4(r.Cantidad)
+                                                <div class="text-muted small">@Txt(r.Unidad)</div>
+                                            </td>
+
+                                            <td>
+                                                <div><strong>Entregó:</strong> @Txt(r.EntregadoPor)</div>
+                                                <div class="text-muted small">
+                                                    <strong>Recibió:</strong> @Txt(r.RecibidoPor)
+                                                </div>
+                                            </td>
+
+                                            <td>
+                                                @r.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")
+                                            </td>
+
+                                            <td>
+                                                <div><strong>OF:</strong> @Txt(r.NumeroOF)</div>
+                                                <div class="text-muted small text-break">
+                                                    <strong>Ref.:</strong> @Txt(r.ReferenciaOperacion)
+                                                </div>
+                                            </td>
+
+                                            <td>
+                                                @Txt(r.Observaciones)
+                                            </td>
                                         </tr>
                                     }
                                 }
@@ -1933,64 +2300,149 @@
                         </table>
                     </div>
                 </div>
-
-                <div class="panel" id="panelHistorialParos" data-collapsible data-default-open="false">
-                    <div class="panel-header">
-                        <i class="bi bi-pause-circle me-1"></i>
-                        Historial de paros
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0 align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Inicio</th>
-                                    <th>Fin</th>
-                                    <th>Duración</th>
-                                    <th>Motivo</th>
-                                    <th>Mayor a 15 min</th>
-                                    <th>Descripción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (!Model.Paros.Any())
-                                {
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted py-4">
-                                            Sin paros registrados.
-                                        </td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    foreach (var p in Model.Paros)
-                                    {
-                                        <tr>
-                                            <td>@p.FechaInicioParo.ToString("dd/MM/yyyy HH:mm")</td>
-                                            <td>@(p.FechaFinParo?.ToString("dd/MM/yyyy HH:mm") ?? "Abierto")</td>
-                                            <td class="fw-bold">@p.DuracionTexto</td>
-                                            <td>@p.MotivoParoTexto</td>
-                                            <td>
-                                                @if (p.EsMayorA15Minutos)
-                                                {
-                                                    <span class="badge bg-danger">Sí</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-secondary">No</span>
-                                                }
-                                            </td>
-                                            <td>@p.Descripcion</td>
-                                        </tr>
-                                    }
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
             </div>
+
+            <div class="panel mb-4" id="panelCapturas" data-collapsible data-default-open="true">
+                <div class="panel-header">
+                    <i class="bi bi-clock-history me-1"></i>
+                    Capturas por hora y objetivos del operador
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th class="text-center">Objetivo</th>
+                                <th class="text-center">OK</th>
+                                <th class="text-center">Sospechoso</th>
+                                <th class="text-center">Scrap</th>
+                                <th>Cumplimiento</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!Model.RegistrosHora.Any())
+                            {
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">
+                                        Sin capturas por hora.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var r in Model.RegistrosHora)
+                                {
+                                    var objetivoRegistro = r.ObjetivoBloque ?? r.ObjetivoHora;
+                                    var porcentajeRegistro = r.PorcentajeCumplimiento;
+                                    var cumplioRegistro = r.CumplioObjetivo;
+                                    <tr>
+                                        <td>@r.FechaProduccion.ToString("dd/MM/yyyy")</td>
+                                        <td class="fw-bold">@r.RangoHora</td>
+                                        <td class="text-center">
+                                            @if (objetivoRegistro.HasValue && objetivoRegistro.Value > 0)
+                                            {
+                                                <span class="objective-pill">@objetivoRegistro.Value.ToString("N0") PZA</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-center fw-bold text-success">@r.CantidadOK.ToString("N0")</td>
+                                        <td class="text-center fw-bold text-warning">@r.CantidadSospechosa.ToString("N0")</td>
+                                        <td class="text-center fw-bold text-danger">@r.CantidadScrap.ToString("N0")</td>
+                                        <td>
+                                            @if (!objetivoRegistro.HasValue || objetivoRegistro.Value <= 0)
+                                            {
+                                                <span class="objective-result neutral">
+                                                    Sin objetivo
+                                                    <small>No evaluable</small>
+                                                </span>
+                                            }
+                                            else if (cumplioRegistro == true)
+                                            {
+                                                <span class="objective-result ok">
+                                                    <span><i class="bi bi-check-circle me-1"></i>Cumplió</span>
+                                                    <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="objective-result fail">
+                                                    <span><i class="bi bi-x-circle me-1"></i>No cumplió</span>
+                                                    <small>@(porcentajeRegistro?.ToString("0.#") ?? "-")%</small>
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>@r.Observaciones</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel" id="panelHistorialParos" data-collapsible data-default-open="false">
+                <div class="panel-header">
+                    <i class="bi bi-pause-circle me-1"></i>
+                    Historial de paros
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Inicio</th>
+                                <th>Fin</th>
+                                <th>Duración</th>
+                                <th>Motivo</th>
+                                <th>Mayor a 15 min</th>
+                                <th>Descripción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!Model.Paros.Any())
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        Sin paros registrados.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                foreach (var p in Model.Paros)
+                                {
+                                    <tr>
+                                        <td>@p.FechaInicioParo.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@(p.FechaFinParo?.ToString("dd/MM/yyyy HH:mm") ?? "Abierto")</td>
+                                        <td class="fw-bold">@p.DuracionTexto</td>
+                                        <td>@p.MotivoParoTexto</td>
+                                        <td>
+                                            @if (p.EsMayorA15Minutos)
+                                            {
+                                                <span class="badge bg-danger">Sí</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">No</span>
+                                            }
+                                        </td>
+                                        <td>@p.Descripcion</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
+    </div>
 
     </div>
 
@@ -2258,6 +2710,110 @@
                     const header = panel.querySelector(':scope > .panel-header');
                     if (header) header.setAttribute('aria-expanded', 'true');
                 });
+            });
+
+            document.querySelectorAll('form[data-config-form]').forEach(function (form) {
+                const cavidades = form.querySelector('[data-config-cavidades]');
+                const ciclo = form.querySelector('[data-config-ciclo]');
+                const contador = form.querySelector('[data-config-contador]');
+                const objetivo = form.querySelector('[data-config-objetivo]');
+                const validacion = form.querySelector('[data-config-validation]');
+                const motivo = form.querySelector('textarea[name="MotivoCambio"]');
+                const esCambio = form.action && form.action.toLowerCase().includes('cambiarconfiguracioncorrida');
+
+                function valorConDefault(input) {
+                    if (!input) return '';
+
+                    const actual = (input.value || '').trim();
+                    if (actual) return actual;
+
+                    return (input.dataset.defaultValue || '').trim();
+                }
+
+                function numeroFlexible(value) {
+                    if (!value) return NaN;
+                    return Number(String(value).replace(',', '.'));
+                }
+
+                function mostrarError(mensaje) {
+                    if (!validacion) return;
+                    validacion.textContent = mensaje || '';
+                    validacion.classList.toggle('is-visible', !!mensaje);
+                }
+
+                function recalcularObjetivo() {
+                    if (!objetivo) return;
+
+                    const cav = numeroFlexible(valorConDefault(cavidades));
+                    const cic = numeroFlexible(valorConDefault(ciclo));
+
+                    if (!Number.isFinite(cav) || cav <= 0 ||
+                        !Number.isFinite(cic) || cic <= 0) {
+                        objetivo.textContent = 'Objetivo estimado: pendiente de datos';
+                        return;
+                    }
+
+                    const calculado = (3600 / cic) * cav;
+                    objetivo.textContent =
+                        'Objetivo estimado: ' +
+                        Math.round(calculado).toLocaleString('es-MX') +
+                        ' pzas/h · (3600 / ' + cic.toLocaleString('es-MX') + ') × ' +
+                        cav.toLocaleString('es-MX');
+                }
+
+                [cavidades, ciclo].forEach(function (input) {
+                    if (!input) return;
+                    input.addEventListener('input', recalcularObjetivo);
+                    input.addEventListener('blur', recalcularObjetivo);
+                });
+
+                form.addEventListener('submit', function (event) {
+                    mostrarError('');
+
+                    if (cavidades && !(cavidades.value || '').trim()) {
+                        cavidades.value = cavidades.dataset.defaultValue || '';
+                    }
+
+                    if (ciclo && !(ciclo.value || '').trim()) {
+                        ciclo.value = ciclo.dataset.defaultValue || '';
+                    }
+
+                    const cav = numeroFlexible(cavidades?.value);
+                    const cic = numeroFlexible(ciclo?.value);
+                    const cont = numeroFlexible(contador?.value);
+
+                    if (!Number.isFinite(cav) || cav <= 0) {
+                        event.preventDefault();
+                        mostrarError('No existe un valor de cavidades por defecto. El técnico debe capturar cuántas cavidades se utilizarán.');
+                        cavidades?.focus();
+                        return;
+                    }
+
+                    if (!Number.isFinite(cic) || cic <= 0) {
+                        event.preventDefault();
+                        mostrarError('No existe un tiempo de ciclo válido por defecto. El técnico debe capturar el ciclo real en segundos.');
+                        ciclo?.focus();
+                        return;
+                    }
+
+                    if (!Number.isFinite(cont) || cont < 0) {
+                        event.preventDefault();
+                        mostrarError('Captura el contador actual de la máquina. Este dato no tiene un valor seguro por defecto.');
+                        contador?.focus();
+                        return;
+                    }
+
+                    if (esCambio && (!motivo || !(motivo.value || '').trim())) {
+                        event.preventDefault();
+                        mostrarError('Para cambiar una configuración activa debes indicar el motivo del cambio.');
+                        motivo?.focus();
+                        return;
+                    }
+
+                    recalcularObjetivo();
+                });
+
+                recalcularObjetivo();
             });
         });
     </script>
