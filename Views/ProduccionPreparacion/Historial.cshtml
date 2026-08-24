@@ -1,0 +1,1344 @@
+﻿@using ERP.NSQuell.Models
+@using System.Linq
+@model ProduccionPreparacionIndexVm
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Historial de Preparación";
+
+    var tareas = (Model.Tareas ?? new List<ProduccionPreparacionTareaVm>())
+        .Where(x => x.EstaConfirmada || x.EstaCancelada)
+        .ToList();
+
+    DateTime FechaOrden(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde)
+            return tarea.FechaFinReal
+                ?? tarea.FechaConfirmacion
+                ?? tarea.FechaInicioReal
+                ?? tarea.FechaObjetivo;
+
+        if (tarea.EsSecadoMaterial)
+            return tarea.FechaConfirmacion
+                ?? tarea.FechaObjetivo;
+
+        return tarea.FechaConfirmacion
+            ?? tarea.FechaObjetivo;
+    }
+
+    var historial = tareas
+        .OrderByDescending(FechaOrden)
+        .ThenByDescending(x => x.PreparacionAnticipadaID)
+        .ToList();
+
+    var totalCambios = historial.Count(x => x.EsCambioMolde);
+    var totalEmbalajes = historial.Count(x => x.EsPreparacionEmbalaje);
+    var totalSecados = historial.Count(x => x.EsSecadoMaterial);
+    var totalExcedidos = historial.Count(x => x.EsCambioMolde && x.ExcedioLimite);
+
+    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+
+    string DuracionMinutos(int? minutos)
+    {
+        if (!minutos.HasValue) return "—";
+
+        var valor = Math.Max(0, minutos.Value);
+        var horas = valor / 60;
+        var resto = valor % 60;
+
+        if (horas > 0 && resto > 0) return $"{horas} h {resto} min";
+        if (horas > 0) return $"{horas} h";
+        return $"{resto} min";
+    }
+
+    string TipoCodigo(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return "CAMBIO_MOLDE";
+        if (tarea.EsPreparacionEmbalaje) return "PREPARAR_EMBALAJE";
+        if (tarea.EsSecadoMaterial) return "SECADO_MATERIAL";
+        return tarea.TipoTarea ?? "";
+    }
+
+    string TipoNombre(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return "Cambio de molde";
+        if (tarea.EsPreparacionEmbalaje) return "Embalaje";
+        if (tarea.EsSecadoMaterial) return "Secado";
+        return tarea.TipoTareaNombre;
+    }
+
+    string TipoIcono(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return "bi-tools";
+        if (tarea.EsPreparacionEmbalaje) return "bi-box-seam";
+        if (tarea.EsSecadoMaterial) return "bi-thermometer-sun";
+        return "bi-gear";
+    }
+
+    string TipoClase(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return "molde";
+        if (tarea.EsPreparacionEmbalaje) return "embalaje";
+        if (tarea.EsSecadoMaterial) return "secado";
+        return "";
+    }
+
+    string DetallePrincipal(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return tarea.TextoCambioMolde;
+        if (tarea.EsPreparacionEmbalaje) return tarea.TextoEmbalaje;
+        if (tarea.EsSecadoMaterial) return tarea.TextoMaterial;
+        return tarea.TipoTareaNombre;
+    }
+
+    string DetalleSecundario(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde)
+        {
+            var limite = tarea.LimiteCambioMoldeMinutos;
+            return limite > 0
+                ? $"Límite aplicado: {DuracionMinutos(limite)}"
+                : "Sin límite histórico";
+        }
+
+        if (tarea.EsPreparacionEmbalaje)
+        {
+            var cantidad = tarea.CantidadEmbalajes.HasValue
+                ? tarea.CantidadEmbalajes.Value.ToString(tarea.CantidadEmbalajes.Value % 1 == 0 ? "N0" : "N2")
+                : "—";
+
+            var piezas = tarea.PiezasPorEmbalaje.HasValue
+                ? tarea.PiezasPorEmbalaje.Value.ToString(tarea.PiezasPorEmbalaje.Value % 1 == 0 ? "N0" : "N2")
+                : "—";
+
+            return $"{cantidad} embalaje(s) · {piezas} pza/embalaje";
+        }
+
+        if (tarea.EsSecadoMaterial)
+        {
+            var horas = tarea.HorasSecado.HasValue
+                ? $"{tarea.HorasSecado.Value:0.##} h"
+                : "—";
+
+            return $"{(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Secado" : tarea.TipoSecado)} · {horas}";
+        }
+
+        return "";
+    }
+
+    DateTime? FechaInicio(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde)
+            return tarea.FechaInicioReal;
+
+        if (tarea.EsSecadoMaterial)
+            return tarea.FechaConfirmacion;
+
+        if (tarea.EsPreparacionEmbalaje)
+            return tarea.FechaConfirmacion;
+
+        return tarea.FechaConfirmacion;
+    }
+
+    string EtiquetaInicio(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return "Inicio real";
+        if (tarea.EsSecadoMaterial) return "Ingreso secador";
+        if (tarea.EsPreparacionEmbalaje) return "Confirmado listo";
+        return "Registro";
+    }
+
+    DateTime? FechaFin(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde)
+            return tarea.FechaFinReal ?? tarea.FechaConfirmacion;
+
+        if (tarea.EsSecadoMaterial)
+            return tarea.FechaDisponibleEstimada;
+
+        return null;
+    }
+
+    string EtiquetaFin(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde) return "Fin real";
+        if (tarea.EsSecadoMaterial) return "Disponibilidad estimada";
+        if (tarea.EsPreparacionEmbalaje) return "No aplica";
+        return "—";
+    }
+
+    string Duracion(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde)
+        {
+            if (tarea.DuracionRealMinutos.HasValue)
+                return DuracionMinutos(tarea.DuracionRealMinutos);
+
+            if (tarea.FechaInicioReal.HasValue &&
+                (tarea.FechaFinReal.HasValue || tarea.FechaConfirmacion.HasValue))
+            {
+                var fin = tarea.FechaFinReal ?? tarea.FechaConfirmacion!.Value;
+                var minutos = Math.Max(
+                    0,
+                    (int)Math.Ceiling(
+                        (fin - tarea.FechaInicioReal.Value).TotalMinutes));
+
+                return DuracionMinutos(minutos);
+            }
+
+            return "Sin medición";
+        }
+
+        if (tarea.EsSecadoMaterial)
+        {
+            return tarea.HorasSecado.HasValue
+                ? $"{tarea.HorasSecado.Value:0.##} h"
+                : "—";
+        }
+
+        return "—";
+    }
+
+    string ResultadoCodigo(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EstaCancelada) return "CANCELADO";
+
+        if (tarea.EsCambioMolde)
+        {
+            if (!tarea.FechaInicioReal.HasValue)
+                return "SIN_MEDICION";
+
+            return tarea.ExcedioLimite
+                ? "EXCESO"
+                : "OK";
+        }
+
+        if (tarea.EsSecadoMaterial)
+        {
+            if (tarea.FechaDisponibleEstimada.HasValue &&
+                tarea.FechaDisponibleEstimada.Value > Model.FechaConsulta)
+                return "PROCESO";
+
+            return tarea.SecadoLlegaraTarde
+                ? "RIESGO"
+                : "OK";
+        }
+
+        return "OK";
+    }
+
+    string ResultadoTexto(ProduccionPreparacionTareaVm tarea)
+    {
+        var codigo = ResultadoCodigo(tarea);
+
+        return codigo switch
+        {
+            "CANCELADO" => "Cancelado",
+            "EXCESO" => "Fuera de estándar",
+            "SIN_MEDICION" => "Confirmado sin medición",
+            "PROCESO" => "En secado",
+            "RIESGO" => "Disponible tarde",
+            _ => tarea.EsCambioMolde
+                ? "Dentro de límite"
+                : tarea.EsPreparacionEmbalaje
+                    ? "Preparado"
+                    : tarea.EsSecadoMaterial
+                        ? "Material listo"
+                        : "Completado"
+        };
+    }
+
+    string ResultadoClase(ProduccionPreparacionTareaVm tarea)
+    {
+        var codigo = ResultadoCodigo(tarea);
+
+        return codigo switch
+        {
+            "EXCESO" => "danger",
+            "RIESGO" => "warning",
+            "PROCESO" => "process",
+            "CANCELADO" => "cancelled",
+            "SIN_MEDICION" => "neutral",
+            _ => "success"
+        };
+    }
+
+    string UsuarioPrincipal(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsCambioMolde)
+        {
+            if (!string.IsNullOrWhiteSpace(tarea.UsuarioInicioNombre) &&
+                !string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre))
+            {
+                if (string.Equals(
+                    tarea.UsuarioInicioNombre.Trim(),
+                    tarea.UsuarioConfirmacionNombre.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+                    return tarea.UsuarioConfirmacionNombre;
+            }
+
+            if (!string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre))
+                return tarea.UsuarioConfirmacionNombre;
+
+            if (!string.IsNullOrWhiteSpace(tarea.UsuarioInicioNombre))
+                return tarea.UsuarioInicioNombre;
+        }
+
+        if (!string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre))
+            return tarea.UsuarioConfirmacionNombre;
+
+        if (tarea.UsuarioConfirmacionID.HasValue)
+            return $"Usuario {tarea.UsuarioConfirmacionID.Value}";
+
+        return "—";
+    }
+
+    bool TieneDetalle(ProduccionPreparacionTareaVm tarea) =>
+        !string.IsNullOrWhiteSpace(tarea.Observaciones) ||
+        !string.IsNullOrWhiteSpace(tarea.MotivoExceso) ||
+        (tarea.EsCambioMolde &&
+         !string.IsNullOrWhiteSpace(tarea.UsuarioInicioNombre) &&
+         !string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre) &&
+         !string.Equals(
+             tarea.UsuarioInicioNombre.Trim(),
+             tarea.UsuarioConfirmacionNombre.Trim(),
+             StringComparison.OrdinalIgnoreCase));
+
+    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro)
+        ? ""
+        : Model.Filtro;
+}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+<style>
+    :root {
+        --hist-bg: #f4f7fb;
+        --hist-panel: #ffffff;
+        --hist-text: #162441;
+        --hist-muted: #6f7b91;
+        --hist-line: #dce4ef;
+        --hist-purple: #6845db;
+        --hist-purple-soft: #f3efff;
+        --hist-blue: #3860d9;
+        --hist-blue-soft: #eef3ff;
+        --hist-orange: #c87a00;
+        --hist-orange-soft: #fff6e5;
+        --hist-red: #c7352f;
+        --hist-red-soft: #fff1f0;
+        --hist-green: #1f7d4f;
+        --hist-green-soft: #edf9f2;
+        --hist-gray: #657188;
+        --hist-gray-soft: #f1f4f8;
+        --hist-shadow: 0 10px 28px rgba(16,35,76,.055);
+    }
+
+    html[data-nsq-theme="dark"],
+    html[data-bs-theme="dark"] {
+        --hist-bg: #0b1220;
+        --hist-panel: #111b2d;
+        --hist-text: #e8eef8;
+        --hist-muted: #9aa9bd;
+        --hist-line: #2d3e55;
+        --hist-purple-soft: #241b38;
+        --hist-blue-soft: #102b4c;
+        --hist-orange-soft: #2b2313;
+        --hist-red-soft: #351719;
+        --hist-green-soft: #102a20;
+        --hist-gray-soft: #17263c;
+        --hist-shadow: 0 10px 28px rgba(0,0,0,.18);
+    }
+
+    .history-page {
+        min-height: 100vh;
+        padding: 16px;
+        background: var(--hist-bg);
+        color: var(--hist-text);
+    }
+
+    .history-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-radius: 18px;
+        background: linear-gradient(120deg,#15305e,#31558d 65%,#4b78b5);
+        color: #fff;
+        box-shadow: 0 15px 36px rgba(20,51,102,.16);
+    }
+
+    .history-brand {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        min-width: 0;
+    }
+
+    .history-brand-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: rgba(255,255,255,.13);
+        font-size: 1.25rem;
+    }
+
+    .history-head h1 {
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 950;
+    }
+
+    .history-head p {
+        margin: 3px 0 0;
+        color: rgba(255,255,255,.78);
+        font-size: .74rem;
+        font-weight: 650;
+    }
+
+    .head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .btnx {
+        min-height: 38px;
+        border-radius: 10px;
+        border: 1px solid #ccd7e5;
+        background: #fff;
+        color: #203150;
+        padding: 7px 11px;
+        text-decoration: none;
+        font-size: .7rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: .14s ease;
+        white-space: nowrap;
+    }
+
+        .btnx:hover {
+            transform: translateY(-1px);
+        }
+
+    .btnx-light {
+        background: rgba(255,255,255,.11);
+        border-color: rgba(255,255,255,.25);
+        color: #fff;
+    }
+
+        .btnx-light:hover {
+            background: #fff;
+            color: #2e4e7d;
+        }
+
+    .btnx-primary {
+        background: #315b9e;
+        border-color: #315b9e;
+        color: #fff;
+    }
+
+        .btnx-primary:hover {
+            color: #fff;
+            filter: brightness(.94);
+        }
+
+    .btnx-outline {
+        background: var(--hist-panel);
+        border-color: var(--hist-line);
+        color: var(--hist-text);
+    }
+
+    .module-nav {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        overflow: auto;
+        padding-bottom: 2px;
+    }
+
+    .module-link {
+        flex: 0 0 auto;
+        min-height: 36px;
+        border: 1px solid var(--hist-line);
+        border-radius: 9px;
+        background: var(--hist-panel);
+        color: var(--hist-text);
+        padding: 6px 10px;
+        text-decoration: none;
+        font-size: .67rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .module-link:hover {
+            border-color: #aab9cf;
+        }
+
+        .module-link.index i {
+            color: #365fda
+        }
+
+        .module-link.molde i {
+            color: var(--hist-purple)
+        }
+
+        .module-link.embalaje i {
+            color: var(--hist-blue)
+        }
+
+        .module-link.secado i {
+            color: var(--hist-orange)
+        }
+
+    .summary-line {
+        margin-top: 10px;
+        min-height: 39px;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px 17px;
+        padding: 8px 12px;
+        border: 1px solid var(--hist-line);
+        border-radius: 11px;
+        background: var(--hist-panel);
+        color: var(--hist-muted);
+        font-size: .63rem;
+        font-weight: 800;
+    }
+
+        .summary-line strong {
+            color: var(--hist-text);
+            font-size: .72rem;
+            font-weight: 950;
+        }
+
+        .summary-line .danger-text {
+            color: var(--hist-red);
+        }
+
+    .flash {
+        margin-top: 10px;
+        border-radius: 11px;
+        padding: 9px 11px;
+        font-size: .73rem;
+        font-weight: 800;
+    }
+
+    .filters {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: minmax(230px,1fr) 230px 190px 190px auto auto;
+        gap: 8px;
+        align-items: end;
+        padding: 10px 11px;
+        border: 1px solid var(--hist-line);
+        border-radius: 11px;
+        background: var(--hist-panel);
+    }
+
+    .field label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--hist-muted);
+        font-size: .57rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .field input,
+    .field select {
+        width: 100%;
+        min-height: 37px;
+        border: 1px solid var(--hist-line);
+        border-radius: 8px;
+        background: var(--hist-panel);
+        color: var(--hist-text);
+        padding: 6px 8px;
+        font-size: .69rem;
+        font-weight: 750;
+    }
+
+        .field input:focus,
+        .field select:focus {
+            outline: none;
+            border-color: #6882b7;
+            box-shadow: 0 0 0 3px rgba(67,94,145,.09);
+        }
+
+    .history-meta {
+        margin: 10px 2px 6px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        color: var(--hist-muted);
+        font-size: .61rem;
+        font-weight: 750;
+    }
+
+        .history-meta strong {
+            color: var(--hist-text);
+            font-weight: 950;
+        }
+
+    .table-wrap {
+        border: 1px solid var(--hist-line);
+        border-radius: 12px;
+        background: var(--hist-panel);
+        overflow: auto;
+        box-shadow: var(--hist-shadow);
+    }
+
+    .history-table {
+        width: 100%;
+        min-width: 1380px;
+        border-collapse: collapse;
+        margin: 0;
+    }
+
+        .history-table thead th {
+            padding: 8px 9px;
+            background: var(--hist-gray-soft);
+            border-bottom: 1px solid var(--hist-line);
+            color: var(--hist-muted);
+            font-size: .54rem;
+            font-weight: 950;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap;
+        }
+
+        .history-table tbody td {
+            padding: 9px;
+            border-top: 1px solid var(--hist-line);
+            vertical-align: middle;
+            color: var(--hist-text);
+            font-size: .65rem;
+            font-weight: 720;
+        }
+
+        .history-table tbody tr:first-child td {
+            border-top: 0;
+        }
+
+        .history-table tbody tr.main-row:hover {
+            background: rgba(70,90,150,.025);
+        }
+
+        .history-table tbody tr.row-danger {
+            background: var(--hist-red-soft);
+        }
+
+    .type {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .63rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+        .type i {
+            width: 26px;
+            height: 26px;
+            border-radius: 7px;
+            display: grid;
+            place-items: center;
+            font-size: .74rem;
+        }
+
+        .type.molde i {
+            color: var(--hist-purple);
+            background: var(--hist-purple-soft);
+        }
+
+        .type.embalaje i {
+            color: var(--hist-blue);
+            background: var(--hist-blue-soft);
+        }
+
+        .type.secado i {
+            color: var(--hist-orange);
+            background: var(--hist-orange-soft);
+        }
+
+    .machine strong,
+    .of strong,
+    .detail strong,
+    .date-cell strong,
+    .user-cell strong {
+        display: block;
+        color: var(--hist-text);
+        font-size: .66rem;
+        font-weight: 900;
+    }
+
+    .machine span,
+    .of span,
+    .detail span,
+    .date-cell span,
+    .user-cell span {
+        display: block;
+        margin-top: 2px;
+        color: var(--hist-muted);
+        font-size: .56rem;
+        font-weight: 700;
+    }
+
+    .detail {
+        max-width: 260px;
+    }
+
+        .detail strong,
+        .detail span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .result {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 25px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: .56rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .result::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .result.success {
+            color: var(--hist-green);
+            background: var(--hist-green-soft);
+        }
+
+        .result.danger {
+            color: var(--hist-red);
+            background: var(--hist-red-soft);
+        }
+
+        .result.warning {
+            color: var(--hist-orange);
+            background: var(--hist-orange-soft);
+        }
+
+        .result.process {
+            color: var(--hist-purple);
+            background: var(--hist-purple-soft);
+        }
+
+        .result.cancelled,
+        .result.neutral {
+            color: var(--hist-gray);
+            background: var(--hist-gray-soft);
+        }
+
+    .duration-danger {
+        color: var(--hist-red);
+        font-weight: 950;
+    }
+
+    .detail-btn {
+        min-height: 30px;
+        padding: 4px 8px;
+        border: 1px solid var(--hist-line);
+        border-radius: 8px;
+        background: var(--hist-panel);
+        color: var(--hist-text);
+        font-size: .59rem;
+        font-weight: 900;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+        .detail-btn:hover {
+            border-color: #9aabc2;
+        }
+
+    .extra-row {
+        display: none;
+        background: var(--hist-gray-soft);
+    }
+
+        .extra-row.show {
+            display: table-row;
+        }
+
+    .extra-content {
+        padding: 10px 12px !important;
+    }
+
+    .extra-grid {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 10px 18px;
+    }
+
+    .extra-block span {
+        display: block;
+        color: var(--hist-muted);
+        font-size: .54rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .extra-block strong {
+        display: block;
+        margin-top: 3px;
+        color: var(--hist-text);
+        font-size: .63rem;
+        font-weight: 800;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .empty {
+        padding: 28px 16px;
+        text-align: center;
+        color: var(--hist-muted);
+    }
+
+        .empty i {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 1.35rem;
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--hist-text);
+            font-size: .77rem;
+            font-weight: 950;
+        }
+
+        .empty span {
+            display: block;
+            margin-top: 3px;
+            font-size: .61rem;
+            font-weight: 700;
+        }
+
+    .no-client-results {
+        display: none;
+        margin-top: 10px;
+        padding: 20px 14px;
+        text-align: center;
+        border: 1px dashed var(--hist-line);
+        border-radius: 11px;
+        background: var(--hist-panel);
+        color: var(--hist-muted);
+        font-size: .65rem;
+        font-weight: 750;
+    }
+
+    @@media(max-width:1200px) {
+        .filters {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+    }
+
+    @@media(max-width:760px) {
+        .history-page {
+            padding: 9px;
+        }
+
+        .history-head {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .head-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        .filters {
+            grid-template-columns: 1fr;
+        }
+
+        .extra-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="history-page" id="historyPage">
+
+    <header class="history-head">
+        <div class="history-brand">
+            <div class="history-brand-icon">
+                <i class="bi bi-clock-history"></i>
+            </div>
+
+            <div>
+                <h1>Historial de Preparación</h1>
+                <p>Trazabilidad por evento operativo. La OF identifica el trabajo y el tipo permite analizar cambio de molde, embalaje o secado.</p>
+            </div>
+        </div>
+
+        <div class="head-actions">
+            <a class="btnx btnx-light"
+               asp-controller="ProduccionPreparacion"
+               asp-action="Index">
+                <i class="bi bi-grid-1x2"></i>
+                Centro operativo
+            </a>
+
+            <a class="btnx btnx-light"
+               asp-controller="Produccion"
+               asp-action="Index">
+                <i class="bi bi-arrow-left"></i>
+                Producción
+            </a>
+        </div>
+    </header>
+
+    <nav class="module-nav">
+        <a class="module-link index"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Index">
+            <i class="bi bi-grid-1x2"></i>
+            Tablero
+        </a>
+
+        <a class="module-link molde"
+           asp-controller="ProduccionPreparacion"
+           asp-action="CambioMolde">
+            <i class="bi bi-tools"></i>
+            Cambios de molde
+        </a>
+
+        <a class="module-link embalaje"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Embalajes">
+            <i class="bi bi-box-seam"></i>
+            Embalajes
+        </a>
+
+        <a class="module-link secado"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Secado">
+            <i class="bi bi-thermometer-sun"></i>
+            Secado
+        </a>
+    </nav>
+
+    <div class="summary-line">
+        <span><strong>@historial.Count</strong> registros</span>
+        <span><strong>@totalCambios</strong> cambios de molde</span>
+        <span><strong>@totalEmbalajes</strong> embalajes</span>
+        <span><strong>@totalSecados</strong> secados</span>
+
+        @if (totalExcedidos > 0)
+        {
+            <span class="danger-text">
+                <strong class="danger-text">@totalExcedidos</strong>
+                cambio(s) fuera de estándar
+            </span>
+        }
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger flash">
+            <i class="bi bi-exclamation-octagon me-1"></i>@TempData["Error"]
+        </div>
+    }
+
+    <div class="filters">
+        <form id="serverFilters"
+              method="get"
+              asp-controller="ProduccionPreparacion"
+              asp-action="Historial"
+              style="display:contents">
+
+            <div class="field">
+                <label>OF / Buscar</label>
+                <input type="text"
+                       name="filtro"
+                       value="@filtroActual"
+                       placeholder="OF, parte, máquina, molde, material..." />
+            </div>
+
+            <div class="field">
+                <label>Máquina</label>
+                <select name="maquinaId">
+                    <option value="">Todas las máquinas</option>
+
+                    @foreach (var maquina in Model.Maquinas)
+                    {
+                        if (Model.MaquinaID == maquina.MaquinaID)
+                        {
+                            <option value="@maquina.MaquinaID" selected>@maquina.Texto</option>
+                        }
+                        else
+                        {
+                            <option value="@maquina.MaquinaID">@maquina.Texto</option>
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="field">
+                <label>Tipo de preparación</label>
+                <select id="tipoFiltro">
+                    <option value="">Todos</option>
+                    <option value="CAMBIO_MOLDE">Cambio de molde</option>
+                    <option value="PREPARAR_EMBALAJE">Embalaje</option>
+                    <option value="SECADO_MATERIAL">Secado</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label>Resultado</label>
+                <select id="resultadoFiltro">
+                    <option value="">Todos</option>
+                    <option value="OK">Correcto / listo</option>
+                    <option value="EXCESO">Fuera de estándar</option>
+                    <option value="RIESGO">Disponible tarde</option>
+                    <option value="PROCESO">En secado</option>
+                    <option value="SIN_MEDICION">Sin medición</option>
+                    <option value="CANCELADO">Cancelado</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btnx btnx-primary">
+                <i class="bi bi-search"></i>
+                Buscar
+            </button>
+
+            <a class="btnx btnx-outline"
+               asp-controller="ProduccionPreparacion"
+               asp-action="Historial">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                Limpiar
+            </a>
+        </form>
+    </div>
+
+    <div class="history-meta">
+        <span>
+            Mostrando <strong id="visibleCount">@historial.Count</strong>
+            de <strong>@historial.Count</strong> registros cargados.
+        </span>
+
+        <span>
+            Orden: más reciente primero
+        </span>
+    </div>
+
+    @if (historial.Any())
+    {
+        <div class="table-wrap">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Máquina</th>
+                        <th>OF / Parte</th>
+                        <th>Preparación</th>
+                        <th>Inicio / registro</th>
+                        <th>Fin / disponibilidad</th>
+                        <th>Duración</th>
+                        <th>Resultado</th>
+                        <th>Usuario</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody id="historyBody">
+                    @foreach (var tarea in historial)
+                    {
+                        var resultadoCodigo = ResultadoCodigo(tarea);
+                        var resultadoClase = ResultadoClase(tarea);
+                        var tipoCodigo = TipoCodigo(tarea);
+                        var tieneDetalle = TieneDetalle(tarea);
+                        var inicio = FechaInicio(tarea);
+                        var fin = FechaFin(tarea);
+                        var rowId = $"history-{tarea.PreparacionAnticipadaID}";
+
+                        <tr class="main-row @(resultadoCodigo == "EXCESO" ? "row-danger" : "") js-history-row"
+                            data-type="@tipoCodigo"
+                            data-result="@resultadoCodigo"
+                            data-detail-row="detail-@rowId">
+
+                            <td>
+                                <span class="type @TipoClase(tarea)">
+                                    <i class="bi @TipoIcono(tarea)"></i>
+                                    @TipoNombre(tarea)
+                                </span>
+                            </td>
+
+                            <td>
+                                <div class="machine">
+                                    <strong>@(string.IsNullOrWhiteSpace(tarea.MaquinaCodigo) ? "—" : tarea.MaquinaCodigo)</strong>
+                                    <span>@(string.IsNullOrWhiteSpace(tarea.MaquinaNombre) ? "Sin nombre" : tarea.MaquinaNombre)</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="of">
+                                    <strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</strong>
+                                    <span>@tarea.TextoParte</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="detail">
+                                    <strong>@DetallePrincipal(tarea)</strong>
+                                    <span>@DetalleSecundario(tarea)</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="date-cell">
+                                    <strong>@Fecha(inicio)</strong>
+                                    <span>@EtiquetaInicio(tarea)</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <div class="date-cell">
+                                    <strong>@Fecha(fin)</strong>
+                                    <span>@EtiquetaFin(tarea)</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <span class="@(resultadoCodigo == "EXCESO" ? "duration-danger" : "")">
+                                    @Duracion(tarea)
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="result @resultadoClase">
+                                    @ResultadoTexto(tarea)
+                                </span>
+                            </td>
+
+                            <td>
+                                <div class="user-cell">
+                                    <strong>@UsuarioPrincipal(tarea)</strong>
+
+                                    @if (tarea.EsCambioMolde &&
+                                                                !string.IsNullOrWhiteSpace(tarea.UsuarioInicioNombre) &&
+                                                                !string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre) &&
+                                                                !string.Equals(
+                                                                tarea.UsuarioInicioNombre.Trim(),
+                                                                tarea.UsuarioConfirmacionNombre.Trim(),
+                                                                StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span>Inicio: @tarea.UsuarioInicioNombre</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@Fecha(tarea.FechaConfirmacion)</span>
+                                    }
+                                </div>
+                            </td>
+
+                            <td style="text-align:right">
+                                @if (tieneDetalle)
+                                {
+                                    <button type="button"
+                                            class="detail-btn js-detail-btn"
+                                            data-target="detail-@rowId">
+                                        <i class="bi bi-chevron-down"></i>
+                                        Detalle
+                                    </button>
+                                }
+                                else if (tarea.EjecucionProduccionID.HasValue)
+                                {
+                                    <a class="detail-btn"
+                                       style="text-decoration:none"
+                                       asp-controller="Produccion"
+                                       asp-action="Detalle"
+                                       asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                        Ver OF
+                                    </a>
+                                }
+                            </td>
+                        </tr>
+
+                        @if (tieneDetalle)
+                        {
+                            <tr class="extra-row js-extra-row"
+                                id="detail-@rowId"
+                                data-parent-type="@tipoCodigo"
+                                data-parent-result="@resultadoCodigo">
+                                <td colspan="10" class="extra-content">
+                                    <div class="extra-grid">
+                                        @if (!string.IsNullOrWhiteSpace(tarea.Observaciones))
+                                        {
+                                            <div class="extra-block">
+                                                <span>Observaciones</span>
+                                                <strong>@tarea.Observaciones</strong>
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(tarea.MotivoExceso))
+                                        {
+                                            <div class="extra-block">
+                                                <span>Motivo de excedente</span>
+                                                <strong>@tarea.MotivoExceso</strong>
+                                            </div>
+                                        }
+
+                                        @if (tarea.EsCambioMolde)
+                                        {
+                                            <div class="extra-block">
+                                                <span>Responsables</span>
+                                                <strong>
+                                                    Inicio: @(string.IsNullOrWhiteSpace(tarea.UsuarioInicioNombre) ? "—" : tarea.UsuarioInicioNombre)
+                                                    @Environment.NewLine
+                                                    Cierre: @(string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre) ? "—" : tarea.UsuarioConfirmacionNombre)
+                                                </strong>
+                                            </div>
+                                        }
+
+                                        @if (tarea.EjecucionProduccionID.HasValue)
+                                        {
+                                            <div class="extra-block">
+                                                <span>Producción relacionada</span>
+                                                <strong>
+                                                    <a asp-controller="Produccion"
+                                                       asp-action="Detalle"
+                                                       asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                                        Abrir detalle de Producción
+                                                    </a>
+                                                </strong>
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="no-client-results" id="noClientResults">
+            No hay registros que coincidan con el tipo o resultado seleccionado.
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <div class="empty">
+                <i class="bi bi-clock-history"></i>
+                <strong>No hay historial con los filtros actuales</strong>
+                <span>Busca por OF, parte, máquina o limpia los filtros para consultar más registros.</span>
+            </div>
+        </div>
+    }
+</div>
+
+<script>
+    (function () {
+        const typeFilter = document.getElementById('tipoFiltro');
+        const resultFilter = document.getElementById('resultadoFiltro');
+        const rows = Array.from(document.querySelectorAll('.js-history-row'));
+        const visibleCount = document.getElementById('visibleCount');
+        const noResults = document.getElementById('noClientResults');
+
+        function applyClientFilters() {
+            const typeValue = (typeFilter?.value || '').trim();
+            const resultValue = (resultFilter?.value || '').trim();
+
+            let count = 0;
+
+            rows.forEach(function (row) {
+                const rowType = row.dataset.type || '';
+                const rowResult = row.dataset.result || '';
+
+                const matchesType =
+                    !typeValue ||
+                    rowType === typeValue;
+
+                const matchesResult =
+                    !resultValue ||
+                    rowResult === resultValue;
+
+                const visible = matchesType && matchesResult;
+
+                row.style.display = visible ? '' : 'none';
+
+                const detailId = row.dataset.detailRow || '';
+                const detailRow = detailId
+                    ? document.getElementById(detailId)
+                    : null;
+
+                if (!visible && detailRow) {
+                    detailRow.classList.remove('show');
+                }
+
+                if (visible) count++;
+            });
+
+            if (visibleCount) {
+                visibleCount.textContent = String(count);
+            }
+
+            if (noResults) {
+                noResults.style.display =
+                    rows.length > 0 && count === 0
+                        ? 'block'
+                        : 'none';
+            }
+        }
+
+        typeFilter?.addEventListener(
+            'change',
+            applyClientFilters);
+
+        resultFilter?.addEventListener(
+            'change',
+            applyClientFilters);
+
+        document.querySelectorAll('.js-detail-btn')
+            .forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const target = document.getElementById(
+                        button.dataset.target || '');
+
+                    if (!target) return;
+
+                    target.classList.toggle('show');
+
+                    const icon = button.querySelector('i');
+
+                    if (icon) {
+                        icon.className = target.classList.contains('show')
+                            ? 'bi bi-chevron-up'
+                            : 'bi bi-chevron-down';
+                    }
+                });
+            });
+
+        applyClientFilters();
+    })();
+</script>

@@ -6,6 +6,9 @@
     var monitoreoTurno = Model.MonitoreoTurnoActual;
     var cambioTurnoTecnico = Model.CambioTurnoTecnico;
     var esReinicioSerie = ViewBag.EsReinicioSerie is bool reinicio && reinicio;
+    var puedeGestionarCajas = ViewBag.PuedeGestionarCajas is bool gestionarCajas && gestionarCajas;
+    var puedeVerCapturasHora = ViewBag.PuedeVerCapturasHora is bool verCapturasHora && verCapturasHora;
+    var puedeGestionarSugerenciaCambioTurno = ViewBag.PuedeGestionarSugerenciaCambioTurno is bool gestionarSugerenciaTurno && gestionarSugerenciaTurno;
 
     var horaInicio = new TimeSpan(DateTime.Now.Hour, 0, 0);
     var horaFin = horaInicio.Add(TimeSpan.FromHours(1));
@@ -673,11 +676,6 @@
         }
 
 
-        /* =====================================================
-                           TEMA GLOBAL ERP
-                           Esta pantalla es standalone (Layout = null), por eso
-                           lee nsq-theme desde localStorage al cargar.
-                           ===================================================== */
         html[data-nsq-theme="dark"] body {
             background: #0b1220;
             color: #e7eef9;
@@ -914,10 +912,20 @@
                         @e.EstatusNombre
                     </span>
 
+                    @if (puedeGestionarCajas)
+                    {
+                        <a href="@Url.Action("Cajas", "Produccion", new { id = e.EjecucionProduccionID })"
+                           class="btn btn-warning fw-bold">
+                            <i class="bi bi-box-seam me-1"></i>
+                            Gestión de cajas
+                        </a>
+                    }
+
                     <a href="@Url.Action("Index", "Produccion")" class="btn btn-light fw-bold">
                         <i class="bi bi-arrow-left me-1"></i>
                         Volver
                     </a>
+                </div>
                 </div>
             </div>
         </div>

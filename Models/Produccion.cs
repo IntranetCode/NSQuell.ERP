@@ -207,12 +207,27 @@ public static class ProduccionTipoEstatus
     public const string Caja = "CAJA";
 }
 
-
+public static class ProduccionEstadoOperativo
+{
+    public const string Pendiente = "PENDIENTE";
+    public const string Preparando = "PREPARANDO";
+    public const string EsperandoCalidad = "ESPERANDO_CALIDAD";
+    public const string ArranqueControlado = "ARRANQUE_CONTROLADO";
+    public const string PrimerasPiezas = "PRIMERAS_PIEZAS";
+    public const string AjustesCalidad = "AJUSTES_CALIDAD";
+    public const string LiberadaCalidad = "LIBERADA_CALIDAD";
+    public const string Produciendo = "PRODUCIENDO";
+    public const string Pausada = "PAUSADA";
+    public const string ReliberacionPendiente = "RELIBERACION_PENDIENTE";
+    public const string ReliberacionRechazada = "RELIBERACION_RECHAZADA";
+    public const string ReliberacionAutorizada = "RELIBERACION_AUTORIZADA";
+    public const string MaquinaLiberada = "MAQUINA_LIBERADA";
+    public const string NoOperativo = "NO_OPERATIVO";
+}
 
 public sealed class ProduccionEjecucionVm
 {
     public int EjecucionProduccionID { get; set; }
-
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
     public int? SolicitudProduccionDetalleID { get; set; }
@@ -238,9 +253,7 @@ public sealed class ProduccionEjecucionVm
     public DateTime? FechaFinReal { get; set; }
 
     public DateTime? FechaLiberacionMaquina { get; set; }
-
     public int? UsuarioLiberacionMaquinaID { get; set; }
-
     public string? ObservacionesLiberacionMaquina { get; set; }
 
     public bool MaquinaLiberada =>
@@ -270,16 +283,356 @@ public sealed class ProduccionEjecucionVm
     public string? MotivoCambioOperadores { get; set; }
     public bool EsCambioMolde { get; set; }
 
-    public string EstatusNombre => ProduccionEstatus.Nombre(EstatusID);
-    public string EstatusClase => ProduccionEstatus.ClaseBadge(EstatusID);
+    // =========================================================
+    // CALIDAD - INSPECCIÓN ACTUAL / MÁS RECIENTE DE LA EJECUCIÓN
+    // =========================================================
+    public int? InspeccionCalidadID { get; set; }
+    public string? EstadoCalidad { get; set; }
+    public string? ResultadoCalidad { get; set; }
+    public string? EtiquetaCalidad { get; set; }
 
-    public bool PuedeIniciar => ProduccionEstatus.PuedeIniciar(EstatusID);
-    public bool PuedeRegistrarProduccion => ProduccionEstatus.PuedeRegistrarProduccion(EstatusID);
-    public bool PuedePausar => ProduccionEstatus.PuedePausar(EstatusID);
-    public bool PuedeTerminar => ProduccionEstatus.PuedeTerminar(EstatusID);
+    public bool CalidadLiberado { get; set; }
+    public bool RequiereReliberacion { get; set; }
+    public bool ConfiguracionCalidadInvalidada { get; set; }
+
+    public DateTime? FechaNotificacionCalidad { get; set; }
+    public DateTime? FechaAutorizacionPrearranque { get; set; }
+    public DateTime? FechaLiberacionProduccion { get; set; }
+
+    // =========================================================
+    // CALIDAD - ÚLTIMA RELIBERACIÓN
+    // =========================================================
+    public int? ReliberacionID { get; set; }
+    public int? NumeroReliberacion { get; set; }
+    public string? ResultadoReliberacion { get; set; }
+    public DateTime? FechaSolicitudReliberacion { get; set; }
+    public DateTime? FechaValidacionReliberacion { get; set; }
+
+    // =========================================================
+    // PARO ACTUAL
+    // =========================================================
+    public bool TieneParoAbierto { get; set; }
+    public int? ParoAbiertoID { get; set; }
+    public DateTime? FechaInicioParoAbierto { get; set; }
+    public bool ParoAbiertoMayorA15Minutos { get; set; }
+
+    // =========================================================
+    // ESTADO GENERAL DE PRODUCCIÓN
+    // =========================================================
+    public string EstatusNombre =>
+        ProduccionEstatus.Nombre(EstatusID);
+
+    public string EstatusClase =>
+        ProduccionEstatus.ClaseBadge(EstatusID);
+
+    public bool PuedeIniciar =>
+        ProduccionEstatus.PuedeIniciar(EstatusID);
+
+    public bool PuedeRegistrarProduccion =>
+        ProduccionEstatus.PuedeRegistrarProduccion(EstatusID);
+
+    public bool PuedePausar =>
+        ProduccionEstatus.PuedePausar(EstatusID);
+
+    public bool PuedeTerminar =>
+        ProduccionEstatus.PuedeTerminar(EstatusID);
+
+    public string EstadoOperativoClave
+    {
+        get
+        {
+            if (MaquinaLiberada)
+                return ProduccionEstadoOperativo.MaquinaLiberada;
+
+            if (ResultadoReliberacionEs("RECHAZADA"))
+                return ProduccionEstadoOperativo.ReliberacionRechazada;
+
+            if (ResultadoReliberacionEs("AUTORIZADA") &&
+                EstatusID == ProduccionEstatus.EnPreparacion)
+                return ProduccionEstadoOperativo.ReliberacionAutorizada;
+
+            var reliberacionYaAutorizada = ResultadoReliberacionEs("AUTORIZADA");
+
+            if (!reliberacionYaAutorizada &&
+                (ResultadoReliberacionEs("PENDIENTE") ||
+                 RequiereReliberacion ||
+                 EstadoCalidadEs(CalidadEstados.PendienteReliberacion)))
+                return ProduccionEstadoOperativo.ReliberacionPendiente;
+
+            if (EstadoCalidadEs(CalidadEstados.DevueltoPrearranque) ||
+                EstadoCalidadEs(CalidadEstados.AjustesSolicitados))
+                return ProduccionEstadoOperativo.AjustesCalidad;
+
+            if (EstadoCalidadEs(CalidadEstados.PendientePrimerasPiezas) &&
+                !CalidadLiberado)
+                return ProduccionEstadoOperativo.PrimerasPiezas;
+
+            if (EstadoCalidadEs(CalidadEstados.PendientePrearranque) &&
+                !CalidadLiberado)
+                return ProduccionEstadoOperativo.EsperandoCalidad;
+
+            if (EstadoCalidadEs(CalidadEstados.ArranqueAutorizado) &&
+                !CalidadLiberado)
+                return ProduccionEstadoOperativo.ArranqueControlado;
+
+            if (CalidadLiberado &&
+                !ConfiguracionCalidadInvalidada &&
+                !RequiereReliberacion &&
+                EstatusID == ProduccionEstatus.EnPreparacion &&
+                (EstadoCalidadEs(CalidadEstados.ProduccionLiberada) ||
+                 EstadoCalidadEs(CalidadEstados.MonitoreoActivo)))
+                return ProduccionEstadoOperativo.LiberadaCalidad;
+
+            if (EstatusID == ProduccionEstatus.Pausado)
+                return ProduccionEstadoOperativo.Pausada;
+
+            if (EstatusID == ProduccionEstatus.EnProduccion)
+                return ProduccionEstadoOperativo.Produciendo;
+
+            if (EstatusID == ProduccionEstatus.EnPreparacion)
+                return ProduccionEstadoOperativo.Preparando;
+
+            if (EstatusID == ProduccionEstatus.Pendiente)
+                return ProduccionEstadoOperativo.Pendiente;
+
+            return ProduccionEstadoOperativo.NoOperativo;
+        }
+    }
+    
+
+    public string EstadoOperativoNombre =>
+        EstadoOperativoClave switch
+        {
+            ProduccionEstadoOperativo.Pendiente =>
+                "PENDIENTE",
+
+            ProduccionEstadoOperativo.Preparando =>
+                "EN PREPARACIÓN",
+
+            ProduccionEstadoOperativo.EsperandoCalidad =>
+                "ESPERANDO CALIDAD",
+
+            ProduccionEstadoOperativo.ArranqueControlado =>
+                "ARRANQUE AUTORIZADO",
+
+            ProduccionEstadoOperativo.PrimerasPiezas =>
+                "PRIMERAS PIEZAS EN VALIDACIÓN",
+
+            ProduccionEstadoOperativo.AjustesCalidad =>
+                "AJUSTES REQUERIDOS",
+
+            ProduccionEstadoOperativo.LiberadaCalidad =>
+                "LIBERADA POR CALIDAD",
+
+            ProduccionEstadoOperativo.Produciendo =>
+                "PRODUCIENDO",
+
+            ProduccionEstadoOperativo.Pausada =>
+                "PAUSADA",
+
+            ProduccionEstadoOperativo.ReliberacionPendiente =>
+                "PENDIENTE DE RELIBERACIÓN",
+
+            ProduccionEstadoOperativo.ReliberacionRechazada =>
+                "RELIBERACIÓN RECHAZADA",
+
+            ProduccionEstadoOperativo.ReliberacionAutorizada =>
+                "RELIBERACIÓN AUTORIZADA",
+
+            ProduccionEstadoOperativo.MaquinaLiberada =>
+                "MÁQUINA LIBERADA",
+
+            _ => EstatusNombre.ToUpperInvariant()
+        };
+
+    public string EstadoOperativoDescripcion
+    {
+        get
+        {
+            switch (EstadoOperativoClave)
+            {
+                case ProduccionEstadoOperativo.MaquinaLiberada:
+                    return FechaLiberacionMaquina.HasValue
+                        ? $"Corrida física finalizada {FechaLiberacionMaquina.Value:HH:mm}"
+                        : "Corrida física finalizada";
+
+                case ProduccionEstadoOperativo.ReliberacionRechazada:
+                    return NumeroReliberacion.HasValue
+                        ? $"Reliberación #{NumeroReliberacion.Value} rechazada por Calidad"
+                        : "Calidad rechazó la reliberación";
+
+                case ProduccionEstadoOperativo.ReliberacionPendiente:
+                    if (NumeroReliberacion.HasValue)
+                        return $"Reliberación #{NumeroReliberacion.Value} pendiente de Calidad";
+
+                    if (ParoAbiertoMayorA15Minutos)
+                        return "Paro >15 min · requiere nueva autorización";
+
+                    return "Esperando nueva autorización de Calidad";
+
+                case ProduccionEstadoOperativo.ReliberacionAutorizada:
+                    return NumeroReliberacion.HasValue
+                        ? $"Reliberación #{NumeroReliberacion.Value} autorizada · lista para reiniciar"
+                        : "Lista para reiniciar producción";
+
+                case ProduccionEstadoOperativo.AjustesCalidad:
+                    if (EstadoCalidadEs(CalidadEstados.DevueltoPrearranque))
+                        return "Prearranque devuelto por Calidad";
+
+                    return "Calidad solicitó ajustes antes de liberar";
+
+                case ProduccionEstadoOperativo.PrimerasPiezas:
+                    return "Calidad está validando las primeras piezas";
+
+                case ProduccionEstadoOperativo.EsperandoCalidad:
+                    return FechaNotificacionCalidad.HasValue
+                        ? $"Prearranque enviado {FechaNotificacionCalidad.Value:HH:mm}"
+                        : "Prearranque pendiente de revisión";
+
+                case ProduccionEstadoOperativo.ArranqueControlado:
+                    return "Puede realizar arranque controlado y primeras piezas";
+
+                case ProduccionEstadoOperativo.LiberadaCalidad:
+                    return FechaLiberacionProduccion.HasValue
+                        ? $"Liberada {FechaLiberacionProduccion.Value:HH:mm} · lista para iniciar serie"
+                        : "Lista para iniciar serie";
+
+                case ProduccionEstadoOperativo.Produciendo:
+                    return FechaInicioReal.HasValue
+                        ? $"Inicio real {FechaInicioReal.Value:HH:mm}"
+                        : "Ejecución en producción";
+
+                case ProduccionEstadoOperativo.Pausada:
+                    return TieneParoAbierto && FechaInicioParoAbierto.HasValue
+                        ? $"Paro activo desde {FechaInicioParoAbierto.Value:HH:mm}"
+                        : "Ejecución pausada";
+
+                case ProduccionEstadoOperativo.Preparando:
+                    return "Checklist / preparación en proceso";
+
+                case ProduccionEstadoOperativo.Pendiente:
+                    return "Pendiente de iniciar preparación";
+
+                default:
+                    return EstatusNombre;
+            }
+        }
+    }
+
+    public string EstadoOperativoClase =>
+        EstadoOperativoClave switch
+        {
+            ProduccionEstadoOperativo.Pendiente =>
+                "prod-operativo-pendiente",
+
+            ProduccionEstadoOperativo.Preparando =>
+                "prod-operativo-preparacion",
+
+            ProduccionEstadoOperativo.EsperandoCalidad =>
+                "prod-operativo-esperando-calidad",
+
+            ProduccionEstadoOperativo.ArranqueControlado =>
+                "prod-operativo-arranque",
+
+            ProduccionEstadoOperativo.PrimerasPiezas =>
+                "prod-operativo-primeras-piezas",
+
+            ProduccionEstadoOperativo.AjustesCalidad =>
+                "prod-operativo-ajustes",
+
+            ProduccionEstadoOperativo.LiberadaCalidad =>
+                "prod-operativo-liberada-calidad",
+
+            ProduccionEstadoOperativo.Produciendo =>
+                "prod-operativo-produciendo",
+
+            ProduccionEstadoOperativo.Pausada =>
+                "prod-operativo-pausada",
+
+            ProduccionEstadoOperativo.ReliberacionPendiente =>
+                "prod-operativo-reliberacion",
+
+            ProduccionEstadoOperativo.ReliberacionRechazada =>
+                "prod-operativo-bloqueado",
+
+            ProduccionEstadoOperativo.ReliberacionAutorizada =>
+                "prod-operativo-reliberacion-autorizada",
+
+            ProduccionEstadoOperativo.MaquinaLiberada =>
+                "prod-operativo-maquina-liberada",
+
+            _ => "prod-operativo-pendiente"
+        };
+
+    public int EstadoOperativoPrioridad =>
+        EstadoOperativoClave switch
+        {
+            ProduccionEstadoOperativo.ReliberacionRechazada => 10,
+            ProduccionEstadoOperativo.ReliberacionPendiente => 20,
+            ProduccionEstadoOperativo.AjustesCalidad => 30,
+            ProduccionEstadoOperativo.PrimerasPiezas => 40,
+            ProduccionEstadoOperativo.EsperandoCalidad => 45,
+            ProduccionEstadoOperativo.Pausada => 50,
+            ProduccionEstadoOperativo.ReliberacionAutorizada => 60,
+            ProduccionEstadoOperativo.LiberadaCalidad => 65,
+            ProduccionEstadoOperativo.ArranqueControlado => 70,
+            ProduccionEstadoOperativo.Preparando => 80,
+            ProduccionEstadoOperativo.Produciendo => 90,
+            ProduccionEstadoOperativo.Pendiente => 100,
+            ProduccionEstadoOperativo.MaquinaLiberada => 200,
+            _ => 999
+        };
+
+    public bool EsOperacionActiva =>
+        !MaquinaLiberada &&
+        (EstatusID == ProduccionEstatus.Pendiente ||
+         EstatusID == ProduccionEstatus.EnPreparacion ||
+         EstatusID == ProduccionEstatus.EnProduccion ||
+         EstatusID == ProduccionEstatus.Pausado);
+
+    public bool EsPreparacionOperativa =>
+        EstadoOperativoClave == ProduccionEstadoOperativo.Preparando ||
+        EstadoOperativoClave == ProduccionEstadoOperativo.ArranqueControlado ||
+        EstadoOperativoClave == ProduccionEstadoOperativo.AjustesCalidad;
+
+    public bool EsEsperandoCalidad =>
+        EstadoOperativoClave == ProduccionEstadoOperativo.EsperandoCalidad ||
+        EstadoOperativoClave == ProduccionEstadoOperativo.PrimerasPiezas;
+
+    public bool EsLiberadaPorCalidad =>
+        EstadoOperativoClave == ProduccionEstadoOperativo.LiberadaCalidad;
+
+    public bool EsProduciendo =>
+        EstadoOperativoClave == ProduccionEstadoOperativo.Produciendo;
+
+    public bool EsPausada =>
+        EstadoOperativoClave == ProduccionEstadoOperativo.Pausada;
+
+    public bool EsReliberacion =>
+        EstadoOperativoClave == ProduccionEstadoOperativo.ReliberacionPendiente ||
+        EstadoOperativoClave == ProduccionEstadoOperativo.ReliberacionRechazada ||
+        EstadoOperativoClave == ProduccionEstadoOperativo.ReliberacionAutorizada;
+
+    private bool EstadoCalidadEs(string estado)
+    {
+        return string.Equals(
+            EstadoCalidad,
+            estado,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool ResultadoReliberacionEs(string resultado)
+    {
+        return string.Equals(
+            ResultadoReliberacion,
+            resultado,
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     public int CantidadTotalCapturada =>
-        CantidadOKTotal + CantidadSospechosaTotal + CantidadScrapTotal;
+        CantidadOKTotal +
+        CantidadSospechosaTotal +
+        CantidadScrapTotal;
 
     public int CantidadPendiente
     {
@@ -288,14 +641,15 @@ public sealed class ProduccionEjecucionVm
             if (!CantidadPlaneada.HasValue)
                 return 0;
 
-            return Math.Max(0, CantidadPlaneada.Value - CantidadOKTotal);
+            return Math.Max(
+                0,
+                CantidadPlaneada.Value - CantidadOKTotal);
         }
     }
 
     public sealed class ProduccionLiberarMaquinaPostVm
     {
         public int EjecucionProduccionID { get; set; }
-
         public string? Observaciones { get; set; }
     }
 
@@ -303,10 +657,17 @@ public sealed class ProduccionEjecucionVm
     {
         get
         {
-            if (!CantidadPlaneada.HasValue || CantidadPlaneada.Value <= 0)
+            if (!CantidadPlaneada.HasValue ||
+                CantidadPlaneada.Value <= 0)
+            {
                 return 0;
+            }
 
-            return Math.Round((decimal)CantidadOKTotal / CantidadPlaneada.Value * 100m, 2);
+            return Math.Round(
+                (decimal)CantidadOKTotal /
+                CantidadPlaneada.Value *
+                100m,
+                2);
         }
     }
 
@@ -334,7 +695,6 @@ public sealed class ProduccionEjecucionVm
             ? "Sin operador"
             : OperadorNombre;
 }
-
 public sealed class ProduccionRegistroHoraVm
 {
     public int RegistroHoraID { get; set; }
@@ -487,6 +847,10 @@ public sealed class ProduccionBandejaVm
     public bool TieneAlertasReprogramacion =>
         AlertasReprogramacion.Count > 0;
 
+    // =========================================================
+    // CONTADORES GENERALES ANTERIORES
+    // Se conservan para no romper otras referencias.
+    // =========================================================
     public int Total =>
         Ejecuciones.Count;
 
@@ -511,6 +875,77 @@ public sealed class ProduccionBandejaVm
             x =>
                 x.EstatusID == ProduccionEstatus.Terminado ||
                 x.EstatusID == ProduccionEstatus.TerminadoParcial);
+
+    // =========================================================
+    // CONTADORES DEL NUEVO PANEL OPERATIVO
+    // =========================================================
+    public int TotalOperativas =>
+        Ejecuciones.Count(
+            x => x.EsOperacionActiva);
+
+    public int PreparacionOperativa =>
+        Ejecuciones.Count(
+            x =>
+                x.EsOperacionActiva &&
+                x.EsPreparacionOperativa);
+
+    public int EsperandoCalidad =>
+        Ejecuciones.Count(
+            x =>
+                x.EsOperacionActiva &&
+                x.EsEsperandoCalidad);
+
+    public int LiberadasPorCalidad =>
+        Ejecuciones.Count(
+            x =>
+                x.EsOperacionActiva &&
+                x.EsLiberadaPorCalidad);
+
+    public int ProduciendoOperativas =>
+        Ejecuciones.Count(
+            x =>
+                x.EsOperacionActiva &&
+                x.EsProduciendo);
+
+    public int PausadasOperativas =>
+        Ejecuciones.Count(
+            x =>
+                x.EsOperacionActiva &&
+                x.EsPausada);
+
+    public int EnReliberacion =>
+        Ejecuciones.Count(
+            x =>
+                x.EsOperacionActiva &&
+                x.EsReliberacion);
+
+    public int MaquinasLiberadas =>
+        Ejecuciones.Count(
+            x => x.MaquinaLiberada);
+
+    public int ReliberacionesPendientes =>
+        Ejecuciones.Count(
+            x =>
+                x.EstadoOperativoClave ==
+                ProduccionEstadoOperativo.ReliberacionPendiente);
+
+    public int ReliberacionesRechazadas =>
+        Ejecuciones.Count(
+            x =>
+                x.EstadoOperativoClave ==
+                ProduccionEstadoOperativo.ReliberacionRechazada);
+
+    public int ReliberacionesAutorizadas =>
+        Ejecuciones.Count(
+            x =>
+                x.EstadoOperativoClave ==
+                ProduccionEstadoOperativo.ReliberacionAutorizada);
+
+    public int PrimerasPiezasPendientes =>
+        Ejecuciones.Count(
+            x =>
+                x.EstadoOperativoClave ==
+                ProduccionEstadoOperativo.PrimerasPiezas);
 }
 public sealed class ProduccionAlertaReprogramacionVm
 {

@@ -18,107 +18,118 @@
         return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
     }
 
-    static string ClaseEstado(int estatusId)
+    static string CategoriaOperativa(ERP.NSQuell.Models.ProduccionEjecucionVm item)
     {
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+        if (item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.MaquinaLiberada)
+            return "MAQUINA_LIBERADA";
+
+        if (item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionPendiente ||
+            item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionRechazada ||
+            item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionAutorizada)
+            return "RELIBERACION";
+
+        if (item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.EsperandoCalidad ||
+            item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.PrimerasPiezas)
+            return "CALIDAD";
+
+        if (item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.LiberadaCalidad)
+            return "LIBERADA_CALIDAD";
+
+        if (item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Produciendo)
+            return "PRODUCIENDO";
+
+        if (item.EstadoOperativoClave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Pausada)
+            return "PAUSADA";
+
+        return "PREPARACION";
+    }
+
+    static string ClaseFila(string clave)
+    {
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Produciendo)
             return "ejec-row-produccion";
 
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion)
-            return "ejec-row-preparacion";
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Pausada)
+            return "ejec-row-pausada";
 
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
-            return "ejec-row-pausado";
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.EsperandoCalidad ||
+            clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.PrimerasPiezas)
+            return "ejec-row-calidad";
 
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
-            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
-            return "ejec-row-terminado";
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.LiberadaCalidad)
+            return "ejec-row-liberada";
 
-        return "ejec-row-default";
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionPendiente)
+            return "ejec-row-reliberacion";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionRechazada)
+            return "ejec-row-rechazada";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionAutorizada)
+            return "ejec-row-reliberacion-ok";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.AjustesCalidad)
+            return "ejec-row-ajustes";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.MaquinaLiberada)
+            return "ejec-row-maquina-liberada";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Pendiente)
+            return "ejec-row-pendiente";
+
+        return "ejec-row-preparacion";
     }
 
-    static string ClaseBadgeEstado(int estatusId)
+    static string IconoEstado(string clave)
     {
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
-            return "estado-produccion";
-
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion)
-            return "estado-preparacion";
-
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
-            return "estado-pausado";
-
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
-            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
-            return "estado-terminado";
-
-        return "estado-default";
-    }
-
-    static string IconoEstado(int estatusId)
-    {
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Produciendo)
             return "bi-play-circle-fill";
 
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion)
-            return "bi-tools";
-
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Pausada)
             return "bi-pause-circle-fill";
 
-        if (estatusId == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
-            estatusId == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.EsperandoCalidad)
+            return "bi-hourglass-split";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.PrimerasPiezas)
+            return "bi-search";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ArranqueControlado)
+            return "bi-speedometer2";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.LiberadaCalidad)
+            return "bi-patch-check-fill";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionPendiente)
+            return "bi-arrow-repeat";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionRechazada)
+            return "bi-x-octagon-fill";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.ReliberacionAutorizada)
             return "bi-check-circle-fill";
 
-        return "bi-circle-fill";
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.AjustesCalidad)
+            return "bi-exclamation-triangle-fill";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.MaquinaLiberada)
+            return "bi-unlock-fill";
+
+        if (clave == ERP.NSQuell.Models.ProduccionEstadoOperativo.Pendiente)
+            return "bi-clock";
+
+        return "bi-tools";
     }
 
     var todas = Model.Ejecuciones
+        .Where(x => x.EsOperacionActiva || x.MaquinaLiberada)
         .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
+        .ThenBy(x => x.EstadoOperativoPrioridad)
         .ThenBy(x => x.ProgramaProduccionID)
         .ThenBy(x => x.EjecucionProduccionID)
         .ToList();
 
-    var activas = todas
-        .Where(x =>
-            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pendiente ||
-            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion ||
-            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ||
-            x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pausado)
-        .ToList();
-
-    var mostrarTerminadas =
-        Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
-        Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial;
-
-    List<ERP.NSQuell.Models.ProduccionEjecucionVm> visibles;
-
-    if (Model.EstatusID.HasValue && Model.EstatusID.Value > 0)
-    {
-        if (mostrarTerminadas)
-        {
-            visibles = todas
-                .Where(x =>
-                    x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
-                    x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial)
-                .ToList();
-        }
-        else
-        {
-            visibles = todas
-                .Where(x => x.EstatusID == Model.EstatusID.Value)
-                .ToList();
-        }
-    }
-    else
-    {
-        visibles = activas;
-    }
-
-    var totalTerminadas = todas.Count(x =>
-        x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Terminado ||
-        x.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial);
-
-    var grupos = visibles
+    var grupos = todas
         .GroupBy(x => new
         {
             MaquinaID = x.MaquinaID ?? 0,
@@ -131,28 +142,40 @@
         })
         .OrderBy(x => x.Key.Codigo)
         .ToList();
+
+    var totalOperativas = todas.Count(x => x.EsOperacionActiva);
+    var totalPreparacion = todas.Count(x => x.EsOperacionActiva && x.EsPreparacionOperativa);
+    var totalCalidad = todas.Count(x => x.EsOperacionActiva && x.EsEsperandoCalidad);
+    var totalLiberadasCalidad = todas.Count(x => x.EsOperacionActiva && x.EsLiberadaPorCalidad);
+    var totalProduciendo = todas.Count(x => x.EsOperacionActiva && x.EsProduciendo);
+    var totalPausadas = todas.Count(x => x.EsOperacionActiva && x.EsPausada);
+    var totalReliberacion = todas.Count(x => x.EsOperacionActiva && x.EsReliberacion);
+    var totalMaquinasLiberadas = todas.Count(x => x.MaquinaLiberada);
 }
 
 <style>
     .ejec-panel {
-        --ej-blue: #003b82;
-        --ej-border: #d7e2f1;
+        --ej-blue: #163b68;
+        --ej-border: #d8e2ef;
         --ej-muted: #667085;
         --ej-text: #182437;
+        border: 1px solid var(--ej-border);
+        border-radius: 15px;
+        background: #fff;
+        overflow: hidden;
+        box-shadow: 0 5px 16px rgba(16,42,78,.04);
     }
 
     .ejec-toolbar {
-        border: 1px solid var(--ej-border);
-        border-radius: 16px;
-        background: #fff;
-        padding: 12px 14px;
-        margin-bottom: 10px;
+        padding: 14px 15px 13px;
+        border-bottom: 1px solid #dfe7f0;
+        background: linear-gradient(180deg,#fbfcfe 0%,#f8fafc 100%);
     }
 
     .ejec-toolbar-top {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 10px;
         flex-wrap: wrap;
     }
@@ -160,191 +183,192 @@
     .ejec-title {
         margin: 0;
         color: var(--ej-blue);
-        font-size: 1rem;
-        font-weight: 950;
+        font-size: .98rem;
+        font-weight: 850;
+        letter-spacing: -.01em;
     }
 
+        .ejec-title i {
+            width: 25px;
+            height: 25px;
+            display: inline-grid;
+            place-items: center;
+            margin-right: 6px;
+            border: 1px solid #d5e2f1;
+            border-radius: 8px;
+            background: #eef5fd;
+            color: #2f6fbd;
+            font-size: .75rem;
+        }
+
     .ejec-sub {
-        margin-top: 2px;
-        color: var(--ej-muted);
-        font-size: .75rem;
-        font-weight: 650;
+        margin-top: 4px;
+        margin-left: 33px;
+        color: #728096;
+        font-size: .73rem;
+        font-weight: 600;
+    }
+
+    .ejec-visible-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 30px;
+        padding: 6px 10px;
+        border: 1px solid #d2deeb;
+        border-radius: 9px;
+        background: #fff;
+        color: #49627f;
+        font-size: .67rem;
+        font-weight: 850;
+        box-shadow: 0 1px 2px rgba(16,24,40,.03);
     }
 
     .ejec-tabs {
         display: flex;
-        gap: 8px;
+        gap: 7px;
         flex-wrap: wrap;
-        margin-top: 12px;
+        margin-top: 11px;
     }
 
     .ejec-tab {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 7px;
-        min-height: 36px;
-        padding: 7px 12px;
-        border: 1px solid #c8d7ea;
-        border-radius: 9px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        color: #344054;
-        text-decoration: none;
-        font-size: .74rem;
-        font-weight: 900;
+        gap: 6px;
+        min-height: 35px;
+        padding: 6px 10px;
+        border: 1px solid #d1dce8;
+        border-radius: 8px;
+        background: #fff;
+        color: #42526a;
+        font-size: .69rem;
+        font-weight: 800;
         line-height: 1;
-        box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
-        transition:
-            transform .16s ease,
-            box-shadow .16s ease,
-            border-color .16s ease,
-            background .16s ease,
-            color .16s ease;
         cursor: pointer;
-        user-select: none;
+        transition: border-color .15s ease,background .15s ease,color .15s ease,box-shadow .15s ease;
     }
 
         .ejec-tab > i {
-            width: 22px;
-            height: 22px;
+            width: 21px;
+            height: 21px;
             display: inline-grid;
             place-items: center;
-            flex: 0 0 22px;
-            border-radius: 7px;
-            background: #eef4fb;
-            color: #496785;
-            font-size: .72rem;
-            transition: background .16s ease, color .16s ease;
+            flex: 0 0 21px;
+            border-radius: 6px;
+            background: #f0f4f8;
+            color: #60758d;
+            font-size: .68rem;
         }
 
         .ejec-tab:hover {
-            transform: translateY(-1px);
-            border-color: #8fb7ee;
-            background: #f7fbff;
+            border-color: #a9bfda;
+            background: #f8fbff;
             color: var(--ej-blue);
-            box-shadow: 0 5px 12px rgba(0, 59, 130, .10);
-        }
-
-        .ejec-tab:hover > i {
-            background: #dcecff;
-            color: var(--ej-blue);
-        }
-
-        .ejec-tab:active {
-            transform: translateY(0);
-            box-shadow: 0 1px 3px rgba(16, 24, 40, .08);
-        }
-
-        .ejec-tab:focus-visible {
-            outline: 3px solid rgba(37, 99, 235, .16);
-            outline-offset: 2px;
+            box-shadow: 0 2px 7px rgba(16,42,78,.06);
         }
 
         .ejec-tab.is-active {
-            border-color: #6fa7e8;
-            background: #edf5ff;
-            color: var(--ej-blue);
-            box-shadow: inset 0 0 0 1px rgba(0, 59, 130, .05), 0 3px 8px rgba(0, 59, 130, .08);
+            border-color: #7ba8dc;
+            background: #eef5fd;
+            color: #1d4ed8;
+            box-shadow: inset 0 -2px 0 #2f6fbd;
         }
 
-        .ejec-tab.is-active > i {
-            background: var(--ej-blue);
-            color: #fff;
+            .ejec-tab.is-active > i {
+                background: #2f6fbd;
+                color: #fff;
+            }
+
+        .ejec-tab.tab-calidad.is-active {
+            border-color: #c5a0ef;
+            background: #f5efff;
+            color: #6b21a8;
+            box-shadow: inset 0 -2px 0 #9333ea;
         }
 
-    .ejec-tabs .ejec-tab:nth-child(2).is-active {
-        border-color: #8db8f5;
-        background: #edf5ff;
-        color: #1d4ed8;
-    }
+            .ejec-tab.tab-calidad.is-active > i {
+                background: #9333ea;
+            }
 
-    .ejec-tabs .ejec-tab:nth-child(2).is-active > i {
-        background: #2563eb;
-        color: #fff;
-    }
+        .ejec-tab.tab-liberada.is-active {
+            border-color: #82c99a;
+            background: #effaf2;
+            color: #166534;
+            box-shadow: inset 0 -2px 0 #16a34a;
+        }
 
-    .ejec-tabs .ejec-tab:nth-child(3).is-active {
-        border-color: #e7bd55;
-        background: #fff8e7;
-        color: #8a5b08;
-    }
+            .ejec-tab.tab-liberada.is-active > i {
+                background: #16a34a;
+            }
 
-    .ejec-tabs .ejec-tab:nth-child(3).is-active > i {
-        background: #d99a13;
-        color: #fff;
-    }
+        .ejec-tab.tab-pausada.is-active {
+            border-color: #e9a0a0;
+            background: #fff1f1;
+            color: #b42318;
+            box-shadow: inset 0 -2px 0 #d92d20;
+        }
 
-    .ejec-tabs .ejec-tab:nth-child(4).is-active {
-        border-color: #e9a0a0;
-        background: #fff1f1;
-        color: #b42318;
-    }
+            .ejec-tab.tab-pausada.is-active > i {
+                background: #d92d20;
+            }
 
-    .ejec-tabs .ejec-tab:nth-child(4).is-active > i {
-        background: #d92d20;
-        color: #fff;
-    }
+        .ejec-tab.tab-reliberacion.is-active {
+            border-color: #e7bd55;
+            background: #fff8e7;
+            color: #8a5b08;
+            box-shadow: inset 0 -2px 0 #d99a13;
+        }
 
-    .ejec-tabs .ejec-tab:nth-child(5).is-active {
-        border-color: #85c997;
-        background: #eefaf1;
-        color: #166534;
-    }
+            .ejec-tab.tab-reliberacion.is-active > i {
+                background: #d99a13;
+            }
 
-    .ejec-tabs .ejec-tab:nth-child(5).is-active > i {
-        background: #16a34a;
-        color: #fff;
-    }
+        .ejec-tab.tab-liberada-maquina.is-active {
+            border-color: #aab6c5;
+            background: #f3f5f7;
+            color: #475467;
+            box-shadow: inset 0 -2px 0 #667085;
+        }
+
+            .ejec-tab.tab-liberada-maquina.is-active > i {
+                background: #667085;
+            }
 
     .ejec-tab-count {
-        min-width: 21px;
-        height: 21px;
+        min-width: 20px;
+        height: 20px;
         padding: 0 6px;
-        border-radius: 7px;
+        border: 1px solid #d3deeb;
+        border-radius: 6px;
         display: inline-grid;
         place-items: center;
         background: #fff;
-        border: 1px solid #d3deeb;
         color: #344054;
-        font-size: .64rem;
+        font-size: .61rem;
         font-weight: 950;
         line-height: 1;
-        box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
     }
 
-        .ejec-tab.is-active .ejec-tab-count {
-            border-color: rgba(255, 255, 255, .85);
-            background: rgba(255, 255, 255, .92);
-            color: currentColor;
-        }
-
-    .ejec-visible-count {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        min-height: 31px;
-        padding: 6px 10px;
-        border: 1px solid #bfd3f2;
-        border-radius: 9px;
-        background: #f8fbff;
-        color: var(--ej-blue);
-        font-size: .7rem;
-        font-weight: 900;
+    .ejec-tab.is-active .ejec-tab-count {
+        background: rgba(255,255,255,.92);
+        border-color: rgba(255,255,255,.85);
+        color: currentColor;
     }
 
     .ejec-machine {
+        margin: 10px 11px;
         border: 1px solid var(--ej-border);
-        border-radius: 14px;
+        border-radius: 11px;
         background: #fff;
         overflow: hidden;
-        margin-bottom: 9px;
     }
 
     .ejec-machine-head {
-        min-height: 42px;
+        min-height: 43px;
         padding: 7px 11px;
         border-bottom: 1px solid var(--ej-border);
-        background: #f8fbff;
+        background: #f8fafc;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -353,7 +377,7 @@
     }
 
     .ejec-machine-code {
-        color: var(--ej-blue);
+        color: #163b68;
         font-size: .82rem;
         font-weight: 950;
     }
@@ -370,10 +394,10 @@
         align-items: center;
         gap: 4px;
         padding: 4px 7px;
-        border: 1px solid #bfd3f2;
-        border-radius: 999px;
+        border: 1px solid #d2deeb;
+        border-radius: 7px;
         background: #fff;
-        color: var(--ej-blue);
+        color: #49627f;
         font-size: .66rem;
         font-weight: 900;
     }
@@ -384,7 +408,7 @@
 
     .ejec-table {
         width: 100%;
-        min-width: 1320px;
+        min-width: 1470px;
         border-collapse: collapse;
         table-layout: fixed;
         font-size: .72rem;
@@ -393,8 +417,8 @@
         .ejec-table th {
             padding: 7px 8px;
             border-bottom: 1px solid #d8e2ef;
-            background: #fbfcfe;
-            color: #667085;
+            background: #f7f9fc;
+            color: #596a80;
             font-size: .61rem;
             font-weight: 950;
             text-transform: uppercase;
@@ -416,6 +440,8 @@
 
         .ejec-table tbody tr {
             border-left: 4px solid #98a2b3;
+            background: #fff;
+            transition: background .15s ease;
         }
 
             .ejec-table tbody tr:hover {
@@ -424,38 +450,49 @@
 
     .ejec-row-produccion {
         border-left-color: #2563eb !important;
-        background: #eff6ff;
+        background: #f7fbff !important;
     }
 
-    .ejec-row-preparacion {
+    .ejec-row-preparacion,
+    .ejec-row-pendiente {
         border-left-color: #f59e0b !important;
-        background: #fffbeb;
+        background: #fffdf6 !important;
     }
 
-    .ejec-row-pausado {
+    .ejec-row-pausada {
         border-left-color: #dc2626 !important;
-        background: #fef2f2;
+        background: #fff8f8 !important;
     }
 
-    .ejec-row-terminado {
+    .ejec-row-calidad {
+        border-left-color: #9333ea !important;
+        background: #fcf9ff !important;
+    }
+
+    .ejec-row-liberada,
+    .ejec-row-reliberacion-ok {
         border-left-color: #16a34a !important;
-        background: #f0fdf4;
+        background: #f7fcf8 !important;
     }
 
-    .ejec-row-produccion:hover {
-        background: #dbeafe !important;
+    .ejec-row-reliberacion {
+        border-left-color: #ea980c !important;
+        background: #fffaf1 !important;
     }
 
-    .ejec-row-preparacion:hover {
-        background: #fef3c7 !important;
+    .ejec-row-rechazada {
+        border-left-color: #b42318 !important;
+        background: #fff5f4 !important;
     }
 
-    .ejec-row-pausado:hover {
-        background: #fee2e2 !important;
+    .ejec-row-ajustes {
+        border-left-color: #d97706 !important;
+        background: #fff9ed !important;
     }
 
-    .ejec-row-terminado:hover {
-        background: #dcfce7 !important;
+    .ejec-row-maquina-liberada {
+        border-left-color: #667085 !important;
+        background: #f8f9fb !important;
     }
 
     .ejec-programa {
@@ -493,43 +530,101 @@
         white-space: nowrap;
     }
 
+    .ejec-status-wrap {
+        min-width: 210px;
+    }
+
     .ejec-status {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 4px 7px;
+        gap: 5px;
+        max-width: 100%;
+        padding: 5px 8px;
         border: 1px solid #d0d5dd;
-        border-radius: 999px;
+        border-radius: 7px;
         background: #fff;
         color: #344054;
-        font-size: .65rem;
-        font-weight: 900;
-        white-space: nowrap;
+        font-size: .62rem;
+        font-weight: 950;
+        line-height: 1.15;
+        text-transform: uppercase;
     }
 
-    .estado-produccion {
-        border-color: #93c5fd;
-        background: #dbeafe;
-        color: #1d4ed8;
-        box-shadow: 0 0 0 2px rgba(37, 99, 235, .05);
+    .ejec-status-detail {
+        display: block;
+        margin-top: 4px;
+        color: #667085;
+        font-size: .61rem;
+        font-weight: 650;
+        line-height: 1.25;
     }
 
-    .estado-preparacion {
+    .prod-operativo-pendiente {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+    }
+
+    .prod-operativo-preparacion {
         border-color: #fcd34d;
         background: #fef3c7;
         color: #92400e;
     }
 
-    .estado-pausado {
+    .prod-operativo-esperando-calidad,
+    .prod-operativo-primeras-piezas {
+        border-color: #d8b4fe;
+        background: #f3e8ff;
+        color: #7e22ce;
+    }
+
+    .prod-operativo-arranque {
+        border-color: #93c5fd;
+        background: #eaf4ff;
+        color: #1d4ed8;
+    }
+
+    .prod-operativo-ajustes {
+        border-color: #fdba74;
+        background: #fff7ed;
+        color: #9a3412;
+    }
+
+    .prod-operativo-liberada-calidad,
+    .prod-operativo-reliberacion-autorizada {
+        border-color: #86efac;
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .prod-operativo-produciendo {
+        border-color: #93c5fd;
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .prod-operativo-pausada {
         border-color: #fca5a5;
         background: #fee2e2;
         color: #b91c1c;
     }
 
-    .estado-terminado {
-        border-color: #86efac;
-        background: #dcfce7;
-        color: #166534;
+    .prod-operativo-reliberacion {
+        border-color: #facc15;
+        background: #fef9c3;
+        color: #854d0e;
+    }
+
+    .prod-operativo-bloqueado {
+        border-color: #fda29b;
+        background: #fee4e2;
+        color: #b42318;
+    }
+
+    .prod-operativo-maquina-liberada {
+        border-color: #cbd5e1;
+        background: #f1f5f9;
+        color: #475569;
     }
 
     .ejec-num {
@@ -578,16 +673,29 @@
             background: #4b8fd8;
         }
 
-    .ejec-row-preparacion .ejec-progress > span {
+    .ejec-row-preparacion .ejec-progress > span,
+    .ejec-row-pendiente .ejec-progress > span,
+    .ejec-row-reliberacion .ejec-progress > span,
+    .ejec-row-ajustes .ejec-progress > span {
         background: #e6b422;
     }
 
-    .ejec-row-pausado .ejec-progress > span {
+    .ejec-row-pausada .ejec-progress > span,
+    .ejec-row-rechazada .ejec-progress > span {
         background: #d46a78;
     }
 
-    .ejec-row-terminado .ejec-progress > span {
+    .ejec-row-liberada .ejec-progress > span,
+    .ejec-row-reliberacion-ok .ejec-progress > span {
         background: #4f9f72;
+    }
+
+    .ejec-row-calidad .ejec-progress > span {
+        background: #9b6bc6;
+    }
+
+    .ejec-row-maquina-liberada .ejec-progress > span {
+        background: #7c8798;
     }
 
     .ejec-action {
@@ -603,149 +711,15 @@
         }
 
     .ejec-empty {
-        border: 1px solid var(--ej-border);
-        border-radius: 16px;
-        background: #fff;
-        padding: 34px 18px;
-        text-align: center;
-        color: var(--ej-muted);
-        font-weight: 700;
-    }
-
-        .ejec-empty i {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 1.65rem;
-            color: #98a2b3;
-        }
-
-    @@media (max-width: 900px) {
-        .ejec-table {
-            min-width: 1180px;
-        }
-    }
-
-    /* =========================================================
-       REFINAMIENTO PROFESIONAL - PANEL DE EJECUCIONES
-       ========================================================= */
-
-    .ejec-panel {
-        border: 1px solid #d8e2ef;
-        border-radius: 15px;
-        background: #fff;
-        overflow: hidden;
-        box-shadow: 0 5px 16px rgba(16, 42, 78, .04);
-    }
-
-    .ejec-toolbar {
-        margin: 0;
-        padding: 14px 15px 13px;
-        border: 0;
-        border-bottom: 1px solid #dfe7f0;
-        border-radius: 0;
-        background: linear-gradient(180deg, #fbfcfe 0%, #f8fafc 100%);
-    }
-
-    .ejec-toolbar-top {
-        align-items: center;
-    }
-
-    .ejec-title {
-        color: #163b68;
-        font-size: .98rem;
-        font-weight: 850;
-        letter-spacing: -.01em;
-    }
-
-    .ejec-title i {
-        width: 25px;
-        height: 25px;
-        display: inline-grid;
-        place-items: center;
-        margin-right: 6px !important;
-        border: 1px solid #d5e2f1;
-        border-radius: 8px;
-        background: #eef5fd;
-        color: #2f6fbd;
-        font-size: .75rem;
-    }
-
-    .ejec-sub {
-        margin-top: 4px;
-        margin-left: 33px;
-        color: #728096;
-        font-size: .73rem;
-        font-weight: 600;
-    }
-
-    .ejec-visible-count {
-        min-height: 30px;
-        border-color: #d2deeb;
-        background: #fff;
-        color: #49627f;
-        font-size: .67rem;
-        box-shadow: 0 1px 2px rgba(16,24,40,.03);
-    }
-
-    .ejec-tabs {
-        gap: 7px;
-        margin-top: 11px;
-    }
-
-    .ejec-tab {
-        min-height: 35px;
-        padding: 6px 10px;
-        border-color: #d1dce8;
-        border-radius: 8px;
-        background: #fff;
-        color: #42526a;
-        font-size: .71rem;
-        font-weight: 800;
-        box-shadow: none;
-    }
-
-    .ejec-tab > i {
-        width: 21px;
-        height: 21px;
-        flex-basis: 21px;
-        border-radius: 6px;
-        background: #f0f4f8;
-        color: #60758d;
-        font-size: .68rem;
-    }
-
-    .ejec-tab:hover {
-        transform: none;
-        border-color: #a9bfda;
-        background: #f8fbff;
-        box-shadow: 0 2px 7px rgba(16,42,78,.06);
-    }
-
-    .ejec-tab.is-active {
-        border-color: #7ba8dc;
-        background: #eef5fd;
-        box-shadow: inset 0 -2px 0 #2f6fbd;
-    }
-
-    .ejec-tab-count {
-        min-width: 20px;
-        height: 20px;
-        border-radius: 6px;
-        font-size: .61rem;
-        box-shadow: none;
-    }
-
-    .ejec-empty {
         min-height: 165px;
         padding: 30px 18px;
-        border: 0;
-        border-radius: 0;
         background: #fff;
         color: #6d7c90;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        text-align: center;
     }
 
     .ejec-empty-icon {
@@ -760,11 +734,11 @@
         color: #8392a5;
     }
 
-    .ejec-empty-icon i {
-        margin: 0;
-        font-size: 1.15rem;
-        color: inherit;
-    }
+        .ejec-empty-icon i {
+            margin: 0;
+            font-size: 1.15rem;
+            color: inherit;
+        }
 
     .ejec-empty-title {
         color: #344054;
@@ -773,7 +747,7 @@
     }
 
     .ejec-empty-text {
-        max-width: 440px;
+        max-width: 480px;
         margin-top: 4px;
         color: #7a889b;
         font-size: .72rem;
@@ -781,34 +755,10 @@
         line-height: 1.45;
     }
 
-    .ejec-machine {
-        margin: 10px 11px;
-        border-radius: 11px;
-        box-shadow: none;
-    }
-
-    .ejec-machine-head {
-        min-height: 43px;
-        background: #f8fafc;
-    }
-
-    .ejec-machine-code {
-        color: #163b68;
-    }
-
-    .ejec-machine-count {
-        border-color: #d2deeb;
-        border-radius: 7px;
-        color: #49627f;
-    }
-
-    .ejec-table th {
-        background: #f7f9fc;
-        color: #596a80;
-    }
-
-    .ejec-table tbody tr:hover {
-        box-shadow: inset 3px 0 0 rgba(47,111,189,.16);
+    @@media (max-width: 900px) {
+        .ejec-table {
+            min-width: 1380px;
+        }
     }
 
     @@media (max-width: 700px) {
@@ -821,25 +771,22 @@
         }
     }
 
-
-
-    /* =========================================================
-       TEMA GLOBAL ERP
-       La vista responde directamente a html[data-nsq-theme].
-       ========================================================= */
-    html[data-nsq-theme="dark"] .ejec-panel {
+    html[data-nsq-theme="dark"] .ejec-panel,
+    html[data-nsq-theme="dark"] .ejec-machine,
+    html[data-nsq-theme="dark"] .ejec-empty {
         --ej-blue: #8cc6ff;
-        --ej-border: #2d3e55;
+        --ej-border: #2d3d54;
         --ej-muted: #9aa9bd;
         --ej-text: #e7eef9;
-        background: #111b2d;
-        border-color: #2d3e55;
+        background: #162133;
+        border-color: #2d3d54;
         box-shadow: 0 5px 16px rgba(0,0,0,.16);
     }
 
-    html[data-nsq-theme="dark"] .ejec-toolbar {
-        background: linear-gradient(180deg,#152238 0%,#111b2d 100%);
-        border-bottom-color: #2d3e55;
+    html[data-nsq-theme="dark"] .ejec-toolbar,
+    html[data-nsq-theme="dark"] .ejec-machine-head {
+        background: #1a2639;
+        border-color: #2d3d54;
     }
 
     html[data-nsq-theme="dark"] .ejec-title,
@@ -850,16 +797,17 @@
         color: #eaf2ff;
     }
 
-    html[data-nsq-theme="dark"] .ejec-title i {
-        background: #102b4c;
-        border-color: #28598b;
-        color: #9dcaff;
-    }
+        html[data-nsq-theme="dark"] .ejec-title i {
+            background: #102b4c;
+            border-color: #28598b;
+            color: #9dcaff;
+        }
 
     html[data-nsq-theme="dark"] .ejec-sub,
     html[data-nsq-theme="dark"] .ejec-machine-name,
     html[data-nsq-theme="dark"] .ejec-small,
     html[data-nsq-theme="dark"] .ejec-desc,
+    html[data-nsq-theme="dark"] .ejec-status-detail,
     html[data-nsq-theme="dark"] .ejec-empty-text {
         color: #9aa9bd;
     }
@@ -868,75 +816,74 @@
     html[data-nsq-theme="dark"] .ejec-tab,
     html[data-nsq-theme="dark"] .ejec-machine-count,
     html[data-nsq-theme="dark"] .ejec-tab-count {
-        background: #17263c;
-        border-color: #354961;
+        background: #1c2a40;
+        border-color: #38506c;
         color: #cbd7e7;
     }
 
-    html[data-nsq-theme="dark"] .ejec-tab > i {
-        background: #223149;
-        color: #aebbd0;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab > i {
+            background: #223149;
+            color: #aebbd0;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tab:hover {
-        background: #1a2941;
-        border-color: #58779e;
-        color: #f3f7ff;
-        box-shadow: none;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab:hover {
+            background: #1a2941;
+            border-color: #58779e;
+            color: #f3f7ff;
+            box-shadow: none;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tab:hover > i {
-        background: #27405f;
-        color: #d9ebff;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.is-active {
+            background: #15355a;
+            border-color: #5ba6f5;
+            color: #d9ebff;
+            box-shadow: inset 0 -2px 0 #5ba6f5;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tab.is-active {
-        background: #15355a;
-        border-color: #5ba6f5;
-        color: #d9ebff;
-        box-shadow: inset 0 -2px 0 #5ba6f5;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.tab-calidad.is-active {
+            background: #2c1c3b;
+            border-color: #8b5bb6;
+            color: #ddb4ff;
+            box-shadow: inset 0 -2px 0 #a855f7;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tabs .ejec-tab:nth-child(3).is-active {
-        background: #322815;
-        border-color: #d39c29;
-        color: #ffd66b;
-        box-shadow: inset 0 -2px 0 #d39c29;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.tab-liberada.is-active {
+            background: #102a20;
+            border-color: #286446;
+            color: #79e3a8;
+            box-shadow: inset 0 -2px 0 #22c55e;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tabs .ejec-tab:nth-child(4).is-active {
-        background: #351719;
-        border-color: #a83d46;
-        color: #ff9ca8;
-        box-shadow: inset 0 -2px 0 #a83d46;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.tab-pausada.is-active {
+            background: #351719;
+            border-color: #a83d46;
+            color: #ff9ca8;
+            box-shadow: inset 0 -2px 0 #ef4444;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tabs .ejec-tab:nth-child(5).is-active {
-        background: #102a20;
-        border-color: #286446;
-        color: #79e3a8;
-        box-shadow: inset 0 -2px 0 #286446;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.tab-reliberacion.is-active {
+            background: #322815;
+            border-color: #d39c29;
+            color: #ffd66b;
+            box-shadow: inset 0 -2px 0 #eab308;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-tab.is-active .ejec-tab-count {
-        background: rgba(255,255,255,.08);
-        border-color: rgba(255,255,255,.18);
-        color: inherit;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.tab-liberada-maquina.is-active {
+            background: #273244;
+            border-color: #66788d;
+            color: #d1d9e5;
+            box-shadow: inset 0 -2px 0 #94a3b8;
+        }
 
-    html[data-nsq-theme="dark"] .ejec-machine {
-        background: #111b2d;
-        border-color: #2d3e55;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-machine-head {
-        background: #152238;
-        border-bottom-color: #2d3e55;
-    }
+        html[data-nsq-theme="dark"] .ejec-tab.is-active .ejec-tab-count {
+            background: rgba(255,255,255,.08);
+            border-color: rgba(255,255,255,.18);
+            color: inherit;
+        }
 
     html[data-nsq-theme="dark"] .ejec-table th {
-        background: #101a2b;
-        border-bottom-color: #2d3e55;
+        background: #111b2b;
+        border-color: #2d3d54;
         color: #9aa9bd;
     }
 
@@ -945,75 +892,109 @@
         color: #dce7f6;
     }
 
-    html[data-nsq-theme="dark"] .ejec-table tbody tr {
-        background: #111b2d;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-table tbody tr:hover {
-        background: #18263c;
-        box-shadow: inset 3px 0 0 rgba(91,166,245,.26);
+    html[data-nsq-theme="dark"] .ejec-table tbody tr,
+    html[data-nsq-theme="dark"] .ejec-row-produccion,
+    html[data-nsq-theme="dark"] .ejec-row-preparacion,
+    html[data-nsq-theme="dark"] .ejec-row-pendiente,
+    html[data-nsq-theme="dark"] .ejec-row-pausada,
+    html[data-nsq-theme="dark"] .ejec-row-calidad,
+    html[data-nsq-theme="dark"] .ejec-row-liberada,
+    html[data-nsq-theme="dark"] .ejec-row-reliberacion,
+    html[data-nsq-theme="dark"] .ejec-row-rechazada,
+    html[data-nsq-theme="dark"] .ejec-row-reliberacion-ok,
+    html[data-nsq-theme="dark"] .ejec-row-ajustes,
+    html[data-nsq-theme="dark"] .ejec-row-maquina-liberada {
+        background: #162133 !important;
     }
 
     html[data-nsq-theme="dark"] .ejec-row-produccion {
-        background: #102843 !important;
+        box-shadow: inset 4px 0 0 #4ea3f7;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-preparacion {
-        background: #2b2412 !important;
+    html[data-nsq-theme="dark"] .ejec-row-preparacion,
+    html[data-nsq-theme="dark"] .ejec-row-pendiente {
+        box-shadow: inset 4px 0 0 #fbbf24;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-pausado {
-        background: #30191d !important;
+    html[data-nsq-theme="dark"] .ejec-row-pausada,
+    html[data-nsq-theme="dark"] .ejec-row-rechazada {
+        box-shadow: inset 4px 0 0 #fb7185;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-terminado {
-        background: #10271d !important;
+    html[data-nsq-theme="dark"] .ejec-row-calidad {
+        box-shadow: inset 4px 0 0 #c084fc;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-produccion:hover {
-        background: #15355a !important;
+    html[data-nsq-theme="dark"] .ejec-row-liberada,
+    html[data-nsq-theme="dark"] .ejec-row-reliberacion-ok {
+        box-shadow: inset 4px 0 0 #4ade80;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-preparacion:hover {
-        background: #382f17 !important;
+    html[data-nsq-theme="dark"] .ejec-row-reliberacion,
+    html[data-nsq-theme="dark"] .ejec-row-ajustes {
+        box-shadow: inset 4px 0 0 #f59e0b;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-pausado:hover {
-        background: #3b2025 !important;
+    html[data-nsq-theme="dark"] .ejec-row-maquina-liberada {
+        box-shadow: inset 4px 0 0 #94a3b8;
     }
 
-    html[data-nsq-theme="dark"] .ejec-row-terminado:hover {
-        background: #153423 !important;
+    html[data-nsq-theme="dark"] .ejec-table tbody tr:hover {
+        background: #1b2a40 !important;
     }
 
     html[data-nsq-theme="dark"] .ejec-status {
-        background: #17263c;
-        border-color: #354961;
+        background: #1c2a40;
+        border-color: #38506c;
         color: #cbd7e7;
     }
 
-    html[data-nsq-theme="dark"] .estado-produccion {
+    html[data-nsq-theme="dark"] .prod-operativo-pendiente,
+    html[data-nsq-theme="dark"] .prod-operativo-maquina-liberada {
+        background: #273244;
+        border-color: #53647a;
+        color: #d1d9e5;
+    }
+
+    html[data-nsq-theme="dark"] .prod-operativo-preparacion,
+    html[data-nsq-theme="dark"] .prod-operativo-reliberacion {
+        background: #322815;
+        border-color: #76571e;
+        color: #f6cc6d;
+    }
+
+    html[data-nsq-theme="dark"] .prod-operativo-esperando-calidad,
+    html[data-nsq-theme="dark"] .prod-operativo-primeras-piezas {
+        background: #2c1c3b;
+        border-color: #71469a;
+        color: #ddb4ff;
+    }
+
+    html[data-nsq-theme="dark"] .prod-operativo-arranque,
+    html[data-nsq-theme="dark"] .prod-operativo-produciendo {
         background: #102b4c;
         border-color: #28598b;
         color: #9dcaff;
     }
 
-    html[data-nsq-theme="dark"] .estado-preparacion {
-        background: #2b2313;
-        border-color: #76571e;
-        color: #f6cc6d;
+    html[data-nsq-theme="dark"] .prod-operativo-ajustes {
+        background: #3a2815;
+        border-color: #855522;
+        color: #ffc980;
     }
 
-    html[data-nsq-theme="dark"] .estado-pausado {
-        background: #351719;
-        border-color: #7f2b32;
-        color: #ff9ca8;
-    }
-
-    html[data-nsq-theme="dark"] .estado-terminado {
+    html[data-nsq-theme="dark"] .prod-operativo-liberada-calidad,
+    html[data-nsq-theme="dark"] .prod-operativo-reliberacion-autorizada {
         background: #102a20;
         border-color: #286446;
         color: #79e3a8;
+    }
+
+    html[data-nsq-theme="dark"] .prod-operativo-pausada,
+    html[data-nsq-theme="dark"] .prod-operativo-bloqueado {
+        background: #351719;
+        border-color: #7f2b32;
+        color: #ff9ca8;
     }
 
     html[data-nsq-theme="dark"] .ejec-avance-top {
@@ -1036,140 +1017,96 @@
         color: #ff9ca8;
     }
 
-    html[data-nsq-theme="dark"] .ejec-empty {
-        background: #111b2d;
-        color: #9aa9bd;
-    }
-
     html[data-nsq-theme="dark"] .ejec-empty-icon {
-        background: #17263c;
-        border-color: #354961;
-        color: #9aa9bd;
-    }
-    
-
-    /* DARK V2: filas neutras; estatus mediante borde/acento. */
-    html[data-nsq-theme="dark"] .ejec-panel,
-    html[data-nsq-theme="dark"] .ejec-machine,
-    html[data-nsq-theme="dark"] .ejec-empty {
-        background: #162133;
-        border-color: #2d3d54;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-toolbar,
-    html[data-nsq-theme="dark"] .ejec-machine-head {
-        background: #1a2639;
-        border-color: #2d3d54;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-table th {
-        background: #111b2b;
-        border-color: #2d3d54;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-table tbody tr,
-    html[data-nsq-theme="dark"] .ejec-row-produccion,
-    html[data-nsq-theme="dark"] .ejec-row-preparacion,
-    html[data-nsq-theme="dark"] .ejec-row-pausado,
-    html[data-nsq-theme="dark"] .ejec-row-terminado {
-        background: #162133 !important;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-row-produccion {
-        box-shadow: inset 4px 0 0 #4ea3f7;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-row-preparacion {
-        box-shadow: inset 4px 0 0 #fbbf24;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-row-pausado {
-        box-shadow: inset 4px 0 0 #fb7185;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-row-terminado {
-        box-shadow: inset 4px 0 0 #4ade80;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-row-produccion:hover,
-    html[data-nsq-theme="dark"] .ejec-row-preparacion:hover,
-    html[data-nsq-theme="dark"] .ejec-row-pausado:hover,
-    html[data-nsq-theme="dark"] .ejec-row-terminado:hover {
-        background: #1b2a40 !important;
-    }
-
-    html[data-nsq-theme="dark"] .ejec-status,
-    html[data-nsq-theme="dark"] .ejec-visible-count,
-    html[data-nsq-theme="dark"] .ejec-tab,
-    html[data-nsq-theme="dark"] .ejec-machine-count,
-    html[data-nsq-theme="dark"] .ejec-tab-count {
         background: #1c2a40;
         border-color: #38506c;
+        color: #9aa9bd;
     }
-
 </style>
 
-<div class="ejec-panel">
-
+<div class="ejec-panel" id="panelEjecucionesOperativo">
     <div class="ejec-toolbar">
         <div class="ejec-toolbar-top">
             <div>
                 <h3 class="ejec-title">
-                    <i class="bi bi-activity me-1"></i>
+                    <i class="bi bi-activity"></i>
                     Ejecuciones de producción
                 </h3>
-
                 <div class="ejec-sub">
-                    OF tomadas por Producción, mostradas en filas compactas por máquina.
+                    Estado actual de cada máquina considerando Producción, Calidad, paros y reliberaciones.
                 </div>
             </div>
-
             <div class="ejec-visible-count">
                 <i class="bi bi-list-ul"></i>
-                @visibles.Count visible(s)
+                <span class="js-ejec-visible-number">@totalOperativas</span>
+                visible(s)
             </div>
         </div>
 
         <div class="ejec-tabs">
-            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
-               class="ejec-tab js-panel-produccion @(Model.EstatusID.HasValue ? "" : "is-active")"
-               data-panel="ejecuciones">
+            <button type="button"
+                    class="ejec-tab is-active"
+                    data-filtro-operativo="TODAS">
                 <i class="bi bi-lightning-charge"></i>
-                Activas
-                <span class="ejec-tab-count">@activas.Count</span>
-            </a>
+                Operativas
+                <span class="ejec-tab-count">@totalOperativas</span>
+            </button>
 
-            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.EnProduccion, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
-               class="ejec-tab js-panel-produccion @(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ? "is-active" : "")"
-               data-panel="ejecuciones">
-                <i class="bi bi-play-circle"></i>
-                Produciendo
-                <span class="ejec-tab-count">@Model.EnProduccion</span>
-            </a>
-
-            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
-               class="ejec-tab js-panel-produccion @(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion ? "is-active" : "")"
-               data-panel="ejecuciones">
+            <button type="button"
+                    class="ejec-tab"
+                    data-filtro-operativo="PREPARACION">
                 <i class="bi bi-tools"></i>
                 Preparación
-                <span class="ejec-tab-count">@Model.EnPreparacion</span>
-            </a>
+                <span class="ejec-tab-count">@totalPreparacion</span>
+            </button>
 
-            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.Pausado, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
-               class="ejec-tab js-panel-produccion @(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pausado ? "is-active" : "")"
-               data-panel="ejecuciones">
+            <button type="button"
+                    class="ejec-tab tab-calidad"
+                    data-filtro-operativo="CALIDAD">
+                <i class="bi bi-shield-check"></i>
+                Esperando Calidad
+                <span class="ejec-tab-count">@totalCalidad</span>
+            </button>
+
+            <button type="button"
+                    class="ejec-tab tab-liberada"
+                    data-filtro-operativo="LIBERADA_CALIDAD">
+                <i class="bi bi-patch-check"></i>
+                Liberadas por Calidad
+                <span class="ejec-tab-count">@totalLiberadasCalidad</span>
+            </button>
+
+            <button type="button"
+                    class="ejec-tab"
+                    data-filtro-operativo="PRODUCIENDO">
+                <i class="bi bi-play-circle"></i>
+                Produciendo
+                <span class="ejec-tab-count">@totalProduciendo</span>
+            </button>
+
+            <button type="button"
+                    class="ejec-tab tab-pausada"
+                    data-filtro-operativo="PAUSADA">
                 <i class="bi bi-pause-circle"></i>
                 Pausadas
-                <span class="ejec-tab-count">@Model.Pausados</span>
-            </a>
+                <span class="ejec-tab-count">@totalPausadas</span>
+            </button>
 
-            <a href="@Url.Action("PanelEjecuciones", "Produccion", new { estatusId = ERP.NSQuell.Models.ProduccionEstatus.Terminado, maquinaId = Model.MaquinaID, busqueda = Model.Busqueda, fechaDesde = Model.FechaDesde, fechaHasta = Model.FechaHasta })"
-               class="ejec-tab js-panel-produccion @(mostrarTerminadas ? "is-active" : "")"
-               data-panel="ejecuciones">
-                <i class="bi bi-check-circle"></i>
-                Terminadas
-                <span class="ejec-tab-count">@totalTerminadas</span>
-            </a>
+            <button type="button"
+                    class="ejec-tab tab-reliberacion"
+                    data-filtro-operativo="RELIBERACION">
+                <i class="bi bi-arrow-repeat"></i>
+                Reliberación
+                <span class="ejec-tab-count">@totalReliberacion</span>
+            </button>
+
+            <button type="button"
+                    class="ejec-tab tab-liberada-maquina"
+                    data-filtro-operativo="MAQUINA_LIBERADA">
+                <i class="bi bi-unlock"></i>
+                Máquina liberada
+                <span class="ejec-tab-count">@totalMaquinasLiberadas</span>
+            </button>
         </div>
     </div>
 
@@ -1181,15 +1118,25 @@
             </div>
             <div class="ejec-empty-title">Sin ejecuciones para mostrar</div>
             <div class="ejec-empty-text">
-                No hay registros que coincidan con el estado o los filtros seleccionados.
+                No existen ejecuciones operativas que coincidan con los filtros seleccionados.
             </div>
         </div>
     }
     else
     {
-        foreach (var grupo in grupos)
+        <div class="ejec-empty js-ejec-empty-filter" style="display:none;">
+            <div class="ejec-empty-icon">
+                <i class="bi bi-funnel"></i>
+            </div>
+            <div class="ejec-empty-title">Sin registros en este estado</div>
+            <div class="ejec-empty-text">
+                No hay máquinas que actualmente coincidan con el estado operativo seleccionado.
+            </div>
+        </div>
+
+        @foreach (var grupo in grupos)
         {
-            <section class="ejec-machine">
+            <section class="ejec-machine js-ejec-machine">
                 <div class="ejec-machine-head">
                     <div>
                         <span class="ejec-machine-code">
@@ -1207,7 +1154,8 @@
 
                     <div class="ejec-machine-count">
                         <i class="bi bi-gear"></i>
-                        @grupo.Count() ejecución(es)
+                        <span class="js-machine-visible-count">@grupo.Count()</span>
+                        ejecución(es)
                     </div>
                 </div>
 
@@ -1225,7 +1173,7 @@
                             <col style="width:82px;" />
                             <col style="width:72px;" />
                             <col style="width:135px;" />
-                            <col style="width:120px;" />
+                            <col style="width:240px;" />
                             <col style="width:86px;" />
                         </colgroup>
 
@@ -1242,13 +1190,16 @@
                                 <th>Scrap</th>
                                 <th>Pend.</th>
                                 <th>Avance</th>
-                                <th>Estatus</th>
+                                <th>Estado operativo</th>
                                 <th></th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            @foreach (var item in grupo)
+                            @foreach (var item in grupo
+                                                .OrderBy(x => x.EstadoOperativoPrioridad)
+                                                .ThenBy(x => x.ProgramaProduccionID)
+                                                .ThenBy(x => x.EjecucionProduccionID))
                             {
                                 var avance = item.PorcentajeAvance;
 
@@ -1258,12 +1209,16 @@
                                 if (avance > 100)
                                     avance = 100;
 
-                                var avanceCss =
-                                avance.ToString(
+                                var avanceCss = avance.ToString(
                                 "0.##",
                                 System.Globalization.CultureInfo.InvariantCulture);
 
-                                <tr class="@ClaseEstado(item.EstatusID)">
+                                var categoria = CategoriaOperativa(item);
+                                var esOperativa = item.EsOperacionActiva ? "1" : "0";
+
+                                <tr class="@ClaseFila(item.EstadoOperativoClave) js-ejec-row"
+                                    data-categoria-operativa="@categoria"
+                                    data-es-operativa="@esOperativa">
                                     <td>
                                         <span class="ejec-programa">
                                             Programa @item.ProgramaProduccionID
@@ -1303,6 +1258,13 @@
                                         <div class="ejec-parte">
                                             @item.TextoOperador
                                         </div>
+
+                            @if (!string.IsNullOrWhiteSpace(item.OperadorAuxiliarNombre))
+                                        {
+                                            <span class="ejec-small">
+                                                Aux: @item.OperadorAuxiliarNombre
+                                            </span>
+                                        }
                                     </td>
 
                                     <td>
@@ -1333,7 +1295,9 @@
                                         <div class="ejec-avance">
                                             <div class="ejec-avance-top">
                                                 <span>@item.PorcentajeAvance.ToString("0.##")%</span>
-                                                <span>@item.CantidadOKTotal.ToString("N0")/@Num(item.CantidadPlaneada)</span>
+                                                <span>
+                                                    @item.CantidadOKTotal.ToString("N0")/@Num(item.CantidadPlaneada)
+                                                </span>
                                             </div>
 
                                             <div class="ejec-progress">
@@ -1343,10 +1307,19 @@
                                     </td>
 
                                     <td>
-                                        <span class="ejec-status @ClaseBadgeEstado(item.EstatusID)">
-                                            <i class="bi @IconoEstado(item.EstatusID)"></i>
-                                            @item.EstatusNombre
-                                        </span>
+                                        <div class="ejec-status-wrap">
+                                            <span class="ejec-status @item.EstadoOperativoClase">
+                                                <i class="bi @IconoEstado(item.EstadoOperativoClave)"></i>
+                                                @item.EstadoOperativoNombre
+                                            </span>
+
+                                            @if (!string.IsNullOrWhiteSpace(item.EstadoOperativoDescripcion))
+                                            {
+                                                <span class="ejec-status-detail">
+                                                    @item.EstadoOperativoDescripcion
+                                                </span>
+                                            }
+                                        </div>
                                     </td>
 
                                     <td class="ejec-action">
@@ -1358,7 +1331,7 @@
                                         </a>
                                     </td>
                                 </tr>
-                                        }
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -1366,3 +1339,100 @@
         }
     }
 </div>
+
+<script>
+    (function () {
+        const panel = document.getElementById('panelEjecucionesOperativo');
+
+        if (!panel)
+            return;
+
+        const tabs = Array.from(
+            panel.querySelectorAll('[data-filtro-operativo]')
+        );
+
+        const rows = Array.from(
+            panel.querySelectorAll('.js-ejec-row')
+        );
+
+        const machines = Array.from(
+            panel.querySelectorAll('.js-ejec-machine')
+        );
+
+        const visibleNumber =
+            panel.querySelector('.js-ejec-visible-number');
+
+        const emptyFilter =
+            panel.querySelector('.js-ejec-empty-filter');
+
+        function aplicarFiltro(filtro) {
+            let totalVisible = 0;
+
+            rows.forEach(function (row) {
+                const categoria =
+                    row.getAttribute('data-categoria-operativa');
+
+                const esOperativa =
+                    row.getAttribute('data-es-operativa') === '1';
+
+                let mostrar = false;
+
+                if (filtro === 'TODAS') {
+                    mostrar = esOperativa;
+                } else {
+                    mostrar = categoria === filtro;
+                }
+
+                row.style.display = mostrar ? '' : 'none';
+
+                if (mostrar)
+                    totalVisible++;
+            });
+
+            machines.forEach(function (machine) {
+                const machineRows = Array.from(
+                    machine.querySelectorAll('.js-ejec-row')
+                );
+
+                const visiblesMaquina =
+                    machineRows.filter(function (row) {
+                        return row.style.display !== 'none';
+                    }).length;
+
+                machine.style.display =
+                    visiblesMaquina > 0 ? '' : 'none';
+
+                const contador =
+                    machine.querySelector('.js-machine-visible-count');
+
+                if (contador)
+                    contador.textContent = visiblesMaquina.toString();
+            });
+
+            tabs.forEach(function (tab) {
+                tab.classList.toggle(
+                    'is-active',
+                    tab.getAttribute('data-filtro-operativo') === filtro
+                );
+            });
+
+            if (visibleNumber)
+                visibleNumber.textContent = totalVisible.toString();
+
+            if (emptyFilter)
+                emptyFilter.style.display =
+                    totalVisible === 0 ? '' : 'none';
+        }
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                const filtro =
+                    tab.getAttribute('data-filtro-operativo') || 'TODAS';
+
+                aplicarFiltro(filtro);
+            });
+        });
+
+        aplicarFiltro('TODAS');
+    })();
+</script>

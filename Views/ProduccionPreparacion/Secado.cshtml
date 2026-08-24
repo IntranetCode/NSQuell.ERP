@@ -1,0 +1,1845 @@
+﻿@using ERP.NSQuell.Models
+@using System.Linq
+@model ProduccionPreparacionIndexVm
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Secado de material";
+
+    var tareas = Model.Tareas ?? new List<ProduccionPreparacionTareaVm>();
+    var secados = tareas.Where(x => x.EsSecadoMaterial).ToList();
+
+    var pendientes = secados
+        .Where(x => x.EstaPendiente)
+        .OrderBy(x => x.FechaAviso)
+        .ThenBy(x => x.FechaObjetivo)
+        .ToList();
+
+    var secando = secados
+        .Where(x => x.EstaConfirmada &&
+                    x.FechaDisponibleEstimada.HasValue &&
+                    x.FechaDisponibleEstimada.Value > Model.FechaConsulta)
+        .OrderBy(x => x.FechaDisponibleEstimada)
+        .ToList();
+
+    var listos = secados
+        .Where(x => x.EstaConfirmada &&
+                    x.FechaDisponibleEstimada.HasValue &&
+                    x.FechaDisponibleEstimada.Value <= Model.FechaConsulta)
+        .OrderByDescending(x => x.FechaDisponibleEstimada)
+        .Take(40)
+        .ToList();
+
+    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro) ? "" : Model.Filtro;
+
+    bool LlegariaTardeSiIniciaAhora(ProduccionPreparacionTareaVm tarea)
+    {
+        if (!tarea.HorasSecado.HasValue ||
+            tarea.HorasSecado.Value <= 0 ||
+            !tarea.FechaArranque.HasValue)
+            return false;
+
+        return Model.FechaConsulta
+            .AddHours(Convert.ToDouble(tarea.HorasSecado.Value)) >
+            tarea.FechaArranque.Value;
+    }
+
+    int MinutosRetrasoSiIniciaAhora(ProduccionPreparacionTareaVm tarea)
+    {
+        if (!LlegariaTardeSiIniciaAhora(tarea) ||
+            !tarea.HorasSecado.HasValue ||
+            !tarea.FechaArranque.HasValue)
+            return 0;
+
+        var disponible = Model.FechaConsulta
+            .AddHours(Convert.ToDouble(tarea.HorasSecado.Value));
+
+        return Math.Max(
+            0,
+            (int)Math.Ceiling(
+                (disponible - tarea.FechaArranque.Value).TotalMinutes));
+    }
+
+    var riesgosPendientes = pendientes.Count(LlegariaTardeSiIniciaAhora);
+    var riesgosEnProceso = secando.Count(x => x.SecadoLlegaraTarde);
+    var totalRiesgos = riesgosPendientes + riesgosEnProceso;
+
+    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    string Hora(DateTime? value) => value?.ToString("HH:mm") ?? "—";
+    string Horas(decimal? value) => value.HasValue ? $"{value.Value:0.##} h" : "—";
+
+    string ClasePendiente(ProduccionPreparacionTareaVm tarea)
+    {
+        if (LlegariaTardeSiIniciaAhora(tarea)) return "task-risk";
+        if (tarea.EsVencida) return "task-overdue";
+        if (tarea.EsHacerAhora) return "task-now";
+        return "task-next";
+    }
+
+    string BadgePendiente(ProduccionPreparacionTareaVm tarea)
+    {
+        if (LlegariaTardeSiIniciaAhora(tarea)) return "risk";
+        if (tarea.EsVencida) return "overdue";
+        if (tarea.EsHacerAhora) return "now";
+        return "next";
+    }
+
+    string TextoPendiente(ProduccionPreparacionTareaVm tarea)
+    {
+        if (LlegariaTardeSiIniciaAhora(tarea)) return "Riesgo de atraso";
+        if (tarea.EsVencida) return "Vencido";
+        if (tarea.EsHacerAhora) return "Iniciar ahora";
+        return "Próximo";
+    }
+}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+<style>
+    :root {
+        --dry-bg: #f4f7fb;
+        --dry-card: #ffffff;
+        --dry-text: #17233d;
+        --dry-muted: #6f7b91;
+        --dry-line: #dce4ef;
+        --dry-orange: #d89216;
+        --dry-orange-dark: #ad6e0e;
+        --dry-orange-soft: #fff5df;
+        --dry-blue: #315bd6;
+        --dry-blue-soft: #eef3ff;
+        --dry-green: #238353;
+        --dry-green-soft: #eefaf3;
+        --dry-red: #c4322b;
+        --dry-red-soft: #fff3f2;
+        --dry-purple: #623cff;
+        --dry-purple-soft: #f3efff;
+        --dry-shadow: 0 12px 30px rgba(15,34,74,.07);
+    }
+
+    html[data-nsq-theme="dark"],
+    html[data-bs-theme="dark"] {
+        --dry-bg: #0b1220;
+        --dry-card: #111b2d;
+        --dry-text: #e7eef9;
+        --dry-muted: #9aa9bd;
+        --dry-line: #2d3e55;
+        --dry-orange-soft: #2b2313;
+        --dry-blue-soft: #102b4c;
+        --dry-green-soft: #102a20;
+        --dry-red-soft: #351719;
+        --dry-purple-soft: #241b38;
+        --dry-shadow: 0 12px 30px rgba(0,0,0,.16);
+    }
+
+    .dry-page {
+        min-height: 100vh;
+        padding: 18px;
+        background: var(--dry-bg);
+        color: var(--dry-text);
+    }
+
+    .hero {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 20px;
+        border-radius: 20px;
+        background: linear-gradient(120deg,#7f4e00,#bd7808 66%,#e2a333);
+        color: #fff;
+        box-shadow: 0 18px 45px rgba(155,93,0,.18);
+    }
+
+    .hero-main {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+    }
+
+    .hero-icon {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        background: rgba(255,255,255,.14);
+        display: grid;
+        place-items: center;
+        font-size: 1.45rem;
+        flex: none;
+    }
+
+    .hero h1 {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 950;
+    }
+
+    .hero p {
+        margin: 4px 0 0;
+        color: rgba(255,255,255,.84);
+        font-size: .79rem;
+        font-weight: 650;
+    }
+
+    .hero-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .btnx {
+        min-height: 40px;
+        border-radius: 11px;
+        border: 1px solid #ccd7e5;
+        background: #fff;
+        color: #203150;
+        padding: 8px 13px;
+        text-decoration: none;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        cursor: pointer;
+        transition: .15s ease;
+    }
+
+        .btnx:hover {
+            transform: translateY(-1px);
+        }
+
+    .btnx-light {
+        background: rgba(255,255,255,.11);
+        border-color: rgba(255,255,255,.28);
+        color: #fff;
+    }
+
+        .btnx-light:hover {
+            background: #fff;
+            color: #9b5e00;
+        }
+
+    .btnx-primary {
+        background: var(--dry-orange);
+        border-color: var(--dry-orange);
+        color: #fff;
+    }
+
+        .btnx-primary:hover {
+            background: var(--dry-orange-dark);
+            color: #fff;
+        }
+
+    .btnx-success {
+        background: var(--dry-green);
+        border-color: var(--dry-green);
+        color: #fff;
+    }
+
+        .btnx-success:hover {
+            background: #176d44;
+            color: #fff;
+        }
+
+    .btnx-outline {
+        background: var(--dry-card);
+        color: var(--dry-text);
+        border-color: var(--dry-line);
+    }
+
+    .flash {
+        margin-top: 12px;
+        border-radius: 14px;
+        padding: 11px 13px;
+        font-size: .78rem;
+        font-weight: 800;
+    }
+
+    .risk-banner {
+        margin-top: 12px;
+        border: 1px solid #efaaa5;
+        background: var(--dry-red-soft);
+        color: var(--dry-red);
+        border-radius: 15px;
+        padding: 12px 14px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: .76rem;
+        font-weight: 800;
+    }
+
+        .risk-banner strong {
+            display: block;
+            margin-bottom: 2px;
+            font-weight: 950;
+        }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .stat {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        padding: 13px 14px;
+        box-shadow: 0 8px 22px rgba(15,34,74,.035);
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .stat-icon {
+        width: 39px;
+        height: 39px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 1rem;
+    }
+
+        .stat-icon.orange {
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange)
+        }
+
+        .stat-icon.blue {
+            background: var(--dry-blue-soft);
+            color: var(--dry-blue)
+        }
+
+        .stat-icon.green {
+            background: var(--dry-green-soft);
+            color: var(--dry-green)
+        }
+
+        .stat-icon.red {
+            background: var(--dry-red-soft);
+            color: var(--dry-red)
+        }
+
+    .stat-value {
+        display: block;
+        font-size: 1.12rem;
+        line-height: 1;
+        font-weight: 950;
+        color: var(--dry-text);
+    }
+
+    .stat-label {
+        display: block;
+        margin-top: 4px;
+        color: var(--dry-muted);
+        font-size: .63rem;
+        font-weight: 850;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .filters {
+        margin-top: 12px;
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        padding: 12px 14px;
+        display: grid;
+        grid-template-columns: minmax(220px,1fr) 280px auto auto;
+        gap: 10px;
+        align-items: end;
+        box-shadow: 0 8px 22px rgba(15,34,74,.035);
+    }
+
+    .field label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: .64rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--dry-muted);
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+        width: 100%;
+        min-height: 41px;
+        border: 1px solid var(--dry-line);
+        border-radius: 10px;
+        background: var(--dry-card);
+        padding: 8px 10px;
+        font-weight: 750;
+        color: var(--dry-text);
+    }
+
+    .field textarea {
+        min-height: 70px;
+        resize: vertical;
+    }
+
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+            outline: none;
+            border-color: #e2a333;
+            box-shadow: 0 0 0 3px rgba(216,146,22,.13);
+        }
+
+    .section {
+        margin-top: 16px;
+    }
+
+    .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 2px 10px;
+    }
+
+        .section-head h2 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 950;
+            color: var(--dry-text);
+        }
+
+        .section-head p {
+            margin: 3px 0 0;
+            color: var(--dry-muted);
+            font-size: .69rem;
+            font-weight: 700;
+        }
+
+    .section-count {
+        min-width: 32px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--dry-orange-soft);
+        color: var(--dry-orange);
+        display: grid;
+        place-items: center;
+        padding: 0 9px;
+        font-size: .7rem;
+        font-weight: 950;
+    }
+
+    .running-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 12px;
+    }
+
+    .dry-card {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--dry-shadow);
+    }
+
+        .dry-card.is-late {
+            border: 2px solid var(--dry-red);
+            box-shadow: 0 14px 34px rgba(196,50,43,.14);
+        }
+
+    .card-top {
+        padding: 13px 15px;
+        background: var(--dry-orange-soft);
+        border-bottom: 1px solid var(--dry-line);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .machine {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .machine-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        background: #fff3d9;
+        color: var(--dry-orange);
+        display: grid;
+        place-items: center;
+        flex: none;
+    }
+
+    html[data-nsq-theme="dark"] .machine-icon,
+    html[data-bs-theme="dark"] .machine-icon {
+        background: #3a2c13;
+    }
+
+    .machine strong {
+        display: block;
+        font-size: .83rem;
+        font-weight: 950;
+        color: var(--dry-text);
+    }
+
+    .machine small {
+        display: block;
+        margin-top: 2px;
+        color: var(--dry-muted);
+        font-size: .63rem;
+        font-weight: 750;
+    }
+
+    .status-pill {
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: .6rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .status-pill.drying {
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange)
+        }
+
+        .status-pill.late {
+            background: var(--dry-red);
+            color: #fff
+        }
+
+        .status-pill.ready {
+            background: var(--dry-green-soft);
+            color: var(--dry-green)
+        }
+
+        .status-pill.overdue {
+            background: var(--dry-red-soft);
+            color: var(--dry-red)
+        }
+
+        .status-pill.now {
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange)
+        }
+
+        .status-pill.next {
+            background: var(--dry-blue-soft);
+            color: var(--dry-blue)
+        }
+
+        .status-pill.risk {
+            background: var(--dry-red);
+            color: #fff
+        }
+
+    .card-bodyx {
+        padding: 15px;
+    }
+
+    .material-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        border: 1px solid var(--dry-line);
+        border-radius: 14px;
+        padding: 11px 12px;
+        background: var(--dry-card);
+    }
+
+    .material-icon {
+        width: 41px;
+        height: 41px;
+        border-radius: 12px;
+        background: var(--dry-purple-soft);
+        color: var(--dry-purple);
+        display: grid;
+        place-items: center;
+        flex: none;
+    }
+
+    .material-box span {
+        display: block;
+        color: var(--dry-muted);
+        font-size: .57rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .material-box strong {
+        display: block;
+        margin-top: 3px;
+        color: var(--dry-text);
+        font-size: .83rem;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+
+    .material-box small {
+        display: block;
+        margin-top: 3px;
+        color: var(--dry-muted);
+        font-size: .64rem;
+        font-weight: 750;
+    }
+
+    .info-grid {
+        margin-top: 9px;
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 7px;
+    }
+
+    .info {
+        border: 1px solid var(--dry-line);
+        border-radius: 10px;
+        padding: 8px 9px;
+        min-width: 0;
+    }
+
+        .info span {
+            display: block;
+            color: var(--dry-muted);
+            font-size: .55rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+        }
+
+        .info strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--dry-text);
+            font-size: .68rem;
+            font-weight: 900;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .timer-box {
+        margin-top: 11px;
+        border-radius: 15px;
+        padding: 13px 14px;
+        background: var(--dry-orange-soft);
+        border: 1px solid #f0d59c;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+    }
+
+    html[data-nsq-theme="dark"] .timer-box,
+    html[data-bs-theme="dark"] .timer-box {
+        border-color: #5a4318;
+    }
+
+    .timer-label {
+        color: var(--dry-muted);
+        font-size: .6rem;
+        text-transform: uppercase;
+        font-weight: 950;
+        letter-spacing: .04em;
+    }
+
+    .timer-value {
+        margin-top: 2px;
+        color: var(--dry-orange-dark);
+        font-weight: 950;
+        font-size: 1.38rem;
+        letter-spacing: .02em;
+    }
+
+    html[data-nsq-theme="dark"] .timer-value,
+    html[data-bs-theme="dark"] .timer-value {
+        color: #ffc45c;
+    }
+
+    .timer-sub {
+        margin-top: 3px;
+        color: var(--dry-muted);
+        font-size: .64rem;
+        font-weight: 750;
+    }
+
+    .timer-target {
+        text-align: right;
+    }
+
+        .timer-target strong {
+            display: block;
+            color: var(--dry-text);
+            font-size: .83rem;
+            font-weight: 950;
+        }
+
+        .timer-target span {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-muted);
+            font-size: .59rem;
+            font-weight: 800;
+        }
+
+    .progressx {
+        margin-top: 9px;
+        height: 8px;
+        border-radius: 999px;
+        background: #e9edf5;
+        overflow: hidden;
+    }
+
+    html[data-nsq-theme="dark"] .progressx,
+    html[data-bs-theme="dark"] .progressx {
+        background: #233149;
+    }
+
+    .progressx > div {
+        width: 0;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--dry-orange);
+        transition: width .25s ease;
+    }
+
+    .late-alert {
+        margin-top: 10px;
+        border-radius: 11px;
+        padding: 9px 10px;
+        background: var(--dry-red-soft);
+        color: var(--dry-red);
+        border: 1px solid #efb1ad;
+        font-size: .66rem;
+        font-weight: 900;
+    }
+
+    html[data-nsq-theme="dark"] .late-alert,
+    html[data-bs-theme="dark"] .late-alert {
+        border-color: #7f2b32;
+    }
+
+    .machine-group {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--dry-shadow);
+        margin-bottom: 12px;
+    }
+
+        .machine-group summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 13px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--dry-card);
+            border-bottom: 1px solid transparent;
+        }
+
+        .machine-group[open] summary {
+            border-bottom-color: var(--dry-line);
+        }
+
+        .machine-group summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .machine-group summary::after {
+            content: "\F282";
+            font-family: "bootstrap-icons";
+            font-size: .8rem;
+            color: var(--dry-muted);
+            transition: transform .15s ease;
+        }
+
+        .machine-group[open] summary::after {
+            transform: rotate(180deg);
+        }
+
+    .group-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .group-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: var(--dry-orange-soft);
+        color: var(--dry-orange);
+        display: grid;
+        place-items: center;
+        flex: none;
+    }
+
+    .group-title strong {
+        display: block;
+        color: var(--dry-text);
+        font-size: .82rem;
+        font-weight: 950;
+    }
+
+    .group-title small {
+        display: block;
+        color: var(--dry-muted);
+        font-size: .63rem;
+        font-weight: 750;
+        margin-top: 2px;
+    }
+
+    .group-count {
+        margin-left: auto;
+        margin-right: 10px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: var(--dry-orange-soft);
+        color: var(--dry-orange);
+        font-size: .62rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .group-body {
+        padding: 10px;
+        background: var(--dry-bg);
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px;
+    }
+
+    .task {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 22px rgba(15,34,74,.04);
+    }
+
+        .task.task-overdue {
+            border-left: 5px solid var(--dry-red)
+        }
+
+        .task.task-now {
+            border-left: 5px solid var(--dry-orange)
+        }
+
+        .task.task-next {
+            border-left: 5px solid var(--dry-blue)
+        }
+
+        .task.task-risk {
+            border: 2px solid var(--dry-red)
+        }
+
+    .task-main {
+        padding: 13px 14px;
+    }
+
+    .task-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .task-title {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        min-width: 0;
+    }
+
+    .task-icon {
+        width: 41px;
+        height: 41px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--dry-orange-soft);
+        color: var(--dry-orange);
+        font-size: 1.08rem;
+    }
+
+    .task-kicker {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 3px;
+    }
+
+    .task-type {
+        font-size: .61rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: var(--dry-orange);
+    }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: var(--dry-blue-soft);
+        color: var(--dry-blue);
+        font-size: .59rem;
+        font-weight: 900;
+    }
+
+    .task h3 {
+        margin: 0;
+        font-size: .91rem;
+        font-weight: 950;
+        color: var(--dry-text);
+        overflow-wrap: anywhere;
+    }
+
+    .task-sub {
+        margin-top: 3px;
+        color: var(--dry-muted);
+        font-size: .67rem;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    .process-banner {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .process-main,
+    .process-time {
+        border: 1px solid var(--dry-line);
+        border-radius: 13px;
+        padding: 10px 11px;
+    }
+
+    .process-main {
+        background: var(--dry-orange-soft);
+    }
+
+        .process-main span,
+        .process-time span {
+            display: block;
+            color: var(--dry-muted);
+            font-size: .56rem;
+            text-transform: uppercase;
+            font-weight: 950;
+            letter-spacing: .04em;
+        }
+
+        .process-main strong {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-orange-dark);
+            font-size: .93rem;
+            font-weight: 950;
+        }
+
+    html[data-nsq-theme="dark"] .process-main strong,
+    html[data-bs-theme="dark"] .process-main strong {
+        color: #ffc45c;
+    }
+
+    .process-time strong {
+        display: block;
+        margin-top: 3px;
+        color: var(--dry-text);
+        font-size: .85rem;
+        font-weight: 950;
+    }
+
+    .pending-info {
+        margin-top: 9px;
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 7px;
+    }
+
+        .pending-info div {
+            border: 1px solid var(--dry-line);
+            border-radius: 10px;
+            padding: 8px 9px;
+        }
+
+        .pending-info span {
+            display: block;
+            color: var(--dry-muted);
+            font-size: .55rem;
+            text-transform: uppercase;
+            font-weight: 950;
+        }
+
+        .pending-info strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--dry-text);
+            font-size: .68rem;
+            font-weight: 900;
+        }
+
+    .actions {
+        margin-top: 11px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .confirm-panel {
+        display: none;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--dry-line);
+    }
+
+        .confirm-panel.show {
+            display: block;
+        }
+
+    .confirm-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: end;
+    }
+
+    .disabled-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 38px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: var(--dry-blue-soft);
+        color: var(--dry-blue);
+        font-size: .63rem;
+        font-weight: 850;
+    }
+
+    .empty {
+        background: var(--dry-card);
+        border: 1px dashed var(--dry-line);
+        border-radius: 15px;
+        padding: 28px 18px;
+        text-align: center;
+        color: var(--dry-muted);
+    }
+
+        .empty i {
+            font-size: 1.5rem;
+            display: block;
+            margin-bottom: 7px;
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--dry-text);
+            font-size: .82rem;
+            font-weight: 950;
+        }
+
+        .empty span {
+            display: block;
+            margin-top: 4px;
+            font-size: .67rem;
+            font-weight: 700;
+        }
+
+    .ready-list {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--dry-shadow);
+    }
+
+    .ready-row {
+        display: grid;
+        grid-template-columns: 1.15fr 1.25fr .8fr 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 11px 13px;
+        border-top: 1px solid var(--dry-line);
+        font-size: .68rem;
+    }
+
+        .ready-row:first-child {
+            border-top: 0;
+        }
+
+        .ready-row strong {
+            color: var(--dry-text);
+            font-weight: 900;
+        }
+
+        .ready-row span {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-muted);
+            font-weight: 750;
+        }
+
+    .ok-text {
+        color: var(--dry-green) !important;
+        font-weight: 950 !important;
+    }
+
+    @@media(max-width:1100px) {
+        .stats {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .filters {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .running-grid, .group-body {
+            grid-template-columns: 1fr
+        }
+
+        .info-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+    }
+
+    @@media(max-width:720px) {
+        .dry-page {
+            padding: 10px
+        }
+
+        .hero {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .hero-actions {
+            width: 100%;
+            justify-content: flex-start
+        }
+
+        .stats {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .filters {
+            grid-template-columns: 1fr
+        }
+
+        .process-banner {
+            grid-template-columns: 1fr
+        }
+
+        .confirm-form {
+            grid-template-columns: 1fr
+        }
+
+        .ready-row {
+            grid-template-columns: 1fr 1fr
+        }
+    }
+</style>
+
+<div class="dry-page"
+     id="secadoPage"
+     data-server-now="@Model.FechaConsulta.ToString("O")">
+
+    <section class="hero">
+        <div class="hero-main">
+            <div class="hero-icon"><i class="bi bi-thermometer-sun"></i></div>
+            <div>
+                <h1>Secado de material</h1>
+                <p>Controla cuándo debe entrar el material al secador o deshumificador y si estará disponible antes del arranque.</p>
+            </div>
+        </div>
+
+        <div class="hero-actions">
+            <a class="btnx btnx-light"
+               asp-controller="ProduccionPreparacion"
+               asp-action="Index">
+                <i class="bi bi-grid-1x2"></i> Tablero
+            </a>
+
+            <a class="btnx btnx-light"
+               asp-controller="ProduccionPreparacion"
+               asp-action="CambioMolde">
+                <i class="bi bi-tools"></i> Cambios de molde
+            </a>
+
+            <a class="btnx btnx-light"
+               asp-controller="ProduccionPreparacion"
+               asp-action="Embalajes">
+                <i class="bi bi-box-seam"></i> Embalajes
+            </a>
+
+            <a class="btnx btnx-light"
+               asp-controller="ProduccionPreparacion"
+               asp-action="Historial">
+                <i class="bi bi-clock-history"></i> Historial
+            </a>
+
+            <a class="btnx btnx-light"
+               asp-controller="Produccion"
+               asp-action="Index">
+                <i class="bi bi-arrow-left"></i> Producción
+            </a>
+        </div>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success flash">
+            <i class="bi bi-check-circle me-1"></i>@TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning flash">
+            <i class="bi bi-exclamation-triangle me-1"></i>@TempData["Warning"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger flash">
+            <i class="bi bi-exclamation-octagon me-1"></i>@TempData["Error"]
+        </div>
+    }
+
+    @if (totalRiesgos > 0)
+    {
+        <div class="risk-banner">
+            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+            <div>
+                <strong>Hay material con riesgo de no estar listo para el arranque.</strong>
+                @if (riesgosPendientes > 0)
+                {
+                    <span>@riesgosPendientes tarea(s) aún no se han iniciado y, si comienzan ahora, llegarían tarde.</span>
+                }
+                @if (riesgosEnProceso > 0)
+                {
+                    <span> @riesgosEnProceso secado(s) ya iniciados tienen disponibilidad estimada posterior al arranque.</span>
+                }
+            </div>
+        </div>
+    }
+
+    <section class="stats">
+        <div class="stat">
+            <div class="stat-icon orange"><i class="bi bi-hourglass-split"></i></div>
+            <div>
+                <span class="stat-value">@pendientes.Count</span>
+                <span class="stat-label">Pendientes por iniciar</span>
+            </div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-icon blue"><i class="bi bi-droplet-half"></i></div>
+            <div>
+                <span class="stat-value">@secando.Count</span>
+                <span class="stat-label">En secado</span>
+            </div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-icon green"><i class="bi bi-check2-circle"></i></div>
+            <div>
+                <span class="stat-value">@listos.Count</span>
+                <span class="stat-label">Material listo</span>
+            </div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-icon red"><i class="bi bi-exclamation-octagon"></i></div>
+            <div>
+                <span class="stat-value">@totalRiesgos</span>
+                <span class="stat-label">Con riesgo de atraso</span>
+            </div>
+        </div>
+    </section>
+
+    <form method="get"
+          asp-controller="ProduccionPreparacion"
+          asp-action="Secado"
+          class="filters">
+
+        <div class="field">
+            <label>Buscar</label>
+            <input type="text"
+                   name="filtro"
+                   value="@filtroActual"
+                   placeholder="OF, parte, material o máquina..." />
+        </div>
+
+        <div class="field">
+            <label>Máquina</label>
+            <select name="maquinaId">
+                <option value="">Todas las máquinas</option>
+
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    if (Model.MaquinaID == maquina.MaquinaID)
+                    {
+                        <option value="@maquina.MaquinaID" selected>@maquina.Texto</option>
+                    }
+                    else
+                    {
+                        <option value="@maquina.MaquinaID">@maquina.Texto</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <button class="btnx btnx-primary" type="submit">
+            <i class="bi bi-search"></i> Filtrar
+        </button>
+
+        <a class="btnx btnx-outline"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Secado">
+            <i class="bi bi-arrow-counterclockwise"></i> Limpiar
+        </a>
+    </form>
+
+    <section class="section">
+        <div class="section-head">
+            <div>
+                <h2>Material en secado</h2>
+                <p>El contador se calcula desde la hora real en que se registró el ingreso al secador.</p>
+            </div>
+            <span class="section-count">@secando.Count</span>
+        </div>
+
+        @if (secando.Any())
+        {
+            <div class="running-grid">
+                @foreach (var tarea in secando)
+                {
+                    var inicio = tarea.FechaConfirmacion;
+                    var disponible = tarea.FechaDisponibleEstimada;
+                    var totalMinutos = inicio.HasValue && disponible.HasValue
+                    ? Math.Max(1, (int)Math.Ceiling((disponible.Value - inicio.Value).TotalMinutes))
+                    : 1;
+
+                    var transcurridos = inicio.HasValue
+                    ? Math.Max(0, (int)Math.Floor((Model.FechaConsulta - inicio.Value).TotalMinutes))
+                    : 0;
+
+                    var porcentaje = Math.Min(
+                    100,
+                    Math.Max(
+                    0,
+                    Math.Round((decimal)transcurridos * 100m / totalMinutos, 0)));
+
+                    <article class="dry-card js-secando @(tarea.SecadoLlegaraTarde ? "is-late" : "")"
+                             data-start="@(tarea.FechaConfirmacion?.ToString("O") ?? "")"
+                             data-ready="@(tarea.FechaDisponibleEstimada?.ToString("O") ?? "")"
+                             data-total-minutes="@totalMinutos">
+
+                        <div class="card-top">
+                            <div class="machine">
+                                <div class="machine-icon">
+                                    <i class="bi bi-droplet-half"></i>
+                                </div>
+                                <div>
+                                    <strong>@tarea.TextoMaquina</strong>
+                                    <small>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) · @tarea.TextoParte</small>
+                                </div>
+                            </div>
+
+                            @if (tarea.SecadoLlegaraTarde)
+                            {
+                                <span class="status-pill late">Llegará tarde</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill drying">Secando</span>
+                            }
+                        </div>
+
+                        <div class="card-bodyx">
+                            <div class="material-box">
+                                <div class="material-icon">
+                                    <i class="bi bi-box2"></i>
+                                </div>
+                                <div>
+                                    <span>Material</span>
+                                    <strong>@tarea.TextoMaterial</strong>
+                                    <small>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Proceso de secado" : tarea.TipoSecado) · @Horas(tarea.HorasSecado)</small>
+                                </div>
+                            </div>
+
+                            <div class="info-grid">
+                                <div class="info">
+                                    <span>Inicio real</span>
+                                    <strong>@Fecha(tarea.FechaConfirmacion)</strong>
+                                </div>
+
+                                <div class="info">
+                                    <span>Disponible estimado</span>
+                                    <strong>@Fecha(tarea.FechaDisponibleEstimada)</strong>
+                                </div>
+
+                                <div class="info">
+                                    <span>Arranque</span>
+                                    <strong>@Fecha(tarea.FechaArranque)</strong>
+                                </div>
+
+                                <div class="info">
+                                    <span>Cantidad programada</span>
+                                    <strong>@tarea.CantidadProgramada.ToString("N0") PZA</strong>
+                                </div>
+                            </div>
+
+                            <div class="timer-box">
+                                <div>
+                                    <div class="timer-label">Tiempo restante de secado</div>
+                                    <div class="timer-value js-countdown">Calculando...</div>
+                                    <div class="timer-sub js-countdown-sub">
+                                        Disponible estimado @Fecha(tarea.FechaDisponibleEstimada)
+                                    </div>
+                                </div>
+
+                                <div class="timer-target">
+                                    <strong>@Horas(tarea.HorasSecado)</strong>
+                                    <span>tiempo requerido</span>
+                                </div>
+                            </div>
+
+                            <div class="progressx">
+                                <div class="js-progress" style="width:@porcentaje%"></div>
+                            </div>
+
+                            @if (tarea.SecadoLlegaraTarde)
+                            {
+                                <div class="late-alert">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                    Con el inicio real registrado, el material estaría disponible
+                                    <strong>@tarea.MinutosRetrasoSecado minuto(s)</strong>
+                                    después del arranque programado.
+                                </div>
+                            }
+
+                            <div class="actions">
+                                @if (tarea.EjecucionProduccionID.HasValue)
+                                {
+                                    <a class="btnx btnx-outline"
+                                       asp-controller="Produccion"
+                                       asp-action="Detalle"
+                                       asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                        <i class="bi bi-box-arrow-up-right"></i> Ver producción
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-droplet-half"></i>
+                <strong>No hay materiales en secado</strong>
+                <span>Cuando se registre el ingreso al secador, la tarea aparecerá aquí con su tiempo restante.</span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <div>
+                <h2>Pendientes por iniciar</h2>
+                <p>El sistema calcula la hora recomendada de inicio usando el tiempo de secado configurado para la parte.</p>
+            </div>
+            <span class="section-count">@pendientes.Count</span>
+        </div>
+
+        @if (pendientes.Any())
+        {
+            foreach (var grupo in pendientes
+            .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre })
+            .OrderBy(x => x.Key.MaquinaCodigo)
+            .ThenBy(x => x.Key.MaquinaNombre))
+            {
+                var nombreMaquina = string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
+                ? grupo.Key.MaquinaCodigo ?? "Sin máquina"
+                : $"{grupo.Key.MaquinaCodigo} · {grupo.Key.MaquinaNombre}";
+
+                <details class="machine-group">
+                    <summary>
+                        <div class="group-title">
+                            <div class="group-icon">
+                                <i class="bi bi-building-gear"></i>
+                            </div>
+
+                            <div>
+                                <strong>@nombreMaquina</strong>
+                                <small>@grupo.Count() material@(grupo.Count() == 1 ? "" : "es") pendiente(s) de secado</small>
+                            </div>
+                        </div>
+
+                        <span class="group-count">@grupo.Count()</span>
+                    </summary>
+
+                    <div class="group-body">
+                        @foreach (var tarea in grupo.OrderBy(x => x.FechaAviso))
+                        {
+                            var llegariaTarde = LlegariaTardeSiIniciaAhora(tarea);
+                            var retraso = MinutosRetrasoSiIniciaAhora(tarea);
+
+                            <article class="task @ClasePendiente(tarea)">
+                                <div class="task-main">
+                                    <div class="task-head">
+                                        <div class="task-title">
+                                            <div class="task-icon">
+                                                <i class="bi bi-thermometer-sun"></i>
+                                            </div>
+
+                                            <div>
+                                                <div class="task-kicker">
+                                                    <span class="task-type">Secado de material</span>
+
+                                                    @if (!string.IsNullOrWhiteSpace(tarea.NumeroOF))
+                                                    {
+                                                        <span class="chip">OF @tarea.NumeroOF</span>
+                                                    }
+                                                </div>
+
+                                                <h3>@tarea.TextoMaterial</h3>
+                                                <div class="task-sub">@tarea.TextoParte · @tarea.TextoMaquina</div>
+                                            </div>
+                                        </div>
+
+                                        <span class="status-pill @BadgePendiente(tarea)">
+                                            @TextoPendiente(tarea)
+                                        </span>
+                                    </div>
+
+                                    <div class="process-banner">
+                                        <div class="process-main">
+                                            <span>Proceso requerido</span>
+                                            <strong>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "SECADO" : tarea.TipoSecado)</strong>
+                                        </div>
+
+                                        <div class="process-time">
+                                            <span>Tiempo requerido</span>
+                                            <strong>@Horas(tarea.HorasSecado)</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="pending-info">
+                                        <div>
+                                            <span>Iniciar secado</span>
+                                            <strong>@Fecha(tarea.FechaAviso)</strong>
+                                        </div>
+
+                                        <div>
+                                            <span>Debe estar listo</span>
+                                            <strong>@Fecha(tarea.FechaObjetivo)</strong>
+                                        </div>
+
+                                        <div>
+                                            <span>Arranque programado</span>
+                                            <strong>@Fecha(tarea.FechaArranque)</strong>
+                                        </div>
+
+                                        <div>
+                                            <span>Cantidad programada</span>
+                                            <strong>@tarea.CantidadProgramada.ToString("N0") PZA</strong>
+                                        </div>
+                                    </div>
+
+                                    @if (llegariaTarde)
+                                    {
+                                        <div class="late-alert">
+                                            <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                            Si el secado comienza ahora, el material estaría disponible aproximadamente
+                                            <strong>@retraso minuto(s) después del arranque</strong>.
+                                        </div>
+                                    }
+                                    else if (tarea.EsHacerAhora)
+                                    {
+                                        <div class="late-alert"
+                                             style="background:var(--dry-orange-soft);color:var(--dry-orange);border-color:#efcf92">
+                                            <i class="bi bi-clock-fill me-1"></i>
+                                            Ya está dentro de la ventana de inicio. @tarea.TextoTiempo.
+                                        </div>
+                                    }
+
+                                    <div class="actions">
+                                        @if (Model.PuedeGestionarSecado)
+                                        {
+                                            if (!tarea.EsProxima || llegariaTarde)
+                                            {
+                                                <button type="button"
+                                                        class="btnx btnx-primary js-toggle-confirmar"
+                                                        data-target="confirmar-@tarea.PreparacionAnticipadaID">
+                                                    <i class="bi bi-play-fill"></i> Registrar ingreso a secador
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="disabled-note">
+                                                    <i class="bi bi-clock-history"></i>
+                                                    Programado para iniciar a las @Hora(tarea.FechaAviso)
+                                                </span>
+                                            }
+                                        }
+
+                                        @if (tarea.EjecucionProduccionID.HasValue)
+                                        {
+                                            <a class="btnx btnx-outline"
+                                               asp-controller="Produccion"
+                                               asp-action="Detalle"
+                                               asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                                <i class="bi bi-box-arrow-up-right"></i> Ver producción
+                                            </a>
+                                        }
+                                    </div>
+
+                                    @if (Model.PuedeGestionarSecado &&
+                                                            (!tarea.EsProxima || llegariaTarde))
+                                    {
+                                        <div class="confirm-panel"
+                                             id="confirmar-@tarea.PreparacionAnticipadaID">
+
+                                            <form asp-controller="ProduccionPreparacion"
+                                                  asp-action="ConfirmarPreparacion"
+                                                  method="post"
+                                                  class="confirm-form js-confirm-form">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="PreparacionAnticipadaID"
+                                                       value="@tarea.PreparacionAnticipadaID" />
+
+                                                <div class="field">
+                                                    <label>Observaciones</label>
+                                                    <textarea name="Observaciones"
+                                              maxlength="500"
+                                              placeholder="Secador utilizado, lote, condición del material, observación de arranque, etc."></textarea>
+                                                </div>
+
+                                                <button class="btnx btnx-success"
+                                                        type="submit">
+                                                    <i class="bi bi-play-circle"></i>
+                                                    Iniciar secado
+                                                </button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </details>
+            }
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-check2-circle"></i>
+                <strong>No hay secados pendientes</strong>
+                <span>No se encontraron materiales pendientes de ingresar al proceso de secado.</span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <details class="machine-group">
+            <summary>
+                <div class="group-title">
+                    <div class="group-icon"
+                         style="background:var(--dry-green-soft);color:var(--dry-green)">
+                        <i class="bi bi-check2-circle"></i>
+                    </div>
+
+                    <div>
+                        <strong>Material listo recientemente</strong>
+                        <small>@listos.Count material@(listos.Count == 1 ? "" : "es") con tiempo de secado cumplido</small>
+                    </div>
+                </div>
+            </summary>
+
+            @if (listos.Any())
+            {
+                <div class="ready-list">
+                    @foreach (var tarea in listos)
+                    {
+                        <div class="ready-row">
+                            <div>
+                                <strong>@tarea.TextoMaquina</strong>
+                                <span>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
+                            </div>
+
+                            <div>
+                                <strong>@tarea.TextoMaterial</strong>
+                                <span>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Secado" : tarea.TipoSecado) · @Horas(tarea.HorasSecado)</span>
+                            </div>
+
+                            <div>
+                                <strong>@Fecha(tarea.FechaConfirmacion)</strong>
+                                <span>Inicio secado</span>
+                            </div>
+
+                            <div>
+                                <strong>@Fecha(tarea.FechaDisponibleEstimada)</strong>
+                                <span>Disponible desde</span>
+                            </div>
+
+                            <div>
+                                <span class="ok-text">
+                                    <i class="bi bi-check-circle me-1"></i>Listo
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty" style="border:0;border-radius:0">
+                    <i class="bi bi-clock-history"></i>
+                    <strong>Aún no hay materiales con secado cumplido recientemente</strong>
+                </div>
+            }
+        </details>
+    </section>
+</div>
+
+<script>
+    (function () {
+        const page = document.getElementById('secadoPage');
+        if (!page) return;
+
+        const serverNowValue = page.dataset.serverNow || '';
+        const parsedServerNow = Date.parse(serverNowValue);
+        const serverOffset = Number.isFinite(parsedServerNow)
+            ? parsedServerNow - Date.now()
+            : 0;
+
+        function nowServer() {
+            return Date.now() + serverOffset;
+        }
+
+        function formatDuration(milliseconds) {
+            const totalSeconds = Math.max(
+                0,
+                Math.floor(milliseconds / 1000));
+
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            return String(hours).padStart(2, '0') + ':' +
+                   String(minutes).padStart(2, '0') + ':' +
+                   String(seconds).padStart(2, '0');
+        }
+
+        function updateDryingCard(card) {
+            const startValue = card.dataset.start || '';
+            const readyValue = card.dataset.ready || '';
+
+            const start = Date.parse(startValue);
+            const ready = Date.parse(readyValue);
+
+            if (!Number.isFinite(start) || !Number.isFinite(ready)) return;
+
+            const now = nowServer();
+            const remaining = ready - now;
+            const total = Math.max(1, ready - start);
+            const elapsed = Math.max(0, now - start);
+            const percent = Math.min(
+                100,
+                Math.max(
+                    0,
+                    Math.round((elapsed * 100) / total)));
+
+            const countdown = card.querySelector('.js-countdown');
+            const subtitle = card.querySelector('.js-countdown-sub');
+            const progress = card.querySelector('.js-progress');
+
+            if (countdown) {
+                countdown.textContent = remaining > 0
+                    ? formatDuration(remaining)
+                    : '00:00:00';
+            }
+
+            if (subtitle && remaining <= 0) {
+                subtitle.textContent =
+                    'El tiempo requerido de secado ya se cumplió. Actualiza la pantalla para moverlo a Material listo.';
+            }
+
+            if (progress) {
+                progress.style.width = percent + '%';
+            }
+        }
+
+        function updateAllDrying() {
+            document.querySelectorAll('.js-secando')
+                .forEach(updateDryingCard);
+        }
+
+        document.querySelectorAll('.js-toggle-confirmar')
+            .forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const targetId = button.dataset.target || '';
+                    const panel = document.getElementById(targetId);
+
+                    if (!panel) return;
+
+                    document.querySelectorAll('.confirm-panel.show')
+                        .forEach(function (other) {
+                            if (other !== panel) {
+                                other.classList.remove('show');
+                            }
+                        });
+
+                    panel.classList.toggle('show');
+
+                    if (panel.classList.contains('show')) {
+                        const textarea = panel.querySelector('textarea');
+                        if (textarea) textarea.focus();
+                    }
+                });
+            });
+
+        document.querySelectorAll('.js-confirm-form')
+            .forEach(function (form) {
+                form.addEventListener('submit', function () {
+                    const button =
+                        form.querySelector('button[type="submit"]');
+
+                    if (!button) return;
+
+                    button.disabled = true;
+                    button.innerHTML =
+                        '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Registrando...';
+                });
+            });
+
+        updateAllDrying();
+
+        if (document.querySelector('.js-secando')) {
+            window.setInterval(updateAllDrying, 1000);
+        }
+    })();
+</script>

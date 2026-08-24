@@ -17,337 +17,85 @@ namespace ERP.NSQuell.Controllers
             _configuration = configuration;
         }
 
+        private sealed class ProduccionPermisosUsuario
+        {
+            public int UsuarioID { get; set; }
+            public int? PersonaID { get; set; }
+            public int? RolID { get; set; }
+            public string Nombre { get; set; } = string.Empty;
+            public string Puesto { get; set; } = string.Empty;
+            public bool EsAdministradorERP { get; set; }
+            public bool EsEncargadoProduccion { get; set; }
+            public bool EsTecnicoProduccion { get; set; }
+            public bool EsSMED { get; set; }
+            public bool EsAuxiliarProduccion { get; set; }
+            public bool EsOperadorProduccion { get; set; }
+            public bool PuedeVerTodo => EsAdministradorERP || EsEncargadoProduccion;
+            public bool PuedeGestionarChecklistArranque => PuedeVerTodo || EsTecnicoProduccion || EsSMED;
+            public bool PuedeGestionarSMED => PuedeVerTodo || EsTecnicoProduccion || EsSMED;
+            public bool PuedeGestionarMonitoreoPerifericos => PuedeVerTodo || EsTecnicoProduccion || EsSMED;
+            public bool PuedeGestionarCajas => PuedeVerTodo || EsAuxiliarProduccion;
+            public bool PuedeVerCapturasHora => PuedeVerTodo || EsAuxiliarProduccion || EsOperadorProduccion;
+            public bool PuedeCapturarHora => PuedeVerTodo || EsOperadorProduccion;
+            public bool PuedeGestionarSugerenciaCambioTurno => PuedeVerTodo || EsAuxiliarProduccion;
+        }
+
+
         private string ConnectionString =>
             _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
 
 
         [HttpGet]
-        public async Task<IActionResult> Index(
-            string? busqueda = null,
-            int? maquinaId = null,
-            int? estatusId = null,
-            DateTime? fechaDesde = null,
-            DateTime? fechaHasta = null)
+        public async Task<IActionResult> Index(string? busqueda = null, int? maquinaId = null, int? estatusId = null, DateTime? fechaDesde = null, DateTime? fechaHasta = null)
         {
             if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
+            var vm = new ProduccionBandejaVm
             {
-                return RedirectToAction(
-                    "Login",
-                    "Login");
-            }
+                Busqueda = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda.Trim(),
+                MaquinaID = maquinaId,
+                EstatusID = estatusId,
+                FechaDesde = fechaDesde,
+                FechaHasta = fechaHasta
+            };
 
-            var vm =
-                new ProduccionBandejaVm
-                {
-                    Busqueda =
-                        busqueda?.Trim(),
-
-                    MaquinaID =
-                        maquinaId,
-
-                    EstatusID =
-                        estatusId,
-
-                    FechaDesde =
-                        fechaDesde,
-
-                    FechaHasta =
-                        fechaHasta
-                };
-
-            await using var cn =
-                new SqlConnection(
-                    ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-         
+            vm.Maquinas = await CargarMaquinasAsync(cn);
+            vm.Estatus = await CargarEstatusProduccionAsync(cn);
+            ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
 
-            vm.Maquinas =
-                await CargarMaquinasAsync(cn);
+            vm.ProgramasDisponibles = await ObtenerProgramasDisponiblesAsync(busqueda, maquinaId, fechaDesde, fechaHasta, cn);
 
-            vm.Estatus =
-                await CargarEstatusProduccionAsync(cn);
+            var ahora = DateTime.Now;
+            var limiteProximos = ahora.AddMinutes(15);
+            var maquinasOcupadas = await ObtenerMaquinasOcupadasAsync(cn);
+            ViewBag.MaquinasOcupadas = maquinasOcupadas;
 
-            ViewBag.OperadoresProduccion =
-                await CargarOperadoresProduccionAsync(
-                    cn);
-
-
-
-            vm.ProgramasDisponibles =
-                await ObtenerProgramasDisponiblesAsync(
-                    busqueda,
-                    maquinaId,
-                    fechaDesde,
-                    fechaHasta,
-                    cn);
-
-
-            var ahora =
-                DateTime.Now;
-
-            var limiteProximos =
-                ahora.AddMinutes(15);
-
-            var maquinasOcupadas =
-                await ObtenerMaquinasOcupadasAsync(
-                    cn);
-
-            ViewBag.MaquinasOcupadas =
-                maquinasOcupadas;
-
-            vm.ProximosAIniciar =
-                vm.ProgramasDisponibles
-                    .Where(x =>
-                        x.PuedeIniciar &&
-                        x.MaquinaID.HasValue &&
-                        x.FechaInicioProgramada.HasValue &&
-                        x.FechaInicioProgramada.Value <=
-                            limiteProximos)
-                    .OrderBy(x =>
-                        x.FechaInicioProgramada)
-                    .ThenBy(x =>
-                        x.MaquinaCodigo)
-                    .ThenBy(x =>
-                        x.ProgramaProduccionID)
-                    .ToList();
-
+            vm.ProximosAIniciar = vm.ProgramasDisponibles
+                .Where(x => x.PuedeIniciar &&
+                            x.MaquinaID.HasValue &&
+                            x.FechaInicioProgramada.HasValue &&
+                            x.FechaInicioProgramada.Value <= limiteProximos)
+                .OrderBy(x => x.FechaInicioProgramada)
+                .ThenBy(x => x.MaquinaCodigo)
+                .ThenBy(x => x.ProgramaProduccionID)
+                .ToList();
 
             try
             {
-                vm.AlertasReprogramacion =
-                    await ObtenerAlertasReprogramacionProduccionAsync(
-                        maquinaId,
-                        cn);
+                vm.AlertasReprogramacion = await ObtenerAlertasReprogramacionProduccionAsync(maquinaId, cn);
             }
             catch (Exception ex)
             {
-             
-
-                vm.AlertasReprogramacion =
-                    new List<ProduccionAlertaReprogramacionVm>();
-
-                ViewBag.ErrorAlertasReprogramacion =
-                    "No fue posible consultar los movimientos recientes: "
-                    + ex.Message;
+                vm.AlertasReprogramacion = new List<ProduccionAlertaReprogramacionVm>();
+                ViewBag.ErrorAlertasReprogramacion = "No fue posible consultar los movimientos recientes: " + ex.Message;
             }
 
-   
-
-            const string sql = @"
-SELECT
-    e.EjecucionProduccionID,
-    e.ProgramaProduccionID,
-    e.SolicitudProduccionID,
-    e.SolicitudProduccionDetalleID,
-    e.ReleaseID,
-    e.ReleaseDetalleID,
-
-    e.MaquinaID,
-    e.MaquinaCodigo,
-    e.MaquinaNombre,
-
-    e.ParteID,
-    e.NumeroParte,
-    e.ReferenciaSAP,
-    e.DescripcionParte,
-
-    e.MoldeID,
-    e.MoldeCodigo,
-    ISNULL(
-        e.EsCambioMolde,
-        0
-    ) AS EsCambioMolde,
-
-    e.OperadorID,
-    e.OperadorNombre,
-
-    e.OperadorAuxiliarID,
-    e.OperadorAuxiliarNombre,
-
-    ISNULL(
-        e.OperadoresModificadosManual,
-        0
-    ) AS OperadoresModificadosManual,
-
-    e.MotivoCambioOperadores,
-
-    e.FechaInicioReal,
-    e.FechaFinReal,
-
-    e.CantidadPlaneada,
-
-    ISNULL(
-        e.CantidadOKTotal,
-        0
-    ) AS CantidadOKTotal,
-
-    ISNULL(
-        e.CantidadSospechosaTotal,
-        0
-    ) AS CantidadSospechosaTotal,
-
-    ISNULL(
-        e.CantidadScrapTotal,
-        0
-    ) AS CantidadScrapTotal,
-
-    e.EstatusID,
-    e.Observaciones,
-
-    e.UsuarioCreacionID,
-    e.FechaCreacion,
-
-    e.UsuarioModificacionID,
-    e.FechaModificacion,
-
-    e.Activo
-
-FROM dbo.Produccion_Ejecucion e
-
-WHERE e.Activo = 1
-
-AND
-(
-       @MaquinaID IS NULL
-    OR e.MaquinaID = @MaquinaID
-)
-
-AND
-(
-       @EstatusID IS NULL
-    OR e.EstatusID = @EstatusID
-)
-
-AND
-(
-       @FechaDesde IS NULL
-    OR CONVERT(
-           DATE,
-           e.FechaCreacion
-       ) >= @FechaDesde
-)
-
-AND
-(
-       @FechaHasta IS NULL
-    OR CONVERT(
-           DATE,
-           e.FechaCreacion
-       ) <= @FechaHasta
-)
-
-AND
-(
-       @Busqueda IS NULL
-
-    OR e.MaquinaCodigo
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.MaquinaNombre
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.NumeroParte
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.ReferenciaSAP
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.DescripcionParte
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.MoldeCodigo
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.OperadorNombre
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.OperadorAuxiliarNombre
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR CONVERT(
-           NVARCHAR(30),
-           e.ProgramaProduccionID
-       )
-       LIKE N'%' + @Busqueda + N'%'
-
-    OR CONVERT(
-           NVARCHAR(30),
-           e.SolicitudProduccionID
-       )
-       LIKE N'%' + @Busqueda + N'%'
-)
-
-ORDER BY
-
-    CASE e.EstatusID
-
-        WHEN 3 THEN 1
-        WHEN 4 THEN 2
-        WHEN 2 THEN 3
-        WHEN 1 THEN 4
-
-        ELSE 5
-
-    END,
-
-    e.FechaCreacion DESC,
-    e.EjecucionProduccionID DESC;";
-
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn);
-
-            cmd.Parameters.Add(
-                "@MaquinaID",
-                SqlDbType.Int).Value =
-                maquinaId.HasValue &&
-                maquinaId.Value > 0
-                    ? maquinaId.Value
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@EstatusID",
-                SqlDbType.Int).Value =
-                estatusId.HasValue &&
-                estatusId.Value > 0
-                    ? estatusId.Value
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@FechaDesde",
-                SqlDbType.Date).Value =
-                fechaDesde.HasValue
-                    ? fechaDesde.Value.Date
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@FechaHasta",
-                SqlDbType.Date).Value =
-                fechaHasta.HasValue
-                    ? fechaHasta.Value.Date
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@Busqueda",
-                SqlDbType.NVarChar,
-                200).Value =
-                string.IsNullOrWhiteSpace(
-                    busqueda)
-                    ? DBNull.Value
-                    : busqueda.Trim();
-
-            await using var rd =
-                await cmd.ExecuteReaderAsync();
-
-            while (await rd.ReadAsync())
-            {
-                vm.Ejecuciones.Add(
-                    MapearEjecucion(rd));
-            }
+            vm.Ejecuciones = await ObtenerEjecucionesPanelAsync(estatusId, maquinaId, busqueda, fechaDesde, fechaHasta, cn);
 
             return View(vm);
         }
@@ -357,17 +105,49 @@ ORDER BY
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
             if (id <= 0) return NotFound();
+
             var usuarioId = ObtenerUsuarioID();
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             var ejecucion = await ObtenerEjecucionAsync(id, cn);
             if (ejecucion == null) return NotFound();
+
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
+
+            ViewBag.UsuarioProduccionID = permisos.UsuarioID;
+            ViewBag.PersonaProduccionID = permisos.PersonaID;
+            ViewBag.NombreProduccionUsuario = permisos.Nombre;
+            ViewBag.PuestoProduccionUsuario = permisos.Puesto;
+            ViewBag.EsAdministradorERP = permisos.EsAdministradorERP;
+            ViewBag.EsEncargadoProduccion = permisos.EsEncargadoProduccion;
+            ViewBag.EsTecnicoProduccion = permisos.EsTecnicoProduccion;
+            ViewBag.EsSMED = permisos.EsSMED;
+            ViewBag.EsAuxiliarProduccion = permisos.EsAuxiliarProduccion;
+            ViewBag.EsOperadorProduccion = permisos.EsOperadorProduccion;
+            ViewBag.PuedeVerTodoProduccion = permisos.PuedeVerTodo;
+            ViewBag.PuedeGestionarChecklistArranque = permisos.PuedeGestionarChecklistArranque;
+            ViewBag.PuedeGestionarSMED = permisos.PuedeGestionarSMED;
+            ViewBag.PuedeGestionarMonitoreoPerifericos = permisos.PuedeGestionarMonitoreoPerifericos;
+            ViewBag.PuedeGestionarCajas = permisos.PuedeGestionarCajas;
+            ViewBag.PuedeVerCapturasHora = permisos.PuedeVerCapturasHora;
+            ViewBag.PuedeCapturarHora = permisos.PuedeCapturarHora;
+            ViewBag.PuedeGestionarSugerenciaCambioTurno = permisos.PuedeGestionarSugerenciaCambioTurno;
+
             ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
+
             ProduccionMonitoreoTurnoAvisoVm? monitoreoTurnoActual = null;
-            var ejecucionActivaParaMonitoreo = ejecucion.EstatusID == ProduccionEstatus.EnPreparacion || ejecucion.EstatusID == ProduccionEstatus.EnProduccion || ejecucion.EstatusID == ProduccionEstatus.Pausado;
+
+            var ejecucionActivaParaMonitoreo =
+                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion ||
+                ejecucion.EstatusID == ProduccionEstatus.EnProduccion ||
+                ejecucion.EstatusID == ProduccionEstatus.Pausado;
+
             if (ejecucionActivaParaMonitoreo && ejecucion.SolicitudProduccionID.HasValue && ejecucion.SolicitudProduccionID.Value > 0)
             {
                 await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+
                 try
                 {
                     var checklistPerifericosId = await ObtenerOCrearChecklistPerifericosTurnoAsync(ejecucion, DateTime.Now, usuarioId, cn, tx);
@@ -380,7 +160,9 @@ ORDER BY
                     TempData["Error"] = "No fue posible preparar el monitoreo de periféricos del turno actual: " + ex.Message;
                 }
             }
+
             var calidadResumen = await ObtenerResumenCalidadAsync(id, cn);
+
             var vm = new ProduccionDetalleVm
             {
                 Ejecucion = ejecucion,
@@ -392,11 +174,15 @@ ORDER BY
                 MonitoreoTurnoActual = monitoreoTurnoActual,
                 CambioTurnoTecnico = await ConstruirCambioTurnoTecnicoAsync(ejecucion, cn)
             };
+
             vm.RecepcionesOF = await ObtenerEntregasAlmacenOFAsync(ejecucion, cn, null);
-            ViewBag.EsReinicioSerie = ejecucion.EstatusID == ProduccionEstatus.EnPreparacion && await EsReinicioSeriePendienteAsync(id, cn);
+
+            ViewBag.EsReinicioSerie =
+                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion &&
+                await EsReinicioSeriePendienteAsync(id, cn);
+
             return View(vm);
         }
-
 
         private async Task<List<ProduccionRecepcionOFVm>>
     ObtenerEntregasAlmacenOFAsync(
@@ -9975,53 +9761,34 @@ ORDER BY
         }
 
         [HttpGet]
-        public async Task<IActionResult> PanelEjecuciones(
-    int? estatusId = null,
-    int? maquinaId = null,
-    string? busqueda = null,
-    DateTime? fechaDesde = null,
-    DateTime? fechaHasta = null)
+        public async Task<IActionResult> PanelEjecuciones(int? estatusId = null, int? maquinaId = null, string? busqueda = null, DateTime? fechaDesde = null, DateTime? fechaHasta = null)
         {
             if (!UsuarioEnSesion())
-            {
                 return Unauthorized();
-            }
 
-            var vm =
-                new ProduccionBandejaVm
-                {
-                    Busqueda =
-                        string.IsNullOrWhiteSpace(busqueda)
-                            ? null
-                            : busqueda.Trim(),
+            var vm = new ProduccionBandejaVm
+            {
+                Busqueda = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda.Trim(),
+                MaquinaID = maquinaId,
+                EstatusID = estatusId,
+                FechaDesde = fechaDesde,
+                FechaHasta = fechaHasta
+            };
 
-                    MaquinaID =
-                        maquinaId,
-
-                    EstatusID =
-                        estatusId,
-
-                    FechaDesde =
-                        fechaDesde,
-
-                    FechaHasta =
-                        fechaHasta
-                };
-
-            await using var cn =
-                new SqlConnection(
-                    ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-          
-            vm.Maquinas =
-                await CargarMaquinasAsync(cn);
+            vm.Maquinas = await CargarMaquinasAsync(cn);
+            vm.Estatus = await CargarEstatusProduccionAsync(cn);
+            vm.Ejecuciones = await ObtenerEjecucionesPanelAsync(estatusId, maquinaId, busqueda, fechaDesde, fechaHasta, cn);
 
-            vm.Estatus =
-                await CargarEstatusProduccionAsync(cn);
+            return PartialView("_Ejecuciones", vm);
+        }
 
-    
+        private async Task<List<ProduccionEjecucionVm>> ObtenerEjecucionesPanelAsync(int? estatusId, int? maquinaId, string? busqueda, DateTime? fechaDesde, DateTime? fechaHasta, SqlConnection cn)
+        {
+            var lista = new List<ProduccionEjecucionVm>();
+
             const string sql = @"
 SELECT
     e.EjecucionProduccionID,
@@ -10030,200 +9797,223 @@ SELECT
     e.SolicitudProduccionDetalleID,
     e.ReleaseID,
     e.ReleaseDetalleID,
-
     e.MaquinaID,
     e.MaquinaCodigo,
     e.MaquinaNombre,
-
     e.ParteID,
     e.NumeroParte,
     e.ReferenciaSAP,
     e.DescripcionParte,
-
     e.MoldeID,
     e.MoldeCodigo,
-
-    ISNULL(
-        e.EsCambioMolde,
-        0
-    ) AS EsCambioMolde,
-
+    ISNULL(e.EsCambioMolde,0) AS EsCambioMolde,
     e.OperadorID,
     e.OperadorNombre,
-
     e.OperadorAuxiliarID,
     e.OperadorAuxiliarNombre,
-
-    ISNULL(
-        e.OperadoresModificadosManual,
-        0
-    ) AS OperadoresModificadosManual,
-
+    ISNULL(e.OperadoresModificadosManual,0) AS OperadoresModificadosManual,
     e.MotivoCambioOperadores,
-
     e.FechaInicioReal,
     e.FechaFinReal,
-
+    e.FechaLiberacionMaquina,
+    e.UsuarioLiberacionMaquinaID,
+    e.ObservacionesLiberacionMaquina,
     e.CantidadPlaneada,
-
-    ISNULL(
-        e.CantidadOKTotal,
-        0
-    ) AS CantidadOKTotal,
-
-    ISNULL(
-        e.CantidadSospechosaTotal,
-        0
-    ) AS CantidadSospechosaTotal,
-
-    ISNULL(
-        e.CantidadScrapTotal,
-        0
-    ) AS CantidadScrapTotal,
-
+    ISNULL(e.CantidadOKTotal,0) AS CantidadOKTotal,
+    ISNULL(e.CantidadSospechosaTotal,0) AS CantidadSospechosaTotal,
+    ISNULL(e.CantidadScrapTotal,0) AS CantidadScrapTotal,
     e.EstatusID,
     e.Observaciones,
-
     e.UsuarioCreacionID,
     e.FechaCreacion,
-
     e.UsuarioModificacionID,
     e.FechaModificacion,
+    e.Activo,
 
-    e.Activo
+    ci.InspeccionID AS InspeccionCalidadID,
+    ci.Estado AS EstadoCalidad,
+    ci.ResultadoCalidad,
+    ci.Etiqueta AS EtiquetaCalidad,
+    CAST(ISNULL(ci.Liberado,0) AS BIT) AS CalidadLiberado,
+    CAST(ISNULL(ci.RequiereReliberacion,0) AS BIT) AS RequiereReliberacion,
+    CAST(ISNULL(ci.ConfiguracionInvalidada,0) AS BIT) AS ConfiguracionCalidadInvalidada,
+    ci.FechaNotificacionCalidad,
+    histArranque.FechaMovimiento AS FechaAutorizacionPrearranque,
+    histLiberacion.FechaMovimiento AS FechaLiberacionProduccion,
+
+    CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
+             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
+            THEN NULL
+        ELSE rel.ReliberacionID
+    END AS ReliberacionID,
+
+    CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
+             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
+            THEN NULL
+        ELSE rel.NumeroReliberacion
+    END AS NumeroReliberacion,
+
+    CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
+             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
+            THEN NULL
+        ELSE rel.Resultado
+    END AS ResultadoReliberacion,
+
+    CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
+             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
+            THEN NULL
+        ELSE rel.FechaSolicitud
+    END AS FechaSolicitudReliberacion,
+
+    CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
+             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
+            THEN NULL
+        ELSE rel.FechaValidacion
+    END AS FechaValidacionReliberacion,
+
+    CAST(CASE WHEN paro.ParoID IS NULL THEN 0 ELSE 1 END AS BIT) AS TieneParoAbierto,
+    paro.ParoID AS ParoAbiertoID,
+    paro.FechaInicioParo AS FechaInicioParoAbierto,
+    CAST(
+        CASE
+            WHEN paro.ParoID IS NULL THEN 0
+            WHEN ISNULL(paro.EsMayorA15Minutos,0)=1 THEN 1
+            WHEN DATEDIFF(MINUTE,paro.FechaInicioParo,GETDATE())>15 THEN 1
+            ELSE 0
+        END
+    AS BIT) AS ParoAbiertoMayorA15Minutos
 
 FROM dbo.Produccion_Ejecucion e
 
-WHERE e.Activo = 1
-
-AND
+OUTER APPLY
 (
-       @MaquinaID IS NULL
-    OR e.MaquinaID = @MaquinaID
-)
+    SELECT TOP (1)
+        ci0.InspeccionID,
+        ci0.Estado,
+        ci0.ResultadoCalidad,
+        ci0.Etiqueta,
+        ci0.Liberado,
+        ci0.RequiereReliberacion,
+        ci0.ConfiguracionInvalidada,
+        ci0.FechaNotificacionCalidad
+    FROM dbo.Calidad_Inspecciones ci0
+    WHERE ci0.EjecucionProduccionID=e.EjecucionProduccionID
+      AND ISNULL(ci0.Estado,N'')<>N'CERRADA'
+    ORDER BY ci0.InspeccionID DESC
+) ci
 
-AND
+OUTER APPLY
 (
-       @FechaDesde IS NULL
-    OR CONVERT(
-           DATE,
-           e.FechaCreacion
-       ) >= @FechaDesde
-)
+    SELECT TOP (1)
+        r.ReliberacionID,
+        r.NumeroReliberacion,
+        r.Resultado,
+        r.FechaSolicitud,
+        r.FechaValidacion
+    FROM dbo.Calidad_Reliberaciones r
+    WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
+      AND r.InspeccionID=ci.InspeccionID
+      AND r.Activo=1
+    ORDER BY r.NumeroReliberacion DESC,r.ReliberacionID DESC
+) rel
 
-AND
+OUTER APPLY
 (
-       @FechaHasta IS NULL
-    OR CONVERT(
-           DATE,
-           e.FechaCreacion
-       ) <= @FechaHasta
-)
+    SELECT TOP (1)
+        h.FechaMovimiento
+    FROM dbo.Calidad_InspeccionHistorial h
+    WHERE h.InspeccionID=ci.InspeccionID
+      AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+      AND rel.ReliberacionID IS NOT NULL
+      AND h.FechaMovimiento>=COALESCE(rel.FechaValidacion,rel.FechaSolicitud)
+    ORDER BY h.FechaMovimiento DESC
+) confirmacionReinicio
 
-AND
+OUTER APPLY
 (
-       @Busqueda IS NULL
+    SELECT TOP (1)
+        h.FechaMovimiento
+    FROM dbo.Calidad_InspeccionHistorial h
+    WHERE h.InspeccionID=ci.InspeccionID
+      AND h.EstadoNuevo=N'ARRANQUE_AUTORIZADO'
+    ORDER BY h.FechaMovimiento DESC
+) histArranque
 
-    OR e.MaquinaCodigo
-        LIKE N'%' + @Busqueda + N'%'
+OUTER APPLY
+(
+    SELECT TOP (1)
+        h.FechaMovimiento
+    FROM dbo.Calidad_InspeccionHistorial h
+    WHERE h.InspeccionID=ci.InspeccionID
+      AND h.EstadoNuevo=N'PRODUCCION_LIBERADA'
+    ORDER BY h.FechaMovimiento DESC
+) histLiberacion
 
-    OR e.MaquinaNombre
-        LIKE N'%' + @Busqueda + N'%'
+OUTER APPLY
+(
+    SELECT TOP (1)
+        p.ParoID,
+        p.FechaInicioParo,
+        p.EsMayorA15Minutos
+    FROM dbo.Produccion_Paros p
+    WHERE p.EjecucionProduccionID=e.EjecucionProduccionID
+      AND p.Activo=1
+      AND p.FechaFinParo IS NULL
+    ORDER BY p.FechaInicioParo DESC,p.ParoID DESC
+) paro
 
-    OR e.NumeroParte
-        LIKE N'%' + @Busqueda + N'%'
+WHERE e.Activo=1
+  AND e.EstatusID IN(@Pendiente,@EnPreparacion,@EnProduccion,@Pausado)
+  AND (@MaquinaID IS NULL OR e.MaquinaID=@MaquinaID)
+  AND (@EstatusID IS NULL OR e.EstatusID=@EstatusID)
+  AND (@FechaDesde IS NULL OR CONVERT(DATE,e.FechaCreacion)>=@FechaDesde)
+  AND (@FechaHasta IS NULL OR CONVERT(DATE,e.FechaCreacion)<=@FechaHasta)
+  AND
+  (
+      @Busqueda IS NULL
+      OR e.MaquinaCodigo LIKE N'%'+@Busqueda+N'%'
+      OR e.MaquinaNombre LIKE N'%'+@Busqueda+N'%'
+      OR e.NumeroParte LIKE N'%'+@Busqueda+N'%'
+      OR e.ReferenciaSAP LIKE N'%'+@Busqueda+N'%'
+      OR e.DescripcionParte LIKE N'%'+@Busqueda+N'%'
+      OR e.MoldeCodigo LIKE N'%'+@Busqueda+N'%'
+      OR e.OperadorNombre LIKE N'%'+@Busqueda+N'%'
+      OR e.OperadorAuxiliarNombre LIKE N'%'+@Busqueda+N'%'
+      OR ci.Estado LIKE N'%'+@Busqueda+N'%'
+      OR rel.Resultado LIKE N'%'+@Busqueda+N'%'
+      OR CONVERT(NVARCHAR(30),e.ProgramaProduccionID) LIKE N'%'+@Busqueda+N'%'
+      OR CONVERT(NVARCHAR(30),e.SolicitudProduccionID) LIKE N'%'+@Busqueda+N'%'
+  )
+ORDER BY e.FechaCreacion DESC,e.EjecucionProduccionID DESC;";
 
-    OR e.ReferenciaSAP
-        LIKE N'%' + @Busqueda + N'%'
+            await using var cmd = new SqlCommand(sql, cn);
 
-    OR e.DescripcionParte
-        LIKE N'%' + @Busqueda + N'%'
+            cmd.Parameters.Add("@Pendiente", SqlDbType.Int).Value = ProduccionEstatus.Pendiente;
+            cmd.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;
+            cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
+            cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = ProduccionEstatus.Pausado;
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId.HasValue && maquinaId.Value > 0 ? maquinaId.Value : DBNull.Value;
+            cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = estatusId.HasValue && estatusId.Value > 0 ? estatusId.Value : DBNull.Value;
+            cmd.Parameters.Add("@FechaDesde", SqlDbType.Date).Value = fechaDesde.HasValue ? fechaDesde.Value.Date : DBNull.Value;
+            cmd.Parameters.Add("@FechaHasta", SqlDbType.Date).Value = fechaHasta.HasValue ? fechaHasta.Value.Date : DBNull.Value;
+            cmd.Parameters.Add("@Busqueda", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(busqueda) ? DBNull.Value : busqueda.Trim();
 
-    OR e.MoldeCodigo
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.OperadorNombre
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR e.OperadorAuxiliarNombre
-        LIKE N'%' + @Busqueda + N'%'
-
-    OR CONVERT(
-           NVARCHAR(30),
-           e.ProgramaProduccionID
-       )
-       LIKE N'%' + @Busqueda + N'%'
-
-    OR CONVERT(
-           NVARCHAR(30),
-           e.SolicitudProduccionID
-       )
-       LIKE N'%' + @Busqueda + N'%'
-)
-
-ORDER BY
-    CASE e.EstatusID
-
-        WHEN 3 THEN 1
-        WHEN 4 THEN 2
-        WHEN 2 THEN 3
-        WHEN 1 THEN 4
-
-        ELSE 5
-
-    END,
-
-    e.FechaCreacion DESC,
-    e.EjecucionProduccionID DESC;";
-
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn);
-
-            cmd.Parameters.Add(
-                "@MaquinaID",
-                SqlDbType.Int).Value =
-                maquinaId.HasValue &&
-                maquinaId.Value > 0
-                    ? maquinaId.Value
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@FechaDesde",
-                SqlDbType.Date).Value =
-                fechaDesde.HasValue
-                    ? fechaDesde.Value.Date
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@FechaHasta",
-                SqlDbType.Date).Value =
-                fechaHasta.HasValue
-                    ? fechaHasta.Value.Date
-                    : DBNull.Value;
-
-            cmd.Parameters.Add(
-                "@Busqueda",
-                SqlDbType.NVarChar,
-                200).Value =
-                string.IsNullOrWhiteSpace(
-                    busqueda)
-                    ? DBNull.Value
-                    : busqueda.Trim();
-
-            await using var rd =
-                await cmd.ExecuteReaderAsync();
+            await using var rd = await cmd.ExecuteReaderAsync();
 
             while (await rd.ReadAsync())
-            {
-                vm.Ejecuciones.Add(
-                    MapearEjecucion(rd));
-            }
+                lista.Add(MapearEjecucion(rd));
 
-            return PartialView(
-                "_Ejecuciones",
-                vm);
+            return lista
+                .OrderBy(x => x.EstadoOperativoPrioridad)
+                .ThenBy(x => x.MaquinaCodigo)
+                .ThenByDescending(x => x.FechaCreacion)
+                .ThenByDescending(x => x.EjecucionProduccionID)
+                .ToList();
         }
 
         [HttpGet]
@@ -10741,6 +10531,118 @@ VALUES
             }
             return RedirectToAction(nameof(Index));
         }
+
+        private async Task<ProduccionPermisosUsuario> ObtenerPermisosProduccionUsuarioAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = new ProduccionPermisosUsuario { UsuarioID = usuarioId };
+            if (usuarioId <= 0) return permisos;
+
+            const string sql = @"
+SELECT TOP(1)
+    u.UsuarioID,
+    u.PersonaID,
+    u.RolID,
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto,
+    LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto,
+    CAST(CASE WHEN u.RolID=1 THEN 1 ELSE 0 END AS BIT) AS EsAdministradorERP,
+    CAST(CASE WHEN ISNULL(p.EsColaboradorActivo,0)=1
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%ENCARGAD%'
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+              THEN 1 ELSE 0 END AS BIT) AS EsEncargadoProduccion,
+    CAST(CASE WHEN ISNULL(p.EsColaboradorActivo,0)=1
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%TECN%'
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+              THEN 1 ELSE 0 END AS BIT) AS EsTecnicoProduccion,
+    CAST(CASE WHEN ISNULL(p.EsColaboradorActivo,0)=1
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%SMED%'
+              THEN 1 ELSE 0 END AS BIT) AS EsSMED,
+    CAST(CASE WHEN ISNULL(p.EsColaboradorActivo,0)=1
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%AUXILIAR%'
+                   AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+              THEN 1 ELSE 0 END AS BIT) AS EsAuxiliarProduccion,
+    CAST(CASE WHEN ISNULL(p.EsColaboradorActivo,0)=1
+                   AND (
+                        UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI=N'OPERADOR'
+                        OR
+                        (
+                            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%OPERADOR%'
+                            AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+                        )
+                   )
+              THEN 1 ELSE 0 END AS BIT) AS EsOperadorProduccion
+FROM dbo.Usuarios u
+LEFT JOIN dbo.Persona p ON p.PersonaID=u.PersonaID
+WHERE u.UsuarioID=@UsuarioID
+  AND u.Activo=1;";
+
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return permisos;
+
+            permisos.PersonaID = rd["PersonaID"] == DBNull.Value ? null : Convert.ToInt32(rd["PersonaID"]);
+            permisos.RolID = rd["RolID"] == DBNull.Value ? null : Convert.ToInt32(rd["RolID"]);
+            permisos.Nombre = rd["NombreCompleto"]?.ToString()?.Trim() ?? string.Empty;
+            permisos.Puesto = rd["Puesto"]?.ToString()?.Trim() ?? string.Empty;
+            permisos.EsAdministradorERP = rd["EsAdministradorERP"] != DBNull.Value && Convert.ToBoolean(rd["EsAdministradorERP"]);
+            permisos.EsEncargadoProduccion = rd["EsEncargadoProduccion"] != DBNull.Value && Convert.ToBoolean(rd["EsEncargadoProduccion"]);
+            permisos.EsTecnicoProduccion = rd["EsTecnicoProduccion"] != DBNull.Value && Convert.ToBoolean(rd["EsTecnicoProduccion"]);
+            permisos.EsSMED = rd["EsSMED"] != DBNull.Value && Convert.ToBoolean(rd["EsSMED"]);
+            permisos.EsAuxiliarProduccion = rd["EsAuxiliarProduccion"] != DBNull.Value && Convert.ToBoolean(rd["EsAuxiliarProduccion"]);
+            permisos.EsOperadorProduccion = rd["EsOperadorProduccion"] != DBNull.Value && Convert.ToBoolean(rd["EsOperadorProduccion"]);
+
+            return permisos;
+        }
+
+        private async Task<bool> UsuarioPuedeGestionarCajasAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeGestionarCajas;
+        }
+
+        private async Task<bool> UsuarioPuedeCapturarHoraAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeCapturarHora;
+        }
+
+        private async Task<bool> UsuarioPuedeVerCapturasHoraAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeVerCapturasHora;
+        }
+
+        private async Task<bool> UsuarioPuedeGestionarChecklistArranqueAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeGestionarChecklistArranque;
+        }
+
+        private async Task<bool> UsuarioPuedeGestionarSMEDAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeGestionarSMED;
+        }
+
+        private async Task<bool> UsuarioPuedeGestionarMonitoreoPerifericosAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeGestionarMonitoreoPerifericos;
+        }
+
+        private async Task<bool> UsuarioPuedeGestionarSugerenciaCambioTurnoAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeGestionarSugerenciaCambioTurno;
+        }
+
+        private async Task<bool> UsuarioPuedeVerTodoProduccionAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
+            return permisos.PuedeVerTodo;
+        }
+
         private async Task CambiarEstatusProgramaAsync(
             int programaProduccionId,
             int estatusId,
@@ -10771,9 +10673,6 @@ WHERE ProgramaProduccionID = @ProgramaProduccionID
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // ============================================================
-        // CATÁLOGOS
-        // ============================================================
 
         private async Task<List<SelectListItem>> CargarMaquinasAsync(
             SqlConnection cn)
@@ -11128,6 +11027,7 @@ IF @@ROWCOUNT<>1
             }
             return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
+
         private static ProduccionEjecucionVm MapearEjecucion(SqlDataReader rd)
         {
             return new ProduccionEjecucionVm
@@ -11169,7 +11069,29 @@ IF @@ROWCOUNT<>1
                 FechaCreacion = Fecha(rd, "FechaCreacion"),
                 UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
                 FechaModificacion = NullableFecha(rd, "FechaModificacion"),
-                Activo = Booleano(rd, "Activo")
+                Activo = Booleano(rd, "Activo"),
+
+                InspeccionCalidadID = TieneColumna(rd, "InspeccionCalidadID") ? NullableEntero(rd, "InspeccionCalidadID") : null,
+                EstadoCalidad = TieneColumna(rd, "EstadoCalidad") ? TextoNullable(rd, "EstadoCalidad") : null,
+                ResultadoCalidad = TieneColumna(rd, "ResultadoCalidad") ? TextoNullable(rd, "ResultadoCalidad") : null,
+                EtiquetaCalidad = TieneColumna(rd, "EtiquetaCalidad") ? TextoNullable(rd, "EtiquetaCalidad") : null,
+                CalidadLiberado = TieneColumna(rd, "CalidadLiberado") && Booleano(rd, "CalidadLiberado"),
+                RequiereReliberacion = TieneColumna(rd, "RequiereReliberacion") && Booleano(rd, "RequiereReliberacion"),
+                ConfiguracionCalidadInvalidada = TieneColumna(rd, "ConfiguracionCalidadInvalidada") && Booleano(rd, "ConfiguracionCalidadInvalidada"),
+                FechaNotificacionCalidad = TieneColumna(rd, "FechaNotificacionCalidad") ? NullableFecha(rd, "FechaNotificacionCalidad") : null,
+                FechaAutorizacionPrearranque = TieneColumna(rd, "FechaAutorizacionPrearranque") ? NullableFecha(rd, "FechaAutorizacionPrearranque") : null,
+                FechaLiberacionProduccion = TieneColumna(rd, "FechaLiberacionProduccion") ? NullableFecha(rd, "FechaLiberacionProduccion") : null,
+
+                ReliberacionID = TieneColumna(rd, "ReliberacionID") ? NullableEntero(rd, "ReliberacionID") : null,
+                NumeroReliberacion = TieneColumna(rd, "NumeroReliberacion") ? NullableEntero(rd, "NumeroReliberacion") : null,
+                ResultadoReliberacion = TieneColumna(rd, "ResultadoReliberacion") ? TextoNullable(rd, "ResultadoReliberacion") : null,
+                FechaSolicitudReliberacion = TieneColumna(rd, "FechaSolicitudReliberacion") ? NullableFecha(rd, "FechaSolicitudReliberacion") : null,
+                FechaValidacionReliberacion = TieneColumna(rd, "FechaValidacionReliberacion") ? NullableFecha(rd, "FechaValidacionReliberacion") : null,
+
+                TieneParoAbierto = TieneColumna(rd, "TieneParoAbierto") && Booleano(rd, "TieneParoAbierto"),
+                ParoAbiertoID = TieneColumna(rd, "ParoAbiertoID") ? NullableEntero(rd, "ParoAbiertoID") : null,
+                FechaInicioParoAbierto = TieneColumna(rd, "FechaInicioParoAbierto") ? NullableFecha(rd, "FechaInicioParoAbierto") : null,
+                ParoAbiertoMayorA15Minutos = TieneColumna(rd, "ParoAbiertoMayorA15Minutos") && Booleano(rd, "ParoAbiertoMayorA15Minutos")
             };
         }
         private bool UsuarioEnSesion()

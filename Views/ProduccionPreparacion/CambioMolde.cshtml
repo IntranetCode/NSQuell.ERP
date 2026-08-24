@@ -1,0 +1,1602 @@
+﻿@using ERP.NSQuell.Models
+@using System.Linq
+@model ProduccionPreparacionIndexVm
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Cambios de molde";
+
+    var tareas = Model.Tareas ?? new List<ProduccionPreparacionTareaVm>();
+    var cambios = tareas.Where(x => x.EsCambioMolde).ToList();
+
+    var enProceso = cambios
+        .Where(x => x.EstaEnProceso)
+        .OrderByDescending(x => x.NivelAlertaCambioMolde == "EXCEDIDO")
+        .ThenByDescending(x => x.NivelAlertaCambioMolde == "CRITICO")
+        .ThenByDescending(x => x.NivelAlertaCambioMolde == "ADVERTENCIA")
+        .ThenBy(x => x.FechaInicioReal)
+        .ToList();
+
+    var pendientes = cambios
+        .Where(x => x.EstaPendiente)
+        .OrderBy(x => x.FechaAviso)
+        .ThenBy(x => x.FechaObjetivo)
+        .ToList();
+
+    var completadas = cambios
+        .Where(x => x.EstaConfirmada)
+        .OrderByDescending(x => x.FechaFinReal ?? x.FechaConfirmacion)
+        .Take(30)
+        .ToList();
+
+    var vencidas = pendientes.Count(x => x.EsVencida);
+    var hacerAhora = pendientes.Count(x => x.EsHacerAhora);
+    var proximas = pendientes.Count(x => x.EsProxima);
+    var fueraEstandar = completadas.Count(x => x.ExcedioLimite);
+
+    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    string Hora(DateTime? value) => value?.ToString("HH:mm") ?? "—";
+
+    string TextoLimite(int minutos)
+    {
+        if (minutos <= 0) minutos = 60;
+        var horas = minutos / 60;
+        var resto = minutos % 60;
+        if (horas > 0 && resto > 0) return $"{horas} h {resto} min";
+        if (horas > 0) return $"{horas} h";
+        return $"{minutos} min";
+    }
+
+    string ClasePendiente(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsVencida) return "task-overdue";
+        if (tarea.EsHacerAhora) return "task-now";
+        return "task-next";
+    }
+
+    string TextoPendiente(ProduccionPreparacionTareaVm tarea)
+    {
+        if (tarea.EsVencida) return "Vencido";
+        if (tarea.EsHacerAhora) return "Hacer ahora";
+        return "Próximo";
+    }
+
+    string ClaseNivel(string? nivel)
+    {
+        nivel = (nivel ?? "").Trim().ToUpperInvariant();
+        return nivel switch
+        {
+            "EXCEDIDO" => "level-exceeded",
+            "CRITICO" => "level-critical",
+            "ADVERTENCIA" => "level-warning",
+            _ => "level-normal"
+        };
+    }
+
+    string TextoNivel(string? nivel)
+    {
+        nivel = (nivel ?? "").Trim().ToUpperInvariant();
+        return nivel switch
+        {
+            "EXCEDIDO" => "Límite excedido",
+            "CRITICO" => "Crítico",
+            "ADVERTENCIA" => "Advertencia",
+            _ => "Normal"
+        };
+    }
+
+    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro) ? "" : Model.Filtro;
+}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+<style>
+    :root {
+        --prep-bg: #f4f7fb;
+        --prep-card: #fff;
+        --prep-text: #17233d;
+        --prep-muted: #6e7a91;
+        --prep-line: #dce4ef;
+        --prep-purple: #6c43dc;
+        --prep-purple-dark: #30206e;
+        --prep-green: #18794e;
+        --prep-green-bg: #edf9f2;
+        --prep-blue: #315bd6;
+        --prep-blue-bg: #eef3ff;
+        --prep-orange: #c77700;
+        --prep-orange-bg: #fff7e7;
+        --prep-red: #c7342d;
+        --prep-red-bg: #fff0ef;
+        --prep-shadow: 0 12px 30px rgba(19,35,75,.07);
+    }
+
+    .prep-page {
+        padding: 18px;
+        min-height: 100vh;
+        background: var(--prep-bg);
+        color: var(--prep-text);
+    }
+
+    .prep-hero {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 20px;
+        border-radius: 20px;
+        background: linear-gradient(120deg,#24165e,#4439a9 68%,#6254eb);
+        color: #fff;
+        box-shadow: 0 18px 45px rgba(27,43,124,.18);
+    }
+
+    .prep-hero-main {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+    }
+
+    .prep-hero-icon {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        background: rgba(255,255,255,.14);
+        display: grid;
+        place-items: center;
+        font-size: 1.45rem;
+        flex: none;
+    }
+
+    .prep-hero h1 {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 950;
+    }
+
+    .prep-hero p {
+        margin: 4px 0 0;
+        color: rgba(255,255,255,.78);
+        font-size: .79rem;
+        font-weight: 650;
+    }
+
+    .hero-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .btnx {
+        min-height: 40px;
+        border-radius: 11px;
+        border: 1px solid #ccd7e5;
+        background: #fff;
+        color: #203150;
+        padding: 8px 13px;
+        text-decoration: none;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        cursor: pointer;
+        transition: .15s ease;
+    }
+
+        .btnx:hover {
+            transform: translateY(-1px);
+        }
+
+    .btnx-light {
+        background: rgba(255,255,255,.11);
+        border-color: rgba(255,255,255,.28);
+        color: #fff;
+    }
+
+        .btnx-light:hover {
+            background: #fff;
+            color: #283d9e;
+        }
+
+    .btnx-primary {
+        background: var(--prep-purple);
+        border-color: var(--prep-purple);
+        color: #fff;
+    }
+
+        .btnx-primary:hover {
+            background: #5733c5;
+            color: #fff;
+        }
+
+    .btnx-success {
+        background: #168052;
+        border-color: #168052;
+        color: #fff;
+    }
+
+        .btnx-success:hover {
+            background: #116b44;
+            color: #fff;
+        }
+
+    .btnx-outline {
+        background: #fff;
+        color: #33415f;
+        border-color: #ced8e6;
+    }
+
+    .btnx-danger {
+        background: #c7342d;
+        border-color: #c7342d;
+        color: #fff;
+    }
+
+    .flash {
+        margin-top: 12px;
+        border-radius: 14px;
+        padding: 11px 13px;
+        font-size: .78rem;
+        font-weight: 800;
+    }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(5,minmax(0,1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .stat-card {
+        background: #fff;
+        border: 1px solid var(--prep-line);
+        border-radius: 16px;
+        padding: 13px 14px;
+        box-shadow: 0 8px 22px rgba(15,34,74,.035);
+        display: flex;
+        align-items: center;
+        gap: 11px;
+    }
+
+    .stat-icon {
+        width: 39px;
+        height: 39px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 1rem;
+    }
+
+        .stat-icon.purple {
+            background: #f2edff;
+            color: #7049dc
+        }
+
+        .stat-icon.red {
+            background: var(--prep-red-bg);
+            color: var(--prep-red)
+        }
+
+        .stat-icon.orange {
+            background: var(--prep-orange-bg);
+            color: var(--prep-orange)
+        }
+
+        .stat-icon.blue {
+            background: var(--prep-blue-bg);
+            color: var(--prep-blue)
+        }
+
+        .stat-icon.green {
+            background: var(--prep-green-bg);
+            color: var(--prep-green)
+        }
+
+    .stat-value {
+        display: block;
+        font-size: 1.12rem;
+        line-height: 1;
+        font-weight: 950;
+        color: #152752;
+    }
+
+    .stat-label {
+        display: block;
+        margin-top: 4px;
+        color: var(--prep-muted);
+        font-size: .63rem;
+        font-weight: 850;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .filters {
+        margin-top: 12px;
+        background: #fff;
+        border: 1px solid var(--prep-line);
+        border-radius: 16px;
+        padding: 12px 14px;
+        display: grid;
+        grid-template-columns: minmax(220px,1fr) 280px auto auto;
+        gap: 10px;
+        align-items: end;
+        box-shadow: 0 8px 22px rgba(15,34,74,.035);
+    }
+
+    .field label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: .64rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #69758b;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+        width: 100%;
+        min-height: 41px;
+        border: 1px solid #cfd9e6;
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px 10px;
+        font-weight: 750;
+        color: #17233d;
+    }
+
+    .field textarea {
+        min-height: 78px;
+        resize: vertical;
+    }
+
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+            outline: none;
+            border-color: #7180ff;
+            box-shadow: 0 0 0 3px rgba(79,92,255,.11);
+        }
+
+    .critical-banner {
+        display: none;
+        margin-top: 12px;
+        border: 1px solid #f1a5a1;
+        background: #fff1f0;
+        color: #8f2723;
+        border-radius: 15px;
+        padding: 12px 14px;
+        font-weight: 850;
+        font-size: .78rem;
+    }
+
+        .critical-banner.show {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+    .section {
+        margin-top: 16px;
+    }
+
+    .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 2px 10px;
+    }
+
+        .section-head h2 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 950;
+            color: #182a53;
+        }
+
+        .section-head p {
+            margin: 3px 0 0;
+            color: var(--prep-muted);
+            font-size: .69rem;
+            font-weight: 700;
+        }
+
+    .section-count {
+        min-width: 32px;
+        height: 28px;
+        border-radius: 999px;
+        background: #e9eef6;
+        display: grid;
+        place-items: center;
+        padding: 0 9px;
+        font-size: .7rem;
+        font-weight: 950;
+    }
+
+    .running-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 12px;
+    }
+
+    .change-card {
+        background: #fff;
+        border: 1px solid var(--prep-line);
+        border-radius: 18px;
+        box-shadow: var(--prep-shadow);
+        overflow: hidden;
+        position: relative;
+    }
+
+        .change-card.level-warning {
+            border-color: #efc166
+        }
+
+        .change-card.level-critical {
+            border-color: #ea817c;
+            box-shadow: 0 12px 30px rgba(199,52,45,.12)
+        }
+
+        .change-card.level-exceeded {
+            border: 2px solid #c7342d;
+            box-shadow: 0 14px 35px rgba(199,52,45,.18)
+        }
+
+    .change-top {
+        padding: 13px 15px;
+        background: #f8faff;
+        border-bottom: 1px solid #e5ebf3;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .machine {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .machine-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        background: #f2edff;
+        color: #7148dd;
+        display: grid;
+        place-items: center;
+        flex: none;
+    }
+
+    .machine strong {
+        display: block;
+        font-size: .83rem;
+        font-weight: 950;
+        color: #182b57;
+    }
+
+    .machine small {
+        display: block;
+        margin-top: 2px;
+        color: #7a8598;
+        font-size: .63rem;
+        font-weight: 750;
+    }
+
+    .status-pill {
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: .61rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .status-pill.normal {
+            background: var(--prep-green-bg);
+            color: var(--prep-green)
+        }
+
+        .status-pill.warning {
+            background: var(--prep-orange-bg);
+            color: var(--prep-orange)
+        }
+
+        .status-pill.critical {
+            background: var(--prep-red-bg);
+            color: var(--prep-red)
+        }
+
+        .status-pill.exceeded {
+            background: #c7342d;
+            color: #fff
+        }
+
+        .status-pill.pending {
+            background: #f2edff;
+            color: #6d45d3
+        }
+
+        .status-pill.overdue {
+            background: var(--prep-red-bg);
+            color: var(--prep-red)
+        }
+
+        .status-pill.now {
+            background: var(--prep-orange-bg);
+            color: var(--prep-orange)
+        }
+
+        .status-pill.next {
+            background: var(--prep-blue-bg);
+            color: var(--prep-blue)
+        }
+
+        .status-pill.complete {
+            background: var(--prep-green-bg);
+            color: var(--prep-green)
+        }
+
+    .change-body {
+        padding: 15px;
+    }
+
+    .mold-flow {
+        display: grid;
+        grid-template-columns: 1fr 46px 1fr;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 13px;
+    }
+
+    .mold-box {
+        border: 1px solid #e1e7f0;
+        background: #fbfcff;
+        border-radius: 13px;
+        padding: 10px 12px;
+    }
+
+        .mold-box span {
+            display: block;
+            color: #7b879a;
+            font-size: .59rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .mold-box strong {
+            display: block;
+            margin-top: 3px;
+            color: #25375f;
+            font-size: .86rem;
+            font-weight: 950;
+            word-break: break-word;
+        }
+
+    .mold-arrow {
+        text-align: center;
+        color: #744fe0;
+        font-size: 1.25rem;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 8px;
+    }
+
+    .info {
+        border: 1px solid #e4eaf2;
+        border-radius: 11px;
+        padding: 8px 9px;
+        min-width: 0;
+    }
+
+        .info span {
+            display: block;
+            color: #7b879a;
+            font-size: .57rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+        }
+
+        .info strong {
+            display: block;
+            margin-top: 3px;
+            color: #26375d;
+            font-size: .72rem;
+            font-weight: 900;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .timer-box {
+        margin-top: 12px;
+        border-radius: 15px;
+        padding: 13px 14px;
+        background: #f7f5ff;
+        border: 1px solid #ded5ff;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .timer-label {
+        color: #736a94;
+        font-size: .61rem;
+        text-transform: uppercase;
+        font-weight: 950;
+        letter-spacing: .04em;
+    }
+
+    .timer-value {
+        margin-top: 2px;
+        color: #38257d;
+        font-weight: 950;
+        font-size: 1.38rem;
+        letter-spacing: .02em;
+    }
+
+    .timer-sub {
+        margin-top: 3px;
+        color: #746f86;
+        font-size: .65rem;
+        font-weight: 750;
+    }
+
+    .timer-limit {
+        text-align: right;
+    }
+
+        .timer-limit strong {
+            display: block;
+            color: #2b3e68;
+            font-size: .88rem;
+            font-weight: 950;
+        }
+
+        .timer-limit span {
+            display: block;
+            margin-top: 2px;
+            color: #748096;
+            font-size: .6rem;
+            font-weight: 800;
+        }
+
+    .progressx {
+        margin-top: 10px;
+        height: 8px;
+        border-radius: 999px;
+        background: #e9edf5;
+        overflow: hidden;
+    }
+
+        .progressx > div {
+            width: 0;
+            height: 100%;
+            border-radius: 999px;
+            background: #6c43dc;
+            transition: width .25s ease, background .25s ease;
+        }
+
+    .change-card.level-warning .progressx > div {
+        background: #d48a11
+    }
+
+    .change-card.level-critical .progressx > div {
+        background: #dc5a52
+    }
+
+    .change-card.level-exceeded .progressx > div {
+        background: #b62520
+    }
+
+    .card-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .finalize-panel {
+        display: none;
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid #dbe3ee;
+        background: #f9fbfd;
+    }
+
+        .finalize-panel.show {
+            display: block;
+        }
+
+    .finalize-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .hint {
+        margin-top: 5px;
+        color: #7a8598;
+        font-size: .61rem;
+        font-weight: 700;
+    }
+
+    .machine-group {
+        background: #fff;
+        border: 1px solid #dbe4ef;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 26px rgba(15,34,74,.06);
+        margin-bottom: 12px;
+    }
+
+        .machine-group summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 13px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: #f8faff;
+            border-bottom: 1px solid transparent;
+        }
+
+        .machine-group[open] summary {
+            border-bottom-color: #e3e9f2;
+        }
+
+        .machine-group summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .machine-group summary::after {
+            content: "\F282";
+            font-family: "bootstrap-icons";
+            font-size: .8rem;
+            color: #64728b;
+            transition: transform .15s ease;
+        }
+
+        .machine-group[open] summary::after {
+            transform: rotate(180deg);
+        }
+
+    .group-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .group-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: #f2edff;
+        color: #7049dc;
+        display: grid;
+        place-items: center;
+        flex: none;
+    }
+
+    .group-title strong {
+        display: block;
+        font-size: .82rem;
+        font-weight: 950;
+        color: #122550;
+    }
+
+    .group-title small {
+        display: block;
+        margin-top: 2px;
+        color: #77839a;
+        font-size: .63rem;
+        font-weight: 750;
+    }
+
+    .group-body {
+        padding: 12px;
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px;
+    }
+
+    .pending-card {
+        border: 1px solid #e0e7f0;
+        border-radius: 14px;
+        padding: 12px;
+        background: #fff;
+    }
+
+        .pending-card.task-overdue {
+            border-left: 4px solid #c7342d
+        }
+
+        .pending-card.task-now {
+            border-left: 4px solid #d2860c
+        }
+
+        .pending-card.task-next {
+            border-left: 4px solid #4166d8
+        }
+
+    .pending-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .pending-title {
+        font-size: .8rem;
+        font-weight: 950;
+        color: #20335c;
+    }
+
+    .pending-sub {
+        margin-top: 3px;
+        color: #758197;
+        font-size: .64rem;
+        font-weight: 750;
+    }
+
+    .pending-mold {
+        margin-top: 10px;
+        padding: 9px 10px;
+        border-radius: 11px;
+        background: #f8f6ff;
+        color: #4d358f;
+        font-size: .73rem;
+        font-weight: 900;
+    }
+
+    .pending-meta {
+        margin-top: 9px;
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 7px;
+    }
+
+        .pending-meta div {
+            border: 1px solid #e5eaf2;
+            border-radius: 9px;
+            padding: 7px 8px;
+        }
+
+        .pending-meta span {
+            display: block;
+            color: #818b9e;
+            font-size: .55rem;
+            text-transform: uppercase;
+            font-weight: 950;
+        }
+
+        .pending-meta strong {
+            display: block;
+            margin-top: 2px;
+            color: #2d3f66;
+            font-size: .67rem;
+            font-weight: 900;
+        }
+
+    .empty {
+        border: 1px dashed #cfd9e6;
+        background: #fff;
+        border-radius: 16px;
+        padding: 26px 18px;
+        text-align: center;
+        color: #768298;
+    }
+
+        .empty i {
+            display: block;
+            font-size: 1.5rem;
+            color: #9aa5b7;
+            margin-bottom: 8px;
+        }
+
+        .empty strong {
+            display: block;
+            color: #42506b;
+            font-size: .82rem;
+            font-weight: 950;
+        }
+
+        .empty span {
+            display: block;
+            margin-top: 4px;
+            font-size: .67rem;
+            font-weight: 700;
+        }
+
+    .history-card {
+        padding: 11px 12px;
+        border-top: 1px solid #e6ebf2;
+        display: grid;
+        grid-template-columns: 1.25fr 1fr 1fr 1fr auto;
+        gap: 10px;
+        align-items: center;
+        font-size: .68rem;
+    }
+
+        .history-card:first-child {
+            border-top: 0;
+        }
+
+        .history-card strong {
+            color: #27395f;
+            font-weight: 900;
+        }
+
+        .history-card span {
+            color: #768298;
+            font-weight: 750;
+        }
+
+    .history-over {
+        color: #b72c27 !important;
+        font-weight: 950 !important;
+    }
+
+    @@media(max-width:1100px) {
+        .stats {
+            grid-template-columns: repeat(3,minmax(0,1fr))
+        }
+
+        .running-grid, .group-body {
+            grid-template-columns: 1fr
+        }
+
+        .info-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .filters {
+            grid-template-columns: 1fr 1fr
+        }
+    }
+
+    @@media(max-width:720px) {
+        .prep-page {
+            padding: 10px
+        }
+
+        .prep-hero {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .hero-actions {
+            width: 100%;
+            justify-content: flex-start
+        }
+
+        .stats {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .filters {
+            grid-template-columns: 1fr
+        }
+
+        .mold-flow {
+            grid-template-columns: 1fr
+        }
+
+        .mold-arrow {
+            transform: rotate(90deg)
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .finalize-grid {
+            grid-template-columns: 1fr
+        }
+
+        .history-card {
+            grid-template-columns: 1fr 1fr
+        }
+    }
+</style>
+
+<div class="prep-page" id="cambioMoldePage" data-estado-url="@Url.Action("EstadoCambioMolde", "ProduccionPreparacion")">
+    <section class="prep-hero">
+        <div class="prep-hero-main">
+            <div class="prep-hero-icon"><i class="bi bi-tools"></i></div>
+            <div>
+                <h1>Cambios de molde</h1>
+                <p>Control operativo SMED: cambio programado, inicio real, cronómetro, límite por máquina y cierre con trazabilidad.</p>
+            </div>
+        </div>
+
+        <div class="hero-actions">
+            <a class="btnx btnx-light" asp-controller="ProduccionPreparacion" asp-action="Index">
+                <i class="bi bi-grid-1x2"></i> Tablero
+            </a>
+            <a class="btnx btnx-light" asp-controller="ProduccionPreparacion" asp-action="Embalajes">
+                <i class="bi bi-box-seam"></i> Embalajes
+            </a>
+            <a class="btnx btnx-light" asp-controller="ProduccionPreparacion" asp-action="Secado">
+                <i class="bi bi-thermometer-sun"></i> Secado
+            </a>
+            <a class="btnx btnx-light" asp-controller="ProduccionPreparacion" asp-action="Historial">
+                <i class="bi bi-clock-history"></i> Historial
+            </a>
+            <a class="btnx btnx-light" asp-controller="Produccion" asp-action="Index">
+                <i class="bi bi-arrow-left"></i> Producción
+            </a>
+        </div>
+    </section>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success flash">
+            <i class="bi bi-check-circle me-1"></i>@TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning flash">
+            <i class="bi bi-exclamation-triangle me-1"></i>@TempData["Warning"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger flash">
+            <i class="bi bi-exclamation-octagon me-1"></i>@TempData["Error"]
+        </div>
+    }
+
+    <div class="critical-banner" id="criticalBanner">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <div>
+            <strong id="criticalBannerTitle">Cambios de molde requieren atención</strong>
+            <div id="criticalBannerText"></div>
+        </div>
+    </div>
+
+    <section class="stats">
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="bi bi-hourglass-split"></i></div>
+            <div><span class="stat-value">@enProceso.Count</span><span class="stat-label">En proceso</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div>
+            <div><span class="stat-value">@vencidas</span><span class="stat-label">Vencidos</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon orange"><i class="bi bi-lightning-charge"></i></div>
+            <div><span class="stat-value">@hacerAhora</span><span class="stat-label">Hacer ahora</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="bi bi-calendar-event"></i></div>
+            <div><span class="stat-value">@proximas</span><span class="stat-label">Próximos</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="bi bi-check2-circle"></i></div>
+            <div><span class="stat-value">@fueraEstandar</span><span class="stat-label">Fuera de estándar</span></div>
+        </div>
+    </section>
+
+    <form method="get" asp-controller="ProduccionPreparacion" asp-action="CambioMolde" class="filters">
+        <div class="field">
+            <label>Buscar</label>
+            <input type="text" name="filtro" value="@filtroActual" placeholder="OF, parte, molde o máquina..." />
+        </div>
+
+        <div class="field">
+            <label>Máquina</label>
+            <select name="maquinaId">
+                <option value="">Todas las máquinas</option>
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    if (Model.MaquinaID == maquina.MaquinaID)
+                    {
+                        <option value="@maquina.MaquinaID" selected>@maquina.Texto · @maquina.TextoLimiteCambioMolde</option>
+                    }
+                    else
+                    {
+                        <option value="@maquina.MaquinaID">@maquina.Texto · @maquina.TextoLimiteCambioMolde</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <button class="btnx btnx-primary" type="submit">
+            <i class="bi bi-search"></i> Filtrar
+        </button>
+
+        <a class="btnx btnx-outline" asp-controller="ProduccionPreparacion" asp-action="CambioMolde">
+            <i class="bi bi-arrow-counterclockwise"></i> Limpiar
+        </a>
+    </form>
+
+    <section class="section">
+        <div class="section-head">
+            <div>
+                <h2>Cambios en proceso</h2>
+                <p>El tiempo se actualiza automáticamente y la alerta depende del límite configurado para cada máquina.</p>
+            </div>
+            <span class="section-count">@enProceso.Count</span>
+        </div>
+
+        @if (enProceso.Any())
+        {
+            <div class="running-grid">
+                @foreach (var tarea in enProceso)
+                {
+                    var claseNivel = ClaseNivel(tarea.NivelAlertaCambioMolde);
+                    var porcentaje = tarea.LimiteCambioMoldeMinutos > 0
+                    ? Math.Min(100, Math.Round((decimal)tarea.MinutosTranscurridosCambioMolde * 100m / tarea.LimiteCambioMoldeMinutos, 0))
+                    : 0;
+
+                    <article class="change-card js-cambio-en-proceso @claseNivel"
+                             data-cambio-id="@tarea.PreparacionAnticipadaID"
+                             data-limite="@tarea.LimiteCambioMoldeMinutos"
+                             data-level="@tarea.NivelAlertaCambioMolde">
+                        <div class="change-top">
+                            <div class="machine">
+                                <div class="machine-icon"><i class="bi bi-gear-wide-connected"></i></div>
+                                <div>
+                                    <strong>@tarea.TextoMaquina</strong>
+                                    <small>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) · @tarea.TextoParte</small>
+                                </div>
+                            </div>
+
+                            <span class="status-pill js-level-badge @(tarea.NivelAlertaCambioMolde == "EXCEDIDO" ? "exceeded" : tarea.NivelAlertaCambioMolde == "CRITICO" ? "critical" : tarea.NivelAlertaCambioMolde == "ADVERTENCIA" ? "warning" : "normal")">
+                                @TextoNivel(tarea.NivelAlertaCambioMolde)
+                            </span>
+                        </div>
+
+                        <div class="change-body">
+                            <div class="mold-flow">
+                                <div class="mold-box">
+                                    <span>Molde anterior</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(tarea.MoldeAnteriorCodigo) ? "Sin dato" : tarea.MoldeAnteriorCodigo)</strong>
+                                </div>
+                                <div class="mold-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="mold-box">
+                                    <span>Molde nuevo</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(tarea.MoldeCodigo) ? "Sin dato" : tarea.MoldeCodigo)</strong>
+                                </div>
+                            </div>
+
+                            <div class="info-grid">
+                                <div class="info"><span>Cambio programado</span><strong>@Fecha(tarea.FechaCambioMolde)</strong></div>
+                                <div class="info"><span>Arranque programado</span><strong>@Fecha(tarea.FechaArranque)</strong></div>
+                                <div class="info"><span>Inicio real</span><strong>@Fecha(tarea.FechaInicioReal)</strong></div>
+                                <div class="info"><span>Límite máquina</span><strong>@TextoLimite(tarea.LimiteCambioMoldeMinutos)</strong></div>
+                            </div>
+
+                            <div class="timer-box">
+                                <div>
+                                    <div class="timer-label">Tiempo transcurrido</div>
+                                    <div class="timer-value js-timer">@tarea.MinutosTranscurridosCambioMolde min</div>
+                                    <div class="timer-sub js-restante">
+                                        @if (tarea.MinutosExcesoCambioMolde > 0)
+                                        {
+                                            <text>Exceso: @tarea.MinutosExcesoCambioMolde min</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Restan @tarea.MinutosRestantesLimiteCambioMolde min antes del límite</text>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="timer-limit">
+                                    <strong>@TextoLimite(tarea.LimiteCambioMoldeMinutos)</strong>
+                                    <span>máximo configurado</span>
+                                </div>
+                            </div>
+
+                            <div class="progressx"><div class="js-progress" style="width:@porcentaje%"></div></div>
+
+                            @if (Model.PuedeGestionarCambioMolde)
+                            {
+                                <div class="card-actions">
+                                    <button type="button"
+                                            class="btnx btnx-success js-toggle-finalizar"
+                                            data-target="finalizar-@tarea.PreparacionAnticipadaID">
+                                        <i class="bi bi-check2-square"></i> Finalizar cambio
+                                    </button>
+                                </div>
+
+                                <div class="finalize-panel" id="finalizar-@tarea.PreparacionAnticipadaID">
+                                    <form method="post" asp-controller="ProduccionPreparacion" asp-action="FinalizarCambioMolde">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="PreparacionAnticipadaID" value="@tarea.PreparacionAnticipadaID" />
+
+                                        <div class="finalize-grid">
+                                            <div class="field">
+                                                <label>Observaciones</label>
+                                                <textarea name="Observaciones" maxlength="500" placeholder="Observaciones de instalación, ajuste o preparación..."></textarea>
+                                            </div>
+
+                                            <div class="field">
+                                                <label>Motivo de excedente</label>
+                                                <textarea name="MotivoExceso"
+                                              maxlength="500"
+                                              class="js-motivo-exceso"
+                                              placeholder="Obligatorio únicamente si el tiempo real supera el límite de la máquina."></textarea>
+                                                <div class="hint js-motivo-hint">
+                                                    El sistema exigirá este campo si al finalizar ya se superó el máximo configurado.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="card-actions">
+                                            <button class="btnx btnx-success" type="submit">
+                                                <i class="bi bi-check-circle"></i> Registrar finalización
+                                            </button>
+                                            <button class="btnx btnx-outline js-cancel-finalizar"
+                                                    type="button"
+                                                    data-target="finalizar-@tarea.PreparacionAnticipadaID">
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-stopwatch"></i>
+                <strong>No hay cambios de molde en proceso</strong>
+                <span>Cuando Técnico o SMED inicien una tarea, aparecerá aquí con su cronómetro.</span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <div>
+                <h2>Pendientes y próximos</h2>
+                <p>Las tareas se agrupan por máquina. Los grupos inician cerrados para mantener la pantalla limpia.</p>
+            </div>
+            <span class="section-count">@pendientes.Count</span>
+        </div>
+
+        @if (pendientes.Any())
+        {
+            foreach (var grupo in pendientes
+            .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre, x.MinutosMaxCambioMolde })
+            .OrderBy(x => x.Key.MaquinaCodigo)
+            .ThenBy(x => x.Key.MaquinaNombre))
+            {
+                var tituloMaquina = string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
+                ? grupo.Key.MaquinaCodigo ?? "Sin máquina"
+                : $"{grupo.Key.MaquinaCodigo} · {grupo.Key.MaquinaNombre}";
+
+                <details class="machine-group">
+                    <summary>
+                        <div class="group-title">
+                            <div class="group-icon"><i class="bi bi-gear-wide-connected"></i></div>
+                            <div>
+                                <strong>@tituloMaquina</strong>
+                                <small>@grupo.Count() cambio(s) · límite @TextoLimite(grupo.Key.MinutosMaxCambioMolde)</small>
+                            </div>
+                        </div>
+                    </summary>
+
+                    <div class="group-body">
+                        @foreach (var tarea in grupo.OrderBy(x => x.FechaObjetivo))
+                        {
+                            <article class="pending-card @ClasePendiente(tarea)">
+                                <div class="pending-head">
+                                    <div>
+                                        <div class="pending-title">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</div>
+                                        <div class="pending-sub">@tarea.TextoParte · Programa @tarea.ProgramaProduccionID</div>
+                                    </div>
+
+                                    <span class="status-pill @(tarea.EsVencida ? "overdue" : tarea.EsHacerAhora ? "now" : "next")">
+                                        @TextoPendiente(tarea)
+                                    </span>
+                                </div>
+
+                                <div class="pending-mold">
+                                    <i class="bi bi-arrow-repeat me-1"></i>@tarea.TextoCambioMolde
+                                </div>
+
+                                <div class="pending-meta">
+                                    <div><span>Cambio</span><strong>@Fecha(tarea.FechaCambioMolde)</strong></div>
+                                    <div><span>Arranque</span><strong>@Fecha(tarea.FechaArranque)</strong></div>
+                                    <div><span>Límite máquina</span><strong>@TextoLimite(tarea.LimiteCambioMoldeMinutos)</strong></div>
+                                    <div><span>Aviso</span><strong>@Fecha(tarea.FechaAviso)</strong></div>
+                                </div>
+
+                                <div class="card-actions">
+                                    @if (Model.PuedeGestionarCambioMolde)
+                                    {
+                                        <form method="post" asp-controller="ProduccionPreparacion" asp-action="IniciarCambioMolde">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="PreparacionAnticipadaID" value="@tarea.PreparacionAnticipadaID" />
+                                            <button class="btnx btnx-primary" type="submit">
+                                                <i class="bi bi-play-fill"></i> Iniciar cambio
+                                            </button>
+                                        </form>
+                                    }
+
+                                    @if (tarea.EjecucionProduccionID.HasValue)
+                                    {
+                                        <a class="btnx btnx-outline"
+                                           asp-controller="Produccion"
+                                           asp-action="Detalle"
+                                           asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                            <i class="bi bi-box-arrow-up-right"></i> Ver producción
+                                        </a>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </details>
+            }
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-check2-circle"></i>
+                <strong>No hay cambios de molde pendientes</strong>
+                <span>La sincronización solo genera tareas cuando detecta un cambio real entre el molde anterior y el siguiente.</span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <details class="machine-group">
+            <summary>
+                <div class="group-title">
+                    <div class="group-icon" style="background:#eefaf3;color:#238353"><i class="bi bi-clock-history"></i></div>
+                    <div>
+                        <strong>Completados recientes</strong>
+                        <small>@completadas.Count cambio(s) visibles · consulta el Historial para ver más</small>
+                    </div>
+                </div>
+            </summary>
+
+            <div>
+                @if (completadas.Any())
+                {
+                    @foreach (var tarea in completadas)
+                    {
+                        <div class="history-card">
+                            <div>
+                                <strong>@tarea.TextoMaquina</strong><br />
+                                <span>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
+                            </div>
+
+                            <div>
+                                <strong>@tarea.TextoCambioMolde</strong><br />
+                                <span>@tarea.TextoParte</span>
+                            </div>
+
+                            <div>
+                                <strong>@(tarea.DuracionRealMinutos?.ToString() ?? tarea.MinutosTranscurridosCambioMolde.ToString()) min</strong><br />
+                                <span>Límite @TextoLimite(tarea.LimiteCambioMoldeMinutos)</span>
+                            </div>
+
+                            <div>
+                                <strong>@Fecha(tarea.FechaFinReal ?? tarea.FechaConfirmacion)</strong><br />
+                                <span>@(string.IsNullOrWhiteSpace(tarea.UsuarioConfirmacionNombre) ? "Sin usuario" : tarea.UsuarioConfirmacionNombre)</span>
+                            </div>
+
+                            <div>
+                                @if (tarea.ExcedioLimite)
+                                {
+                                    <span class="history-over"><i class="bi bi-exclamation-octagon me-1"></i>Fuera de estándar</span>
+                                }
+                                else
+                                {
+                                    <span style="color:#238353;font-weight:950"><i class="bi bi-check-circle me-1"></i>Dentro de límite</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="empty" style="border:0;border-radius:0">
+                        <i class="bi bi-clock-history"></i>
+                        <strong>Aún no hay cambios completados</strong>
+                    </div>
+                }
+            </div>
+        </details>
+    </section>
+</div>
+
+<script>
+    (function () {
+        const page = document.getElementById('cambioMoldePage');
+        if (!page) return;
+
+        const estadoUrl = page.dataset.estadoUrl || '';
+        const cards = Array.from(document.querySelectorAll('.js-cambio-en-proceso'));
+        const banner = document.getElementById('criticalBanner');
+        const bannerText = document.getElementById('criticalBannerText');
+
+        function formatMinutes(totalMinutes) {
+            const value = Math.max(0, Number(totalMinutes || 0));
+            const hours = Math.floor(value / 60);
+            const minutes = value % 60;
+
+            if (hours > 0) {
+                return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+            }
+
+            return '00:' + String(minutes).padStart(2, '0');
+        }
+
+        function badgeClass(level) {
+            level = String(level || '').toUpperCase();
+
+            if (level === 'EXCEDIDO') return 'exceeded';
+            if (level === 'CRITICO') return 'critical';
+            if (level === 'ADVERTENCIA') return 'warning';
+            return 'normal';
+        }
+
+        function cardClass(level) {
+            level = String(level || '').toUpperCase();
+
+            if (level === 'EXCEDIDO') return 'level-exceeded';
+            if (level === 'CRITICO') return 'level-critical';
+            if (level === 'ADVERTENCIA') return 'level-warning';
+            return 'level-normal';
+        }
+
+        function levelText(level) {
+            level = String(level || '').toUpperCase();
+
+            if (level === 'EXCEDIDO') return 'Límite excedido';
+            if (level === 'CRITICO') return 'Crítico';
+            if (level === 'ADVERTENCIA') return 'Advertencia';
+            return 'Normal';
+        }
+
+        function updateCard(card, data) {
+            const timer = card.querySelector('.js-timer');
+            const remaining = card.querySelector('.js-restante');
+            const badge = card.querySelector('.js-level-badge');
+            const progress = card.querySelector('.js-progress');
+            const motivo = card.querySelector('.js-motivo-exceso');
+            const hint = card.querySelector('.js-motivo-hint');
+
+            const elapsed = Number(data.minutosTranscurridos || 0);
+            const limit = Math.max(1, Number(data.limiteMinutos || card.dataset.limite || 60));
+            const excess = Number(data.minutosExceso || 0);
+            const left = Number(data.minutosRestantes || 0);
+            const level = String(data.nivel || 'NORMAL').toUpperCase();
+            const percent = Math.min(100, Math.round((elapsed * 100) / limit));
+
+            card.dataset.level = level;
+            card.classList.remove('level-normal', 'level-warning', 'level-critical', 'level-exceeded');
+            card.classList.add(cardClass(level));
+
+            if (timer) {
+                timer.textContent = formatMinutes(elapsed) + ' · ' + elapsed + ' min';
+            }
+
+            if (remaining) {
+                remaining.textContent = excess > 0
+                    ? 'Exceso: ' + excess + ' min sobre el límite'
+                    : 'Restan ' + left + ' min antes del límite';
+            }
+
+            if (badge) {
+                badge.classList.remove('normal', 'warning', 'critical', 'exceeded');
+                badge.classList.add(badgeClass(level));
+                badge.textContent = levelText(level);
+            }
+
+            if (progress) {
+                progress.style.width = percent + '%';
+            }
+
+            if (motivo) {
+                motivo.required = level === 'EXCEDIDO';
+            }
+
+            if (hint) {
+                hint.textContent = level === 'EXCEDIDO'
+                    ? 'El límite ya fue superado. El motivo de excedente es obligatorio para finalizar.'
+                    : 'El sistema exigirá este campo si al finalizar ya se superó el máximo configurado.';
+            }
+        }
+
+        async function refreshCard(card) {
+            if (!estadoUrl) return;
+
+            const id = card.dataset.cambioId;
+            if (!id) return;
+
+            try {
+                const response = await fetch(estadoUrl + '?id=' + encodeURIComponent(id), {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) return;
+
+                const data = await response.json();
+                updateCard(card, data);
+            } catch (_) {
+            }
+        }
+
+        function refreshBanner() {
+            if (!banner || !bannerText) return;
+
+            const important = cards.filter(function (card) {
+                const level = String(card.dataset.level || '').toUpperCase();
+                return level === 'ADVERTENCIA' || level === 'CRITICO' || level === 'EXCEDIDO';
+            });
+
+            if (important.length === 0) {
+                banner.classList.remove('show');
+                bannerText.textContent = '';
+                return;
+            }
+
+            const exceeded = important.filter(x => String(x.dataset.level).toUpperCase() === 'EXCEDIDO').length;
+            const critical = important.filter(x => String(x.dataset.level).toUpperCase() === 'CRITICO').length;
+            const warning = important.filter(x => String(x.dataset.level).toUpperCase() === 'ADVERTENCIA').length;
+
+            const parts = [];
+            if (exceeded > 0) parts.push(exceeded + ' excedido(s)');
+            if (critical > 0) parts.push(critical + ' crítico(s)');
+            if (warning > 0) parts.push(warning + ' en advertencia');
+
+            bannerText.textContent = parts.join(' · ') + '. Revisa los cambios en proceso.';
+            banner.classList.add('show');
+        }
+
+        async function refreshAll() {
+            await Promise.all(cards.map(refreshCard));
+            refreshBanner();
+        }
+
+        document.querySelectorAll('.js-toggle-finalizar').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const target = document.getElementById(button.dataset.target || '');
+                if (!target) return;
+                target.classList.toggle('show');
+            });
+        });
+
+        document.querySelectorAll('.js-cancel-finalizar').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const target = document.getElementById(button.dataset.target || '');
+                if (!target) return;
+                target.classList.remove('show');
+            });
+        });
+
+        refreshAll();
+
+        if (cards.length > 0) {
+            window.setInterval(refreshAll, 30000);
+        }
+    })();
+</script>

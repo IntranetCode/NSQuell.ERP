@@ -1,0 +1,2202 @@
+﻿@using ERP.NSQuell.Models
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@model ProduccionPreparacionIndexVm
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Preparación de Producción";
+
+    var todas = (Model.Tareas ?? new List<ProduccionPreparacionTareaVm>())
+        .Where(x => !x.EstaCancelada)
+        .ToList();
+
+    bool SecadoEnProceso(ProduccionPreparacionTareaVm t) =>
+        t.EsSecadoMaterial &&
+        t.EstaConfirmada &&
+        t.FechaDisponibleEstimada.HasValue &&
+        t.FechaDisponibleEstimada.Value > Model.FechaConsulta;
+
+    bool SecadoListo(ProduccionPreparacionTareaVm t) =>
+        t.EsSecadoMaterial &&
+        t.EstaConfirmada &&
+        t.FechaDisponibleEstimada.HasValue &&
+        t.FechaDisponibleEstimada.Value <= Model.FechaConsulta;
+
+    bool SecadoLlegariaTarde(ProduccionPreparacionTareaVm t)
+    {
+        if (!t.EsSecadoMaterial ||
+            !t.EstaPendiente ||
+            !t.HorasSecado.HasValue ||
+            t.HorasSecado.Value <= 0 ||
+            !t.FechaArranque.HasValue)
+            return false;
+
+        return Model.FechaConsulta
+            .AddHours(Convert.ToDouble(t.HorasSecado.Value)) >
+            t.FechaArranque.Value;
+    }
+
+    bool EsRiesgo(ProduccionPreparacionTareaVm t)
+    {
+        if (t.EsCambioMolde && t.EstaEnProceso)
+        {
+            var nivel = (t.NivelAlertaCambioMolde ?? "").Trim().ToUpperInvariant();
+
+            if (nivel == "EXCEDIDO" || nivel == "CRITICO")
+                return true;
+        }
+
+        if (t.EsSecadoMaterial &&
+            (t.SecadoLlegaraTarde || SecadoLlegariaTarde(t)))
+            return true;
+
+        return t.EsVencida;
+    }
+
+    bool EsEnCurso(ProduccionPreparacionTareaVm t) =>
+        t.EstaEnProceso || SecadoEnProceso(t);
+
+    bool ProgramaEsOperativo(IEnumerable<ProduccionPreparacionTareaVm> origen)
+    {
+        var lista = origen.ToList();
+
+        if (lista.Any(EsRiesgo) ||
+            lista.Any(EsEnCurso) ||
+            lista.Any(x => x.EstaPendiente))
+            return true;
+
+        var arranque = lista
+            .Where(x => x.FechaArranque.HasValue)
+            .OrderBy(x => x.FechaArranque)
+            .Select(x => x.FechaArranque)
+            .FirstOrDefault();
+
+        return arranque.HasValue &&
+               arranque.Value >= Model.FechaConsulta.AddHours(-2);
+    }
+
+    var programasOperativos = todas
+        .GroupBy(x => x.ProgramaProduccionID)
+        .Where(ProgramaEsOperativo)
+        .ToList();
+
+    var tareas = programasOperativos
+        .SelectMany(x => x)
+        .ToList();
+
+    var gruposMaquina = tareas
+        .Where(x => x.MaquinaID.HasValue)
+        .GroupBy(x => new
+        {
+            x.MaquinaID,
+            x.MaquinaCodigo,
+            x.MaquinaNombre
+        })
+        .OrderByDescending(x => x.Any(EsRiesgo))
+        .ThenByDescending(x => x.Any(EsEnCurso))
+        .ThenByDescending(x => x.Any(y => y.EstaPendiente && (y.EsHacerAhora || y.EsVencida)))
+        .ThenBy(x => x.Key.MaquinaCodigo)
+        .ThenBy(x => x.Key.MaquinaNombre)
+        .ToList();
+
+    var proximas = tareas
+        .Where(x =>
+            x.EstaPendiente &&
+            x.EsProxima &&
+            !SecadoLlegariaTarde(x))
+        .OrderBy(x => x.FechaAviso)
+        .ThenBy(x => x.FechaObjetivo)
+        .Take(20)
+        .ToList();
+
+    var tareasSinMaquina = tareas
+        .Where(x => !x.MaquinaID.HasValue)
+        .ToList();
+
+    var riesgos = tareas.Count(EsRiesgo);
+
+    var enCurso = tareas.Count(EsEnCurso);
+
+    var requierenAccion = tareas.Count(x =>
+        x.EstaPendiente &&
+        (
+            x.EsHacerAhora ||
+            x.EsVencida ||
+            SecadoLlegariaTarde(x)
+        ));
+
+    var programadas = proximas.Count;
+
+    string Fecha(DateTime? value) =>
+        value?.ToString("dd/MM HH:mm") ?? "—";
+
+    string Hora(DateTime? value) =>
+        value?.ToString("HH:mm") ?? "—";
+
+    string TipoNombre(ProduccionPreparacionTareaVm t)
+    {
+        if (t.EsCambioMolde) return "Cambio de molde";
+        if (t.EsPreparacionEmbalaje) return "Embalaje";
+        if (t.EsSecadoMaterial) return "Secado";
+
+        return "Preparación";
+    }
+
+    string TipoIcono(ProduccionPreparacionTareaVm t)
+    {
+        if (t.EsCambioMolde) return "bi-tools";
+        if (t.EsPreparacionEmbalaje) return "bi-box-seam";
+        if (t.EsSecadoMaterial) return "bi-thermometer-sun";
+
+        return "bi-gear";
+    }
+
+    string TipoClase(ProduccionPreparacionTareaVm t)
+    {
+        if (t.EsCambioMolde) return "molde";
+        if (t.EsPreparacionEmbalaje) return "embalaje";
+        if (t.EsSecadoMaterial) return "secado";
+
+        return "";
+    }
+
+    string TituloTarea(ProduccionPreparacionTareaVm t)
+    {
+        if (t.EsCambioMolde) return t.TextoCambioMolde;
+        if (t.EsPreparacionEmbalaje) return t.TextoEmbalaje;
+        if (t.EsSecadoMaterial) return t.TextoMaterial;
+
+        return t.TipoTareaNombre;
+    }
+
+    string SubtituloTarea(ProduccionPreparacionTareaVm t)
+    {
+        if (t.EsCambioMolde)
+        {
+            if (t.EstaEnProceso)
+                return $"{t.MinutosTranscurridosCambioMolde} min transcurridos · límite {t.LimiteCambioMoldeMinutos} min";
+
+            return t.DuracionProgramadaCambioMoldeMinutos.HasValue
+                ? $"Programado: {t.DuracionProgramadaCambioMoldeMinutos.Value} min"
+                : $"Límite máquina: {t.LimiteCambioMoldeMinutos} min";
+        }
+
+        if (t.EsPreparacionEmbalaje)
+        {
+            var cantidad = t.CantidadEmbalajes.HasValue
+                ? t.CantidadEmbalajes.Value.ToString(
+                    t.CantidadEmbalajes.Value % 1 == 0 ? "N0" : "N2")
+                : "—";
+
+            var piezas = t.PiezasPorEmbalaje.HasValue
+                ? t.PiezasPorEmbalaje.Value.ToString(
+                    t.PiezasPorEmbalaje.Value % 1 == 0 ? "N0" : "N2")
+                : "—";
+
+            return $"{cantidad} embalaje(s) · {piezas} pza/embalaje";
+        }
+
+        if (t.EsSecadoMaterial)
+        {
+            if (SecadoEnProceso(t))
+                return $"Disponible {Fecha(t.FechaDisponibleEstimada)}";
+
+            var horas = t.HorasSecado.HasValue
+                ? $"{t.HorasSecado.Value:0.##} h"
+                : "—";
+
+            return $"{(string.IsNullOrWhiteSpace(t.TipoSecado) ? "Secado" : t.TipoSecado)} · {horas}";
+        }
+
+        return "";
+    }
+
+    string EstadoTarea(ProduccionPreparacionTareaVm? t)
+    {
+        if (t == null)
+            return "No aplica";
+
+        if (t.EsSecadoMaterial)
+        {
+            if (SecadoEnProceso(t))
+                return t.SecadoLlegaraTarde
+                    ? "Secando · riesgo"
+                    : "Secando";
+
+            if (SecadoListo(t))
+                return "Listo";
+        }
+
+        if (t.EsCambioMolde && t.EstaEnProceso)
+        {
+            var nivel = (t.NivelAlertaCambioMolde ?? "").Trim().ToUpperInvariant();
+
+            if (nivel == "EXCEDIDO") return "Límite excedido";
+            if (nivel == "CRITICO") return "Crítico";
+            if (nivel == "ADVERTENCIA") return "Advertencia";
+
+            return "En proceso";
+        }
+
+        if (t.EstaConfirmada) return "Listo";
+        if (SecadoLlegariaTarde(t)) return "Riesgo de atraso";
+        if (t.EsVencida) return "Vencido";
+        if (t.EsHacerAhora) return "Hacer ahora";
+        if (t.EsProxima) return "Programado";
+
+        return t.Estado;
+    }
+
+    string EstadoClase(ProduccionPreparacionTareaVm? t)
+    {
+        if (t == null)
+            return "na";
+
+        if (t.EsSecadoMaterial)
+        {
+            if (SecadoEnProceso(t))
+                return t.SecadoLlegaraTarde
+                    ? "risk"
+                    : "process";
+
+            if (SecadoListo(t))
+                return "ready";
+        }
+
+        if (t.EsCambioMolde && t.EstaEnProceso)
+        {
+            var nivel = (t.NivelAlertaCambioMolde ?? "").Trim().ToUpperInvariant();
+
+            if (nivel == "EXCEDIDO" || nivel == "CRITICO")
+                return "risk";
+
+            if (nivel == "ADVERTENCIA")
+                return "warning";
+
+            return "process";
+        }
+
+        if (t.EstaConfirmada) return "ready";
+        if (SecadoLlegariaTarde(t) || t.EsVencida) return "risk";
+        if (t.EsHacerAhora) return "warning";
+        if (t.EsProxima) return "scheduled";
+
+        return "na";
+    }
+
+    string UrlTarea(ProduccionPreparacionTareaVm t)
+    {
+        var filtro = string.IsNullOrWhiteSpace(t.NumeroOF)
+            ? Model.Filtro
+            : t.NumeroOF;
+
+        if (t.EsCambioMolde)
+            return Url.Action(
+                "CambioMolde",
+                "ProduccionPreparacion",
+                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+
+        if (t.EsPreparacionEmbalaje)
+            return Url.Action(
+                "Embalajes",
+                "ProduccionPreparacion",
+                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+
+        if (t.EsSecadoMaterial)
+            return Url.Action(
+                "Secado",
+                "ProduccionPreparacion",
+                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+
+        return "#";
+    }
+
+    string EstadoGeneral(IEnumerable<ProduccionPreparacionTareaVm> origen)
+    {
+        var lista = origen.ToList();
+
+        if (lista.Any(EsRiesgo)) return "RIESGO";
+        if (lista.Any(EsEnCurso)) return "EN PROCESO";
+
+        if (lista.Any(x =>
+            x.EstaPendiente &&
+            (x.EsHacerAhora || x.EsVencida)))
+            return "ATENDER";
+
+        if (lista.Any(x => x.EstaPendiente))
+            return "PROGRAMADA";
+
+        return "LISTA";
+    }
+
+    string EstadoGeneralClase(string estado)
+    {
+        return estado switch
+        {
+            "RIESGO" => "risk",
+            "EN PROCESO" => "process",
+            "ATENDER" => "warning",
+            "PROGRAMADA" => "scheduled",
+            _ => "ready"
+        };
+    }
+
+    DateTime? ArranquePrograma(
+        IEnumerable<ProduccionPreparacionTareaVm> origen) =>
+        origen
+            .Where(x => x.FechaArranque.HasValue)
+            .OrderBy(x => x.FechaArranque)
+            .Select(x => x.FechaArranque)
+            .FirstOrDefault();
+
+    string OfPrograma(
+        IEnumerable<ProduccionPreparacionTareaVm> origen) =>
+        origen
+            .Where(x => !string.IsNullOrWhiteSpace(x.NumeroOF))
+            .Select(x => x.NumeroOF!)
+            .FirstOrDefault() ?? "—";
+
+    string PartePrograma(
+        IEnumerable<ProduccionPreparacionTareaVm> origen) =>
+        origen
+            .Select(x => x.TextoParte)
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+        ?? "Sin parte";
+
+    ProduccionPreparacionTareaVm? TareaDelPrograma(
+        IEnumerable<ProduccionPreparacionTareaVm> programa,
+        string tipoTarea)
+    {
+        var lista = programa
+            .Where(x =>
+                string.Equals(
+                    x.TipoTarea,
+                    tipoTarea,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (tipoTarea == ProduccionPreparacionTipo.SecadoMaterial)
+        {
+            var secando = lista
+                .Where(SecadoEnProceso)
+                .OrderBy(x => x.FechaDisponibleEstimada)
+                .FirstOrDefault();
+
+            if (secando != null)
+                return secando;
+        }
+
+        var enProceso = lista
+            .Where(x => x.EstaEnProceso)
+            .OrderBy(x => x.FechaInicioReal)
+            .FirstOrDefault();
+
+        if (enProceso != null)
+            return enProceso;
+
+        var pendiente = lista
+            .Where(x => x.EstaPendiente)
+            .OrderBy(x => x.FechaObjetivo)
+            .FirstOrDefault();
+
+        if (pendiente != null)
+            return pendiente;
+
+        return lista
+            .Where(x => x.EstaConfirmada)
+            .OrderByDescending(x => x.FechaConfirmacion)
+            .FirstOrDefault();
+    }
+
+    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro)
+        ? ""
+        : Model.Filtro;
+}
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+      rel="stylesheet" />
+
+<style>
+    :root {
+        --bg: #f4f7fb;
+        --panel: #fff;
+        --text: #14213f;
+        --muted: #6f7b91;
+        --line: #dbe4ef;
+        --purple: #6845db;
+        --purpleSoft: #f3efff;
+        --blue: #365fda;
+        --blueSoft: #eef3ff;
+        --orange: #c77800;
+        --orangeSoft: #fff6e3;
+        --red: #c8332d;
+        --redSoft: #fff1f0;
+        --green: #1f7d4f;
+        --greenSoft: #edf9f2;
+        --graySoft: #f1f4f8;
+        --shadow: 0 10px 28px rgba(16,35,76,.06);
+    }
+
+    html[data-nsq-theme="dark"],
+    html[data-bs-theme="dark"] {
+        --bg: #0b1220;
+        --panel: #111b2d;
+        --text: #e8eef8;
+        --muted: #9aa9bd;
+        --line: #2d3e55;
+        --purpleSoft: #241b38;
+        --blueSoft: #102b4c;
+        --orangeSoft: #2b2313;
+        --redSoft: #351719;
+        --greenSoft: #102a20;
+        --graySoft: #17263c;
+        --shadow: 0 10px 28px rgba(0,0,0,.18);
+    }
+
+    .prep-page {
+        min-height: 100vh;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    .prep-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-radius: 18px;
+        background: linear-gradient(120deg,#17275d,#3e399b 68%,#6555de);
+        color: #fff;
+        box-shadow: 0 16px 38px rgba(35,43,124,.18);
+    }
+
+    .prep-brand {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        min-width: 0;
+    }
+
+    .prep-brand-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: rgba(255,255,255,.13);
+        font-size: 1.25rem;
+        flex: none;
+    }
+
+    .prep-head h1 {
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 950;
+    }
+
+    .prep-head p {
+        margin: 3px 0 0;
+        font-size: .75rem;
+        color: rgba(255,255,255,.78);
+        font-weight: 650;
+    }
+
+    .prep-head-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .prep-clock {
+        text-align: right;
+        line-height: 1.1;
+    }
+
+        .prep-clock strong {
+            display: block;
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .prep-clock span {
+            display: block;
+            margin-top: 3px;
+            font-size: .61rem;
+            color: rgba(255,255,255,.72);
+            font-weight: 750;
+        }
+
+    .btnx {
+        min-height: 38px;
+        border-radius: 10px;
+        border: 1px solid #ccd7e5;
+        background: #fff;
+        color: #203150;
+        padding: 7px 11px;
+        text-decoration: none;
+        font-size: .7rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .btnx-light {
+        background: rgba(255,255,255,.11);
+        border-color: rgba(255,255,255,.25);
+        color: #fff;
+    }
+
+        .btnx-light:hover {
+            background: #fff;
+            color: #2b3994;
+        }
+
+    .btnx-primary {
+        background: var(--purple);
+        border-color: var(--purple);
+        color: #fff;
+    }
+
+    .btnx-outline {
+        background: var(--panel);
+        border-color: var(--line);
+        color: var(--text);
+    }
+
+    .module-nav {
+        margin-top: 11px;
+        display: flex;
+        gap: 7px;
+        overflow: auto;
+        padding-bottom: 3px;
+    }
+
+    .module-link {
+        flex: 0 0 auto;
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        color: var(--text);
+        padding: 7px 11px;
+        text-decoration: none;
+        font-size: .69rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+        .module-link.molde i {
+            color: var(--purple)
+        }
+
+        .module-link.embalaje i {
+            color: var(--blue)
+        }
+
+        .module-link.secado i {
+            color: var(--orange)
+        }
+
+        .module-link.historial i {
+            color: var(--green)
+        }
+
+    .status-strip {
+        margin-top: 11px;
+        display: flex;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        overflow: auto;
+    }
+
+    .status-item {
+        flex: 1;
+        min-width: 145px;
+        padding: 9px 14px;
+        border-left: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+        .status-item:first-child {
+            border-left: 0;
+        }
+
+    .status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+    }
+
+        .status-dot.red {
+            background: var(--red)
+        }
+
+        .status-dot.orange {
+            background: var(--orange)
+        }
+
+        .status-dot.purple {
+            background: var(--purple)
+        }
+
+        .status-dot.blue {
+            background: var(--blue)
+        }
+
+    .status-item strong {
+        display: block;
+        font-size: .87rem;
+        line-height: 1;
+        font-weight: 950;
+    }
+
+    .status-item span {
+        display: block;
+        margin-top: 3px;
+        font-size: .57rem;
+        color: var(--muted);
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+
+    .flash {
+        margin-top: 10px;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: .75rem;
+        font-weight: 800;
+    }
+
+    .filters {
+        margin-top: 11px;
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: minmax(240px,1fr) 260px auto auto auto;
+        gap: 9px;
+        align-items: end;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 13px;
+    }
+
+    .field label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: .58rem;
+        font-weight: 950;
+        text-transform: uppercase;
+    }
+
+    .field input,
+    .field select {
+        width: 100%;
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--panel);
+        color: var(--text);
+        padding: 7px 9px;
+        font-size: .72rem;
+        font-weight: 750;
+    }
+
+    .attention-toggle {
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 11px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--panel);
+        font-size: .67rem;
+        font-weight: 900;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+        .attention-toggle input {
+            width: 15px;
+            height: 15px;
+            accent-color: var(--purple);
+        }
+
+    .section-shell {
+        margin-top: 12px;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+
+        .section-shell > summary {
+            list-style: none;
+            cursor: pointer;
+            min-height: 54px;
+            display: grid;
+            grid-template-columns: 36px minmax(0,1fr) auto 28px;
+            gap: 10px;
+            align-items: center;
+            padding: 9px 12px;
+            background: var(--panel);
+        }
+
+            .section-shell > summary::-webkit-details-marker {
+                display: none;
+            }
+
+        .section-shell[open] > summary {
+            background: var(--graySoft);
+            border-bottom: 1px solid var(--line);
+        }
+
+    .section-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: var(--purpleSoft);
+        color: var(--purple);
+    }
+
+    .section-summary-title strong {
+        display: block;
+        font-size: .78rem;
+        font-weight: 950;
+    }
+
+    .section-summary-title span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .58rem;
+        font-weight: 700;
+    }
+
+    .section-count {
+        min-width: 30px;
+        height: 26px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--graySoft);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        font-size: .62rem;
+        font-weight: 950;
+    }
+
+    .section-chevron {
+        color: var(--muted);
+        text-align: center;
+        transition: transform .18s ease;
+    }
+
+    .section-shell[open] .section-chevron {
+        transform: rotate(180deg);
+    }
+
+    .section-content {
+        padding: 10px;
+        background: var(--bg);
+    }
+
+    .machine-list {
+        display: grid;
+        gap: 9px;
+    }
+
+    .machine-accordion {
+        border: 1px solid var(--line) !important;
+        border-radius: 12px !important;
+        overflow: hidden;
+        background: var(--panel);
+    }
+
+        .machine-accordion.is-hidden {
+            display: none;
+        }
+
+    .machine-button {
+        width: 100%;
+        min-height: 60px;
+        padding: 9px 11px;
+        background: var(--panel) !important;
+        color: var(--text) !important;
+        display: grid !important;
+        grid-template-columns: minmax(180px,1.1fr) minmax(170px,.9fr) minmax(145px,.75fr) auto 28px;
+        gap: 12px;
+        align-items: center;
+        text-align: left;
+        box-shadow: none !important;
+    }
+
+        .machine-button:not(.collapsed) {
+            background: var(--graySoft) !important;
+        }
+
+        .machine-button::after {
+            display: none !important;
+        }
+
+    .machine-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .machine-mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--purpleSoft);
+        color: var(--purple);
+    }
+
+    .machine-main strong,
+    .machine-next strong,
+    .machine-time strong {
+        display: block;
+        font-size: .69rem;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .machine-main span,
+    .machine-next span,
+    .machine-time span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .56rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .machine-counters {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .mini-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        font-size: .54rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .mini-count.risk {
+            background: var(--redSoft);
+            color: var(--red)
+        }
+
+        .mini-count.warning {
+            background: var(--orangeSoft);
+            color: var(--orange)
+        }
+
+        .mini-count.process {
+            background: var(--purpleSoft);
+            color: var(--purple)
+        }
+
+        .mini-count.scheduled {
+            background: var(--blueSoft);
+            color: var(--blue)
+        }
+
+    .overall {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 90px;
+        min-height: 28px;
+        padding: 5px 8px;
+        border-radius: 8px;
+        font-size: .56rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .overall.risk {
+            background: var(--red);
+            color: #fff
+        }
+
+        .overall.warning {
+            background: var(--orange);
+            color: #fff
+        }
+
+        .overall.process {
+            background: var(--purple);
+            color: #fff
+        }
+
+        .overall.scheduled {
+            background: var(--blue);
+            color: #fff
+        }
+
+        .overall.ready {
+            background: var(--green);
+            color: #fff
+        }
+
+    .chevron {
+        color: var(--muted);
+        text-align: center;
+        transition: transform .18s ease;
+    }
+
+    .machine-button:not(.collapsed) .chevron {
+        transform: rotate(180deg);
+    }
+
+    .machine-body {
+        padding: 0 !important;
+        background: var(--panel);
+        border-top: 1px solid var(--line);
+    }
+
+    .program-block {
+        border-top: 1px solid var(--line);
+    }
+
+        .program-block:first-child {
+            border-top: 0;
+        }
+
+    .program-head {
+        padding: 8px 12px;
+        display: grid;
+        grid-template-columns: minmax(220px,1.2fr) minmax(150px,.8fr) minmax(145px,.75fr) auto;
+        gap: 12px;
+        align-items: center;
+        background: var(--graySoft);
+    }
+
+    .program-of strong,
+    .program-info strong {
+        display: block;
+        font-size: .66rem;
+        font-weight: 950;
+    }
+
+    .program-of span,
+    .program-info span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .55rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .table-wrap {
+        overflow: auto;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+    }
+
+    .task-table,
+    .ops-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+    }
+
+    .task-table {
+        min-width: 900px;
+    }
+
+    .ops-table {
+        min-width: 1030px;
+    }
+
+        .task-table th,
+        .ops-table th {
+            padding: 7px 10px;
+            background: var(--graySoft);
+            color: var(--muted);
+            border-bottom: 1px solid var(--line);
+            font-size: .52rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .task-table td,
+        .ops-table td {
+            padding: 8px 10px;
+            border-top: 1px solid var(--line);
+            vertical-align: middle;
+            font-size: .64rem;
+        }
+
+        .task-table tbody tr:first-child td,
+        .ops-table tbody tr:first-child td {
+            border-top: 0;
+        }
+
+        .task-table tr.task-risk,
+        .ops-table tr.row-risk {
+            background: var(--redSoft);
+        }
+
+    .task-table tr.task-warning {
+        background: var(--orangeSoft);
+    }
+
+    .type {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+        .type i {
+            width: 25px;
+            height: 25px;
+            border-radius: 7px;
+            display: grid;
+            place-items: center;
+            font-size: .73rem;
+        }
+
+        .type.molde i {
+            background: var(--purpleSoft);
+            color: var(--purple)
+        }
+
+        .type.embalaje i {
+            background: var(--blueSoft);
+            color: var(--blue)
+        }
+
+        .type.secado i {
+            background: var(--orangeSoft);
+            color: var(--orange)
+        }
+
+    .task-detail {
+        max-width: 330px;
+    }
+
+        .task-detail strong {
+            display: block;
+            font-size: .66rem;
+            font-weight: 900;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .task-detail span {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: .55rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .state {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: .55rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .state::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .state.risk {
+            background: var(--redSoft);
+            color: var(--red)
+        }
+
+        .state.warning {
+            background: var(--orangeSoft);
+            color: var(--orange)
+        }
+
+        .state.process {
+            background: var(--purpleSoft);
+            color: var(--purple)
+        }
+
+        .state.scheduled {
+            background: var(--blueSoft);
+            color: var(--blue)
+        }
+
+        .state.ready {
+            background: var(--greenSoft);
+            color: var(--green)
+        }
+
+        .state.na {
+            background: var(--graySoft);
+            color: var(--muted)
+        }
+
+    .time-main {
+        display: block;
+        font-size: .64rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .time-sub {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .54rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .matrix-machine strong {
+        display: block;
+        font-size: .66rem;
+        font-weight: 950;
+    }
+
+    .matrix-machine span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .55rem;
+        font-weight: 700;
+    }
+
+    .matrix-state {
+        min-width: 145px;
+    }
+
+    .empty {
+        padding: 25px 16px;
+        text-align: center;
+        background: var(--panel);
+        border: 1px dashed var(--line);
+        border-radius: 13px;
+        color: var(--muted);
+    }
+
+        .empty i {
+            display: block;
+            font-size: 1.35rem;
+            margin-bottom: 6px;
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--text);
+            font-size: .78rem;
+            font-weight: 950;
+        }
+
+        .empty span {
+            display: block;
+            margin-top: 3px;
+            font-size: .62rem;
+        }
+
+    .warning-line {
+        margin-top: 9px;
+        padding: 9px 11px;
+        border: 1px solid #efc37c;
+        border-radius: 10px;
+        background: var(--orangeSoft);
+        color: var(--orange);
+        font-size: .64rem;
+        font-weight: 850;
+    }
+
+    .footer-note {
+        margin-top: 9px;
+        padding: 0 2px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: .56rem;
+        font-weight: 700;
+    }
+
+    @@media(max-width:1100px) {
+        .filters {
+            grid-template-columns: 1fr 1fr auto;
+        }
+
+        .machine-button {
+            grid-template-columns: minmax(180px,1.2fr) minmax(160px,1fr) auto 28px;
+        }
+
+        .machine-time {
+            display: none;
+        }
+
+        .program-head {
+            grid-template-columns: 1fr 1fr auto;
+        }
+
+        .arranque-info {
+            display: none;
+        }
+    }
+
+    @@media(max-width:760px) {
+        .prep-page {
+            padding: 9px;
+        }
+
+        .prep-head {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .prep-head-right {
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .prep-clock {
+            text-align: left;
+        }
+
+        .filters {
+            grid-template-columns: 1fr;
+        }
+
+        .machine-button {
+            grid-template-columns: 1fr auto 26px;
+            gap: 8px;
+        }
+
+        .machine-next,
+        .machine-time {
+            display: none;
+        }
+
+        .machine-counters {
+            justify-content: flex-start;
+        }
+
+        .program-head {
+            grid-template-columns: 1fr auto;
+        }
+
+        .program-info {
+            display: none;
+        }
+
+        .section-shell > summary {
+            grid-template-columns: 34px minmax(0,1fr) auto 24px;
+        }
+
+        .footer-note {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="prep-page"
+     id="prepOperativa"
+     data-server-now="@Model.FechaConsulta.ToString("O")">
+
+    <header class="prep-head">
+        <div class="prep-brand">
+            <div class="prep-brand-icon">
+                <i class="bi bi-wrench-adjustable-circle"></i>
+            </div>
+
+            <div>
+                <h1>Preparación de Producción</h1>
+                <p>Centro operativo para dejar máquina, material, embalaje y cambio de molde listos antes del arranque.</p>
+            </div>
+        </div>
+
+        <div class="prep-head-right">
+            <div class="prep-clock">
+                <strong id="liveClock">@Model.FechaConsulta.ToString("HH:mm:ss")</strong>
+                <span id="liveDate">@Model.FechaConsulta.ToString("dddd dd/MM/yyyy")</span>
+            </div>
+
+            <a class="btnx btnx-light"
+               asp-controller="Produccion"
+               asp-action="Index">
+                <i class="bi bi-arrow-left"></i>
+                Producción
+            </a>
+        </div>
+    </header>
+
+    <nav class="module-nav">
+        <a class="module-link molde"
+           asp-controller="ProduccionPreparacion"
+           asp-action="CambioMolde">
+            <i class="bi bi-tools"></i>
+            Cambios de molde
+        </a>
+
+        <a class="module-link embalaje"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Embalajes">
+            <i class="bi bi-box-seam"></i>
+            Embalajes
+        </a>
+
+        <a class="module-link secado"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Secado">
+            <i class="bi bi-thermometer-sun"></i>
+            Secado
+        </a>
+
+        <a class="module-link historial"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Historial">
+            <i class="bi bi-clock-history"></i>
+            Historial
+        </a>
+    </nav>
+
+    <div class="status-strip">
+        <div class="status-item">
+            <span class="status-dot red"></span>
+            <div>
+                <strong>@riesgos</strong>
+                <span>Riesgos / vencidos</span>
+            </div>
+        </div>
+
+        <div class="status-item">
+            <span class="status-dot orange"></span>
+            <div>
+                <strong>@requierenAccion</strong>
+                <span>Requieren acción</span>
+            </div>
+        </div>
+
+        <div class="status-item">
+            <span class="status-dot purple"></span>
+            <div>
+                <strong>@enCurso</strong>
+                <span>Procesos en curso</span>
+            </div>
+        </div>
+
+        <div class="status-item">
+            <span class="status-dot blue"></span>
+            <div>
+                <strong>@programadas</strong>
+                <span>Preparaciones próximas</span>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success flash">
+            <i class="bi bi-check-circle me-1"></i>@TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning flash">
+            <i class="bi bi-exclamation-triangle me-1"></i>@TempData["Warning"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger flash">
+            <i class="bi bi-exclamation-octagon me-1"></i>@TempData["Error"]
+        </div>
+    }
+
+    <form method="get"
+          asp-controller="ProduccionPreparacion"
+          asp-action="Index"
+          class="filters">
+
+        <div class="field">
+            <label>Buscar</label>
+            <input type="text"
+                   name="filtro"
+                   value="@filtroActual"
+                   placeholder="OF, parte, material, embalaje, molde..." />
+        </div>
+
+        <div class="field">
+            <label>Máquina</label>
+            <select name="maquinaId">
+                <option value="">Todas las máquinas</option>
+
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    if (Model.MaquinaID == maquina.MaquinaID)
+                    {
+                        <option value="@maquina.MaquinaID" selected>@maquina.Texto</option>
+                    }
+                    else
+                    {
+                        <option value="@maquina.MaquinaID">@maquina.Texto</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <button type="submit"
+                class="btnx btnx-primary">
+            <i class="bi bi-search"></i>
+            Filtrar
+        </button>
+
+        <a class="btnx btnx-outline"
+           asp-controller="ProduccionPreparacion"
+           asp-action="Index">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Limpiar
+        </a>
+
+        <label class="attention-toggle">
+            <input type="checkbox"
+                   id="soloAtencion" />
+            Solo máquinas con atención
+        </label>
+    </form>
+
+    <details class="section-shell" open>
+        <summary>
+            <span class="section-icon">
+                <i class="bi bi-building-gear"></i>
+            </span>
+
+            <span class="section-summary-title">
+                <strong>Operación por máquina</strong>
+                <span>Cada máquina agrupa sus OF y sus actividades de preparación.</span>
+            </span>
+
+            <span class="section-count">@gruposMaquina.Count</span>
+
+            <span class="section-chevron">
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </summary>
+
+        <div class="section-content">
+            @if (gruposMaquina.Any())
+            {
+                <div class="accordion machine-list"
+                     id="accordionMaquinas">
+
+                    @foreach (var grupo in gruposMaquina)
+                    {
+                        var estadoMaquina = EstadoGeneral(grupo);
+                        var claseMaquina = EstadoGeneralClase(estadoMaquina);
+
+                        var riesgosMaquina = grupo.Count(EsRiesgo);
+
+                        var accionMaquina = grupo.Count(x =>
+                        x.EstaPendiente &&
+                        (
+                        x.EsHacerAhora ||
+                        x.EsVencida ||
+                        SecadoLlegariaTarde(x)
+                        ));
+
+                        var enCursoMaquina = grupo.Count(EsEnCurso);
+
+                        var programadasMaquina = grupo.Count(x =>
+                        x.EstaPendiente &&
+                        x.EsProxima &&
+                        !SecadoLlegariaTarde(x));
+
+                        var requiereAtencion =
+                        riesgosMaquina > 0 ||
+                        accionMaquina > 0 ||
+                        enCursoMaquina > 0;
+
+                        var programas = grupo
+                        .GroupBy(x => x.ProgramaProduccionID)
+                        .Where(ProgramaEsOperativo)
+                        .OrderBy(x =>
+                        ArranquePrograma(x) ??
+                        x.Min(y => y.FechaObjetivo))
+                        .ThenBy(x => x.Key)
+                        .ToList();
+
+                        var siguientePrograma = programas.FirstOrDefault();
+
+                        var siguienteOf = siguientePrograma == null
+                        ? "—"
+                        : OfPrograma(siguientePrograma);
+
+                        var siguienteParte = siguientePrograma == null
+                        ? "Sin parte"
+                        : PartePrograma(siguientePrograma);
+
+                        var siguienteArranque = siguientePrograma == null
+                        ? (DateTime?)null
+                        : ArranquePrograma(siguientePrograma);
+
+                        var collapseId = $"maquina-{grupo.Key.MaquinaID}";
+                        var headingId = $"heading-{grupo.Key.MaquinaID}";
+
+                        <div class="accordion-item machine-accordion js-machine"
+                             data-attention="@(requiereAtencion ? "1" : "0")">
+
+                            <h2 class="accordion-header"
+                                id="@headingId">
+
+                                <button class="accordion-button machine-button collapsed"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#@collapseId"
+                                        aria-expanded="false"
+                                        aria-controls="@collapseId">
+
+                                    <div class="machine-main">
+                                        <span class="machine-mark">
+                                            <i class="bi bi-building-gear"></i>
+                                        </span>
+
+                                        <div>
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(grupo.Key.MaquinaCodigo)
+                                                                                        ? "Sin código"
+                                                                                        : grupo.Key.MaquinaCodigo)
+                                                                                                              </strong>
+
+                                            <span>
+                                                @(string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
+                                                                                        ? "Máquina"
+                                                                                        : grupo.Key.MaquinaNombre)
+                                    </span>
+                                </div>
+                            </div>
+
+                                    <div class="machine-next">
+                                        <strong>OF @siguienteOf</strong>
+                                        <span>@siguienteParte</span>
+                                    </div>
+
+                                    <div class="machine-time">
+                                        <strong>@Fecha(siguienteArranque)</strong>
+                                        <span>Próximo arranque</span>
+                                    </div>
+
+                                    <div class="machine-counters">
+                                @if (riesgosMaquina > 0)
+                                        {
+                                            <span class="mini-count risk">
+                                                <i class="bi bi-exclamation-octagon"></i>
+                                                @riesgosMaquina riesgo(s)
+                                            </span>
+                                        }
+
+                                        @if (accionMaquina > 0)
+                                        {
+                                            <span class="mini-count warning">
+                                                <i class="bi bi-lightning-charge"></i>
+                                                @accionMaquina atender
+                                            </span>
+                                        }
+
+                                        @if (enCursoMaquina > 0)
+                                        {
+                                            <span class="mini-count process">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                @enCursoMaquina en curso
+                                            </span>
+                                        }
+
+                                        @if (programadasMaquina > 0)
+                                        {
+                                            <span class="mini-count scheduled">
+                                                <i class="bi bi-calendar-event"></i>
+                                                @programadasMaquina próxima(s)
+                                            </span>
+                                        }
+
+                                        <span class="overall @claseMaquina">
+                                            @estadoMaquina
+                                        </span>
+                                    </div>
+
+                                    <span class="chevron">
+                                        <i class="bi bi-chevron-down"></i>
+                                    </span>
+                                </button>
+                            </h2>
+
+                            <div id="@collapseId"
+                                 class="accordion-collapse collapse"
+                                 aria-labelledby="@headingId">
+
+                                <div class="accordion-body machine-body">
+                                    @foreach (var programa in programas)
+                                    {
+                                        var estadoPrograma = EstadoGeneral(programa);
+                                        var clasePrograma = EstadoGeneralClase(estadoPrograma);
+                                        var arranque = ArranquePrograma(programa);
+                                        var of = OfPrograma(programa);
+                                        var parte = PartePrograma(programa);
+
+                                        <section class="program-block">
+                                            <div class="program-head">
+                                                <div class="program-of">
+                                                    <strong>OF @of</strong>
+                                                    <span>@parte</span>
+                                                </div>
+
+                                                <div class="program-info">
+                                                    <strong>Programa #@programa.Key</strong>
+                                                    <span>@programa.First().CantidadProgramada.ToString("N0") pza programadas</span>
+                                                </div>
+
+                                                <div class="program-info arranque-info">
+                                                    <strong>@Fecha(arranque)</strong>
+                                                    <span>Arranque programado</span>
+                                                </div>
+
+                                                <span class="overall @clasePrograma">
+                                                    @estadoPrograma
+                                                </span>
+                                            </div>
+
+                                            <div class="task-table-wrap">
+                                                <table class="task-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Actividad</th>
+                                                            <th>Preparación requerida</th>
+                                                            <th>Estado</th>
+                                                            <th>Atender desde</th>
+                                                            <th>Objetivo</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+
+                                                    <tbody>
+                                                        @foreach (var tarea in programa
+                                                                                                    .OrderBy(x =>
+                                                                                                    x.EsCambioMolde ? 1 :
+                                                                                                    x.EsSecadoMaterial ? 2 :
+                                                                                                    x.EsPreparacionEmbalaje ? 3 : 4)
+                                                                                                    .ThenBy(x => x.FechaObjetivo))
+                                                        {
+                                                            var claseFila = EsRiesgo(tarea)
+                                                            ? "task-risk"
+                                                            : tarea.EstaPendiente &&
+                                                            tarea.EsHacerAhora
+                                                            ? "task-warning"
+                                                            : "";
+
+                                                            <tr class="@claseFila">
+                                                                <td>
+                                                                    <span class="type @TipoClase(tarea)">
+                                                                        <i class="bi @TipoIcono(tarea)"></i>
+                                                                        @TipoNombre(tarea)
+                                                                    </span>
+                                                                </td>
+
+                                                                <td>
+                                                                    <div class="task-detail">
+                                                                        <strong>@TituloTarea(tarea)</strong>
+                                                                        <span>@SubtituloTarea(tarea)</span>
+                                                                    </div>
+                                                                </td>
+
+                                                                <td>
+                                                                    <span class="state @EstadoClase(tarea)">
+                                                                        @EstadoTarea(tarea)
+                                                                    </span>
+                                                                </td>
+
+                                                                <td>
+                                                                    <span class="time-main">@Fecha(tarea.FechaAviso)</span>
+
+                                                                    @if (tarea.EstaPendiente)
+                                                                    {
+                                                                        <span class="time-sub">@tarea.TextoTiempo</span>
+                                                                    }
+                                                                </td>
+
+                                                                <td>
+                                                                    <span class="time-main">@Fecha(tarea.FechaObjetivo)</span>
+
+                                                                    @if (tarea.FechaArranque.HasValue)
+                                                                    {
+                                                                        <span class="time-sub">
+                                                                            Arranque @Hora(tarea.FechaArranque)
+                                                                        </span>
+                                                                    }
+                                                                </td>
+
+                                                                <td style="text-align:right">
+                                                                    @if (!tarea.EstaConfirmada || SecadoEnProceso(tarea))
+                                                                    {
+                                                                        <a class="btnx btnx-primary"
+                                                                           href="@UrlTarea(tarea)">
+                                                                            Atender
+                                                                            <i class="bi bi-arrow-right"></i>
+                                                                        </a>
+                                                                    }
+                                                                    else if (tarea.EjecucionProduccionID.HasValue)
+                                                                    {
+                                                                        <a class="btnx btnx-outline"
+                                                                           asp-controller="Produccion"
+                                                                           asp-action="Detalle"
+                                                                           asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                                                            Ver OF
+                                                                        </a>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="state ready">Listo</span>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </section>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty">
+                    <i class="bi bi-check2-circle"></i>
+                    <strong>No hay preparaciones operativas con los filtros actuales</strong>
+                    <span>Las tareas se generan automáticamente desde Planeación.</span>
+                </div>
+            }
+
+            @if (tareasSinMaquina.Any())
+            {
+                <div class="warning-line">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Hay @tareasSinMaquina.Count tarea(s) sin máquina asociada.
+                    Conviene corregir su programa en Planeación.
+                </div>
+            }
+        </div>
+    </details>
+
+    <details class="section-shell">
+        <summary>
+            <span class="section-icon"
+                  style="background:var(--blueSoft);color:var(--blue)">
+                <i class="bi bi-speedometer2"></i>
+            </span>
+
+            <span class="section-summary-title">
+                <strong>Estado operativo por máquina</strong>
+                <span>Resumen de la próxima OF de cada máquina: secado, embalaje, cambio de molde y preparación general.</span>
+            </span>
+
+            <span class="section-count">@gruposMaquina.Count</span>
+
+            <span class="section-chevron">
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </summary>
+
+        <div class="section-content">
+            @if (gruposMaquina.Any())
+            {
+                <div class="table-wrap">
+                    <table class="ops-table">
+                        <thead>
+                            <tr>
+                                <th>Máquina</th>
+                                <th>Próxima OF</th>
+                                <th>Secado</th>
+                                <th>Embalaje</th>
+                                <th>Cambio de molde</th>
+                                <th>Próximo arranque</th>
+                                <th>Preparación</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var grupo in gruposMaquina)
+                            {
+                                var programas = grupo
+                                .GroupBy(x => x.ProgramaProduccionID)
+                                .Where(ProgramaEsOperativo)
+                                .OrderBy(x =>
+                                ArranquePrograma(x) ??
+                                x.Min(y => y.FechaObjetivo))
+                                .ThenBy(x => x.Key)
+                                .ToList();
+
+                                var programaReferencia = programas.FirstOrDefault();
+
+                                var secado = programaReferencia == null
+                                ? null
+                                : TareaDelPrograma(
+                                programaReferencia,
+                                ProduccionPreparacionTipo.SecadoMaterial);
+
+                                var embalaje = programaReferencia == null
+                                ? null
+                                : TareaDelPrograma(
+                                programaReferencia,
+                                ProduccionPreparacionTipo.PrepararEmbalaje);
+
+                                var molde = programaReferencia == null
+                                ? null
+                                : TareaDelPrograma(
+                                programaReferencia,
+                                ProduccionPreparacionTipo.CambioMolde);
+
+                                var estadoGeneral = programaReferencia == null
+                                ? EstadoGeneral(grupo)
+                                : EstadoGeneral(programaReferencia);
+
+                                var claseGeneral = EstadoGeneralClase(estadoGeneral);
+
+                                var proximoArranque = programaReferencia == null
+                                ? (DateTime?)null
+                                : ArranquePrograma(programaReferencia);
+
+                                var proximaOf = programaReferencia == null
+                                ? "—"
+                                : OfPrograma(programaReferencia);
+
+                                <tr class="@(claseGeneral == "risk" ? "row-risk" : "")">
+                                    <td>
+                                        <div class="matrix-machine">
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(grupo.Key.MaquinaCodigo)
+                                                                                        ? "Sin código"
+                                                                                        : grupo.Key.MaquinaCodigo)
+                                                                                                              </strong>
+
+                                            <span>
+                                                @(string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
+                                                                                        ? "Máquina"
+                                                                                        : grupo.Key.MaquinaNombre)
+                                    </span>
+                                </div>
+                            </td>
+
+                                    <td>
+                                        <strong>@proximaOf</strong>
+                                    </td>
+
+                                    <td class="matrix-state">
+                                        <span class="state @EstadoClase(secado)">
+                                            @EstadoTarea(secado)
+                                        </span>
+
+                                @if (secado != null)
+                                        {
+                                            <span class="time-sub">
+                                                @(SecadoEnProceso(secado)
+                                                                                    ? $"Listo {Fecha(secado.FechaDisponibleEstimada)}"
+                                                                                    : Fecha(secado.FechaAviso))
+                                </span>
+                                                                }
+                                    </td>
+
+                                    <td class="matrix-state">
+                                        <span class="state @EstadoClase(embalaje)">
+                                            @EstadoTarea(embalaje)
+                                        </span>
+
+                                        @if (embalaje != null)
+                                        {
+                                            <span class="time-sub">@embalaje.TextoEmbalaje</span>
+                                        }
+                                    </td>
+
+                                    <td class="matrix-state">
+                                        <span class="state @EstadoClase(molde)">
+                                            @EstadoTarea(molde)
+                                        </span>
+
+                                        @if (molde != null)
+                                        {
+                                            <span class="time-sub">@molde.TextoCambioMolde</span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <span class="time-main">@Fecha(proximoArranque)</span>
+                                    </td>
+
+                                    <td>
+                                        <span class="overall @claseGeneral">
+                                            @estadoGeneral
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="empty">
+                    <i class="bi bi-speedometer2"></i>
+                    <strong>No hay máquinas con preparación activa</strong>
+                    <span>No se encontraron programas operativos con los filtros actuales.</span>
+                </div>
+            }
+        </div>
+    </details>
+
+    <details class="section-shell">
+        <summary>
+            <span class="section-icon"
+                  style="background:var(--orangeSoft);color:var(--orange)">
+                <i class="bi bi-calendar-event"></i>
+            </span>
+
+            <span class="section-summary-title">
+                <strong>Próximas preparaciones</strong>
+                <span>Agenda corta de actividades futuras que todavía no requieren intervención.</span>
+            </span>
+
+            <span class="section-count">@proximas.Count</span>
+
+            <span class="section-chevron">
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </summary>
+
+        <div class="section-content">
+            @if (proximas.Any())
+            {
+                <div class="table-wrap">
+                    <table class="ops-table">
+                        <thead>
+                            <tr>
+                                <th>Atender desde</th>
+                                <th>Máquina</th>
+                                <th>OF / Parte</th>
+                                <th>Actividad</th>
+                                <th>Preparación requerida</th>
+                                <th>Arranque</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var tarea in proximas)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="time-main">@Fecha(tarea.FechaAviso)</span>
+                                        <span class="time-sub">@tarea.TextoTiempo</span>
+                                    </td>
+
+                                    <td>
+                                        <div class="matrix-machine">
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(tarea.MaquinaCodigo)
+                                                                                        ? "Sin código"
+                                                                                        : tarea.MaquinaCodigo)
+                                                                                                          </strong>
+
+                                            <span>
+                                                @(string.IsNullOrWhiteSpace(tarea.MaquinaNombre)
+                                                                                        ? "Máquina"
+                                                                                        : tarea.MaquinaNombre)
+                                    </span>
+                                </div>
+                            </td>
+
+                                    <td>
+                                        <div class="task-detail">
+                                            <strong>
+                                                OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF)
+                                                                                        ? "—"
+                                                                                        : tarea.NumeroOF)
+                                    </strong>
+
+                                            <span>@tarea.TextoParte</span>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="type @TipoClase(tarea)">
+                                            <i class="bi @TipoIcono(tarea)"></i>
+                                            @TipoNombre(tarea)
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <div class="task-detail">
+                                            <strong>@TituloTarea(tarea)</strong>
+                                            <span>@SubtituloTarea(tarea)</span>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="time-main">@Fecha(tarea.FechaArranque)</span>
+                                    </td>
+
+                                    <td style="text-align:right">
+                                        <a class="btnx btnx-outline"
+                                           href="@UrlTarea(tarea)">
+                                            Ver
+                                            <i class="bi bi-arrow-right"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                                }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="empty">
+                    <i class="bi bi-calendar-check"></i>
+                    <strong>No hay preparaciones próximas</strong>
+                    <span>No hay tareas futuras pendientes con los filtros actuales.</span>
+                </div>
+            }
+        </div>
+    </details>
+
+    <div class="footer-note">
+        <span>
+            Todo inicia contraído. El usuario decide qué sección y qué máquina necesita desplegar.
+        </span>
+
+        <span>
+            Actualizado: @Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss")
+        </span>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const page = document.getElementById('prepOperativa');
+        const clock = document.getElementById('liveClock');
+        const date = document.getElementById('liveDate');
+        const soloAtencion = document.getElementById('soloAtencion');
+        const maquinas = Array.from(
+            document.querySelectorAll('.js-machine'));
+
+        if (!page) return;
+
+        const serverNow = Date.parse(
+            page.dataset.serverNow || '');
+
+        const offset = Number.isFinite(serverNow)
+            ? serverNow - Date.now()
+            : 0;
+
+        function updateClock() {
+            if (!clock || !date) return;
+
+            const now = new Date(
+                Date.now() + offset);
+
+            clock.textContent =
+                now.toLocaleTimeString('es-MX', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+
+            date.textContent =
+                now.toLocaleDateString('es-MX', {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+        }
+
+        function aplicarFiltroAtencion() {
+            const solo = !!soloAtencion?.checked;
+
+            maquinas.forEach(function (maquina) {
+                const requiere =
+                    maquina.dataset.attention === '1';
+
+                maquina.classList.toggle(
+                    'is-hidden',
+                    solo && !requiere);
+            });
+        }
+
+        soloAtencion?.addEventListener(
+            'change',
+            aplicarFiltroAtencion);
+
+        updateClock();
+        aplicarFiltroAtencion();
+
+        window.setInterval(
+            updateClock,
+            1000);
+    })();
+</script>
