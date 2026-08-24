@@ -207,7 +207,7 @@ ORDER BY ISNULL(c.Nombre,r.ClienteNombre),d.FechaRequerida,d.NumeroParte,d.Rengl
                 var piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
                 var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ObjetivoHora"]);
                 decimal mpRequeridaKg = 0;
-                if (piezasAProducir > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0) mpRequeridaKg = Math.Round((piezasAProducir * pesoBrutoPieza.Value) / 1000m, 4);
+                if (piezasAProducir > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0) mpRequeridaKg = Math.Round(piezasAProducir * pesoBrutoPieza.Value, 4);
                 decimal embalajeRequerido = 0;
                 if (piezasAProducir > 0 && piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0) embalajeRequerido = Math.Ceiling(piezasAProducir / piezasPorEmbalaje.Value);
                 decimal horasProgramadas = 0;
@@ -949,7 +949,7 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             vm.PesoBrutoPieza = pesoBruto;
             vm.PiezasPorEmbalaje = piezasPorEmbalaje;
             vm.ObjetivoHora = objetivoHora > 0 ? objetivoHora : null;
-            vm.CantidadMpKg = pesoBruto.HasValue && pesoBruto.Value > 0 ? Math.Round((cantidadProgramada * pesoBruto.Value) / 1000m, 4) : 0;
+            vm.CantidadMpKg = pesoBruto.HasValue && pesoBruto.Value > 0 ? Math.Round(cantidadProgramada * pesoBruto.Value, 4) : 0;
             vm.CantidadEmbalajes = piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0 ? Math.Ceiling(cantidadProgramada / piezasPorEmbalaje.Value) : 0;
             vm.HorasProgramadas = objetivoHora > 0 ? Math.Ceiling(cantidadProgramada / (decimal)objetivoHora) : 0;
         }
@@ -1312,7 +1312,7 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1 AND r.Activo=1;";
             var piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
             var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ObjetivoHora"]);
             decimal cantidadMpKg = 0;
-            if (piezasAProducir > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0) cantidadMpKg = Math.Round((piezasAProducir * pesoBrutoPieza.Value) / 1000m, 4);
+            if (piezasAProducir > 0 && pesoBrutoPieza.HasValue && pesoBrutoPieza.Value > 0) cantidadMpKg = Math.Round(piezasAProducir * pesoBrutoPieza.Value, 4);
             decimal cantidadEmbalajes = 0;
             if (piezasAProducir > 0 && piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0) cantidadEmbalajes = Math.Ceiling(piezasAProducir / piezasPorEmbalaje.Value);
             decimal horasProgramadas = 0;
