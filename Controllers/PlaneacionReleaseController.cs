@@ -2723,6 +2723,16 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
             await using var cmd = new SqlCommand(sql, cn, tx);
 
             AgregarParametrosCalculoDetalle(cmd, d, usuarioId);
+            // RELEASE_UPDATE_PARAM_FIX_V1_1
+            cmd.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 120).Value =
+                (object?)d.NumeroParte ?? DBNull.Value;
+
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value =
+                (object?)d.ReferenciaSAP ?? DBNull.Value;
+
+            cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value =
+                (object?)d.DesignacionDescripcionSAP ?? DBNull.Value;
+
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = d.ReleaseDetalleID!.Value;
 
             await cmd.ExecuteNonQueryAsync();
