@@ -929,7 +929,7 @@ OUTER APPLY
     SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)-ISNULL(pp.CantidadProducida,0)),0) AS ProgramadoPendiente
     FROM dbo.Planeacion_ProgramaProduccion pp
     WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID AND pp.Activo=1 AND ISNULL(pp.EstatusID,1) NOT IN(5,9,99)
-)
+)prog
 WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
