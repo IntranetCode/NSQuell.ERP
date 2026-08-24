@@ -30,8 +30,6 @@
         const archivoInput = document.getElementById('ArchivosRelease');
         const fechaRecepcionInput = document.getElementById('FechaRecepcion');
         const versionReleaseInput = document.getElementById('VersionRelease');
-        const nivelCriticidadInput = document.getElementById('NivelCriticidad');
-const comentarioCriticidadInput = document.getElementById('ComentarioCriticidad');
 
         function obtenerSemanaISO(fecha) {
             const temp = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
@@ -51,6 +49,12 @@ const comentarioCriticidadInput = document.getElementById('ComentarioCriticidad'
             versionReleaseInput.value = `SEMANA ${semana}`;
         }
 
+        // NSQ_REMOVE_CRITICIDAD_V1
+        function quitarCriticidadReleaseManual() {
+            const campo = document.getElementById('NivelCriticidad');
+            const panel = campo?.closest('.border.rounded-4.p-3.bg-light');
+            if (panel) panel.remove();
+        }
         function aplicarModoCaptura() {
             const modo = modoArchivoRadio?.checked ? 'archivo' : 'manual';
 
@@ -62,24 +66,7 @@ const comentarioCriticidadInput = document.getElementById('ComentarioCriticidad'
             }
         }
 
-function validarCriticidadManual() {
-    const modoArchivo = modoArchivoRadio?.checked === true;
-
-    if (modoArchivo) {
-        return true;
-    }
-
-    const nivel = (nivelCriticidadInput?.value || 'NORMAL').toUpperCase();
-    const comentario = (comentarioCriticidadInput?.value || '').trim();
-
-    if (nivel === 'URGENTE' && comentario.length < 5) {
-        mostrarErrorFormulario('Captura un comentario para el release urgente.');
-        comentarioCriticidadInput?.focus();
-        return false;
-    }
-
-    return true;
-}
+function validarCriticidadManual() { return true; }
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -117,6 +104,24 @@ function validarCriticidadManual() {
             select.dataset.selected = select.value || '';
         }
 
+        function filtrarPartesRenglon(input) {
+            const card = input.closest('.renglon-item');
+            const select = card?.querySelector('.parte-select');
+            if (!select) return;
+            const termino = (input.value || '').trim().toLowerCase();
+            const actual = select.value || select.dataset.selected || '';
+            const base = partesClienteActual || [];
+            const filtradas = !termino
+                ? base
+                : base.filter(x => String(x.text || '').toLowerCase().includes(termino));
+            llenarSelectPartes(select, filtradas, actual);
+        }
+
+        document.addEventListener('input', function (event) {
+            if (event.target instanceof HTMLInputElement && event.target.classList.contains('parte-busqueda')) {
+                filtrarPartesRenglon(event.target);
+            }
+        });
         async function cargarPartesPorCliente(clienteId, preservarSeleccion) {
             const selects = Array.from(document.querySelectorAll('.parte-select'));
             const seleccionAnterior = selects.map(select =>
@@ -249,6 +254,7 @@ function validarCriticidadManual() {
                         <div class="row g-3 mb-3">
                             <div class="col-lg-4">
                                 <label class="erp-label required-label">Parte</label>
+                                <input type="search" class="form-control mb-2 parte-busqueda" placeholder="Buscar numero, referencia o descripcion..." autocomplete="off" />
                                 <select name="Renglones[${index}].ParteID"
                                         class="form-select parte-select"
                                         data-selected="">
@@ -260,11 +266,12 @@ function validarCriticidadManual() {
                             </div>
 
                             <div class="col-lg-2">
-                                <label class="erp-label">Unidad cliente</label>
-                                <input name="Renglones[${index}].UnidadMedidaCliente"
-                                       class="form-control unidad-input"
-                                       maxlength="30"
-                                       placeholder="PC / PZA" />
+                                <label class="erp-label">Unidad</label>
+                                <input type="hidden"
+                                       name="Renglones[${index}].UnidadMedidaCliente"
+                                       value="PIEZA"
+                                       class="unidad-input" />
+                                <div class="form-control bg-light fw-semibold">PIEZA</div>
                             </div>
 
                             <div class="col-lg-3">
@@ -691,7 +698,8 @@ function validarCriticidadManual() {
 
             if (submitter && submitter.id === 'btnValidarArchivos') {
                 if (modoArchivoRadio) modoArchivoRadio.checked = true;
-                aplicarModoCaptura();
+                quitarCriticidadReleaseManual();
+        aplicarModoCaptura();
                 const archivo = document.getElementById('ArchivosRelease');
 
                 if (!archivo || !archivo.files || archivo.files.length === 0) {
@@ -737,7 +745,8 @@ function validarCriticidadManual() {
                 : 'Puedes mezclar PDF HUF/VERITAS y Excel GOLDE/NORMA/AIR THERMAL. Máximo 25 archivos y 10 MB por archivo.';
         });
         document.addEventListener('DOMContentLoaded', async () => {
-            aplicarModoCaptura();
+            quitarCriticidadReleaseManual();
+        aplicarModoCaptura();
             actualizarVersionAutomatica();
             renumerarRenglones();
             actualizarResumen();
@@ -1132,6 +1141,7 @@ function validarCriticidadManual() {
                                     <div class="row g-3 mb-3">
                                         <div class="col-lg-4">
                                             <label class="erp-label required-label">Parte</label>
+                                            <input type="search" class="form-control mb-2 parte-busqueda" placeholder="Buscar numero, referencia o descripcion..." autocomplete="off" />
                                             <select name="Renglones[@i].ParteID"
                                                     class="form-select parte-select"
                                                     data-selected="@Model.Renglones[i].ParteID">
@@ -1143,12 +1153,12 @@ function validarCriticidadManual() {
                                         </div>
 
                                         <div class="col-lg-2">
-                                            <label class="erp-label">Unidad cliente</label>
-                                            <input name="Renglones[@i].UnidadMedidaCliente"
-                                                   value="@Model.Renglones[i].UnidadMedidaCliente"
-                                                   class="form-control unidad-input"
-                                                   maxlength="30"
-                                                   placeholder="PC / PZA" />
+                                            <label class="erp-label">Unidad</label>
+                                            <input type="hidden"
+                                                   name="Renglones[@i].UnidadMedidaCliente"
+                                                   value="PIEZA"
+                                                   class="unidad-input" />
+                                            <div class="form-control bg-light fw-semibold">PIEZA</div>
                                         </div>
 
                                         @*

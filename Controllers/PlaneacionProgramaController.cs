@@ -7,7 +7,7 @@ using System.Data;
 
 namespace ERP.NSQuell.Controllers
 {
-    public class PlaneacionProgramaController : Controller
+    public partial class PlaneacionProgramaController : Controller // NSQ_TODO_PLANEACION_PRODUCCION_V1
     {
         private readonly IConfiguration _configuration;
 
@@ -31,7 +31,7 @@ namespace ERP.NSQuell.Controllers
                 FechaHasta = fechaHasta,
                 SoloPendientes = soloListos,
                 SoloSinMP = soloPendienteAbasto,
-                SoloSinCapacidad = soloPendienteDatosTecnicos
+                SoloSinCapacidad = false // NSQ_FILTRO_DT_REMOVIDO_V1
             };
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
@@ -1082,8 +1082,30 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             var pesoBruto = rd["PesoBrutoPieza"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PesoBrutoPieza"]);
             var piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
             var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ObjetivoHora"]);
+<<<<<<< HEAD
             var cantidadProgramada = Math.Max(0, cantidadRequerida - programadoPendiente);
             if (cantidadProgramada <= 0) throw new InvalidOperationException("La necesidad ya no tiene cantidad pendiente por programar.");
+=======
+            var cantidadOriginalAProducir = Math.Max(0, cantidadRequerida - programadoPendiente);
+            var cantidadBaseProgramar =
+                Math.Max(
+                    0,
+                    cantidadOriginalAProducir -
+                    productoIncompleto);
+
+            var cantidadObjetivoEmpaque =
+                RedondearCantidadPorEmbalaje(
+                    cantidadOriginalAProducir,
+                    piezasPorEmbalaje);
+
+            var cantidadProgramada =
+                Math.Max(
+                    0,
+                    cantidadObjetivoEmpaque -
+                    productoIncompleto); // NSQ_REDONDEO_EMBALAJE_POST_V1
+            if (productoIncompleto > cantidadOriginalAProducir) throw new InvalidOperationException($"El producto incompleto apartado ({productoIncompleto:N0}) supera la cantidad pendiente ({cantidadOriginalAProducir:N0}).");
+            if (cantidadProgramada <= 0) throw new InvalidOperationException("Después de considerar el producto incompleto apartado ya no existe cantidad nueva por producir.");
+>>>>>>> origin/Rama_Adrian
             vm.CantidadRequerida = cantidadRequerida;
             vm.CantidadOriginalAProducir = cantidadProgramada;
             vm.PiezasAProducir = cantidadProgramada;
@@ -1227,34 +1249,37 @@ WHERE CajaProduccionID=@CajaProduccionID AND Activo=1 AND EsProductoIncompleto=1
                 vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(sugeridaTx.Arranque, vm.HorasProgramadas.Value, trabajarDomingo);
                 var textoSugerencia = $"Programación colocada automáticamente en cola. Cambio: {sugeridaTx.Cambio:dd/MM/yyyy HH:mm}. Arranque: {sugeridaTx.Arranque:dd/MM/yyyy HH:mm}. {sugeridaTx.Motivo}";
                 vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? textoSugerencia : vm.Observaciones.Trim() + Environment.NewLine + textoSugerencia;
-                var operadoresEscala = await ObtenerOperadoresEscalaPorMaquinaFechaAsync(vm.MaquinaID.Value, vm.FechaInicioProgramada.Value, cn, sqlTx);
-                if (operadoresEscala.Any())
-                {
-                    var operadorPrincipal = operadoresEscala[0];
-                    var operadorAuxiliar = operadoresEscala.Skip(1).FirstOrDefault();
-                    vm.OperadorPrincipalID = operadorPrincipal.PersonaID;
-                    vm.OperadorAuxiliarID = operadorAuxiliar?.PersonaID;
-                    var textoOperadorEscala = $"Operador asignado automáticamente desde RRHH: {operadorPrincipal.NombreCompleto}" + (operadorAuxiliar != null ? $" | Auxiliar: {operadorAuxiliar.NombreCompleto}" : "") + $" | Turno: {operadorPrincipal.TurnoNombre}.";
-                    vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? textoOperadorEscala : vm.Observaciones.Trim() + Environment.NewLine + textoOperadorEscala;
-                }
-                else
-                {
-                    vm.OperadorPrincipalID = null;
-                    vm.OperadorAuxiliarID = null;
-                    var textoSinOperador = "Sin operador asignado desde RRHH para esta máquina y horario. La producción queda programada pendiente de asignación de operador.";
-                    vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? textoSinOperador : vm.Observaciones.Trim() + Environment.NewLine + textoSinOperador;
-                }
-                await CompletarDatosProgramaAsync(vm, cn, sqlTx);
+                // NSQ_OPERADORES_SOLO_PRODUCCION_V1
+                // Planeacion no decide personal. Fecha + Turno + Maquina se resuelve
+                // en Produccion mediante DDP.
+                vm.OperadorPrincipalID = null;
+                vm.OperadorAuxiliarID = null;
+await CompletarDatosProgramaAsync(vm, cn, sqlTx);
                 await CompletarVinculoOFExistenteAsync(vm, cn, sqlTx);
                 var programaId = await InsertarProgramaAsync(vm, usuarioId, cn, sqlTx);
-                await InsertarOperadoresProgramaAsync(programaId, vm, usuarioId, cn, sqlTx);
+                // NSQ_OPERADORES_SOLO_PRODUCCION_V1 - no persistir personal desde Planeacion.
                 await MarcarReleaseDetalleProgramadoAsync(vm.ReleaseDetalleID, programaId, usuarioId, cn, sqlTx);
+                // NSQ_LHRH_AUTO_V1
+                var programaParejaLhRhId =
+                    await ProgramarParejaLhRhAsync(
+                        programaId,
+                        vm,
+                        usuarioId,
+                        cn,
+                        sqlTx);
                 if (vm.SolicitudProduccionID.HasValue && vm.SolicitudProduccionDetalleID.HasValue)
                     await VincularOFManualConProgramaAsync(programaId, vm, usuarioId, cn, sqlTx);
                 await DesactivarReacomodoPlaneacionAsync(cn, sqlTx);
                 await tx.CommitAsync();
+<<<<<<< HEAD
                 TempData["Success"] = $"Cambio de molde programado correctamente por {vm.CantidadProgramada:N0} pieza(s).";
                 return RedirectToAction(nameof(Maquinas));
+=======
+                TempData["Success"] = vm.ProductoIncompletoApartado > 0
+                    ? $"Cambio de molde programado correctamente. Se usarán {vm.ProductoIncompletoApartado:N0} pieza(s) de etiqueta blanca y se producirán {vm.CantidadProgramada:N0}."
+                    : "Cambio de molde programado correctamente.";
+                return RedirectToAction(nameof(Index)); // NSQ_REDIRECT_INDEX_V1
+>>>>>>> origin/Rama_Adrian
             }
             catch (Exception ex)
             {
@@ -1915,6 +1940,8 @@ SELECT
     Nombre
 FROM dbo.ERP_Maquinas
 WHERE Activo = 1
+  AND UPPER(REPLACE(ISNULL(Codigo,N''),N' ',N'')) <> N'1200T'
+  AND UPPER(REPLACE(ISNULL(Nombre,N''),N' ',N'')) NOT LIKE N'%1200T%'
 ORDER BY Codigo;";
 
             await using var cmd = new SqlCommand(sql, cn);
@@ -2417,6 +2444,8 @@ SELECT
     ) AS Ocupada
 FROM dbo.ERP_Maquinas m
 WHERE m.Activo = 1
+  AND UPPER(REPLACE(ISNULL(m.Codigo,N''),N' ',N'')) <> N'1200T'
+  AND UPPER(REPLACE(ISNULL(m.Nombre,N''),N' ',N'')) NOT LIKE N'%1200T%'
   AND
   (
         @ParteID IS NULL

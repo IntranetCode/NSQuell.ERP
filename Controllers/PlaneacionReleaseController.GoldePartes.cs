@@ -22,6 +22,10 @@ public partial class PlaneacionReleaseController
     {
         return string.Equals(
                    templateCode,
+                   "GOLDE_MEXICO_WEEKLY_RELEASE",
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   templateCode,
                    "GOLDEN_WEEKLY_RELEASE",
                    StringComparison.OrdinalIgnoreCase) ||
                string.Equals(

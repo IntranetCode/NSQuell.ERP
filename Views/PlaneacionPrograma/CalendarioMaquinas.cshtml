@@ -87,7 +87,7 @@
 
             const statusBox = document.getElementById('calendarStatus');
             const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-            let snapMinutes = 30;
+            let snapMinutes = 60; // NSQ_CALENDARIO_LEGACY_FIX_V1
 
             function parseLocalDate(value) {
                 if (!value) return null;
@@ -321,7 +321,7 @@
             const timeline = new vis.Timeline(container, items, groups, options);
 
             async function saveMove(payload) {
-                const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionPrograma")', {
+                const response = await fetch('@Url.Action("ReprogramarCalendario", "PlaneacionCalendarioMaquinas")', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

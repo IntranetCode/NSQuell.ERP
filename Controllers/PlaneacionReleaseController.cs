@@ -164,24 +164,10 @@ ORDER BY r.FechaCreacion DESC;";
         {
             var usuarioId = ObtenerUsuarioID();
 
-            vm.NivelCriticidad = string.IsNullOrWhiteSpace(vm.NivelCriticidad)
-    ? "NORMAL"
-    : vm.NivelCriticidad.Trim().ToUpperInvariant();
+            vm.NivelCriticidad = "NORMAL";
+            vm.ComentarioCriticidad = null;
 
-            vm.ComentarioCriticidad = vm.ComentarioCriticidad?.Trim();
-
-            if (vm.NivelCriticidad != "NORMAL" &&
-                vm.NivelCriticidad != "CRITICO" &&
-                vm.NivelCriticidad != "URGENTE")
-            {
-                ModelState.AddModelError(nameof(vm.NivelCriticidad), "Selecciona un nivel de criticidad válido.");
-            }
-
-            if (vm.NivelCriticidad == "URGENTE" &&
-                string.IsNullOrWhiteSpace(vm.ComentarioCriticidad))
-            {
-                ModelState.AddModelError(nameof(vm.ComentarioCriticidad), "Captura un comentario para el release urgente.");
-            }
+            
 
             vm.Renglones = vm.Renglones
                 .Where(r =>
@@ -473,6 +459,10 @@ ORDER BY r.FechaCreacion DESC;";
 
                         switch (excelTemplate)
                         {
+                            case ReleaseExcelTemplate.GoldeMexicoWeeklyMatrix:
+                                await ImportarDocumentoGoldeMexicoSeguroAsync(bytes, item, usuarioId);
+                                break;
+
                             case ReleaseExcelTemplate.GoldeWeeklyMatrix:
                                 await ImportarDocumentoGoldeSeguroAsync(bytes, item, usuarioId);
                                 break;
@@ -859,6 +849,14 @@ ORDER BY r.FechaCreacion DESC;";
                 item,
                 usuarioId);
         }
+        private async Task ImportarDocumentoGoldeMexicoSeguroAsync(
+            byte[] bytes,
+            PlaneacionReleaseImportacionArchivoVm item,
+            int usuarioId)
+        {
+            var document = ReleaseExcelDocumentDetector.ParseGoldeMexico(bytes, item.Archivo);
+            await ImportarDocumentoExcelMatrizSeguroAsync(document, item, usuarioId);
+        }
         private async Task ImportarDocumentoGoldeSeguroAsync(
             byte[] bytes,
             PlaneacionReleaseImportacionArchivoVm item,
@@ -888,7 +886,8 @@ ORDER BY r.FechaCreacion DESC;";
                 : $"{document.Rows.Count} partes";
             item.Descripcion = document.TemplateCode switch
             {
-                "GOLDEN_WEEKLY_RELEASE" => "Matriz semanal GOLDE",
+                "GOLDE_MEXICO_WEEKLY_RELEASE" => "Matriz semanal GOLDE MEXICO",
+                "GOLDEN_WEEKLY_RELEASE" => "Matriz semanal GOLDE USA",
                 "NORMA_WEEKLY_RELEASE" => "Matriz semanal NORMA",
                 "AIR_THERMAL_MATERIAL_RELEASE" => "Material Release AIR THERMAL",
                 _ => "Release Excel"
@@ -1067,7 +1066,8 @@ ORDER BY r.FechaCreacion DESC;";
         {
             return templateCode switch
             {
-                "GOLDEN_WEEKLY_RELEASE" => "GOLDE",
+                "GOLDE_MEXICO_WEEKLY_RELEASE" => "GOLDE MEXICO",
+                "GOLDEN_WEEKLY_RELEASE" => "GOLDE USA",
                 "NORMA_WEEKLY_RELEASE" => "NORMA",
                 "AIR_THERMAL_MATERIAL_RELEASE" => "AIR THERMAL",
                 _ => templateCode
@@ -1080,7 +1080,16 @@ ORDER BY r.FechaCreacion DESC;";
         {
             string sql;
 
-            if (templateCode == "GOLDEN_WEEKLY_RELEASE")
+            if (templateCode == "GOLDE_MEXICO_WEEKLY_RELEASE")
+            {
+                sql = @"
+SELECT TOP (1) ClienteID
+FROM dbo.ERP_Clientes
+WHERE Activo = 1
+  AND (Codigo = N'GOLDE_MEXICO' OR UPPER(LTRIM(RTRIM(Nombre))) = N'GOLDE MEXICO')
+ORDER BY ClienteID;";
+            }
+            else if (templateCode == "GOLDEN_WEEKLY_RELEASE")
             {
                 sql = @"
 SELECT TOP (1) ClienteID
@@ -1190,7 +1199,8 @@ WHERE ReleaseID = @ReleaseID
             }
 
             if (!clienteId.HasValue ||
-                (templateCode != "GOLDEN_WEEKLY_RELEASE" &&
+                (templateCode != "GOLDE_MEXICO_WEEKLY_RELEASE" &&
+                 templateCode != "GOLDEN_WEEKLY_RELEASE" &&
                  templateCode != "NORMA_WEEKLY_RELEASE" &&
                  templateCode != "AIR_THERMAL_MATERIAL_RELEASE"))
             {
@@ -5321,6 +5331,31 @@ WHERE ClienteID = @ClienteID
 
                     var archivoGuardado = await GuardarDocumentoOriginalReleaseAsync(bytes, documento.Archivo);
                     var vm = documento.ReleasePreparado;
+                    // RELEASE_UPDATE_SAVE_V1_0
+                    if (documento.ReleaseID.HasValue)
+                    {
+                        var resumenActualizacion =
+                            await ActualizarReleaseExistenteDesdeDocumentoAsync(
+                                documento,
+                                archivoGuardado,
+                                usuarioId,
+                                cn,
+                                tx);
+
+                        await tx.CommitAsync();
+
+                        documento.Estado = ReleaseValidacionEstados.Guardado;
+                        documento.FolioRelease = resumenActualizacion.FolioRelease;
+                        documento.Mensaje = resumenActualizacion.ConstruirMensaje();
+
+                        item.Estado = "ACTUALIZADO";
+                        item.ReleaseID = resumenActualizacion.ReleaseID;
+                        item.FolioRelease = resumenActualizacion.FolioRelease;
+                        item.ArchivoGuardado = archivoGuardado;
+                        item.Mensaje = documento.Mensaje;
+
+                        continue;
+                    }
 
                     vm.FolioRelease = await GenerarFolioReleaseAsync(cn, tx);
                     vm.ArchivoOrigenNombre = documento.Archivo;
@@ -5352,7 +5387,8 @@ WHERE ClienteID = @ClienteID
                             cn,
                             tx);
                     }
-                    else if (documento.Plantilla == "GOLDEN_WEEKLY_RELEASE" ||
+                    else if (documento.Plantilla == "GOLDE_MEXICO_WEEKLY_RELEASE" ||
+                             documento.Plantilla == "GOLDEN_WEEKLY_RELEASE" ||
                              documento.Plantilla == "NORMA_WEEKLY_RELEASE" ||
                              documento.Plantilla == "AIR_THERMAL_MATERIAL_RELEASE")
                     {
@@ -5407,6 +5443,12 @@ WHERE ClienteID = @ClienteID
             ReleaseValidacionDocumentoVm documento,
             byte[] bytes)
         {
+            // GENERIC_RELEASE_ANALYZER_V1_1
+            // Flujo:
+            // 1) parser especializado conocido
+            // 2) GOLDE MEXICO directo para no depender de Detect()
+            // 3) fallback generico contra ERP_Partes
+            // 4) hidratar siempre los datos maestros antes de mostrar vista previa
             var extension = Path.GetExtension(documento.Archivo).ToLowerInvariant();
 
             await using var cn = new SqlConnection(ConnectionString);
@@ -5420,43 +5462,114 @@ WHERE ClienteID = @ClienteID
                     var template = ReleasePdfDocumentDetector.Detect(bytes);
 
                     if (template == ReleasePdfTemplate.HufSupplierSchedule)
+                    {
                         await PrepararHufValidacionAsync(documento, bytes, cn, tx);
+                    }
                     else if (template == ReleasePdfTemplate.VeritasSchedule)
+                    {
                         await PrepararVeritasValidacionAsync(documento, bytes, cn, tx);
+                    }
                     else
                     {
-                        documento.Estado = ReleaseValidacionEstados.NoSoportado;
-                        documento.Mensaje = "PDF no soportado. Se reconocen HUF y VERITAS.";
+                        await PrepararGenericoValidacionAsync(
+                            documento,
+                            bytes,
+                            extension,
+                            cn,
+                            tx);
                     }
                 }
-                else if (extension == ".xlsx" || extension == ".xls" || extension == ".xlsm")
+                else if (extension == ".xlsx" ||
+                         extension == ".xls" ||
+                         extension == ".xlsm")
                 {
-                    var template = ReleaseExcelDocumentDetector.Detect(bytes);
+                    ReleaseExcelDocument? parsed = null;
 
-                    ReleaseExcelDocument? parsed = template switch
+                    try
                     {
-                        ReleaseExcelTemplate.GoldeWeeklyMatrix => ReleaseExcelDocumentDetector.ParseGolde(bytes, documento.Archivo),
-                        ReleaseExcelTemplate.NormaWeeklyMatrix => ReleaseExcelDocumentDetector.ParseNorma(bytes),
-                        ReleaseExcelTemplate.AirThermalMaterialRelease => ReleaseExcelDocumentDetector.ParseAirThermal(bytes, documento.Archivo),
-                        _ => null
-                    };
+                        parsed = ReleaseExcelDocumentDetector.ParseGoldeMexico(
+                            bytes,
+                            documento.Archivo);
+                    }
+                    catch
+                    {
+                        parsed = null;
+                    }
 
                     if (parsed == null)
                     {
-                        documento.Estado = ReleaseValidacionEstados.NoSoportado;
-                        documento.Mensaje = "Excel no soportado. Se reconocen GOLDE, NORMA y AIR THERMAL.";
+                        var template = ReleaseExcelDocumentDetector.Detect(bytes);
+
+                        parsed = template switch
+                        {
+                            ReleaseExcelTemplate.GoldeWeeklyMatrix =>
+                                ReleaseExcelDocumentDetector.ParseGolde(
+                                    bytes,
+                                    documento.Archivo),
+
+                            ReleaseExcelTemplate.NormaWeeklyMatrix =>
+                                ReleaseExcelDocumentDetector.ParseNorma(bytes),
+
+                            ReleaseExcelTemplate.AirThermalMaterialRelease =>
+                                ReleaseExcelDocumentDetector.ParseAirThermal(
+                                    bytes,
+                                    documento.Archivo),
+
+                            _ => null
+                        };
+                    }
+
+                    if (parsed != null)
+                    {
+                        await PrepararExcelValidacionAsync(
+                            documento,
+                            parsed,
+                            cn,
+                            tx);
                     }
                     else
                     {
-                        await PrepararExcelValidacionAsync(documento, parsed, cn, tx);
+                        await PrepararGenericoValidacionAsync(
+                            documento,
+                            bytes,
+                            extension,
+                            cn,
+                            tx);
                     }
+                }
+                else if (extension == ".csv")
+                {
+                    await PrepararGenericoValidacionAsync(
+                        documento,
+                        bytes,
+                        extension,
+                        cn,
+                        tx);
                 }
                 else
                 {
                     documento.Estado = ReleaseValidacionEstados.NoSoportado;
-                    documento.Mensaje = "Formato no soportado. Usa PDF, XLSX, XLS o XLSM.";
+                    documento.Mensaje =
+                        "Formato no soportado. Usa PDF, XLSX, XLS, XLSM o CSV.";
                 }
 
+                if (documento.ReleasePreparado != null &&
+                    documento.ReleasePreparado.Renglones != null &&
+                    documento.ReleasePreparado.Renglones.Count > 0)
+                {
+                    await HidratarVistaPreviaDesdeERPAsync(
+                        documento.ReleasePreparado,
+                        cn,
+                        tx);
+                }
+
+                                // RELEASE_UPDATE_DETECT_V1_0
+                await DetectarActualizacionExistenteValidacionAsync(
+                    documento,
+                    cn,
+                    tx);
+
+// Analizar nunca guarda cambios en SQL.
                 await tx.RollbackAsync();
             }
             catch
@@ -5466,7 +5579,9 @@ WHERE ClienteID = @ClienteID
             }
         }
 
-        private async Task PrepararHufValidacionAsync(
+
+        // GENERIC_RELEASE_ANALYZER_V1_1_END
+private async Task PrepararHufValidacionAsync(
             ReleaseValidacionDocumentoVm documento,
             byte[] bytes,
             SqlConnection cn,

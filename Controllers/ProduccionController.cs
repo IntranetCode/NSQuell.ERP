@@ -1322,6 +1322,31 @@ VALUES
                     return RedirectToAction(nameof(Index));
                 }
 
+                // NSQ_PERSONAL_PROGRAMADO_INICIAR_V30
+                var personalProgramado =
+                    await ObtenerPersonalProgramadoProduccionAsync(
+                        programaProduccionId,
+                        DateTime.Now,
+                        programa.FechaInicioProgramada,
+                        cn,
+                        tx);
+
+                if (personalProgramado != null)
+                {
+                    if (!operadorId.HasValue &&
+                        string.IsNullOrWhiteSpace(operadorNombre) &&
+                        personalProgramado.OperadorID.HasValue)
+                    {
+                        operadorId = personalProgramado.OperadorID;
+                    }
+
+                    if (!operadorAuxiliarId.HasValue &&
+                        string.IsNullOrWhiteSpace(operadorAuxiliarNombre) &&
+                        personalProgramado.AuxiliarID.HasValue)
+                    {
+                        operadorAuxiliarId = personalProgramado.AuxiliarID;
+                    }
+                }
                 const string sqlMaquinaOcupada = @"
 SELECT TOP (1)
     e.EjecucionProduccionID,
@@ -1687,7 +1712,7 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 // NSQ_ESCALA_OPERADORES_V5_END
 
                 // NSQ_TECNICO_PRODUCCION_PREP_V2
-                int? tecnicoProduccionFinalId = null;
+                int? tecnicoProduccionFinalId = personalProgramado?.TecnicoID; // NSQ_PERSONAL_PROGRAMADO_TECNICO_V30
 
                 var tecnicoProduccionIdTexto =
                     Request.Form["tecnicoProduccionId"]

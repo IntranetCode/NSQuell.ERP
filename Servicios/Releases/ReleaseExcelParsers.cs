@@ -12,7 +12,8 @@ public enum ReleaseExcelTemplate
     Unknown = 0,
     GoldeWeeklyMatrix = 1,
     NormaWeeklyMatrix = 2,
-    AirThermalMaterialRelease = 3
+    AirThermalMaterialRelease = 3,
+    GoldeMexicoWeeklyMatrix = 4
 }
 
 public sealed class ReleaseExcelDocument
@@ -67,6 +68,12 @@ public static class ReleaseExcelDocumentDetector
         return ReleaseExcelTemplate.Unknown;
     }
 
+    public static ReleaseExcelDocument ParseGoldeMexico(
+        byte[] bytes,
+        string? fileName = null)
+    {
+        return GoldeMexicoReleaseExcelParser.Parse(bytes, fileName);
+    }
     public static ReleaseExcelDocument ParseGolde(
         byte[] bytes,
         string? fileName = null)

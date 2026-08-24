@@ -287,7 +287,7 @@
                         <div class="text-muted small">Los pendientes pueden vincularse escribiendo el número de parte ERP.</div>
                     </div>
                     <button type="button" id="openConfirm" class="btn btn-main px-4" data-bs-toggle="modal" data-bs-target="#confirmModal" @(Model.Validados == 0 ? "disabled" : "")>
-                        <i class="fa-solid fa-floppy-disk me-1"></i>Guardar documentos validados
+                        <i class="fa-solid fa-floppy-disk me-1"></i>Guardar / actualizar documentos
                     </button>
                 </div>
             </div>
@@ -306,7 +306,19 @@
                                 }
                                 else { <span class="text-muted">—</span> }
                             </td>
-                            <td><span class="badge @Badge(documento.Estado)">@EstadoTexto(documento.Estado)</span></td>
+                            <td>
+                                @* RELEASE_UPDATE_BADGE_V1_0 *@
+                                @if (documento.Estado == ERP.NSQuell.Models.ReleaseValidacionEstados.Validado &&
+                                     documento.ReleaseID.HasValue)
+                                {
+                                    <span class="badge text-bg-info">Actualización</span>
+                                    <div class="small text-primary fw-bold mt-1">Release #@documento.ReleaseID</div>
+                                }
+                                else
+                                {
+                                    <span class="badge @Badge(documento.Estado)">@EstadoTexto(documento.Estado)</span>
+                                }
+                            </td>
                             <td class="file-name">
                                 <button type="button"
                                         class="file-detail-link"

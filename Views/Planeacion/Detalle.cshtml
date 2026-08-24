@@ -149,8 +149,38 @@
 
 @section Scripts {
     <script>
+        // NSQ_OF_PRINT_ISOLATED_V19
         function imprimirOF() {
-            window.print();
+            const printArea = document.querySelector('.print-area');
+            if (!printArea) {
+                window.print();
+                return;
+            }
+
+            const originalParent = printArea.parentNode;
+            const originalNext = printArea.nextSibling;
+            let restored = false;
+
+            function restorePrintArea() {
+                if (restored) return;
+                restored = true;
+                document.body.classList.remove('nsq-of-printing');
+
+                if (originalParent) {
+                    originalParent.insertBefore(printArea, originalNext);
+                }
+            }
+
+            document.body.appendChild(printArea);
+            document.body.classList.add('nsq-of-printing');
+            window.addEventListener('afterprint', restorePrintArea, { once: true });
+
+            try {
+                window.print();
+            }
+            finally {
+                window.setTimeout(restorePrintArea, 0);
+            }
         }
     </script>
 }

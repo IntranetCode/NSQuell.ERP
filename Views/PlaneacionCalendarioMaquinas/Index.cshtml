@@ -391,12 +391,12 @@
             const minutos = porcentaje * totalMinutosPeriodo;
 
             const fecha = new Date(inicioPeriodo.getTime() + minutos * 60000);
-            // Se ajusta a 15 minutos para respetar cola sin crear huecos grandes.
-            return snapToMinutes(fecha, 15);
+            // Se ajusta a 60 minutos: los movimientos de Planeación se realizan por hora.
+            return snapToMinutes(fecha, 60); // NSQ_DROP_HORA_EXACTA_V40
         }
 
         function puedeArrastrar(block) {
-            return !modoProduccion && block.dataset.puedeMover === 'true';
+            return !modoProduccion && '@Model.VistaNormalizada'.toLowerCase() !== 'mes' && block.dataset.puedeMover === 'true'; // NSQ_MES_SIN_DRAG_V40
         }
 
 
@@ -1961,3 +1961,195 @@ else
         </div>
     </div>
 </div>
+
+@* NSQ_CALENDAR_HEADER_V30 *@
+<style>
+    .timeline-header .days .nsq-hour-ruler-v30 {
+        grid-column: 1 / -1;
+        display: grid;
+        background: #eef4fb;
+        border-top: 1px solid #d7e1ee;
+    }
+    .timeline-header .days .nsq-hour-cell-v30 {
+        min-width: 0;
+        padding: 4px 0;
+        border-left: 1px solid #d7e1ee;
+        text-align: center;
+        color: #344054;
+        font-size: .62rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+    .timeline-header .days .nsq-hour-cell-v30.day-start {
+        border-left: 2px solid #7d8da6;
+        color: #004aad;
+        background: #e4efff;
+    }
+    .nsq-drop-hour-v30 {
+        position: fixed;
+        z-index: 99999;
+        display: none;
+        pointer-events: none;
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: #102a56;
+        color: #fff;
+        font-size: .78rem;
+        font-weight: 900;
+        box-shadow: 0 8px 24px rgba(16,42,86,.28);
+    }
+    .nsq-month-hint-v30 {
+        grid-column: 1 / -1;
+        padding: 5px 8px;
+        background: #fff7ed;
+        border-top: 1px solid #fed7aa;
+        color: #b54708;
+        font-size: .7rem;
+        font-weight: 850;
+        text-align: center;
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const vista = '@Model.VistaNormalizada'.toLowerCase();
+    const totalDiasV30 = @totalDias;
+    const inicioV30 = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+    const finV30 = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+    const days = document.querySelector('.timeline-header .days');
+    const timeline = document.querySelector('.timeline');
+    const machineHead = document.querySelector('.timeline-header .machine-head');
+
+    document.querySelectorAll('.nsq-hour-ruler-v30,.nsq-month-hint-v30').forEach(x => x.remove());
+
+    const mostrarHoras = vista === 'dia' || vista === 'semana' || (vista === 'rango' && totalDiasV30 <= 7);
+
+    if (days && mostrarHoras) {
+        const totalHoras = Math.max(24, totalDiasV30 * 24);
+        const ruler = document.createElement('div');
+        ruler.className = 'nsq-hour-ruler-v30';
+        ruler.style.gridTemplateColumns = `repeat(${totalHoras}, minmax(34px, 1fr))`;
+
+        for (let index = 0; index < totalHoras; index++) {
+            const hour = index % 24;
+            const cell = document.createElement('span');
+            cell.className = 'nsq-hour-cell-v30' + (hour === 0 ? ' day-start' : '');
+            cell.textContent = String(hour).padStart(2, '0');
+            cell.title = `${String(hour).padStart(2, '0')}:00`;
+            ruler.appendChild(cell);
+        }
+        days.appendChild(ruler);
+
+        if (timeline && machineHead) {
+            const machineWidth = Math.max(150, Math.ceil(machineHead.getBoundingClientRect().width));
+            const hourWidth = vista === 'dia' ? 48 : 34;
+            timeline.style.minWidth = `${machineWidth + (totalHoras * hourWidth)}px`;
+        }
+    }
+    else if (days && vista === 'mes') {
+        const hint = document.createElement('div');
+        hint.className = 'nsq-month-hint-v30';
+        hint.textContent = 'Vista mensual: panorama por día. Para mover una OF a una hora exacta usa Día o Semana.';
+        days.appendChild(hint);
+    }
+
+    const badge = document.createElement('div');
+    badge.className = 'nsq-drop-hour-v30';
+    document.body.appendChild(badge);
+
+    function snappedDate(track, event) {
+        const rect = track.getBoundingClientRect();
+        if (!rect.width) return null;
+        const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+        const pct = x / rect.width;
+        const raw = new Date(inicioV30.getTime() + pct * (finV30 - inicioV30));
+        const base = new Date(raw.getFullYear(), raw.getMonth(), raw.getDate(), raw.getHours(), 0, 0, 0);
+        if (raw.getMinutes() >= 30) base.setHours(base.getHours() + 1);
+        return base;
+    }
+
+    document.addEventListener('dragover', function (event) {
+        if (vista === 'mes') return;
+        const track = event.target?.closest?.('.track');
+        if (!track) {
+            badge.style.display = 'none';
+            return;
+        }
+        const date = snappedDate(track, event);
+        if (!date) return;
+        const pad = n => String(n).padStart(2, '0');
+        badge.textContent = `${pad(date.getDate())}/${pad(date.getMonth()+1)} ${pad(date.getHours())}:00`;
+        badge.style.left = `${Math.min(window.innerWidth - 150, event.clientX + 14)}px`;
+        badge.style.top = `${Math.max(8, event.clientY - 42)}px`;
+        badge.style.display = 'block';
+    });
+
+    ['drop','dragend'].forEach(name => {
+        document.addEventListener(name, () => { badge.style.display = 'none'; });
+    });
+});
+</script>
+@* NSQ_WEEK_COMPACT_HOURS_V31 *@
+<style>
+    .timeline-header .days .nsq-hour-ruler-v31 {
+        grid-column: 1 / -1;
+        display: grid;
+        background: #eef4fb;
+        border-top: 1px solid #d7e1ee;
+        overflow: hidden;
+    }
+    .timeline-header .days .nsq-hour-cell-v31 {
+        min-width: 0;
+        padding: 2px 0;
+        border-left: 1px solid #d7e1ee;
+        text-align: center;
+        color: #344054;
+        font-size: .48rem;
+        font-weight: 900;
+        line-height: 1;
+        overflow: hidden;
+    }
+    .timeline-header .days .nsq-hour-cell-v31.day-start {
+        border-left: 2px solid #7d8da6;
+        color: #004aad;
+        background: #e4efff;
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const vista31 = '@Model.VistaNormalizada'.toLowerCase();
+    const dias31 = @totalDias;
+    const days31 = document.querySelector('.timeline-header .days');
+    const timeline31 = document.querySelector('.timeline');
+    const machine31 = document.querySelector('.timeline-header .machine-head');
+
+    document.querySelectorAll('.nsq-hour-ruler-v30,.nsq-hour-ruler-v31').forEach(x => x.remove());
+
+    const mostrar31 = vista31 === 'dia' || vista31 === 'semana' || (vista31 === 'rango' && dias31 <= 7);
+    if (!days31 || !mostrar31) return;
+
+    const totalHoras31 = Math.max(24, dias31 * 24);
+    const ruler31 = document.createElement('div');
+    ruler31.className = 'nsq-hour-ruler-v31';
+    ruler31.style.gridTemplateColumns = `repeat(${totalHoras31}, minmax(0, 1fr))`;
+
+    for (let i=0; i<totalHoras31; i++) {
+        const h=i%24;
+        const cell=document.createElement('span');
+        cell.className='nsq-hour-cell-v31'+(h===0?' day-start':'');
+        cell.textContent=String(h).padStart(2,'0');
+        cell.title=String(h).padStart(2,'0')+':00';
+        ruler31.appendChild(cell);
+    }
+    days31.appendChild(ruler31);
+
+    if (timeline31) {
+        if (vista31 === 'dia' && machine31) {
+            const mw=Math.max(150,Math.ceil(machine31.getBoundingClientRect().width));
+            timeline31.style.minWidth=`${mw + (24 * 48)}px`;
+        } else {
+            // Semana vuelve al ancho natural anterior; 168 horas se comprimen.
+            timeline31.style.minWidth='';
+        }
+    }
+});
+</script>
