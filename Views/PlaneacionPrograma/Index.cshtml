@@ -21,7 +21,12 @@
     // PT sigue fuera de este bloqueo. MP y embalajes usan disponibilidad neta de reservas.
     public static bool StockOk(PlaneacionProgramaNecesidadVm x)
     {
-        return MpOk(x) && EmbalajeOk(x);
+        // NSQ_ABASTO_TEMP_BYPASS_V1
+        // TEMPORAL: MP y embalaje se conservan como datos informativos,
+        // pero su disponibilidad NO bloquea Programar molde.
+        // Para reactivar abastecimiento, volver a:
+        // return MpOk(x) && EmbalajeOk(x);
+        return true;
     }
 
     public static bool MpOk(PlaneacionProgramaNecesidadVm x)
@@ -296,7 +301,7 @@
     new SeccionUi
     {
         Titulo = "Listos para Programa Cambio de Molde",
-        Sub = "Renglones con datos técnicos completos y MP/embalaje disponibles después de reservas activas.",
+        Sub = "Renglones con datos técnicos completos. La disponibilidad de MP y embalaje es informativa y temporalmente no bloquea la programación.",
         Items = listos,
         Open = true,
         Icono = "fa-circle-check",
@@ -709,8 +714,8 @@
 
                     <div class="col-12 d-flex gap-2 flex-wrap">
                         <a class="quick-btn quick-ok" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloListos="true"><i class="fa-solid fa-circle-check"></i>Listos cambio molde</a>
-                        <a class="quick-btn quick-warn" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteAbasto="true"><i class="fa-solid fa-truck-ramp-box"></i>Pendiente abasto</a>
-                        <a class="quick-btn" asp-controller="PlaneacionPrograma" asp-action="Index"><i class="fa-solid fa-rotate-left"></i>Limpiar</a>
+                        @* NSQ_ABASTO_TEMP_BYPASS_V1: filtro Pendiente abasto oculto temporalmente. *@
+<a class="quick-btn" asp-controller="PlaneacionPrograma" asp-action="Index"><i class="fa-solid fa-rotate-left"></i>Limpiar</a>
                         <button type="button" class="quick-btn" id="btnCerrarTodo"><i class="fa-solid fa-down-left-and-up-right-to-center"></i>Cerrar todo</button>
                     </div>
 

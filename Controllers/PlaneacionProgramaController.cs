@@ -309,7 +309,9 @@ ORDER BY ISNULL(c.Nombre,r.ClienteNombre),d.FechaRequerida,d.NumeroParte,d.Rengl
                     HorasSecado = rd["HorasSecado"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasSecado"]),
                     HorasSecadoTexto = rd["HorasSecadoTexto"] as string
                 };
-                if (soloListos && !(!necesidad.ProgramaProduccionID.HasValue && (necesidad.PiezasAProducir ?? 0) > 0 && !faltaMaterial && !faltaMaquina && !faltaMolde && !faltaCavidades && !faltaCiclo && !faltaObjetivo && !faltaPeso && !faltaEmbalaje && !faltaMPStock && !faltaEmbalajeStock)) continue;
+                // NSQ_ABASTO_TEMP_BYPASS_CONTROLLER_V1
+                // TEMPORAL: falta de stock MP/embalaje NO impide considerar el renglon "listo".
+                if (soloListos && !(!necesidad.ProgramaProduccionID.HasValue && (necesidad.PiezasAProducir ?? 0) > 0 && !faltaMaterial && !faltaMaquina && !faltaMolde && !faltaCavidades && !faltaCiclo && !faltaObjetivo && !faltaPeso && !faltaEmbalaje)) continue;
                 if (soloPendienteAbasto && !(!necesidad.ProgramaProduccionID.HasValue && (necesidad.PiezasAProducir ?? 0) > 0 && !faltaMaterial && !faltaMaquina && !faltaMolde && !faltaCavidades && !faltaCiclo && !faltaObjetivo && !faltaPeso && !faltaEmbalaje && (faltaMPStock || faltaEmbalajeStock))) continue;
                 if (soloPendienteDatosTecnicos && !((necesidad.PiezasAProducir ?? 0) > 0 && (faltaMaterial || faltaMaquina || faltaMolde || faltaCavidades || faltaCiclo || faltaObjetivo || faltaPeso || faltaEmbalaje))) continue;
                 vm.Necesidades.Add(necesidad);
