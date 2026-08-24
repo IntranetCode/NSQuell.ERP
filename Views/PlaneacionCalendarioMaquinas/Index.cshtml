@@ -889,6 +889,7 @@
             });
         });
     </script>
+    <script src="~/js/PlaneacionPrograma/calendario-abrir-tablero-maquina-v1.js" asp-append-version="true"></script>
     <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
 }
 
@@ -1326,7 +1327,16 @@ else
 
                     <div class="machine-row calendar-machine-row"
                          data-search="@search">
-                        <div class="machine-info" data-nsq-style="height:@(rowHeight)px">
+                        <div class="machine-info"
+                             data-open-machine-board
+                             data-maquina-id="@maquina.MaquinaID"
+                             data-fecha-desde="@inicioPeriodo.ToString("yyyy-MM-dd")"
+                             data-fecha-hasta="@finPeriodo.AddDays(-1).ToString("yyyy-MM-dd")"
+                             data-board-url="@Url.Action("Maquinas", "PlaneacionPrograma")"
+                             role="button"
+                             tabindex="0"
+                             title="Abrir tablero de @maquina.Codigo"
+                             data-nsq-marker="NSQ_GENERAL_MACHINE_CLICK_V1" data-nsq-style="height:@(rowHeight)px">
                             <div class="machine-inline" title="@maquina.Codigo - @maquina.Nombre">
                                 <span class="machine-code">@maquina.Codigo</span>
                                 <span class="machine-name">@maquina.Nombre</span>
@@ -2153,3 +2163,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+
+<style>
+/* NSQ_GENERAL_MACHINE_CLICK_STYLE_V1 */
+.machine-info[data-open-machine-board] {
+    cursor: pointer;
+    transition: background-color .15s ease, box-shadow .15s ease;
+}
+.machine-info[data-open-machine-board]:hover,
+.machine-info[data-open-machine-board]:focus-visible {
+    background: #eef6ff;
+    box-shadow: inset -3px 0 0 #0759a8;
+    outline: none;
+}
+</style>

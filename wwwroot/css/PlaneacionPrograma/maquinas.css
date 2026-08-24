@@ -1061,3 +1061,105 @@
 
 /* Estilos inline estaticos migrados desde la vista. */
 [data-nsq-style-id="nsq-si-e6d79bbd39"] { font-size: .45rem !important; }
+/* NSQ_MACHINE_BOARD_SCROLL_DRAG_V1 */
+.modal-fullscreen .modal-content {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-fullscreen .modal-header-pro {
+    flex: 0 0 auto;
+}
+
+.modal-fullscreen .modal-body-pro {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.machine-board-track {
+    background-image:
+        repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc((100% / 192) - 1px),
+            rgba(6, 56, 117, .08) calc((100% / 192) - 1px),
+            rgba(6, 56, 117, .08) calc(100% / 192)
+        );
+}
+
+.machine-board-block {
+    cursor: grab;
+    user-select: none;
+}
+
+.machine-board-block:active,
+.machine-board-block.is-dragging {
+    cursor: grabbing;
+    opacity: .68;
+    z-index: 20;
+}
+
+.machine-board-status {
+    margin-bottom: 12px;
+    border: 1px solid #b2ddff;
+    border-radius: 12px;
+    background: #eef6ff;
+    color: #0759a8;
+    padding: 9px 12px;
+    font-size: .78rem;
+    font-weight: 800;
+}
+
+.machine-board-status.working {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #b54708;
+}
+
+.machine-board-status.success {
+    background: #ecfdf3;
+    border-color: #abefc6;
+    color: #067647;
+}
+
+.machine-board-status.error {
+    background: #fef3f2;
+    border-color: #fecdca;
+    color: #b42318;
+}
+
+.machine-board-drop-indicator {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #f79009;
+    z-index: 50;
+    pointer-events: none;
+    display: none;
+}
+
+.machine-board-drop-indicator.show {
+    display: block;
+}
+
+.machine-board-drop-indicator span {
+    position: absolute;
+    top: 4px;
+    left: 5px;
+    white-space: nowrap;
+    border-radius: 8px;
+    background: #111827;
+    color: #fff;
+    padding: 4px 7px;
+    font-size: .68rem;
+    font-weight: 900;
+    box-shadow: 0 5px 14px rgba(0,0,0,.2);
+}

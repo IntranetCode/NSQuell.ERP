@@ -288,6 +288,7 @@
             document.getElementById('formGenerarOF').submit();
         });
     </script>
+    <script src="~/js/PlaneacionPrograma/maquina-tablero-interactivo-v1.js" asp-append-version="true"></script>
     <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
 }
 
@@ -299,7 +300,10 @@
 
     @* PLANEACION_NAVBAR_INJECT_V1_0 *@
     @await Html.PartialAsync("_PlaneacionNavbar")
-    <div class="page">
+    
+<form id="machineBoardTokenForm" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form><div class="page">
         <section class="hero">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
@@ -427,7 +431,7 @@
                     <div class="machine-actions"><button type="button" class="btn btn-main" data-bs-toggle="modal" data-bs-target="#@modalId"><i class="fa-solid fa-up-right-and-down-left-from-center me-1"></i>Abrir tablero</button></div>
                 </article>
 
-                <div class="modal fade" id="@modalId" tabindex="-1" aria-hidden="true">
+                <div class="modal fade" id="@modalId" tabindex="-1" aria-hidden="true" data-machine-board-modal data-maquina-id="@maq.MaquinaID" data-nsq-marker="NSQ_MACHINE_BOARD_MODAL_V1">
                     <div class="modal-dialog modal-fullscreen">
                         <div class="modal-content">
                             <div class="modal-header-pro">
@@ -480,7 +484,11 @@
                                                             }
                                                         </div>
 
-                                                        <div class="timeline-track">
+                                                        <div class="timeline-track machine-board-track"
+                                             data-machine-board-track
+                                             data-maquina-id="@maq.MaquinaID"
+                                             data-inicio-periodo="@RangoInicio().ToString("yyyy-MM-ddTHH:mm:ss")"
+                                             data-fin-periodo="@RangoFin().ToString("yyyy-MM-ddTHH:mm:ss")" data-nsq-marker="NSQ_MACHINE_BOARD_TRACK_V1">
                                                             <div class="timeline-day-grid" data-nsq-style="grid-template-columns: repeat(@columnasTimeline, minmax(120px, 1fr));">
                                                                 @foreach (var dia in diasTimeline)
                                                                 {
@@ -500,7 +508,12 @@
                                                                 var carrilTimeline = idxTimeline % 5;
                                                                 var topTimeline = 18 + (carrilTimeline * 42);
 
-                                                                <div class="timeline-item @TimelineClass(p)"
+                                                                <div class="timeline-item @TimelineClass(p) machine-board-block"
+                                                                     draggable="true"
+                                                                     data-programa-id="@p.ProgramaProduccionID"
+                                                                     data-maquina-id="@maq.MaquinaID"
+                                                                     data-estatus-id="@p.EstatusID"
+                                                                     data-nsq-marker="NSQ_MACHINE_BOARD_BLOCK_V1"
                                                                      data-nsq-style="@TimelineStyle(p) top:@(topTimeline)px;"
                                                                      title="@Valor(p.ReferenciaSAP ?? p.NumeroParte) · @FechaHora(p.FechaInicioProgramada) - @FechaHora(p.FechaFinProgramada)">
                                                                     <span class="timeline-ref">@Valor(p.ReferenciaSAP ?? p.NumeroParte)</span>

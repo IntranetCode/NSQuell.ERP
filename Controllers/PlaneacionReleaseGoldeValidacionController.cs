@@ -184,8 +184,9 @@ ORDER BY
                         continue;
 
                     var match =
-                        await BuscarParteGoldeAsync(
+                        await BuscarParteGoldeSeguraAsync( // NSQ_GOLDE_SAFE_MATCH_CALL_V1
                             referencia,
+                            renglon.DesignacionDescripcionSAP,
                             documento.ClienteID!.Value,
                             cn,
                             tx);
