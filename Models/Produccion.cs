@@ -698,7 +698,6 @@ public sealed class ProduccionEjecucionVm
 public sealed class ProduccionRegistroHoraVm
 {
     public int RegistroHoraID { get; set; }
-
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
@@ -732,19 +731,19 @@ public sealed class ProduccionRegistroHoraVm
     // PRODUCCIÓN REAL MEDIANTE CONTADOR DE MÁQUINA
     // =========================================================
     public int? PiezasCalculadasContador { get; set; }
-
     public decimal? MinutosProductivos { get; set; }
 
+    // =========================================================
+    // TIEMPO EXTRA
+    // =========================================================
     public bool EsTiempoExtra { get; set; }
-
     public string? TipoBloque { get; set; }
+    public int? TiempoExtraID { get; set; }
+    public int? NumeroCorteTiempoExtra { get; set; }
 
     public bool TieneCambioConfiguracion { get; set; }
-
     public bool TieneReinicioContador { get; set; }
 
-    // Una hora puede tener varios segmentos:
-    // paro, cambio de cavidades, cambio de ciclo, reinicio, etc.
     public List<ProduccionRegistroHoraSegmentoVm> Segmentos { get; set; } = new();
 
     public long? ContadorInicial =>
@@ -767,8 +766,11 @@ public sealed class ProduccionRegistroHoraVm
         Segmentos
             .Where(x => x.Activo)
             .Sum(x => x.CiclosPeriodo);
+
     public int TotalCapturado =>
-        CantidadOK + CantidadSospechosa + CantidadScrap;
+        CantidadOK +
+        CantidadSospechosa +
+        CantidadScrap;
 
     public string RangoHora =>
         $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
@@ -778,8 +780,19 @@ public sealed class ProduccionRegistroHoraVm
         CantidadSospechosa > 0 ||
         CantidadScrap > 0 ||
         !string.IsNullOrWhiteSpace(Observaciones);
-}
 
+    public bool EsCorteTiempoExtra =>
+        EsTiempoExtra &&
+        TiempoExtraID.HasValue &&
+        NumeroCorteTiempoExtra.HasValue;
+
+    public string TipoBloqueTexto =>
+        EsCorteTiempoExtra
+            ? $"Tiempo extra · corte #{NumeroCorteTiempoExtra}"
+            : EsTiempoExtra
+                ? "Tiempo extra"
+                : "Producción normal";
+}
 public sealed class ProduccionParoVm
 {
     public int ParoID { get; set; }
@@ -1274,20 +1287,25 @@ public sealed class ProduccionRegistroHoraPostVm
     public string HoraInicio { get; set; } = string.Empty;
     public string HoraFin { get; set; } = string.Empty;
 
-    
     public long? ContadorMaquinaActual { get; set; }
+
+    public int CantidadOK { get; set; }
+    public bool OkModificadoManual { get; set; }
+
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+
 
     public bool EsTiempoExtra { get; set; }
     public int? MinutosTiempoExtra { get; set; }
 
-    
-    public int CantidadOK { get; set; }
-    public int CantidadSospechosa { get; set; }
-    public int CantidadScrap { get; set; }
+    public int? TiempoExtraID { get; set; }
+    public int? NumeroCorteTiempoExtra { get; set; }
+
+    public bool FinalizarTiempoExtra { get; set; }
 
     public string? Observaciones { get; set; }
 }
-
 public sealed class ProduccionParoPostVm
 {
     public int EjecucionProduccionID { get; set; }
@@ -1340,20 +1358,20 @@ public sealed class ProduccionOperadorTabletVm
     public decimal? Ciclo { get; set; }
     public int? Cavidades { get; set; }
 
-   
+    // =========================================================
+    // CONFIGURACIÓN REAL DEL TÉCNICO
+    // =========================================================
     public ProduccionConfiguracionCorridaVm? ConfiguracionActual { get; set; }
-
     public long? UltimoContadorMaquina { get; set; }
-
     public int BonusOperadorActual { get; set; }
 
     public int? CavidadesEnUso =>
-        ConfiguracionActual?.CavidadesUsadas
-        ?? Cavidades;
+        ConfiguracionActual?.CavidadesUsadas ??
+        Cavidades;
 
     public decimal? CicloEnUso =>
-        ConfiguracionActual?.TiempoCicloSegundos
-        ?? Ciclo;
+        ConfiguracionActual?.TiempoCicloSegundos ??
+        Ciclo;
 
     public int? ObjetivoHoraEnUso =>
         ConfiguracionActual != null
@@ -1363,10 +1381,37 @@ public sealed class ProduccionOperadorTabletVm
     public bool TieneConfiguracionReal =>
         ConfiguracionActual?.EstaVigente == true;
 
+    // =========================================================
+    // TIEMPO EXTRA
+    // =========================================================
+    public ProduccionTiempoExtraVm? TiempoExtraActivo { get; set; }
+
+    public List<ProduccionTiempoExtraVm> HistorialTiempoExtra { get; set; } = new();
+
+    public bool PuedeIniciarTiempoExtra { get; set; }
+
+    // Lo establecerá el controller en cada carga.
+    // Sirve para sincronizar el cronómetro del navegador
+    // contra la hora real del servidor.
+    public DateTime FechaHoraServidor { get; set; } = DateTime.Now;
+
+    public bool TieneTiempoExtraActivo =>
+        TiempoExtraActivo?.EstaEnCurso == true;
+
+    public bool TiempoExtraRequiereCorte =>
+        TiempoExtraActivo?.RequiereCorte60 == true;
+
+    public DateTime? ProximoCorteTiempoExtra =>
+        TiempoExtraActivo?.FechaHoraProximoCorte;
 
     public int EstatusID { get; set; }
-    public string EstatusNombre => ProduccionEstatus.Nombre(EstatusID);
-    public string EstatusClase => ProduccionEstatus.ClaseBadge(EstatusID);
+
+    public string EstatusNombre =>
+        ProduccionEstatus.Nombre(EstatusID);
+
+    public string EstatusClase =>
+        ProduccionEstatus.ClaseBadge(EstatusID);
+
     public List<ProduccionCapturaHoraFilaVm> HorasCaptura { get; set; } = new();
 
     public DateTime FechaProduccion { get; set; } = DateTime.Today;
@@ -1382,6 +1427,7 @@ public sealed class ProduccionOperadorTabletVm
         FechaLiberacionMaquina.HasValue;
 
     public List<ProduccionHistorialTurnoVm> HistorialTurnos { get; set; } = new();
+
     public List<ProduccionCambioTurnoHistorialVm> HistorialCambiosTurno { get; set; } = new();
 
     public List<SelectListItem> MotivosParo { get; set; } = new();
@@ -1396,11 +1442,13 @@ public sealed class ProduccionOperadorTabletVm
             if (!CantidadPlaneada.HasValue)
                 return 0;
 
-            return Math.Max(0, CantidadPlaneada.Value - CantidadOKTotal);
+            return Math.Max(
+                0,
+                CantidadPlaneada.Value -
+                CantidadOKTotal);
         }
     }
 }
-
 public static class ProduccionCambioTurnoEstado
 {
     public const string PendienteRecepcion = "PENDIENTE_RECEPCION";
@@ -1549,40 +1597,62 @@ public sealed class ProduccionCambioTurnoPendienteVm
     public string? ReferenciaSAP { get; set; }
     public string? NumeroParte { get; set; }
 }
+
 public sealed class ProduccionCapturaHoraFilaVm
 {
     public int NumeroHora { get; set; }
+
     public DateTime FechaProduccion { get; set; }
+
     public TimeSpan HoraInicio { get; set; }
     public TimeSpan HoraFin { get; set; }
+
     public int CantidadOK { get; set; }
     public int CantidadSospechosa { get; set; }
     public int CantidadScrap { get; set; }
+
     public string? Observaciones { get; set; }
+
     public bool Capturada { get; set; }
     public bool Disponible { get; set; }
     public bool Vencida { get; set; }
+
     public int? RegistroHoraID { get; set; }
+
     public int? ObjetivoHora { get; set; }
     public int? ObjetivoBloque { get; set; }
 
     public int? OperadorID { get; set; }
     public string? OperadorNombre { get; set; }
 
-   
+    // =========================================================
+    // CONTADOR / SEGMENTOS
+    // =========================================================
     public int? PiezasCalculadasContador { get; set; }
 
     public decimal? MinutosProductivos { get; set; }
-
-    public bool EsTiempoExtra { get; set; }
-
-    public string? TipoBloque { get; set; }
 
     public bool TieneCambioConfiguracion { get; set; }
 
     public bool TieneReinicioContador { get; set; }
 
     public List<ProduccionRegistroHoraSegmentoVm> Segmentos { get; set; } = new();
+
+    // =========================================================
+    // TIEMPO EXTRA
+    // =========================================================
+    public bool EsTiempoExtra { get; set; }
+
+    public string? TipoBloque { get; set; }
+
+    public int? TiempoExtraID { get; set; }
+
+    public int? NumeroCorteTiempoExtra { get; set; }
+
+    public bool EsCorteTiempoExtra =>
+        EsTiempoExtra &&
+        TiempoExtraID.HasValue &&
+        NumeroCorteTiempoExtra.HasValue;
 
     public long? ContadorInicial =>
         Segmentos.Count > 0
@@ -1624,9 +1694,17 @@ public sealed class ProduccionCapturaHoraFilaVm
     {
         get
         {
-            if (Capturada) return "Capturada";
-            if (Vencida) return "Pendiente vencida";
-            if (Disponible) return "Disponible";
+            if (Capturada)
+                return EsCorteTiempoExtra
+                    ? $"Tiempo extra #{NumeroCorteTiempoExtra} capturado"
+                    : "Capturada";
+
+            if (Vencida)
+                return "Pendiente vencida";
+
+            if (Disponible)
+                return "Disponible";
+
             return "Próxima";
         }
     }
@@ -1635,43 +1713,58 @@ public sealed class ProduccionCapturaHoraFilaVm
     {
         get
         {
-            if (Capturada) return "bg-success";
-            if (Vencida) return "bg-danger";
-            if (Disponible) return "bg-warning text-dark";
+            if (Capturada)
+                return "bg-success";
+
+            if (Vencida)
+                return "bg-danger";
+
+            if (Disponible)
+                return "bg-warning text-dark";
+
             return "bg-secondary";
         }
     }
 
     public int DiferenciaObjetivo =>
-        ObjetivoBloque.HasValue && ObjetivoBloque.Value > 0
-            ? CantidadOK - ObjetivoBloque.Value
+        ObjetivoBloque.HasValue &&
+        ObjetivoBloque.Value > 0
+            ? CantidadOK -
+              ObjetivoBloque.Value
             : 0;
 
     public decimal PorcentajeCumplimiento =>
-        ObjetivoBloque.HasValue && ObjetivoBloque.Value > 0
+        ObjetivoBloque.HasValue &&
+        ObjetivoBloque.Value > 0
             ? Math.Round(
-                (decimal)CantidadOK / ObjetivoBloque.Value * 100m,
+                (decimal)CantidadOK /
+                ObjetivoBloque.Value *
+                100m,
                 1)
             : 0m;
 
     public bool CumplioObjetivo =>
         ObjetivoBloque.HasValue &&
         ObjetivoBloque.Value > 0 &&
-        CantidadOK >= ObjetivoBloque.Value;
+        CantidadOK >=
+        ObjetivoBloque.Value;
 
     public int PiezasFaltantes =>
         ObjetivoBloque.HasValue &&
-        ObjetivoBloque.Value > CantidadOK
-            ? ObjetivoBloque.Value - CantidadOK
+        ObjetivoBloque.Value >
+        CantidadOK
+            ? ObjetivoBloque.Value -
+              CantidadOK
             : 0;
 
     public int PiezasSobreObjetivo =>
         ObjetivoBloque.HasValue &&
-        CantidadOK > ObjetivoBloque.Value
-            ? CantidadOK - ObjetivoBloque.Value
+        CantidadOK >
+        ObjetivoBloque.Value
+            ? CantidadOK -
+              ObjetivoBloque.Value
             : 0;
 }
-
 public sealed class ProduccionRecepcionOFVm
 {
     public int RecepcionOFID { get; set; }

@@ -6,14 +6,21 @@
     var pendiente = Math.Max(0, planeada - Model.CantidadOKTotal);
     var avance = planeada > 0 ? Math.Min(100m, Math.Round(Model.CantidadOKTotal * 100m / planeada, 2)) : 0m;
     var horas = Model.HorasCaptura?.OrderBy(x => x.NumeroHora).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
-    var horasPendientes = horas.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).ToList();
+    var historialTurnos = Model.HistorialTurnos?.OrderBy(x => x.NumeroTurno).ToList() ?? new List<ERP.NSQuell.Models.ProduccionHistorialTurnoVm>();
+    var historialCambiosTurno = Model.HistorialCambiosTurno?.OrderBy(x => x.FechaEntrega).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCambioTurnoHistorialVm>();
+    var tiempoExtraActivo = Model.TiempoExtraActivo;
+    var historialTiempoExtra = Model.HistorialTiempoExtra?.OrderByDescending(x => x.TiempoExtraID).ToList() ?? new List<ERP.NSQuell.Models.ProduccionTiempoExtraVm>();
+    var tieneTiempoExtraActivo = tiempoExtraActivo != null;
+    var capturaNormalFinalizada = Model.PuedeIniciarTiempoExtra || tieneTiempoExtraActivo;
+    var horasPendientes = capturaNormalFinalizada ? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>() : horas.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).ToList();
     var horasPendientesVisibles = horasPendientes.Take(5).ToList();
     var horasPendientesAdicionales = horasPendientes.Skip(5).ToList();
     var horasCapturadas = horas.Where(x => x.Capturada).OrderByDescending(x => x.NumeroHora).ToList();
-    var historialTurnos = Model.HistorialTurnos?.OrderBy(x => x.NumeroTurno).ToList() ?? new List<ERP.NSQuell.Models.ProduccionHistorialTurnoVm>();
-    var historialCambiosTurno = Model.HistorialCambiosTurno?.OrderBy(x => x.FechaEntrega).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCambioTurnoHistorialVm>();
     var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
-    var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
+    var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto && !capturaNormalFinalizada;
+    var puedeIniciarTiempoExtra = Model.PuedeIniciarTiempoExtra && !tieneTiempoExtraActivo && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
+    var segundosSesionTiempoExtra = tiempoExtraActivo != null ? Math.Max(0d, (Model.FechaHoraServidor - tiempoExtraActivo.FechaHoraInicio).TotalSeconds) : 0d;
+    var segundosCorteTiempoExtra = tiempoExtraActivo != null ? Math.Max(0d, (Model.FechaHoraServidor - tiempoExtraActivo.FechaHoraUltimoCorte).TotalSeconds) : 0d;
     var objetivoHora = Model.ObjetivoHoraEnUso ?? Model.ObjetivoHora;
     var cavidadesEnUso = Model.CavidadesEnUso;
     var cicloEnUso = Model.CicloEnUso;
@@ -615,6 +622,102 @@
             margin-bottom: 6px
         }
 
+        .ok-capture-wrap {
+            position: relative
+        }
+
+        .ok-mode-row {
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            margin-top: 7px;
+            flex-wrap: wrap
+        }
+
+        .ok-mode-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-size: .7rem;
+            font-weight: 900;
+            background: #ecfdf3;
+            color: #067647
+        }
+
+        .ok-mode-badge.manual {
+            background: #fff7ed;
+            color: #b54708
+        }
+
+        .btn-ok-auto {
+            border: 0;
+            background: transparent;
+            color: var(--blue);
+            font-size: .72rem;
+            font-weight: 900;
+            padding: 3px 5px
+        }
+
+        .physical-summary {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-bottom: 14px
+        }
+
+        .physical-card {
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            padding: 10px 11px;
+            background: #f8fafc;
+            text-align: center
+        }
+
+        .physical-card .k {
+            color: var(--muted);
+            font-size: .66rem;
+            font-weight: 900;
+            text-transform: uppercase
+        }
+
+        .physical-card .v {
+            margin-top: 3px;
+            color: var(--blue-dark);
+            font-size: 1.15rem;
+            font-weight: 950
+        }
+
+        .classification-feedback {
+            border-radius: 13px;
+            padding: 10px 12px;
+            margin-top: 10px;
+            font-size: .82rem;
+            font-weight: 800;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            color: #475467
+        }
+
+        .classification-feedback.ok {
+            background: #ecfdf3;
+            border-color: #abefc6;
+            color: #067647
+        }
+
+        .classification-feedback.warning {
+            background: #fffcf5;
+            border-color: #fedf89;
+            color: #93370d
+        }
+
+        .preview-loading {
+            opacity: .65
+        }
+
         .modal-footer .btn-primary {
             font-weight: 950;
             border-radius: 12px;
@@ -1157,6 +1260,290 @@
                 white-space: pre-wrap;
             }
 
+        .extra-panel {
+            margin-top: 16px;
+            border: 1px solid #b9ccff;
+            border-radius: 20px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 12px 30px rgba(15,23,42,.07);
+        }
+
+        .extra-panel.ready {
+            border-color: #93c5fd;
+            background: linear-gradient(180deg,#f8fbff,#eef6ff);
+        }
+
+        .extra-panel.active {
+            border-color: #a7f3d0;
+            background: linear-gradient(180deg,#f7fef9,#ecfdf3);
+        }
+
+        .extra-panel.waiting {
+            border-color: #e4e7ec;
+            background: #f8fafc;
+        }
+
+        .extra-head {
+            padding: 17px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid rgba(148,163,184,.25);
+        }
+
+        .extra-title {
+            color: var(--blue-dark);
+            font-size: 1.08rem;
+            font-weight: 950;
+        }
+
+        .extra-subtitle {
+            color: var(--muted);
+            font-size: .84rem;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+
+        .btn-extra-start {
+            border: 0;
+            border-radius: 14px;
+            padding: 12px 17px;
+            background: linear-gradient(135deg,#00347a,#004aad);
+            color: #fff;
+            font-weight: 950;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+            box-shadow: 0 8px 18px rgba(0,74,173,.18);
+        }
+
+        .btn-extra-start:hover {
+            background: #00347a;
+            color: #fff;
+        }
+
+        .extra-body {
+            padding: 17px 18px;
+        }
+
+        .extra-timer-wrap {
+            display: grid;
+            grid-template-columns: minmax(0,1.5fr) minmax(0,1fr);
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .extra-timer-card {
+            border: 1px solid #abefc6;
+            border-radius: 18px;
+            background: #fff;
+            padding: 18px;
+            text-align: center;
+        }
+
+        .extra-timer-card.cut {
+            border-color: #bfdbfe;
+        }
+
+        .extra-timer-label {
+            color: var(--muted);
+            font-size: .7rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .extra-timer-value {
+            margin-top: 3px;
+            font-size: 2.65rem;
+            line-height: 1;
+            font-weight: 950;
+            color: #067647;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .extra-timer-card.cut .extra-timer-value {
+            color: var(--blue-dark);
+        }
+
+        .extra-timer-value.overdue {
+            color: #b42318 !important;
+        }
+
+        .extra-cut-status {
+            margin-top: 8px;
+            font-size: .8rem;
+            font-weight: 850;
+            color: #475467;
+        }
+
+        .extra-cut-status.overdue {
+            color: #b42318;
+        }
+
+        .extra-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(5,minmax(0,1fr));
+            gap: 9px;
+        }
+
+        .extra-meta-card {
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: #fff;
+            padding: 10px 11px;
+        }
+
+        .extra-meta-card .k {
+            color: var(--muted);
+            font-size: .66rem;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .extra-meta-card .v {
+            color: var(--blue-dark);
+            margin-top: 3px;
+            font-size: .96rem;
+            font-weight: 950;
+        }
+
+        .extra-running-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 7px 10px;
+            background: #ecfdf3;
+            color: #067647;
+            font-size: .76rem;
+            font-weight: 950;
+        }
+
+        .extra-running-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: extraPulse 1.2s infinite;
+        }
+
+        @@keyframes extraPulse {
+            0%,100% { opacity: .35; transform: scale(.85); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        .extra-waiting-message {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #475467;
+            font-weight: 800;
+        }
+
+        .extra-history {
+            margin-top: 12px;
+        }
+
+        .extra-history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .extra-history-table th,
+        .extra-history-table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+            font-size: .82rem;
+        }
+
+        .extra-history-table th {
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: .68rem;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .extra-history-table td {
+            font-weight: 700;
+            color: #344054;
+        }
+
+        .modal-extra .modal-header {
+            background: linear-gradient(135deg,#00347a,#004aad);
+        }
+
+        .extra-start-summary {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 9px;
+            margin-bottom: 14px;
+        }
+
+        .extra-start-card {
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            padding: 11px;
+            background: #f8fbff;
+        }
+
+        .extra-start-card .k {
+            color: var(--muted);
+            font-size: .68rem;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .extra-start-card .v {
+            margin-top: 3px;
+            color: var(--blue-dark);
+            font-weight: 950;
+            font-size: 1rem;
+        }
+
+        @@media(max-width:1100px) {
+            .extra-meta-grid {
+                grid-template-columns: repeat(3,1fr);
+            }
+        }
+
+        @@media(max-width:800px) {
+            .extra-timer-wrap {
+                grid-template-columns: 1fr;
+            }
+
+            .extra-meta-grid,
+            .extra-start-summary {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @@media(max-width:520px) {
+            .extra-head {
+                align-items: stretch;
+            }
+
+            .btn-extra-start {
+                width: 100%;
+            }
+
+            .extra-timer-value {
+                font-size: 2.1rem;
+            }
+
+            .extra-meta-grid,
+            .extra-start-summary {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @@media(max-width:900px) {
             .shift-summary {
                 grid-template-columns: repeat(2,1fr);
@@ -1214,6 +1601,10 @@
                 grid-template-columns: 1fr
             }
 
+            .physical-summary {
+                grid-template-columns: 1fr 1fr
+            }
+
             .counter-capture-grid {
                 grid-template-columns: 1fr
             }
@@ -1248,6 +1639,10 @@
     @if (TempData["Error"] != null)
     {
         <div class="alert alert-danger rounded-4 fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["Error"]</div>
+    }
+    @if (TempData["Info"] != null)
+    {
+        <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>@TempData["Info"]</div>
     }
 
     <section class="summary-grid">
@@ -1495,7 +1890,7 @@
             else
             {
 
-                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual de la máquina</strong> y clasifica las piezas como <strong>OK, Sospechosas o posible Scrap</strong>. El servidor calcula la producción física con el contador y las cavidades vigentes, y valida que la clasificación corresponda. Las horas futuras permanecen bloqueadas.</div>
+                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual</strong>, <strong>Sospechosos</strong> y <strong>Scrap</strong>. El ERP calculará y propondrá automáticamente las piezas <strong>OK</strong>. El operador puede corregir el OK manualmente cuando sea necesario; la diferencia contra la producción física quedará visible antes de guardar.</div>
             }
 
             @if (horas.Count == 0)
@@ -1518,7 +1913,7 @@
                                     <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
                                     <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
                                     <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
-                                    <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
+                                    <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
                                     <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
                                     <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
                                     <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
@@ -1547,7 +1942,7 @@
                                             <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
                                             <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
                                             <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
-                                            <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
+                                            <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
                                             <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
                                             <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
                                             <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
@@ -1709,6 +2104,143 @@
             }
         </div>
     </section>
+
+    @if (tieneTiempoExtraActivo && tiempoExtraActivo != null)
+    {
+        <section class="extra-panel active" id="panelTiempoExtra" data-segundos-sesion="@Math.Floor(segundosSesionTiempoExtra)" data-segundos-corte="@Math.Floor(segundosCorteTiempoExtra)">
+            <div class="extra-head">
+                <div>
+                    <div class="extra-title"><i class="fa-solid fa-stopwatch me-2"></i>Tiempo extra en curso</div>
+                    <div class="extra-subtitle">La sesión queda guardada en el ERP. Puedes actualizar la pantalla sin perder el cronómetro.</div>
+                </div>
+                <span class="extra-running-badge"><span class="extra-running-dot"></span>@tiempoExtraActivo.EstadoNombre</span>
+            </div>
+            <div class="extra-body">
+                <div class="extra-timer-wrap">
+                    <div class="extra-timer-card">
+                        <div class="extra-timer-label">Tiempo total de la sesión</div>
+                        <div class="extra-timer-value" id="cronometroTiempoExtra">00:00:00</div>
+                        <div class="extra-cut-status">Inició @tiempoExtraActivo.FechaHoraInicio.ToString("dd/MM/yyyy HH:mm")</div>
+                    </div>
+                    <div class="extra-timer-card cut">
+                        <div class="extra-timer-label">Desde el último corte</div>
+                        <div class="extra-timer-value" id="cronometroCorteTiempoExtra">00:00:00</div>
+                        <div class="extra-cut-status" id="estadoCorteTiempoExtra">Próximo corte al cumplir 60 minutos.</div>
+                    </div>
+                </div>
+                <div class="extra-meta-grid">
+                    <div class="extra-meta-card"><div class="k">Sesión</div><div class="v">#@tiempoExtraActivo.TiempoExtraID</div></div>
+                    <div class="extra-meta-card"><div class="k">Operador</div><div class="v">@Txt(tiempoExtraActivo.OperadorInicioNombre)</div></div>
+                    <div class="extra-meta-card"><div class="k">Contador base</div><div class="v">@tiempoExtraActivo.ContadorInicio.ToString("N0")</div></div>
+                    <div class="extra-meta-card"><div class="k">Último contador corte</div><div class="v">@tiempoExtraActivo.ContadorUltimoCorte.ToString("N0")</div></div>
+                    <div class="extra-meta-card"><div class="k">Motivo</div><div class="v">@tiempoExtraActivo.MotivoNombre</div></div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(tiempoExtraActivo.Observaciones))
+                {
+                    <div class="alert alert-light border rounded-4 mt-3 mb-0"><strong>Observaciones:</strong> @tiempoExtraActivo.Observaciones</div>
+                }
+            </div>
+        </section>
+    }
+    else if (puedeIniciarTiempoExtra)
+    {
+        <section class="extra-panel ready">
+            <div class="extra-head">
+                <div>
+                    <div class="extra-title"><i class="fa-solid fa-forward-fast me-2"></i>¿Vas a seguir produciendo?</div>
+                    <div class="extra-subtitle">El tiempo normal planeado ya quedó capturado. Si la máquina continuará trabajando, inicia una sesión de tiempo extra.</div>
+                </div>
+                <button type="button" class="btn-extra-start" data-bs-toggle="modal" data-bs-target="#modalIniciarTiempoExtra"><i class="fa-solid fa-play"></i>Iniciar tiempo extra</button>
+            </div>
+            <div class="extra-body">
+                <div class="extra-start-summary mb-0">
+                    <div class="extra-start-card"><div class="k">Último contador</div><div class="v">@(ultimoContador.HasValue ? ultimoContador.Value.ToString("N0") : "-")</div></div>
+                    <div class="extra-start-card"><div class="k">Cavidades en uso</div><div class="v">@(cavidadesEnUso.HasValue ? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
+                    <div class="extra-start-card"><div class="k">Ciclo vigente</div><div class="v">@(cicloEnUso.HasValue ? $"{cicloEnUso.Value:0.##} s" : "-")</div></div>
+                </div>
+            </div>
+        </section>
+    }
+    else if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+    {
+        <section class="extra-panel waiting">
+            <div class="extra-body">
+                <div class="extra-waiting-message"><i class="fa-solid fa-hourglass-half text-primary fa-lg"></i><span>El botón de <strong>tiempo extra</strong> se habilitará automáticamente cuando se complete la captura del tiempo normal planeado.</span></div>
+            </div>
+        </section>
+    }
+
+    @if (historialTiempoExtra.Count > 0)
+    {
+        <div class="extra-history">
+            <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialTiempoExtra" aria-expanded="false" aria-controls="historialTiempoExtra"><span><i class="fa-solid fa-clock-rotate-left me-2"></i>Historial de tiempo extra (@historialTiempoExtra.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+            <div class="collapse history-box" id="historialTiempoExtra">
+                <div class="table-wrap">
+                    <table class="extra-history-table">
+                        <thead><tr><th>Sesión</th><th>Rango</th><th>Operador</th><th>Motivo</th><th>Contador inicial</th><th>Contador final</th><th>Cortes</th><th>Estado</th></tr></thead>
+                        <tbody>
+                            @foreach (var sesion in historialTiempoExtra)
+                            {
+                                var claseEstadoExtra = sesion.EstaFinalizado ? "status-complete" : sesion.EstaCancelado ? "status-overdue" : "status-ready";
+                                <tr>
+                                    <td><strong>#@sesion.TiempoExtraID</strong></td>
+                                    <td>@sesion.RangoTexto</td>
+                                    <td>@Txt(sesion.OperadorInicioNombre)</td>
+                                    <td>@sesion.MotivoNombre</td>
+                                    <td>@sesion.ContadorInicio.ToString("N0")</td>
+                                    <td>@(sesion.ContadorFin.HasValue ? sesion.ContadorFin.Value.ToString("N0") : "-")</td>
+                                    <td>@(sesion.Cortes?.Count ?? 0)</td>
+                                    <td><span class="status-pill @claseEstadoExtra">@sesion.EstadoNombre</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="modal fade modal-extra" id="modalIniciarTiempoExtra" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-stopwatch me-2"></i>Iniciar tiempo extra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="@Url.Action("IniciarTiempoExtra","ProduccionOperador")" id="formIniciarTiempoExtra">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                <div class="modal-body p-4">
+                    <div class="alert alert-primary rounded-4 fw-semibold"><i class="fa-solid fa-circle-info me-1"></i>El ERP tomará automáticamente la última lectura del contador como base. No necesitas reiniciar físicamente el contador de la máquina.</div>
+                    <div class="extra-start-summary">
+                        <div class="extra-start-card"><div class="k">Contador base</div><div class="v">@(ultimoContador.HasValue ? ultimoContador.Value.ToString("N0") : "-")</div></div>
+                        <div class="extra-start-card"><div class="k">Cavidades</div><div class="v">@(cavidadesEnUso.HasValue ? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
+                        <div class="extra-start-card"><div class="k">Ciclo</div><div class="v">@(cicloEnUso.HasValue ? $"{cicloEnUso.Value:0.##} s" : "-")</div></div>
+                    </div>
+                    <div id="mensajeTiempoExtra" class="alert alert-danger rounded-4 fw-bold d-none" role="alert"></div>
+                    <div class="mb-3">
+                        <label for="motivoTiempoExtra" class="form-label fw-bold">Motivo del tiempo extra</label>
+                        <select class="form-select form-select-lg" name="Motivo" id="motivoTiempoExtra" required>
+                            <option value="@ERP.NSQuell.Models.ProduccionTiempoExtraMotivo.CompletarOF">Completar OF</option>
+                            <option value="@ERP.NSQuell.Models.ProduccionTiempoExtraMotivo.RecuperarAtraso">Recuperar atraso</option>
+                            <option value="@ERP.NSQuell.Models.ProduccionTiempoExtraMotivo.ProduccionAdicionalAutorizada">Producción adicional autorizada</option>
+                            <option value="@ERP.NSQuell.Models.ProduccionTiempoExtraMotivo.AjusteProceso">Ajuste de proceso</option>
+                            <option value="@ERP.NSQuell.Models.ProduccionTiempoExtraMotivo.Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="mb-0">
+                        <label for="observacionesTiempoExtra" class="form-label fw-bold">Observaciones</label>
+                        <textarea class="form-control" rows="4" maxlength="500" name="Observaciones" id="observacionesTiempoExtra" placeholder="Opcional. Si eliges Otro, explica el motivo."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4">
+                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold" id="btnConfirmarTiempoExtra"><i class="fa-solid fa-play me-1"></i>Iniciar cronómetro</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade modal-turn" id="modalCambioTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -1963,14 +2495,14 @@
                     <div class="modal-goal">
                         <div class="goal-label">Objetivo de este bloque</div>
                         <div class="goal-value"><span id="modalObjetivo">-</span> <small>PZA</small></div>
-                        <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura las piezas OK para comparar contra el objetivo.</div>
+                        <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura el contador para calcular la producción y sugerir las piezas OK.</div>
                     </div>
 
                     <div class="counter-capture-card">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                             <div>
                                 <div class="fw-bold text-primary"><i class="fa-solid fa-gauge-high me-1"></i>Contador de máquina</div>
-                                <div class="small text-muted fw-semibold">Escribe la lectura que muestra físicamente la máquina al cierre de este bloque.</div>
+                                <div class="small text-muted fw-semibold">Escribe la lectura física de la máquina al cierre de este bloque.</div>
                             </div>
                             <span class="badge bg-primary">@(cavidadesEnUso.HasValue ? $"{cavidadesEnUso.Value:N0} cavidad(es) en uso" : "Cavidades pendientes")</span>
                         </div>
@@ -1985,19 +2517,35 @@
                                 <div class="small text-muted mt-1">@(cicloEnUso.HasValue ? $"Ciclo vigente: {cicloEnUso.Value:0.##} s" : "El servidor tomará la configuración técnica vigente")</div>
                             </div>
                         </div>
-                        <div class="counter-feedback" id="modalContadorFeedback">
-                            El contador determina la producción física. Después clasifica esas piezas en OK, Sospechosas y posible Scrap.
-                        </div>
+                        <div class="counter-feedback" id="modalContadorFeedback">Captura el contador. El servidor hará el cálculo real considerando contador base, cavidades, paros y cambios de configuración.</div>
                     </div>
 
                     <div id="mensajeCapturaHora" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
-                    <div class="modal-grid mb-3">
-                        <div><div class="modal-label text-success">OK</div><input type="number" min="0" value="" placeholder="0" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" /></div>
-                        <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" /></div>
-                        <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" /></div>
+
+                    <div class="physical-summary" id="resumenFisicoHora">
+                        <div class="physical-card"><div class="k">Producción física</div><div class="v" id="modalPiezasFisicas">-</div></div>
+                        <div class="physical-card"><div class="k">OK sugerido</div><div class="v text-success" id="modalOKSugerido">-</div></div>
+                        <div class="physical-card"><div class="k">Min. productivos</div><div class="v" id="modalMinutosProductivos">-</div></div>
+                        <div class="physical-card"><div class="k">Segmentos</div><div class="v" id="modalSegmentos">-</div></div>
                     </div>
-                    <label class="form-label fw-bold">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Necesaria cuando no hubo producción o para explicar incidencias"></textarea>
-                    <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i>El contador indica cuántas piezas físicas salieron; <strong>OK + Sospechosas + Scrap</strong> es la clasificación del operador. El servidor volverá a calcular y validar ambos datos antes de guardar.</div>
+
+                    <div class="modal-grid mb-3">
+                        <div class="ok-capture-wrap">
+                            <div class="modal-label text-success">OK</div>
+                            <input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" autocomplete="off" />
+                            <div class="ok-mode-row">
+                                <span class="ok-mode-badge" id="modalOKModo"><i class="fa-solid fa-wand-magic-sparkles"></i>Automático</span>
+                                <button type="button" class="btn-ok-auto d-none" id="btnRestaurarOKAutomatico"><i class="fa-solid fa-rotate-left me-1"></i>Usar cálculo automático</button>
+                            </div>
+                        </div>
+                        <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="0" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" autocomplete="off" /></div>
+                        <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div>
+                    </div>
+
+                    <div class="classification-feedback" id="modalClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El OK se propondrá automáticamente como producción física menos Sospechosos y Scrap. Si el operador necesita corregirlo, puede borrar el valor y capturar otro.</div>
+
+                    <label class="form-label fw-bold mt-3">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Recomendado cuando se modifica manualmente el OK o existe una diferencia contra el contador."></textarea>
+                    <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i><strong>Ayuda automática:</strong> el ERP propone el OK para reducir captura. <strong>El campo OK sigue editable</strong>; si el operador lo modifica, la pantalla marcará la diferencia contra la producción física antes de guardar.</div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
             </form>
@@ -2011,23 +2559,58 @@
             const modalElement=document.getElementById('modalCapturaHora');
             const modal=modalElement?bootstrap.Modal.getOrCreateInstance(modalElement):null;
             const form=document.getElementById('formModalHora');
-            function cargarFila(row){
-                if(!row||!form)return;
-                document.getElementById('modalFecha').value=row.dataset.fecha||'';
-                document.getElementById('modalInicio').value=row.dataset.inicio||'';
-                document.getElementById('modalFin').value=row.dataset.fin||'';
-                document.getElementById('modalTituloHora').textContent='Hora '+(row.dataset.numero||'');
-                document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
-                document.getElementById('modalObjetivo').textContent=Number(row.dataset.objetivo||0)>0?Number(row.dataset.objetivo).toLocaleString('es-MX'):'-';
-                document.getElementById('modalOK').dataset.objetivo=row.dataset.objetivo||'0';
-                document.getElementById('modalContador').value=row.querySelector('[data-field="counter"]')?.value||'';
-                document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
-                document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'';
-                document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'';
-                document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
-                actualizarComparacionObjetivo();
-                actualizarResumenContador();
+            const urlPrevisualizar='@Url.Action("PrevisualizarProduccionHora","ProduccionOperador")';
+            const capturaHabilitada=@capturaHabilitada.ToString().ToLowerInvariant();
+            const tieneParoAbierto=@Model.TieneParoAbierto.ToString().ToLowerInvariant();
+            const tieneTiempoExtraActivo=@tieneTiempoExtraActivo.ToString().ToLowerInvariant();
+            const formIniciarTiempoExtra=document.getElementById('formIniciarTiempoExtra');
+            let filaActiva=null;
+            let okManual=false;
+            let actualizandoOKAutomatico=false;
+            let previewTimer=null;
+            let previewSecuencia=0;
+            let ultimaPrevisualizacion=null;
+
+            function numeroSeguro(input){
+                const raw=(input?.value||'').trim();
+                if(raw==='')return 0;
+                const numero=Number(raw);
+                return Number.isFinite(numero)?numero:0;
             }
+
+            function limpiarPrevisualizacion(){
+                ultimaPrevisualizacion=null;
+                document.getElementById('modalPiezasFisicas').textContent='-';
+                document.getElementById('modalOKSugerido').textContent='-';
+                document.getElementById('modalMinutosProductivos').textContent='-';
+                document.getElementById('modalSegmentos').textContent='-';
+            }
+
+            function cambiarModoOK(manual){
+                okManual=manual;
+                const badge=document.getElementById('modalOKModo');
+                const boton=document.getElementById('btnRestaurarOKAutomatico');
+                if(badge){
+                    badge.classList.toggle('manual',manual);
+                    badge.innerHTML=manual
+                        ?'<i class="fa-solid fa-pen"></i>Manual'
+                        :'<i class="fa-solid fa-wand-magic-sparkles"></i>Automático';
+                }
+                boton?.classList.toggle('d-none',!manual);
+            }
+
+            function establecerOKAutomatico(valor){
+                const input=document.getElementById('modalOK');
+                if(!input)return;
+                actualizandoOKAutomatico=true;
+                input.value=Number(valor||0).toString();
+                actualizandoOKAutomatico=false;
+                if(filaActiva){
+                    const campo=filaActiva.querySelector('[data-field="ok"]');
+                    if(campo)campo.value=input.value;
+                }
+            }
+
             function actualizarComparacionObjetivo(){
                 const input=document.getElementById('modalOK');
                 const feedback=document.getElementById('modalObjetivoFeedback');
@@ -2036,12 +2619,12 @@
                 const valorRaw=(input.value||'').trim();
                 if(objetivo<=0){
                     feedback.className='modal-goal-feedback text-muted';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Esta parte no tiene objetivo por hora configurado.';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Esta parte no tiene objetivo configurado para este bloque.';
                     return;
                 }
                 if(valorRaw===''){
                     feedback.className='modal-goal-feedback text-muted';
-                    feedback.textContent='Captura las piezas OK para comparar contra el objetivo de esta hora.';
+                    feedback.textContent='El OK se propondrá automáticamente después de calcular la producción física.';
                     return;
                 }
                 const ok=Number(valorRaw||0);
@@ -2060,129 +2643,249 @@
                 feedback.className='modal-goal-feedback text-danger';
                 feedback.innerHTML='<i class="fa-solid fa-circle-xmark me-1"></i>No alcanzaste el objetivo: <strong>'+porcentaje.toLocaleString('es-MX')+'%</strong>. Faltaron '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s).';
             }
-            document.getElementById('modalOK')?.addEventListener('input',actualizarComparacionObjetivo);
 
-            const ultimoContadorServidor = @(ultimoContador.HasValue? ultimoContador.Value.ToString() : "null");
-            const cavidadesServidor = @(cavidadesEnUso.HasValue? cavidadesEnUso.Value.ToString() : "0");
-
-            function actualizarResumenContador(){
-                const feedback=document.getElementById('modalContadorFeedback');
-                const contadorInput=document.getElementById('modalContador');
-                const okInput=document.getElementById('modalOK');
-                const yellowInput=document.getElementById('modalYellow');
-                const scrapInput=document.getElementById('modalScrap');
-                if(!feedback||!contadorInput)return;
-
-                const raw=(contadorInput.value||'').trim();
-                const ok=Number(okInput?.value||0);
-                const yellow=Number(yellowInput?.value||0);
-                const scrap=Number(scrapInput?.value||0);
-                const clasificado=ok+yellow+scrap;
-
-                if(raw===''){
-                    feedback.className='counter-feedback';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura la lectura actual del contador. La clasificación suma <strong>'+clasificado.toLocaleString('es-MX')+'</strong> pieza(s).';
+            function actualizarClasificacion(){
+                const feedback=document.getElementById('modalClasificacionFeedback');
+                if(!feedback)return;
+                const ok=numeroSeguro(document.getElementById('modalOK'));
+                const yellow=numeroSeguro(document.getElementById('modalYellow'));
+                const scrap=numeroSeguro(document.getElementById('modalScrap'));
+                const total=ok+yellow+scrap;
+                if(!ultimaPrevisualizacion){
+                    feedback.className='classification-feedback';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Clasificación actual: <strong>'+total.toLocaleString('es-MX')+'</strong> pieza(s). Captura el contador para obtener la producción física real.';
                     return;
                 }
-
-                const actual=Number(raw);
-                if(!Number.isFinite(actual)||actual<0){
-                    feedback.className='counter-feedback text-danger';
-                    feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>El contador debe ser un número entero mayor o igual a cero.';
+                const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);
+                const diferencia=total-fisicas;
+                if(diferencia===0){
+                    feedback.className='classification-feedback ok';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>La clasificación cuadra con las <strong>'+fisicas.toLocaleString('es-MX')+'</strong> piezas físicas. OK '+ok.toLocaleString('es-MX')+' + Sospechosos '+yellow.toLocaleString('es-MX')+' + Scrap '+scrap.toLocaleString('es-MX')+'.';
                     return;
                 }
-
-                if(ultimoContadorServidor===null||ultimoContadorServidor===undefined){
-                    feedback.className='counter-feedback';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Lectura actual: <strong>'+actual.toLocaleString('es-MX')+'</strong>. El servidor usará el contador base técnico para calcular la producción física. Clasificación capturada: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>.';
-                    return;
-                }
-
-                if(actual<Number(ultimoContadorServidor)){
-                    feedback.className='counter-feedback text-warning';
-                    feedback.innerHTML='<i class="fa-solid fa-rotate-left me-1"></i>La lectura actual es menor a la anterior. Puede existir un reinicio del contador. El servidor validará el evento antes de guardar. Clasificación: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>.';
-                    return;
-                }
-
-                const ciclos=actual-Number(ultimoContadorServidor);
-                if(cavidadesServidor>0){
-                    const estimado=ciclos*cavidadesServidor;
-                    const diferencia=estimado-clasificado;
-                    let detalle='Estimación visual: <strong>'+ciclos.toLocaleString('es-MX')+'</strong> ciclo(s) × <strong>'+Number(cavidadesServidor).toLocaleString('es-MX')+'</strong> cav. = <strong>'+estimado.toLocaleString('es-MX')+'</strong> pieza(s). Clasificación: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>.';
-                    if(diferencia===0){
-                        detalle+=' <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Coinciden.</span>';
-                    }else{
-                        detalle+=' <span class="text-warning">Diferencia estimada: '+diferencia.toLocaleString('es-MX')+'.</span>';
-                    }
-                    feedback.className='counter-feedback';
-                    feedback.innerHTML=detalle+' <span class="text-muted">El cálculo definitivo lo hace el servidor con todos los segmentos y cambios de configuración.</span>';
-                    return;
-                }
-
-                feedback.className='counter-feedback';
-                feedback.innerHTML='Lectura actual: <strong>'+actual.toLocaleString('es-MX')+'</strong>. Clasificación: <strong>'+clasificado.toLocaleString('es-MX')+'</strong>. El servidor calculará las piezas con la configuración técnica vigente.';
+                feedback.className='classification-feedback warning';
+                const textoDiferencia=diferencia>0
+                    ?'La clasificación excede la producción física por <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s).'
+                    :'Faltan por clasificar <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s) contra el contador.';
+                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+textoDiferencia+(okManual?' <strong>El OK está en modo manual.</strong>':'');
             }
 
-            ['modalContador','modalOK','modalYellow','modalScrap'].forEach(function(id){
-                document.getElementById(id)?.addEventListener('input',actualizarResumenContador);
+            function pintarPrevisualizacion(data,forzarAuto){
+                ultimaPrevisualizacion=data;
+                const fisicas=Number(data.piezasFisicas??data.PiezasFisicas??0);
+                const sugerido=Number(data.cantidadOK??data.CantidadOK??0);
+                const minutos=Number(data.minutosProductivos??data.MinutosProductivos??0);
+                const segmentos=Number(data.numeroSegmentos??data.NumeroSegmentos??0);
+                document.getElementById('modalPiezasFisicas').textContent=fisicas.toLocaleString('es-MX');
+                document.getElementById('modalOKSugerido').textContent=sugerido.toLocaleString('es-MX');
+                document.getElementById('modalMinutosProductivos').textContent=minutos.toLocaleString('es-MX',{maximumFractionDigits:2});
+                document.getElementById('modalSegmentos').textContent=segmentos.toLocaleString('es-MX');
+                if(!okManual||forzarAuto){
+                    cambiarModoOK(false);
+                    establecerOKAutomatico(sugerido);
+                }
+                const contadorInicial=data.contadorInicial??data.ContadorInicial;
+                const contadorFinal=data.contadorFinal??data.ContadorFinal;
+                const feedback=document.getElementById('modalContadorFeedback');
+                if(feedback){
+                    let texto='<i class="fa-solid fa-calculator me-1"></i>Producción física calculada por el servidor: <strong>'+fisicas.toLocaleString('es-MX')+' pieza(s)</strong>.';
+                    if(contadorInicial!==null&&contadorInicial!==undefined&&contadorFinal!==null&&contadorFinal!==undefined)texto+=' Contador '+Number(contadorInicial).toLocaleString('es-MX')+' → '+Number(contadorFinal).toLocaleString('es-MX')+'.';
+                    if(Boolean(data.tieneCambioConfiguracion??data.TieneCambioConfiguracion))texto+=' <span class="text-primary">Se consideraron cambios de configuración.</span>';
+                    if(Boolean(data.tieneReinicioContador??data.TieneReinicioContador))texto+=' <span class="text-warning">Se detectó reinicio del contador.</span>';
+                    feedback.className='counter-feedback';
+                    feedback.innerHTML=texto;
+                }
+                actualizarComparacionObjetivo();
+                actualizarClasificacion();
+            }
+
+            async function ejecutarPrevisualizacion(forzarAuto=false){
+                const contadorInput=document.getElementById('modalContador');
+                const raw=(contadorInput?.value||'').trim();
+                if(raw===''||!Number.isFinite(Number(raw))||Number(raw)<0){
+                    limpiarPrevisualizacion();
+                    const feedback=document.getElementById('modalContadorFeedback');
+                    if(feedback){
+                        feedback.className='counter-feedback';
+                        feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura un contador válido para calcular automáticamente la producción física y el OK sugerido.';
+                    }
+                    actualizarClasificacion();
+                    return;
+                }
+                if(!form)return;
+                const secuencia=++previewSecuencia;
+                const card=document.getElementById('resumenFisicoHora');
+                card?.classList.add('preview-loading');
+                const token=form.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+                const datos=new FormData();
+                datos.append('__RequestVerificationToken',token);
+                datos.append('ejecucionProduccionId','@Model.EjecucionProduccionID');
+                datos.append('fechaProduccion',document.getElementById('modalFecha')?.value||'');
+                datos.append('horaInicio',document.getElementById('modalInicio')?.value||'');
+                datos.append('horaFin',document.getElementById('modalFin')?.value||'');
+                datos.append('contadorMaquinaActual',raw);
+                datos.append('cantidadSospechosa',String(numeroSeguro(document.getElementById('modalYellow'))));
+                datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('modalScrap'))));
+                try{
+                    const response=await fetch(urlPrevisualizar,{method:'POST',body:datos,headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    let data=null;
+                    try{data=await response.json();}catch{data=null;}
+                    if(secuencia!==previewSecuencia)return;
+                    if(!response.ok||!data||data.ok===false){
+                        ultimaPrevisualizacion=null;
+                        const mensaje=data?.mensaje||data?.Mensaje||'No fue posible calcular la producción del bloque.';
+                        const feedback=document.getElementById('modalContadorFeedback');
+                        if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+mensaje;}
+                        limpiarPrevisualizacion();
+                        actualizarClasificacion();
+                        return;
+                    }
+                    pintarPrevisualizacion(data,forzarAuto);
+                }catch(error){
+                    if(secuencia!==previewSecuencia)return;
+                    ultimaPrevisualizacion=null;
+                    limpiarPrevisualizacion();
+                    const feedback=document.getElementById('modalContadorFeedback');
+                    if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+(error?.message||'No fue posible consultar el cálculo automático.');}
+                    actualizarClasificacion();
+                }finally{
+                    if(secuencia===previewSecuencia)card?.classList.remove('preview-loading');
+                }
+            }
+
+            function programarPrevisualizacion(forzarAuto=false){
+                if(previewTimer)window.clearTimeout(previewTimer);
+                previewTimer=window.setTimeout(function(){ejecutarPrevisualizacion(forzarAuto);},300);
+            }
+
+            function cargarFila(row){
+                if(!row||!form)return;
+                filaActiva=row;
+                cambiarModoOK(false);
+                limpiarPrevisualizacion();
+                limpiarMensajeCaptura();
+                document.getElementById('modalFecha').value=row.dataset.fecha||'';
+                document.getElementById('modalInicio').value=row.dataset.inicio||'';
+                document.getElementById('modalFin').value=row.dataset.fin||'';
+                document.getElementById('modalTituloHora').textContent='Hora '+(row.dataset.numero||'');
+                document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
+                document.getElementById('modalObjetivo').textContent=Number(row.dataset.objetivo||0)>0?Number(row.dataset.objetivo).toLocaleString('es-MX'):'-';
+                document.getElementById('modalOK').dataset.objetivo=row.dataset.objetivo||'0';
+                document.getElementById('modalContador').value=row.querySelector('[data-field="counter"]')?.value||'';
+                document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
+                document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'0';
+                document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'0';
+                document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
+                actualizarComparacionObjetivo();
+                actualizarClasificacion();
+                if((document.getElementById('modalContador').value||'').trim()!=='')programarPrevisualizacion(true);
+            }
+
+            document.getElementById('modalContador')?.addEventListener('input',function(){
+                if(filaActiva){const campo=filaActiva.querySelector('[data-field="counter"]');if(campo)campo.value=this.value;}
+                programarPrevisualizacion(false);
             });
 
-            const capturaHabilitada = @capturaHabilitada.ToString().ToLowerInvariant();
-            const tieneParoAbierto = @Model.TieneParoAbierto.ToString().ToLowerInvariant();
+            ['modalYellow','modalScrap'].forEach(function(id){
+                document.getElementById(id)?.addEventListener('input',function(){
+                    if(filaActiva){
+                        const selector=id==='modalYellow'?'[data-field="yellow"]':'[data-field="scrap"]';
+                        const campo=filaActiva.querySelector(selector);
+                        if(campo)campo.value=this.value;
+                    }
+                    actualizarClasificacion();
+                    programarPrevisualizacion(false);
+                });
+            });
+
+            document.getElementById('modalOK')?.addEventListener('input',function(){
+                if(!actualizandoOKAutomatico)cambiarModoOK(true);
+                if(filaActiva){const campo=filaActiva.querySelector('[data-field="ok"]');if(campo)campo.value=this.value;}
+                actualizarComparacionObjetivo();
+                actualizarClasificacion();
+            });
+
+            document.getElementById('modalObs')?.addEventListener('input',function(){
+                if(filaActiva){const campo=filaActiva.querySelector('[data-field="obs"]');if(campo)campo.value=this.value;}
+            });
+
+            document.getElementById('btnRestaurarOKAutomatico')?.addEventListener('click',function(){
+                cambiarModoOK(false);
+                if(ultimaPrevisualizacion){
+                    const sugerido=Number(ultimaPrevisualizacion.cantidadOK??ultimaPrevisualizacion.CantidadOK??0);
+                    establecerOKAutomatico(sugerido);
+                    actualizarComparacionObjetivo();
+                    actualizarClasificacion();
+                }else{
+                    programarPrevisualizacion(true);
+                }
+            });
 
             document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){
-                if (!capturaHabilitada || tieneParoAbierto) return;
+                if(!capturaHabilitada||tieneParoAbierto)return;
                 const row=this.closest('[data-hour-row]');
                 cargarFila(row);
                 modal?.show();
             }));
+
             function mostrarMensajeCaptura(mensaje){
                 const box=document.getElementById('mensajeCapturaHora');
                 if(!box)return;
                 box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;
                 box.classList.remove('d-none');
             }
+
             function limpiarMensajeCaptura(){
                 const box=document.getElementById('mensajeCapturaHora');
                 if(!box)return;
                 box.classList.add('d-none');
                 box.innerHTML='';
             }
+
             form?.addEventListener('submit',function(e){
                 limpiarMensajeCaptura();
-                const contadorRaw=(document.getElementById('modalContador').value||'').trim();
+                const contadorRaw=(document.getElementById('modalContador')?.value||'').trim();
                 const contador=Number(contadorRaw);
-                const ok=Number(document.getElementById('modalOK').value||0);
-                const yellow=Number(document.getElementById('modalYellow').value||0);
-                const scrap=Number(document.getElementById('modalScrap').value||0);
-                const obs=(document.getElementById('modalObs').value||'').trim();
+                const okRaw=(document.getElementById('modalOK')?.value||'').trim();
+                const ok=Number(okRaw||0);
+                const yellow=numeroSeguro(document.getElementById('modalYellow'));
+                const scrap=numeroSeguro(document.getElementById('modalScrap'));
+                const obs=(document.getElementById('modalObs')?.value||'').trim();
                 if(contadorRaw===''||!Number.isFinite(contador)||contador<0){
                     e.preventDefault();
                     mostrarMensajeCaptura('Captura el contador actual de la máquina antes de guardar la hora.');
                     document.getElementById('modalContador')?.focus();
                     return;
                 }
-                if(ok<0||yellow<0||scrap<0){
+                if(okRaw===''||!Number.isFinite(ok)||ok<0||yellow<0||scrap<0){
                     e.preventDefault();
-                    mostrarMensajeCaptura('Las cantidades no pueden ser negativas. Revisa OK, Sospechosos y Scrap.');
+                    mostrarMensajeCaptura('Revisa las cantidades. OK, Sospechosos y Scrap deben ser números mayores o iguales a cero.');
                     return;
                 }
                 if(ok===0&&yellow===0&&scrap===0&&!obs){
                     e.preventDefault();
-                    mostrarMensajeCaptura('Captura al menos una cantidad o explica en observaciones por qué no hubo producción durante esta hora.');
+                    mostrarMensajeCaptura('No existe producción clasificada. Explica en observaciones por qué no hubo producción durante este bloque.');
                     return;
                 }
-                const button=form.querySelector('button[type="submit"]');
-                if(button){
-                    button.disabled=true;
-                    button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
+                if(ultimaPrevisualizacion){
+                    const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);
+                    const total=ok+yellow+scrap;
+                    if(total!==fisicas&&!obs){
+                        e.preventDefault();
+                        mostrarMensajeCaptura('La clasificación suma '+total.toLocaleString('es-MX')+' pieza(s), pero el contador indica '+fisicas.toLocaleString('es-MX')+'. Puedes conservar el OK manual, pero agrega una observación explicando la diferencia.');
+                        document.getElementById('modalObs')?.focus();
+                        return;
+                    }
                 }
+                const button=form.querySelector('button[type="submit"]');
+                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
             });
+
             const obligatoria=document.querySelector('[data-hour-row][data-obligatoria="true"]');
-            if(capturaHabilitada && !tieneParoAbierto && obligatoria){
+            if(capturaHabilitada&&!tieneParoAbierto&&obligatoria){
                 cargarFila(obligatoria);
                 modal?.show();
-            } else {
+            }else{
                 modal?.hide();
             }
 
@@ -2528,6 +3231,82 @@
                 btnConfirmarCambioTurno.innerHTML='<i class="fa-solid fa-paper-plane me-1"></i>Enviar turno para recepción';
             }
         });
+
+            function formatoCronometro(segundos){
+                const total=Math.max(0,Math.floor(Number(segundos)||0));
+                const horas=Math.floor(total/3600);
+                const minutos=Math.floor((total%3600)/60);
+                const seg=total%60;
+                return String(horas).padStart(2,'0')+':'+String(minutos).padStart(2,'0')+':'+String(seg).padStart(2,'0');
+            }
+
+            const panelTiempoExtra=document.getElementById('panelTiempoExtra');
+            if(panelTiempoExtra&&tieneTiempoExtraActivo){
+                const segundosSesionBase=Number(panelTiempoExtra.dataset.segundosSesion||0);
+                const segundosCorteBase=Number(panelTiempoExtra.dataset.segundosCorte||0);
+                const inicioReloj=performance.now();
+                const timerSesion=document.getElementById('cronometroTiempoExtra');
+                const timerCorte=document.getElementById('cronometroCorteTiempoExtra');
+                const estadoCorte=document.getElementById('estadoCorteTiempoExtra');
+                function actualizarCronometroTiempoExtra(){
+                    const transcurrido=(performance.now()-inicioReloj)/1000;
+                    const segundosSesion=segundosSesionBase+transcurrido;
+                    const segundosCorte=segundosCorteBase+transcurrido;
+                    if(timerSesion)timerSesion.textContent=formatoCronometro(segundosSesion);
+                    if(timerCorte)timerCorte.textContent=formatoCronometro(segundosCorte);
+                    if(estadoCorte){
+                        if(segundosCorte>=3600){
+                            timerCorte?.classList.add('overdue');
+                            estadoCorte.classList.add('overdue');
+                            const excedente=Math.floor(segundosCorte-3600);
+                            estadoCorte.innerHTML='<i class="fa-solid fa-bell me-1"></i>Corte de 60 min pendiente · '+formatoCronometro(excedente)+' después del corte.';
+                        }else{
+                            timerCorte?.classList.remove('overdue');
+                            estadoCorte.classList.remove('overdue');
+                            estadoCorte.innerHTML='<i class="fa-solid fa-hourglass-half me-1"></i>Próximo corte en '+formatoCronometro(3600-segundosCorte)+'.';
+                        }
+                    }
+                }
+                actualizarCronometroTiempoExtra();
+                window.setInterval(actualizarCronometroTiempoExtra,1000);
+            }
+
+            function mostrarMensajeTiempoExtra(mensaje){
+                const box=document.getElementById('mensajeTiempoExtra');
+                if(!box)return;
+                box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;
+                box.classList.remove('d-none');
+            }
+
+            function limpiarMensajeTiempoExtra(){
+                const box=document.getElementById('mensajeTiempoExtra');
+                if(!box)return;
+                box.classList.add('d-none');
+                box.innerHTML='';
+            }
+
+            formIniciarTiempoExtra?.addEventListener('submit',function(e){
+                limpiarMensajeTiempoExtra();
+                const motivo=(document.getElementById('motivoTiempoExtra')?.value||'').trim();
+                const observaciones=(document.getElementById('observacionesTiempoExtra')?.value||'').trim();
+                const motivoOtro='@ERP.NSQuell.Models.ProduccionTiempoExtraMotivo.Otro';
+                if(!motivo){
+                    e.preventDefault();
+                    mostrarMensajeTiempoExtra('Selecciona el motivo del tiempo extra.');
+                    return;
+                }
+                if(motivo===motivoOtro&&!observaciones){
+                    e.preventDefault();
+                    mostrarMensajeTiempoExtra('Cuando seleccionas Otro debes explicar el motivo en observaciones.');
+                    document.getElementById('observacionesTiempoExtra')?.focus();
+                    return;
+                }
+                const boton=document.getElementById('btnConfirmarTiempoExtra');
+                if(boton){
+                    boton.disabled=true;
+                    boton.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Iniciando...';
+                }
+            });
 
             function programarActualizacion(){
                 window.setTimeout(function(){

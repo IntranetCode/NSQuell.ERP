@@ -307,4 +307,213 @@ namespace ERP.NSQuell.Models
             Movimientos
         { get; set; } = new();
     }
+
+    public static class ProduccionTiempoExtraEstado
+    {
+        public const string EnCurso = "EN_CURSO";
+        public const string Pausado = "PAUSADO";
+        public const string Finalizado = "FINALIZADO";
+        public const string Cancelado = "CANCELADO";
+
+        public static string Nombre(string? estado)
+        {
+            return estado?.Trim().ToUpperInvariant() switch
+            {
+                EnCurso => "En curso",
+                Pausado => "Pausado",
+                Finalizado => "Finalizado",
+                Cancelado => "Cancelado",
+                _ => "Sin estado"
+            };
+        }
+    }
+
+    public static class ProduccionTiempoExtraMotivo
+    {
+        public const string RecuperarAtraso = "RECUPERAR_ATRASO";
+        public const string CompletarOF = "COMPLETAR_OF";
+        public const string ProduccionAdicionalAutorizada = "PRODUCCION_ADICIONAL_AUTORIZADA";
+        public const string AjusteProceso = "AJUSTE_PROCESO";
+        public const string Otro = "OTRO";
+
+        public static string Nombre(string? motivo)
+        {
+            return motivo?.Trim().ToUpperInvariant() switch
+            {
+                RecuperarAtraso => "Recuperar atraso",
+                CompletarOF => "Completar OF",
+                ProduccionAdicionalAutorizada => "Producción adicional autorizada",
+                AjusteProceso => "Ajuste de proceso",
+                Otro => "Otro",
+                _ => string.IsNullOrWhiteSpace(motivo) ? "Sin motivo" : motivo
+            };
+        }
+    }
+
+    public sealed class ProduccionTiempoExtraVm
+    {
+        public int TiempoExtraID { get; set; }
+        public int EjecucionProduccionID { get; set; }
+
+        public int OperadorInicioID { get; set; }
+        public string? OperadorInicioNombre { get; set; }
+
+        public int? OperadorFinID { get; set; }
+        public string? OperadorFinNombre { get; set; }
+
+        public int? ConfiguracionCorridaInicioID { get; set; }
+
+        public DateTime FechaHoraInicio { get; set; }
+        public DateTime FechaHoraUltimoCorte { get; set; }
+        public DateTime? FechaHoraFin { get; set; }
+
+        public long ContadorInicio { get; set; }
+        public long ContadorUltimoCorte { get; set; }
+        public long? ContadorFin { get; set; }
+
+        public string Estado { get; set; } = ProduccionTiempoExtraEstado.EnCurso;
+
+        public string Motivo { get; set; } = string.Empty;
+        public string? Observaciones { get; set; }
+
+        public int UsuarioCreacionID { get; set; }
+        public DateTime FechaCreacion { get; set; }
+
+        public int? UsuarioModificacionID { get; set; }
+        public DateTime? FechaModificacion { get; set; }
+
+        public int? UsuarioCancelacionID { get; set; }
+        public DateTime? FechaCancelacion { get; set; }
+        public string? MotivoCancelacion { get; set; }
+
+        public bool Activo { get; set; } = true;
+
+        public List<ProduccionTiempoExtraCorteVm> Cortes { get; set; } = new();
+
+        public bool EstaEnCurso =>
+            Activo &&
+            string.Equals(
+                Estado,
+                ProduccionTiempoExtraEstado.EnCurso,
+                StringComparison.OrdinalIgnoreCase) &&
+            !FechaHoraFin.HasValue;
+
+        public bool EstaFinalizado =>
+            string.Equals(
+                Estado,
+                ProduccionTiempoExtraEstado.Finalizado,
+                StringComparison.OrdinalIgnoreCase);
+
+        public bool EstaCancelado =>
+            string.Equals(
+                Estado,
+                ProduccionTiempoExtraEstado.Cancelado,
+                StringComparison.OrdinalIgnoreCase);
+
+        public DateTime FechaHoraProximoCorte =>
+            FechaHoraUltimoCorte.AddMinutes(60);
+
+        public int NumeroSiguienteCorte =>
+            Cortes.Count == 0
+                ? 1
+                : Cortes.Max(x => x.NumeroCorte) + 1;
+
+        public double SegundosDesdeUltimoCorte
+        {
+            get
+            {
+                var fin = FechaHoraFin ?? DateTime.Now;
+                return Math.Max(
+                    0,
+                    (fin - FechaHoraUltimoCorte).TotalSeconds);
+            }
+        }
+
+        public int MinutosDesdeUltimoCorte =>
+            (int)Math.Floor(
+                SegundosDesdeUltimoCorte / 60d);
+
+        public bool RequiereCorte60 =>
+            EstaEnCurso &&
+            DateTime.Now >= FechaHoraProximoCorte;
+
+        public string EstadoNombre =>
+            ProduccionTiempoExtraEstado.Nombre(Estado);
+
+        public string MotivoNombre =>
+            ProduccionTiempoExtraMotivo.Nombre(Motivo);
+
+        public string RangoTexto =>
+            FechaHoraFin.HasValue
+                ? $"{FechaHoraInicio:dd/MM/yyyy HH:mm} - {FechaHoraFin.Value:dd/MM/yyyy HH:mm}"
+                : $"{FechaHoraInicio:dd/MM/yyyy HH:mm} - En curso";
+    }
+
+    public sealed class ProduccionTiempoExtraCorteVm
+    {
+        public int RegistroHoraID { get; set; }
+        public int TiempoExtraID { get; set; }
+        public int NumeroCorte { get; set; }
+
+        public int OperadorID { get; set; }
+        public string? OperadorNombre { get; set; }
+
+        public DateTime FechaHoraInicio { get; set; }
+        public DateTime FechaHoraFin { get; set; }
+
+        public long? ContadorInicial { get; set; }
+        public long? ContadorFinal { get; set; }
+
+        public int PiezasCalculadasContador { get; set; }
+
+        public int CantidadOK { get; set; }
+        public int CantidadSospechosa { get; set; }
+        public int CantidadScrap { get; set; }
+
+        public decimal MinutosProductivos { get; set; }
+
+        public int? ObjetivoBloque { get; set; }
+
+        public bool EsCorteFinal { get; set; }
+
+        public string? Observaciones { get; set; }
+
+        public int TotalClasificado =>
+            CantidadOK +
+            CantidadSospechosa +
+            CantidadScrap;
+
+        public string RangoTexto =>
+            $"{FechaHoraInicio:HH:mm} - {FechaHoraFin:HH:mm}";
+    }
+
+    public sealed class ProduccionTiempoExtraIniciarPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+
+        public string Motivo { get; set; } =
+            ProduccionTiempoExtraMotivo.CompletarOF;
+
+        public string? Observaciones { get; set; }
+    }
+
+    public sealed class ProduccionTiempoExtraCortePostVm
+    {
+        public int TiempoExtraID { get; set; }
+        public int EjecucionProduccionID { get; set; }
+
+        public long? ContadorMaquinaActual { get; set; }
+
+        public int CantidadOK { get; set; }
+        public bool OkModificadoManual { get; set; }
+
+        public int CantidadSospechosa { get; set; }
+        public int CantidadScrap { get; set; }
+
+        public string? Observaciones { get; set; }
+
+        public bool FinalizarTiempoExtra { get; set; }
+    }
+
+
 }
