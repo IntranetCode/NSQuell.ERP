@@ -821,3 +821,25 @@
 [data-nsq-style-id="nsq-si-b1ecc496e0"] { margin-top: 8px !important; }
 [data-nsq-style-id="nsq-si-8d6c4e4089"] { width: 37% !important; padding: 0 !important; }
 [data-nsq-style-id="nsq-si-abacecd417"] { width: 59% !important; padding: 0 !important; }
+
+/* NSQ_OF_PRINT_ISOLATED_CSS_V19 */
+@media print {
+    body.nsq-of-printing {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body.nsq-of-printing > *:not(.print-area) {
+        display: none !important;
+    }
+
+    body.nsq-of-printing > .print-area {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}

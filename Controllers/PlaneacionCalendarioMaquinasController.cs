@@ -8,7 +8,7 @@ using System.Globalization;
 namespace ERP.NSQuell.Controllers
 {
     [Route("PlaneacionCalendarioMaquinas")]
-    public sealed class PlaneacionCalendarioMaquinasController : Controller
+    public sealed partial class PlaneacionCalendarioMaquinasController : Controller // NSQ_TODO_PLANEACION_PRODUCCION_V1
     {
         private readonly IConfiguration _configuration;
 
@@ -56,7 +56,8 @@ namespace ERP.NSQuell.Controllers
             var periodo = ResolverPeriodo(vista, fecha, rangoInicio, rangoFin);
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-            var maquinas = await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn);
+            var maquinas = Excluir1200TCalendario(
+                await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn)); // NSQ_CALENDARIO_1200T_FIX_V19
             var solicitudesReprogramacion = modoProduccion
                 ? new List<SolicitudReprogramacionCalendarioVm>()
                 : await ObtenerSolicitudesReprogramacionPendientesAsync(cn);
@@ -410,25 +411,13 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     });
                 }
 
-                /*
-                    REGLA:
-                    El punto donde se suelta el bloque NO es una hora exacta.
-                    Es una posición de cola.
-
-                    Si lo sueltas entre Programa 1 y Programa 2:
-                    - se inserta después del Programa 1,
-                    - se calcula cambio / arranque / fin,
-                    - se reacomodan los posteriores desde la posición original de inserción,
-                    - pero el cursor de acomodo empieza en el fin del programa insertado.
-                */
-                var puntoCola = NormalizarFecha(request.Inicio);
-
-                if (puntoCola < DateTime.Now)
-                    puntoCola = DateTime.Now;
-
-                puntoCola = SiguienteAperturaOperativa(
-                    puntoCola,
-                    request.TrabajarDomingo);
+                                /* NSQ_CALENDARIO_MOVIMIENTO_EXACTO_V30
+                 * La hora soltada por el usuario es la hora solicitada.
+                 * No se convierte silenciosamente en una posicion de cola.
+                 * Los programas futuros movibles se recorren DESPUES de fijar esta OF.
+                 */
+                var puntoCola = HoraExactaCalendario(
+                    NormalizarFecha(request.Inicio));
 
                 var horasProduccion = programa.HorasProgramadas > 0
                     ? programa.HorasProgramadas
@@ -441,25 +430,16 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     cn,
                     tx);
 
-                var desdeReacomodo = anteriorCola == null
-                    ? puntoCola
-                    : anteriorCola.Fin;
+                var desdeReacomodo = puntoCola;
 
-                if (desdeReacomodo < DateTime.Now)
-                    desdeReacomodo = DateTime.Now;
-
-                desdeReacomodo = SiguienteAperturaOperativa(
-                    desdeReacomodo,
-                    request.TrabajarDomingo);
-
-                var calculoCola = await CalcularPosicionCompactaAsync(
+                var calculoCola = await CalcularPosicionExactaCalendarioAsync(
                     maquinaDestino.MaquinaID,
                     programa.ProgramaProduccionID,
                     programa.ParteID,
                     programa.MoldeID,
                     anteriorCola == null ? null : anteriorCola.ParteID,
                     anteriorCola == null ? null : anteriorCola.MoldeID,
-                    desdeReacomodo,
+                    puntoCola,
                     horasProduccion,
                     cn,
                     tx,
@@ -603,14 +583,23 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     horasProduccion,
                     cn,
                     tx);
+                // NSQ_LHRH_CALENDARIO_HOOK_V1
+                var programaParejaMovidoId =
+                    await SincronizarParejaLhRhCalendarioAsync(
+                        programa,
+                        maquinaDestino,
+                        fechaCambio,
+                        fechaArranque,
+                        fechaFin,
+                        horasProduccion,
+                        nuevaSecuencia,
+                        usuarioId,
+                        cn,
+                        tx);
 
-                await RecalcularOperadoresProgramaAsync(
-                    programa.ProgramaProduccionID,
-                    maquinaDestino.MaquinaID,
-                    fechaCambio,
-                    usuarioId,
-                    cn,
-                    tx);
+                // DDP / operadores se resuelven exclusivamente en Produccion.
+
+                // NSQ_DDP_PRODUCCION_V1 - calendario no reasigna operadores.
 
                 await InsertarHistorialMovimientoAsync(
                     programa,
@@ -646,7 +635,7 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                         ? "Programa movido correctamente. Se reacomodaron " +
                           programasReacomodados +
                           " programa(s) posterior(es) para cerrar espacios de cola."
-                        : "Programa movido correctamente a la cola sin dejar espacios.",
+                        : "Programa movido correctamente a la hora seleccionada.",
                     resumen,
                     maquinaID = maquinaDestino.MaquinaID,
                     maquinaCodigo = maquinaDestino.Codigo,
@@ -706,6 +695,8 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
 SELECT MaquinaID,Codigo,Nombre
 FROM dbo.ERP_Maquinas
 WHERE Activo=1
+  AND UPPER(REPLACE(ISNULL(Codigo,N''),N' ',N'')) <> N'1200T'
+  AND UPPER(REPLACE(ISNULL(Nombre,N''),N' ',N'')) NOT LIKE N'%1200T%'
 ORDER BY Codigo,Nombre;";
 
             await using (var cmd = new SqlCommand(sqlMaquinas, cn))
@@ -1456,7 +1447,7 @@ ORDER BY
             bool trabajarDomingo)
         {
             var cursor = SiguienteAperturaOperativa(cursorInicial, trabajarDomingo);
-            cursor = RedondearSiguienteBloqueLocal(cursor, 15);
+            cursor = RedondearSiguienteBloqueLocal(cursor, 60);
 
             if (horasProduccion <= 0)
                 horasProduccion = 1m;
@@ -1466,7 +1457,7 @@ ORDER BY
             for (var intento = 0; intento < 500; intento++)
             {
                 cursor = SiguienteAperturaOperativa(cursor, trabajarDomingo);
-                cursor = RedondearSiguienteBloqueLocal(cursor, 15);
+                cursor = RedondearSiguienteBloqueLocal(cursor, 60);
 
                 var mismaParte = parteId.HasValue && parteAnteriorId.HasValue && parteId.Value == parteAnteriorId.Value;
                 var mismoMolde = moldeId.HasValue && moldeAnteriorId.HasValue && moldeId.Value == moldeAnteriorId.Value;
@@ -1617,6 +1608,46 @@ FROM dbo.Planeacion_ProgramaProduccion pp WITH (UPDLOCK, HOLDLOCK)
 WHERE pp.Activo = 1
   AND pp.MoldeID = @MoldeID
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Planeacion_ProgramaProduccion origen
+      CROSS APPLY
+      (
+          SELECT CHARINDEX(
+              N'NSQ_LHRH_PAIR:',
+              ISNULL(origen.Observaciones,N'')
+          ) AS PosGrupo
+      ) pos
+      CROSS APPLY
+      (
+          SELECT TRY_CONVERT(
+              INT,
+              LEFT(
+                  SUBSTRING(
+                      origen.Observaciones,
+                      pos.PosGrupo + LEN(N'NSQ_LHRH_PAIR:'),
+                      50
+                  ),
+                  CHARINDEX(
+                      N';',
+                      SUBSTRING(
+                          origen.Observaciones,
+                          pos.PosGrupo + LEN(N'NSQ_LHRH_PAIR:'),
+                          50
+                      ) + N';'
+                  ) - 1
+              )
+          ) AS Grupo
+      ) grp
+      WHERE origen.ProgramaProduccionID = @ProgramaProduccionID
+        AND pos.PosGrupo > 0
+        AND grp.Grupo IS NOT NULL
+        AND pp.Observaciones LIKE
+            N'%NSQ_LHRH_PAIR:' +
+            CONVERT(NVARCHAR(20),grp.Grupo) +
+            N';%'
+  )
   AND pp.FechaInicioProgramada IS NOT NULL
   AND ISNULL(pp.EstatusID, 1) NOT IN (5, 6, 9, 99)
   AND pp.FechaInicioProgramada < @Fin
@@ -2177,6 +2208,46 @@ OUTER APPLY
 WHERE pp.Activo = 1
   AND pp.MaquinaID = @MaquinaID
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Planeacion_ProgramaProduccion origen
+      CROSS APPLY
+      (
+          SELECT CHARINDEX(
+              N'NSQ_LHRH_PAIR:',
+              ISNULL(origen.Observaciones,N'')
+          ) AS PosGrupo
+      ) pos
+      CROSS APPLY
+      (
+          SELECT TRY_CONVERT(
+              INT,
+              LEFT(
+                  SUBSTRING(
+                      origen.Observaciones,
+                      pos.PosGrupo + LEN(N'NSQ_LHRH_PAIR:'),
+                      50
+                  ),
+                  CHARINDEX(
+                      N';',
+                      SUBSTRING(
+                          origen.Observaciones,
+                          pos.PosGrupo + LEN(N'NSQ_LHRH_PAIR:'),
+                          50
+                      ) + N';'
+                  ) - 1
+              )
+          ) AS Grupo
+      ) grp
+      WHERE origen.ProgramaProduccionID = @ProgramaProduccionID
+        AND pos.PosGrupo > 0
+        AND grp.Grupo IS NOT NULL
+        AND pp.Observaciones LIKE
+            N'%NSQ_LHRH_PAIR:' +
+            CONVERT(NVARCHAR(20),grp.Grupo) +
+            N';%'
+  )
   AND pp.FechaInicioProgramada IS NOT NULL
   AND pp.FechaInicioProgramada >= @Desde
   AND ISNULL(pp.EstatusID, 1) = 1
@@ -2323,13 +2394,7 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            await RecalcularOperadoresProgramaAsync(
-                programa.ProgramaProduccionID,
-                maquinaId,
-                cambio,
-                usuarioId,
-                cn,
-                tx);
+            // NSQ_DDP_PRODUCCION_V1 - calendario no reasigna operadores.
         }
 
         private static ProgramaCola MapearProgramaCola(SqlDataReader rd)

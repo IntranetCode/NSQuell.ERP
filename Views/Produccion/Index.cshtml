@@ -3499,3 +3499,45 @@ formSolicitarReprogramacion?.addEventListener('submit', function (event) {
 
 
 }
+
+@* NSQ_PRODUCCION_PERSONAL_PREFILL_V30 *@
+<script>
+document.addEventListener('shown.bs.modal', async function (event) {
+    if (event.target?.id !== 'modalIniciarPreparacion') return;
+
+    const programa = document.getElementById('modalProgramaProduccionId')?.value;
+    if (!programa) return;
+
+    try {
+        const response = await fetch(`/Produccion/PersonalProgramadoPrograma?programaProduccionId=${encodeURIComponent(programa)}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data?.ok || !data?.asignado) return;
+
+        const selectWhenReady = (id, value) => {
+            if (!value) return;
+            let intentos = 0;
+            const timer = window.setInterval(() => {
+                intentos++;
+                const select = document.getElementById(id);
+                if (select && Array.from(select.options).some(x => String(x.value) === String(value))) {
+                    select.value = String(value);
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    window.clearInterval(timer);
+                    return;
+                }
+                if (intentos >= 20) window.clearInterval(timer);
+            }, 100);
+        };
+
+        selectWhenReady('modalOperadorId', data.operadorID);
+        selectWhenReady('modalOperadorAuxiliarId', data.auxiliarID);
+        selectWhenReady('modalTecnicoProduccionId', data.tecnicoProduccionID);
+    }
+    catch (error) {
+        console.debug('Programacion de Personal no disponible para preseleccion:', error);
+    }
+});
+</script>

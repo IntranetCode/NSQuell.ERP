@@ -710,7 +710,6 @@
                     <div class="col-12 d-flex gap-2 flex-wrap">
                         <a class="quick-btn quick-ok" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloListos="true"><i class="fa-solid fa-circle-check"></i>Listos cambio molde</a>
                         <a class="quick-btn quick-warn" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteAbasto="true"><i class="fa-solid fa-truck-ramp-box"></i>Pendiente abasto</a>
-                        <a class="quick-btn quick-danger" asp-controller="PlaneacionPrograma" asp-action="Index" asp-route-soloPendienteDatosTecnicos="true"><i class="fa-solid fa-screwdriver-wrench"></i>Pendiente datos técnicos</a>
                         <a class="quick-btn" asp-controller="PlaneacionPrograma" asp-action="Index"><i class="fa-solid fa-rotate-left"></i>Limpiar</a>
                         <button type="button" class="quick-btn" id="btnCerrarTodo"><i class="fa-solid fa-down-left-and-up-right-to-center"></i>Cerrar todo</button>
                     </div>
@@ -1048,6 +1047,18 @@
                                                                                             Programar molde
                                                                                         </a>
                                                                                     }
+                                                                                    else if (PendienteDatosTecnicos(item) && item.ParteID.HasValue)
+                                                                                    {
+                                                                                        <button type="button"
+                                                                                                class="btn-card-main btn-datos-tecnicos"
+                                                                                                data-parte-id="@item.ParteID"
+                                                                                                data-release-detalle-id="@item.ReleaseDetalleID"
+                                                                                                data-parte="@ParteClave(item)">
+                                                                                            <i class="fa-solid fa-screwdriver-wrench"></i>
+                                                                                            Completar datos y programar
+                                                                                        </button>
+                                                                                        <span class="row-result row-result-review">Datos técnicos</span>
+                                                                                    }
                                                                                     else
                                                                                     {
                                                                                         <button type="button"
@@ -1089,3 +1100,280 @@
             </div>
         </section>
     </div>
+
+@* NSQ_DT_MODAL_V1 *@
+<div class="modal fade" id="modalDatosTecnicosRapidos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold">
+                        <i class="fa-solid fa-screwdriver-wrench me-2"></i>
+                        Completar datos técnicos
+                    </h5>
+                    <div class="small opacity-75" id="dtParteTitulo">-</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="dtTokenForm">@Html.AntiForgeryToken()</form>
+                <input type="hidden" id="dtParteID" />
+                <input type="hidden" id="dtReleaseDetalleID" />
+
+                <div id="dtMensaje" class="alert d-none"></div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Material *</label>
+                        <select id="dtMaterialID" class="form-select"></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Máquina principal *</label>
+                        <select id="dtMaquinaPrincipalID" class="form-select"></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Máquina sustituta</label>
+                        <select id="dtMaquinaSustitutaID" class="form-select"></select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Molde principal *</label>
+                        <select id="dtMoldePrincipalID" class="form-select"></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Cavidades *</label>
+                        <input id="dtCavidades" type="number" min="1" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Objetivo/h *</label>
+                        <input id="dtObjetivoHora" type="number" min="1" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Pzas/caja</label>
+                        <input id="dtPiezasPorCaja" type="number" min="0" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Color</label>
+                        <input id="dtColor" class="form-control" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Ciclo *</label>
+                        <input id="dtCiclo" class="form-control" placeholder="Ej. 45 s" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Peso bruto/pza *</label>
+                        <input id="dtPesoBruto" type="number" min="0" step="0.0001" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Peso neto/pza</label>
+                        <input id="dtPesoNeto" type="number" min="0" step="0.0001" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Piezas por embalaje *</label>
+                        <input id="dtPiezasPorEmbalaje" type="number" min="1" step="1" class="form-control" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Código embalaje</label>
+                        <input id="dtEmbalajeCodigo" class="form-control" />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Descripción embalaje</label>
+                        <input id="dtEmbalajeDescripcion" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo secado</label>
+                        <input id="dtTipoSecado" class="form-control" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Horas secado</label>
+                        <input id="dtHorasSecado" type="number" min="0" step="0.25" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="small text-muted mt-3">
+                    La máquina 1200T está excluida. Al guardar se utilizarán estos datos en Planeación y después se abrirá Programar molde.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary fw-bold" id="btnGuardarDtRapidos">
+                    Guardar y programar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    // NSQ_FILTRO_DT_DOM_V1_5
+    document
+        .querySelectorAll('a[href*="soloPendienteDatosTecnicos=true"]')
+        .forEach(x => x.remove());
+
+    const modalEl = document.getElementById('modalDatosTecnicosRapidos');
+    if (!modalEl) return;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const qs = id => document.getElementById(id);
+
+    function setMensaje(texto, tipo) {
+        const el = qs('dtMensaje');
+        if (!el) return;
+        if (!texto) {
+            el.className = 'alert d-none';
+            el.textContent = '';
+            return;
+        }
+        el.className = `alert alert-${tipo || 'info'}`;
+        el.textContent = texto;
+    }
+
+    function option(select, value, text) {
+        const opt = document.createElement('option');
+        opt.value = value ?? '';
+        opt.textContent = text;
+        select.appendChild(opt);
+    }
+
+    function cargarSelect(select, items, current, placeholder) {
+        select.innerHTML = '';
+        option(select, '', placeholder);
+
+        for (const item of items || []) {
+            option(
+                select,
+                item.id,
+                [item.codigo, item.nombre].filter(Boolean).join(' - ') || `ID ${item.id}`);
+        }
+
+        if (current !== null && current !== undefined) {
+            select.value = String(current);
+        }
+    }
+
+    function numberOrNull(id) {
+        const value = qs(id)?.value?.trim();
+        if (!value) return null;
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    document.addEventListener('click', async event => {
+        const btn = event.target.closest('.btn-datos-tecnicos');
+        if (!btn) return;
+
+        const parteId = btn.dataset.parteId || '';
+        const releaseDetalleId = btn.dataset.releaseDetalleId || '';
+
+        qs('dtParteID').value = parteId;
+        qs('dtReleaseDetalleID').value = releaseDetalleId;
+        qs('dtParteTitulo').textContent = btn.dataset.parte || `Parte ${parteId}`;
+        setMensaje('Cargando datos actuales...', 'info');
+        modal.show();
+
+        try {
+            const response = await fetch(
+                `@Url.Action("DatosTecnicosRapidos","PlaneacionPrograma")?parteId=${encodeURIComponent(parteId)}`,
+                { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.mensaje || 'No fue posible cargar los datos técnicos.');
+            }
+
+            const d = result.data || {};
+
+            cargarSelect(qs('dtMaterialID'), result.materiales, d.materialID, '-- Material --');
+            cargarSelect(qs('dtMaquinaPrincipalID'), result.maquinas, d.maquinaPrincipalID, '-- Máquina principal --');
+            cargarSelect(qs('dtMaquinaSustitutaID'), result.maquinas, d.maquinaSustitutaID, '-- Sin sustituta --');
+            cargarSelect(qs('dtMoldePrincipalID'), result.moldes, d.moldePrincipalID, '-- Molde --');
+
+            qs('dtCavidades').value = d.cavidades ?? '';
+            qs('dtObjetivoHora').value = d.objetivoHora ?? '';
+            qs('dtPiezasPorCaja').value = d.piezasPorCaja ?? '';
+            qs('dtColor').value = d.color ?? '';
+            qs('dtCiclo').value = d.ciclo ?? '';
+            qs('dtPesoBruto').value = d.pesoBrutoPieza ?? '';
+            qs('dtPesoNeto').value = d.pesoNetoPieza ?? '';
+            qs('dtPiezasPorEmbalaje').value = d.piezasPorEmbalaje ?? '';
+            qs('dtEmbalajeCodigo').value = d.embalajeCodigo ?? '';
+            qs('dtEmbalajeDescripcion').value = d.embalajeDescripcion ?? '';
+            qs('dtTipoSecado').value = d.tipoSecado ?? '';
+            qs('dtHorasSecado').value = d.horasSecado ?? '';
+
+            qs('dtParteTitulo').textContent =
+                `${d.numeroParte || btn.dataset.parte || ''} · ${d.descripcion || ''}`;
+
+            setMensaje('', 'info');
+        }
+        catch (error) {
+            setMensaje(error.message, 'danger');
+        }
+    });
+
+    qs('btnGuardarDtRapidos')?.addEventListener('click', async () => {
+        const button = qs('btnGuardarDtRapidos');
+        const token = document.querySelector('#dtTokenForm input[name="__RequestVerificationToken"]')?.value || '';
+
+        const payload = {
+            parteID: Number(qs('dtParteID').value || 0),
+            materialID: numberOrNull('dtMaterialID'),
+            maquinaPrincipalID: numberOrNull('dtMaquinaPrincipalID'),
+            maquinaSustitutaID: numberOrNull('dtMaquinaSustitutaID'),
+            moldePrincipalID: numberOrNull('dtMoldePrincipalID'),
+            color: qs('dtColor').value || null,
+            cavidades: numberOrNull('dtCavidades'),
+            objetivoHora: numberOrNull('dtObjetivoHora'),
+            piezasPorCaja: numberOrNull('dtPiezasPorCaja'),
+            ciclo: qs('dtCiclo').value || null,
+            tipoSecado: qs('dtTipoSecado').value || null,
+            horasSecado: numberOrNull('dtHorasSecado'),
+            pesoBrutoPieza: numberOrNull('dtPesoBruto'),
+            pesoNetoPieza: numberOrNull('dtPesoNeto'),
+            embalajeCodigo: qs('dtEmbalajeCodigo').value || null,
+            embalajeDescripcion: qs('dtEmbalajeDescripcion').value || null,
+            piezasPorEmbalaje: numberOrNull('dtPiezasPorEmbalaje')
+        };
+
+        button.disabled = true;
+        setMensaje('Guardando datos técnicos...', 'info');
+
+        try {
+            const response = await fetch(
+                '@Url.Action("GuardarDatosTecnicosRapidos","PlaneacionPrograma")',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.mensaje || 'No fue posible guardar.');
+            }
+
+            setMensaje(result.mensaje, 'success');
+
+            const releaseDetalleId = qs('dtReleaseDetalleID').value;
+
+            window.setTimeout(() => {
+                window.location.href =
+                    '@Url.Action("CrearDesdeNecesidad","PlaneacionPrograma")' +
+                    `?releaseDetalleId=${encodeURIComponent(releaseDetalleId)}`;
+            }, 450);
+        }
+        catch (error) {
+            button.disabled = false;
+            setMensaje(error.message, 'danger');
+        }
+    });
+})();
+</script>

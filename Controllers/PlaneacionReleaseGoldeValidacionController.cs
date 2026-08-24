@@ -141,10 +141,16 @@ ORDER BY
                 .Where(x =>
                     x.Estado ==
                         ReleaseValidacionEstados.Pendiente &&
-                    string.Equals(
-                        x.Plantilla,
-                        "GOLDEN_WEEKLY_RELEASE",
-                        StringComparison.OrdinalIgnoreCase) &&
+                    (
+                        string.Equals(
+                            x.Plantilla,
+                            "GOLDEN_WEEKLY_RELEASE",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(
+                            x.Plantilla,
+                            "GOLDE_MEXICO_WEEKLY_RELEASE",
+                            StringComparison.OrdinalIgnoreCase)
+                    ) &&
                     x.ClienteID.HasValue)
                 .ToList();
 

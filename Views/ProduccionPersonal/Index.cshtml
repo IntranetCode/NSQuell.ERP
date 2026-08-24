@@ -1,0 +1,430 @@
+﻿@model ERP.NSQuell.Models.ProduccionPersonalIndexVm
+@using System.Globalization
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Programación de Personal | Producción";
+    var cultura = new CultureInfo("es-MX");
+}
+
+@section Styles {
+<style>
+    .pp-page{max-width:1800px;margin:0 auto;padding:18px}.pp-hero{border-radius:24px;padding:22px 26px;background:linear-gradient(135deg,#0f2f63,#194c9b);color:#fff;box-shadow:0 16px 34px rgba(15,47,99,.18)}.pp-hero h1{margin:0;font-size:1.65rem;font-weight:950}.pp-hero p{margin:6px 0 0;max-width:1050px;color:rgba(255,255,255,.86);font-weight:600}.pp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pp-actions a{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);border-radius:12px;padding:8px 12px;font-weight:850}.pp-panel{background:#fff;border:1px solid #d7e2f1;border-radius:18px;box-shadow:0 8px 24px rgba(16,24,40,.06);margin-top:12px}.pp-filter{padding:14px 16px}.pp-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px}.pp-metric{background:#fff;border:1px solid #d7e2f1;border-radius:16px;padding:13px 15px}.pp-metric span{display:block;color:#667085;text-transform:uppercase;font-size:.7rem;font-weight:850}.pp-metric strong{color:#0f2f63;font-size:1.35rem}.pp-program{padding:15px 16px;border-bottom:1px solid #e8eef6}.pp-program:last-child{border-bottom:0}.pp-program-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}.pp-of{font-size:1.05rem;font-weight:950;color:#0f2f63}.pp-sub{color:#667085;font-size:.79rem;font-weight:650;margin-top:2px}.pp-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.pp-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:#f8fbff;border:1px solid #d7e2f1;font-size:.73rem;font-weight:800;color:#344054}.pp-assignments{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:9px;margin-top:12px}.pp-assignment{border:1px solid #d7e2f1;border-radius:14px;padding:11px 12px;background:#fbfdff}.pp-assignment.complete{border-color:#abefc6;background:#f3fff7}.pp-assignment.pending{border-color:#fed7aa;background:#fffaf3}.pp-assignment-title{display:flex;justify-content:space-between;gap:8px;font-weight:900;color:#0f2f63}.pp-person-grid{display:grid;grid-template-columns:1fr;gap:4px;margin-top:8px}.pp-person{font-size:.79rem;color:#344054}.pp-person strong{display:inline-block;min-width:76px}.pp-empty{padding:12px;border:1px dashed #cbd5e1;border-radius:12px;color:#667085;font-weight:700;margin-top:10px}.pp-btn{border-radius:11px;font-weight:850}.pp-setup{margin-top:12px;border:1px solid #fecdca;background:#fffbfa;color:#b42318;border-radius:16px;padding:14px 16px;font-weight:700}.pp-note{font-size:.76rem;color:#667085}.pp-candidate-note{padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:.78rem;color:#475467}.pp-status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:.7rem;font-weight:900}.pp-ok{background:#ecfdf3;color:#067647;border:1px solid #abefc6}.pp-warn{background:#fff7ed;color:#b54708;border:1px solid #fed7aa}.pp-search{min-width:260px}.modal-content.pp-modal{border:0;border-radius:20px;overflow:hidden}.pp-modal .modal-header{background:linear-gradient(135deg,#0f2f63,#194c9b);color:#fff}.pp-loading{opacity:.65;pointer-events:none}
+    @@media (max-width:900px){.pp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.pp-page{padding:10px}}
+    @@media (max-width:560px){.pp-metrics{grid-template-columns:1fr}.pp-assignments{grid-template-columns:1fr}}
+</style>
+}
+
+@section Scripts {
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('modalProgramarPersonal');
+    if (!modalEl) return;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const form = document.getElementById('formProgramarPersonal');
+    const asignacionId = document.getElementById('ppAsignacionId');
+    const programaId = document.getElementById('ppProgramaId');
+    const fecha = document.getElementById('ppFechaTrabajo');
+    const turno = document.getElementById('ppTurnoId');
+    const operador = document.getElementById('ppOperadorId');
+    const auxiliar = document.getElementById('ppAuxiliarId');
+    const tecnico = document.getElementById('ppTecnicoId');
+    const observaciones = document.getElementById('ppObservaciones');
+    const ventana = document.getElementById('ppVentana');
+    const contexto = document.getElementById('ppContexto');
+    const candidatosInfo = document.getElementById('ppCandidatosInfo');
+    const search = document.getElementById('ppSearch');
+
+    let valoresPendientes = null;
+
+    function limpiarSelect(select, texto) {
+        if (!select) return;
+        select.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = texto;
+        select.appendChild(option);
+    }
+
+    function textoCandidato(x, mostrarNivel) {
+        const partes = [x.nombre || 'Persona'];
+        if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
+        if (x.enEscala) {
+            partes.push(`Escala: ${x.turnoEscala || 'turno'}` + (x.maquinaEscala ? ` / ${x.maquinaEscala}` : ''));
+        } else {
+            partes.push('Fuera de escala seleccionada');
+        }
+        return partes.join(' · ');
+    }
+
+    function cargarLista(select, lista, placeholder, mostrarNivel, preferido) {
+        limpiarSelect(select, placeholder);
+        (lista || []).forEach(x => {
+            const option = document.createElement('option');
+            option.value = String(x.personaID);
+            option.textContent = textoCandidato(x, mostrarNivel);
+            if (String(x.personaID) === String(preferido || '')) option.selected = true;
+            select.appendChild(option);
+        });
+    }
+
+    async function cargarCandidatos() {
+        const p = programaId.value;
+        const f = fecha.value;
+        const t = turno.value;
+
+        if (!p || !f || !t) {
+            limpiarSelect(operador, '-- Selecciona fecha y turno --');
+            limpiarSelect(auxiliar, '-- Opcional --');
+            limpiarSelect(tecnico, '-- Opcional --');
+            ventana.textContent = 'Selecciona una fecha y un turno para calcular la ventana exacta.';
+            return;
+        }
+
+        form.classList.add('pp-loading');
+        candidatosInfo.textContent = 'Consultando personal disponible, escala y polivalencia...';
+
+        try {
+            const qs = new URLSearchParams({
+                programaProduccionId: p,
+                fechaTrabajo: f,
+                turnoId: t
+            });
+            const response = await fetch(`/ProduccionPersonal/Candidatos?${qs.toString()}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await response.json();
+            if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+            const pref = valoresPendientes || {};
+            cargarLista(operador, data.operadores, '-- Seleccionar operador --', data.tieneMatrizPolivalencia, pref.operador);
+            cargarLista(auxiliar, data.auxiliares, '-- Sin auxiliar --', false, pref.auxiliar);
+            cargarLista(tecnico, data.tecnicos, '-- Sin técnico --', false, pref.tecnico);
+
+            ventana.textContent = `Ventana asignable: ${data.ventanaTexto}`;
+            contexto.textContent = `Programa ${data.programa.programaProduccionID} · ${data.programa.maquina || 'Sin máquina'} · ${data.programa.parte || 'Sin parte'}`;
+
+            const matriz = data.tieneMatrizPolivalencia
+                ? 'Operador filtrado por Polivalencia N1-N4.'
+                : 'La parte no tiene matriz: se usa el catálogo activo de operadores.';
+            const escala = data.escalaPublicadaEncontrada
+                ? 'Existe escala RRHH publicada para este turno; sus personas aparecen primero.'
+                : 'No se encontró escala RRHH publicada para este turno; se permite seleccionar personal activo del catálogo.';
+            candidatosInfo.textContent = `${matriz} ${escala}`;
+            valoresPendientes = null;
+        }
+        catch (error) {
+            console.error(error);
+            limpiarSelect(operador, '-- No disponible --');
+            limpiarSelect(auxiliar, '-- No disponible --');
+            limpiarSelect(tecnico, '-- No disponible --');
+            ventana.textContent = error.message || 'No fue posible calcular la ventana.';
+            candidatosInfo.textContent = 'Corrige fecha/turno o revisa la configuración RRHH.';
+        }
+        finally {
+            form.classList.remove('pp-loading');
+        }
+    }
+
+    document.querySelectorAll('[data-pp-new]').forEach(btn => {
+        btn.addEventListener('click', async function () {
+            form.reset();
+            asignacionId.value = '';
+            programaId.value = btn.dataset.programa || '';
+            fecha.value = (btn.dataset.inicio || '').slice(0, 10);
+            valoresPendientes = null;
+            contexto.textContent = `Programa ${btn.dataset.programa || ''} · ${btn.dataset.maquina || ''} · ${btn.dataset.parte || ''}`;
+            ventana.textContent = 'Selecciona turno.';
+            modal.show();
+            if (turno.value) await cargarCandidatos();
+        });
+    });
+
+    document.querySelectorAll('[data-pp-edit]').forEach(btn => {
+        btn.addEventListener('click', async function () {
+            form.reset();
+            asignacionId.value = btn.dataset.asignacion || '';
+            programaId.value = btn.dataset.programa || '';
+            fecha.value = btn.dataset.fecha || '';
+            turno.value = btn.dataset.turno || '';
+            observaciones.value = btn.dataset.observaciones || '';
+            valoresPendientes = {
+                operador: btn.dataset.operador || '',
+                auxiliar: btn.dataset.auxiliar || '',
+                tecnico: btn.dataset.tecnico || ''
+            };
+            modal.show();
+            await cargarCandidatos();
+        });
+    });
+
+    fecha.addEventListener('change', cargarCandidatos);
+    turno.addEventListener('change', cargarCandidatos);
+
+    form.addEventListener('submit', function (event) {
+        const ids = [operador.value, auxiliar.value, tecnico.value].filter(Boolean);
+        if (ids.length === 0) {
+            event.preventDefault();
+            alert('Selecciona al menos una persona: operador, auxiliar o técnico de Producción.');
+            return;
+        }
+        if (new Set(ids).size !== ids.length) {
+            event.preventDefault();
+            alert('Operador, auxiliar y técnico deben ser personas diferentes.');
+        }
+    });
+
+    search?.addEventListener('input', function () {
+        const q = (search.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        document.querySelectorAll('[data-pp-program]').forEach(row => {
+            const text = (row.dataset.search || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            row.style.display = !q || text.includes(q) ? '' : 'none';
+        });
+    });
+});
+</script>
+}
+
+<div class="pp-page">
+    <section class="pp-hero">
+        <h1><i class="fa-solid fa-users-gear me-2"></i>Programación de Personal</h1>
+        <p>Asigna operador, auxiliar y técnico de Producción a cada programa según parte, máquina, fecha y turno. Los horarios se leen del catálogo RRHH; no están escritos de forma fija en este módulo.</p>
+        <div class="pp-actions">
+            <a href="@Url.Action("Grupo","Menu",new { id = 2 })"><i class="fa-solid fa-arrow-left me-1"></i>Producción</a>
+            <a href="@Url.Action("Index","ProduccionPersonal",new { fechaDesde = DateTime.Today.ToString("yyyy-MM-dd"), fechaHasta = DateTime.Today.AddDays(7).ToString("yyyy-MM-dd") })"><i class="fa-solid fa-calendar-week me-1"></i>Hoy + 7 días</a>
+            <a href="@Url.Action("Turnos","EscalaPersonal")"><i class="fa-solid fa-clock me-1"></i>Catálogo de turnos RRHH</a>
+        </div>
+    </section>
+
+    @if (!Model.TablaConfigurada)
+    {
+        <div class="pp-setup">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+            Falta la tabla <code>dbo.Produccion_ProgramaPersonalAsignaciones</code>. Ejecuta primero <strong>01_DIAGNOSTICO_ProgramacionPersonal.sql</strong> y después <strong>02_APLICAR_ProgramacionPersonal.sql</strong> en ERP_QUELL.
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mt-3 fw-semibold">@TempData["Error"]</div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mt-3 fw-semibold">@TempData["Success"]</div>
+    }
+
+    <section class="pp-panel pp-filter">
+        <form method="get" action="@Url.Action("Index","ProduccionPersonal")" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Desde</label>
+                <input type="date" name="fechaDesde" value="@Model.FechaDesde.ToString("yyyy-MM-dd")" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Hasta</label>
+                <input type="date" name="fechaHasta" value="@Model.FechaHasta.ToString("yyyy-MM-dd")" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary pp-btn w-100"><i class="fa-solid fa-filter me-1"></i>Consultar</button>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Buscar</label>
+                <input id="ppSearch" type="search" class="form-control pp-search" placeholder="OF, máquina, parte, molde, persona..." />
+            </div>
+        </form>
+        <div class="pp-note mt-2">Los turnos provienen de <code>RRHH_Turnos</code>. Puedes guardar franjas distintas para operador/auxiliar y técnico; por ejemplo, un técnico en turno mixto que se superpone con operadores de 1.º o 2.º turno.</div>
+        <div class="pp-note mt-2"><strong>Una OF puede tener varias asignaciones.</strong> Guarda una por cada fecha/turno que corresponda. Por ejemplo: Operador + Auxiliar en 1er turno y Técnico en Mixto; después puedes agregar 2do y 3er turno a la misma OF.</div>
+    </section>
+
+    <section class="pp-metrics">
+        <div class="pp-metric"><span>Programas visibles</span><strong>@Model.TotalProgramas</strong></div>
+        <div class="pp-metric"><span>Asignaciones</span><strong>@Model.TotalAsignaciones</strong></div>
+        <div class="pp-metric"><span>Con 3 roles</span><strong>@Model.AsignacionesCompletas</strong></div>
+        <div class="pp-metric"><span>Turnos activos RRHH</span><strong>@Model.Turnos.Count</strong></div>
+    </section>
+
+    <section class="pp-panel">
+        @if (Model.Programas.Count == 0)
+        {
+            <div class="p-5 text-center text-muted fw-semibold">No hay programas de Producción en el periodo seleccionado.</div>
+        }
+        else
+        {
+            @foreach (var programa in Model.Programas)
+            {
+                var search = string.Join(" ", new[] {
+                    programa.FolioOF, programa.MaquinaCodigo, programa.MaquinaNombre,
+                    programa.NumeroParte, programa.ReferenciaSAP, programa.DescripcionParte,
+                    programa.MoldeCodigo,
+                    string.Join(" ", programa.Asignaciones.Select(a => $"{a.OperadorNombre} {a.AuxiliarNombre} {a.TecnicoProduccionNombre} {a.TurnoNombre}"))
+                });
+
+                <article class="pp-program" data-pp-program data-search="@search">
+                    <div class="pp-program-head">
+                        <div>
+                            <div class="pp-of">@(string.IsNullOrWhiteSpace(programa.FolioOF) ? $"Programa #{programa.ProgramaProduccionID}" : $"OF {programa.FolioOF}")</div>
+                            <div class="pp-sub">Programa @programa.ProgramaProduccionID · @programa.Inicio.ToString("ddd dd/MM HH:mm", cultura) → @programa.Fin.ToString("ddd dd/MM HH:mm", cultura)</div>
+                            <div class="pp-tags">
+                                <span class="pp-tag"><i class="fa-solid fa-industry"></i>@programa.MaquinaCodigo @programa.MaquinaNombre</span>
+                                <span class="pp-tag"><i class="fa-solid fa-cube"></i>@programa.ParteVisible</span>
+                                @if (!string.IsNullOrWhiteSpace(programa.MoldeCodigo)) { <span class="pp-tag"><i class="fa-solid fa-shapes"></i>Molde @programa.MoldeCodigo</span> }
+                                <span class="pp-tag"><i class="fa-solid fa-boxes-stacked"></i>@programa.CantidadProgramada.ToString("N0") pzas</span>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(programa.DescripcionParte))
+                            {
+                                <div class="pp-sub mt-1">@programa.DescripcionParte</div>
+                            }
+                        </div>
+                        <button type="button"
+                                class="btn btn-primary pp-btn"
+                                data-pp-new
+                                data-programa="@programa.ProgramaProduccionID"
+                                data-inicio="@programa.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                data-maquina="@programa.MaquinaCodigo"
+                                data-parte="@programa.ParteVisible"
+                                disabled="@(!Model.TablaConfigurada)">
+                            <i class="fa-solid fa-user-plus me-1"></i>Agregar responsables / turno
+                        </button>
+                    </div>
+
+                    @if (programa.Asignaciones.Count == 0)
+                    {
+                        <div class="pp-empty">Sin personal programado todavía. Puedes agregar varios responsables a la misma OF usando distintos turnos o fechas.</div>
+                    }
+                    else
+                    {
+                        <div class="pp-assignments">
+                            @foreach (var a in programa.Asignaciones)
+                            {
+                                <div class="pp-assignment @(a.EstaCompleta ? "complete" : "pending")">
+                                    <div class="pp-assignment-title">
+                                        <span>@a.TurnoNombre</span>
+                                        <span class="pp-status @(a.EstaCompleta ? "pp-ok" : "pp-warn")">@(a.EstaCompleta ? "3 roles" : "Parcial")</span>
+                                    </div>
+                                    <div class="pp-sub">@a.Inicio.ToString("dd/MM HH:mm") → @a.Fin.ToString("dd/MM HH:mm")</div>
+                                    <div class="pp-person-grid">
+                                        <div class="pp-person"><strong>Operador:</strong> @(string.IsNullOrWhiteSpace(a.OperadorNombre) ? "Sin asignar" : a.OperadorNombre)</div>
+                                        <div class="pp-person"><strong>Auxiliar:</strong> @(string.IsNullOrWhiteSpace(a.AuxiliarNombre) ? "Sin asignar" : a.AuxiliarNombre)</div>
+                                        <div class="pp-person"><strong>Técnico:</strong> @(string.IsNullOrWhiteSpace(a.TecnicoProduccionNombre) ? "Sin asignar" : a.TecnicoProduccionNombre)</div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(a.Observaciones))
+                                    {
+                                        <div class="pp-sub mt-2">@a.Observaciones</div>
+                                    }
+                                    <div class="d-flex gap-2 flex-wrap mt-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary pp-btn"
+                                                data-pp-edit
+                                                data-asignacion="@a.AsignacionPersonalID"
+                                                data-programa="@a.ProgramaProduccionID"
+                                                data-fecha="@a.FechaTrabajo.ToString("yyyy-MM-dd")"
+                                                data-turno="@a.TurnoID"
+                                                data-operador="@a.OperadorID"
+                                                data-auxiliar="@a.AuxiliarID"
+                                                data-tecnico="@a.TecnicoProduccionID"
+                                                data-observaciones="@a.Observaciones">
+                                            <i class="fa-solid fa-pen me-1"></i>Editar
+                                        </button>
+                                        <form method="post" action="@Url.Action("Eliminar","ProduccionPersonal")" onsubmit="return confirm('¿Retirar esta asignación de personal?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="asignacionPersonalId" value="@a.AsignacionPersonalID" />
+                                            <input type="hidden" name="volverAFecha" value="@Model.FechaDesde.ToString("yyyy-MM-dd")" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger pp-btn"><i class="fa-solid fa-trash me-1"></i>Retirar</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </article>
+            }
+        }
+    </section>
+</div>
+
+<div class="modal fade" id="modalProgramarPersonal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content pp-modal">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-users-gear me-1"></i>Asignar personal al programa</h5>
+                    <div id="ppContexto" class="small opacity-75"></div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="formProgramarPersonal" method="post" action="@Url.Action("Guardar","ProduccionPersonal")">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <input type="hidden" id="ppAsignacionId" name="AsignacionPersonalID" />
+                    <input type="hidden" id="ppProgramaId" name="ProgramaProduccionID" />
+
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">Fecha de trabajo</label>
+                            <input id="ppFechaTrabajo" name="FechaTrabajo" type="date" class="form-control" required />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold">Turno</label>
+                            <select id="ppTurnoId" name="TurnoID" class="form-select" required>
+                                <option value="">-- Seleccionar turno --</option>
+                                @{
+                                    var turnosPrincipales = Model.Turnos.Where(x => x.EsTurnoPrincipal).ToList();
+                                    var turnosOtros = Model.Turnos.Where(x => !x.EsTurnoPrincipal).ToList();
+                                }
+                                @if (turnosPrincipales.Any())
+                                {
+                                    <optgroup label="Turnos principales de Producción">
+                                        @foreach (var t in turnosPrincipales)
+                                        {
+                                            <option value="@t.TurnoID">@t.EtiquetaDropdown</option>
+                                        }
+                                    </optgroup>
+                                }
+                                @if (turnosOtros.Any())
+                                {
+                                    <optgroup label="Otros turnos activos en RRHH">
+                                        @foreach (var t in turnosOtros)
+                                        {
+                                            <option value="@t.TurnoID">@t.EtiquetaDropdown</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <div id="ppVentana" class="pp-candidate-note">Selecciona fecha y turno.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Operador principal <span class="text-muted fw-normal">(según turno)</span></label>
+                            <select id="ppOperadorId" name="OperadorID" class="form-select">
+                                <option value="">-- Seleccionar --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Auxiliar</label>
+                            <select id="ppAuxiliarId" name="AuxiliarID" class="form-select">
+                                <option value="">-- Sin auxiliar --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Técnico Producción</label>
+                            <select id="ppTecnicoId" name="TecnicoProduccionID" class="form-select">
+                                <option value="">-- Sin técnico --</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <div id="ppCandidatosInfo" class="pp-candidate-note">La disponibilidad se calcula con RRHH y la polivalencia de la parte.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Observaciones</label>
+                            <textarea id="ppObservaciones" name="Observaciones" class="form-control" rows="2" maxlength="500" placeholder="Opcional"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light pp-btn" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary pp-btn"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar programación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

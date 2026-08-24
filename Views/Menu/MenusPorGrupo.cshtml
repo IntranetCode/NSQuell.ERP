@@ -635,3 +635,69 @@
         return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 }
+
+@* NSQ_MENU_PROGRAMACION_PERSONAL_V30 *@
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const title = document.getElementById('grupo-title');
+    const normalize = value => (value || '')
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    if (!normalize(title?.textContent).includes('produccion')) return;
+    if (document.getElementById('nsqProgramacionPersonalCard')) return;
+
+    const container = document.querySelector('.quick-actions');
+    if (!container) return;
+
+    const card = document.createElement('article');
+    card.id = 'nsqProgramacionPersonalCard';
+    card.className = 'action-card module-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', 'Abrir Programacion de Personal');
+    card.style.setProperty('--card-bg', '#eef6ff');
+    card.style.setProperty('--card-border', '#b2ddff');
+    card.style.setProperty('--icon-bg', '#dbeafe');
+    card.style.setProperty('--stripe-bg', '#175cd3');
+
+    card.innerHTML = `
+        <span class="module-accent" aria-hidden="true"></span>
+        <div class="module-card__inner">
+            <div class="module-top">
+                <div class="action-icon module-icon" aria-hidden="true">
+                    <i class="fa-solid fa-users-gear"></i>
+                </div>
+            </div>
+            <div class="module-body">
+                <span class="module-kicker">Producción</span>
+                <h2 class="action-title module-title">Programación de Personal</h2>
+                <p class="action-description module-description">Asigna operador, auxiliar y técnico a cada programa según parte, máquina, fecha y turno.</p>
+            </div>
+            <div class="module-footer">
+                <span class="module-status"><i class="fas fa-circle" aria-hidden="true"></i>Disponible</span>
+                <span class="module-open">Abrir módulo <i class="fas fa-arrow-right" aria-hidden="true"></i></span>
+            </div>
+        </div>`;
+
+    const open = () => { window.location.href = '/ProduccionPersonal/Index'; };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            open();
+        }
+    });
+
+    container.appendChild(card);
+
+    const metric = document.querySelector('.group-hero__metric span');
+    if (metric) {
+        const base = Number.parseInt(metric.textContent || '0', 10);
+        if (Number.isFinite(base)) metric.textContent = String(base + 1);
+    }
+});
+</script>

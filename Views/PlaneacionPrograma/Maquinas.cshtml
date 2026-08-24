@@ -731,3 +731,25 @@
             </div>
         </div>
     </div>
+
+@* NSQ_CALENDARIO_EDITABLE_LINK_V1 *@
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (document.getElementById('nsqCalendarioEditableLink')) return;
+
+    const host =
+        document.querySelector('.hero-actions') ||
+        document.querySelector('.d-flex.gap-2.flex-wrap');
+
+    if (!host) return;
+
+    const link = document.createElement('a');
+    link.id = 'nsqCalendarioEditableLink';
+    link.className = 'btn-glass';
+    link.href = '@Url.Action("Index","PlaneacionCalendarioMaquinas", new { vista = "semana", fecha = Model.FechaDesde.ToString("yyyy-MM-dd") })';
+    link.innerHTML =
+        '<i class="fa-solid fa-arrows-left-right-to-line"></i> Mover horarios por hora';
+
+    host.appendChild(link);
+});
+</script>

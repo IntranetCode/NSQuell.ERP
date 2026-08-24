@@ -1247,3 +1247,82 @@
             </section>
         </form>
     </div>
+
+@* NSQ_CREAR_CLIENT_V1_4 *@
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Planeación no asigna personal. DDP se resuelve en Producción.
+    const nsqOperadorPrincipal = document.getElementById('OperadorPrincipalID');
+    const nsqOperadorAuxiliar = document.getElementById('OperadorAuxiliarID');
+    const nsqOperadorBox = document.getElementById('operadorTurnoBox');
+    const nsqFormPrograma = document.getElementById('formPrograma');
+
+    if (nsqOperadorPrincipal) nsqOperadorPrincipal.value = '';
+    if (nsqOperadorAuxiliar) nsqOperadorAuxiliar.value = '';
+
+    if (nsqOperadorBox) {
+        const nsqStep = nsqOperadorBox.closest('.step-line');
+        (nsqStep || nsqOperadorBox).style.display = 'none';
+    }
+
+    if (nsqFormPrograma) {
+        nsqFormPrograma.addEventListener('submit', function () {
+            if (nsqOperadorPrincipal) nsqOperadorPrincipal.value = '';
+            if (nsqOperadorAuxiliar) nsqOperadorAuxiliar.value = '';
+        }, true);
+    }
+
+    // Renumerar pasos visibles para que no queden huecos.
+    let nsqPaso = 1;
+    document.querySelectorAll('.step-line').forEach(function (step) {
+        if (window.getComputedStyle(step).display === 'none') return;
+        const number = step.querySelector('.step-number');
+        if (number) number.textContent = String(nsqPaso++);
+    });
+
+    // Redondeo visual por embalaje.
+    // El servidor repite esta regla antes de guardar.
+    const nsqCantidadBase = Number('@cantidadBase');
+    const nsqProductoIncompleto = Number('@productoIncompletoApartado');
+    const nsqPiezasPorEmbalaje = Number('@(Model.PiezasPorEmbalaje ?? 0)');
+    const nsqCantidadInput = document.getElementById('CantidadProgramada');
+
+    if (nsqCantidadInput &&
+        Number.isFinite(nsqCantidadBase) &&
+        nsqCantidadBase > 0 &&
+        Number.isFinite(nsqPiezasPorEmbalaje) &&
+        nsqPiezasPorEmbalaje > 0) {
+
+        const nsqObjetivoTotal =
+            Math.ceil(nsqCantidadBase / nsqPiezasPorEmbalaje) *
+            nsqPiezasPorEmbalaje;
+
+        const nsqNuevaProduccion =
+            Math.max(
+                0,
+                nsqObjetivoTotal -
+                (Number.isFinite(nsqProductoIncompleto)
+                    ? nsqProductoIncompleto
+                    : 0));
+
+        nsqCantidadInput.value = String(Math.ceil(nsqNuevaProduccion));
+
+        let nsqInfo =
+            document.getElementById('nsqInfoRedondeoEmbalaje');
+
+        if (!nsqInfo) {
+            nsqInfo = document.createElement('div');
+            nsqInfo.id = 'nsqInfoRedondeoEmbalaje';
+            nsqInfo.className = 'small text-primary fw-semibold mt-1';
+            nsqCantidadInput.insertAdjacentElement('afterend', nsqInfo);
+        }
+
+        nsqInfo.textContent =
+            `Redondeo por embalaje: objetivo total ${Math.ceil(nsqObjetivoTotal).toLocaleString()} ` +
+            `(${Math.ceil(nsqPiezasPorEmbalaje).toLocaleString()} pzas/embalaje).`;
+
+        nsqCantidadInput.dispatchEvent(
+            new Event('input', { bubbles: true }));
+    }
+});
+</script>
