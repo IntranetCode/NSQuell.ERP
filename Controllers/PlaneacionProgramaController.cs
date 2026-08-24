@@ -956,13 +956,14 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
 
       
 
-        [HttpPost]
+                [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionProgramaCrearDesdeNecesidadVm vm)
         {
             var usuarioId = ObtenerUsuarioID();
             vm.TipoOF = "RELEASE";
             vm.MotivoTipoOF = null;
+
             if (usuarioId <= 0) ModelState.AddModelError("", "No se pudo identificar el usuario de la sesión.");
             if (vm.ReleaseDetalleID <= 0) ModelState.AddModelError("", "No se recibió el renglón de release.");
             if (!vm.MaquinaID.HasValue) ModelState.AddModelError(nameof(vm.MaquinaID), "Selecciona la máquina.");
@@ -971,46 +972,119 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             if (!vm.FechaInicioProgramada.HasValue) ModelState.AddModelError(nameof(vm.FechaInicioProgramada), "Captura la fecha y hora de cambio.");
             if (!vm.Cambio.HasValue) ModelState.AddModelError(nameof(vm.Cambio), "Captura la hora de cambio de molde.");
             if (!vm.Arranque.HasValue) ModelState.AddModelError(nameof(vm.Arranque), "Captura la hora de arranque.");
+
             ModelState.Remove(nameof(vm.CantidadProgramada));
             ModelState.Remove(nameof(vm.HorasProgramadas));
             ModelState.Remove(nameof(vm.OperadorPrincipalID));
             ModelState.Remove(nameof(vm.OperadorAuxiliarID));
+
             vm.OperadorPrincipalID = null;
             vm.OperadorAuxiliarID = null;
-            if (string.Equals(vm.CondicionProduccion, PlaneacionProgramaCondicion.InterrumpirProduccion, StringComparison.OrdinalIgnoreCase))
-                ModelState.AddModelError(nameof(vm.CondicionProduccion), "La opción I.P. / Interrumpir producción estará disponible cuando el módulo de Producción esté terminado y contabilizando avance real.");
-            if (vm.FechaInicioProgramada.HasValue && vm.Cambio.HasValue) vm.FechaInicioProgramada = CalcularFechaHoraDesdeHora(vm.FechaInicioProgramada.Value.Date, vm.Cambio);
+
+            if (string.Equals(
+                    vm.CondicionProduccion,
+                    PlaneacionProgramaCondicion.InterrumpirProduccion,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                ModelState.AddModelError(
+                    nameof(vm.CondicionProduccion),
+                    "La opción I.P. / Interrumpir producción estará disponible cuando el módulo de Producción esté terminado y contabilizando avance real.");
+            }
+
+            if (vm.FechaInicioProgramada.HasValue && vm.Cambio.HasValue)
+            {
+                vm.FechaInicioProgramada =
+                    CalcularFechaHoraDesdeHora(
+                        vm.FechaInicioProgramada.Value.Date,
+                        vm.Cambio);
+            }
+
             var minimoPermitido = RedondearSiguienteBloque(DateTime.Now, 15);
-            if (vm.FechaInicioProgramada.HasValue && vm.FechaInicioProgramada.Value < minimoPermitido)
+
+            if (vm.FechaInicioProgramada.HasValue &&
+                vm.FechaInicioProgramada.Value < minimoPermitido)
             {
                 vm.FechaInicioProgramada = minimoPermitido;
                 vm.Cambio = minimoPermitido.TimeOfDay;
             }
-            var trabajarDomingo = string.Equals(Request.Form["TrabajarDomingo"].ToString(), "true", StringComparison.OrdinalIgnoreCase) || string.Equals(Request.Form["TrabajarDomingo"].ToString(), "on", StringComparison.OrdinalIgnoreCase);
+
+            var trabajarDomingo =
+                string.Equals(
+                    Request.Form["TrabajarDomingo"].ToString(),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(
+                    Request.Form["TrabajarDomingo"].ToString(),
+                    "on",
+                    StringComparison.OrdinalIgnoreCase);
+
             if (!ModelState.IsValid)
             {
                 await CargarCatalogosAsync(vm);
                 return View(vm);
             }
-            await using var cn = new SqlConnection(ConnectionString);
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
-            await using var tx = await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            await using var tx =
+                await cn.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            var etapaSql =
+                "Inicio de transacción"; // NSQ_SQL_ETAPA_PROGRAMAR_MOLDE_V2
+
             try
             {
                 var sqlTx = (SqlTransaction)tx;
-                var existe = await ReleaseDetalleYaProgramadoAsync(vm.ReleaseDetalleID, cn, sqlTx);
+
+                etapaSql =
+                    "Validar si el ReleaseDetalle ya está programado";
+
+                var existe =
+                    await ReleaseDetalleYaProgramadoAsync(
+                        vm.ReleaseDetalleID,
+                        cn,
+                        sqlTx);
+
                 if (existe)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Ese renglón de release ya fue programado.";
+                    TempData["Error"] =
+                        "Ese renglón de release ya fue programado.";
                     return RedirectToAction(nameof(Index));
                 }
-                await RecalcularCantidadesProgramaAsync(vm, cn, sqlTx);
-                if (vm.CantidadProgramada <= 0 || !vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0)
-                    throw new InvalidOperationException("La cantidad u horas de producción recalculadas no son válidas.");
+
+                etapaSql =
+                    "Recalcular cantidades del programa";
+
+                await RecalcularCantidadesProgramaAsync(
+                    vm,
+                    cn,
+                    sqlTx);
+
+                if (vm.CantidadProgramada <= 0 ||
+                    !vm.HorasProgramadas.HasValue ||
+                    vm.HorasProgramadas.Value <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "La cantidad u horas de producción recalculadas no son válidas.");
+                }
+
                 if (vm.MaquinaID.HasValue)
                 {
-                    var maquinaCompatible = await MaquinaCompatibleConParteAsync(vm.ParteID, vm.MaquinaID.Value, cn, sqlTx);
+                    etapaSql =
+                        "Validar máquina compatible con la parte";
+
+                    var maquinaCompatible =
+                        await MaquinaCompatibleConParteAsync(
+                            vm.ParteID,
+                            vm.MaquinaID.Value,
+                            cn,
+                            sqlTx);
+
                     if (!maquinaCompatible)
                     {
                         await tx.RollbackAsync();
@@ -1027,29 +1101,32 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                 vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(sugeridaTx.Arranque, vm.HorasProgramadas.Value, trabajarDomingo);
                 var textoSugerencia = $"Programación colocada automáticamente en cola. Cambio: {sugeridaTx.Cambio:dd/MM/yyyy HH:mm}. Arranque: {sugeridaTx.Arranque:dd/MM/yyyy HH:mm}. {sugeridaTx.Motivo}";
                 vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? textoSugerencia : vm.Observaciones.Trim() + Environment.NewLine + textoSugerencia;
-
-                // Planeación no decide personal. Fecha + Turno + Máquina se resuelve en Producción mediante DDP.
+                // NSQ_OPERADORES_SOLO_PRODUCCION_V1
+                // Planeacion no decide personal. Fecha + Turno + Maquina se resuelve
+                // en Produccion mediante DDP.
                 vm.OperadorPrincipalID = null;
                 vm.OperadorAuxiliarID = null;
-
-                await CompletarDatosProgramaAsync(vm, cn, sqlTx);
-                await CompletarVinculoOFExistenteAsync(vm,cn, sqlTx);
+await CompletarDatosProgramaAsync(vm, cn, sqlTx);
+                await CompletarVinculoOFExistenteAsync(vm, cn, sqlTx);
                 var programaId = await InsertarProgramaAsync(vm, usuarioId, cn, sqlTx);
-
-                // Planeación no persiste operador principal ni auxiliar.
+                // NSQ_OPERADORES_SOLO_PRODUCCION_V1 - no persistir personal desde Planeacion.
                 await MarcarReleaseDetalleProgramadoAsync(vm.ReleaseDetalleID, programaId, usuarioId, cn, sqlTx);
-
-                // LHRH automático.
-                var programaParejaLhRhId = await ProgramarParejaLhRhAsync(programaId, vm, usuarioId, cn, sqlTx);
-
+                // NSQ_LHRH_AUTO_V1
+                var programaParejaLhRhId =
+                    await ProgramarParejaLhRhAsync(
+                        programaId,
+                        vm,
+                        usuarioId,
+                        cn,
+                        sqlTx);
                 if (vm.SolicitudProduccionID.HasValue && vm.SolicitudProduccionDetalleID.HasValue)
                     await VincularOFManualConProgramaAsync(programaId, vm, usuarioId, cn, sqlTx);
-
                 await DesactivarReacomodoPlaneacionAsync(cn, sqlTx);
                 await tx.CommitAsync();
-
-                TempData["Success"] = $"Cambio de molde programado correctamente por {vm.CantidadProgramada:N0} pieza(s).";
-                return RedirectToAction(nameof(Maquinas));
+                TempData["Success"] = vm.ProductoIncompletoApartado > 0
+                    ? $"Cambio de molde programado correctamente. Se usarán {vm.ProductoIncompletoApartado:N0} pieza(s) de etiqueta blanca y se producirán {vm.CantidadProgramada:N0}."
+                    : "Cambio de molde programado correctamente.";
+                return RedirectToAction(nameof(Index)); // NSQ_REDIRECT_INDEX_V1
             }
             catch (Exception ex)
             {

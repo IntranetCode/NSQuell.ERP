@@ -1,4 +1,4 @@
-@{
+﻿@{
     var title = ViewData["Title"] as string ?? "ERP NSQuell";
 }
 
@@ -180,6 +180,7 @@
         }
 
     </style>
+    <link rel="stylesheet" href="~/css/planeacion/select-search.css" asp-append-version="true" /> @* NSQ_PLANEACION_SELECT_SEARCH_V2_CSS *@
 </head>
 
 <body>
@@ -270,5 +271,6 @@
     </script>
 
     @await RenderSectionAsync("Scripts", required: false)
+    <script src="~/js/planeacion/select-search.js" asp-append-version="true"></script> @* NSQ_PLANEACION_SELECT_SEARCH_V2_JS *@
 </body>
 </html>

@@ -1175,7 +1175,7 @@
                     </div>
 
                     <div class="col-md-3">
-                        <label class="form-label">Código embalaje</label>
+                        <label class="form-label">Código embalaje *</label>
                         <input id="dtEmbalajeCodigo" class="form-control" />
                     </div>
                     <div class="col-md-5">
@@ -1276,7 +1276,7 @@
 
         try {
             const response = await fetch(
-                `@Url.Action("DatosTecnicosRapidos","PlaneacionPrograma")?parteId=${encodeURIComponent(parteId)}`,
+                `@Url.Action("DatosTecnicosParaProgramar","PlaneacionPrograma")?parteId=${encodeURIComponent(parteId)}&releaseDetalleId=${encodeURIComponent(releaseDetalleId)}`,
                 { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
 
             const result = await response.json();
@@ -1308,7 +1308,17 @@
             qs('dtParteTitulo').textContent =
                 `${d.numeroParte || btn.dataset.parte || ''} · ${d.descripcion || ''}`;
 
-            setMensaje('', 'info');
+                        if (Array.isArray(result.faltantes) && result.faltantes.length) {
+                setMensaje(
+                    `Falta completar: ${result.faltantes.join(', ')}. Los campos obligatorios están marcados con *.`,
+                    'warning'
+                );
+            } else {
+                setMensaje(
+                    'Los datos técnicos obligatorios ya están completos. Puedes guardar para sincronizar la necesidad y continuar.',
+                    'success'
+                );
+            }
         }
         catch (error) {
             setMensaje(error.message, 'danger');
@@ -1321,6 +1331,7 @@
 
         const payload = {
             parteID: Number(qs('dtParteID').value || 0),
+            releaseDetalleID: Number(qs('dtReleaseDetalleID').value || 0), // NSQ_DT_FLUJO_VIEW_V3
             materialID: numberOrNull('dtMaterialID'),
             maquinaPrincipalID: numberOrNull('dtMaquinaPrincipalID'),
             maquinaSustitutaID: numberOrNull('dtMaquinaSustitutaID'),
@@ -1344,7 +1355,7 @@
 
         try {
             const response = await fetch(
-                '@Url.Action("GuardarDatosTecnicosRapidos","PlaneacionPrograma")',
+                '@Url.Action("GuardarDatosTecnicosParaProgramar","PlaneacionPrograma")',
                 {
                     method: 'POST',
                     headers: {
@@ -1377,3 +1388,6 @@
     });
 })();
 </script>
+@* NSQ_DT_MODAL_FIX_V3_SCRIPT *@
+<script src="~/js/Planeacion/programa-datos-tecnicos-modal-v3.js"
+        asp-append-version="true"></script>
