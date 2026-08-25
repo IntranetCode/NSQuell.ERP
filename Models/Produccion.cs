@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using static ERP.NSQuell.Models.ProduccionOperadorCajaVm;
 
 
 namespace ERP.NSQuell.Models;
@@ -1305,6 +1306,8 @@ public sealed class ProduccionRegistroHoraPostVm
     public bool FinalizarTiempoExtra { get; set; }
 
     public string? Observaciones { get; set; }
+
+    public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
 }
 public sealed class ProduccionParoPostVm
 {
@@ -1358,9 +1361,6 @@ public sealed class ProduccionOperadorTabletVm
     public decimal? Ciclo { get; set; }
     public int? Cavidades { get; set; }
 
-    // =========================================================
-    // CONFIGURACIÓN REAL DEL TÉCNICO
-    // =========================================================
     public ProduccionConfiguracionCorridaVm? ConfiguracionActual { get; set; }
     public long? UltimoContadorMaquina { get; set; }
     public int BonusOperadorActual { get; set; }
@@ -1381,18 +1381,14 @@ public sealed class ProduccionOperadorTabletVm
     public bool TieneConfiguracionReal =>
         ConfiguracionActual?.EstaVigente == true;
 
-    // =========================================================
-    // TIEMPO EXTRA
-    // =========================================================
+
     public ProduccionTiempoExtraVm? TiempoExtraActivo { get; set; }
 
     public List<ProduccionTiempoExtraVm> HistorialTiempoExtra { get; set; } = new();
 
     public bool PuedeIniciarTiempoExtra { get; set; }
 
-    // Lo establecerá el controller en cada carga.
-    // Sirve para sincronizar el cronómetro del navegador
-    // contra la hora real del servidor.
+    public List<ProduccionCatalogoDefectoVm> CatalogoDefectos { get; set; } = new();
     public DateTime FechaHoraServidor { get; set; } = DateTime.Now;
 
     public bool TieneTiempoExtraActivo =>

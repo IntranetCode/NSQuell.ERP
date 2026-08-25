@@ -27,6 +27,7 @@
     var cicloEnUso = Model.CicloEnUso;
     var ultimoContador = Model.UltimoContadorMaquina;
     var bonusActual = Model.BonusOperadorActual;
+    var catalogoDefectos = Model.CatalogoDefectos?.Where(x => x.Activo).OrderBy(x => x.Codigo).ThenBy(x => x.Nombre).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCatalogoDefectoVm>();
     var mensajeSuccess = TempData["Success"]?.ToString();
     var mensajeObjetivoNoCumplido = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("No alcanzaste el objetivo por hora", StringComparison.OrdinalIgnoreCase);
     var mensajeSinObjetivo = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("no tiene objetivo por hora configurado", StringComparison.OrdinalIgnoreCase);
@@ -713,6 +714,167 @@
             background: #fffcf5;
             border-color: #fedf89;
             color: #93370d
+        }
+
+        .defect-panel {
+            border: 1px solid #fda29b;
+            background: linear-gradient(180deg,#fffafa,#fff5f4);
+            border-radius: 17px;
+            padding: 14px;
+            margin: 2px 0 14px;
+        }
+
+        .defect-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 11px;
+        }
+
+        .defect-title {
+            color: #912018;
+            font-weight: 950;
+            font-size: .98rem;
+        }
+
+        .defect-help {
+            color: #7a271a;
+            font-size: .8rem;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .defect-counter {
+            border-radius: 999px;
+            padding: 7px 10px;
+            background: #fff;
+            border: 1px solid #fda29b;
+            color: #b42318;
+            font-size: .75rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .defect-counter.ok {
+            border-color: #abefc6;
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+        .defect-list {
+            display: grid;
+            gap: 9px;
+        }
+
+        .defect-row {
+            display: grid;
+            grid-template-columns: minmax(0,2fr) minmax(110px,.55fr) auto;
+            gap: 8px;
+            align-items: end;
+            border: 1px solid #fecaca;
+            border-radius: 13px;
+            padding: 10px;
+            background: #fff;
+        }
+
+        .defect-row .form-label {
+            margin-bottom: 4px;
+            color: #7a271a;
+            font-size: .7rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .defect-row .form-select,
+        .defect-row .form-control {
+            min-height: 44px;
+            font-weight: 750;
+        }
+
+        .defect-observation {
+            grid-column: 1 / -1;
+        }
+
+        .btn-remove-defect {
+            width: 44px;
+            height: 44px;
+            border-radius: 11px;
+            border: 1px solid #fda29b;
+            background: #fff;
+            color: #b42318;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-remove-defect:hover {
+            background: #fef3f2;
+            color: #912018;
+        }
+
+        .defect-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .btn-add-defect {
+            border: 1px solid #fda29b;
+            background: #fff;
+            color: #b42318;
+            border-radius: 11px;
+            padding: 9px 12px;
+            font-size: .8rem;
+            font-weight: 900;
+        }
+
+        .btn-add-defect:hover:not(:disabled) {
+            background: #fef3f2;
+        }
+
+        .btn-add-defect:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .defect-feedback {
+            flex: 1;
+            min-width: 230px;
+            border-radius: 11px;
+            padding: 9px 11px;
+            background: #fef3f2;
+            color: #b42318;
+            font-size: .8rem;
+            font-weight: 850;
+        }
+
+        .defect-feedback.ok {
+            background: #ecfdf3;
+            color: #067647;
+        }
+
+        .defect-feedback.warning {
+            background: #fffcf5;
+            color: #93370d;
+        }
+
+        @@media(max-width:650px) {
+            .defect-row {
+                grid-template-columns: 1fr;
+            }
+
+            .defect-observation {
+                grid-column: auto;
+            }
+
+            .btn-remove-defect {
+                width: 100%;
+            }
         }
 
         .preview-loading {
@@ -1989,7 +2151,7 @@
             else
             {
 
-                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual</strong>, <strong>Sospechosos</strong> y <strong>Scrap</strong>. El ERP calculará y propondrá automáticamente las piezas <strong>OK</strong>. El operador puede corregir el OK manualmente cuando sea necesario; la diferencia contra la producción física quedará visible antes de guardar.</div>
+                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual</strong>, <strong>Sospechosos</strong> y <strong>Scrap</strong>. El ERP calculará y propondrá automáticamente las piezas <strong>OK</strong>. Si reportas Scrap, aparecerá automáticamente la clasificación de defectos y deberás indicar por qué se retiró cada pieza antes de guardar.</div>
             }
 
             @if (horas.Count == 0)
@@ -2432,6 +2594,27 @@
                             <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="0" placeholder="0" name="CantidadSospechosa" id="extraYellow" class="modal-qty yellow empty-number" inputmode="numeric" autocomplete="off" /></div>
                             <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="extraScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div>
                         </div>
+                        <div class="defect-panel d-none" id="panelDefectosExtra">
+                            <div class="defect-head">
+                                <div>
+                                    <div class="defect-title"><i class="fa-solid fa-bug me-2"></i>Defecto del scrap <span class="text-danger">*</span></div>
+                                    <div class="defect-help">Si retiras piezas como scrap, indica por qué. Debes clasificar exactamente todas las piezas reportadas.</div>
+                                </div>
+                                <div class="defect-counter" id="contadorDefectosExtra">0 / 0 clasificadas</div>
+                            </div>
+                            @if (catalogoDefectos.Count == 0)
+                            {
+                                <div class="alert alert-danger rounded-4 fw-bold mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i>No existen defectos activos en Calidad_CatalogoDefectos. No podrás guardar scrap hasta que exista al menos un defecto activo.</div>
+                            }
+                            else
+                            {
+                                <div class="defect-list" id="listaDefectosExtra"></div>
+                                <div class="defect-footer">
+                                    <button type="button" class="btn-add-defect" id="btnAgregarDefectoExtra"><i class="fa-solid fa-plus me-1"></i>Agregar otro defecto</button>
+                                    <div class="defect-feedback" id="resumenDefectosExtra">Selecciona el defecto de las piezas scrap.</div>
+                                </div>
+                            }
+                        </div>
                         <div class="classification-feedback" id="extraClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El ERP propondrá el OK como producción física menos Sospechosos y Scrap. Puedes ajustar el OK manualmente si existe una diferencia real y dejar la explicación en observaciones.</div>
                         <label class="form-label fw-bold mt-3" for="extraObservaciones">Observaciones</label>
                         <textarea name="Observaciones" id="extraObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Obligatorio si modificas el OK y la clasificación ya no coincide con la producción física, o si el contador no registra producción."></textarea>
@@ -2745,16 +2928,62 @@
                         <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div>
                     </div>
 
+                    <div class="defect-panel d-none" id="panelDefectosNormal">
+                        <div class="defect-head">
+                            <div>
+                                <div class="defect-title"><i class="fa-solid fa-bug me-2"></i>¿Por qué estás retirando estas piezas? <span class="text-danger">*</span></div>
+                                <div class="defect-help">El defecto es obligatorio cuando Scrap es mayor que cero. Puedes repartir el scrap entre varios defectos.</div>
+                            </div>
+                            <div class="defect-counter" id="contadorDefectosNormal">0 / 0 clasificadas</div>
+                        </div>
+                        @if (catalogoDefectos.Count == 0)
+                        {
+                            <div class="alert alert-danger rounded-4 fw-bold mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i>No existen defectos activos en Calidad_CatalogoDefectos. No podrás guardar scrap hasta que exista al menos un defecto activo.</div>
+                        }
+                        else
+                        {
+                            <div class="defect-list" id="listaDefectosNormal"></div>
+                            <div class="defect-footer">
+                                <button type="button" class="btn-add-defect" id="btnAgregarDefectoNormal"><i class="fa-solid fa-plus me-1"></i>Agregar otro defecto</button>
+                                <div class="defect-feedback" id="resumenDefectosNormal">Selecciona el defecto de las piezas scrap.</div>
+                            </div>
+                        }
+                    </div>
+
                     <div class="classification-feedback" id="modalClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El OK se propondrá automáticamente como producción física menos Sospechosos y Scrap. Si el operador necesita corregirlo, puede borrar el valor y capturar otro.</div>
 
                     <label class="form-label fw-bold mt-3">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Recomendado cuando se modifica manualmente el OK o existe una diferencia contra el contador."></textarea>
                     <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i><strong>Ayuda automática:</strong> el ERP propone el OK para reducir captura. <strong>El campo OK sigue editable</strong>; si el operador lo modifica, la pantalla marcará la diferencia contra la producción física antes de guardar.</div>
                 </div>
-                <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
+                <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100" id="btnGuardarHora"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
             </form>
         </div>
     </div>
 </div>
+
+<template id="templateDefectoScrap">
+    <div class="defect-row" data-defect-row>
+        <div>
+            <label class="form-label">Tipo de defecto</label>
+            <select class="form-select" data-defect-select>
+                <option value="">Selecciona defecto...</option>
+                @foreach (var defecto in catalogoDefectos)
+                {
+                    <option value="@defecto.CatalogoDefectoID">@defecto.Texto</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label">Cantidad</label>
+            <input type="number" min="1" step="1" class="form-control text-center" data-defect-qty inputmode="numeric" autocomplete="off" />
+        </div>
+        <button type="button" class="btn-remove-defect" data-remove-defect title="Quitar defecto" aria-label="Quitar defecto"><i class="fa-solid fa-trash-can"></i></button>
+        <div class="defect-observation">
+            <label class="form-label">Observación del defecto <span class="text-muted text-lowercase">(opcional)</span></label>
+            <input type="text" maxlength="500" class="form-control" data-defect-obs placeholder="Ej. zona de la pieza, condición observada, detalle útil para Calidad" />
+        </div>
+    </div>
+</template>
 
 @section Scripts {
     <script>
@@ -2781,6 +3010,178 @@
                 const numero=Number(raw);
                 return Number.isFinite(numero)?numero:0;
             }
+
+            const hayCatalogoDefectos=@(catalogoDefectos.Count > 0 ? "true" : "false");
+            let claveFilaDefectosNormal=null;
+
+            function configDefectos(tipo){
+                return tipo==='extra'
+                    ?{scrapId:'extraScrap',panelId:'panelDefectosExtra',listaId:'listaDefectosExtra',contadorId:'contadorDefectosExtra',resumenId:'resumenDefectosExtra',agregarId:'btnAgregarDefectoExtra'}
+                    :{scrapId:'modalScrap',panelId:'panelDefectosNormal',listaId:'listaDefectosNormal',contadorId:'contadorDefectosNormal',resumenId:'resumenDefectosNormal',agregarId:'btnAgregarDefectoNormal'};
+            }
+
+            function filasDefecto(tipo){
+                const cfg=configDefectos(tipo);
+                const lista=document.getElementById(cfg.listaId);
+                return lista?Array.from(lista.querySelectorAll('[data-defect-row]')):[];
+            }
+
+            function reindexarDefectos(tipo){
+                filasDefecto(tipo).forEach(function(fila,index){
+                    const select=fila.querySelector('[data-defect-select]');
+                    const qty=fila.querySelector('[data-defect-qty]');
+                    const obs=fila.querySelector('[data-defect-obs]');
+                    if(select)select.name='DefectosScrap['+index+'].CatalogoDefectoID';
+                    if(qty)qty.name='DefectosScrap['+index+'].CantidadScrap';
+                    if(obs)obs.name='DefectosScrap['+index+'].Observaciones';
+                });
+            }
+
+            function agregarFilaDefecto(tipo,cantidadSugerida){
+                const cfg=configDefectos(tipo);
+                const lista=document.getElementById(cfg.listaId);
+                const template=document.getElementById('templateDefectoScrap');
+                if(!lista||!template||!hayCatalogoDefectos)return null;
+                const fragment=template.content.cloneNode(true);
+                const fila=fragment.querySelector('[data-defect-row]');
+                const qty=fila?.querySelector('[data-defect-qty]');
+                if(qty&&Number(cantidadSugerida)>0){
+                    qty.value=String(Math.trunc(Number(cantidadSugerida)));
+                    fila.dataset.cantidadAutomatica='true';
+                }
+                lista.appendChild(fragment);
+                reindexarDefectos(tipo);
+                return lista.lastElementChild;
+            }
+
+            function reiniciarDefectos(tipo){
+                const cfg=configDefectos(tipo);
+                const lista=document.getElementById(cfg.listaId);
+                if(lista)lista.innerHTML='';
+                const panel=document.getElementById(cfg.panelId);
+                panel?.classList.add('d-none');
+                pintarEstadoDefectos(tipo);
+            }
+
+            function evaluarDefectos(tipo){
+                const cfg=configDefectos(tipo);
+                const scrap=Math.max(0,Math.trunc(numeroSeguro(document.getElementById(cfg.scrapId))));
+                if(scrap<=0)return{valido:true,scrap:0,total:0,faltan:0,mensaje:'Sin scrap por clasificar.',estado:'ok'};
+                if(!hayCatalogoDefectos)return{valido:false,scrap,total:0,faltan:scrap,mensaje:'No existen defectos activos en el catálogo. Solicita a Calidad que habilite al menos un defecto.',estado:'error'};
+                const filas=filasDefecto(tipo);
+                if(filas.length===0)return{valido:false,scrap,total:0,faltan:scrap,mensaje:'Selecciona el defecto de las piezas scrap.',estado:'error'};
+                let total=0;
+                const ids=[];
+                for(const fila of filas){
+                    const select=fila.querySelector('[data-defect-select]');
+                    const qtyInput=fila.querySelector('[data-defect-qty]');
+                    const id=Number((select?.value||'').trim());
+                    const raw=(qtyInput?.value||'').trim();
+                    const qty=Number(raw);
+                    if(!Number.isInteger(id)||id<=0)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'Selecciona un tipo de defecto en todas las filas.',estado:'error'};
+                    if(raw===''||!Number.isInteger(qty)||qty<=0)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'La cantidad de cada defecto debe ser un número entero mayor a cero.',estado:'error'};
+                    ids.push(id);
+                    total+=qty;
+                }
+                if(new Set(ids).size!==ids.length)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'No repitas el mismo defecto. Usa una sola fila y coloca ahí la cantidad total de ese defecto.',estado:'error'};
+                if(total<scrap)return{valido:false,scrap,total,faltan:scrap-total,mensaje:'Has clasificado '+total.toLocaleString('es-MX')+' de '+scrap.toLocaleString('es-MX')+' pieza(s). Faltan '+(scrap-total).toLocaleString('es-MX')+'.',estado:'warning'};
+                if(total>scrap)return{valido:false,scrap,total,faltan:0,mensaje:'Asignaste '+total.toLocaleString('es-MX')+' pieza(s) a defectos, pero el scrap es '+scrap.toLocaleString('es-MX')+'. Reduce '+(total-scrap).toLocaleString('es-MX')+'.',estado:'error'};
+                return{valido:true,scrap,total,faltan:0,mensaje:'Scrap completamente clasificado: '+total.toLocaleString('es-MX')+' de '+scrap.toLocaleString('es-MX')+' pieza(s).',estado:'ok'};
+            }
+
+            function pintarEstadoDefectos(tipo){
+                const cfg=configDefectos(tipo);
+                const estado=evaluarDefectos(tipo);
+                const contador=document.getElementById(cfg.contadorId);
+                const resumen=document.getElementById(cfg.resumenId);
+                const agregar=document.getElementById(cfg.agregarId);
+                if(contador){
+                    contador.textContent=estado.total.toLocaleString('es-MX')+' / '+estado.scrap.toLocaleString('es-MX')+' clasificadas';
+                    contador.classList.toggle('ok',estado.valido&&estado.scrap>0);
+                }
+                if(resumen){
+                    resumen.textContent=estado.mensaje;
+                    resumen.className='defect-feedback'+(estado.estado==='ok'?' ok':estado.estado==='warning'?' warning':'');
+                }
+                if(agregar){
+                    const numeroFilas=filasDefecto(tipo).length;
+                    agregar.disabled=!hayCatalogoDefectos||estado.scrap<=0||(estado.scrap>0&&numeroFilas>=estado.scrap);
+                }
+                if(tipo==='normal'){
+                    const guardar=document.getElementById('btnGuardarHora');
+                    if(guardar&&!guardar.dataset.enviando)guardar.disabled=!estado.valido;
+                }
+                return estado;
+            }
+
+            function sincronizarDefectosConScrap(tipo){
+                const cfg=configDefectos(tipo);
+                const scrap=Math.max(0,Math.trunc(numeroSeguro(document.getElementById(cfg.scrapId))));
+                const panel=document.getElementById(cfg.panelId);
+                const lista=document.getElementById(cfg.listaId);
+                if(scrap<=0){
+                    if(lista)lista.innerHTML='';
+                    panel?.classList.add('d-none');
+                    pintarEstadoDefectos(tipo);
+                    return;
+                }
+                panel?.classList.remove('d-none');
+                if(hayCatalogoDefectos&&filasDefecto(tipo).length===0)agregarFilaDefecto(tipo,scrap);
+                const filas=filasDefecto(tipo);
+                if(filas.length===1&&filas[0].dataset.cantidadAutomatica==='true'){
+                    const qty=filas[0].querySelector('[data-defect-qty]');
+                    if(qty)qty.value=String(scrap);
+                }
+                reindexarDefectos(tipo);
+                pintarEstadoDefectos(tipo);
+            }
+
+            function prepararEventosDefectos(tipo){
+                const cfg=configDefectos(tipo);
+                const lista=document.getElementById(cfg.listaId);
+                const agregar=document.getElementById(cfg.agregarId);
+                agregar?.addEventListener('click',function(){
+                    const estadoAntes=evaluarDefectos(tipo);
+                    const scrap=estadoAntes.scrap;
+                    const filas=filasDefecto(tipo);
+                    if(scrap<=0)return;
+                    if(filas.length>=scrap)return;
+                    filas.forEach(f=>f.dataset.cantidadAutomatica='false');
+                    let cantidadNueva=estadoAntes.total<scrap?scrap-estadoAntes.total:1;
+                    if(cantidadNueva<=0)cantidadNueva=1;
+                    const nueva=agregarFilaDefecto(tipo,cantidadNueva);
+                    nueva?.querySelector('[data-defect-select]')?.focus();
+                    pintarEstadoDefectos(tipo);
+                    if(tipo==='extra')actualizarBotonConfirmarExtra();
+                });
+                lista?.addEventListener('input',function(e){
+                    const fila=e.target.closest?.('[data-defect-row]');
+                    if(fila&&e.target.matches('[data-defect-qty]'))fila.dataset.cantidadAutomatica='false';
+                    reindexarDefectos(tipo);
+                    pintarEstadoDefectos(tipo);
+                    if(tipo==='extra')actualizarBotonConfirmarExtra();
+                });
+                lista?.addEventListener('change',function(){
+                    reindexarDefectos(tipo);
+                    pintarEstadoDefectos(tipo);
+                    if(tipo==='extra')actualizarBotonConfirmarExtra();
+                });
+                lista?.addEventListener('click',function(e){
+                    const boton=e.target.closest?.('[data-remove-defect]');
+                    if(!boton)return;
+                    boton.closest('[data-defect-row]')?.remove();
+                    reindexarDefectos(tipo);
+                    if(filasDefecto(tipo).length===0){
+                        const scrap=Math.max(0,Math.trunc(numeroSeguro(document.getElementById(cfg.scrapId))));
+                        if(scrap>0&&hayCatalogoDefectos)agregarFilaDefecto(tipo,scrap);
+                    }
+                    pintarEstadoDefectos(tipo);
+                    if(tipo==='extra')actualizarBotonConfirmarExtra();
+                });
+            }
+
+            prepararEventosDefectos('normal');
+            prepararEventosDefectos('extra');
 
             function limpiarPrevisualizacion(){
                 ultimaPrevisualizacion=null;
@@ -2965,6 +3366,11 @@
             function cargarFila(row){
                 if(!row||!form)return;
                 filaActiva=row;
+                const claveActual=(row.dataset.fecha||'')+'|'+(row.dataset.inicio||'')+'|'+(row.dataset.numero||'');
+                if(claveFilaDefectosNormal!==claveActual){
+                    reiniciarDefectos('normal');
+                    claveFilaDefectosNormal=claveActual;
+                }
                 cambiarModoOK(false);
                 limpiarPrevisualizacion();
                 limpiarMensajeCaptura();
@@ -2980,6 +3386,7 @@
                 document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'0';
                 document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'0';
                 document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
+                sincronizarDefectosConScrap('normal');
                 actualizarComparacionObjetivo();
                 actualizarClasificacion();
                 if((document.getElementById('modalContador').value||'').trim()!=='')programarPrevisualizacion(true);
@@ -2997,6 +3404,7 @@
                         const campo=filaActiva.querySelector(selector);
                         if(campo)campo.value=this.value;
                     }
+                    if(id==='modalScrap')sincronizarDefectosConScrap('normal');
                     actualizarClasificacion();
                     programarPrevisualizacion(false);
                 });
@@ -3066,6 +3474,15 @@
                     mostrarMensajeCaptura('Revisa las cantidades. OK, Sospechosos y Scrap deben ser números mayores o iguales a cero.');
                     return;
                 }
+                const estadoDefectos=evaluarDefectos('normal');
+                pintarEstadoDefectos('normal');
+                if(!estadoDefectos.valido){
+                    e.preventDefault();
+                    mostrarMensajeCaptura(estadoDefectos.mensaje);
+                    document.getElementById('panelDefectosNormal')?.scrollIntoView({behavior:'smooth',block:'center'});
+                    return;
+                }
+                reindexarDefectos('normal');
                 if(ok===0&&yellow===0&&scrap===0&&!obs){
                     e.preventDefault();
                     mostrarMensajeCaptura('No existe producción clasificada. Explica en observaciones por qué no hubo producción durante este bloque.');
@@ -3082,7 +3499,7 @@
                     }
                 }
                 const button=form.querySelector('button[type="submit"]');
-                if(button){button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
+                if(button){button.dataset.enviando='true';button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
             });
 
             const obligatoria=document.querySelector('[data-hour-row][data-obligatoria="true"]');
@@ -3467,7 +3884,8 @@
                 const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
                 if(!boton)return;
                 const cortePermitido=modoRegistroTiempoExtra!=='CORTE'||segundosCorteActual>=3600;
-                boton.disabled=!ejecucionEnProduccion||tieneParoAbierto||!extraPreviewValida||!cortePermitido;
+                const defectosValidos=evaluarDefectos('extra').valido;
+                boton.disabled=!ejecucionEnProduccion||tieneParoAbierto||!extraPreviewValida||!cortePermitido||!defectosValidos;
             }
 
             function mostrarMensajeCorteExtra(mensaje){
@@ -3694,6 +4112,8 @@
                 if(sospechoso)sospechoso.value='0';
                 if(scrap)scrap.value='0';
                 if(observaciones)observaciones.value='';
+                reiniciarDefectos('extra');
+                sincronizarDefectosConScrap('extra');
                 const finalizar=document.getElementById('extraFinalizarTiempoExtra');
                 if(finalizar)finalizar.value=modo==='FINALIZAR'?'true':'false';
                 const titulo=document.getElementById('tituloModalCorteTiempoExtra');
@@ -3741,6 +4161,7 @@
             ['extraYellow','extraScrap'].forEach(function(id){
                 document.getElementById(id)?.addEventListener('input',function(){
                     extraPreviewValida=false;
+                    if(id==='extraScrap')sincronizarDefectosConScrap('extra');
                     actualizarBotonConfirmarExtra();
                     actualizarClasificacionExtra();
                     programarPrevisualizacionExtra(false);
@@ -3792,6 +4213,16 @@
                     return;
                 }
 
+                const estadoDefectos=evaluarDefectos('extra');
+                pintarEstadoDefectos('extra');
+                if(!estadoDefectos.valido){
+                    e.preventDefault();
+                    mostrarMensajeCorteExtra(estadoDefectos.mensaje);
+                    document.getElementById('panelDefectosExtra')?.scrollIntoView({behavior:'smooth',block:'center'});
+                    return;
+                }
+                reindexarDefectos('extra');
+
                 if(!extraPreviewValida||!ultimaPrevisualizacionExtra){
                     e.preventDefault();
                     mostrarMensajeCorteExtra('Espera a que el ERP termine de calcular la producción física antes de guardar.');
@@ -3831,6 +4262,7 @@
                 limpiarMensajeCorteExtra();
                 limpiarPrevisualizacionExtra();
                 cambiarModoOKExtra(false);
+                reiniciarDefectos('extra');
                 const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
                 if(boton)boton.innerHTML='<i class="fa-solid fa-floppy-disk me-1"></i>Guardar corte';
             });

@@ -1,0 +1,1206 @@
+﻿@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaCatalogosVm
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Rutas y unidades";
+}
+
+@section Styles {
+    <link rel="stylesheet"
+          href="~/css/logistica.css"
+          asp-append-version="true" />
+}
+
+
+<style>
+    .catalogos-page {
+        padding: 18px 20px 30px;
+    }
+
+    .catalogos-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .catalogos-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+
+    .catalogos-subtitle {
+        margin: 3px 0 0;
+        color: #6c757d;
+        font-size: .88rem;
+    }
+
+    .catalogos-nav {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .catalogos-section {
+        padding: 16px 0;
+        border-top: 1px solid #e9ecef;
+    }
+
+        .catalogos-section:first-of-type {
+            border-top: 0;
+            padding-top: 0;
+        }
+
+    .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .section-title {
+        margin: 0;
+        font-size: .95rem;
+        font-weight: 700;
+    }
+
+    .section-subtitle {
+        margin: 2px 0 0;
+        color: #6c757d;
+        font-size: .76rem;
+    }
+
+    .count-badge {
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .32em .6em;
+    }
+
+    .catalogo-form {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 8px;
+        align-items: end;
+        margin-bottom: 12px;
+    }
+
+    .form-2 {
+        grid-column: span 2;
+    }
+
+    .form-3 {
+        grid-column: span 3;
+    }
+
+    .form-4 {
+        grid-column: span 4;
+    }
+
+    .form-5 {
+        grid-column: span 5;
+    }
+
+    .form-6 {
+        grid-column: span 6;
+    }
+
+    .form-8 {
+        grid-column: span 8;
+    }
+
+    .form-10 {
+        grid-column: span 10;
+    }
+
+    .form-12 {
+        grid-column: span 12;
+    }
+
+    .catalogo-form label {
+        display: block;
+        font-size: .73rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 3px;
+    }
+
+    .catalogo-form .form-control,
+    .catalogo-form .form-select {
+        min-height: 36px;
+        font-size: .82rem;
+    }
+
+    .catalogo-form .btn {
+        min-height: 36px;
+        font-size: .8rem;
+    }
+
+    .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .catalogos-table {
+        font-size: .8rem;
+        margin-bottom: 0;
+        vertical-align: middle;
+    }
+
+        .catalogos-table thead th {
+            white-space: nowrap;
+            font-size: .71rem;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            color: #495057;
+            background: #f8f9fa;
+        }
+
+        .catalogos-table td {
+            vertical-align: middle;
+        }
+
+        .catalogos-table .principal {
+            font-weight: 700;
+        }
+
+    .texto-corto {
+        display: block;
+        max-width: 260px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .acciones {
+        white-space: nowrap;
+        text-align: right;
+    }
+
+        .acciones .btn {
+            padding: .22rem .42rem;
+            font-size: .73rem;
+        }
+
+    .badge-mini {
+        font-size: .68rem;
+        padding: .32em .55em;
+        font-weight: 600;
+    }
+
+    .empty {
+        padding: 26px 10px;
+        color: #6c757d;
+        text-align: center;
+        font-size: .82rem;
+    }
+
+    .edit-row {
+        background: #fffdf5;
+    }
+
+    .edit-form {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 8px;
+        align-items: end;
+        padding: 10px 4px;
+    }
+
+        .edit-form label {
+            display: block;
+            font-size: .7rem;
+            font-weight: 600;
+            margin-bottom: 3px;
+            color: #495057;
+        }
+
+        .edit-form .form-control {
+            min-height: 34px;
+            font-size: .8rem;
+        }
+
+    .edit-actions {
+        display: flex;
+        gap: 5px;
+        justify-content: flex-end;
+    }
+
+    @@media (max-width: 950px) {
+        .form-2,
+        .form-3,
+        .form-4,
+        .form-5,
+        .form-6,
+        .form-8,
+        .form-10 {
+            grid-column: span 6;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .catalogos-page {
+            padding: 14px 10px 24px;
+        }
+
+        .form-2,
+        .form-3,
+        .form-4,
+        .form-5,
+        .form-6,
+        .form-8,
+        .form-10,
+        .form-12 {
+            grid-column: span 12;
+        }
+
+        .catalogos-nav {
+            width: 100%;
+        }
+
+            .catalogos-nav .btn {
+                flex: 1;
+            }
+
+        .edit-actions {
+            justify-content: stretch;
+        }
+
+            .edit-actions .btn {
+                flex: 1;
+            }
+    }
+
+    /* =========================================================
+       CATÁLOGOS LOGÍSTICA - MEJORA VISUAL SIN CARDS
+       Mantiene formularios, tablas, edición inline y funcionalidad.
+       ========================================================= */
+
+    .catalogos-page {
+        position: relative;
+    }
+
+    .catalogos-header {
+        padding: 6px 0 12px;
+        border-bottom: 1px solid #dbe4ee;
+    }
+
+    .catalogos-title {
+        color: #172033;
+        letter-spacing: -.02em;
+        font-size: 1.48rem;
+    }
+
+    .catalogos-title i {
+        color: #173a7a;
+    }
+
+    .catalogos-subtitle {
+        color: #6f7b8d;
+        font-weight: 500;
+    }
+
+    .catalogos-nav .btn {
+        min-height: 35px;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .catalogos-section {
+        position: relative;
+        margin-bottom: 16px;
+        padding: 14px 14px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+    }
+
+    .catalogos-section:first-of-type {
+        border-top: 1px solid #dce5ef;
+        padding-top: 14px;
+    }
+
+    .section-head {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #172033;
+        font-size: .97rem;
+        letter-spacing: -.01em;
+    }
+
+    .section-title::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        border-radius: 8px;
+        background: #173a7a;
+        flex: 0 0 auto;
+    }
+
+    .section-subtitle {
+        margin-left: 12px;
+        color: #7a8492;
+    }
+
+    .count-badge {
+        border: 1px solid #dfe6ee;
+        background: #f8fafc !important;
+        border-radius: 999px;
+        padding: .38em .7em;
+    }
+
+    .catalogo-form {
+        margin-bottom: 12px;
+        padding: 11px 12px;
+        border: 1px solid #e2e8ef;
+        border-radius: 10px;
+        background: #fbfcfd;
+    }
+
+    .catalogo-form label,
+    .edit-form label {
+        color: #465164;
+        font-weight: 700;
+    }
+
+    .catalogo-form .form-control,
+    .catalogo-form .form-select,
+    .edit-form .form-control {
+        border-radius: 8px;
+        border-color: #d4dde7;
+        background: #fff;
+        box-shadow: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .catalogo-form .form-control:focus,
+    .catalogo-form .form-select:focus,
+    .edit-form .form-control:focus {
+        border-color: #8ba5d4;
+        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+    }
+
+    .catalogo-form .btn {
+        border-radius: 8px;
+        font-weight: 700;
+        background: #233f80;
+        border-color: #233f80;
+    }
+
+    .table-wrap {
+        border: 1px solid #e1e7ee;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(25,47,80,.025);
+    }
+
+    .catalogos-table {
+        background: #fff;
+    }
+
+    .catalogos-table thead th {
+        background: #f3f6f9;
+        color: #4c5868;
+        padding-top: .55rem;
+        padding-bottom: .55rem;
+        border-bottom: 1px solid #d8e1ea;
+        letter-spacing: .025em;
+    }
+
+    .catalogos-table tbody td {
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-color: #edf0f4;
+    }
+
+    .catalogos-table tbody tr:nth-child(even):not(.edit-row) td {
+        background: #fbfcfd;
+    }
+
+    .catalogos-table tbody tr:hover:not(.edit-row) td {
+        background: #f4f8fc;
+    }
+
+    .catalogos-table .principal {
+        color: #173a7a;
+        font-weight: 800;
+    }
+
+    .acciones .btn {
+        min-width: 31px;
+        min-height: 29px;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+    }
+
+    .badge-mini {
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.06);
+    }
+
+    .edit-row td {
+        background: #fffaf0 !important;
+        border-top: 1px solid #f0dfb4;
+        border-bottom: 1px solid #f0dfb4;
+    }
+
+    .edit-form {
+        padding: 10px 8px;
+        border-radius: 8px;
+    }
+
+    .edit-actions .btn {
+        min-height: 34px;
+        border-radius: 7px;
+        font-weight: 700;
+    }
+
+    .empty {
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px dashed #d8e0e8;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    @@media (max-width: 950px) {
+        .catalogos-section {
+            padding: 12px 10px 10px;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .catalogos-section {
+            border-radius: 10px;
+        }
+
+        .catalogo-form {
+            padding: 10px;
+        }
+
+        .catalogos-nav .btn {
+            justify-content: center;
+        }
+
+        .table-wrap {
+            border-radius: 9px;
+        }
+    }
+
+</style>
+
+<div class="catalogos-page">
+
+    <div class="catalogos-header">
+
+        <div>
+            <h1 class="catalogos-title">
+                <i class="fa-solid fa-sliders me-1"></i>
+                Rutas y unidades
+            </h1>
+
+            <p class="catalogos-subtitle">
+                Catálogos compartidos por embarques y viajes.
+            </p>
+        </div>
+
+        <div class="catalogos-nav">
+
+            <a asp-controller="LogisticaEmbarques"
+               asp-action="Index"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-boxes-stacked me-1"></i>
+                Embarques
+            </a>
+
+            <a asp-controller="LogisticaViajes"
+               asp-action="Index"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-route me-1"></i>
+                Viajes
+            </a>
+
+        </div>
+
+    </div>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-circle-check me-1"></i>
+            @TempData["LogisticaOk"]
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+            @TempData["LogisticaError"]
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="catalogos-section">
+
+        <div class="section-head">
+
+            <div>
+                <h2 class="section-title">
+                    Rutas
+                </h2>
+
+                <p class="section-subtitle">
+                    Trayectos utilizados en la operación logística.
+                </p>
+            </div>
+
+            <span class="badge bg-light text-dark count-badge">
+                @Model.Rutas.Count registro(s)
+            </span>
+
+        </div>
+
+        <form asp-controller="LogisticaCatalogos"
+              asp-action="GuardarRuta"
+              method="post"
+              class="catalogo-form"
+              id="formRuta">
+
+            @Html.AntiForgeryToken()
+
+            <input type="hidden"
+                   name="RutaID"
+                   value="0" />
+
+            <div class="form-2">
+                <label>Código</label>
+
+                <input type="text"
+                       name="Codigo"
+                       maxlength="30"
+                       required
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="QRO-01" />
+            </div>
+
+            <div class="form-3">
+                <label>Nombre</label>
+
+                <input type="text"
+                       name="Nombre"
+                       maxlength="150"
+                       required
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="Planta - Cliente Querétaro" />
+            </div>
+
+            <div class="form-5">
+                <label>Descripción</label>
+
+                <input type="text"
+                       name="Descripcion"
+                       maxlength="500"
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="Referencia, zona o detalle operativo" />
+            </div>
+
+            <div class="form-2">
+                <button type="submit"
+                        class="btn btn-primary w-100"
+                        id="btnGuardarRuta">
+                    <i class="fa-solid fa-plus me-1"></i>
+                    Agregar ruta
+                </button>
+            </div>
+
+        </form>
+
+        <div class="table-wrap">
+
+            <table class="table table-sm table-hover catalogos-table">
+
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                       
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @if (!Model.Rutas.Any())
+                    {
+                        <tr>
+                            <td colspan="5">
+                                <div class="empty">
+                                    <i class="fa-solid fa-route me-1"></i>
+                                    No hay rutas registradas.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var ruta in Model.Rutas)
+                        {
+                            <tr id="ruta-row-@ruta.RutaID">
+
+                                <td class="principal">
+                                    @ruta.Codigo
+                                </td>
+
+                                <td>
+                                    @ruta.Nombre
+                                </td>
+
+                                <td>
+                                    <span class="texto-corto"
+                                          title="@ruta.Descripcion">
+                                        @(string.IsNullOrWhiteSpace(ruta.Descripcion)
+                                                                        ? "-"
+                                                                        : ruta.Descripcion)
+                            </span>
+                        </td>
+
+                               
+
+                                <td class="acciones">
+
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm"
+                                            onclick="editarRuta(@ruta.RutaID)"
+                                            title="Editar">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+
+                                    <form asp-controller="LogisticaCatalogos"
+                                          asp-action="CambiarEstadoRuta"
+                                          method="post"
+                                          class="d-inline">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="rutaId"
+                                               value="@ruta.RutaID" />
+
+                                        <input type="hidden"
+                                               name="activo"
+                                               value="@(!ruta.Activo)" />
+
+                                        <button type="submit"
+                                                class="btn @(ruta.Activo ? "btn-outline-danger" : "btn-outline-success") btn-sm"
+                                                title="@(ruta.Activo ? "Desactivar" : "Activar")"
+                                                onclick="return confirm('@(ruta.Activo ? "¿Desactivar esta ruta?" : "¿Activar esta ruta?")');">
+
+                                            <i class="fa-solid @(ruta.Activo ? "fa-ban" : "fa-check")"></i>
+
+                                        </button>
+
+                                    </form>
+
+                                </td>
+
+                            </tr>
+
+                            <tr id="ruta-edit-@ruta.RutaID"
+                                class="edit-row d-none">
+
+                                <td colspan="5">
+
+                                    <form asp-controller="LogisticaCatalogos"
+                                          asp-action="GuardarRuta"
+                                          method="post"
+                                          class="edit-form">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="RutaID"
+                                               value="@ruta.RutaID" />
+
+                                        <div class="form-2">
+                                            <label>Código</label>
+
+                                            <input type="text"
+                                                   name="Codigo"
+                                                   value="@ruta.Codigo"
+                                                   maxlength="30"
+                                                   required
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-3">
+                                            <label>Nombre</label>
+
+                                            <input type="text"
+                                                   name="Nombre"
+                                                   value="@ruta.Nombre"
+                                                   maxlength="150"
+                                                   required
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-5">
+                                            <label>Descripción</label>
+
+                                            <input type="text"
+                                                   name="Descripcion"
+                                                   value="@ruta.Descripcion"
+                                                   maxlength="500"
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-2 edit-actions">
+
+                                            <button type="submit"
+                                                    class="btn btn-primary btn-sm">
+                                                <i class="fa-solid fa-floppy-disk"></i>
+                                            </button>
+
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm"
+                                                    onclick="cancelarRuta(@ruta.RutaID)">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+
+                                        </div>
+
+                                    </form>
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+    <div class="catalogos-section">
+
+        <div class="section-head">
+
+            <div>
+                <h2 class="section-title">
+                    Unidades
+                </h2>
+
+                <p class="section-subtitle">
+                    Vehículos disponibles para embarques y viajes internos.
+                </p>
+            </div>
+
+            <span class="badge bg-light text-dark count-badge">
+                @Model.Unidades.Count registro(s)
+            </span>
+
+        </div>
+
+        <form asp-controller="LogisticaCatalogos"
+              asp-action="GuardarUnidad"
+              method="post"
+              class="catalogo-form"
+              id="formUnidad">
+
+            @Html.AntiForgeryToken()
+
+            <input type="hidden"
+                   name="UnidadID"
+                   value="0" />
+
+            <div class="form-2">
+                <label>Número económico</label>
+
+                <input type="text"
+                       name="NumeroEconomico"
+                       maxlength="50"
+                       required
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="ECO-12" />
+            </div>
+
+            <div class="form-2">
+                <label>Placas</label>
+
+                <input type="text"
+                       name="Placas"
+                       maxlength="30"
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="ABC-123-A" />
+            </div>
+
+            <div class="form-2">
+                <label>Marca</label>
+
+                <input type="text"
+                       name="Marca"
+                       maxlength="80"
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="Marca" />
+            </div>
+
+            <div class="form-2">
+                <label>Modelo</label>
+
+                <input type="text"
+                       name="Modelo"
+                       maxlength="80"
+                       autocomplete="off"
+                       class="form-control"
+                       placeholder="Modelo" />
+            </div>
+
+            <div class="form-2">
+                <label>Capacidad pzas.</label>
+
+                <input type="number"
+                       name="CapacidadPiezas"
+                       min="0"
+                       class="form-control"
+                       placeholder="Opcional" />
+            </div>
+
+            <div class="form-2">
+                <button type="submit"
+                        class="btn btn-primary w-100"
+                        id="btnGuardarUnidad">
+                    <i class="fa-solid fa-plus me-1"></i>
+                    Agregar unidad
+                </button>
+            </div>
+
+        </form>
+
+        <div class="table-wrap">
+
+            <table class="table table-sm table-hover catalogos-table">
+
+                <thead>
+                    <tr>
+                        <th>No. económico</th>
+                        <th>Placas</th>
+                        <th>Marca</th>
+                        <th>Modelo</th>
+                        <th>Capacidad</th>
+                        
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @if (!Model.Unidades.Any())
+                    {
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty">
+                                    <i class="fa-solid fa-truck me-1"></i>
+                                    No hay unidades registradas.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var unidad in Model.Unidades)
+                        {
+                            <tr id="unidad-row-@unidad.UnidadID">
+
+                                <td class="principal">
+                                    @unidad.NumeroEconomico
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(unidad.Placas)
+                                                                ? "-"
+                                                                : unidad.Placas)
+                                                                            </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(unidad.Marca)
+                                                                ? "-"
+                                                                : unidad.Marca)
+                                                                           </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(unidad.Modelo)
+                                                                ? "-"
+                                                                : unidad.Modelo)
+                                                                            </td>
+
+                                <td class="text-nowrap">
+                                    @(unidad.CapacidadPiezas.HasValue
+                                                                ? $"{unidad.CapacidadPiezas.Value:N0} pzas"
+                                                                : "-")
+                        </td>
+
+                                <td class="acciones">
+
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm"
+                                            onclick="editarUnidad(@unidad.UnidadID)"
+                                            title="Editar">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+
+                                    <form asp-controller="LogisticaCatalogos"
+                                          asp-action="CambiarEstadoUnidad"
+                                          method="post"
+                                          class="d-inline">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="unidadId"
+                                               value="@unidad.UnidadID" />
+
+                                        <input type="hidden"
+                                               name="activo"
+                                               value="@(!unidad.Activo)" />
+
+                                        <button type="submit"
+                                                class="btn @(unidad.Activo ? "btn-outline-danger" : "btn-outline-success") btn-sm"
+                                                title="@(unidad.Activo ? "Desactivar" : "Activar")"
+                                                onclick="return confirm('@(unidad.Activo ? "¿Desactivar esta unidad?" : "¿Activar esta unidad?")');">
+
+                                            <i class="fa-solid @(unidad.Activo ? "fa-ban" : "fa-check")"></i>
+
+                                        </button>
+
+                                    </form>
+
+                                </td>
+
+                            </tr>
+
+                            <tr id="unidad-edit-@unidad.UnidadID"
+                                class="edit-row d-none">
+
+                                <td colspan="7">
+
+                                    <form asp-controller="LogisticaCatalogos"
+                                          asp-action="GuardarUnidad"
+                                          method="post"
+                                          class="edit-form">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="UnidadID"
+                                               value="@unidad.UnidadID" />
+
+                                        <div class="form-2">
+                                            <label>No. económico</label>
+
+                                            <input type="text"
+                                                   name="NumeroEconomico"
+                                                   value="@unidad.NumeroEconomico"
+                                                   maxlength="50"
+                                                   required
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-2">
+                                            <label>Placas</label>
+
+                                            <input type="text"
+                                                   name="Placas"
+                                                   value="@unidad.Placas"
+                                                   maxlength="30"
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-2">
+                                            <label>Marca</label>
+
+                                            <input type="text"
+                                                   name="Marca"
+                                                   value="@unidad.Marca"
+                                                   maxlength="80"
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-2">
+                                            <label>Modelo</label>
+
+                                            <input type="text"
+                                                   name="Modelo"
+                                                   value="@unidad.Modelo"
+                                                   maxlength="80"
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-2">
+                                            <label>Capacidad</label>
+
+                                            <input type="number"
+                                                   name="CapacidadPiezas"
+                                                   min="0"
+                                                   value="@unidad.CapacidadPiezas"
+                                                   class="form-control" />
+                                        </div>
+
+                                        <div class="form-2 edit-actions">
+
+                                            <button type="submit"
+                                                    class="btn btn-primary btn-sm">
+                                                <i class="fa-solid fa-floppy-disk"></i>
+                                            </button>
+
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary btn-sm"
+                                                    onclick="cancelarUnidad(@unidad.UnidadID)">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+
+                                        </div>
+
+                                    </form>
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    (() => {
+
+        function ocultarEdiciones(selector) {
+
+            document
+                .querySelectorAll(selector)
+                .forEach(x => x.classList.add('d-none'));
+        }
+
+        window.editarRuta = function (id) {
+
+            ocultarEdiciones('[id^="ruta-edit-"]');
+
+            const fila =
+                document.getElementById(
+                    `ruta-edit-${id}`
+                );
+
+            fila?.classList.remove('d-none');
+        };
+
+        window.cancelarRuta = function (id) {
+
+            document
+                .getElementById(`ruta-edit-${id}`)
+                ?.classList.add('d-none');
+        };
+
+        window.editarUnidad = function (id) {
+
+            ocultarEdiciones('[id^="unidad-edit-"]');
+
+            const fila =
+                document.getElementById(
+                    `unidad-edit-${id}`
+                );
+
+            fila?.classList.remove('d-none');
+        };
+
+        window.cancelarUnidad = function (id) {
+
+            document
+                .getElementById(`unidad-edit-${id}`)
+                ?.classList.add('d-none');
+        };
+
+        const formRuta =
+            document.getElementById('formRuta');
+
+        const formUnidad =
+            document.getElementById('formUnidad');
+
+        const btnRuta =
+            document.getElementById('btnGuardarRuta');
+
+        const btnUnidad =
+            document.getElementById('btnGuardarUnidad');
+
+        formRuta?.addEventListener(
+            'submit',
+            () => {
+
+                if (!btnRuta)
+                    return;
+
+                btnRuta.disabled = true;
+
+                btnRuta.innerHTML =
+                    '<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
+            });
+
+        formUnidad?.addEventListener(
+            'submit',
+            () => {
+
+                if (!btnUnidad)
+                    return;
+
+                btnUnidad.disabled = true;
+
+                btnUnidad.innerHTML =
+                    '<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
+            });
+
+    })();
+</script>

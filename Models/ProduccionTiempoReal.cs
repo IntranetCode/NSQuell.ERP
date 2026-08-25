@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using static ERP.NSQuell.Models.ProduccionOperadorCajaVm;
 
 namespace ERP.NSQuell.Models
 {
@@ -513,6 +514,8 @@ namespace ERP.NSQuell.Models
         public string? Observaciones { get; set; }
 
         public bool FinalizarTiempoExtra { get; set; }
+
+        public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
     }
 
 

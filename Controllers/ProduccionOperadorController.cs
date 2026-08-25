@@ -7,6 +7,7 @@ using Microsoft.Data.SqlClient;
 using System.Data;
 using static ERP.NSQuell.Models.ProduccionChecklistArranqueVm;
 using static ERP.NSQuell.Models.ProduccionOperadorCajasVm;
+using static ERP.NSQuell.Models.ProduccionOperadorCajaVm;
 
 namespace ERP.NSQuell.Controllers
 {
@@ -100,10 +101,10 @@ namespace ERP.NSQuell.Controllers
             vm.UltimoContadorMaquina = await ObtenerUltimaLecturaContadorMaquinaAsync(id, cn);
             vm.BonusOperadorActual = await ObtenerBonusOperadorActualAsync(personaId.Value, cn);
             vm.MotivosParo = await CargarMotivosParoAsync(cn);
+            vm.CatalogoDefectos = await CargarCatalogoDefectosAsync(cn);
             vm.HorasCaptura = await ObtenerFilasCapturaHoraAsync(vm.EjecucionProduccionID, vm.ProgramaProduccionID, cn);
             vm.HistorialCambiosTurno = await ObtenerHistorialCambiosTurnoAsync(vm.EjecucionProduccionID, cn);
             vm.HistorialTurnos = ConstruirHistorialTurnos(vm.HorasCaptura, vm.HistorialCambiosTurno);
-
             vm.FechaHoraServidor = DateTime.Now;
             vm.TiempoExtraActivo = await ObtenerTiempoExtraActivoAsync(vm.EjecucionProduccionID, cn);
             vm.HistorialTiempoExtra = await ObtenerHistorialTiempoExtraAsync(vm.EjecucionProduccionID, cn);
@@ -715,6 +716,15 @@ ORDER BY te.TiempoExtraID DESC;";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
 
+                var validacionDefectos = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrap, vm.DefectosScrap, cn, tx);
+                if (!validacionDefectos.Valido)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = validacionDefectos.Mensaje;
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+                vm.DefectosScrap = validacionDefectos.Defectos;
+
                 var okSugerido = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
                 var okCapturado = vm.CantidadOK;
                 var okModificadoManual = okCapturado != okSugerido;
@@ -743,7 +753,8 @@ ORDER BY te.TiempoExtraID DESC;";
 
                 vm.CantidadOK = okCapturado;
                 vm.OkModificadoManual = okModificadoManual;
-                if (okModificadoManual) vm.Observaciones = ConstruirObservacionAuditoriaOkManual(okSugerido, okCapturado, calculo.PiezasCalculadas, totalClasificado, vm.Observaciones);
+                if (okModificadoManual)
+                    vm.Observaciones = ConstruirObservacionAuditoriaOkManual(okSugerido, okCapturado, calculo.PiezasCalculadas, totalClasificado, vm.Observaciones);
 
                 vm.EsTiempoExtra = false;
                 vm.MinutosTiempoExtra = null;
@@ -755,12 +766,12 @@ ORDER BY te.TiempoExtraID DESC;";
                 vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
 
                 var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                await GuardarDefectosScrapAsync(registroHoraId, vm.DefectosScrap, usuarioId, cn, tx);
                 await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
                 await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
-                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, usuarioId, cn, tx);
+                await RegistrarBonusProduccionHoraAsync(     personaId.Value,     ejecucion.EjecucionProduccionID,   registroHoraId,    vm.CantidadOK,    calculo.PiezasCalculadas,    fechaFinFila,    usuarioId,     cn,    tx);
                 await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
                 await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
-
                 await tx.CommitAsync();
 
                 TempData["Success"] = ConstruirMensajeCumplimientoHora(
@@ -781,7 +792,6 @@ ORDER BY te.TiempoExtraID DESC;";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
         }
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -9099,15 +9109,7 @@ ORDER BY FechaInicioParo;";
 
                 if (reinicioContador)
                 {
-                    /*
-                     * Regla operativa:
-                     *
-                     * Si el contador actual es menor al anterior,
-                     * interpretamos que la máquina fue reiniciada.
-                     *
-                     * Por tanto:
-                     * ciclos = contador actual - 0
-                     */
+                   
                     contadorInicialCalculo = 0;
 
                     resultado
@@ -9537,21 +9539,205 @@ VALUES
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
+
+        private static async Task<List<ProduccionCatalogoDefectoVm>> CargarCatalogoDefectosAsync(SqlConnection cn, SqlTransaction? tx = null)
+        {
+            var lista = new List<ProduccionCatalogoDefectoVm>();
+            const string sql = @"
+SELECT
+    CatalogoDefectoID,
+    ISNULL(Codigo,N'') AS Codigo,
+    ISNULL(Nombre,N'') AS Nombre,
+    ISNULL(Activo,0) AS Activo
+FROM dbo.Calidad_CatalogoDefectos
+WHERE Activo=1
+ORDER BY
+    CASE WHEN NULLIF(LTRIM(RTRIM(Codigo)),N'') IS NULL THEN 1 ELSE 0 END,
+    Codigo,
+    Nombre,
+    CatalogoDefectoID;";
+
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new ProduccionCatalogoDefectoVm
+                {
+                    CatalogoDefectoID = Convert.ToInt32(rd["CatalogoDefectoID"]),
+                    Codigo = rd["Codigo"] == DBNull.Value ? string.Empty : rd["Codigo"]?.ToString()?.Trim() ?? string.Empty,
+                    Nombre = rd["Nombre"] == DBNull.Value ? string.Empty : rd["Nombre"]?.ToString()?.Trim() ?? string.Empty,
+                    Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"])
+                });
+            }
+
+            return lista;
+        }
+        private static async Task<(bool Valido, string Mensaje, List<ProduccionRegistroDefectoPostVm> Defectos)> ValidarYNormalizarDefectosScrapAsync(int cantidadScrap, List<ProduccionRegistroDefectoPostVm>? defectos, SqlConnection cn, SqlTransaction tx)
+        {
+            var vacio = new List<ProduccionRegistroDefectoPostVm>();
+            if (cantidadScrap < 0) return (false, "La cantidad scrap no puede ser negativa.", vacio);
+            if (cantidadScrap == 0) return (true, string.Empty, vacio);
+
+            var recibidos = defectos ?? new List<ProduccionRegistroDefectoPostVm>();
+            if (recibidos.Count == 0)
+                return (false, "Reportaste piezas scrap. Debes indicar el defecto por el que se está retirando cada pieza.", vacio);
+
+            if (recibidos.Count > 100)
+                return (false, "Se recibieron demasiados defectos para una sola captura.", vacio);
+
+            var limpios = new List<ProduccionRegistroDefectoPostVm>();
+            foreach (var defecto in recibidos)
+            {
+                if (defecto == null) continue;
+                if (defecto.CatalogoDefectoID <= 0)
+                    return (false, "Selecciona un defecto válido para todas las piezas scrap.", vacio);
+                if (defecto.CantidadScrap <= 0)
+                    return (false, "La cantidad asignada a cada defecto debe ser mayor a cero.", vacio);
+
+                var observaciones = defecto.Observaciones?.Trim();
+                if (!string.IsNullOrWhiteSpace(observaciones) && observaciones.Length > 500)
+                    return (false, "Las observaciones de cada defecto no pueden superar 500 caracteres.", vacio);
+
+                limpios.Add(new ProduccionRegistroDefectoPostVm
+                {
+                    CatalogoDefectoID = defecto.CatalogoDefectoID,
+                    CantidadScrap = defecto.CantidadScrap,
+                    Observaciones = string.IsNullOrWhiteSpace(observaciones) ? null : observaciones
+                });
+            }
+
+            if (limpios.Count == 0)
+                return (false, "Reportaste piezas scrap. Debes seleccionar al menos un defecto.", vacio);
+
+            var normalizados = new List<ProduccionRegistroDefectoPostVm>();
+            foreach (var grupo in limpios.GroupBy(x => x.CatalogoDefectoID))
+            {
+                var cantidadGrupo = grupo.Sum(x => (long)x.CantidadScrap);
+                if (cantidadGrupo > int.MaxValue)
+                    return (false, "La cantidad acumulada para uno de los defectos excede el máximo permitido.", vacio);
+
+                var observacionesGrupo = grupo
+                    .Select(x => x.Observaciones?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var observaciones = observacionesGrupo.Count == 0 ? null : string.Join(" | ", observacionesGrupo);
+                if (!string.IsNullOrWhiteSpace(observaciones) && observaciones.Length > 500)
+                    observaciones = observaciones[..500];
+
+                normalizados.Add(new ProduccionRegistroDefectoPostVm
+                {
+                    CatalogoDefectoID = grupo.Key,
+                    CantidadScrap = Convert.ToInt32(cantidadGrupo),
+                    Observaciones = observaciones
+                });
+            }
+
+            var totalDefectos = normalizados.Sum(x => (long)x.CantidadScrap);
+            if (totalDefectos != cantidadScrap)
+                return (false, $"Reportaste {cantidadScrap:N0} pieza(s) scrap, pero asignaste {totalDefectos:N0} pieza(s) entre los defectos. Debes clasificar exactamente todas las piezas scrap.", vacio);
+
+            var ids = normalizados.Select(x => x.CatalogoDefectoID).Distinct().ToList();
+            var nombresParametros = ids.Select((_, i) => $"@Defecto{i}").ToList();
+            var sql = $@"
+SELECT CatalogoDefectoID
+FROM dbo.Calidad_CatalogoDefectos WITH(UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+  AND CatalogoDefectoID IN({string.Join(",", nombresParametros)});";
+
+            var activos = new HashSet<int>();
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                for (var i = 0; i < ids.Count; i++)
+                    cmd.Parameters.Add(nombresParametros[i], SqlDbType.Int).Value = ids[i];
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+                while (await rd.ReadAsync())
+                    activos.Add(Convert.ToInt32(rd["CatalogoDefectoID"]));
+            }
+
+            var invalidos = ids.Where(x => !activos.Contains(x)).ToList();
+            if (invalidos.Count > 0)
+                return (false, "Uno o más defectos seleccionados ya no existen o están inactivos. Actualiza la pantalla y vuelve a seleccionar el defecto.", vacio);
+
+            return (true, string.Empty, normalizados);
+        }
+
+        private static async Task GuardarDefectosScrapAsync(int registroHoraId, List<ProduccionRegistroDefectoPostVm>? defectos, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (registroHoraId <= 0) throw new InvalidOperationException("No se recibió un registro horario válido para guardar sus defectos.");
+            if (usuarioId <= 0) throw new InvalidOperationException("No se pudo identificar al usuario que registra los defectos.");
+            if (defectos == null || defectos.Count == 0) return;
+
+            const string sql = @"
+INSERT INTO dbo.Produccion_RegistroHoraDefectos
+(
+    RegistroHoraID,
+    CatalogoDefectoID,
+    CantidadScrap,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+VALUES
+(
+    @RegistroHoraID,
+    @CatalogoDefectoID,
+    @CantidadScrap,
+    @Observaciones,
+    @UsuarioID,
+    SYSDATETIME(),
+    1
+);";
+
+            foreach (var defecto in defectos)
+            {
+                if (defecto.CatalogoDefectoID <= 0 || defecto.CantidadScrap <= 0)
+                    throw new InvalidOperationException("Se intentó guardar un defecto inválido.");
+
+                await using var cmd = new SqlCommand(sql, cn, tx);
+                cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
+                cmd.Parameters.Add("@CatalogoDefectoID", SqlDbType.Int).Value = defecto.CatalogoDefectoID;
+                cmd.Parameters.Add("@CantidadScrap", SqlDbType.Int).Value = defecto.CantidadScrap;
+                cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(defecto.Observaciones) ? DBNull.Value : defecto.Observaciones.Trim();
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
         private static async Task RegistrarBonusProduccionHoraAsync(
-    int operadorId,
-    int ejecucionProduccionId,
-    int registroHoraId,
-    int cantidadOK,
-    int piezasFisicas,
-    int usuarioId,
-    SqlConnection cn,
-    SqlTransaction tx)
+       int operadorId,
+       int ejecucionProduccionId,
+       int registroHoraId,
+       int cantidadOK,
+       int piezasFisicas,
+       DateTime fechaMovimiento,
+       int usuarioId,
+       SqlConnection cn,
+       SqlTransaction tx)
         {
             if (cantidadOK <= 0)
                 return;
 
-            var referenciaEvento =
-                $"REGISTRO_HORA:{registroHoraId}:PRODUCCION_OK";
+            if (operadorId <= 0)
+                throw new InvalidOperationException("No se recibió un operador válido para registrar el bonus.");
+
+            if (ejecucionProduccionId <= 0)
+                throw new InvalidOperationException("No se recibió una ejecución válida para registrar el bonus.");
+
+            if (registroHoraId <= 0)
+                throw new InvalidOperationException("No se recibió un registro horario válido para registrar el bonus.");
+
+            if (usuarioId <= 0)
+                throw new InvalidOperationException("No se pudo identificar al usuario que registra el bonus.");
+
+            if (fechaMovimiento == default)
+                throw new InvalidOperationException("No se recibió una fecha válida para registrar el movimiento de bonus.");
+
+            var referenciaEvento = $"REGISTRO_HORA:{registroHoraId}:PRODUCCION_OK";
 
             var motivo =
                 $"Abono provisional por captura horaria. " +
@@ -9591,7 +9777,7 @@ SELECT
     @Motivo,
     @ReferenciaEvento,
     @UsuarioID,
-    SYSDATETIME(),
+    @FechaMovimiento,
     1
 WHERE NOT EXISTS
 (
@@ -9601,60 +9787,21 @@ WHERE NOT EXISTS
       AND Activo=1
 );";
 
-            await using var cmd =
-                new SqlCommand(
-                    sql,
-                    cn,
-                    tx);
+            await using var cmd = new SqlCommand(sql, cn, tx);
 
-            cmd.Parameters.Add(
-                "@OperadorID",
-                SqlDbType.Int).Value =
-                operadorId;
+            cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = operadorId;
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registroHoraId;
 
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucionProduccionId;
+            cmd.Parameters.Add("@TipoMovimiento", SqlDbType.NVarChar, 60).Value =
+                ProduccionTipoMovimientoBonus.ProduccionHoraProvisional;
 
-            cmd.Parameters.Add(
-                "@RegistroHoraID",
-                SqlDbType.Int).Value =
-                registroHoraId;
-
-            cmd.Parameters.Add(
-                "@TipoMovimiento",
-                SqlDbType.NVarChar,
-                60).Value =
-                ProduccionTipoMovimientoBonus
-                    .ProduccionHoraProvisional;
-
-            cmd.Parameters.Add(
-                "@PiezasMovimiento",
-                SqlDbType.Int).Value =
-                cantidadOK;
-
-            cmd.Parameters.Add(
-                "@PiezasReferencia",
-                SqlDbType.Int).Value =
-                piezasFisicas;
-
-            cmd.Parameters.Add(
-                "@Motivo",
-                SqlDbType.NVarChar,
-                1000).Value =
-                motivo;
-
-            cmd.Parameters.Add(
-                "@ReferenciaEvento",
-                SqlDbType.NVarChar,
-                200).Value =
-                referenciaEvento;
-
-            cmd.Parameters.Add(
-                "@UsuarioID",
-                SqlDbType.Int).Value =
-                usuarioId;
+            cmd.Parameters.Add("@PiezasMovimiento", SqlDbType.Int).Value = cantidadOK;
+            cmd.Parameters.Add("@PiezasReferencia", SqlDbType.Int).Value = piezasFisicas;
+            cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 1000).Value = motivo;
+            cmd.Parameters.Add("@ReferenciaEvento", SqlDbType.NVarChar, 200).Value = referenciaEvento;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@FechaMovimiento", SqlDbType.DateTime2).Value = fechaMovimiento;
 
             await cmd.ExecuteNonQueryAsync();
         }
@@ -9949,14 +10096,11 @@ WHERE TiempoExtraID=@TiempoExtraID
             try
             {
                 var sesion = await ObtenerTiempoExtraPorIdAsync(vm.TiempoExtraID, cn, tx, true);
-
                 if (sesion == null)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "No se encontró la sesión de tiempo extra.";
-                    return ejecucionProduccionId > 0
-                        ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
-                        : RedirectToAction(nameof(Index));
+                    return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
                 }
 
                 ejecucionProduccionId = sesion.EjecucionProduccionID;
@@ -10053,6 +10197,15 @@ WHERE TiempoExtraID=@TiempoExtraID
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
 
+                var validacionDefectos = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrap, vm.DefectosScrap, cn, tx);
+                if (!validacionDefectos.Valido)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = validacionDefectos.Mensaje;
+                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
+                }
+                vm.DefectosScrap = validacionDefectos.Defectos;
+
                 var okSugerido = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
                 var okCapturado = vm.CantidadOK;
                 var okModificadoManual = okCapturado != okSugerido;
@@ -10100,6 +10253,7 @@ WHERE TiempoExtraID=@TiempoExtraID
                     OkModificadoManual = okModificadoManual,
                     CantidadSospechosa = vm.CantidadSospechosa,
                     CantidadScrap = vm.CantidadScrap,
+                    DefectosScrap = vm.DefectosScrap,
                     EsTiempoExtra = true,
                     MinutosTiempoExtra = (int)Math.Ceiling(calculo.MinutosProductivos),
                     TiempoExtraID = vm.TiempoExtraID,
@@ -10109,10 +10263,10 @@ WHERE TiempoExtraID=@TiempoExtraID
                 };
 
                 var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                await GuardarDefectosScrapAsync(registroHoraId, registroVm.DefectosScrap, usuarioId, cn, tx);
                 await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucionProduccionId, calculo, usuarioId, cn, tx);
                 await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinCorte, vm.ContadorMaquinaActual.Value, calculo, cn, tx, true);
-                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucionProduccionId, registroHoraId, okFinal, calculo.PiezasCalculadas, usuarioId, cn, tx);
-
+                await RegistrarBonusProduccionHoraAsync(     personaId.Value,      ejecucionProduccionId,      registroHoraId,      okFinal,      calculo.PiezasCalculadas,      fechaFinCorte,     usuarioId,     cn,  tx);
                 if (totalClasificado > 0)
                     await VincularRegistroHoraConCalidadAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
 
@@ -10165,19 +10319,17 @@ WHERE TiempoExtraID=@TiempoExtraID
             {
                 try { await tx.RollbackAsync(); } catch { }
                 TempData["Error"] = "Este corte de tiempo extra ya fue registrado. Actualiza la pantalla.";
-                return ejecucionProduccionId > 0
-                    ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
-                    : RedirectToAction(nameof(Index));
+                return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
                 try { await tx.RollbackAsync(); } catch { }
                 TempData["Error"] = "No fue posible guardar el corte de tiempo extra: " + ex.Message;
-                return ejecucionProduccionId > 0
-                    ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
-                    : RedirectToAction(nameof(Index));
+                return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
             }
         }
+
+
         private static async Task<bool> PersonaAsignadaAEjecucionAsync(
     int ejecucionProduccionId,
     int personaId,

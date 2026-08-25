@@ -301,4 +301,47 @@ namespace ERP.NSQuell.Models
             }
         }
     }
+
+    public sealed class ProduccionCatalogoDefectoVm
+    {
+        public int CatalogoDefectoID { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public bool Activo { get; set; }
+
+        public string Texto =>
+            string.IsNullOrWhiteSpace(Codigo)
+                ? Nombre
+                : $"{Codigo} - {Nombre}";
+    }
+
+    public sealed class ProduccionRegistroDefectoPostVm
+    {
+        public int CatalogoDefectoID { get; set; }
+        public int CantidadScrap { get; set; }
+        public string? Observaciones { get; set; }
+    }
+
+    public sealed class ProduccionRegistroDefectoVm
+    {
+        public int RegistroHoraDefectoID { get; set; }
+        public int RegistroHoraID { get; set; }
+        public int CatalogoDefectoID { get; set; }
+        public string? Codigo { get; set; }
+        public string? Nombre { get; set; }
+        public int CantidadScrap { get; set; }
+        public string? Observaciones { get; set; }
+        public int? UsuarioCreacionID { get; set; }
+        public DateTime FechaCreacion { get; set; }
+        public bool Activo { get; set; }
+
+        public string DefectoTexto =>
+            !string.IsNullOrWhiteSpace(Codigo) && !string.IsNullOrWhiteSpace(Nombre)
+                ? $"{Codigo} - {Nombre}"
+                : !string.IsNullOrWhiteSpace(Nombre)
+                    ? Nombre
+                    : !string.IsNullOrWhiteSpace(Codigo)
+                        ? Codigo
+                        : $"Defecto #{CatalogoDefectoID}";
+    }
 }
