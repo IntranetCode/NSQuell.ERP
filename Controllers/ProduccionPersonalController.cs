@@ -33,7 +33,7 @@ public sealed partial class ProduccionPersonalController : Controller
         DateTime? fechaDesde,
         DateTime? fechaHasta)
     {
-        return await IndexSemanalCoreAsync(fechaDesde);
+        return await IndexV7CoreAsync(Request.Query["vista"].ToString(), fechaDesde, fechaHasta);
     }
 
     [HttpGet("Candidatos")]

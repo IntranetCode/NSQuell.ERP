@@ -58,6 +58,8 @@ namespace ERP.NSQuell.Controllers
             await cn.OpenAsync();
             var maquinas = Excluir1200TCalendario(
                 await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn)); // NSQ_CALENDARIO_1200T_FIX_V19
+            // NSQ_PRODUCCION_PERSONAL_V7_CALENDARIO
+            await AplicarPersonalV7CalendarioAsync(maquinas, periodo.Inicio, periodo.Fin, cn);
             var solicitudesReprogramacion = modoProduccion
                 ? new List<SolicitudReprogramacionCalendarioVm>()
                 : await ObtenerSolicitudesReprogramacionPendientesAsync(cn);
