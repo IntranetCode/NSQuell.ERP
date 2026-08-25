@@ -637,6 +637,14 @@
         <input type="hidden" asp-for="HorasSecado" />
         <input type="hidden" asp-for="HorasSecadoTexto" />
 
+        @* NSQ_LHRH_PROGRAMACION_CONJUNTA_V3 *@
+        <input type="hidden" asp-for="ParejaLhRhDisponible" />
+        <input type="hidden" asp-for="ParejaLhRhReleaseDetalleID" />
+        <input type="hidden" asp-for="ParejaLhRhLado" />
+        <input type="hidden" asp-for="ParejaLhRhNumeroParte" />
+        <input type="hidden" asp-for="ParejaLhRhDescripcion" />
+        <input type="hidden" asp-for="ParejaLhRhCantidadRequerida" />
+
         <div class="layout">
 
             <div>
@@ -703,6 +711,166 @@
                         </div>
                     </div>
                 </section>
+
+                <style>
+                    /* NSQ_LHRH_UI_V7 */
+                    .lhrh-choice {
+                        width: 100%;
+                        min-height: 86px;
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        padding: 14px 16px;
+                        margin: 0;
+                        border: 1px solid #cfd8ea;
+                        border-radius: 16px;
+                        background: linear-gradient(135deg,#ffffff,#f7f9ff);
+                        cursor: pointer;
+                        transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+                    }
+
+                    .lhrh-choice:hover {
+                        border-color: #7c63c5;
+                        box-shadow: 0 8px 22px rgba(79,54,148,.10);
+                        transform: translateY(-1px);
+                    }
+
+                    .lhrh-choice:has(.lhrh-choice-check:checked) {
+                        border-color: #27a968;
+                        background: linear-gradient(135deg,#f6fff9,#edfff4);
+                        box-shadow: 0 8px 22px rgba(31,143,87,.12);
+                    }
+
+                    .lhrh-choice-check {
+                        width: 1.25rem;
+                        height: 1.25rem;
+                        margin: 0;
+                        flex: 0 0 auto;
+                    }
+
+                    .lhrh-choice-icon {
+                        width: 42px;
+                        height: 42px;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        flex: 0 0 42px;
+                        border-radius: 12px;
+                        background: #ede8ff;
+                        color: #5c43a5;
+                        font-size: 1.05rem;
+                    }
+
+                    .lhrh-choice:has(.lhrh-choice-check:checked) .lhrh-choice-icon {
+                        background: #daf7e6;
+                        color: #15834d;
+                    }
+
+                    .lhrh-choice-copy {
+                        min-width: 0;
+                        display: flex;
+                        flex: 1 1 auto;
+                        flex-direction: column;
+                        gap: 3px;
+                    }
+
+                    .lhrh-choice-copy strong {
+                        color: #1f2937;
+                        font-size: .96rem;
+                        line-height: 1.15;
+                    }
+
+                    .lhrh-choice-copy small {
+                        color: #6b7280;
+                        font-size: .78rem;
+                        line-height: 1.25;
+                    }
+
+                    .lhrh-choice-side {
+                        flex: 0 0 auto;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-width: 42px;
+                        padding: 7px 10px;
+                        border-radius: 999px;
+                        background: #5c43a5;
+                        color: #fff;
+                        font-size: .76rem;
+                        font-weight: 900;
+                        letter-spacing: .04em;
+                    }
+
+                    .lhrh-choice:has(.lhrh-choice-check:checked) .lhrh-choice-side {
+                        background: #168a50;
+                    }
+
+                    @@media (max-width: 991.98px) {
+                        .lhrh-choice {
+                            min-height: 74px;
+                        }
+                    }
+                </style>
+                @if (Model.ParejaLhRhDisponible && Model.ParejaLhRhReleaseDetalleID.HasValue)
+                {
+                    <section class="cardx border border-primary-subtle">
+                        <div class="cardx-header">
+                            <div>
+                                <h2 class="cardx-title">
+                                    <i class="fa-solid fa-link me-2"></i>
+                                    Pareja LH/RH detectada
+                                </h2>
+                                <div class="cardx-sub">
+                                    El Release contiene la contraparte @Model.ParejaLhRhLado pendiente de programar.
+                                </div>
+                            </div>
+                            <span class="badge-ok">
+                                <i class="fa-solid fa-code-branch"></i>
+                                Programacion conjunta disponible
+                            </span>
+                        </div>
+
+                        <div class="cardx-body">
+                            <div class="row g-3 align-items-center">
+                                <div class="col-lg-7">
+                                    <div class="field-label">Contraparte</div>
+                                    <div class="field-value">
+                                        @Valor(Model.ParejaLhRhNumeroParte) - @Valor(Model.ParejaLhRhDescripcion)
+                                    </div>
+                                    <div class="small text-muted mt-1">
+                                        Requerido: <strong>@Model.ParejaLhRhCantidadRequerida.ToString("N0") pzas</strong>
+                                        &middot; ReleaseDetalle #@Model.ParejaLhRhReleaseDetalleID
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-5">
+                                    <label class="lhrh-choice">
+                                        <input asp-for="ProgramarParejaLhRh"
+                                               class="form-check-input lhrh-choice-check"
+                                               type="checkbox" />
+
+                                        <span class="lhrh-choice-icon">
+                                            <i class="fa-solid fa-layer-group"></i>
+                                        </span>
+
+                                        <span class="lhrh-choice-copy">
+                                            <strong>Programar LH + RH juntas</strong>
+                                            <small>Agregar tambien la contraparte @Model.ParejaLhRhLado</small>
+                                        </span>
+
+                                        <span class="lhrh-choice-side">@Model.ParejaLhRhLado</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info rounded-4 mt-3 mb-0">
+                                <strong>Como se manejara:</strong>
+                                mismo molde, misma maquina y exactamente el mismo horario en el Calendario de Maquinas.
+                                Cada lado conserva su propio Programa/OF y sus entregas de MP y embalaje se calculan y entregan por separado.
+                            </div>
+                        </div>
+                    </section>
+                }
 
                 <section class="cardx">
                     <div class="cardx-header">

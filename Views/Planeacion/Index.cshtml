@@ -146,7 +146,10 @@
 
     var success = TempData["Success"] as string;
     var error = TempData["Error"] as string;
-    var lista = Model ?? new List<ERP.NSQuell.Models.PlaneacionOFIndexVm>();
+    // NSQ_OF_SOLO_PENDIENTES_GENERAR_V2
+    var lista = (Model ?? new List<ERP.NSQuell.Models.PlaneacionOFIndexVm>())
+        .Where(x => x.SolicitudProduccionID < 0)
+        .ToList();
 
     var pendientesGenerarOF = lista.Count(x => x.SolicitudProduccionID < 0);
     var ofGeneradas = lista.Count(x => x.SolicitudProduccionID > 0);
@@ -259,7 +262,7 @@
                     if ((query || selectedMachine || selectedTipoOF) && hasVisibleGroup) {
                         setMachineOpen(section, true);
                     } else if (!query && !selectedMachine && !selectedTipoOF) {
-                        setMachineOpen(section, false);
+                        setMachineOpen(section, true);
                     }
                 });
 
@@ -337,12 +340,12 @@
         <section class="hero">
             <div class="hero-layout">
                 <div>
-                    <h1><i class="fa-solid fa-industry me-2"></i>Órdenes de Fabricación</h1>
-                    <p>OF organizadas por máquina y prioridad, ordenadas por la fecha de entrega más próxima.</p>
+                    <h1><i class="fa-solid fa-file-circle-plus me-2"></i>OF pendientes por generar</h1>
+                    <p>Programas de Planeacion que ya estan calendarizados y aun necesitan generar su Orden de Fabricacion.</p>
                 </div>
 
                 <div class="hero-stats">
-                    <div class="stat"><div class="stat-value">@ofGeneradas.ToString("N0")</div><div class="stat-label">OF generadas</div></div>
+
                     <div class="stat"><div class="stat-value">@pendientesGenerarOF.ToString("N0")</div><div class="stat-label">Pendientes de generar</div></div>
 
                     <div class="stat"><div class="stat-value">@vencidas.ToString("N0")</div><div class="stat-label">Entregas vencidas</div></div>
@@ -425,8 +428,8 @@
         {
             <section class="empty-state">
                 <i class="fa-regular fa-folder-open"></i>
-                <h5 class="fw-bold">No hay órdenes de fabricación</h5>
-                <p class="mb-3">Cuando exista una OF o un programa de máquina pendiente, aparecerá en esta bandeja.</p>
+                <h5 class="fw-bold">No hay OF pendientes por generar</h5>
+                <p class="mb-3">Todos los programas visibles ya tienen Orden de Fabricacion o todavia no existen programas listos.</p>
                 <a asp-controller="PlaneacionPrograma"
                    asp-action="Index"
                    class="btn-erp btn-erp-primary">
@@ -460,13 +463,13 @@
 
                     var maquinaDomId = $"maquina-{maquinaIndex}";
 
-                    <section class="machine-section"
+                    <section class="machine-section is-open"
                              data-machine-section
                              data-machine="@maquina.Key.Codigo">
                         <button type="button"
                                 class="machine-header"
                                 data-machine-toggle
-                                aria-expanded="false"
+                                aria-expanded="true"
                                 aria-controls="@maquinaDomId">
                             <div class="machine-header-main">
                                 <div class="machine-identification">
@@ -476,7 +479,7 @@
                                     <div>
                                         <h2 class="machine-title">@maquina.Key.Codigo</h2>
                                         <div class="machine-subtitle">
-                                            @maquina.Key.Nombre · Haz clic para consultar prioridades y órdenes
+                                            @maquina.Key.Nombre · OF pendientes visibles sin abrir la maquina
                                         </div>
                                     </div>
                                 </div>
