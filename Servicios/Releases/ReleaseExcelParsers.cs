@@ -84,34 +84,33 @@ public static class ReleaseExcelDocumentDetector
     public static ReleaseExcelDocument ParseNorma(byte[] bytes)
     {
         var workbook = ReadWorkbook(bytes);
-        var table = workbook.Tables.Cast<DataTable>()
-            .Where(LooksLikeNorma)
-            .Select(x => new
-            {
-                Table = x,
-                HasDate = TryReadDate(Get(x, 1, 2), out var date),
-                FirstDate = TryReadDate(Get(x, 1, 2), out var parsedDate)
-                    ? parsedDate
-                    : DateTime.MinValue
-            })
-            .Where(x => x.HasDate)
-            .OrderByDescending(x => x.FirstDate)
-            .Select(x => x.Table)
+
+        var layout = workbook.Tables.Cast<DataTable>()
+            .Select(BuildNormaLayout)
+            .Where(x => x != null)
+            .Cast<NormaLayout>()
+            .OrderByDescending(x => x.DocumentDate)
+            .ThenByDescending(x => x.DeclaredWeek)
             .FirstOrDefault()
-            ?? throw new InvalidOperationException("No se encontro la matriz semanal NORMA dentro del Excel.");
+            ?? throw new InvalidOperationException(
+                "No se encontro la matriz semanal NORMA dentro del Excel.");
 
-        if (!TryReadDate(Get(table, 1, 2), out var firstDate))
-            throw new InvalidOperationException("No se pudo leer la fecha inicial de la matriz NORMA.");
-
-        var firstWeek = 0;
-        TryInteger(Get(table, 0, 2), out firstWeek);
-        if (firstWeek <= 0)
-            firstWeek = ISOWeek.GetWeekOfYear(firstDate);
+        var table = layout.Table;
+        var firstWeek = layout.DeclaredWeek > 0
+            ? layout.DeclaredWeek
+            : ISOWeek.GetWeekOfYear(layout.DocumentDate);
 
         var rows = new List<ReleaseExcelRow>();
+        var warnings = new List<string>();
+        var currentMold = string.Empty;
+        var backlogDetected = false;
 
         for (var row = 2; row < table.Rows.Count; row++)
         {
+            var mold = CellText(Get(table, row, 0));
+            if (!string.IsNullOrWhiteSpace(mold))
+                currentMold = mold;
+
             var partNumber = CellText(Get(table, row, 1));
             if (string.IsNullOrWhiteSpace(partNumber))
                 continue;
@@ -119,55 +118,95 @@ public static class ReleaseExcelDocumentDetector
             var deliveries = new List<ReleaseExcelDelivery>();
             var sequence = 1;
 
-            for (var column = 2; column < table.Columns.Count; column++)
+            if (layout.BacklogColumn.HasValue &&
+                TryPositiveInteger(
+                    Get(table, row, layout.BacklogColumn.Value),
+                    out var backlogQuantity))
+            {
+                deliveries.Add(new ReleaseExcelDelivery
+                {
+                    Sequence = sequence++,
+                    PeriodLabel = $"BL W{firstWeek}",
+                    RequiredDate = layout.DocumentDate.Date,
+                    RequiredQuantity = backlogQuantity,
+                    IsBacklog = true
+                });
+
+                backlogDetected = true;
+            }
+
+            for (var column = layout.FirstDatedColumn;
+                 column < table.Columns.Count;
+                 column++)
             {
                 if (!TryPositiveInteger(Get(table, row, column), out var quantity))
                     continue;
 
-                var requiredDate = firstDate.AddDays((column - 2) * 7d);
+                var requiredDate =
+                    layout.FirstDatedDate.AddDays(
+                        (column - layout.FirstDatedColumn) * 7d);
+
                 if (TryReadDate(Get(table, 1, column), out var explicitDate))
-                    requiredDate = explicitDate;
+                    requiredDate = explicitDate.Date;
 
                 deliveries.Add(new ReleaseExcelDelivery
                 {
                     Sequence = sequence++,
                     PeriodLabel = $"W{ISOWeek.GetWeekOfYear(requiredDate)}",
-                    RequiredDate = requiredDate,
+                    RequiredDate = requiredDate.Date,
                     RequiredQuantity = quantity,
-                    IsBacklog = requiredDate.Date < firstDate.Date
+                    IsBacklog = false
                 });
             }
 
             if (deliveries.Count == 0)
                 continue;
 
-            var mold = CellText(Get(table, row, 0));
             rows.Add(new ReleaseExcelRow
             {
                 PartNumber = partNumber,
                 PartDescription = null,
-                SourceReference = string.IsNullOrWhiteSpace(mold) ? null : $"Molde {mold}",
+                SourceReference = string.IsNullOrWhiteSpace(currentMold)
+                    ? null
+                    : $"Molde {currentMold}",
                 Uom = "PZA",
                 Deliveries = deliveries
             });
         }
 
         if (rows.Count == 0)
-            throw new InvalidOperationException("El Excel NORMA no contiene cantidades positivas para importar.");
+        {
+            throw new InvalidOperationException(
+                "El Excel NORMA no contiene cantidades positivas para importar.");
+        }
+
+        if (layout.BacklogColumn.HasValue)
+        {
+            warnings.Add(
+                $"NORMA: se detecto columna BL. " +
+                $"La demanda BL se interpreta como backlog de la W{firstWeek} " +
+                $"con fecha operativa {layout.DocumentDate:dd/MM/yyyy}.");
+        }
+
+        if (backlogDetected)
+        {
+            warnings.Add(
+                "NORMA: las cantidades positivas de BL se importaron como demanda vencida/backlog; " +
+                "las columnas fechadas posteriores se conservaron como demanda futura.");
+        }
 
         return new ReleaseExcelDocument
         {
             TemplateCode = "NORMA_WEEKLY_RELEASE",
             ClienteNombre = "NORMA",
-            FolioCliente = $"NORMA-W{firstWeek}-{firstDate:yyyy}",
-            DocumentDate = firstDate,
-            VersionText = $"W{firstWeek} / {firstDate:dd.MM.yyyy}",
+            FolioCliente = $"NORMA-W{firstWeek}-{layout.DocumentDate:yyyy}",
+            DocumentDate = layout.DocumentDate.Date,
+            VersionText = $"W{firstWeek} / {layout.DocumentDate:dd.MM.yyyy}",
             Sha256 = Convert.ToHexString(SHA256.HashData(bytes)),
             Rows = rows,
-            Warnings = new List<string>()
+            Warnings = warnings
         };
     }
-
     // RELEASE_EXCEL_AIR_THERMAL_V1_8
     public static ReleaseExcelDocument ParseAirThermal(
         byte[] bytes,
@@ -442,21 +481,85 @@ public static class ReleaseExcelDocumentDetector
         return GoldeReleaseExcelParser.LooksLike(table);
     }
 
+    private sealed class NormaLayout
+    {
+        public required DataTable Table { get; init; }
+        public int DeclaredWeek { get; init; }
+        public int FirstDatedColumn { get; init; }
+        public DateTime FirstDatedDate { get; init; }
+        public int? BacklogColumn { get; init; }
+        public DateTime DocumentDate { get; init; }
+    }
+
     private static bool LooksLikeNorma(DataTable table)
     {
+        return BuildNormaLayout(table) != null;
+    }
+
+    private static NormaLayout? BuildNormaLayout(DataTable table)
+    {
         if (table.Rows.Count < 4 || table.Columns.Count < 4)
-            return false;
+            return null;
 
         var weekLabel = CellText(Get(table, 0, 1));
         var moldLabel = CellText(Get(table, 1, 0));
         var itemLabel = CellText(Get(table, 1, 1));
 
-        return weekLabel.Contains("semana", StringComparison.OrdinalIgnoreCase) &&
-               moldLabel.Equals("MOLDE", StringComparison.OrdinalIgnoreCase) &&
-               itemLabel.Equals("item", StringComparison.OrdinalIgnoreCase) &&
-               TryReadDate(Get(table, 1, 2), out _);
-    }
+        if (!weekLabel.Contains("semana", StringComparison.OrdinalIgnoreCase) ||
+            !moldLabel.Equals("MOLDE", StringComparison.OrdinalIgnoreCase) ||
+            !itemLabel.Equals("item", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
 
+        int? backlogColumn = null;
+        var firstDatedColumn = -1;
+        var firstDatedDate = DateTime.MinValue;
+
+        for (var column = 2; column < table.Columns.Count; column++)
+        {
+            var header = CellText(Get(table, 1, column)).Trim();
+
+            if (!backlogColumn.HasValue &&
+                (header.Equals("BL", StringComparison.OrdinalIgnoreCase) ||
+                 header.Equals("BACKLOG", StringComparison.OrdinalIgnoreCase) ||
+                 header.Contains("BACK LOG", StringComparison.OrdinalIgnoreCase)))
+            {
+                backlogColumn = column;
+                continue;
+            }
+
+            if (TryReadDate(Get(table, 1, column), out var date))
+            {
+                firstDatedColumn = column;
+                firstDatedDate = date.Date;
+                break;
+            }
+        }
+
+        if (firstDatedColumn < 0)
+            return null;
+
+        var declaredWeek = 0;
+        TryInteger(Get(table, 0, 2), out declaredWeek);
+
+        var documentDate = backlogColumn.HasValue
+            ? firstDatedDate.AddDays(-7).Date
+            : firstDatedDate.Date;
+
+        if (declaredWeek <= 0)
+            declaredWeek = ISOWeek.GetWeekOfYear(documentDate);
+
+        return new NormaLayout
+        {
+            Table = table,
+            DeclaredWeek = declaredWeek,
+            FirstDatedColumn = firstDatedColumn,
+            FirstDatedDate = firstDatedDate,
+            BacklogColumn = backlogColumn,
+            DocumentDate = documentDate
+        };
+    }
     private static object? Get(DataTable table, int row, int column)
     {
         if (row < 0 || column < 0 || row >= table.Rows.Count || column >= table.Columns.Count)

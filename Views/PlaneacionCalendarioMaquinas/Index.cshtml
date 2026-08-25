@@ -889,6 +889,158 @@
             });
         });
     </script>
+
+    <script>
+    // NSQ_CAMBIO_OPERADOR_CALENDARIO_V1
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!modoProduccion) return;
+
+        const modalEl = document.getElementById('modalCambioOperadorCalendario');
+        if (!modalEl) return;
+
+        const modalCambio = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const programaInput = document.getElementById('coProgramaID');
+        const operadorActual = document.getElementById('coOperadorActual');
+        const turnoTexto = document.getElementById('coTurno');
+        const operadorSelect = document.getElementById('coOperadorNuevo');
+        const alcance = document.getElementById('coAlcance');
+        const motivo = document.getElementById('coMotivo');
+        const justificacion = document.getElementById('coJustificacion');
+        const feedback = document.getElementById('coFeedback');
+        const btnGuardar = document.getElementById('coGuardar');
+
+        function feedbackSet(texto, tipo) {
+            feedback.className = `alert py-2 px-3 small ${tipo || 'alert-light'}`;
+            feedback.textContent = texto || '';
+            feedback.classList.toggle('d-none', !texto);
+        }
+
+        async function abrirCambio(programaId) {
+            feedbackSet('', '');
+            operadorSelect.innerHTML = '<option value="">Cargando...</option>';
+            programaInput.value = programaId;
+            justificacion.value = '';
+            motivo.value = '';
+            alcance.value = 'SOLO_OF';
+            modalCambio.show();
+
+            try {
+                const url =
+                    '@Url.Action("PersonalPrograma","PlaneacionCalendarioMaquinas")' +
+                    '?programaProduccionId=' + encodeURIComponent(programaId);
+
+                const response = await fetch(url, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data?.ok) {
+                    throw new Error(data?.mensaje || `HTTP ${response.status}`);
+                }
+
+                operadorActual.textContent =
+                    data.operadorRealNombre ||
+                    data.operadorPlaneadoNombre ||
+                    'Sin operador';
+
+                turnoTexto.textContent = data.turno || 'Sin turno';
+
+                operadorSelect.innerHTML =
+                    '<option value="">-- Seleccionar sustituto --</option>';
+
+                (data.candidatos || []).forEach(x => {
+                    const option = document.createElement('option');
+                    option.value = String(x.personaID);
+                    option.textContent =
+                        x.nombre + (x.nivel ? ` · N${x.nivel}` : '');
+                    operadorSelect.appendChild(option);
+                });
+            }
+            catch (error) {
+                operadorSelect.innerHTML =
+                    '<option value="">No disponible</option>';
+                feedbackSet(
+                    error.message || 'No fue posible cargar candidatos.',
+                    'alert-danger'
+                );
+            }
+        }
+
+        document.querySelectorAll('[data-cambiar-operador]').forEach(btn => {
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                abrirCambio(btn.dataset.programaId);
+            });
+        });
+
+        btnGuardar?.addEventListener('click', async function () {
+            const payload = {
+                programaProduccionID: Number(programaInput.value || 0),
+                operadorSustitutoID: Number(operadorSelect.value || 0),
+                alcance: alcance.value,
+                motivo: motivo.value,
+                justificacion: justificacion.value.trim()
+            };
+
+            if (!payload.operadorSustitutoID) {
+                feedbackSet('Selecciona el operador sustituto.', 'alert-warning');
+                return;
+            }
+
+            if (!payload.motivo) {
+                feedbackSet('Selecciona el motivo del cambio.', 'alert-warning');
+                return;
+            }
+
+            if (payload.justificacion.length < 5) {
+                feedbackSet(
+                    'Escribe una justificación clara del cambio.',
+                    'alert-warning'
+                );
+                return;
+            }
+
+            try {
+                btnGuardar.disabled = true;
+                btnGuardar.innerHTML =
+                    '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+
+                const response = await fetch(
+                    '@Url.Action("CambiarOperador","PlaneacionCalendarioMaquinas")',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                const data = await response.json();
+
+                if (!response.ok || !data?.ok) {
+                    throw new Error(data?.mensaje || `HTTP ${response.status}`);
+                }
+
+                feedbackSet(data.mensaje || 'Cambio aplicado.', 'alert-success');
+                setTimeout(() => window.location.reload(), 700);
+            }
+            catch (error) {
+                feedbackSet(
+                    error.message || 'No fue posible guardar el cambio.',
+                    'alert-danger'
+                );
+            }
+            finally {
+                btnGuardar.disabled = false;
+                btnGuardar.innerHTML =
+                    '<i class="fa-solid fa-user-check me-1"></i> Aplicar cambio';
+            }
+        });
+    });
+    </script>
+
     <script src="~/js/PlaneacionPrograma/calendario-abrir-tablero-maquina-v1.js" asp-append-version="true"></script>
     <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
 }
@@ -1540,6 +1692,18 @@ else
                                 <small>Operador planeado</small>
                                 <strong class="d-block">@textoOperadorModal</strong>
                                 <span class="small text-muted">Auxiliar: @textoAuxiliarModal</span>
+
+                                @if (modoProduccion)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-warning fw-bold mt-2"
+                                            data-cambiar-operador
+                                            data-programa-id="@bloque.ProgramaProduccionID">
+                                        <i class="fa-solid fa-user-pen me-1"></i>
+                                        Cambiar operador
+                                    </button>
+                                }
+
                             </div>
                         </div>
 
@@ -1780,6 +1944,113 @@ else
             </div>
         </div>
     </div>
+}
+
+
+@if (modoProduccion)
+{
+<div class="modal fade"
+     id="modalCambioOperadorCalendario"
+     tabindex="-1"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 bg-primary text-white">
+                <div>
+                    <div class="small text-uppercase fw-bold opacity-75">
+                        Producción / Excepción operativa
+                    </div>
+                    <h5 class="modal-title fw-bold mb-0">
+                        <i class="fa-solid fa-user-pen me-1"></i>
+                        Cambiar operador
+                    </h5>
+                </div>
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="hidden" id="coProgramaID" />
+
+                <div class="row g-2 mb-3">
+                    <div class="col-7">
+                        <div class="border rounded-3 p-3 h-100">
+                            <small class="text-muted fw-bold">OPERADOR ACTUAL</small>
+                            <strong id="coOperadorActual" class="d-block mt-1">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-5">
+                        <div class="border rounded-3 p-3 h-100">
+                            <small class="text-muted fw-bold">TURNO</small>
+                            <strong id="coTurno" class="d-block mt-1">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nuevo operador</label>
+                    <select id="coOperadorNuevo" class="form-select">
+                        <option value="">-- Seleccionar sustituto --</option>
+                    </select>
+                    <div class="form-text">
+                        Si existe matriz, sólo aparecen operadores con polivalencia N1-N4 para la parte.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Aplicar cambio a</label>
+                    <select id="coAlcance" class="form-select">
+                        <option value="SOLO_OF">Sólo esta OF</option>
+                        <option value="RESTO_TURNO">Resto del turno en esta máquina</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Motivo</label>
+                    <select id="coMotivo" class="form-select">
+                        <option value="">-- Seleccionar --</option>
+                        <option value="AUSENCIA">Ausencia</option>
+                        <option value="INCAPACIDAD">Incapacidad</option>
+                        <option value="PERMISO">Permiso / salida</option>
+                        <option value="COBERTURA">Cobertura operativa</option>
+                        <option value="CAMBIO_DE_PRIORIDAD">Cambio de prioridad</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fw-bold">
+                        Justificación <span class="text-danger">*</span>
+                    </label>
+                    <textarea id="coJustificacion"
+                              class="form-control"
+                              rows="3"
+                              maxlength="500"
+                              placeholder="Ej. El operador planeado reportó ausencia al inicio del turno."></textarea>
+                </div>
+
+                <div id="coFeedback"
+                     class="alert d-none mt-3 mb-0"></div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <button type="button"
+                        class="btn btn-outline-secondary fw-bold"
+                        data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+
+                <button type="button"
+                        id="coGuardar"
+                        class="btn btn-primary fw-bold">
+                    <i class="fa-solid fa-user-check me-1"></i>
+                    Aplicar cambio
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 }
 
 <div class="modal fade" id="modalSolicitudesReprogramacion" tabindex="-1" aria-hidden="true">

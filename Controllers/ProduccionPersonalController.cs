@@ -7,7 +7,7 @@ namespace ERP.NSQuell.Controllers;
 
 // NSQ_PRODUCCION_PERSONAL_V31
 [Route("ProduccionPersonal")]
-public sealed class ProduccionPersonalController : Controller
+public sealed partial class ProduccionPersonalController : Controller
 {
     private readonly IConfiguration _configuration;
 
@@ -33,55 +33,7 @@ public sealed class ProduccionPersonalController : Controller
         DateTime? fechaDesde,
         DateTime? fechaHasta)
     {
-        if (!UsuarioEnSesion())
-            return RedirectToAction("Login", "Login");
-
-        var desde = (fechaDesde ?? DateTime.Today).Date;
-        var hasta = (fechaHasta ?? desde.AddDays(7)).Date;
-
-        if (hasta < desde)
-            (desde, hasta) = (hasta, desde);
-
-        if ((hasta - desde).TotalDays > 31)
-            hasta = desde.AddDays(31);
-
-        await using var cn = new SqlConnection(ConnectionString);
-        await cn.OpenAsync();
-
-        var vm = new ProduccionPersonalIndexVm
-        {
-            FechaDesde = desde,
-            FechaHasta = hasta,
-            TablaConfigurada = await TablaPersonalConfiguradaAsync(cn, null),
-            Turnos = await CargarTurnosAsync(cn),
-            Programas = await CargarProgramasAsync(desde, hasta, cn)
-        };
-
-        if (vm.TablaConfigurada && vm.Programas.Count > 0)
-        {
-            var asignaciones =
-                await CargarAsignacionesAsync(
-                    desde,
-                    hasta.AddDays(1),
-                    cn);
-
-            var porPrograma =
-                asignaciones
-                    .GroupBy(x => x.ProgramaProduccionID)
-                    .ToDictionary(x => x.Key, x => x.OrderBy(a => a.Inicio).ToList());
-
-            foreach (var programa in vm.Programas)
-            {
-                if (porPrograma.TryGetValue(
-                        programa.ProgramaProduccionID,
-                        out var lista))
-                {
-                    programa.Asignaciones = lista;
-                }
-            }
-        }
-
-        return View(vm);
+        return await IndexSemanalCoreAsync(fechaDesde);
     }
 
     [HttpGet("Candidatos")]
