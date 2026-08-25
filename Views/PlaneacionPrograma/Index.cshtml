@@ -389,19 +389,17 @@
                 const cards = Array.from(client.querySelectorAll(`[data-row][data-release-key="${releaseKey}"]`));
                 let requerido = 0;
                 let pt = 0;
-                let blanco = 0;
                 let producir = 0;
                 let programado = 0;
 
                 cards.forEach(card => {
                     requerido += parseInt(card.dataset.requerido || "0",10);
                     pt += parseInt(card.dataset.pt || "0",10);
-                    blanco += parseInt(card.dataset.blanco || "0",10);
                     producir += parseInt(card.dataset.producir || "0",10);
                     programado += parseInt(card.dataset.programado || "0",10);
                 });
 
-                summary.textContent=requerido.toLocaleString("es-MX")+" requerido · "+blanco.toLocaleString("es-MX")+" etiqueta blanca · "+producir.toLocaleString("es-MX")+" a producir · "+programado.toLocaleString("es-MX")+" programado";
+                summary.textContent=requerido.toLocaleString("es-MX")+" requerido · "+producir.toLocaleString("es-MX")+" a producir · "+programado.toLocaleString("es-MX")+" programado";
             }
 
             function filtrarReleaseCliente(client, releaseKey) {
@@ -745,7 +743,7 @@
                         <span class="count-pill">@items.Count.ToString("N0") registro(s)</span>
                         <span class="summary-pill">@items.Sum(x => x.CantidadRequerida).ToString("N0") requerido</span>
                         <span class="summary-pill">@items.Sum(x => x.ProduccionProgramadaPendiente ?? 0).ToString("N0") programado</span>
-                        <span class="summary-pill"><i class="fa-solid fa-tag"></i>@items.Sum(x => x.ProductoIncompletoApartado).ToString("N0") etiqueta blanca</span>
+
                         <span class="summary-pill">@items.Sum(x => x.PiezasAProducir ?? 0).ToString("N0") a producir</span>
                         <span class="summary-pill">@items.Sum(x => x.HorasNecesarias ?? 0).ToString("N2") hrs</span>
                     </div>
@@ -772,7 +770,7 @@
                                 Releases = g.Select(ReleaseTexto).Distinct().Count(),
                                 TotalRequerido = g.Sum(x => x.CantidadRequerida),
                                 TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0),
-                                TotalBlanco = g.Sum(x => x.ProductoIncompletoApartado),
+
                                 TotalAProducir = g.Sum(x => x.PiezasAProducir ?? 0)
                             })
                             .OrderBy(g => g.FechaEntrega)
@@ -826,7 +824,7 @@
                                                         @fechaGrupo.Releases.ToString("N0") release(s) ·
                                                         @fechaGrupo.TotalRequerido.ToString("N0") requerido ·
                                                         @fechaGrupo.TotalProgramado.ToString("N0") programado ·
-                                                        @fechaGrupo.TotalBlanco.ToString("N0") etiqueta blanca ·
+
                                                         @fechaGrupo.TotalAProducir.ToString("N0") a producir
                                                     </div>
                                                 </div>
@@ -869,7 +867,7 @@
                                                             TotalRequerido = g.Sum(x => x.CantidadRequerida),
                                                             TotalPT = g.Sum(x => x.PiezasDesdePT ?? 0),
                                                             TotalProgramado = g.Sum(x => x.ProduccionProgramadaPendiente ?? 0),
-                                                            TotalBlanco = g.Sum(x => x.ProductoIncompletoApartado),
+
                                                             TotalAProducir = g.Sum(x => x.PiezasAProducir ?? 0)
                                                         })
                                                         .OrderBy(g => g.EntradaPrioridad)
@@ -895,7 +893,7 @@
                                                                         @clienteItems.Count.ToString("N0") registro(s) ·
                                                                         @partesCliente.ToString("N0") parte(s) ·
                                                                         @clienteItems.Sum(x => x.CantidadRequerida).ToString("N0") requerido ·
-                                                                        @clienteItems.Sum(x => x.ProductoIncompletoApartado).ToString("N0") etiqueta blanca ·
+
                                                                         @clienteItems.Sum(x => x.PiezasAProducir ?? 0).ToString("N0") a producir
                                                                     </div>
                                                                 </div>
@@ -927,7 +925,7 @@
 
                                                                         <span class="release-summary" data-release-summary>
                                                                             @releasesCliente.First().TotalRequerido.ToString("N0") requerido ·
-                                                                            @releasesCliente.First().TotalBlanco.ToString("N0") etiqueta blanca ·
+
                                                                             @releasesCliente.First().TotalAProducir.ToString("N0") a producir ·
                                                                             @releasesCliente.First().TotalProgramado.ToString("N0") programado
                                                                         </span>
@@ -939,7 +937,7 @@
                                                                             <div>Entrega cliente</div>
                                                                             <div>Requerido</div>
                                                                             <div>PT apartado</div>
-                                                                            <div>Etiqueta blanca</div>
+
                                                                             <div>A producir</div>
                                                                             <div>Máquina</div>
                                                                             <div>Molde</div>
@@ -954,7 +952,7 @@
                                                                                      data-release-key="@ReleaseKey(item)"
                                                                                      data-requerido="@item.CantidadRequerida"
                                                                                      data-pt="@(item.PiezasDesdePT ?? 0)"
-                                                                                     data-blanco="@item.ProductoIncompletoApartado"
+
                                                                                      data-producir="@(item.PiezasAProducir ?? 0)"
                                                                                      data-programado="@(item.ProduccionProgramadaPendiente ?? 0)"
                                                                                      data-search="@DataSearch(item)">
@@ -994,14 +992,6 @@
                                                                                     <span class="need-cell-label">PT apartado</span>
                                                                                     <span class="need-cell-value">@N0(item.PiezasDesdePT)</span>
                                                                                 </div>
-                                                                                <div class="need-cell white-cell" title="Producto incompleto que Planeación ya decidió utilizar para esta necesidad.">
-                                                                                    <span class="need-cell-label">Etiqueta blanca</span>
-                                                                                    <span class="need-cell-value"><i class="fa-solid fa-tag me-1"></i>@item.ProductoIncompletoApartado.ToString("N0")</span>
-                                                                                    @if (item.ProductoIncompletoApartado <= 0 && item.ProductoIncompletoDisponible > 0)
-                                                                                    {
-                                                                                        <span class="white-chip mt-1"><i class="fa-solid fa-circle-info"></i>@item.ProductoIncompletoDisponible.ToString("N0") disp.</span>
-                                                                                    }
-                                                                                </div>
                                                                                 <div class="need-cell">
                                                                                     <span class="need-cell-label">A producir</span>
                                                                                     <span class="need-cell-value">@N0(item.PiezasAProducir)</span>
@@ -1031,10 +1021,7 @@
                                                                                 </div>
 
                                                                                 <div class="need-actions-row">
-                                                                                    @if (!item.ProgramaProduccionID.HasValue && item.ProductoIncompletoDisponible > 0 && item.ProductoIncompletoApartado <= 0)
-                                                                                    {
-                                                                                        <span class="white-chip" title="Al abrir Programar molde podrás decidir si usar este producto incompleto."><i class="fa-solid fa-tag"></i>@item.ProductoIncompletoDisponible.ToString("N0") disp.</span>
-                                                                                    }
+
                                                                                     @if (item.ProgramaProduccionID.HasValue)
                                                                                     {
                                                                                         <a class="btn-card-main"

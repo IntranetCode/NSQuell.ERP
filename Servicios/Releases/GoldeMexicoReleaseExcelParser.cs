@@ -344,39 +344,7 @@ internal static class GoldeMexicoReleaseExcelParser
 
     private static bool TryPositiveInteger(object? value, out int quantity)
     {
-        quantity = 0;
-        if (value == null)
-            return false;
-
-        try
-        {
-            if (value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal)
-            {
-                var number = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-                if (number <= 0 || number > int.MaxValue)
-                    return false;
-
-                quantity = Convert.ToInt32(Math.Round(number, 0, MidpointRounding.AwayFromZero));
-                return quantity > 0;
-            }
-        }
-        catch
-        {
-            return false;
-        }
-
-        var text = CellText(value)
-            .Replace(",", string.Empty, StringComparison.Ordinal)
-            .Replace(" ", string.Empty, StringComparison.Ordinal);
-
-        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) &&
-            parsed > 0 && parsed <= int.MaxValue)
-        {
-            quantity = Convert.ToInt32(Math.Round(parsed, 0, MidpointRounding.AwayFromZero));
-            return quantity > 0;
-        }
-
-        return false;
+        return ReleaseQuantityParser.TryParsePositiveInteger(value, out quantity);
     }
 
     private static bool TryReadDate(object? value, out DateTime date)

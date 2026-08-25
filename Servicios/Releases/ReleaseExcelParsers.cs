@@ -495,36 +495,7 @@ public static class ReleaseExcelDocumentDetector
 
     private static bool TryInteger(object? value, out int result)
     {
-        result = 0;
-        if (value == null)
-            return false;
-
-        try
-        {
-            switch (value)
-            {
-                case int integer:
-                    result = integer;
-                    return true;
-                case long longValue when longValue >= int.MinValue && longValue <= int.MaxValue:
-                    result = (int)longValue;
-                    return true;
-                case double doubleValue when doubleValue >= int.MinValue && doubleValue <= int.MaxValue:
-                    result = Convert.ToInt32(Math.Round(doubleValue));
-                    return true;
-                case decimal decimalValue when decimalValue >= int.MinValue && decimalValue <= int.MaxValue:
-                    result = Convert.ToInt32(Math.Round(decimalValue));
-                    return true;
-                default:
-                    var text = CellText(value).Replace(",", string.Empty).Trim();
-                    return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
-            }
-        }
-        catch
-        {
-            result = 0;
-            return false;
-        }
+        return ReleaseQuantityParser.TryParseInteger(value, out result);
     }
 
     private static bool TryReadDate(object? value, out DateTime date)

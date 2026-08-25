@@ -1542,6 +1542,31 @@ OUTER APPLY
 WHERE pp.Activo = 1
   AND pp.MaquinaID = @MaquinaID
   AND pp.ProgramaProduccionID <> @ProgramaProduccionID
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Planeacion_ProgramaProduccion origen
+      CROSS APPLY
+      (
+          SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(origen.Observaciones,N'')) AS PosGrupo
+      ) pos
+      CROSS APPLY
+      (
+          SELECT TRY_CONVERT
+          (
+              INT,
+              LEFT
+              (
+                  SUBSTRING(origen.Observaciones,pos.PosGrupo + LEN(N'NSQ_LHRH_PAIR:'),50),
+                  CHARINDEX(N';',SUBSTRING(origen.Observaciones,pos.PosGrupo + LEN(N'NSQ_LHRH_PAIR:'),50) + N';') - 1
+              )
+          ) AS Grupo
+      ) grp
+      WHERE origen.ProgramaProduccionID = @ProgramaProduccionID
+        AND pos.PosGrupo > 0
+        AND grp.Grupo IS NOT NULL
+        AND pp.Observaciones LIKE N'%NSQ_LHRH_PAIR:' + CONVERT(NVARCHAR(20),grp.Grupo) + N';%'
+  )
   AND pp.FechaInicioProgramada IS NOT NULL
   AND
   (

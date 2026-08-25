@@ -502,21 +502,7 @@ public static class HufReleasePdfParser
 
     private static int ParseInteger(string value)
     {
-        var normalized = value
-            .Replace(",", string.Empty, StringComparison.Ordinal)
-            .Trim();
-
-        if (!int.TryParse(
-                normalized,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var number))
-        {
-            throw new InvalidOperationException(
-                $"Cantidad HUF invalida: {value}.");
-        }
-
-        return number;
+        return ReleaseQuantityParser.ParseInteger(value, "Cantidad HUF");
     }
 
     private static int? ParseNullableInteger(string? value)

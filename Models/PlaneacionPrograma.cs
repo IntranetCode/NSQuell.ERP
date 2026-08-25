@@ -154,6 +154,17 @@ namespace ERP.NSQuell.Models
         public int? OperadorPrincipalID { get; set; }
         public int? OperadorAuxiliarID { get; set; }
 
+        // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
+        // La programacion es conjunta en maquina/molde/horario, pero cada lado
+        // conserva ReleaseDetalle, Programa, OF, MP y embalaje independientes.
+        public bool ParejaLhRhDisponible { get; set; }
+        public bool ProgramarParejaLhRh { get; set; }
+        public int? ParejaLhRhReleaseDetalleID { get; set; }
+        public string? ParejaLhRhLado { get; set; }
+        public string? ParejaLhRhNumeroParte { get; set; }
+        public string? ParejaLhRhDescripcion { get; set; }
+        public int ParejaLhRhCantidadRequerida { get; set; }
+
         public int ProductoIncompletoApartado { get; set; }
         public int CantidadOriginalAProducir { get; set; }
         public List<PlaneacionProductoIncompletoDisponibleVm> ProductoIncompletoDisponible { get; set; } = new();

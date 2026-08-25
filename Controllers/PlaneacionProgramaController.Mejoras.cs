@@ -461,6 +461,140 @@ END;";
             Math.Ceiling(redondeada));
     }
 
+    // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
+    private sealed class ParejaLhRhVistaCandidata
+    {
+        public int ReleaseDetalleID { get; set; }
+        public int ParteID { get; set; }
+        public string NumeroParte { get; set; } = string.Empty;
+        public string TextoParte { get; set; } = string.Empty;
+        public int CantidadRequerida { get; set; }
+    }
+
+    private async Task PrepararParejaLhRhVistaAsync(
+        PlaneacionProgramaCrearDesdeNecesidadVm principal)
+    {
+        principal.ParejaLhRhDisponible = false;
+        principal.ProgramarParejaLhRh = true;
+        principal.ParejaLhRhReleaseDetalleID = null;
+        principal.ParejaLhRhLado = null;
+        principal.ParejaLhRhNumeroParte = null;
+        principal.ParejaLhRhDescripcion = null;
+        principal.ParejaLhRhCantidadRequerida = 0;
+
+        if (!principal.ParteID.HasValue ||
+            !principal.ClienteID.HasValue ||
+            !principal.ReleaseID.HasValue ||
+            principal.ReleaseDetalleID <= 0)
+        {
+            return;
+        }
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync();
+
+        var textoPrincipal = await ObtenerTextoParteLhRhAsync(
+            principal.ParteID.Value,
+            cn,
+            null);
+
+        if (!TrySepararLhRh(
+                textoPrincipal,
+                out var basePrincipal,
+                out var ladoPrincipal))
+        {
+            return;
+        }
+
+        var ladoBuscado = ladoPrincipal == "LH" ? "RH" : "LH";
+
+        const string sql = @"
+DECLARE @FechaPrincipal DATE =
+(
+    SELECT TOP (1) FechaRequerida
+    FROM dbo.Planeacion_ReleaseDetalle
+    WHERE ReleaseDetalleID = @ReleaseDetallePrincipalID
+      AND Activo = 1
+);
+
+SELECT
+    d.ReleaseDetalleID,
+    d.ParteID,
+    p.NumeroParte,
+    COALESCE(NULLIF(p.Designacion,N''), NULLIF(p.Descripcion,N''), d.DesignacionDescripcionSAP, p.NumeroParte) AS TextoParte,
+    ISNULL(d.CantidadRequerida,0) AS CantidadRequerida
+FROM dbo.Planeacion_ReleaseDetalle d
+INNER JOIN dbo.ERP_Partes p
+    ON p.ParteID = d.ParteID
+   AND p.Activo = 1
+WHERE d.ReleaseID = @ReleaseID
+  AND d.ReleaseDetalleID <> @ReleaseDetallePrincipalID
+  AND d.Activo = 1
+  AND d.ProgramaProduccionID IS NULL
+  AND d.EstatusID NOT IN (9,99)
+  AND p.ClienteID = @ClienteID
+ORDER BY
+    CASE WHEN CONVERT(date,d.FechaRequerida) = @FechaPrincipal THEN 0 ELSE 1 END,
+    ABS(DATEDIFF(DAY,@FechaPrincipal,d.FechaRequerida)),
+    d.ReleaseDetalleID;";
+
+        var candidatas = new List<ParejaLhRhVistaCandidata>();
+
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.Add("@ReleaseDetallePrincipalID", SqlDbType.Int).Value =
+                principal.ReleaseDetalleID;
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value =
+                principal.ReleaseID.Value;
+            cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value =
+                principal.ClienteID.Value;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                var texto = TextoNullableMejora(rd, "TextoParte");
+
+                if (!TrySepararLhRh(texto, out var baseCandidata, out var lado))
+                    continue;
+
+                if (lado != ladoBuscado ||
+                    !string.Equals(baseCandidata, basePrincipal, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                candidatas.Add(new ParejaLhRhVistaCandidata
+                {
+                    ReleaseDetalleID = Convert.ToInt32(rd["ReleaseDetalleID"]),
+                    ParteID = Convert.ToInt32(rd["ParteID"]),
+                    NumeroParte = TextoNullableMejora(rd, "NumeroParte") ?? string.Empty,
+                    TextoParte = texto ?? string.Empty,
+                    CantidadRequerida = Convert.ToInt32(rd["CantidadRequerida"])
+                });
+            }
+        }
+
+        var partes = candidatas
+            .GroupBy(x => x.ParteID)
+            .ToList();
+
+        // Si hay mas de una parte maestra posible no se adivina.
+        if (partes.Count != 1)
+            return;
+
+        // La consulta ya prioriza misma fecha de entrega y luego la mas cercana.
+        var seleccionada = partes[0].First();
+
+        principal.ParejaLhRhDisponible = true;
+        principal.ProgramarParejaLhRh = true;
+        principal.ParejaLhRhReleaseDetalleID = seleccionada.ReleaseDetalleID;
+        principal.ParejaLhRhLado = ladoBuscado;
+        principal.ParejaLhRhNumeroParte = seleccionada.NumeroParte;
+        principal.ParejaLhRhDescripcion = seleccionada.TextoParte;
+        principal.ParejaLhRhCantidadRequerida = seleccionada.CantidadRequerida;
+    }
+
     private async Task<int?> ProgramarParejaLhRhAsync(
         int programaPrincipalId,
         PlaneacionProgramaCrearDesdeNecesidadVm principal,
@@ -501,6 +635,16 @@ FROM dbo.ERP_Partes
 WHERE ClienteID = @ClienteID
   AND Activo = 1
   AND ParteID <> @ParteID
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.Planeacion_ReleaseDetalle d
+      WHERE d.ReleaseID = @ReleaseID
+        AND d.ParteID = dbo.ERP_Partes.ParteID
+        AND d.Activo = 1
+        AND d.ProgramaProduccionID IS NULL
+        AND d.EstatusID NOT IN (9,99)
+  )
 ORDER BY ParteID;";
 
         await using (var cmd = new SqlCommand(sqlPartes, cn, tx))
@@ -509,6 +653,8 @@ ORDER BY ParteID;";
                 principal.ClienteID.Value;
             cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value =
                 principal.ParteID.Value;
+            cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value =
+                principal.ReleaseID.Value;
 
             await using var rd = await cmd.ExecuteReaderAsync();
 
@@ -583,10 +729,37 @@ ORDER BY
             return null;
 
         var pareja = await ObtenerNecesidadParaProgramaAsync(
-            releaseDetalleParejaId.Value);
+            releaseDetalleParejaId.Value,
+            cn,
+            tx);
 
         if (pareja == null || pareja.PiezasAProducir <= 0)
             return null;
+
+        if (principal.MoldeID.HasValue &&
+            pareja.MoldeID.HasValue &&
+            principal.MoldeID.Value != pareja.MoldeID.Value)
+        {
+            throw new InvalidOperationException(
+                "La contraparte LH/RH no tiene configurado el mismo molde. " +
+                "Corrige los datos tecnicos antes de programarlas juntas.");
+        }
+
+        if (principal.MaquinaID.HasValue)
+        {
+            var maquinaCompatiblePareja = await MaquinaCompatibleConParteAsync(
+                pareja.ParteID,
+                principal.MaquinaID.Value,
+                cn,
+                tx);
+
+            if (!maquinaCompatiblePareja)
+            {
+                throw new InvalidOperationException(
+                    "La maquina seleccionada para la parte principal no esta configurada " +
+                    "como principal o sustituta directa de la contraparte LH/RH.");
+            }
+        }
 
         var cantidadObjetivoPareja =
             RedondearCantidadPorEmbalaje(
@@ -616,7 +789,7 @@ ORDER BY
         {
             pareja.CantidadMpKg = Math.Round(
                 pareja.CantidadProgramada *
-                pareja.PesoBrutoPieza.Value / 1000m,
+                pareja.PesoBrutoPieza.Value,
                 4);
         }
 
@@ -710,7 +883,7 @@ WHERE ProgramaProduccionID IN
     private static async Task<string?> ObtenerTextoParteLhRhAsync(
         int parteId,
         SqlConnection cn,
-        SqlTransaction tx)
+        SqlTransaction? tx)
     {
         const string sql = @"
 SELECT
@@ -719,7 +892,9 @@ FROM dbo.ERP_Partes
 WHERE ParteID = @ParteID
   AND Activo = 1;";
 
-        await using var cmd = new SqlCommand(sql, cn, tx);
+        await using var cmd = tx == null
+            ? new SqlCommand(sql, cn)
+            : new SqlCommand(sql, cn, tx);
         cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
 
         var result = await cmd.ExecuteScalarAsync();

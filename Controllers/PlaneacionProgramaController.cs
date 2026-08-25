@@ -909,6 +909,8 @@ VALUES
                 vm.Arranque = horaBase.AddHours(1).TimeOfDay;
                 if (vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0) vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(horaBase.AddHours(1), vm.HorasProgramadas.Value, false);
             }
+            // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
+            await PrepararParejaLhRhVistaAsync(vm);
             await CargarCatalogosAsync(vm);
             return View("Crear", vm);
         }
@@ -1113,27 +1115,43 @@ await CompletarDatosProgramaAsync(vm, cn, sqlTx);
                 var programaId = await InsertarProgramaAsync(vm, usuarioId, cn, sqlTx);
                 // NSQ_OPERADORES_SOLO_PRODUCCION_V1 - no persistir personal desde Planeacion.
                 await MarcarReleaseDetalleProgramadoAsync(vm.ReleaseDetalleID, programaId, usuarioId, cn, sqlTx);
-                // NSQ_LHRH_AUTO_V1
-                var programaParejaLhRhId =
-                    await ProgramarParejaLhRhAsync(
-                        programaId,
-                        vm,
-                        usuarioId,
-                        cn,
-                        sqlTx);
+                // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
+                int? programaParejaLhRhId = null;
+
+                if (vm.ProgramarParejaLhRh)
+                {
+                    etapaSql = "Programar contraparte LH/RH";
+                    programaParejaLhRhId =
+                        await ProgramarParejaLhRhAsync(
+                            programaId,
+                            vm,
+                            usuarioId,
+                            cn,
+                            sqlTx);
+
+                    if (!programaParejaLhRhId.HasValue)
+                    {
+                        throw new InvalidOperationException(
+                            "Se solicito programar la contraparte LH/RH, pero ya no existe una necesidad pendiente compatible dentro del mismo Release.");
+                    }
+                }
                 if (vm.SolicitudProduccionID.HasValue && vm.SolicitudProduccionDetalleID.HasValue)
                     await VincularOFManualConProgramaAsync(programaId, vm, usuarioId, cn, sqlTx);
                 await DesactivarReacomodoPlaneacionAsync(cn, sqlTx);
                 await tx.CommitAsync();
-                TempData["Success"] = vm.ProductoIncompletoApartado > 0
-                    ? $"Cambio de molde programado correctamente. Se usarán {vm.ProductoIncompletoApartado:N0} pieza(s) de etiqueta blanca y se producirán {vm.CantidadProgramada:N0}."
-                    : "Cambio de molde programado correctamente.";
+                TempData["Success"] = programaParejaLhRhId.HasValue
+                    ? $"Cambio de molde LH/RH programado en conjunto. Programas #{programaId} y #{programaParejaLhRhId.Value}; mismo molde, maquina y horario, con OF/MP/embalaje independientes."
+                    : vm.ProductoIncompletoApartado > 0
+                        ? $"Cambio de molde programado correctamente. Se usaran {vm.ProductoIncompletoApartado:N0} pieza(s) de etiqueta blanca y se produciran {vm.CantidadProgramada:N0}."
+                        : "Cambio de molde programado correctamente.";
                 return RedirectToAction(nameof(Index)); // NSQ_REDIRECT_INDEX_V1
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                ModelState.AddModelError("", "Error al programar cambio de molde: " + ex.Message);
+                ModelState.AddModelError(
+                    "",
+                    $"Error al programar cambio de molde [{etapaSql}]: {ex.Message}");
                 await CargarCatalogosAsync(vm);
                 return View(vm);
             }
@@ -1250,7 +1268,10 @@ await CompletarDatosProgramaAsync(vm, cn, sqlTx);
             }
         }
 
-        private async Task<PlaneacionProgramaCrearDesdeNecesidadVm?> ObtenerNecesidadParaProgramaAsync(int releaseDetalleId)
+        private async Task<PlaneacionProgramaCrearDesdeNecesidadVm?> ObtenerNecesidadParaProgramaAsync(
+            int releaseDetalleId,
+            SqlConnection? existingConnection = null,
+            SqlTransaction? existingTransaction = null)
         {
             const string sql = @"
 SELECT r.ReleaseID,r.FolioRelease,r.ClienteID,ISNULL(c.Nombre,r.ClienteNombre) AS ClienteNombre,d.ReleaseDetalleID,d.ParteID,d.NumeroParte,d.ReferenciaSAP,d.DesignacionDescripcionSAP,d.FechaRequerida,d.CantidadRequerida,d.ProgramaProduccionID,d.SolicitudProduccionID,
@@ -1296,9 +1317,19 @@ OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenE
 OUTER APPLY(SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)-ISNULL(pp.CantidadProducida,0)),0) AS ProgramadoPendiente FROM dbo.Planeacion_ProgramaProduccion pp WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID AND pp.Activo=1 AND ISNULL(pp.EstatusID,1) NOT IN(5,9,99))prog
 OUTER APPLY(SELECT ISNULL(SUM(a.CantidadApartada),0) AS CantidadApartada FROM dbo.Planeacion_PT_Apartado a WHERE a.ParteID=d.ParteID AND a.ReleaseDetalleID<>d.ReleaseDetalleID AND a.Activo=1 AND a.EstatusID=1)aptOtros
 WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1 AND r.Activo=1;";
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-            await using var cmd = new SqlCommand(sql, cn);
+            await using var ownedConnection =
+                existingConnection == null
+                    ? new SqlConnection(ConnectionString)
+                    : null;
+
+            var cn = existingConnection ?? ownedConnection!;
+
+            if (ownedConnection != null)
+                await cn.OpenAsync();
+
+            await using var cmd = existingTransaction == null
+                ? new SqlCommand(sql, cn)
+                : new SqlCommand(sql, cn, existingTransaction);
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId;
             await using var rd = await cmd.ExecuteReaderAsync();
             if (!await rd.ReadAsync()) return null;
