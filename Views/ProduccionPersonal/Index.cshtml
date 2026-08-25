@@ -1,430 +1,1275 @@
-﻿@model ERP.NSQuell.Models.ProduccionPersonalIndexVm
+﻿@model ERP.NSQuell.Models.ProduccionPersonalSemanalIndexVm
 @using System.Globalization
+@using System.Text.Json
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Programación de Personal | Producción";
+    ViewData["Title"] = "Centro Operativo de Programación de Personal";
+
     var cultura = new CultureInfo("es-MX");
+    var anterior = Model.SemanaInicio.AddDays(-7).ToString("yyyy-MM-dd");
+    var siguiente = Model.SemanaInicio.AddDays(7).ToString("yyyy-MM-dd");
+    var actual = DateTime.Today.ToString("yyyy-MM-dd");
+
+    var maquinas = Model.Programas
+        .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre })
+        .Select(x => x.Key)
+        .OrderBy(x => x.MaquinaCodigo)
+        .ThenBy(x => x.MaquinaNombre)
+        .ToList();
+
+    var personas = new Dictionary<int, string>();
+
+    void AgregarPersona(int id, string? nombre)
+    {
+        if (id <= 0 || string.IsNullOrWhiteSpace(nombre)) return;
+        personas[id] = nombre.Trim();
+    }
+
+    foreach (var p in Model.Tecnicos) AgregarPersona(p.PersonaID, p.Nombre);
+    foreach (var p in Model.SmedYTecnicos) AgregarPersona(p.PersonaID, p.Nombre);
+    foreach (var p in Model.Auxiliares) AgregarPersona(p.PersonaID, p.Nombre);
+
+    foreach (var programa in Model.Programas)
+    {
+        if (programa.OperadorID.HasValue)
+            AgregarPersona(programa.OperadorID.Value, programa.OperadorNombre);
+
+        foreach (var candidato in programa.Candidatos)
+            AgregarPersona(candidato.PersonaID, candidato.Nombre);
+    }
+
+    string NombrePersona(int? id, string vacio = "Sin asignar")
+    {
+        if (!id.HasValue) return vacio;
+        return personas.TryGetValue(id.Value, out var nombre)
+            ? nombre
+            : $"Persona #{id.Value}";
+    }
+
+    var plannerData = Model.Programas.Select(p => new
+    {
+        programaID = p.ProgramaProduccionID,
+        of = p.OF,
+        parte = p.NumeroParte,
+        descripcion = p.DescripcionParte,
+        maquinaID = p.MaquinaID,
+        maquina = p.MaquinaCodigo,
+        maquinaNombre = p.MaquinaNombre,
+        inicio = p.Inicio.ToString("O"),
+        fin = p.Fin.ToString("O"),
+        turnoID = Model.TurnoOperadorID(p.Inicio),
+        turno = Model.TurnoOperadorNombre(p.Inicio),
+        operadorID = p.OperadorID,
+        operadorNombre = p.OperadorNombre,
+        nivel = p.NivelOperador,
+        tieneMatriz = p.TieneMatriz,
+        excepcion = p.ExcepcionActiva,
+        candidatos = p.Candidatos.Select(c => new
+        {
+            personaID = c.PersonaID,
+            numeroControl = c.NumeroControl,
+            nombre = c.Nombre,
+            nivel = c.Nivel,
+            enEscala = c.EnEscala,
+            mismaMaquina = c.MismaMaquinaEscala,
+            turnoEscala = c.TurnoEscala
+        }).ToList()
+    }).ToList();
+
+    var turnosData = Model.TurnosApoyo.Select(t => new
+    {
+        turnoID = t.TurnoID,
+        nombre = t.Nombre,
+        tipo = t.TipoTurno,
+        inicioMin = t.HoraInicio.HasValue ? (int?)Math.Round(t.HoraInicio.Value.TotalMinutes) : null,
+        finMin = t.HoraFin.HasValue ? (int?)Math.Round(t.HoraFin.Value.TotalMinutes) : null,
+        cruza = t.CruzaDiaSiguiente,
+        tecnicoID = t.TecnicoProduccionID,
+        smedID = t.SmedID,
+        auxiliarID = t.AuxiliarID
+    }).ToList();
+
+    var personasData = personas
+        .OrderBy(x => x.Value)
+        .Select(x => new { personaID = x.Key, nombre = x.Value })
+        .ToList();
 }
 
 @section Styles {
-<style>
-    .pp-page{max-width:1800px;margin:0 auto;padding:18px}.pp-hero{border-radius:24px;padding:22px 26px;background:linear-gradient(135deg,#0f2f63,#194c9b);color:#fff;box-shadow:0 16px 34px rgba(15,47,99,.18)}.pp-hero h1{margin:0;font-size:1.65rem;font-weight:950}.pp-hero p{margin:6px 0 0;max-width:1050px;color:rgba(255,255,255,.86);font-weight:600}.pp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pp-actions a{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);border-radius:12px;padding:8px 12px;font-weight:850}.pp-panel{background:#fff;border:1px solid #d7e2f1;border-radius:18px;box-shadow:0 8px 24px rgba(16,24,40,.06);margin-top:12px}.pp-filter{padding:14px 16px}.pp-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px}.pp-metric{background:#fff;border:1px solid #d7e2f1;border-radius:16px;padding:13px 15px}.pp-metric span{display:block;color:#667085;text-transform:uppercase;font-size:.7rem;font-weight:850}.pp-metric strong{color:#0f2f63;font-size:1.35rem}.pp-program{padding:15px 16px;border-bottom:1px solid #e8eef6}.pp-program:last-child{border-bottom:0}.pp-program-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}.pp-of{font-size:1.05rem;font-weight:950;color:#0f2f63}.pp-sub{color:#667085;font-size:.79rem;font-weight:650;margin-top:2px}.pp-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.pp-tag{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:#f8fbff;border:1px solid #d7e2f1;font-size:.73rem;font-weight:800;color:#344054}.pp-assignments{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:9px;margin-top:12px}.pp-assignment{border:1px solid #d7e2f1;border-radius:14px;padding:11px 12px;background:#fbfdff}.pp-assignment.complete{border-color:#abefc6;background:#f3fff7}.pp-assignment.pending{border-color:#fed7aa;background:#fffaf3}.pp-assignment-title{display:flex;justify-content:space-between;gap:8px;font-weight:900;color:#0f2f63}.pp-person-grid{display:grid;grid-template-columns:1fr;gap:4px;margin-top:8px}.pp-person{font-size:.79rem;color:#344054}.pp-person strong{display:inline-block;min-width:76px}.pp-empty{padding:12px;border:1px dashed #cbd5e1;border-radius:12px;color:#667085;font-weight:700;margin-top:10px}.pp-btn{border-radius:11px;font-weight:850}.pp-setup{margin-top:12px;border:1px solid #fecdca;background:#fffbfa;color:#b42318;border-radius:16px;padding:14px 16px;font-weight:700}.pp-note{font-size:.76rem;color:#667085}.pp-candidate-note{padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:.78rem;color:#475467}.pp-status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:.7rem;font-weight:900}.pp-ok{background:#ecfdf3;color:#067647;border:1px solid #abefc6}.pp-warn{background:#fff7ed;color:#b54708;border:1px solid #fed7aa}.pp-search{min-width:260px}.modal-content.pp-modal{border:0;border-radius:20px;overflow:hidden}.pp-modal .modal-header{background:linear-gradient(135deg,#0f2f63,#194c9b);color:#fff}.pp-loading{opacity:.65;pointer-events:none}
-    @@media (max-width:900px){.pp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.pp-page{padding:10px}}
-    @@media (max-width:560px){.pp-metrics{grid-template-columns:1fr}.pp-assignments{grid-template-columns:1fr}}
-</style>
+    <link rel="stylesheet"
+          href="~/css/ProduccionPersonal/semanal.css"
+          asp-append-version="true" />
 }
+
+<div class="ppv3-page" id="ppv3Root">
+    <header class="ppv3-header">
+        <div class="ppv3-title-block">
+            <a href="@Url.Action("Grupo","Menu",new { id = 2 })" class="ppv3-back" title="Volver a Producción">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <div>
+                <div class="ppv3-eyebrow">PRODUCCIÓN · PERSONAL</div>
+                <h1>Centro Operativo de Programación</h1>
+            </div>
+        </div>
+
+        <div class="ppv3-week-block">
+            <div class="ppv3-week-number">
+                <span>SEMANA</span>
+                <strong>@Model.NumeroSemana</strong>
+            </div>
+            <div class="ppv3-week-range">
+                <strong>@Model.SemanaInicio.ToString("dd MMM", cultura) — @Model.SemanaFin.ToString("dd MMM yyyy", cultura)</strong>
+                <span>
+                    @if (Model.EscalaID.HasValue)
+                    {
+                        <i class="fa-solid fa-circle-check text-success"></i>
+                        @Model.EscalaFolio
+                        <text> · @Model.EscalaEstado</text>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-triangle-exclamation text-warning"></i>
+                        <text>Sin escala RRHH publicada</text>
+                    }
+                </span>
+            </div>
+        </div>
+
+        <div class="ppv3-week-nav">
+            <a class="btn btn-sm btn-outline-primary"
+               href="@Url.Action("Index","ProduccionPersonal",new { fechaDesde = anterior })"
+               title="Semana anterior">
+                <i class="fa-solid fa-chevron-left"></i>
+            </a>
+            <a class="btn btn-sm btn-primary fw-bold"
+               href="@Url.Action("Index","ProduccionPersonal",new { fechaDesde = actual })">
+                Hoy
+            </a>
+            <a class="btn btn-sm btn-outline-primary"
+               href="@Url.Action("Index","ProduccionPersonal",new { fechaDesde = siguiente })"
+               title="Semana siguiente">
+                <i class="fa-solid fa-chevron-right"></i>
+            </a>
+        </div>
+    </header>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mt-2 mb-0 fw-semibold">@TempData["Error"]</div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mt-2 mb-0 fw-semibold">@TempData["Success"]</div>
+    }
+    @if (!Model.Configurado)
+    {
+        <div class="alert alert-warning mt-2 mb-0 fw-semibold">
+            <i class="fa-solid fa-database me-1"></i>
+            Falta completar la instalación SQL V2 de Programación de Personal.
+        </div>
+    }
+
+    <section class="ppv3-filterbar">
+        <div class="ppv3-search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="ppv3Search"
+                   type="search"
+                   class="form-control"
+                   placeholder="Buscar OF, pieza, máquina o persona..." />
+        </div>
+
+        <select id="ppv3MachineFilter" class="form-select form-select-sm">
+            <option value="">Todas las máquinas</option>
+            @foreach (var m in maquinas)
+            {
+                <option value="@m.MaquinaID">@m.MaquinaCodigo · @m.MaquinaNombre</option>
+            }
+        </select>
+
+        <select id="ppv3TurnFilter" class="form-select form-select-sm">
+            <option value="">Todos los turnos</option>
+            @foreach (var t in Model.TurnosOperador)
+            {
+                <option value="@t.TurnoID">@t.Nombre · @t.HorarioTexto</option>
+            }
+        </select>
+
+        <select id="ppv3RoleFilter" class="form-select form-select-sm">
+            <option value="">Todos los roles</option>
+            <option value="OPERADOR">Operador</option>
+            <option value="TECNICO">Técnico</option>
+            <option value="SMED">SMED</option>
+            <option value="AUXILIAR">Auxiliar</option>
+        </select>
+
+        <select id="ppv3PersonFilter" class="form-select form-select-sm">
+            <option value="">Todas las personas</option>
+            @foreach (var persona in personas.OrderBy(x => x.Value))
+            {
+                <option value="@persona.Key">@persona.Value</option>
+            }
+        </select>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="ppv3ClearFilters">
+            <i class="fa-solid fa-eraser"></i> Limpiar
+        </button>
+    </section>
+
+    <section class="ppv3-kpis" aria-label="Indicadores de cobertura">
+        <button type="button" class="ppv3-kpi" data-kpi="all">
+            <span>OF / PROGRAMAS</span>
+            <strong id="kpiTotal">@Model.TotalProgramas</strong>
+        </button>
+        <button type="button" class="ppv3-kpi warning" data-kpi="operator">
+            <span>SIN OPERADOR</span>
+            <strong id="kpiSinOperador">@Model.TotalSinOperador</strong>
+        </button>
+        <button type="button" class="ppv3-kpi warning" data-kpi="technician">
+            <span>SIN TÉCNICO</span>
+            <strong id="kpiSinTecnico">@Model.TotalSinTecnico</strong>
+        </button>
+        <button type="button" class="ppv3-kpi danger" data-kpi="conflict">
+            <span>CONFLICTOS</span>
+            <strong id="kpiConflictos">@Model.TotalConflictos</strong>
+        </button>
+        <button type="button" class="ppv3-kpi success" data-kpi="complete">
+            <span>COBERTURA COMPLETA</span>
+            <strong id="kpiCompletas">@Model.TotalCoberturaCompleta</strong>
+        </button>
+    </section>
+
+    <nav class="ppv3-tabs" aria-label="Vistas de programación">
+        <button type="button" class="ppv3-tab active" data-view="planner">
+            <i class="fa-solid fa-table-cells-large"></i>
+            Programación
+        </button>
+        <button type="button" class="ppv3-tab" data-view="support">
+            <i class="fa-solid fa-people-group"></i>
+            Cobertura de turno
+        </button>
+        <button type="button" class="ppv3-tab" data-view="people">
+            <i class="fa-solid fa-user-clock"></i>
+            Vista por persona
+        </button>
+        <button type="button" class="ppv3-tab" data-view="pending">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Pendientes
+            <span class="ppv3-tab-count" id="pendingTabCount">0</span>
+        </button>
+    </nav>
+
+    <form method="post"
+          action="@Url.Action("GuardarSemana","ProduccionPersonal")"
+          id="ppv3Form">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="SemanaInicio" value="@Model.SemanaInicio.ToString("yyyy-MM-dd")" />
+
+        <section class="ppv3-view active" data-view-panel="planner">
+            <div class="ppv3-view-head">
+                <div>
+                    <h2>Planner de OF / pieza</h2>
+                    <p>Haz clic en la celda del operador para consultar disponibilidad, carga y polivalencia antes de asignar.</p>
+                </div>
+                <a class="btn btn-sm btn-outline-primary fw-bold"
+                   href="@Url.Action("Index","ProduccionPersonal",new { fechaDesde = Model.SemanaInicio.ToString("yyyy-MM-dd"), sugerir = 1 })">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Sugerir operadores
+                </a>
+            </div>
+
+            @if (Model.SugerenciasAplicadas)
+            {
+                <div class="ppv3-inline-info">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    Se sugirieron únicamente OF sin operador. Revisa carga y disponibilidad antes de guardar.
+                </div>
+            }
+
+            <div class="table-responsive ppv3-table-wrap">
+                <table class="ppv3-planner" id="ppv3PlannerTable">
+                    <thead>
+                        <tr>
+                            <th>Fecha / hora</th>
+                            <th>OF</th>
+                            <th>Pieza</th>
+                            <th>Máquina</th>
+                            <th>Turno</th>
+                            <th class="ppv3-operator-head">Operador planeado</th>
+                            <th>Carga</th>
+                            <th>Cobertura</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @for (var i = 0; i < Model.Programas.Count; i++)
+                    {
+                        var p = Model.Programas[i];
+                        var turno = Model.TurnoOperadorPara(p.Inicio);
+                        var actualEnLista = p.OperadorID.HasValue &&
+                            p.Candidatos.Any(x => x.PersonaID == p.OperadorID.Value);
+                        var tecnica = Model.TieneCoberturaRol(p, "TECNICO");
+                        var smed = Model.TieneCoberturaRol(p, "SMED");
+                        var auxiliar = Model.TieneCoberturaRol(p, "AUXILIAR");
+                        var completa = Model.TieneCoberturaCompleta(p);
+                        var search = $"{p.OF} {p.NumeroParte} {p.DescripcionParte} {p.MaquinaCodigo} {p.MaquinaNombre} {p.OperadorNombre}".ToLowerInvariant();
+
+                        <tr class="ppv3-program-row"
+                            data-program-id="@p.ProgramaProduccionID"
+                            data-machine-id="@p.MaquinaID"
+                            data-turn-id="@(turno?.TurnoID ?? 0)"
+                            data-person-id="@(p.OperadorID ?? 0)"
+                            data-search="@search"
+                            data-tech="@(tecnica ? "1" : "0")"
+                            data-smed="@(smed ? "1" : "0")"
+                            data-aux="@(auxiliar ? "1" : "0")"
+                            data-complete="@(completa ? "1" : "0")">
+                            <td class="ppv3-time-cell">
+                                <strong>@p.Inicio.ToString("ddd dd/MM", cultura)</strong>
+                                <span>@p.Inicio.ToString("HH:mm") — @p.Fin.ToString("HH:mm")</span>
+                            </td>
+                            <td>
+                                <strong class="ppv3-of">@p.OF</strong>
+                                @if (p.ExcepcionActiva)
+                                {
+                                    <span class="ppv3-mini-badge exception">Excepción</span>
+                                }
+                            </td>
+                            <td class="ppv3-part-cell">
+                                <strong>@(string.IsNullOrWhiteSpace(p.NumeroParte) ? "Sin parte" : p.NumeroParte)</strong>
+                                <span>@p.DescripcionParte</span>
+                            </td>
+                            <td class="ppv3-machine-cell">
+                                <strong>@p.MaquinaCodigo</strong>
+                                <span>@p.MaquinaNombre</span>
+                            </td>
+                            <td>
+                                <span class="ppv3-turn-chip">@(turno?.Nombre ?? "Sin turno")</span>
+                            </td>
+                            <td class="ppv3-operator-cell">
+                                <input type="hidden"
+                                       name="Operadores[@i].ProgramaProduccionID"
+                                       value="@p.ProgramaProduccionID" />
+
+                                <select name="Operadores[@i].OperadorID"
+                                        class="d-none ppv3-operator-hidden"
+                                        data-program-id="@p.ProgramaProduccionID"
+                                        disabled="@(!Model.Configurado || p.ExcepcionActiva ? "disabled" : null)">
+                                    <option value="">-- Sin operador --</option>
+                                    @if (p.OperadorID.HasValue && !actualEnLista)
+                                    {
+                                        <option value="@p.OperadorID" selected>@p.OperadorNombre</option>
+                                    }
+                                    @foreach (var c in p.Candidatos)
+                                    {
+                                        if (p.OperadorID == c.PersonaID)
+                                        {
+                                            <option value="@c.PersonaID" selected>@c.Nombre</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@c.PersonaID">@c.Nombre</option>
+                                        }
+                                    }
+                                </select>
+
+                                <button type="button"
+                                        class="ppv3-assign-cell @(p.OperadorID.HasValue ? "assigned" : "pending")"
+                                        data-open-operator="@p.ProgramaProduccionID"
+                                        disabled="@(p.ExcepcionActiva ? "disabled" : null)">
+                                    <span class="ppv3-assign-name">
+                                        @(p.OperadorID.HasValue ? p.OperadorNombre : "Asignar operador")
+                                    </span>
+                                    <small class="ppv3-assign-meta">
+                                        @if (p.ExcepcionActiva)
+                                        {
+                                            <text>Cambio controlado desde Calendario</text>
+                                        }
+                                        else if (p.NivelOperador.HasValue)
+                                        {
+                                            <text>N@p.NivelOperador · @(p.OperadorEnEscala ? "en escala" : "fuera de escala")</text>
+                                        }
+                                        else if (!p.TieneMatriz)
+                                        {
+                                            <text>La pieza no tiene matriz</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Consultar personal disponible</text>
+                                        }
+                                    </small>
+                                </button>
+                            </td>
+                            <td>
+                                <span class="ppv3-load" data-load-for="@p.ProgramaProduccionID">—</span>
+                            </td>
+                            <td>
+                                <div class="ppv3-coverage-stack" data-coverage-for="@p.ProgramaProduccionID">
+                                    <span class="ppv3-cov @(p.OperadorID.HasValue ? "ok" : "miss")" data-role-status="OPERADOR">OP</span>
+                                    <span class="ppv3-cov @(tecnica ? "ok" : "miss")" data-role-status="TECNICO">T</span>
+                                    <span class="ppv3-cov @(smed ? "ok" : "miss")" data-role-status="SMED">S</span>
+                                    <span class="ppv3-cov @(auxiliar ? "ok" : "miss")" data-role-status="AUXILIAR">A</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="ppv3-view" data-view-panel="support">
+            <div class="ppv3-view-head">
+                <div>
+                    <h2>Cobertura global por turno</h2>
+                    <p>Técnico, SMED y Auxiliar cubren el turno completo. Los turnos 12x12 se mantienen disponibles para estos cargos.</p>
+                </div>
+                <div class="ppv3-rule-note">
+                    <i class="fa-solid fa-circle-info"></i>
+                    SMED acepta personal SMED <strong>o Técnico</strong>.
+                </div>
+            </div>
+
+            <div class="table-responsive ppv3-table-wrap">
+                <table class="ppv3-support-table" id="ppv3SupportTable">
+                    <thead>
+                        <tr>
+                            <th>Turno</th>
+                            <th>Tipo</th>
+                            <th data-role-col="TECNICO">Técnico</th>
+                            <th data-role-col="SMED">SMED</th>
+                            <th data-role-col="AUXILIAR">Auxiliar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @for (var i = 0; i < Model.TurnosApoyo.Count; i++)
+                    {
+                        var t = Model.TurnosApoyo[i];
+                        <tr class="ppv3-support-row"
+                            data-turn-id="@t.TurnoID"
+                            data-tech-id="@(t.TecnicoProduccionID ?? 0)"
+                            data-smed-id="@(t.SmedID ?? 0)"
+                            data-aux-id="@(t.AuxiliarID ?? 0)">
+                            <td class="ppv3-support-turn">
+                                <span class="ppv3-turn-dot" style="--turn-color:@t.Color"></span>
+                                <div>
+                                    <strong>@t.Nombre</strong>
+                                    <span>@t.HorarioTexto</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="ppv3-type-chip @(ERP.NSQuell.Models.ProduccionPersonalSemanalIndexVm.EsTurno12x12(t) ? "x12" : "regular")">
+                                    @t.TipoTurno
+                                </span>
+                            </td>
+                            <td data-role-cell="TECNICO">
+                                <input type="hidden" name="Coberturas[@i].TurnoID" value="@t.TurnoID" />
+                                <select name="Coberturas[@i].TecnicoProduccionID"
+                                        class="d-none ppv3-support-hidden"
+                                        data-turno-id="@t.TurnoID"
+                                        data-role="TECNICO"
+                                        disabled="@(!Model.Configurado ? "disabled" : null)">
+                                    <option value="">-- Sin cobertura --</option>
+                                    @foreach (var p in Model.Tecnicos)
+                                    {
+                                        if (t.TecnicoProduccionID == p.PersonaID)
+                                        {
+                                            <option value="@p.PersonaID" selected>@p.Nombre</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@p.PersonaID">@p.Nombre</option>
+                                        }
+                                    }
+                                </select>
+                                <button type="button" class="ppv3-support-cell"
+                                        data-support-open data-turno-id="@t.TurnoID" data-role="TECNICO">
+                                    <span>@NombrePersona(t.TecnicoProduccionID)</span>
+                                    <small>clic para modificar</small>
+                                </button>
+                            </td>
+                            <td data-role-cell="SMED">
+                                <select name="Coberturas[@i].SmedID"
+                                        class="d-none ppv3-support-hidden"
+                                        data-turno-id="@t.TurnoID"
+                                        data-role="SMED"
+                                        disabled="@(!Model.Configurado ? "disabled" : null)">
+                                    <option value="">-- Sin cobertura --</option>
+                                    @foreach (var p in Model.SmedYTecnicos)
+                                    {
+                                        var etiqueta = string.IsNullOrWhiteSpace(p.Puesto)
+                                            ? p.Nombre
+                                            : $"{p.Nombre} · {p.Puesto}";
+                                        if (t.SmedID == p.PersonaID)
+                                        {
+                                            <option value="@p.PersonaID" selected>@etiqueta</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@p.PersonaID">@etiqueta</option>
+                                        }
+                                    }
+                                </select>
+                                <button type="button" class="ppv3-support-cell"
+                                        data-support-open data-turno-id="@t.TurnoID" data-role="SMED">
+                                    <span>@NombrePersona(t.SmedID)</span>
+                                    <small>SMED o Técnico</small>
+                                </button>
+                            </td>
+                            <td data-role-cell="AUXILIAR">
+                                <select name="Coberturas[@i].AuxiliarID"
+                                        class="d-none ppv3-support-hidden"
+                                        data-turno-id="@t.TurnoID"
+                                        data-role="AUXILIAR"
+                                        disabled="@(!Model.Configurado ? "disabled" : null)">
+                                    <option value="">-- Sin cobertura --</option>
+                                    @foreach (var p in Model.Auxiliares)
+                                    {
+                                        if (t.AuxiliarID == p.PersonaID)
+                                        {
+                                            <option value="@p.PersonaID" selected>@p.Nombre</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@p.PersonaID">@p.Nombre</option>
+                                        }
+                                    }
+                                </select>
+                                <button type="button" class="ppv3-support-cell"
+                                        data-support-open data-turno-id="@t.TurnoID" data-role="AUXILIAR">
+                                    <span>@NombrePersona(t.AuxiliarID)</span>
+                                    <small>clic para modificar</small>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="ppv3-view" data-view-panel="people">
+            <div class="ppv3-view-head">
+                <div>
+                    <h2>Vista por persona</h2>
+                    <p>Consulta en una sola línea toda la semana de cada persona, su carga y posibles empalmes.</p>
+                </div>
+            </div>
+            <div id="ppv3PeopleView" class="ppv3-people-view"></div>
+        </section>
+
+        <section class="ppv3-view" data-view-panel="pending">
+            <div class="ppv3-view-head">
+                <div>
+                    <h2>Pendientes de cobertura</h2>
+                    <p>OF que requieren atención por Operador, Técnico, SMED, Auxiliar o conflicto de personal.</p>
+                </div>
+            </div>
+            <div class="table-responsive ppv3-table-wrap">
+                <table class="ppv3-pending-table">
+                    <thead>
+                        <tr>
+                            <th>Prioridad</th>
+                            <th>Inicio</th>
+                            <th>OF</th>
+                            <th>Máquina</th>
+                            <th>Pieza</th>
+                            <th>Falta / conflicto</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="ppv3PendingBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="ppv3-savebar">
+            <div>
+                <strong>Semana @Model.NumeroSemana · @Model.SemanaInicio.ToString("dd/MM") — @Model.SemanaFin.ToString("dd/MM/yyyy")</strong>
+                <span>Las excepciones registradas desde Calendario no se sobrescriben.</span>
+            </div>
+            <button type="submit"
+                    class="btn btn-success fw-bold"
+                    disabled="@(!Model.Configurado ? "disabled" : null)">
+                <i class="fa-solid fa-floppy-disk me-1"></i>
+                Guardar programación
+            </button>
+        </div>
+    </form>
+</div>
+
+<div class="offcanvas offcanvas-end ppv3-availability"
+     tabindex="-1"
+     id="ppv3Availability"
+     aria-labelledby="ppv3AvailabilityTitle">
+    <div class="offcanvas-header">
+        <div>
+            <div class="ppv3-eyebrow">PERSONAL DISPONIBLE</div>
+            <h5 class="offcanvas-title" id="ppv3AvailabilityTitle">Selecciona una OF</h5>
+            <small id="ppv3AvailabilityContext" class="text-muted"></small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="ppv3-drawer-summary" id="ppv3DrawerSummary"></div>
+        <div class="ppv3-candidate-list" id="ppv3CandidateList"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="ppv3SupportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header">
+                <div>
+                    <div class="ppv3-eyebrow">COBERTURA DE TURNO</div>
+                    <h5 class="modal-title" id="ppv3SupportTitle">Asignar responsable</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="ppv3SupportTurnID" />
+                <input type="hidden" id="ppv3SupportRole" />
+                <label class="form-label fw-bold">Responsable</label>
+                <select id="ppv3SupportSelect" class="form-select"></select>
+                <div class="form-text mt-2" id="ppv3SupportHelp"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary fw-bold" id="ppv3SupportApply">
+                    <i class="fa-solid fa-check me-1"></i> Aplicar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const modalEl = document.getElementById('modalProgramarPersonal');
-    if (!modalEl) return;
+    const programs = @Html.Raw(JsonSerializer.Serialize(plannerData));
+    const turnos = @Html.Raw(JsonSerializer.Serialize(turnosData));
+    const peopleSeed = @Html.Raw(JsonSerializer.Serialize(personasData));
+    const weekStart = new Date('@Model.SemanaInicio.ToString("yyyy-MM-dd")T00:00:00');
 
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    const form = document.getElementById('formProgramarPersonal');
-    const asignacionId = document.getElementById('ppAsignacionId');
-    const programaId = document.getElementById('ppProgramaId');
-    const fecha = document.getElementById('ppFechaTrabajo');
-    const turno = document.getElementById('ppTurnoId');
-    const operador = document.getElementById('ppOperadorId');
-    const auxiliar = document.getElementById('ppAuxiliarId');
-    const tecnico = document.getElementById('ppTecnicoId');
-    const observaciones = document.getElementById('ppObservaciones');
-    const ventana = document.getElementById('ppVentana');
-    const contexto = document.getElementById('ppContexto');
-    const candidatosInfo = document.getElementById('ppCandidatosInfo');
-    const search = document.getElementById('ppSearch');
+    const people = new Map((peopleSeed || []).map(x => [Number(x.personaID), x.nombre]));
+    const programMap = new Map((programs || []).map(x => [Number(x.programaID), x]));
 
-    let valoresPendientes = null;
+    const plannerRows = Array.from(document.querySelectorAll('.ppv3-program-row'));
+    const search = document.getElementById('ppv3Search');
+    const machineFilter = document.getElementById('ppv3MachineFilter');
+    const turnFilter = document.getElementById('ppv3TurnFilter');
+    const roleFilter = document.getElementById('ppv3RoleFilter');
+    const personFilter = document.getElementById('ppv3PersonFilter');
+    const supportModalEl = document.getElementById('ppv3SupportModal');
+    const supportModal = supportModalEl ? bootstrap.Modal.getOrCreateInstance(supportModalEl) : null;
+    const availabilityEl = document.getElementById('ppv3Availability');
+    const availability = availabilityEl ? bootstrap.Offcanvas.getOrCreateInstance(availabilityEl) : null;
 
-    function limpiarSelect(select, texto) {
-        if (!select) return;
-        select.innerHTML = '';
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = texto;
-        select.appendChild(option);
+    function normalize(value) {
+        return (value || '')
+            .toString()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
     }
 
-    function textoCandidato(x, mostrarNivel) {
-        const partes = [x.nombre || 'Persona'];
-        if (mostrarNivel && x.nivel) partes.push(`N${x.nivel}`);
-        if (x.enEscala) {
-            partes.push(`Escala: ${x.turnoEscala || 'turno'}` + (x.maquinaEscala ? ` / ${x.maquinaEscala}` : ''));
-        } else {
-            partes.push('Fuera de escala seleccionada');
-        }
-        return partes.join(' · ');
+    function toDate(value) {
+        return new Date(value);
     }
 
-    function cargarLista(select, lista, placeholder, mostrarNivel, preferido) {
-        limpiarSelect(select, placeholder);
-        (lista || []).forEach(x => {
-            const option = document.createElement('option');
-            option.value = String(x.personaID);
-            option.textContent = textoCandidato(x, mostrarNivel);
-            if (String(x.personaID) === String(preferido || '')) option.selected = true;
-            select.appendChild(option);
-        });
+    function localDateKey(value) {
+        const d = value instanceof Date ? value : toDate(value);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
     }
 
-    async function cargarCandidatos() {
-        const p = programaId.value;
-        const f = fecha.value;
-        const t = turno.value;
-
-        if (!p || !f || !t) {
-            limpiarSelect(operador, '-- Selecciona fecha y turno --');
-            limpiarSelect(auxiliar, '-- Opcional --');
-            limpiarSelect(tecnico, '-- Opcional --');
-            ventana.textContent = 'Selecciona una fecha y un turno para calcular la ventana exacta.';
-            return;
-        }
-
-        form.classList.add('pp-loading');
-        candidatosInfo.textContent = 'Consultando personal disponible, escala y polivalencia...';
-
-        try {
-            const qs = new URLSearchParams({
-                programaProduccionId: p,
-                fechaTrabajo: f,
-                turnoId: t
-            });
-            const response = await fetch(`/ProduccionPersonal/Candidatos?${qs.toString()}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            const data = await response.json();
-            if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
-
-            const pref = valoresPendientes || {};
-            cargarLista(operador, data.operadores, '-- Seleccionar operador --', data.tieneMatrizPolivalencia, pref.operador);
-            cargarLista(auxiliar, data.auxiliares, '-- Sin auxiliar --', false, pref.auxiliar);
-            cargarLista(tecnico, data.tecnicos, '-- Sin técnico --', false, pref.tecnico);
-
-            ventana.textContent = `Ventana asignable: ${data.ventanaTexto}`;
-            contexto.textContent = `Programa ${data.programa.programaProduccionID} · ${data.programa.maquina || 'Sin máquina'} · ${data.programa.parte || 'Sin parte'}`;
-
-            const matriz = data.tieneMatrizPolivalencia
-                ? 'Operador filtrado por Polivalencia N1-N4.'
-                : 'La parte no tiene matriz: se usa el catálogo activo de operadores.';
-            const escala = data.escalaPublicadaEncontrada
-                ? 'Existe escala RRHH publicada para este turno; sus personas aparecen primero.'
-                : 'No se encontró escala RRHH publicada para este turno; se permite seleccionar personal activo del catálogo.';
-            candidatosInfo.textContent = `${matriz} ${escala}`;
-            valoresPendientes = null;
-        }
-        catch (error) {
-            console.error(error);
-            limpiarSelect(operador, '-- No disponible --');
-            limpiarSelect(auxiliar, '-- No disponible --');
-            limpiarSelect(tecnico, '-- No disponible --');
-            ventana.textContent = error.message || 'No fue posible calcular la ventana.';
-            candidatosInfo.textContent = 'Corrige fecha/turno o revisa la configuración RRHH.';
-        }
-        finally {
-            form.classList.remove('pp-loading');
-        }
+    function durationHours(program) {
+        return Math.max(0, (toDate(program.fin) - toDate(program.inicio)) / 3600000);
     }
 
-    document.querySelectorAll('[data-pp-new]').forEach(btn => {
-        btn.addEventListener('click', async function () {
-            form.reset();
-            asignacionId.value = '';
-            programaId.value = btn.dataset.programa || '';
-            fecha.value = (btn.dataset.inicio || '').slice(0, 10);
-            valoresPendientes = null;
-            contexto.textContent = `Programa ${btn.dataset.programa || ''} · ${btn.dataset.maquina || ''} · ${btn.dataset.parte || ''}`;
-            ventana.textContent = 'Selecciona turno.';
-            modal.show();
-            if (turno.value) await cargarCandidatos();
-        });
-    });
+    function overlaps(a, b) {
+        return toDate(a.inicio) < toDate(b.fin) && toDate(a.fin) > toDate(b.inicio);
+    }
 
-    document.querySelectorAll('[data-pp-edit]').forEach(btn => {
-        btn.addEventListener('click', async function () {
-            form.reset();
-            asignacionId.value = btn.dataset.asignacion || '';
-            programaId.value = btn.dataset.programa || '';
-            fecha.value = btn.dataset.fecha || '';
-            turno.value = btn.dataset.turno || '';
-            observaciones.value = btn.dataset.observaciones || '';
-            valoresPendientes = {
-                operador: btn.dataset.operador || '',
-                auxiliar: btn.dataset.auxiliar || '',
-                tecnico: btn.dataset.tecnico || ''
+    function assignedPrograms(personID, excludeProgramID) {
+        const id = Number(personID || 0);
+        if (!id) return [];
+        return programs.filter(p =>
+            Number(p.operadorID || 0) === id &&
+            Number(p.programaID) !== Number(excludeProgramID || 0));
+    }
+
+    function loadHours(personID, excludeProgramID) {
+        return assignedPrograms(personID, excludeProgramID)
+            .reduce((sum, p) => sum + durationHours(p), 0);
+    }
+
+    function conflictsFor(program, personID) {
+        return assignedPrograms(personID, program.programaID)
+            .filter(other => overlaps(program, other));
+    }
+
+    function minuteOfDay(dateValue) {
+        const d = toDate(dateValue);
+        return d.getHours() * 60 + d.getMinutes();
+    }
+
+    function turnCovers(turn, dateValue) {
+        if (turn.inicioMin == null || turn.finMin == null) return false;
+        const minute = minuteOfDay(dateValue);
+        const start = Number(turn.inicioMin);
+        const end = Number(turn.finMin);
+        return turn.cruza || end <= start
+            ? minute >= start || minute < end
+            : minute >= start && minute < end;
+    }
+
+    function supportRoleID(turn, role) {
+        if (role === 'TECNICO') return Number(turn.tecnicoID || 0);
+        if (role === 'SMED') return Number(turn.smedID || 0);
+        if (role === 'AUXILIAR') return Number(turn.auxiliarID || 0);
+        return 0;
+    }
+
+    function hasSupport(program, role) {
+        return turnos.some(t => turnCovers(t, program.inicio) && supportRoleID(t, role) > 0);
+    }
+
+    function programConflict(program) {
+        const personID = Number(program.operadorID || 0);
+        return personID > 0 && conflictsFor(program, personID).length > 0;
+    }
+
+    function programComplete(program) {
+        const operatorOk = Number(program.operadorID || 0) > 0 &&
+            !programConflict(program) &&
+            (!program.tieneMatriz || Number(program.nivel || 0) > 0);
+        return operatorOk &&
+            hasSupport(program, 'TECNICO') &&
+            hasSupport(program, 'SMED') &&
+            hasSupport(program, 'AUXILIAR');
+    }
+
+    function getMissing(program) {
+        const missing = [];
+        if (!Number(program.operadorID || 0)) missing.push('Operador');
+        else if (program.tieneMatriz && !Number(program.nivel || 0)) missing.push('Operador no apto');
+        if (!hasSupport(program, 'TECNICO')) missing.push('Técnico');
+        if (!hasSupport(program, 'SMED')) missing.push('SMED');
+        if (!hasSupport(program, 'AUXILIAR')) missing.push('Auxiliar');
+        if (programConflict(program)) missing.push('Conflicto de operador');
+        return missing;
+    }
+
+    function programPriority(program) {
+        const hours = (toDate(program.inicio) - new Date()) / 3600000;
+        if (hours <= 24) return { text: 'ALTA', cls: 'high' };
+        if (hours <= 72) return { text: 'MEDIA', cls: 'medium' };
+        return { text: 'NORMAL', cls: 'normal' };
+    }
+
+    function updateProgramUI(program) {
+        const row = document.querySelector(`.ppv3-program-row[data-program-id="${program.programaID}"]`);
+        if (!row) return;
+
+        row.dataset.personId = String(program.operadorID || 0);
+        row.dataset.tech = hasSupport(program, 'TECNICO') ? '1' : '0';
+        row.dataset.smed = hasSupport(program, 'SMED') ? '1' : '0';
+        row.dataset.aux = hasSupport(program, 'AUXILIAR') ? '1' : '0';
+        row.dataset.complete = programComplete(program) ? '1' : '0';
+        row.dataset.conflict = programConflict(program) ? '1' : '0';
+
+        const button = row.querySelector('[data-open-operator]');
+        const name = button?.querySelector('.ppv3-assign-name');
+        const meta = button?.querySelector('.ppv3-assign-meta');
+        const candidate = (program.candidatos || []).find(x => Number(x.personaID) === Number(program.operadorID));
+
+        if (button && !program.excepcion) {
+            button.classList.toggle('assigned', !!program.operadorID);
+            button.classList.toggle('pending', !program.operadorID);
+        }
+
+        if (name) {
+            name.textContent = program.operadorID
+                ? (candidate?.nombre || program.operadorNombre || people.get(Number(program.operadorID)) || `Persona #${program.operadorID}`)
+                : 'Asignar operador';
+        }
+
+        if (meta && !program.excepcion) {
+            if (program.operadorID && candidate) {
+                meta.textContent = `${candidate.nivel ? `N${candidate.nivel} · ` : ''}${candidate.enEscala ? 'en escala' : 'fuera de escala'}`;
+            } else if (!program.tieneMatriz) {
+                meta.textContent = 'La pieza no tiene matriz';
+            } else {
+                meta.textContent = 'Consultar personal disponible';
+            }
+        }
+
+        const load = row.querySelector(`[data-load-for="${program.programaID}"]`);
+        if (load) {
+            load.textContent = program.operadorID
+                ? `${loadHours(program.operadorID).toFixed(1)} h/sem`
+                : '—';
+        }
+
+        const coverage = row.querySelector(`[data-coverage-for="${program.programaID}"]`);
+        if (coverage) {
+            const states = {
+                OPERADOR: !!program.operadorID && !programConflict(program),
+                TECNICO: hasSupport(program, 'TECNICO'),
+                SMED: hasSupport(program, 'SMED'),
+                AUXILIAR: hasSupport(program, 'AUXILIAR')
             };
-            modal.show();
-            await cargarCandidatos();
+            coverage.querySelectorAll('[data-role-status]').forEach(el => {
+                const ok = !!states[el.dataset.roleStatus];
+                el.classList.toggle('ok', ok);
+                el.classList.toggle('miss', !ok);
+            });
+        }
+
+        row.classList.toggle('has-conflict', programConflict(program));
+        row.classList.toggle('is-complete', programComplete(program));
+    }
+
+    function refreshKPIs() {
+        const total = programs.length;
+        const sinOperador = programs.filter(p => !Number(p.operadorID || 0)).length;
+        const sinTecnico = programs.filter(p => !hasSupport(p, 'TECNICO')).length;
+        const conflicts = programs.filter(programConflict).length + supportConflicts().length;
+        const completas = programs.filter(programComplete).length;
+
+        document.getElementById('kpiTotal').textContent = total;
+        document.getElementById('kpiSinOperador').textContent = sinOperador;
+        document.getElementById('kpiSinTecnico').textContent = sinTecnico;
+        document.getElementById('kpiConflictos').textContent = conflicts;
+        document.getElementById('kpiCompletas').textContent = completas;
+    }
+
+    function supportConflicts() {
+        const assignments = [];
+        turnos.forEach(t => {
+            ['TECNICO', 'SMED', 'AUXILIAR'].forEach(role => {
+                const id = supportRoleID(t, role);
+                if (id) assignments.push({ personID: id, role, turn: t });
+            });
         });
-    });
 
-    fecha.addEventListener('change', cargarCandidatos);
-    turno.addEventListener('change', cargarCandidatos);
+        const conflicts = [];
+        for (let i = 0; i < assignments.length; i++) {
+            for (let j = i + 1; j < assignments.length; j++) {
+                const a = assignments[i];
+                const b = assignments[j];
+                if (a.personID !== b.personID) continue;
+                if (turnsOverlap(a.turn, b.turn)) {
+                    conflicts.push({ a, b });
+                }
+            }
+        }
+        return conflicts;
+    }
 
-    form.addEventListener('submit', function (event) {
-        const ids = [operador.value, auxiliar.value, tecnico.value].filter(Boolean);
-        if (ids.length === 0) {
-            event.preventDefault();
-            alert('Selecciona al menos una persona: operador, auxiliar o técnico de Producción.');
+    function turnsOverlap(a, b) {
+        if (a.inicioMin == null || a.finMin == null || b.inicioMin == null || b.finMin == null)
+            return false;
+
+        function segments(t) {
+            const start = Number(t.inicioMin);
+            const end = Number(t.finMin);
+            if (t.cruza || end <= start) return [[start, 1440], [0, end]];
+            return [[start, end]];
+        }
+
+        return segments(a).some(sa =>
+            segments(b).some(sb => sa[0] < sb[1] && sa[1] > sb[0]));
+    }
+
+    function applyFilters() {
+        const q = normalize(search?.value);
+        const machine = machineFilter?.value || '';
+        const turn = turnFilter?.value || '';
+        const person = personFilter?.value || '';
+
+        plannerRows.forEach(row => {
+            const matchesText = !q || normalize(row.dataset.search).includes(q);
+            const matchesMachine = !machine || row.dataset.machineId === machine;
+            const matchesTurn = !turn || row.dataset.turnId === turn;
+            const matchesPerson = !person || row.dataset.personId === person;
+            row.classList.toggle('d-none', !(matchesText && matchesMachine && matchesTurn && matchesPerson));
+        });
+
+        document.querySelectorAll('.ppv3-support-row').forEach(row => {
+            const matchesTurn = !turn || row.dataset.turnId === turn;
+            const matchesPerson = !person ||
+                row.dataset.techId === person ||
+                row.dataset.smedId === person ||
+                row.dataset.auxId === person;
+            row.classList.toggle('d-none', !(matchesTurn && matchesPerson));
+        });
+
+        document.getElementById('ppv3Root')?.setAttribute('data-role-filter', roleFilter?.value || '');
+    }
+
+    function activateView(view) {
+        document.querySelectorAll('.ppv3-tab').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.view === view));
+        document.querySelectorAll('.ppv3-view').forEach(panel =>
+            panel.classList.toggle('active', panel.dataset.viewPanel === view));
+
+        if (view === 'people') renderPeopleView();
+        if (view === 'pending') renderPending();
+    }
+
+    function renderPending(mode) {
+        const body = document.getElementById('ppv3PendingBody');
+        if (!body) return;
+
+        let pending = programs
+            .map(p => ({ program: p, missing: getMissing(p) }))
+            .filter(x => x.missing.length > 0);
+
+        if (mode === 'operator') pending = pending.filter(x => x.missing.includes('Operador'));
+        if (mode === 'technician') pending = pending.filter(x => x.missing.includes('Técnico'));
+        if (mode === 'conflict') pending = pending.filter(x => x.missing.some(m => m.includes('Conflicto')));
+
+        body.innerHTML = '';
+
+        if (!pending.length) {
+            body.innerHTML = '<tr><td colspan="7"><div class="ppv3-empty-state">Sin pendientes para este filtro.</div></td></tr>';
+        } else {
+            pending
+                .sort((a, b) => toDate(a.program.inicio) - toDate(b.program.inicio))
+                .forEach(item => {
+                    const p = item.program;
+                    const priority = programPriority(p);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><span class="ppv3-priority ${priority.cls}">${priority.text}</span></td>
+                        <td><strong>${toDate(p.inicio).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'2-digit'})}</strong><br><small>${toDate(p.inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</small></td>
+                        <td><strong>${escapeHtml(p.of || '')}</strong></td>
+                        <td>${escapeHtml(p.maquina || '')}</td>
+                        <td>${escapeHtml(p.parte || '')}</td>
+                        <td>${item.missing.map(x => `<span class="ppv3-missing-chip">${escapeHtml(x)}</span>`).join(' ')}</td>
+                        <td><button type="button" class="btn btn-sm btn-outline-primary fw-bold" data-pending-action="${p.programaID}">Resolver</button></td>`;
+                    body.appendChild(tr);
+                });
+        }
+
+        document.getElementById('pendingTabCount').textContent = String(
+            programs.filter(p => getMissing(p).length > 0).length
+        );
+
+        body.querySelectorAll('[data-pending-action]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const p = programMap.get(Number(btn.dataset.pendingAction));
+                if (!p) return;
+                if (!Number(p.operadorID || 0)) {
+                    openAvailability(p.programaID);
+                } else {
+                    activateView('support');
+                }
+            });
+        });
+    }
+
+    function escapeHtml(value) {
+        return (value || '').toString()
+            .replaceAll('&','&amp;')
+            .replaceAll('<','&lt;')
+            .replaceAll('>','&gt;')
+            .replaceAll('"','&quot;')
+            .replaceAll("'",'&#039;');
+    }
+
+    function openAvailability(programID) {
+        const program = programMap.get(Number(programID));
+        if (!program || !availability) return;
+
+        const title = document.getElementById('ppv3AvailabilityTitle');
+        const context = document.getElementById('ppv3AvailabilityContext');
+        const summary = document.getElementById('ppv3DrawerSummary');
+        const list = document.getElementById('ppv3CandidateList');
+
+        title.textContent = `OF ${program.of || program.programaID}`;
+        context.textContent = `${program.parte || 'Sin parte'} · ${program.maquina || 'Sin máquina'} · ${program.turno || 'Sin turno'}`;
+
+        summary.innerHTML = `
+            <div><span>Inicio</span><strong>${toDate(program.inicio).toLocaleString('es-MX',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</strong></div>
+            <div><span>Fin</span><strong>${toDate(program.fin).toLocaleString('es-MX',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</strong></div>
+            <div><span>Actual</span><strong>${escapeHtml(program.operadorNombre || 'Sin operador')}</strong></div>`;
+
+        const candidates = (program.candidatos || []).map(c => {
+            const conflicts = conflictsFor(program, c.personaID);
+            return {
+                ...c,
+                conflicts,
+                load: loadHours(c.personaID, program.programaID),
+                current: Number(program.operadorID || 0) === Number(c.personaID)
+            };
+        }).sort((a,b) =>
+            Number(a.conflicts.length > 0) - Number(b.conflicts.length > 0) ||
+            Number(b.nivel || 0) - Number(a.nivel || 0) ||
+            Number(b.enEscala) - Number(a.enEscala) ||
+            a.load - b.load ||
+            (a.nombre || '').localeCompare(b.nombre || ''));
+
+        list.innerHTML = '';
+
+        if (!program.excepcion) {
+            const clear = document.createElement('button');
+            clear.type = 'button';
+            clear.className = 'ppv3-clear-assignment';
+            clear.innerHTML = '<i class="fa-regular fa-circle-xmark"></i><span><strong>Dejar sin operador</strong><small>Marcar esta OF como pendiente de cobertura</small></span>';
+            clear.addEventListener('click', () => assignOperator(program, null, null));
+            list.appendChild(clear);
+        }
+
+        if (!candidates.length) {
+            const empty = document.createElement('div');
+            empty.className = 'ppv3-empty-state';
+            empty.textContent = program.tieneMatriz
+                ? 'No hay operadores N1-N4 disponibles para esta pieza.'
+                : 'No hay candidatos operativos activos.';
+            list.appendChild(empty);
+        }
+
+        candidates.forEach(c => {
+            const card = document.createElement('article');
+            const busy = c.conflicts.length > 0;
+            card.className = `ppv3-candidate ${busy ? 'busy' : 'available'} ${c.current ? 'current' : ''}`;
+
+            const conflictText = busy
+                ? `Ocupado: ${c.conflicts.map(x => `OF ${x.of} ${toDate(x.inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}-${toDate(x.fin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}`).join(', ')}`
+                : 'Disponible durante todo el intervalo';
+
+            card.innerHTML = `
+                <div class="ppv3-candidate-main">
+                    <div class="ppv3-candidate-name">
+                        <span class="ppv3-level-badge ${c.nivel ? `n${c.nivel}` : 'none'}">${c.nivel ? `N${c.nivel}` : 'S/N'}</span>
+                        <div>
+                            <strong>${escapeHtml(c.nombre)}</strong>
+                            <small>${escapeHtml(c.numeroControl || '')}${c.enEscala ? ` · ${escapeHtml(c.turnoEscala || 'En escala')}` : ' · Fuera de escala'}</small>
+                        </div>
+                    </div>
+                    <div class="ppv3-candidate-load"><span>Carga</span><strong>${c.load.toFixed(1)} h</strong></div>
+                </div>
+                <div class="ppv3-availability-state ${busy ? 'busy' : 'ok'}">
+                    <i class="fa-solid ${busy ? 'fa-clock' : 'fa-circle-check'}"></i>
+                    ${escapeHtml(conflictText)}
+                </div>
+                <button type="button" class="btn btn-sm ${c.current ? 'btn-secondary' : 'btn-primary'} fw-bold w-100" ${busy || c.current ? 'disabled' : ''}>
+                    ${c.current ? 'Asignado actualmente' : busy ? 'No disponible' : 'Asignar a esta OF'}
+                </button>`;
+
+            const assign = card.querySelector('button');
+            if (!busy && !c.current) {
+                assign.addEventListener('click', () => assignOperator(program, c.personaID, c));
+            }
+            list.appendChild(card);
+        });
+
+        availability.show();
+    }
+
+    function assignOperator(program, personID, candidate) {
+        if (program.excepcion) return;
+
+        const select = document.querySelector(`.ppv3-operator-hidden[data-program-id="${program.programaID}"]`);
+        if (!select) return;
+
+        select.value = personID ? String(personID) : '';
+        program.operadorID = personID ? Number(personID) : null;
+        program.operadorNombre = personID
+            ? (candidate?.nombre || people.get(Number(personID)) || '')
+            : '';
+        program.nivel = candidate?.nivel ?? null;
+
+        recomputeAll();
+        availability?.hide();
+    }
+
+    function renderPeopleView() {
+        const container = document.getElementById('ppv3PeopleView');
+        if (!container) return;
+
+        const ids = new Set();
+        programs.forEach(p => { if (p.operadorID) ids.add(Number(p.operadorID)); });
+        turnos.forEach(t => {
+            ['TECNICO','SMED','AUXILIAR'].forEach(role => {
+                const id = supportRoleID(t, role);
+                if (id) ids.add(id);
+            });
+        });
+
+        const personFilterValue = Number(personFilter?.value || 0);
+        let personIDs = Array.from(ids);
+        if (personFilterValue) personIDs = personIDs.filter(x => x === personFilterValue);
+        personIDs.sort((a,b) => (people.get(a)||'').localeCompare(people.get(b)||''));
+
+        if (!personIDs.length) {
+            container.innerHTML = '<div class="ppv3-empty-state">No hay personas programadas con los filtros actuales.</div>';
             return;
         }
-        if (new Set(ids).size !== ids.length) {
+
+        const days = Array.from({length:7}, (_,i) => {
+            const d = new Date(weekStart);
+            d.setDate(d.getDate()+i);
+            return d;
+        });
+
+        let html = `<div class="ppv3-people-grid"><div class="ppv3-person-head">Persona</div>${days.map(d => `<div class="ppv3-day-head">${d.toLocaleDateString('es-MX',{weekday:'short'})}<small>${d.toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit'})}</small></div>`).join('')}`;
+
+        personIDs.forEach(id => {
+            const opPrograms = programs.filter(p => Number(p.operadorID||0) === id);
+            const support = [];
+            turnos.forEach(t => {
+                if (Number(t.tecnicoID||0) === id) support.push({ role:'Técnico', turn:t });
+                if (Number(t.smedID||0) === id) support.push({ role:'SMED', turn:t });
+                if (Number(t.auxiliarID||0) === id) support.push({ role:'Auxiliar', turn:t });
+            });
+            const conflictCount = opPrograms.filter(programConflict).length + supportConflicts().filter(x => x.a.personID === id).length;
+            const roles = [opPrograms.length ? 'Operador' : null, ...support.map(x => x.role)].filter(Boolean);
+            const uniqueRoles = [...new Set(roles)];
+
+            html += `<div class="ppv3-person-name"><strong>${escapeHtml(people.get(id) || `Persona #${id}`)}</strong><span>${escapeHtml(uniqueRoles.join(' · '))}</span><small>${loadHours(id).toFixed(1)} h OF${conflictCount ? ` · <b>${conflictCount} conflicto(s)</b>` : ''}</small></div>`;
+
+            days.forEach(day => {
+                const dayKey = localDateKey(day);
+                const dayPrograms = opPrograms.filter(p => localDateKey(p.inicio) === dayKey);
+                const chips = [];
+                support.forEach(s => chips.push(`<span class="ppv3-person-chip support">${escapeHtml(s.role)} · ${escapeHtml(s.turn.nombre)}</span>`));
+                dayPrograms.forEach(p => chips.push(`<span class="ppv3-person-chip ${programConflict(p) ? 'conflict' : 'program'}">${toDate(p.inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})} · ${escapeHtml(p.of)} · ${escapeHtml(p.maquina)}</span>`));
+                html += `<div class="ppv3-person-day">${chips.length ? chips.join('') : '<span class="ppv3-free">Libre</span>'}</div>`;
+            });
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function recomputeAll() {
+        programs.forEach(updateProgramUI);
+        refreshKPIs();
+        renderPending();
+        renderPeopleView();
+        applyFilters();
+        syncSupportRows();
+    }
+
+    function syncSupportRows() {
+        document.querySelectorAll('.ppv3-support-row').forEach(row => {
+            const turnID = Number(row.dataset.turnId);
+            const turn = turnos.find(x => Number(x.turnoID) === turnID);
+            if (!turn) return;
+            row.dataset.techId = String(turn.tecnicoID || 0);
+            row.dataset.smedId = String(turn.smedID || 0);
+            row.dataset.auxId = String(turn.auxiliarID || 0);
+        });
+    }
+
+    document.querySelectorAll('[data-open-operator]').forEach(btn => {
+        btn.addEventListener('click', () => openAvailability(Number(btn.dataset.openOperator)));
+    });
+
+    document.querySelectorAll('[data-support-open]').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const turnID = Number(btn.dataset.turnoId);
+            const role = btn.dataset.role;
+            const hidden = document.querySelector(`.ppv3-support-hidden[data-turno-id="${turnID}"][data-role="${role}"]`);
+            if (!hidden || !supportModal) return;
+
+            document.getElementById('ppv3SupportTurnID').value = String(turnID);
+            document.getElementById('ppv3SupportRole').value = role;
+            document.getElementById('ppv3SupportTitle').textContent = `${role === 'TECNICO' ? 'Técnico' : role === 'SMED' ? 'SMED' : 'Auxiliar'} · ${turnos.find(x => Number(x.turnoID) === turnID)?.nombre || 'Turno'}`;
+
+            const select = document.getElementById('ppv3SupportSelect');
+            select.innerHTML = hidden.innerHTML;
+            select.value = hidden.value;
+            document.getElementById('ppv3SupportHelp').textContent = role === 'SMED'
+                ? 'La lista incluye personal catalogado como SMED y también Técnicos habilitados.'
+                : 'La cobertura aplica a todas las máquinas durante este turno.';
+            supportModal.show();
+        });
+    });
+
+    document.getElementById('ppv3SupportApply')?.addEventListener('click', function () {
+        const turnID = Number(document.getElementById('ppv3SupportTurnID').value || 0);
+        const role = document.getElementById('ppv3SupportRole').value;
+        const select = document.getElementById('ppv3SupportSelect');
+        const hidden = document.querySelector(`.ppv3-support-hidden[data-turno-id="${turnID}"][data-role="${role}"]`);
+        const button = document.querySelector(`[data-support-open][data-turno-id="${turnID}"][data-role="${role}"]`);
+        const turn = turnos.find(x => Number(x.turnoID) === turnID);
+        if (!hidden || !button || !turn) return;
+
+        hidden.value = select.value;
+        const selectedText = select.selectedOptions[0]?.textContent?.trim() || 'Sin asignar';
+        button.querySelector('span').textContent = select.value ? selectedText : 'Sin asignar';
+
+        const id = Number(select.value || 0) || null;
+        if (role === 'TECNICO') turn.tecnicoID = id;
+        if (role === 'SMED') turn.smedID = id;
+        if (role === 'AUXILIAR') turn.auxiliarID = id;
+
+        supportModal.hide();
+        recomputeAll();
+    });
+
+    document.querySelectorAll('.ppv3-tab').forEach(btn =>
+        btn.addEventListener('click', () => activateView(btn.dataset.view)));
+
+    [search, machineFilter, turnFilter, personFilter].forEach(el => {
+        el?.addEventListener(el === search ? 'input' : 'change', applyFilters);
+    });
+
+    roleFilter?.addEventListener('change', function () {
+        const role = roleFilter.value;
+        if (role === 'OPERADOR') activateView('planner');
+        if (['TECNICO','SMED','AUXILIAR'].includes(role)) activateView('support');
+        applyFilters();
+    });
+
+    document.getElementById('ppv3ClearFilters')?.addEventListener('click', function () {
+        search.value = '';
+        machineFilter.value = '';
+        turnFilter.value = '';
+        roleFilter.value = '';
+        personFilter.value = '';
+        applyFilters();
+    });
+
+    document.querySelectorAll('[data-kpi]').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const mode = btn.dataset.kpi;
+            if (mode === 'all') {
+                activateView('planner');
+                return;
+            }
+            if (mode === 'complete') {
+                activateView('planner');
+                plannerRows.forEach(row => row.classList.toggle('d-none', row.dataset.complete !== '1'));
+                return;
+            }
+            activateView('pending');
+            renderPending(mode);
+        });
+    });
+
+    document.getElementById('ppv3Form')?.addEventListener('submit', function (event) {
+        const conflicts = programs.filter(programConflict).length + supportConflicts().length;
+        if (conflicts > 0) {
             event.preventDefault();
-            alert('Operador, auxiliar y técnico deben ser personas diferentes.');
+            alert(`No se puede guardar mientras existan ${conflicts} conflicto(s) de personal. Revísalos en Pendientes o Vista por persona.`);
+            return;
+        }
+
+        if (!confirm(`¿Guardar la programación de personal de la semana @Model.NumeroSemana?`)) {
+            event.preventDefault();
         }
     });
 
-    search?.addEventListener('input', function () {
-        const q = (search.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        document.querySelectorAll('[data-pp-program]').forEach(row => {
-            const text = (row.dataset.search || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            row.style.display = !q || text.includes(q) ? '' : 'none';
-        });
-    });
+    recomputeAll();
 });
 </script>
 }
-
-<div class="pp-page">
-    <section class="pp-hero">
-        <h1><i class="fa-solid fa-users-gear me-2"></i>Programación de Personal</h1>
-        <p>Asigna operador, auxiliar y técnico de Producción a cada programa según parte, máquina, fecha y turno. Los horarios se leen del catálogo RRHH; no están escritos de forma fija en este módulo.</p>
-        <div class="pp-actions">
-            <a href="@Url.Action("Grupo","Menu",new { id = 2 })"><i class="fa-solid fa-arrow-left me-1"></i>Producción</a>
-            <a href="@Url.Action("Index","ProduccionPersonal",new { fechaDesde = DateTime.Today.ToString("yyyy-MM-dd"), fechaHasta = DateTime.Today.AddDays(7).ToString("yyyy-MM-dd") })"><i class="fa-solid fa-calendar-week me-1"></i>Hoy + 7 días</a>
-            <a href="@Url.Action("Turnos","EscalaPersonal")"><i class="fa-solid fa-clock me-1"></i>Catálogo de turnos RRHH</a>
-        </div>
-    </section>
-
-    @if (!Model.TablaConfigurada)
-    {
-        <div class="pp-setup">
-            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-            Falta la tabla <code>dbo.Produccion_ProgramaPersonalAsignaciones</code>. Ejecuta primero <strong>01_DIAGNOSTICO_ProgramacionPersonal.sql</strong> y después <strong>02_APLICAR_ProgramacionPersonal.sql</strong> en ERP_QUELL.
-        </div>
-    }
-
-    @if (TempData["Error"] != null)
-    {
-        <div class="alert alert-danger mt-3 fw-semibold">@TempData["Error"]</div>
-    }
-    @if (TempData["Success"] != null)
-    {
-        <div class="alert alert-success mt-3 fw-semibold">@TempData["Success"]</div>
-    }
-
-    <section class="pp-panel pp-filter">
-        <form method="get" action="@Url.Action("Index","ProduccionPersonal")" class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Desde</label>
-                <input type="date" name="fechaDesde" value="@Model.FechaDesde.ToString("yyyy-MM-dd")" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Hasta</label>
-                <input type="date" name="fechaHasta" value="@Model.FechaHasta.ToString("yyyy-MM-dd")" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary pp-btn w-100"><i class="fa-solid fa-filter me-1"></i>Consultar</button>
-            </div>
-            <div class="col-md-6">
-                <label class="form-label fw-bold">Buscar</label>
-                <input id="ppSearch" type="search" class="form-control pp-search" placeholder="OF, máquina, parte, molde, persona..." />
-            </div>
-        </form>
-        <div class="pp-note mt-2">Los turnos provienen de <code>RRHH_Turnos</code>. Puedes guardar franjas distintas para operador/auxiliar y técnico; por ejemplo, un técnico en turno mixto que se superpone con operadores de 1.º o 2.º turno.</div>
-        <div class="pp-note mt-2"><strong>Una OF puede tener varias asignaciones.</strong> Guarda una por cada fecha/turno que corresponda. Por ejemplo: Operador + Auxiliar en 1er turno y Técnico en Mixto; después puedes agregar 2do y 3er turno a la misma OF.</div>
-    </section>
-
-    <section class="pp-metrics">
-        <div class="pp-metric"><span>Programas visibles</span><strong>@Model.TotalProgramas</strong></div>
-        <div class="pp-metric"><span>Asignaciones</span><strong>@Model.TotalAsignaciones</strong></div>
-        <div class="pp-metric"><span>Con 3 roles</span><strong>@Model.AsignacionesCompletas</strong></div>
-        <div class="pp-metric"><span>Turnos activos RRHH</span><strong>@Model.Turnos.Count</strong></div>
-    </section>
-
-    <section class="pp-panel">
-        @if (Model.Programas.Count == 0)
-        {
-            <div class="p-5 text-center text-muted fw-semibold">No hay programas de Producción en el periodo seleccionado.</div>
-        }
-        else
-        {
-            @foreach (var programa in Model.Programas)
-            {
-                var search = string.Join(" ", new[] {
-                    programa.FolioOF, programa.MaquinaCodigo, programa.MaquinaNombre,
-                    programa.NumeroParte, programa.ReferenciaSAP, programa.DescripcionParte,
-                    programa.MoldeCodigo,
-                    string.Join(" ", programa.Asignaciones.Select(a => $"{a.OperadorNombre} {a.AuxiliarNombre} {a.TecnicoProduccionNombre} {a.TurnoNombre}"))
-                });
-
-                <article class="pp-program" data-pp-program data-search="@search">
-                    <div class="pp-program-head">
-                        <div>
-                            <div class="pp-of">@(string.IsNullOrWhiteSpace(programa.FolioOF) ? $"Programa #{programa.ProgramaProduccionID}" : $"OF {programa.FolioOF}")</div>
-                            <div class="pp-sub">Programa @programa.ProgramaProduccionID · @programa.Inicio.ToString("ddd dd/MM HH:mm", cultura) → @programa.Fin.ToString("ddd dd/MM HH:mm", cultura)</div>
-                            <div class="pp-tags">
-                                <span class="pp-tag"><i class="fa-solid fa-industry"></i>@programa.MaquinaCodigo @programa.MaquinaNombre</span>
-                                <span class="pp-tag"><i class="fa-solid fa-cube"></i>@programa.ParteVisible</span>
-                                @if (!string.IsNullOrWhiteSpace(programa.MoldeCodigo)) { <span class="pp-tag"><i class="fa-solid fa-shapes"></i>Molde @programa.MoldeCodigo</span> }
-                                <span class="pp-tag"><i class="fa-solid fa-boxes-stacked"></i>@programa.CantidadProgramada.ToString("N0") pzas</span>
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(programa.DescripcionParte))
-                            {
-                                <div class="pp-sub mt-1">@programa.DescripcionParte</div>
-                            }
-                        </div>
-                        <button type="button"
-                                class="btn btn-primary pp-btn"
-                                data-pp-new
-                                data-programa="@programa.ProgramaProduccionID"
-                                data-inicio="@programa.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                data-maquina="@programa.MaquinaCodigo"
-                                data-parte="@programa.ParteVisible"
-                                disabled="@(!Model.TablaConfigurada)">
-                            <i class="fa-solid fa-user-plus me-1"></i>Agregar responsables / turno
-                        </button>
-                    </div>
-
-                    @if (programa.Asignaciones.Count == 0)
-                    {
-                        <div class="pp-empty">Sin personal programado todavía. Puedes agregar varios responsables a la misma OF usando distintos turnos o fechas.</div>
-                    }
-                    else
-                    {
-                        <div class="pp-assignments">
-                            @foreach (var a in programa.Asignaciones)
-                            {
-                                <div class="pp-assignment @(a.EstaCompleta ? "complete" : "pending")">
-                                    <div class="pp-assignment-title">
-                                        <span>@a.TurnoNombre</span>
-                                        <span class="pp-status @(a.EstaCompleta ? "pp-ok" : "pp-warn")">@(a.EstaCompleta ? "3 roles" : "Parcial")</span>
-                                    </div>
-                                    <div class="pp-sub">@a.Inicio.ToString("dd/MM HH:mm") → @a.Fin.ToString("dd/MM HH:mm")</div>
-                                    <div class="pp-person-grid">
-                                        <div class="pp-person"><strong>Operador:</strong> @(string.IsNullOrWhiteSpace(a.OperadorNombre) ? "Sin asignar" : a.OperadorNombre)</div>
-                                        <div class="pp-person"><strong>Auxiliar:</strong> @(string.IsNullOrWhiteSpace(a.AuxiliarNombre) ? "Sin asignar" : a.AuxiliarNombre)</div>
-                                        <div class="pp-person"><strong>Técnico:</strong> @(string.IsNullOrWhiteSpace(a.TecnicoProduccionNombre) ? "Sin asignar" : a.TecnicoProduccionNombre)</div>
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(a.Observaciones))
-                                    {
-                                        <div class="pp-sub mt-2">@a.Observaciones</div>
-                                    }
-                                    <div class="d-flex gap-2 flex-wrap mt-2">
-                                        <button type="button" class="btn btn-sm btn-outline-primary pp-btn"
-                                                data-pp-edit
-                                                data-asignacion="@a.AsignacionPersonalID"
-                                                data-programa="@a.ProgramaProduccionID"
-                                                data-fecha="@a.FechaTrabajo.ToString("yyyy-MM-dd")"
-                                                data-turno="@a.TurnoID"
-                                                data-operador="@a.OperadorID"
-                                                data-auxiliar="@a.AuxiliarID"
-                                                data-tecnico="@a.TecnicoProduccionID"
-                                                data-observaciones="@a.Observaciones">
-                                            <i class="fa-solid fa-pen me-1"></i>Editar
-                                        </button>
-                                        <form method="post" action="@Url.Action("Eliminar","ProduccionPersonal")" onsubmit="return confirm('¿Retirar esta asignación de personal?');">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="asignacionPersonalId" value="@a.AsignacionPersonalID" />
-                                            <input type="hidden" name="volverAFecha" value="@Model.FechaDesde.ToString("yyyy-MM-dd")" />
-                                            <button type="submit" class="btn btn-sm btn-outline-danger pp-btn"><i class="fa-solid fa-trash me-1"></i>Retirar</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
-                </article>
-            }
-        }
-    </section>
-</div>
-
-<div class="modal fade" id="modalProgramarPersonal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content pp-modal">
-            <div class="modal-header">
-                <div>
-                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-users-gear me-1"></i>Asignar personal al programa</h5>
-                    <div id="ppContexto" class="small opacity-75"></div>
-                </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-            </div>
-            <form id="formProgramarPersonal" method="post" action="@Url.Action("Guardar","ProduccionPersonal")">
-                @Html.AntiForgeryToken()
-                <div class="modal-body">
-                    <input type="hidden" id="ppAsignacionId" name="AsignacionPersonalID" />
-                    <input type="hidden" id="ppProgramaId" name="ProgramaProduccionID" />
-
-                    <div class="row g-3">
-                        <div class="col-md-5">
-                            <label class="form-label fw-bold">Fecha de trabajo</label>
-                            <input id="ppFechaTrabajo" name="FechaTrabajo" type="date" class="form-control" required />
-                        </div>
-                        <div class="col-md-7">
-                            <label class="form-label fw-bold">Turno</label>
-                            <select id="ppTurnoId" name="TurnoID" class="form-select" required>
-                                <option value="">-- Seleccionar turno --</option>
-                                @{
-                                    var turnosPrincipales = Model.Turnos.Where(x => x.EsTurnoPrincipal).ToList();
-                                    var turnosOtros = Model.Turnos.Where(x => !x.EsTurnoPrincipal).ToList();
-                                }
-                                @if (turnosPrincipales.Any())
-                                {
-                                    <optgroup label="Turnos principales de Producción">
-                                        @foreach (var t in turnosPrincipales)
-                                        {
-                                            <option value="@t.TurnoID">@t.EtiquetaDropdown</option>
-                                        }
-                                    </optgroup>
-                                }
-                                @if (turnosOtros.Any())
-                                {
-                                    <optgroup label="Otros turnos activos en RRHH">
-                                        @foreach (var t in turnosOtros)
-                                        {
-                                            <option value="@t.TurnoID">@t.EtiquetaDropdown</option>
-                                        }
-                                    </optgroup>
-                                }
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <div id="ppVentana" class="pp-candidate-note">Selecciona fecha y turno.</div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Operador principal <span class="text-muted fw-normal">(según turno)</span></label>
-                            <select id="ppOperadorId" name="OperadorID" class="form-select">
-                                <option value="">-- Seleccionar --</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Auxiliar</label>
-                            <select id="ppAuxiliarId" name="AuxiliarID" class="form-select">
-                                <option value="">-- Sin auxiliar --</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Técnico Producción</label>
-                            <select id="ppTecnicoId" name="TecnicoProduccionID" class="form-select">
-                                <option value="">-- Sin técnico --</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <div id="ppCandidatosInfo" class="pp-candidate-note">La disponibilidad se calcula con RRHH y la polivalencia de la parte.</div>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label fw-bold">Observaciones</label>
-                            <textarea id="ppObservaciones" name="Observaciones" class="form-control" rows="2" maxlength="500" placeholder="Opcional"></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light pp-btn" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary pp-btn"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar programación</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
