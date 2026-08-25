@@ -49,7 +49,6 @@
     <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
 }
 
-@await Html.PartialAsync("_LogisticaNavegacion")
 
 <style>
     .detalle-page {
@@ -399,6 +398,331 @@
             margin-bottom: 3px
         }
     }
+
+    /* =========================================================
+       DETALLE DE EMBARQUE - MEJORA VISUAL SIN CARDS
+       Más jerarquía, contraste y presencia conservando la vista.
+       ========================================================= */
+
+    .detalle-page {
+        position: relative;
+    }
+
+    .detalle-header {
+        padding: 6px 0 12px;
+        border-bottom: 1px solid #d9e2ec;
+    }
+
+    .detalle-title {
+        color: #172033;
+        letter-spacing: -.02em;
+        font-size: 1.5rem;
+    }
+
+    .detalle-title i {
+        color: #173a7a;
+    }
+
+    .detalle-subtitle {
+        color: #6f7b8d;
+        font-weight: 500;
+    }
+
+    .header-actions .btn {
+        min-height: 34px;
+        border-radius: 8px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .status-strip {
+        gap: 8px;
+        padding: 10px;
+        margin-top: 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 5px 16px rgba(25,47,80,.045);
+    }
+
+    .status-item {
+        min-height: 40px;
+        padding: 6px 11px;
+        border-right: 1px solid #e5eaf0;
+    }
+
+    .status-item:last-child {
+        border-right: 0;
+    }
+
+    .status-item strong {
+        font-size: .98rem;
+        color: #172033;
+    }
+
+    .status-item span {
+        color: #6e7887;
+        font-size: .72rem;
+    }
+
+    .progress-line {
+        height: 7px;
+        margin: 10px 0 16px;
+        background: #e6ebf1;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
+    }
+
+    .progress-line > div {
+        background: linear-gradient(90deg,#173a7a,#3b72c5);
+        box-shadow: 0 0 10px rgba(23,58,122,.15);
+    }
+
+    .section {
+        position: relative;
+        margin-bottom: 14px;
+        padding: 14px 14px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+    }
+
+    .section:first-of-type {
+        border-top: 1px solid #dce5ef;
+    }
+
+    .section-head,
+    .section > .section-title {
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #172033;
+        font-size: .96rem;
+        letter-spacing: -.01em;
+    }
+
+    .section-title::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        flex: 0 0 auto;
+        border-radius: 8px;
+        background: #173a7a;
+    }
+
+    .section-subtitle {
+        margin-left: 12px;
+        color: #7a8492;
+    }
+
+    .info-grid {
+        gap: 10px;
+    }
+
+    .info-grid > div {
+        min-height: 58px;
+        padding: 8px 10px;
+        border-bottom: 1px solid #edf1f5;
+        background: transparent;
+    }
+
+    .info-label {
+        color: #7a8492;
+        font-weight: 700;
+    }
+
+    .info-value {
+        margin-top: 2px;
+        color: #172033;
+        font-size: .86rem;
+        font-weight: 600;
+    }
+
+    .form-grid {
+        gap: 10px;
+    }
+
+    .form-grid label {
+        color: #465164;
+        font-weight: 700;
+    }
+
+    .form-grid .form-control,
+    .form-grid .form-select {
+        border-radius: 8px;
+        border-color: #d4dde7;
+        background: #fff;
+        box-shadow: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .form-grid .form-control:focus,
+    .form-grid .form-select:focus {
+        border-color: #8ba5d4;
+        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+    }
+
+    .table-wrap {
+        border: 1px solid #e1e7ee;
+        border-radius: 9px;
+        background: #fff;
+    }
+
+    .compact-table {
+        background: #fff;
+    }
+
+    .compact-table thead th {
+        background: #f3f6f9;
+        color: #4c5868;
+        padding-top: .54rem;
+        padding-bottom: .54rem;
+        border-bottom: 1px solid #d9e1ea;
+        letter-spacing: .02em;
+    }
+
+    .compact-table tbody td {
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-color: #edf0f4;
+    }
+
+    .compact-table tbody tr:nth-child(even) td {
+        background: #fbfcfd;
+    }
+
+    .compact-table tbody tr:hover td {
+        background: #f4f8fc;
+    }
+
+    .badge-mini {
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.06);
+    }
+
+    .action-row {
+        gap: 8px;
+    }
+
+    .action-row .btn,
+    .section .btn {
+        border-radius: 7px;
+        font-weight: 600;
+    }
+
+    .checklist {
+        gap: 8px 16px;
+    }
+
+    .check-item {
+        min-height: 58px;
+        padding: 9px 10px;
+        border: 1px solid #e5eaf0;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    .check-item i {
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #fff;
+    }
+
+    .check-item strong {
+        color: #172033;
+    }
+
+    .doc-required {
+        gap: 8px;
+    }
+
+    .doc-required-item {
+        min-height: 76px;
+        padding: 9px 10px;
+        border: 1px solid #e2e8ef;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    .doc-required-item .fw-semibold {
+        color: #172033;
+    }
+
+    .empty {
+        border: 1px dashed #d8e0e8;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    .history-row {
+        margin: 0;
+        padding: 9px 8px;
+        border-bottom: 1px solid #e9edf2;
+    }
+
+    .history-row:nth-child(even) {
+        background: #fbfcfd;
+    }
+
+    .history-date,
+    .history-user {
+        color: #798394;
+    }
+
+    .danger-zone {
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid #efc5ca;
+        border-radius: 12px;
+        background: #fff8f8;
+    }
+
+    .danger-zone .section-title {
+        border-bottom: 1px solid #f3d7da;
+    }
+
+    @@media(max-width:900px) {
+        .status-item {
+            border-right: 0;
+            min-width: calc(33.333% - 8px);
+        }
+
+        .info-grid > div {
+            min-height: auto;
+        }
+    }
+
+    @@media(max-width:600px) {
+        .section {
+            padding: 11px 9px 9px;
+            border-radius: 10px;
+        }
+
+        .status-strip {
+            gap: 4px;
+        }
+
+        .status-item {
+            min-width: calc(50% - 4px);
+            padding: 7px 9px;
+        }
+
+        .doc-required-item,
+        .check-item {
+            min-height: auto;
+        }
+    }
+
 </style>
 
 <div class="detalle-page">

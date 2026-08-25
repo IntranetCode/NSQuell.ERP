@@ -1368,20 +1368,43 @@ VALUES
     }
 
     private static void AgregarFiltros(
-        SqlCommand cmd,
-        string? q,
-        string? estatus,
-        string? tipoViaje,
-        string? tipoTransporte,
-        DateTime? fechaDesde,
-        DateTime? fechaHasta)
+     SqlCommand cmd,
+     string? q,
+     string? estatus,
+     string? tipoViaje,
+     string? tipoTransporte,
+     DateTime? fechaDesde,
+     DateTime? fechaHasta)
     {
-        cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = Db(q);
-        cmd.Parameters.Add("@Estatus", SqlDbType.NVarChar, 30).Value = Db(estatus);
-        cmd.Parameters.Add("@TipoViaje", SqlDbType.NVarChar, 50).Value = Db(tipoViaje);
-        cmd.Parameters.Add("@TipoTransporte", SqlDbType.NVarChar, 30).Value = Db(tipoTransporte);
-        cmd.Parameters.Add("@FechaDesde", SqlDbType.Date).Value = Db(fechaDesde?.Date);
-        cmd.Parameters.Add("@FechaHasta", SqlDbType.Date).Value = Db(fechaHasta?.Date);
+        cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value =
+            string.IsNullOrWhiteSpace(q)
+                ? DBNull.Value
+                : q.Trim();
+
+        cmd.Parameters.Add("@Estatus", SqlDbType.NVarChar, 30).Value =
+            string.IsNullOrWhiteSpace(estatus)
+                ? DBNull.Value
+                : estatus.Trim();
+
+        cmd.Parameters.Add("@TipoViaje", SqlDbType.NVarChar, 50).Value =
+            string.IsNullOrWhiteSpace(tipoViaje)
+                ? DBNull.Value
+                : tipoViaje.Trim();
+
+        cmd.Parameters.Add("@TipoTransporte", SqlDbType.NVarChar, 30).Value =
+            string.IsNullOrWhiteSpace(tipoTransporte)
+                ? DBNull.Value
+                : tipoTransporte.Trim();
+
+        cmd.Parameters.Add("@FechaDesde", SqlDbType.Date).Value =
+            fechaDesde.HasValue
+                ? fechaDesde.Value.Date
+                : DBNull.Value;
+
+        cmd.Parameters.Add("@FechaHasta", SqlDbType.Date).Value =
+            fechaHasta.HasValue
+                ? fechaHasta.Value.Date
+                : DBNull.Value;
     }
 
     [HttpGet]

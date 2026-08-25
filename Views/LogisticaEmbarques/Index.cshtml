@@ -40,7 +40,7 @@
           asp-append-version="true" />
 }
 
-@await Html.PartialAsync("_LogisticaNavegacion")
+
 
 <style>
     .embarques-page {
@@ -330,6 +330,258 @@
             display: none;
         }
     }
+
+    /* =========================================================
+       AJUSTE VISUAL - MÁS PRESENCIA SIN CARGAR LA PANTALLA
+       Mantiene estructura, filtros, tablas y funcionalidad.
+       ========================================================= */
+
+    .embarques-page {
+        position: relative;
+    }
+
+    .embarques-header {
+        padding: 4px 0 10px;
+        border-bottom: 1px solid #dbe4ee;
+    }
+
+    .embarques-title {
+        letter-spacing: -.02em;
+        color: #172033;
+    }
+
+    .embarques-title i {
+        color: #173a7a;
+    }
+
+    .header-actions .btn {
+        border-radius: 8px;
+        font-weight: 600;
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .resumen-strip {
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.72);
+        box-shadow: 0 5px 16px rgba(25,47,80,.045);
+    }
+
+    .resumen-item {
+        min-height: 42px;
+        padding: 6px 11px;
+        border-right: 1px solid #e5eaf0;
+    }
+
+    .resumen-item:last-child {
+        border-right: 0;
+    }
+
+    .resumen-item strong {
+        font-size: 1.08rem;
+        color: #172033;
+    }
+
+    .resumen-item span {
+        font-size: .74rem;
+        color: #687386;
+    }
+
+    .resumen-item.ok {
+        background: #f2fbf5;
+        border-radius: 8px;
+        border-right: 0;
+    }
+
+    .resumen-item.ok strong,
+    .resumen-item.ok span {
+        color: #227a44;
+    }
+
+    .resumen-item.alerta {
+        background: #fff4f3;
+        border-radius: 8px;
+        border-right: 0;
+    }
+
+    .periodos {
+        padding: 4px 0 2px;
+    }
+
+    .periodos .btn {
+        border-radius: 8px;
+        min-height: 32px;
+        font-weight: 600;
+    }
+
+    .periodo-activo {
+        box-shadow: 0 3px 8px rgba(33,37,41,.12);
+    }
+
+    .section {
+        position: relative;
+        margin: 0 0 14px;
+        padding: 14px 14px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+    }
+
+    .section:first-of-type {
+        border-top: 1px solid #dce5ef;
+    }
+
+    .section-head {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #172033;
+        font-size: .95rem;
+        letter-spacing: -.01em;
+    }
+
+    .section-title::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        border-radius: 8px;
+        background: #173a7a;
+        flex: 0 0 auto;
+    }
+
+    .section-subtitle {
+        margin-left: 11px;
+        color: #7b8492;
+    }
+
+    .section-count {
+        border: 1px solid #dfe6ee;
+        background: #f8fafc !important;
+        border-radius: 999px;
+        padding: .38em .7em;
+    }
+
+    .table-wrap {
+        border: 1px solid #e2e8ef;
+        border-radius: 9px;
+        background: #fff;
+    }
+
+    .log-table {
+        background: #fff;
+    }
+
+    .log-table thead th {
+        background: #f3f6f9;
+        color: #4c5868;
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-bottom: 1px solid #d9e1ea;
+    }
+
+    .log-table tbody td {
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-color: #edf0f4;
+    }
+
+    .log-table tbody tr:nth-child(even) td {
+        background: #fbfcfd;
+    }
+
+    .log-table tbody tr:hover td {
+        background: #f4f8fc;
+    }
+
+    .folio {
+        color: #173a7a;
+    }
+
+    .badge-mini {
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.07);
+    }
+
+    .acciones .btn {
+        border-radius: 7px;
+        min-width: 32px;
+        min-height: 29px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+    }
+
+    .acciones .btn-primary {
+        background: #233f80;
+        border-color: #233f80;
+    }
+
+    .pt-ok,
+    .pt-falta {
+        display: inline-block;
+        min-width: 34px;
+    }
+
+    .cliente-resumen {
+        background: #fff;
+    }
+
+    .cliente-resumen.header {
+        border-radius: 8px 8px 0 0;
+        color: #4c5868;
+        background: #f3f6f9;
+    }
+
+    .cliente-resumen > div {
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+    }
+
+    .cliente-nombre {
+        color: #173a7a;
+    }
+
+    .empty {
+        background: #fbfcfd;
+        border-radius: 8px;
+    }
+
+    @@media (max-width: 900px) {
+        .resumen-item {
+            border-right: 0;
+            min-width: calc(33.333% - 8px);
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .resumen-strip {
+            gap: 4px;
+        }
+
+        .resumen-item {
+            min-width: calc(50% - 4px);
+            padding: 7px 9px;
+        }
+
+        .section {
+            padding: 11px 9px 9px;
+            border-radius: 10px;
+        }
+    }
+
 </style>
 
 <div class="embarques-page">

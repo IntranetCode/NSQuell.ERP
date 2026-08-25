@@ -24,7 +24,7 @@
           asp-append-version="true" />
 }
 
-@await Html.PartialAsync("_LogisticaNavegacion")
+
 
 <style>
     .crear-embarque-page {
@@ -297,6 +297,249 @@
                 width: 100%;
             }
     }
+
+    /* =========================================================
+       AJUSTE VISUAL - MÁS PRESENCIA SIN CAMBIAR LA ESTRUCTURA
+       ========================================================= */
+
+    .crear-embarque-page {
+        position: relative;
+    }
+
+    .crear-header {
+        padding: 4px 0 10px;
+        border-bottom: 1px solid #dbe4ee;
+    }
+
+    .crear-title {
+        color: #172033;
+        letter-spacing: -.02em;
+    }
+
+    .crear-title i {
+        color: #173a7a;
+    }
+
+    .crear-header > .btn {
+        border-radius: 8px;
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        font-weight: 600;
+    }
+
+    .section {
+        margin-bottom: 14px;
+        padding: 14px 14px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+    }
+
+    .section:first-of-type {
+        border-top: 1px solid #dce5ef;
+        padding-top: 14px;
+    }
+
+    .section-title {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+        color: #172033;
+        font-size: .95rem;
+        letter-spacing: -.01em;
+    }
+
+    .section-title::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        border-radius: 8px;
+        background: #173a7a;
+        flex: 0 0 auto;
+    }
+
+    .release-strip {
+        padding: 0;
+        margin-bottom: 8px;
+        gap: 10px;
+    }
+
+    .release-item {
+        min-height: 66px;
+        padding: 9px 10px;
+        border: 1px solid #e4eaf1;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    .release-item label {
+        color: #798394;
+        font-weight: 700;
+    }
+
+    .release-item strong {
+        color: #172033;
+        font-size: .84rem;
+    }
+
+    .form-label {
+        color: #445063;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 8px;
+        border-color: #d5dde7;
+        background: #fff;
+        box-shadow: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #8ba5d4;
+        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+    }
+
+    .help-text {
+        color: #7a8492;
+    }
+
+    .pt-summary {
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid #dfe6ee;
+        border-radius: 10px;
+        background: #f8fafc;
+    }
+
+    .pt-summary-item {
+        min-height: 38px;
+        padding: 6px 10px;
+        border-right: 1px solid #e1e7ee;
+    }
+
+    .pt-summary-item:last-child {
+        border-right: 0;
+    }
+
+    .pt-summary-item.ok {
+        background: #f2fbf5;
+        border-radius: 8px;
+        border-right: 0;
+    }
+
+    .pt-summary-item.warn {
+        background: #fff4f3;
+        border-radius: 8px;
+        border-right: 0;
+    }
+
+    .pt-summary-item strong {
+        font-size: 1rem;
+        color: #172033;
+    }
+
+    .table-wrap {
+        border: 1px solid #e2e8ef;
+        border-radius: 9px;
+        background: #fff;
+    }
+
+    .pt-table {
+        background: #fff;
+    }
+
+    .pt-table thead th {
+        background: #f3f6f9;
+        color: #4c5868;
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-bottom: 1px solid #d9e1ea;
+    }
+
+    .pt-table tbody td {
+        padding-top: .5rem;
+        padding-bottom: .5rem;
+        border-color: #edf0f4;
+    }
+
+    .pt-table tbody tr:nth-child(even) td {
+        background: #fbfcfd;
+    }
+
+    .pt-table tbody tr:hover td {
+        background: #f4f8fc;
+    }
+
+    .selected-row td {
+        background: #f0fff6 !important;
+    }
+
+    .empty {
+        border: 1px dashed #d9e1ea;
+        border-radius: 10px;
+        background: #fbfcfd;
+    }
+
+    .form-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        margin-top: 14px;
+        padding: 12px 14px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.96);
+        box-shadow: 0 -4px 16px rgba(25,47,80,.05);
+        backdrop-filter: blur(4px);
+    }
+
+    .form-actions .btn {
+        min-height: 38px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .form-actions .btn-primary {
+        min-width: 170px;
+        background: #233f80;
+        border-color: #233f80;
+    }
+
+    @@media (max-width: 900px) {
+        .release-item {
+            min-height: auto;
+        }
+
+        .pt-summary-item {
+            border-right: 0;
+            min-width: calc(50% - 4px);
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .section {
+            padding: 11px 9px 9px;
+            border-radius: 10px;
+        }
+
+        .pt-summary-item {
+            min-width: 100%;
+        }
+
+        .form-actions {
+            position: static;
+            padding: 10px;
+        }
+    }
+
 </style>
 
 <div class="crear-embarque-page">

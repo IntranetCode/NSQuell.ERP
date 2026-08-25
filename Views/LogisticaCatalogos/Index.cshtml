@@ -12,7 +12,6 @@
           asp-append-version="true" />
 }
 
-@await Html.PartialAsync("_LogisticaNavegacion")
 
 <style>
     .catalogos-page {
@@ -276,6 +275,238 @@
                 flex: 1;
             }
     }
+
+    /* =========================================================
+       CATÁLOGOS LOGÍSTICA - MEJORA VISUAL SIN CARDS
+       Mantiene formularios, tablas, edición inline y funcionalidad.
+       ========================================================= */
+
+    .catalogos-page {
+        position: relative;
+    }
+
+    .catalogos-header {
+        padding: 6px 0 12px;
+        border-bottom: 1px solid #dbe4ee;
+    }
+
+    .catalogos-title {
+        color: #172033;
+        letter-spacing: -.02em;
+        font-size: 1.48rem;
+    }
+
+    .catalogos-title i {
+        color: #173a7a;
+    }
+
+    .catalogos-subtitle {
+        color: #6f7b8d;
+        font-weight: 500;
+    }
+
+    .catalogos-nav .btn {
+        min-height: 35px;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .catalogos-section {
+        position: relative;
+        margin-bottom: 16px;
+        padding: 14px 14px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+    }
+
+    .catalogos-section:first-of-type {
+        border-top: 1px solid #dce5ef;
+        padding-top: 14px;
+    }
+
+    .section-head {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #172033;
+        font-size: .97rem;
+        letter-spacing: -.01em;
+    }
+
+    .section-title::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        border-radius: 8px;
+        background: #173a7a;
+        flex: 0 0 auto;
+    }
+
+    .section-subtitle {
+        margin-left: 12px;
+        color: #7a8492;
+    }
+
+    .count-badge {
+        border: 1px solid #dfe6ee;
+        background: #f8fafc !important;
+        border-radius: 999px;
+        padding: .38em .7em;
+    }
+
+    .catalogo-form {
+        margin-bottom: 12px;
+        padding: 11px 12px;
+        border: 1px solid #e2e8ef;
+        border-radius: 10px;
+        background: #fbfcfd;
+    }
+
+    .catalogo-form label,
+    .edit-form label {
+        color: #465164;
+        font-weight: 700;
+    }
+
+    .catalogo-form .form-control,
+    .catalogo-form .form-select,
+    .edit-form .form-control {
+        border-radius: 8px;
+        border-color: #d4dde7;
+        background: #fff;
+        box-shadow: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .catalogo-form .form-control:focus,
+    .catalogo-form .form-select:focus,
+    .edit-form .form-control:focus {
+        border-color: #8ba5d4;
+        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+    }
+
+    .catalogo-form .btn {
+        border-radius: 8px;
+        font-weight: 700;
+        background: #233f80;
+        border-color: #233f80;
+    }
+
+    .table-wrap {
+        border: 1px solid #e1e7ee;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(25,47,80,.025);
+    }
+
+    .catalogos-table {
+        background: #fff;
+    }
+
+    .catalogos-table thead th {
+        background: #f3f6f9;
+        color: #4c5868;
+        padding-top: .55rem;
+        padding-bottom: .55rem;
+        border-bottom: 1px solid #d8e1ea;
+        letter-spacing: .025em;
+    }
+
+    .catalogos-table tbody td {
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-color: #edf0f4;
+    }
+
+    .catalogos-table tbody tr:nth-child(even):not(.edit-row) td {
+        background: #fbfcfd;
+    }
+
+    .catalogos-table tbody tr:hover:not(.edit-row) td {
+        background: #f4f8fc;
+    }
+
+    .catalogos-table .principal {
+        color: #173a7a;
+        font-weight: 800;
+    }
+
+    .acciones .btn {
+        min-width: 31px;
+        min-height: 29px;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+    }
+
+    .badge-mini {
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.06);
+    }
+
+    .edit-row td {
+        background: #fffaf0 !important;
+        border-top: 1px solid #f0dfb4;
+        border-bottom: 1px solid #f0dfb4;
+    }
+
+    .edit-form {
+        padding: 10px 8px;
+        border-radius: 8px;
+    }
+
+    .edit-actions .btn {
+        min-height: 34px;
+        border-radius: 7px;
+        font-weight: 700;
+    }
+
+    .empty {
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px dashed #d8e0e8;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    @@media (max-width: 950px) {
+        .catalogos-section {
+            padding: 12px 10px 10px;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .catalogos-section {
+            border-radius: 10px;
+        }
+
+        .catalogo-form {
+            padding: 10px;
+        }
+
+        .catalogos-nav .btn {
+            justify-content: center;
+        }
+
+        .table-wrap {
+            border-radius: 9px;
+        }
+    }
+
 </style>
 
 <div class="catalogos-page">
@@ -424,7 +655,7 @@
                         <th>Código</th>
                         <th>Nombre</th>
                         <th>Descripción</th>
-                        <th>Estatus</th>
+                       
                         <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
@@ -465,20 +696,7 @@
                             </span>
                         </td>
 
-                                <td>
-                            @if (ruta.Activo)
-                                    {
-                                        <span class="badge bg-success badge-mini">
-                                            Activa
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary badge-mini">
-                                            Inactiva
-                                        </span>
-                                    }
-                                </td>
+                               
 
                                 <td class="acciones">
 
@@ -707,7 +925,7 @@
                         <th>Marca</th>
                         <th>Modelo</th>
                         <th>Capacidad</th>
-                        <th>Estatus</th>
+                        
                         <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
@@ -758,21 +976,6 @@
                                                                 ? $"{unidad.CapacidadPiezas.Value:N0} pzas"
                                                                 : "-")
                         </td>
-
-                                <td>
-                            @if (unidad.Activo)
-                                    {
-                                        <span class="badge bg-success badge-mini">
-                                            Activa
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary badge-mini">
-                                            Inactiva
-                                        </span>
-                                    }
-                                </td>
 
                                 <td class="acciones">
 

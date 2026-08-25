@@ -343,6 +343,312 @@
             margin-bottom: 3px;
         }
     }
+
+    /* =========================================================
+       DETALLE VIAJE - MEJORA VISUAL SIN CARDS
+       Más presencia, jerarquía y legibilidad manteniendo lógica.
+       ========================================================= */
+
+    .viaje-detalle-page {
+        position: relative;
+    }
+
+    .detalle-header {
+        padding: 6px 0 12px;
+        border-bottom: 1px solid #dbe4ee;
+    }
+
+    .detalle-title {
+        color: #172033;
+        letter-spacing: -.02em;
+        font-size: 1.5rem;
+    }
+
+    .detalle-title i {
+        color: #173a7a;
+    }
+
+    .detalle-subtitle {
+        color: #6f7b8d;
+        font-weight: 500;
+    }
+
+    .header-actions .btn {
+        min-height: 35px;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .estado-strip {
+        gap: 0;
+        padding: 0;
+        margin-top: 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.78);
+        box-shadow: 0 5px 16px rgba(25,47,80,.045);
+        overflow: hidden;
+    }
+
+    .estado-item {
+        min-height: 50px;
+        padding: 8px 14px;
+        border-right: 1px solid #e5eaf0;
+    }
+
+    .estado-item:last-child {
+        border-right: 0;
+    }
+
+    .estado-item strong {
+        color: #172033;
+        font-size: .95rem;
+    }
+
+    .estado-item span {
+        color: #6f7988;
+        font-size: .73rem;
+    }
+
+    .section,
+    .action-block {
+        position: relative;
+        margin-bottom: 14px;
+        padding: 14px 14px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        background: rgba(255,255,255,.76);
+        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+    }
+
+    .section {
+        border-bottom: 1px solid #dce5ef;
+    }
+
+    .section-title,
+    .action-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+        color: #172033;
+        font-size: .96rem;
+        letter-spacing: -.01em;
+    }
+
+    .section-title::before,
+    .action-title::before {
+        content: "";
+        width: 4px;
+        height: 18px;
+        border-radius: 8px;
+        background: #173a7a;
+        flex: 0 0 auto;
+    }
+
+    .action-title i,
+    .section-title i {
+        color: #173a7a;
+    }
+
+    .info-grid {
+        gap: 10px;
+    }
+
+    .info-grid > div {
+        min-height: 58px;
+        padding: 8px 10px;
+        border-bottom: 1px solid #edf1f5;
+        background: transparent;
+    }
+
+    .info-label {
+        color: #7a8492;
+        font-weight: 700;
+    }
+
+    .info-value {
+        margin-top: 2px;
+        color: #172033;
+        font-size: .86rem;
+        font-weight: 600;
+    }
+
+    .compact-form {
+        gap: 10px;
+    }
+
+    .compact-form label {
+        color: #465164;
+        font-weight: 700;
+    }
+
+    .compact-form .form-control,
+    .compact-form .form-select {
+        min-height: 38px;
+        border-radius: 8px;
+        border-color: #d4dde7;
+        background: #fff;
+        box-shadow: none;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .compact-form .form-control:focus,
+    .compact-form .form-select:focus {
+        border-color: #8ba5d4;
+        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+    }
+
+    .table-wrap {
+        border: 1px solid #e1e7ee;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(25,47,80,.025);
+    }
+
+    .compact-table {
+        background: #fff;
+    }
+
+    .compact-table thead th {
+        background: #f3f6f9;
+        color: #4c5868;
+        padding-top: .54rem;
+        padding-bottom: .54rem;
+        border-bottom: 1px solid #d8e1ea;
+    }
+
+    .compact-table tbody td {
+        padding-top: .52rem;
+        padding-bottom: .52rem;
+        border-color: #edf0f4;
+    }
+
+    .compact-table tbody tr:nth-child(even) td {
+        background: #fbfcfd;
+    }
+
+    .compact-table tbody tr:hover td {
+        background: #f4f8fc;
+    }
+
+    .badge-mini {
+        border-radius: 6px;
+        box-shadow: 0 2px 5px rgba(0,0,0,.06);
+    }
+
+    .history-row {
+        margin: 0;
+        padding: 9px 8px;
+        border-bottom: 1px solid #e9edf2;
+    }
+
+    .history-row:nth-child(even) {
+        background: #fbfcfd;
+    }
+
+    .history-date,
+    .history-user {
+        color: #798394;
+    }
+
+    .history-event {
+        color: #172033;
+        font-weight: 700;
+    }
+
+    .empty {
+        border: 1px dashed #d8e0e8;
+        border-radius: 9px;
+        background: #fbfcfd;
+    }
+
+    .danger-zone {
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid #efc5ca;
+        border-radius: 12px;
+        background: #fff8f8;
+    }
+
+    .danger-zone .section-title {
+        border-bottom: 1px solid #f3d7da;
+    }
+
+    .action-block .btn-success,
+    .section .btn-success {
+        font-weight: 700;
+        border-radius: 7px;
+    }
+
+    .section .btn,
+    .action-block .btn {
+        border-radius: 7px;
+        font-weight: 700;
+    }
+
+    @@media (max-width: 900px) {
+        .estado-item {
+            min-width: calc(33.333% - 1px);
+            flex: 1 1 30%;
+            border-bottom: 1px solid #e5eaf0;
+        }
+
+        .estado-item:nth-child(3n) {
+            border-right: 0;
+        }
+
+        .info-grid > div {
+            min-height: auto;
+        }
+
+        .form-1,
+        .form-2,
+        .form-3,
+        .form-4,
+        .form-5,
+        .form-6,
+        .form-8,
+        .form-10 {
+            grid-column: span 6;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .section,
+        .action-block,
+        .danger-zone {
+            padding: 11px 9px 9px;
+            border-radius: 10px;
+        }
+
+        .estado-item {
+            min-width: 50%;
+            flex-basis: 50%;
+            border-right: 1px solid #e5eaf0;
+        }
+
+        .estado-item:nth-child(even) {
+            border-right: 0;
+        }
+
+        .form-1,
+        .form-2,
+        .form-3,
+        .form-4,
+        .form-5,
+        .form-6,
+        .form-8,
+        .form-10,
+        .form-12 {
+            grid-column: span 12;
+        }
+    }
+
 </style>
 
 <div class="viaje-detalle-page">
