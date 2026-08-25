@@ -1,0 +1,427 @@
+﻿@model ERP.NSQuell.Models.ProduccionIndicadoresParosIndexVm
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Indicadores de Paros | Producción";
+
+    string FechaHora(DateTime value) =>
+        Model.PeriodoNormalizado == "diario"
+            ? value.ToString("HH:mm")
+            : value.ToString("dd/MM HH:mm");
+
+    string FechaFin(DateTime? value) =>
+        value.HasValue
+            ? FechaHora(value.Value)
+            : "—";
+
+    string Activo(string periodo) =>
+        Model.PeriodoNormalizado == periodo
+            ? "active"
+            : string.Empty;
+}
+
+@section Styles {
+    <link rel="stylesheet"
+          href="~/css/ProduccionIndicadoresParos/index.css"
+          asp-append-version="true" />
+}
+
+<div class="paros-page">
+    <header class="paros-hero">
+        <div>
+            <a class="paros-back"
+               href="@Url.Action("Index", "Produccion")">
+                <i class="fa-solid fa-arrow-left"></i>
+                Producción
+            </a>
+
+            <div class="paros-eyebrow">
+                CONSULTA · PRODUCCIÓN
+            </div>
+
+            <h1>
+                <i class="fa-solid fa-chart-column"></i>
+                Indicadores de Paros
+            </h1>
+
+            <p>
+                Historial e indicadores calculados a partir de los paros
+                registrados por Producción. Esta pantalla no modifica
+                ningún registro operativo.
+            </p>
+        </div>
+
+        <div class="paros-live">
+            <span class="paros-live-dot"></span>
+            <div>
+                <strong>
+                    @Model.PeriodoTitulo · @Model.RangoTexto
+                </strong>
+
+                <small>
+                    Actualizado @Model.FechaActualizacion.ToString("dd/MM/yyyy HH:mm:ss")
+                </small>
+            </div>
+        </div>
+    </header>
+
+    <section class="paros-toolbar">
+        <div class="period-tabs"
+             aria-label="Periodo de consulta">
+
+            <a class="period-tab @Activo("diario")"
+               href="@Url.Action(
+                   "Index",
+                   "ProduccionIndicadoresParos",
+                   new
+                   {
+                       fecha = Model.Fecha.ToString("yyyy-MM-dd"),
+                       periodo = "diario",
+                       maquinaId = Model.MaquinaID,
+                       operadorId = Model.OperadorID,
+                       motivo = Model.Motivo,
+                       of = Model.OF
+                   })">
+                Diario
+            </a>
+
+            <a class="period-tab @Activo("semanal")"
+               href="@Url.Action(
+                   "Index",
+                   "ProduccionIndicadoresParos",
+                   new
+                   {
+                       fecha = Model.Fecha.ToString("yyyy-MM-dd"),
+                       periodo = "semanal",
+                       maquinaId = Model.MaquinaID,
+                       operadorId = Model.OperadorID,
+                       motivo = Model.Motivo,
+                       of = Model.OF
+                   })">
+                Semanal
+            </a>
+
+            <a class="period-tab @Activo("mensual")"
+               href="@Url.Action(
+                   "Index",
+                   "ProduccionIndicadoresParos",
+                   new
+                   {
+                       fecha = Model.Fecha.ToString("yyyy-MM-dd"),
+                       periodo = "mensual",
+                       maquinaId = Model.MaquinaID,
+                       operadorId = Model.OperadorID,
+                       motivo = Model.Motivo,
+                       of = Model.OF
+                   })">
+                Mensual
+            </a>
+        </div>
+
+        <form method="get"
+              asp-controller="ProduccionIndicadoresParos"
+              asp-action="Index"
+              class="filters-grid">
+
+            <input type="hidden"
+                   name="periodo"
+                   value="@Model.PeriodoNormalizado" />
+
+            <div class="filter-field">
+                <label for="fecha">
+                    Fecha de referencia
+                </label>
+
+                <input id="fecha"
+                       name="fecha"
+                       type="date"
+                       class="form-control"
+                       value="@Model.Fecha.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <div class="filter-field">
+                <label asp-for="MaquinaID">
+                    Máquina
+                </label>
+
+                <select asp-for="MaquinaID"
+                        asp-items="Model.Maquinas"
+                        name="maquinaId"
+                        class="form-select">
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label asp-for="OperadorID">
+                    Operador
+                </label>
+
+                <select asp-for="OperadorID"
+                        asp-items="Model.Operadores"
+                        name="operadorId"
+                        class="form-select">
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label asp-for="Motivo">
+                    Motivo
+                </label>
+
+                <select asp-for="Motivo"
+                        asp-items="Model.Motivos"
+                        name="motivo"
+                        class="form-select">
+                </select>
+            </div>
+
+            <div class="filter-field filter-field-of">
+                <label for="of">
+                    OF
+                </label>
+
+                <input id="of"
+                       name="of"
+                       class="form-control"
+                       value="@Model.OF"
+                       placeholder="Buscar folio o número..." />
+            </div>
+
+            <div class="filter-actions">
+                <button type="submit"
+                        class="btn-filter">
+                    <i class="fa-solid fa-filter"></i>
+                    Aplicar
+                </button>
+
+                <a class="btn-clear"
+                   href="@Url.Action(
+                       "Index",
+                       "ProduccionIndicadoresParos",
+                       new
+                       {
+                           fecha = DateTime.Today.ToString("yyyy-MM-dd"),
+                           periodo = "diario"
+                       })">
+                    Limpiar
+                </a>
+            </div>
+        </form>
+    </section>
+
+    <section class="metrics-grid"
+             aria-label="Indicadores de paros">
+
+        <article class="metric-card">
+            <span class="metric-icon">
+                <i class="fa-solid fa-circle-pause"></i>
+            </span>
+
+            <div>
+                <small>Total de paros</small>
+                <strong>@Model.TotalParos.ToString("N0")</strong>
+                <span>en el periodo filtrado</span>
+            </div>
+        </article>
+
+        <article class="metric-card">
+            <span class="metric-icon">
+                <i class="fa-solid fa-clock"></i>
+            </span>
+
+            <div>
+                <small>Minutos detenidos</small>
+                <strong>@Model.MinutosTotalesDetenidos.ToString("N0")</strong>
+                <span>
+                    @((Model.MinutosTotalesDetenidos / 60m).ToString("N1")) h acumuladas
+                </span>
+            </div>
+        </article>
+
+        <article class="metric-card">
+            <span class="metric-icon">
+                <i class="fa-solid fa-chart-line"></i>
+            </span>
+
+            <div>
+                <small>Duración promedio</small>
+                <strong>@Model.DuracionPromedioMinutos.ToString("N1")</strong>
+                <span>minutos por paro</span>
+            </div>
+        </article>
+
+        <article class="metric-card metric-card-alert">
+            <span class="metric-icon">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </span>
+
+            <div>
+                <small>Mayores a 15 min</small>
+                <strong>@Model.MayoresA15Minutos.ToString("N0")</strong>
+                <span>
+                    @Model.EnCurso.ToString("N0") en curso
+                </span>
+            </div>
+        </article>
+    </section>
+
+    <section class="history-panel">
+        <div class="history-head">
+            <div>
+                <span class="section-kicker">
+                    HISTORIAL
+                </span>
+
+                <h2>
+                    Paros registrados
+                </h2>
+
+                <p>
+                    @Model.TotalParos.ToString("N0") registro(s) ·
+                    @Model.PeriodoTitulo.ToLowerInvariant() ·
+                    @Model.RangoTexto
+                </p>
+            </div>
+
+            <a class="btn-refresh"
+               href="@($"{Context.Request.Path}{Context.Request.QueryString}")">
+                <i class="fa-solid fa-rotate"></i>
+                Actualizar
+            </a>
+        </div>
+
+        @if (!Model.Paros.Any())
+        {
+            <div class="empty-state">
+                <i class="fa-regular fa-circle-check"></i>
+
+                <h3>
+                    Sin paros para esta consulta
+                </h3>
+
+                <p>
+                    No existen registros que coincidan con el periodo
+                    y los filtros seleccionados.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="paros-table">
+                    <thead>
+                        <tr>
+                            <th>Inicio</th>
+                            <th>Fin</th>
+                            <th>Duración</th>
+                            <th>Estado</th>
+                            <th>Máquina</th>
+                            <th>Motivo</th>
+                            <th>OF</th>
+                            <th>Operador</th>
+                            <th>Descripción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var paro in Model.Paros)
+                        {
+                            <tr class="@(paro.EnCurso ? "row-running" : "")">
+                                <td class="cell-time">
+                                    <strong>
+                                        @FechaHora(paro.FechaInicioParo)
+                                    </strong>
+
+                                    @if (Model.PeriodoNormalizado == "diario")
+                                    {
+                                        <small>
+                                            @paro.FechaInicioParo.ToString("dd/MM/yyyy")
+                                        </small>
+                                    }
+                                </td>
+
+                                <td class="cell-time">
+                                    @if (paro.EnCurso)
+                                    {
+                                        <span class="running-dash">
+                                            —
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <strong>
+                                            @FechaFin(paro.FechaFinParo)
+                                        </strong>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="duration-chip @(paro.EsMayorA15Minutos ? "duration-alert" : "")">
+                                        @paro.DuracionTexto
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="status-chip @(paro.EnCurso ? "status-running" : "status-closed")">
+                                        @if (paro.EnCurso)
+                                        {
+                                            <span class="status-pulse"></span>
+                                        }
+
+                                        @paro.EstadoTexto
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <strong>
+                                        @paro.MaquinaVisible
+                                    </strong>
+
+                                    @if (!string.IsNullOrWhiteSpace(paro.MaquinaNombre))
+                                    {
+                                        <small class="cell-sub">
+                                            @paro.MaquinaNombre
+                                        </small>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="reason-text">
+                                        @paro.MotivoVisible
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="of-chip">
+                                        @paro.OFVisible
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @paro.OperadorVisible
+                                </td>
+
+                                <td class="description-cell"
+                                    title="@paro.Descripcion">
+                                    @(string.IsNullOrWhiteSpace(paro.Descripcion)
+                                        ? "—"
+                                        : paro.Descripcion)
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@if (Model.TieneParosEnCurso)
+{
+    <script>
+        // Sólo lectura. Recarga la consulta para recalcular la duración
+        // de los paros abiertos sin modificar Produccion_Paros.
+        window.setTimeout(function () {
+            window.location.reload();
+        }, 60000);
+    </script>
+}
