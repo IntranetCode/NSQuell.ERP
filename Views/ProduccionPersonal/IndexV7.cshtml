@@ -1,0 +1,1100 @@
+﻿@model ERP.NSQuell.Models.ProduccionPersonalV7IndexVm
+@using System.Globalization
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Centro Operativo de Programación de Personal";
+
+    var cultura = new CultureInfo("es-MX");
+
+    var maquinas = Model.Segmentos
+        .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre })
+        .Select(x => x.Key)
+        .OrderBy(x => x.MaquinaCodigo)
+        .ThenBy(x => x.MaquinaNombre)
+        .ToList();
+
+    var personas = new Dictionary<int, string>();
+
+    void AgregarPersona(int id, string? nombre)
+    {
+        if (id <= 0 || string.IsNullOrWhiteSpace(nombre)) return;
+        personas[id] = nombre.Trim();
+    }
+
+    foreach (var p in Model.Operadores) AgregarPersona(p.PersonaID, p.Nombre);
+    foreach (var p in Model.Tecnicos) AgregarPersona(p.PersonaID, p.Nombre);
+    foreach (var p in Model.SmedYTecnicos) AgregarPersona(p.PersonaID, p.Nombre);
+    foreach (var p in Model.Auxiliares) AgregarPersona(p.PersonaID, p.Nombre);
+
+    string NombrePersona(IEnumerable<ERP.NSQuell.Models.ProduccionPersonalPersonaOpcionVm> lista, int? id, string vacio = "Sin asignar")
+    {
+        if (!id.HasValue) return vacio;
+        return lista.FirstOrDefault(x => x.PersonaID == id.Value)?.Nombre ?? $"Persona #{id.Value}";
+    }
+
+    DateTime anterior;
+    DateTime siguiente;
+
+    if (Model.Vista == "mes")
+    {
+        anterior = Model.FechaReferencia.AddMonths(-1);
+        siguiente = Model.FechaReferencia.AddMonths(1);
+    }
+    else if (Model.Vista == "semana")
+    {
+        anterior = Model.FechaReferencia.AddDays(-7);
+        siguiente = Model.FechaReferencia.AddDays(7);
+    }
+    else if (Model.Vista == "rango")
+    {
+        var diasRango = Math.Max(1, (Model.FinPeriodo - Model.InicioPeriodo).Days);
+        anterior = Model.InicioPeriodo.AddDays(-diasRango);
+        siguiente = Model.InicioPeriodo.AddDays(diasRango);
+    }
+    else
+    {
+        anterior = Model.FechaReferencia.AddDays(-1);
+        siguiente = Model.FechaReferencia.AddDays(1);
+    }
+
+    string FechaParam(DateTime d) => d.ToString("yyyy-MM-dd");
+
+    string TextoPeriodo()
+    {
+        if (Model.Vista == "dia")
+            return Model.FechaReferencia.ToString("dddd dd 'de' MMMM yyyy", cultura);
+        if (Model.Vista == "semana")
+            return $"{Model.InicioPeriodo:dd MMM} — {Model.FinPeriodoVisible:dd MMM yyyy}";
+        if (Model.Vista == "mes")
+            return Model.FechaReferencia.ToString("MMMM yyyy", cultura);
+        return $"{Model.InicioPeriodo:dd/MM/yyyy} — {Model.FinPeriodoVisible:dd/MM/yyyy}";
+    }
+
+    var totalDiasCalendario = Math.Max(1, (Model.FinPeriodoVisible.Date - Model.InicioPeriodo.Date).Days + 1);
+    var diasCalendario = Enumerable.Range(0, totalDiasCalendario)
+        .Select(i => Model.InicioPeriodo.Date.AddDays(i))
+        .ToList();
+
+    string panelActual = Context.Request.Query["panel"].ToString().Trim().ToLowerInvariant();
+    if (panelActual != "planner" &&
+        panelActual != "support" &&
+        panelActual != "people" &&
+        panelActual != "pending")
+    {
+        panelActual = "planner";
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/ProduccionPersonal/semanal.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ProduccionPersonal/v7.css" asp-append-version="true" />
+}
+
+<div class="ppv3-page" id="ppv3Root">
+    <header class="ppv3-header">
+        <div class="ppv3-title-block">
+            <a href="@Url.Action("Grupo","Menu",new { id = 2 })" class="ppv3-back" title="Volver a Producción">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <div>
+                <div class="ppv3-eyebrow">PRODUCCIÓN · PERSONAL</div>
+                <h1>Centro Operativo de Programación</h1>
+            </div>
+        </div>
+
+        <div class="ppv3-week-block">
+            <div class="ppv3-week-number">
+                <span>SEMANA</span>
+                <strong>@Model.NumeroSemana</strong>
+            </div>
+            <div class="ppv3-week-range">
+                <strong>@Model.SemanaInicio.ToString("dd MMM", cultura) — @Model.SemanaInicio.AddDays(6).ToString("dd MMM yyyy", cultura)</strong>
+                <span>
+                    @if (Model.EscalaID.HasValue)
+                    {
+                        <i class="fa-solid fa-circle-check text-success"></i>
+                        @Model.EscalaFolio
+                        <text> · @Model.EscalaEstado</text>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-triangle-exclamation text-warning"></i>
+                        <text>Sin escala RRHH publicada</text>
+                    }
+                </span>
+            </div>
+        </div>
+
+        <div class="ppv3-week-nav">
+            <a class="btn btn-sm btn-outline-primary"
+               href="@Url.Action("Index","ProduccionPersonal",new {
+                    vista = Model.Vista,
+                    fechaDesde = FechaParam(anterior),
+                    fechaHasta = Model.Vista == "rango"
+                        ? FechaParam(anterior.AddDays(Math.Max(1,(Model.FinPeriodo-Model.InicioPeriodo).Days)-1))
+                        : null,
+                    panel = panelActual
+               })"
+               title="Periodo anterior">
+                <i class="fa-solid fa-chevron-left"></i>
+            </a>
+            <a class="btn btn-sm btn-primary fw-bold"
+               href="@Url.Action("Index","ProduccionPersonal",new { vista="dia", fechaDesde=FechaParam(DateTime.Today), panel=panelActual })">
+                Hoy
+            </a>
+            <a class="btn btn-sm btn-outline-primary"
+               href="@Url.Action("Index","ProduccionPersonal",new {
+                    vista = Model.Vista,
+                    fechaDesde = FechaParam(siguiente),
+                    fechaHasta = Model.Vista == "rango"
+                        ? FechaParam(siguiente.AddDays(Math.Max(1,(Model.FinPeriodo-Model.InicioPeriodo).Days)-1))
+                        : null,
+                    panel = panelActual
+               })"
+               title="Periodo siguiente">
+                <i class="fa-solid fa-chevron-right"></i>
+            </a>
+        </div>
+    </header>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mt-2 mb-0 fw-semibold">@TempData["Error"]</div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mt-2 mb-0 fw-semibold">@TempData["Success"]</div>
+    }
+    @if (!Model.Configurado)
+    {
+        <div class="alert alert-warning mt-2 mb-0 fw-semibold ppv7-db-warning">
+            <i class="fa-solid fa-database me-1"></i>
+            <strong>Falta terminar V7 en la BD de pruebas.</strong>
+            El ERP puede mostrar la programación heredada, pero para guardar por turno e historial deben existir
+            <code>Produccion_ProgramaPersonalAsignaciones</code> y <code>Produccion_PersonalAsignacionHistorial</code>.
+        </div>
+    }
+
+    <section class="ppv7-period-shell">
+        <div class="ppv7-period-tabs" role="group" aria-label="Periodo de consulta">
+            <a class="ppv7-period-tab @(Model.Vista=="dia" ? "active" : "")"
+               href="@Url.Action("Index",new { vista="dia", fechaDesde=FechaParam(Model.FechaReferencia), panel=panelActual })">
+                <span class="ppv7-period-icon"><i class="fa-solid fa-calendar-day"></i></span>
+                <span><strong>Día</strong><small>Jornada actual</small></span>
+            </a>
+            <a class="ppv7-period-tab @(Model.Vista=="semana" ? "active" : "")"
+               href="@Url.Action("Index",new { vista="semana", fechaDesde=FechaParam(Model.FechaReferencia), panel=panelActual })">
+                <span class="ppv7-period-icon"><i class="fa-solid fa-calendar-week"></i></span>
+                <span><strong>Semana</strong><small>Semana ISO @Model.NumeroSemana</small></span>
+            </a>
+            <a class="ppv7-period-tab @(Model.Vista=="mes" ? "active" : "")"
+               href="@Url.Action("Index",new { vista="mes", fechaDesde=FechaParam(Model.FechaReferencia), panel=panelActual })">
+                <span class="ppv7-period-icon"><i class="fa-solid fa-calendar-days"></i></span>
+                <span><strong>Mes</strong><small>@Model.FechaReferencia.ToString("MMM", cultura)</small></span>
+            </a>
+            <button class="ppv7-period-tab @(Model.Vista=="rango" ? "active" : "")"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#ppv7Range">
+                <span class="ppv7-period-icon"><i class="fa-solid fa-calendar"></i></span>
+                <span><strong>Rango</strong><small>Personalizado</small></span>
+            </button>
+        </div>
+
+        <div class="ppv7-period-current">
+            <span>PERIODO MOSTRADO</span>
+            <strong>@TextoPeriodo()</strong>
+            <small>Semana ISO @Model.NumeroSemana · se conserva la vista seleccionada</small>
+        </div>
+
+        <form method="get" class="ppv7-date-go">
+            <input type="hidden" name="vista" value="dia" />
+            <input type="hidden" name="panel" value="@panelActual" />
+            <input type="date" name="fechaDesde" value="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="form-control form-control-sm" />
+            <button class="btn btn-sm btn-primary fw-bold"><i class="fa-solid fa-arrow-right"></i> Ir</button>
+        </form>
+    </section>
+
+    <div class="collapse @(Model.Vista=="rango" ? "show" : "")" id="ppv7Range">
+        <form method="get" class="ppv7-range-form">
+            <input type="hidden" name="vista" value="rango" />
+            <input type="hidden" name="panel" value="@panelActual" />
+            <label>Desde<input type="date" name="fechaDesde" class="form-control form-control-sm" value="@Model.InicioPeriodo.ToString("yyyy-MM-dd")" /></label>
+            <label>Hasta<input type="date" name="fechaHasta" class="form-control form-control-sm" value="@Model.FinPeriodoVisible.ToString("yyyy-MM-dd")" /></label>
+            <button class="btn btn-sm btn-primary fw-bold"><i class="fa-solid fa-filter"></i> Aplicar rango</button>
+        </form>
+    </div>
+
+    <section class="ppv3-filterbar">
+        <div class="ppv3-search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="ppv3Search" type="search" class="form-control" placeholder="Buscar OF, pieza, máquina o persona..." />
+        </div>
+        <select id="ppv3MachineFilter" class="form-select form-select-sm">
+            <option value="">Todas las máquinas</option>
+            @foreach (var m in maquinas)
+            {
+                <option value="@m.MaquinaID">@m.MaquinaCodigo · @m.MaquinaNombre</option>
+            }
+        </select>
+        <select id="ppv3TurnFilter" class="form-select form-select-sm">
+            <option value="">Todos los turnos</option>
+            @foreach (var t in Model.Segmentos.GroupBy(x => new { x.TurnoID, x.TurnoNombre }).Select(x => x.Key).OrderBy(x => x.TurnoID))
+            {
+                <option value="@t.TurnoID">@t.TurnoNombre</option>
+            }
+        </select>
+        <select id="ppv3RoleFilter" class="form-select form-select-sm">
+            <option value="">Todos los roles</option>
+            <option value="OPERADOR">Operador</option>
+            <option value="TECNICO">Técnico</option>
+            <option value="SMED">SMED</option>
+            <option value="AUXILIAR">Auxiliar</option>
+        </select>
+        <select id="ppv3PersonFilter" class="form-select form-select-sm">
+            <option value="">Todas las personas</option>
+            @foreach (var persona in personas.OrderBy(x => x.Value))
+            {
+                <option value="@persona.Key">@persona.Value</option>
+            }
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="ppv3ClearFilters">
+            <i class="fa-solid fa-eraser"></i> Limpiar
+        </button>
+    </section>
+
+    <section class="ppv3-kpis">
+        <button type="button" class="ppv3-kpi" data-kpi="all"><span>TURNOS / OF</span><strong>@Model.TotalSegmentos</strong></button>
+        <button type="button" class="ppv3-kpi danger" data-kpi="red"><span>SIN OPERADOR</span><strong>@Model.TotalSinOperador</strong></button>
+        <button type="button" class="ppv3-kpi warning" data-kpi="yellow"><span>PRODUCIENDO</span><strong>@Model.TotalProduciendo</strong></button>
+        <button type="button" class="ppv3-kpi danger" data-kpi="conflict"><span>CONFLICTOS</span><strong>@Model.TotalConflictos</strong></button>
+        <button type="button" class="ppv3-kpi success" data-kpi="green"><span>PROGRAMADOS</span><strong>@Model.TotalCompletos</strong></button>
+    </section>
+
+    <nav class="ppv3-tabs">
+        <button type="button" class="ppv3-tab @(panelActual=="planner" ? "active" : "")" data-view="planner"><i class="fa-solid fa-table-cells-large"></i> Programación</button>
+        <button type="button" class="ppv3-tab @(panelActual=="support" ? "active" : "")" data-view="support"><i class="fa-solid fa-people-group"></i> Cobertura semanal por turno</button>
+        <button type="button" class="ppv3-tab @(panelActual=="people" ? "active" : "")" data-view="people"><i class="fa-solid fa-users-viewfinder"></i> Vista por persona</button>
+        <button type="button" class="ppv3-tab @(panelActual=="pending" ? "active" : "")" data-view="pending"><i class="fa-solid fa-triangle-exclamation"></i> Pendientes <span class="ppv3-tab-count">@Model.TotalSinOperador</span></button>
+    </nav>
+
+    <section class="ppv3-view @(panelActual=="planner" ? "active" : "")" data-view-panel="planner">
+        <div class="ppv3-view-head ppv75-planner-head">
+            <div>
+                <h2>Programación por OF y turno</h2>
+                <p>Una OF se divide por los turnos que cruza. El horario mostrado es únicamente el tiempo real trabajado dentro de esa OF.</p>
+            </div>
+            <div class="ppv75-planner-actions">
+                @if (Model.Vista == "dia")
+                {
+                    <form asp-action="SugerirDiaV7" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="fecha" value="@Model.FechaReferencia.ToString("yyyy-MM-dd")" />
+                        <input type="hidden" name="panel" value="planner" />
+                        <button class="btn btn-sm btn-outline-primary fw-bold"
+                                @(Model.Configurado ? null : "disabled")
+                                title="Completa únicamente horarios sin operador del día seleccionado">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Sugerir operadores del día
+                        </button>
+                    </form>
+                }
+                <div class="ppv7-semaphore-legend">
+                    <span><i class="ppv7-light rojo"></i> Falta operador</span>
+                    <span><i class="ppv7-light amarillo"></i> Produciendo</span>
+                    <span><i class="ppv7-light verde"></i> Programado</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive ppv3-table-wrap">
+            <table class="ppv3-planner" id="ppv3PlannerTable">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>OF</th>
+                        <th>Pieza</th>
+                        <th>Máquina</th>
+                        <th>Turno</th>
+                        <th class="ppv7-work-head">Horario en OF</th>
+                        <th class="ppv3-operator-head">Operador planeado</th>
+                        <th>Nivel</th>
+                        <th>Hist.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var s in Model.Segmentos)
+                {
+                    var search = ($"{s.OF} {s.MaquinaCodigo} {s.MaquinaNombre} {s.NumeroParte} {s.DescripcionParte} {s.TurnoNombre} {s.OperadorEfectivoNombre}").ToLowerInvariant();
+                    var semaforoClase = $"ppv7-operator-{s.Semaforo.ToLowerInvariant()}";
+
+                    <tr class="ppv3-program-row @(s.TieneConflicto ? "has-conflict" : "")"
+                        data-search="@search"
+                        data-machine-id="@s.MaquinaID"
+                        data-turn-id="@s.TurnoID"
+                        data-person-id="@(s.OperadorEfectivoID?.ToString() ?? "")"
+                        data-status="@s.Semaforo.ToLowerInvariant()"
+                        data-conflict="@(s.TieneConflicto ? "1" : "0")"
+                        data-role="OPERADOR">
+                        <td class="ppv3-time-cell">
+                            <strong>@s.Inicio.ToString("ddd dd/MM", cultura)</strong>
+                            <span>Turno @s.FechaTrabajo.ToString("dd/MM")</span>
+                        </td>
+                        <td>
+                            <strong class="ppv3-of">@s.OF</strong>
+                            @if (s.ProduccionActiva)
+                            {
+                                <span class="ppv3-mini-badge ppv7-producing-badge">EN PRODUCCIÓN</span>
+                            }
+                            else if (!s.TieneAsignacionEspecifica && s.OperadorBaseID.HasValue)
+                            {
+                                <span class="ppv3-mini-badge ppv7-inherited-badge">Heredado de OF</span>
+                            }
+                            else if (s.TieneAsignacionEspecifica)
+                            {
+                                <span class="ppv3-mini-badge ppv7-turn-badge">Por turno</span>
+                            }
+                        </td>
+                        <td class="ppv3-part-cell">
+                            <strong>@(string.IsNullOrWhiteSpace(s.NumeroParte) ? "Sin parte" : s.NumeroParte)</strong>
+                            <span>@s.DescripcionParte</span>
+                        </td>
+                        <td class="ppv3-machine-cell"><strong>@s.MaquinaCodigo</strong><span>@s.MaquinaNombre</span></td>
+                        <td><span class="ppv3-turn-chip">@s.TurnoNombre</span></td>
+                        <td>
+                            <div class="ppv7-work-window" title="OF completa: @s.InicioPrograma.ToString("dd/MM HH:mm") → @s.FinPrograma.ToString("dd/MM HH:mm")">
+                                <strong>@s.Inicio.ToString("HH:mm") — @s.Fin.ToString("HH:mm")</strong>
+                                <span>@((s.Fin - s.Inicio).TotalHours.ToString("0.##")) h en esta OF</span>
+                            </div>
+                        </td>
+                        <td>
+                            <button type="button"
+                                    class="ppv3-assign-cell ppv7-operator-cell @semaforoClase @(s.OperadorEfectivoID.HasValue ? "" : "pending")"
+                                    data-assign
+                                    data-program="@s.ProgramaProduccionID"
+                                    data-turn="@s.TurnoID"
+                                    data-date="@s.FechaTrabajo.ToString("yyyy-MM-dd")"
+                                    data-current="@(s.OperadorEfectivoID?.ToString() ?? "")"
+                                    data-name="@s.OperadorEfectivoNombre"
+                                    data-producing="@(s.ProduccionActiva ? "1" : "0")"
+                                    data-of="@s.OF">
+                                <span class="ppv3-assign-name">
+                                    <i class="ppv7-operator-dot"></i>
+                                    @(s.OperadorEfectivoID.HasValue ? s.OperadorEfectivoNombre : "Asignar operador")
+                                </span>
+                                <span class="ppv3-assign-meta">
+                                    @(s.Semaforo == "ROJO"
+                                        ? "Falta operador · clic para asignar"
+                                        : s.Semaforo == "AMARILLO"
+                                            ? "OF produciendo · cambio queda en historial"
+                                            : s.TieneAsignacionEspecifica
+                                                ? "Programado para este horario"
+                                                : "Programado · heredado de la OF")
+                                </span>
+                            </button>
+                        </td>
+                        <td>
+                            @if (s.NivelOperador.HasValue)
+                            {
+                                <span class="ppv7-level n@(s.NivelOperador.Value)">@($"N{s.NivelOperador.Value}")</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-history data-program="@s.ProgramaProduccionID" data-of="@s.OF" title="Ver historial">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (!Model.Segmentos.Any())
+        {
+            <div class="ppv3-empty-state">No hay OF que crucen el periodo seleccionado.</div>
+        }
+    </section>
+
+    <section class="ppv3-view @(panelActual=="support" ? "active" : "")" data-view-panel="support">
+        <div class="ppv3-view-head">
+            <div>
+                <h2>Cobertura semanal por turno</h2>
+                <p>Semana @Model.NumeroSemana · @Model.SemanaInicio.ToString("dd/MM") — @Model.SemanaInicio.AddDays(6).ToString("dd/MM/yyyy")</p>
+            </div>
+            <div class="ppv3-rule-note"><i class="fa-solid fa-circle-info"></i> SMED acepta personal SMED o Técnico.</div>
+        </div>
+
+        <form asp-action="GuardarCoberturaV7" method="post" id="ppv7SupportForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="SemanaInicio" value="@Model.SemanaInicio.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="Vista" value="@Model.Vista" />
+            <input type="hidden" name="Panel" value="support" />
+            <input type="hidden" name="FechaDesde" value="@Model.InicioPeriodo.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="FechaHasta" value="@(Model.Vista=="rango" ? Model.FinPeriodoVisible.ToString("yyyy-MM-dd") : "")" />
+
+            <div class="table-responsive">
+                <table class="ppv3-support-table">
+                    <thead><tr><th>Turno</th><th>Tipo</th><th data-role-col="TECNICO">Técnico</th><th data-role-col="SMED">SMED</th><th data-role-col="AUXILIAR">Auxiliar</th></tr></thead>
+                    <tbody>
+                    @for (var i = 0; i < Model.TurnosApoyo.Count; i++)
+                    {
+                        var t = Model.TurnosApoyo[i];
+                        var es12 = (t.Nombre ?? "").Contains("12", StringComparison.OrdinalIgnoreCase) || (t.TipoTurno ?? "").Contains("12", StringComparison.OrdinalIgnoreCase);
+                        <tr class="ppv3-support-row" data-turn-id="@t.TurnoID">
+                            <td>
+                                <input type="hidden" name="Coberturas[@i].TurnoID" value="@t.TurnoID" />
+                                <div class="ppv3-support-turn"><i class="ppv3-turn-dot" style="--turn-color:@t.Color"></i><div><strong>@t.Nombre</strong><span>@t.HorarioTexto</span></div></div>
+                            </td>
+                            <td><span class="ppv3-type-chip @(es12 ? "x12" : "regular")">@(es12 ? "12x12" : "Regular")</span></td>
+                            <td data-role-cell="TECNICO">
+                                <select class="d-none ppv3-support-hidden" name="Coberturas[@i].TecnicoProduccionID" data-turno-id="@t.TurnoID" data-role="TECNICO">
+                                    <option value="">Sin asignar</option>
+                                    @foreach (var p in Model.Tecnicos) { <option value="@p.PersonaID" selected="@(t.TecnicoProduccionID == p.PersonaID ? "selected" : null)">@p.Nombre</option> }
+                                </select>
+                                <button type="button" class="ppv3-support-cell @(t.TecnicoProduccionID.HasValue ? "assigned" : "unassigned")" data-support-open data-turno-id="@t.TurnoID" data-role="TECNICO">
+                                    <span>@NombrePersona(Model.Tecnicos, t.TecnicoProduccionID)</span><small class="ppv3-support-status">@(t.TecnicoProduccionID.HasValue ? "Asignado como Técnico · clic para modificar" : "Sin técnico · clic para modificar")</small>
+                                </button>
+                            </td>
+                            <td data-role-cell="SMED">
+                                <select class="d-none ppv3-support-hidden" name="Coberturas[@i].SmedID" data-turno-id="@t.TurnoID" data-role="SMED">
+                                    <option value="">Sin asignar</option>
+                                    @foreach (var p in Model.SmedYTecnicos) { <option value="@p.PersonaID" selected="@(t.SmedID == p.PersonaID ? "selected" : null)">@p.Nombre</option> }
+                                </select>
+                                <button type="button" class="ppv3-support-cell @(t.SmedID.HasValue ? "assigned" : "unassigned")" data-support-open data-turno-id="@t.TurnoID" data-role="SMED">
+                                    <span>@NombrePersona(Model.SmedYTecnicos, t.SmedID)</span><small class="ppv3-support-status">@(t.SmedID.HasValue ? "Asignado · SMED o Técnico · clic para modificar" : "Sin SMED · SMED o Técnico · clic para modificar")</small>
+                                </button>
+                            </td>
+                            <td data-role-cell="AUXILIAR">
+                                <select class="d-none ppv3-support-hidden" name="Coberturas[@i].AuxiliarID" data-turno-id="@t.TurnoID" data-role="AUXILIAR">
+                                    <option value="">Sin asignar</option>
+                                    @foreach (var p in Model.Auxiliares) { <option value="@p.PersonaID" selected="@(t.AuxiliarID == p.PersonaID ? "selected" : null)">@p.Nombre</option> }
+                                </select>
+                                <button type="button" class="ppv3-support-cell @(t.AuxiliarID.HasValue ? "assigned" : "unassigned")" data-support-open data-turno-id="@t.TurnoID" data-role="AUXILIAR">
+                                    <span>@NombrePersona(Model.Auxiliares, t.AuxiliarID)</span><small class="ppv3-support-status">@(t.AuxiliarID.HasValue ? "Asignado como Auxiliar · clic para modificar" : "Sin auxiliar · clic para modificar")</small>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            <div class="ppv3-savebar ppv7-support-savebar">
+                <div><strong>Semana @Model.NumeroSemana · @Model.SemanaInicio.ToString("dd/MM") — @Model.SemanaInicio.AddDays(6).ToString("dd/MM/yyyy")</strong><span>Técnico, SMED y Auxiliar cubren semanalmente el turno seleccionado.</span></div>
+                <button class="btn btn-primary fw-bold"><i class="fa-solid fa-floppy-disk"></i> Guardar cobertura semanal</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="ppv3-view @(panelActual=="people" ? "active" : "")" data-view-panel="people">
+        <div class="ppv3-view-head">
+            <div>
+                <h2>Calendario de personal</h2>
+                <p>Todos los operadores oficiales permanecen visibles, tengan o no programación. Usa el buscador superior para localizar a una persona al instante.</p>
+            </div>
+            <div class="ppv7-people-summary">
+                <strong>@Model.Operadores.Count operadores</strong>
+                <span>@Model.Operadores.Count(op => !Model.Segmentos.Any(s => s.OperadorEfectivoID == op.PersonaID)) sin programación</span>
+            </div>
+        </div>
+
+        @if (Model.Vista == "dia")
+        {
+            var diaTimeline = Model.InicioPeriodo.Date;
+            <div class="ppv75-timeline-help">
+                <i class="fa-solid fa-circle-info"></i>
+                Vista horaria del día. Los bloques muestran exactamente el intervalo trabajado dentro de la OF; haz clic para ver el detalle.
+            </div>
+            <div class="ppv75-person-timeline-scroll">
+                <div class="ppv75-person-timeline">
+                    <div class="ppv75-time-corner">PERSONA / CARGA</div>
+                    <div class="ppv75-time-ruler">
+                        @for (var h = 0; h <= 24; h += 2)
+                        {
+                            var pct = h / 24.0 * 100.0;
+                            <span style="left:@pct.ToString("0.####", CultureInfo.InvariantCulture)%">@h.ToString("00"):00</span>
+                        }
+                    </div>
+
+                    @foreach (var op in Model.Operadores.OrderBy(x => x.Nombre))
+                    {
+                        var trabajosPersona = Model.Segmentos
+                            .Where(x => x.OperadorEfectivoID == op.PersonaID)
+                            .OrderBy(x => x.Inicio)
+                            .ToList();
+                        var horasPersona = trabajosPersona.Sum(x => (x.Fin - x.Inicio).TotalHours);
+                        var sinProgramacion = trabajosPersona.Count == 0;
+                        var machineList = string.Join(",", trabajosPersona.Select(x => x.MaquinaID).Distinct());
+                        var turnList = string.Join(",", trabajosPersona.Select(x => x.TurnoID).Distinct());
+
+                        <div class="ppv75-time-person @(sinProgramacion ? "empty" : "")"
+                             data-person-calendar="@op.PersonaID"
+                             data-person-search="@($"{op.Nombre} {op.NumeroControl}".ToLowerInvariant())"
+                             data-machine-list="@machineList"
+                             data-turn-list="@turnList">
+                            <strong>@op.Nombre</strong>
+                            <span>@op.NumeroControl · @horasPersona.ToString("0.##") h</span>
+                            <small class="@(sinProgramacion ? "empty" : trabajosPersona.Any(x => x.TieneConflicto) ? "conflict" : "ok")">
+                                @(sinProgramacion ? "SIN PROGRAMACIÓN" : trabajosPersona.Any(x => x.TieneConflicto) ? "REVISAR CRUCE" : "PROGRAMADO")
+                            </small>
+                        </div>
+
+                        <div class="ppv75-time-track"
+                             data-person-cell="@op.PersonaID"
+                             data-person-search="@($"{op.Nombre} {op.NumeroControl}".ToLowerInvariant())"
+                             data-machine-list="@machineList"
+                             data-turn-list="@turnList">
+                            @for (var h = 0; h <= 24; h += 2)
+                            {
+                                var pct = h / 24.0 * 100.0;
+                                <i class="ppv75-hour-line" style="left:@pct.ToString("0.####", CultureInfo.InvariantCulture)%"></i>
+                            }
+
+                            @if (!trabajosPersona.Any())
+                            {
+                                <span class="ppv75-timeline-free">Sin programación para este día</span>
+                            }
+                            else
+                            {
+                                @foreach (var s in trabajosPersona)
+                                {
+                                    var inicioClip = s.Inicio < diaTimeline ? diaTimeline : s.Inicio;
+                                    var finClip = s.Fin > diaTimeline.AddDays(1) ? diaTimeline.AddDays(1) : s.Fin;
+                                    var inicioMin = Math.Max(0, (inicioClip - diaTimeline).TotalMinutes);
+                                    var finMin = Math.Min(1440, (finClip - diaTimeline).TotalMinutes);
+                                    var left = inicioMin / 1440.0 * 100.0;
+                                    var width = Math.Max(0.7, (finMin - inicioMin) / 1440.0 * 100.0);
+
+                                    <button type="button"
+                                            class="ppv75-time-job @s.Semaforo.ToLowerInvariant() @(s.TieneConflicto ? "conflict" : "")"
+                                            style="left:@left.ToString("0.####", CultureInfo.InvariantCulture)%;width:@width.ToString("0.####", CultureInfo.InvariantCulture)%"
+                                            data-person-job
+                                            data-person="@op.Nombre"
+                                            data-control="@op.NumeroControl"
+                                            data-of="@s.OF"
+                                            data-machine="@s.MaquinaCodigo"
+                                            data-machine-name="@s.MaquinaNombre"
+                                            data-part="@s.NumeroParte"
+                                            data-part-desc="@s.DescripcionParte"
+                                            data-turn="@s.TurnoNombre"
+                                            data-start="@s.Inicio.ToString("O")"
+                                            data-end="@s.Fin.ToString("O")"
+                                            data-program-start="@s.InicioPrograma.ToString("O")"
+                                            data-program-end="@s.FinPrograma.ToString("O")"
+                                            data-status="@s.Semaforo"
+                                            data-conflict="@(s.TieneConflicto ? "1" : "0")"
+                                            data-calendar-date="@s.Inicio.ToString("yyyy-MM-dd")"
+                                            title="@s.OF · @s.Inicio.ToString("HH:mm")–@s.Fin.ToString("HH:mm")">
+                                        <strong>@s.OF</strong>
+                                        <span>@s.Inicio.ToString("HH:mm")–@s.Fin.ToString("HH:mm")</span>
+                                    </button>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ppv75-calendar-hint">
+                <i class="fa-solid fa-clock"></i> Para revisar horas exactas en una línea de tiempo, abre el periodo <strong>Día</strong>. En Semana/Mes/Rango se mantiene la matriz por fechas.
+            </div>
+            <div class="ppv7-calendar-scroll">
+                <div class="ppv7-person-calendar" style="--ppv7-days:@diasCalendario.Count">
+                    <div class="ppv7-calendar-corner">PERSONA / CARGA</div>
+                    @foreach (var dia in diasCalendario)
+                    {
+                        <button type="button" class="ppv7-calendar-day-head @(dia.Date == DateTime.Today ? "today" : "")" data-calendar-day="@dia.ToString("yyyy-MM-dd")">
+                            <span>@dia.ToString("ddd", cultura)</span>
+                            <strong>@dia.ToString("dd/MM")</strong>
+                        </button>
+                    }
+
+                    @foreach (var op in Model.Operadores.OrderBy(x => x.Nombre))
+                    {
+                        var trabajosPersona = Model.Segmentos.Where(x => x.OperadorEfectivoID == op.PersonaID).OrderBy(x => x.Inicio).ToList();
+                        var horasPersona = trabajosPersona.Sum(x => (x.Fin - x.Inicio).TotalHours);
+                        var sinProgramacion = trabajosPersona.Count == 0;
+                        var machineList = string.Join(",", trabajosPersona.Select(x => x.MaquinaID).Distinct());
+                        var turnList = string.Join(",", trabajosPersona.Select(x => x.TurnoID).Distinct());
+
+                        <div class="ppv7-calendar-person @(sinProgramacion ? "empty" : "")"
+                             data-person-calendar="@op.PersonaID"
+                             data-person-search="@($"{op.Nombre} {op.NumeroControl}".ToLowerInvariant())"
+                             data-machine-list="@machineList"
+                             data-turn-list="@turnList">
+                            <strong>@op.Nombre</strong>
+                            <span>@op.NumeroControl · @horasPersona.ToString("0.##") h</span>
+                            <small class="@(sinProgramacion ? "empty" : trabajosPersona.Any(x => x.TieneConflicto) ? "conflict" : "ok")">
+                                @(sinProgramacion ? "SIN PROGRAMACIÓN" : trabajosPersona.Any(x => x.TieneConflicto) ? "REVISAR CRUCE" : "PROGRAMADO")
+                            </small>
+                        </div>
+
+                        @foreach (var dia in diasCalendario)
+                        {
+                            var finDia = dia.AddDays(1);
+                            var trabajosDia = trabajosPersona.Where(x => x.Inicio < finDia && x.Fin > dia).OrderBy(x => x.Inicio).ToList();
+                            <div class="ppv7-calendar-cell @(dia.Date == DateTime.Today ? "today" : "")"
+                                 data-person-cell="@op.PersonaID"
+                                 data-person-search="@($"{op.Nombre} {op.NumeroControl}".ToLowerInvariant())"
+                                 data-machine-list="@machineList"
+                                 data-turn-list="@turnList">
+                                @if (!trabajosDia.Any())
+                                {
+                                    <span class="ppv7-calendar-free">Sin programación</span>
+                                }
+                                else
+                                {
+                                    @foreach (var s in trabajosDia)
+                                    {
+                                        var inicioDia = s.Inicio > dia ? s.Inicio : dia;
+                                        var finEfectivo = s.Fin < finDia ? s.Fin : finDia;
+                                        <button type="button"
+                                                class="ppv7-calendar-job @s.Semaforo.ToLowerInvariant() @(s.TieneConflicto ? "conflict" : "")"
+                                                data-person-job
+                                                data-person="@op.Nombre"
+                                                data-control="@op.NumeroControl"
+                                                data-of="@s.OF"
+                                                data-machine="@s.MaquinaCodigo"
+                                                data-machine-name="@s.MaquinaNombre"
+                                                data-part="@s.NumeroParte"
+                                                data-part-desc="@s.DescripcionParte"
+                                                data-turn="@s.TurnoNombre"
+                                                data-start="@s.Inicio.ToString("O")"
+                                                data-end="@s.Fin.ToString("O")"
+                                                data-program-start="@s.InicioPrograma.ToString("O")"
+                                                data-program-end="@s.FinPrograma.ToString("O")"
+                                                data-status="@s.Semaforo"
+                                                data-conflict="@(s.TieneConflicto ? "1" : "0")"
+                                                data-calendar-date="@dia.ToString("yyyy-MM-dd")"
+                                                title="Ver detalle">
+                                            <span>@inicioDia.ToString("HH:mm")–@finEfectivo.ToString("HH:mm")</span>
+                                            <strong>@s.OF</strong>
+                                            <small>@s.MaquinaCodigo · @s.NumeroParte</small>
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </section>
+
+    <section class="ppv3-view @(panelActual=="pending" ? "active" : "")" data-view-panel="pending">
+        <div class="ppv3-view-head"><div><h2>Pendientes de cobertura</h2><p>Turnos efectivos de OF que todavía no tienen operador.</p></div></div>
+        <div class="table-responsive">
+            <table class="ppv3-pending-table">
+                <thead><tr><th>Prioridad</th><th>OF</th><th>Horario en OF</th><th>Máquina</th><th>Pieza</th><th>Turno</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var s in Model.Segmentos.Where(x => !x.OperadorEfectivoID.HasValue).OrderBy(x => x.Inicio))
+                {
+                    <tr>
+                        <td><span class="ppv3-priority high">ALTA</span></td><td><strong>@s.OF</strong></td>
+                        <td>@s.Inicio.ToString("dd/MM HH:mm") — @s.Fin.ToString("dd/MM HH:mm")</td>
+                        <td>@s.MaquinaCodigo</td><td>@s.NumeroParte</td><td>@s.TurnoNombre</td>
+                        <td><button type="button" class="btn btn-sm btn-danger" data-assign data-program="@s.ProgramaProduccionID" data-turn="@s.TurnoID" data-date="@s.FechaTrabajo.ToString("yyyy-MM-dd")" data-current="" data-name="Sin asignar" data-producing="@(s.ProduccionActiva ? "1" : "0")" data-of="@s.OF">Asignar</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<div class="offcanvas offcanvas-end ppv3-availability" tabindex="-1" id="ppv3Availability">
+    <div class="offcanvas-header">
+        <div><div class="ppv3-eyebrow">PERSONAL DISPONIBLE</div><h5 class="offcanvas-title mb-0" id="ppv3DrawerTitle">Asignar operador</h5></div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="ppv3-drawer-summary" id="ppv3DrawerSummary"></div>
+        <div class="ppv3-candidate-search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" id="ppv3CandidateSearch" class="form-control" autocomplete="off" placeholder="Buscar operador por nombre o No. control..." />
+            <button type="button" id="ppv3CandidateSearchClear" class="ppv3-candidate-search-clear" title="Limpiar búsqueda"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="ppv3-candidate-search-meta"><span id="ppv3CandidateSearchCount"></span><span>Polivalencia, escala, carga y disponibilidad.</span></div>
+        <div id="ppv3CandidateNoResults" class="ppv3-candidate-no-results d-none"><i class="fa-solid fa-user-slash"></i> No hay operadores que coincidan con la búsqueda.</div>
+        <div class="ppv3-candidate-list" id="ppv3CandidateList"></div>
+        <div class="ppv75-drawer-note">
+            <i class="fa-solid fa-circle-info"></i> Selecciona una persona o <strong>Dejar sin operador</strong>. Antes de guardar verás un resumen del cambio.
+        </div>
+        <form asp-action="GuardarTurnoV7" method="post" id="ppv3AssignForm" class="d-none">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ProgramaProduccionID" id="ppv3Program" />
+            <input type="hidden" name="TurnoID" id="ppv3Turno" />
+            <input type="hidden" name="FechaTrabajo" id="ppv3Fecha" />
+            <input type="hidden" name="OperadorID" id="ppv3Operator" />
+            <input type="hidden" name="Motivo" id="ppv3Motivo" />
+            <input type="hidden" name="Justificacion" id="ppv3Just" />
+            <input type="hidden" name="Vista" value="@Model.Vista" />
+            <input type="hidden" name="Panel" value="@panelActual" />
+            <input type="hidden" name="FechaDesde" value="@Model.InicioPeriodo.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="FechaHasta" value="@(Model.Vista=="rango" ? Model.FinPeriodoVisible.ToString("yyyy-MM-dd") : "")" />
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="ppv75ConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div><div class="ppv3-eyebrow">CONFIRMAR CAMBIO</div><h5 class="modal-title mb-0">Asignación de operador</h5></div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="ppv75-confirm-route">
+                    <div><span>ACTUAL</span><strong id="ppv75ConfirmOld">Sin asignar</strong></div>
+                    <i class="fa-solid fa-arrow-right"></i>
+                    <div><span>NUEVO</span><strong id="ppv75ConfirmNew">Sin asignar</strong></div>
+                </div>
+                <div class="ppv75-confirm-context" id="ppv75ConfirmContext"></div>
+                <div class="alert alert-warning d-none mt-2 mb-2" id="ppv75ConflictWarning">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    Esta persona ya tiene otra OF que cruza con el horario. <strong>Se permite continuar</strong>, pero quedará marcado como conflicto para revisión.
+                </div>
+                <div class="alert alert-warning d-none mt-2 mb-2" id="ppv75ProductionWarning">
+                    La OF ya está produciendo. El cambio quedará registrado en historial y requiere justificación.
+                </div>
+                <div class="mt-2">
+                    <label class="form-label fw-bold">Motivo</label>
+                    <input id="ppv75ConfirmReason" class="form-control form-control-sm" maxlength="150" />
+                </div>
+                <div class="mt-2">
+                    <label class="form-label fw-bold">Justificación</label>
+                    <textarea id="ppv75ConfirmJust" class="form-control form-control-sm" rows="2" maxlength="500"></textarea>
+                    <div class="form-text">Obligatoria cuando la OF está produciendo. Para cruces es recomendable documentar por qué el operador atenderá ambas máquinas.</div>
+                </div>
+                <div class="alert alert-danger d-none mt-2 mb-0" id="ppv75ConfirmError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary fw-bold" id="ppv75ConfirmSave">
+                    <i class="fa-solid fa-floppy-disk"></i> Confirmar y guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="ppv75PersonJobModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div><div class="ppv3-eyebrow">CALENDARIO DE PERSONAL</div><h5 class="modal-title mb-0" id="ppv75JobTitle">Detalle de asignación</h5></div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="ppv75-job-person" id="ppv75JobPerson"></div>
+                <div class="ppv75-job-grid">
+                    <div><span>OF</span><strong id="ppv75JobOf"></strong></div>
+                    <div><span>Máquina</span><strong id="ppv75JobMachine"></strong></div>
+                    <div><span>Pieza</span><strong id="ppv75JobPart"></strong></div>
+                    <div><span>Turno</span><strong id="ppv75JobTurn"></strong></div>
+                    <div><span>Horario del operador en OF</span><strong id="ppv75JobSchedule"></strong></div>
+                    <div><span>Horario completo de OF</span><strong id="ppv75JobProgramSchedule"></strong></div>
+                </div>
+                <div id="ppv75JobAlert" class="alert alert-warning d-none mt-2 mb-0"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <a class="btn btn-primary fw-bold" id="ppv75OpenMachineCalendar" href="#">
+                    <i class="fa-solid fa-calendar-days"></i> Abrir Calendario de Producción
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="ppv3SupportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><div><div class="ppv3-eyebrow">COBERTURA SEMANAL</div><h5 class="modal-title mb-0" id="ppv3SupportTitle">Asignar responsable</h5></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><label class="form-label fw-bold">Personal</label><select id="ppv3SupportSelect" class="form-select"></select><div class="form-text" id="ppv3SupportHelp"></div></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary fw-bold" id="ppv3SupportApply">Aplicar</button></div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="ppv3HistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="ppv3HistoryTitle">Historial</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body" id="ppv3HistoryBody"></div>
+    </div></div>
+</div>
+
+@section Scripts {
+<script>
+(() => {
+    const root = document.getElementById('ppv3Root');
+    if (!root) return;
+    const $ = (s, ctx = document) => ctx.querySelector(s);
+    const $$ = (s, ctx = document) => Array.from(ctx.querySelectorAll(s));
+    const normalize = v => (v || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const initialPanel = '@panelActual';
+    let currentPanel = initialPanel;
+
+    const search = $('#ppv3Search');
+    const machine = $('#ppv3MachineFilter');
+    const turn = $('#ppv3TurnFilter');
+    const role = $('#ppv3RoleFilter');
+    const person = $('#ppv3PersonFilter');
+    let activeKpi = 'all';
+
+    function listContains(list, value) {
+        if (!value) return true;
+        return (list || '').split(',').map(x => x.trim()).includes(value);
+    }
+
+    function applyFilters() {
+        const q = normalize(search?.value);
+        const m = machine?.value || '';
+        const t = turn?.value || '';
+        const p = person?.value || '';
+
+        $$('.ppv3-program-row').forEach(row => {
+            let ok = (!q || normalize(row.dataset.search).includes(q)) &&
+                     (!m || row.dataset.machineId === m) &&
+                     (!t || row.dataset.turnId === t) &&
+                     (!p || row.dataset.personId === p);
+            if (activeKpi === 'red') ok = ok && row.dataset.status === 'rojo';
+            else if (activeKpi === 'yellow') ok = ok && row.dataset.status === 'amarillo';
+            else if (activeKpi === 'green') ok = ok && row.dataset.status === 'verde';
+            else if (activeKpi === 'conflict') ok = ok && row.dataset.conflict === '1';
+            row.style.display = ok ? '' : 'none';
+        });
+
+        const allPersonIds = new Set($$('[data-person-calendar]').map(x => x.dataset.personCalendar));
+        allPersonIds.forEach(id => {
+            const label = $(`[data-person-calendar="${id}"]`);
+            if (!label) return;
+            const personSearch = normalize(label.dataset.personSearch);
+            const matches = (!q || personSearch.includes(q)) &&
+                            (!p || id === p) &&
+                            (!m || listContains(label.dataset.machineList, m)) &&
+                            (!t || listContains(label.dataset.turnList, t));
+            label.style.display = matches ? '' : 'none';
+            $$(`[data-person-cell="${id}"]`).forEach(cell => cell.style.display = matches ? '' : 'none');
+        });
+    }
+
+    [search, machine, turn, person].forEach(el => el?.addEventListener('input', applyFilters));
+    $('#ppv3ClearFilters')?.addEventListener('click', () => {
+        [search, machine, turn, role, person].forEach(el => { if (el) el.value = ''; });
+        activeKpi = 'all'; root.dataset.roleFilter = ''; showView('planner'); applyFilters();
+    });
+    $$('.ppv3-kpi').forEach(button => button.addEventListener('click', () => {
+        activeKpi = button.dataset.kpi || 'all'; showView('planner'); applyFilters();
+    }));
+
+    const tabs = $$('.ppv3-tab');
+    function showView(name, updateUrl = true) {
+        currentPanel = name;
+        tabs.forEach(x => x.classList.toggle('active', x.dataset.view === name));
+        $$('[data-view-panel]').forEach(x => x.classList.toggle('active', x.dataset.viewPanel === name));
+
+        // Los href se renderizan inicialmente en servidor. Si el usuario cambia
+        // de pestaña sin recargar, hay que actualizar tambien esos enlaces.
+        $$('.ppv7-period-tab[href], .ppv3-week-nav a[href]').forEach(link => {
+            const u = new URL(link.href, window.location.origin);
+            u.searchParams.set('panel', name);
+            link.href = u.toString();
+        });
+
+        $$('input[name="panel"], input[name="Panel"]').forEach(input => {
+            input.value = name;
+        });
+
+        if (updateUrl) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('panel', name);
+            history.replaceState({}, '', url);
+        }
+    }
+    tabs.forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+    role?.addEventListener('change', () => {
+        root.dataset.roleFilter = role.value || '';
+        showView(['TECNICO','SMED','AUXILIAR'].includes(role.value) ? 'support' : 'planner');
+    });
+    showView(initialPanel, false);
+
+    // ------------------------------------------------------------
+    // Asignación de operador
+    // ------------------------------------------------------------
+    const drawerEl = $('#ppv3Availability');
+    const drawer = bootstrap.Offcanvas.getOrCreateInstance(drawerEl);
+    const candidateList = $('#ppv3CandidateList');
+    const candidateSearch = $('#ppv3CandidateSearch');
+    const candidateSearchClear = $('#ppv3CandidateSearchClear');
+    const candidateSearchCount = $('#ppv3CandidateSearchCount');
+    const candidateNoResults = $('#ppv3CandidateNoResults');
+    const confirmModal = bootstrap.Modal.getOrCreateInstance($('#ppv75ConfirmModal'));
+    let assignmentContext = null;
+    let pendingSelection = null;
+
+    function filterCandidateCards() {
+        const q = normalize(candidateSearch?.value);
+        const cards = $$('.ppv3-candidate', candidateList);
+        let visible = 0;
+        cards.forEach(card => {
+            const show = !q || normalize(card.dataset.candidateSearch || card.textContent).includes(q);
+            card.classList.toggle('d-none', !show);
+            if (show) visible++;
+        });
+        if (candidateSearchCount) candidateSearchCount.textContent = `${visible} de ${cards.length} operador(es)`;
+        candidateNoResults?.classList.toggle('d-none', !(cards.length > 0 && visible === 0));
+    }
+    candidateSearch?.addEventListener('input', filterCandidateCards);
+    candidateSearchClear?.addEventListener('click', () => {
+        if (!candidateSearch) return; candidateSearch.value = ''; filterCandidateCards(); candidateSearch.focus();
+    });
+    drawerEl?.addEventListener('shown.bs.offcanvas', () => candidateSearch?.focus());
+    function levelClass(n) { return n >= 4 ? 'n4' : n === 3 ? 'n3' : n === 2 ? 'n2' : n === 1 ? 'n1' : 'none'; }
+
+    function fmtHour(value) {
+        const d = new Date(value);
+        return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    }
+
+    function prepareConfirmation(selection) {
+        pendingSelection = selection;
+        $('#ppv75ConfirmOld').textContent = assignmentContext?.currentName || 'Sin asignar';
+        $('#ppv75ConfirmNew').textContent = selection.name || 'Sin asignar';
+        $('#ppv75ConfirmContext').innerHTML = `<strong>${assignmentContext.of}</strong> · ${assignmentContext.turno}<br>${fmtHour(assignmentContext.inicio)} — ${fmtHour(assignmentContext.fin)}`;
+        $('#ppv75ConflictWarning').classList.toggle('d-none', !selection.conflict);
+        $('#ppv75ProductionWarning').classList.toggle('d-none', !assignmentContext.producing);
+        $('#ppv75ConfirmReason').value = selection.conflict ? 'PROGRAMACIÓN CON CRUCE' : assignmentContext.producing ? 'CAMBIO DURANTE PRODUCCIÓN' : selection.id ? 'PROGRAMACIÓN' : 'SIN OPERADOR';
+        $('#ppv75ConfirmJust').value = '';
+        $('#ppv75ConfirmError').classList.add('d-none');
+        confirmModal.show();
+    }
+
+    $('#ppv75ConfirmSave')?.addEventListener('click', () => {
+        if (!assignmentContext || !pendingSelection) return;
+        const reason = $('#ppv75ConfirmReason').value.trim();
+        const just = $('#ppv75ConfirmJust').value.trim();
+        const error = $('#ppv75ConfirmError');
+        if (assignmentContext.producing && (!pendingSelection.id || reason.length < 3 || just.length < 5)) {
+            error.textContent = !pendingSelection.id
+                ? 'Una OF en producción no puede quedar sin operador.'
+                : 'Motivo y justificación son obligatorios cuando la OF ya está produciendo.';
+            error.classList.remove('d-none');
+            return;
+        }
+        $('#ppv3Operator').value = pendingSelection.id || '';
+        $('#ppv3Motivo').value = reason || (pendingSelection.conflict ? 'PROGRAMACIÓN CON CRUCE' : 'PROGRAMACIÓN');
+        $('#ppv3Just').value = just;
+        $('#ppv3AssignForm').requestSubmit();
+    });
+
+    async function openAssign(button) {
+        const program = button.dataset.program, turno = button.dataset.turn, date = button.dataset.date;
+        const producing = button.dataset.producing === '1', current = button.dataset.current || '';
+        assignmentContext = { program, turnoId:turno, date, producing, current, currentName:button.dataset.name || 'Sin asignar', of:button.dataset.of, inicio:null, fin:null, turno:'' };
+        $('#ppv3Program').value = program; $('#ppv3Turno').value = turno; $('#ppv3Fecha').value = date; $('#ppv3Operator').value = current;
+        $('#ppv3DrawerTitle').textContent = `${button.dataset.of} · ${button.dataset.name || 'Sin asignar'}`;
+        if (candidateSearch) candidateSearch.value = '';
+        candidateList.innerHTML = '<div class="text-muted py-3"><i class="fa-solid fa-spinner fa-spin me-2"></i>Cargando candidatos...</div>';
+        drawer.show();
+        try {
+            const url = `@Url.Action("CandidatosV7","ProduccionPersonal")?programaProduccionId=${encodeURIComponent(program)}&turnoId=${encodeURIComponent(turno)}&fechaTrabajo=${encodeURIComponent(date)}`;
+            const response = await fetch(url), data = await response.json();
+            if (!data.ok) throw new Error(data.mensaje || 'No fue posible consultar candidatos.');
+            assignmentContext.turno = data.turno; assignmentContext.inicio = data.inicio; assignmentContext.fin = data.fin;
+            $('#ppv3DrawerSummary').innerHTML = `<div><span>OF</span><strong>${data.of}</strong></div><div><span>Turno</span><strong>${data.turno}</strong></div><div><span>Horario en OF</span><strong>${fmtHour(data.inicio)} — ${fmtHour(data.fin)}</strong></div>`;
+            candidateList.innerHTML = '';
+
+            const clear = document.createElement('button');
+            clear.type = 'button';
+            clear.className = `ppv3-clear-assignment w-100 text-start mb-1 ${producing ? 'disabled' : ''}`;
+            clear.innerHTML = producing
+                ? '<strong>Dejar sin operador</strong><small class="d-block text-muted">No disponible mientras la OF está produciendo.</small>'
+                : '<strong>Dejar sin operador</strong><small class="d-block text-muted">Marcar este horario como pendiente de cobertura.</small>';
+            clear.disabled = producing;
+            if (!producing) clear.addEventListener('click', () => prepareConfirmation({ id:null, name:'Sin asignar', conflict:false }));
+            candidateList.appendChild(clear);
+
+            data.candidatos.forEach(c => {
+                const card = document.createElement('button'); card.type = 'button';
+                const isCurrent = String(c.personaID) === String(current);
+                card.className = `ppv3-candidate ${c.conflicto ? 'busy' : 'available'} ${isCurrent ? 'current' : ''}`;
+                card.dataset.candidateSearch = [c.nombre||'',c.numeroControl||'',c.nivel?`N${c.nivel}`:'',c.enEscala?'en escala':'fuera de escala'].join(' ');
+                card.innerHTML = `<div class="ppv3-candidate-main"><div class="ppv3-candidate-name"><span class="ppv3-level-badge ${levelClass(c.nivel)}">${c.nivel?'N'+c.nivel:'—'}</span><div><strong>${c.nombre || 'Persona sin nombre'}</strong><small>${c.numeroControl||''} · ${c.enEscala?'En escala':'Fuera de escala'}</small></div></div><div class="ppv3-candidate-load"><span>CARGA</span><strong>${Number(c.horasSemana||0).toFixed(1)} h</strong></div></div><div class="ppv3-availability-state ${c.conflicto?'busy':'ok'}"><i class="fa-solid ${c.conflicto?'fa-triangle-exclamation':'fa-circle-check'}"></i> ${c.conflicto?'Cruza con otra OF · permitido con advertencia':'Disponible durante todo el intervalo'}</div><div class="ppv7-candidate-action">${isCurrent?'Asignado actualmente':c.conflicto?'Asignar con aviso':'Asignar a este horario'}</div>`;
+                card.addEventListener('click', () => prepareConfirmation({ id:c.personaID, name:c.nombre, conflict:!!c.conflicto }));
+                candidateList.appendChild(card);
+            });
+            if (!data.candidatos.length) candidateList.innerHTML += '<div class="alert alert-warning mt-2">No hay candidatos con polivalencia válida para esta pieza.</div>';
+            filterCandidateCards();
+        } catch (e) { candidateList.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+    }
+    $$('[data-assign]').forEach(button => button.addEventListener('click', () => openAssign(button)));
+
+    // ------------------------------------------------------------
+    // Detalle del calendario de personal
+    // ------------------------------------------------------------
+    const jobModal = bootstrap.Modal.getOrCreateInstance($('#ppv75PersonJobModal'));
+    $$('[data-person-job]').forEach(button => button.addEventListener('click', () => {
+        const d = button.dataset;
+        $('#ppv75JobTitle').textContent = `${d.of} · ${d.person}`;
+        $('#ppv75JobPerson').innerHTML = `<strong>${d.person}</strong><span>${d.control || ''}</span>`;
+        $('#ppv75JobOf').textContent = d.of || '—';
+        $('#ppv75JobMachine').textContent = `${d.machine || '—'}${d.machineName ? ' · ' + d.machineName : ''}`;
+        $('#ppv75JobPart').textContent = `${d.part || '—'}${d.partDesc ? ' · ' + d.partDesc : ''}`;
+        $('#ppv75JobTurn').textContent = d.turn || '—';
+        $('#ppv75JobSchedule').textContent = `${new Date(d.start).toLocaleString()} — ${new Date(d.end).toLocaleString()}`;
+        $('#ppv75JobProgramSchedule').textContent = `${new Date(d.programStart).toLocaleString()} — ${new Date(d.programEnd).toLocaleString()}`;
+        const alert = $('#ppv75JobAlert');
+        alert.classList.toggle('d-none', d.conflict !== '1' && d.status !== 'AMARILLO');
+        alert.textContent = d.conflict === '1' ? 'Este operador presenta cruce con otra OF en el mismo intervalo.' : d.status === 'AMARILLO' ? 'Esta OF se encuentra actualmente en producción.' : '';
+        $('#ppv75OpenMachineCalendar').href = `/Produccion/Calendario?vista=dia&fecha=${encodeURIComponent(d.calendarDate)}`;
+        jobModal.show();
+    }));
+    $$('[data-calendar-day]').forEach(button => button.addEventListener('click', () => {
+        window.location.href = `/Produccion/Calendario?vista=dia&fecha=${encodeURIComponent(button.dataset.calendarDay)}`;
+    }));
+
+    // ------------------------------------------------------------
+    // Cobertura semanal
+    // ------------------------------------------------------------
+    const supportModal = bootstrap.Modal.getOrCreateInstance($('#ppv3SupportModal'));
+    const supportSelect = $('#ppv3SupportSelect'); let supportContext = null;
+    function supportLabel(r) { return r === 'TECNICO' ? 'Técnico' : r === 'SMED' ? 'SMED' : 'Auxiliar'; }
+    $$('[data-support-open]').forEach(button => button.addEventListener('click', () => {
+        const turnoId = button.dataset.turnoId, roleName = button.dataset.role;
+        const hidden = $(`.ppv3-support-hidden[data-turno-id="${turnoId}"][data-role="${roleName}"]`); if (!hidden) return;
+        supportContext = { button, hidden, roleName }; $('#ppv3SupportTitle').textContent = `${supportLabel(roleName)} · turno ${turnoId}`;
+        $('#ppv3SupportHelp').textContent = roleName === 'SMED' ? 'La lista incluye personal SMED y también Técnicos habilitados.' : 'La asignación aplica a la cobertura semanal de este turno.';
+        supportSelect.innerHTML = hidden.innerHTML; supportSelect.value = hidden.value; supportModal.show();
+    }));
+    $('#ppv3SupportApply')?.addEventListener('click', () => {
+        if (!supportContext) return; const { button, hidden, roleName } = supportContext; hidden.value = supportSelect.value;
+        const selectedText = supportSelect.selectedOptions?.[0]?.textContent?.trim() || 'Sin asignar'; const value = Number(supportSelect.value || 0);
+        $('span', button).textContent = value > 0 ? selectedText : 'Sin asignar'; const status = $('.ppv3-support-status', button);
+        if (status) status.textContent = value > 0 ? (roleName === 'SMED' ? 'Asignado · SMED o Técnico · clic para modificar' : `Asignado como ${supportLabel(roleName)} · clic para modificar`) : (roleName === 'SMED' ? 'Sin SMED · SMED o Técnico · clic para modificar' : `Sin ${supportLabel(roleName).toLowerCase()} · clic para modificar`);
+        button.classList.toggle('assigned', value > 0); button.classList.toggle('unassigned', value <= 0); supportModal.hide();
+    });
+
+    // ------------------------------------------------------------
+    // Historial
+    // ------------------------------------------------------------
+    const historyModal = bootstrap.Modal.getOrCreateInstance($('#ppv3HistoryModal'));
+    $$('[data-history]').forEach(button => button.addEventListener('click', async () => {
+        $('#ppv3HistoryTitle').textContent = `Historial · ${button.dataset.of}`;
+        $('#ppv3HistoryBody').innerHTML = '<div class="text-muted"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+        historyModal.show();
+        try {
+            const response = await fetch(`@Url.Action("HistorialV7","ProduccionPersonal")?programaProduccionId=${button.dataset.program}`), data = await response.json();
+            if (!data.ok) throw new Error('No fue posible consultar el historial.');
+            if (!data.historial.length) { $('#ppv3HistoryBody').innerHTML = '<div class="text-muted">Sin movimientos registrados.</div>'; return; }
+            $('#ppv3HistoryBody').innerHTML = data.historial.map(x => `<div class="ppv7-history-item"><header><strong>${new Date(x.fechaMovimiento).toLocaleString()}</strong><span>${x.turno||''}</span></header><div>${x.anterior||'Sin asignar'} <i class="fa-solid fa-arrow-right mx-1"></i> <strong>${x.nuevo||'Sin asignar'}</strong></div><small>${x.motivo||''}${x.justificacion?' · '+x.justificacion:''}${x.produccionActiva?' · CAMBIO EN PRODUCCIÓN':''}</small></div>`).join('');
+        } catch (e) { $('#ppv3HistoryBody').innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+    }));
+
+    applyFilters();
+})();
+</script>
+}

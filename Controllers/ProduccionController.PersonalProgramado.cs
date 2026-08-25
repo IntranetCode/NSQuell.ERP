@@ -286,6 +286,21 @@ ORDER BY po.ProgramaOperadorID DESC;";
             }
         }
 
+        // NSQ_PRODUCCION_PERSONAL_V7_TURNO: una asignación específica del turno
+        // prevalece sobre el operador base de la OF, pero NO sobre una excepción
+        // operativa justificada desde Calendario.
+        if (!string.Equals(fuente,"EXCEPCION",StringComparison.OrdinalIgnoreCase))
+        {
+            var especificoV7 = await ObtenerOperadorProgramadoTurnoV7Async(
+                programaId, objetivo, cn, tx);
+            if (especificoV7.HasValue)
+            {
+                operadorId = especificoV7.Value.Id;
+                operadorNombre = especificoV7.Value.Nombre;
+                fuente = "PROGRAMA_TURNO_V7";
+            }
+        }
+
         var turnos=await CargarTurnosResolverV2Async(cn,tx);
         var semanaHoy=InicioSemanaResolverV2(objetivo.Date);
         var semanaAyer=InicioSemanaResolverV2(objetivo.Date.AddDays(-1));
