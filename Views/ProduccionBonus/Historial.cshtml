@@ -1,0 +1,790 @@
+﻿@model ERP.NSQuell.Models.ProduccionBonusHistorialVm
+@{
+    Layout = null;
+    ViewData["Title"] = "Historial de Bonus";
+
+    var semanaReferencia = Model.Semanas.FirstOrDefault()?.SemanaInicio ?? DateTime.Today;
+    var semanasMostrar = Model.NumeroSemanas <= 0 ? 12 : Model.NumeroSemanas;
+    var bloqueAnterior = semanaReferencia.AddDays(-(7 * semanasMostrar));
+    var bloqueSiguiente = semanaReferencia.AddDays(7 * semanasMostrar);
+    var inicioSemanaActual = DateTime.Today.AddDays(-(((int)DateTime.Today.DayOfWeek + 6) % 7));
+    var puedeAvanzar = bloqueSiguiente.Date <= inicioSemanaActual.Date;
+
+    string ClaseNeto(long valor)
+    {
+        if (valor > 0) return "text-success";
+        if (valor < 0) return "text-danger";
+        return "text-secondary";
+    }
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --ns-blue: #004aad;
+            --ns-blue-dark: #073b7a;
+            --ns-border: #dfe5ec;
+            --ns-muted: #667085;
+            --ns-bg: #f5f7fa;
+            --ns-surface: #fff;
+            --ns-text: #172033;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--ns-bg);
+            color: var(--ns-text);
+            font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        }
+
+        .page {
+            width: min(1500px,calc(100% - 28px));
+            margin: 18px auto 40px;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg,var(--ns-blue-dark),var(--ns-blue));
+            color: #fff;
+            border-radius: 16px;
+            padding: 20px 22px;
+            box-shadow: 0 12px 30px rgba(0,74,173,.14);
+        }
+
+        .topbar-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 950;
+            letter-spacing: -.02em;
+        }
+
+        .subtitle {
+            margin-top: 4px;
+            color: rgba(255,255,255,.8);
+            font-size: .86rem;
+            font-weight: 650;
+        }
+
+        .top-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+            .top-actions .btn {
+                border-radius: 9px;
+                font-weight: 850;
+            }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 15px 0 10px;
+            padding: 11px 13px;
+            border: 1px solid var(--ns-border);
+            border-radius: 12px;
+            background: var(--ns-surface);
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-label {
+            color: var(--ns-muted);
+            font-size: .68rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .055em;
+        }
+
+        .toolbar .btn {
+            border-radius: 8px;
+            font-size: .74rem;
+            font-weight: 850;
+        }
+
+        .range-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 43px;
+            height: 31px;
+            padding: 0 9px;
+            border: 1px solid #cfd8e6;
+            border-radius: 8px;
+            background: #fff;
+            color: #475467;
+            text-decoration: none;
+            font-size: .7rem;
+            font-weight: 900;
+        }
+
+            .range-link:hover {
+                border-color: #8eaae0;
+                color: var(--ns-blue);
+                background: #f5f8ff;
+            }
+
+            .range-link.active {
+                background: #eaf2ff;
+                border-color: #8eaae0;
+                color: var(--ns-blue);
+            }
+
+        .summary-strip {
+            display: flex;
+            align-items: stretch;
+            border: 1px solid var(--ns-border);
+            background: var(--ns-surface);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+
+        .summary-item {
+            flex: 1 1 0;
+            min-width: 130px;
+            padding: 11px 14px;
+            border-right: 1px solid var(--ns-border);
+        }
+
+            .summary-item:last-child {
+                border-right: 0;
+            }
+
+        .summary-label {
+            font-size: .62rem;
+            font-weight: 950;
+            letter-spacing: .055em;
+            text-transform: uppercase;
+            color: var(--ns-muted);
+        }
+
+        .summary-value {
+            margin-top: 3px;
+            font-weight: 950;
+            font-size: 1.02rem;
+        }
+
+        .history-shell {
+            border: 1px solid var(--ns-border);
+            border-radius: 13px;
+            overflow: hidden;
+            background: var(--ns-surface);
+        }
+
+        .history-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--ns-border);
+            background: #fbfcfe;
+        }
+
+        .history-title {
+            margin: 0;
+            font-size: .96rem;
+            font-weight: 950;
+        }
+
+        .history-subtitle {
+            margin-top: 2px;
+            color: var(--ns-muted);
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .history-count {
+            color: var(--ns-muted);
+            font-size: .74rem;
+            font-weight: 850;
+            white-space: nowrap;
+        }
+
+        .history-table {
+            margin: 0;
+            vertical-align: middle;
+        }
+
+            .history-table thead th {
+                padding: 9px 12px;
+                background: #f8fafc;
+                border-bottom: 1px solid var(--ns-border);
+                color: #667085;
+                font-size: .62rem;
+                font-weight: 950;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                white-space: nowrap;
+            }
+
+            .history-table tbody td {
+                padding: 10px 12px;
+                border-bottom-color: #edf0f4;
+                font-size: .77rem;
+            }
+
+            .history-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+
+            .history-table tbody tr:hover {
+                background: #f7faff;
+            }
+
+            .history-table tbody tr.current-week {
+                background: #f3f8ff;
+            }
+
+        .period {
+            font-weight: 900;
+            color: #27364f;
+            white-space: nowrap;
+        }
+
+        .current-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 6px;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #eaf7ef;
+            color: #18794e;
+            font-size: .59rem;
+            font-weight: 950;
+            vertical-align: middle;
+        }
+
+        .winner {
+            color: #344054;
+            font-weight: 900;
+        }
+
+        .winner-empty {
+            color: #98a2b3;
+            font-weight: 700;
+        }
+
+        .winner-medal {
+            margin-right: 5px;
+        }
+
+        .number {
+            font-weight: 850;
+            white-space: nowrap;
+        }
+
+        .net {
+            font-size: .9rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+
+        .action-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 5px 8px;
+            border: 1px solid #cfd8e6;
+            border-radius: 7px;
+            background: #fff;
+            color: #30445f;
+            text-decoration: none;
+            font-size: .66rem;
+            font-weight: 900;
+        }
+
+            .action-link:hover {
+                border-color: #8eaae0;
+                color: var(--ns-blue);
+                background: #f2f6fd;
+            }
+
+            .action-link.primary {
+                border-color: #adc7ec;
+                background: #eef5ff;
+                color: #235496;
+            }
+
+        .empty-state {
+            padding: 60px 18px;
+            text-align: center;
+            color: var(--ns-muted);
+        }
+
+            .empty-state i {
+                display: block;
+                margin-bottom: 8px;
+                font-size: 2.1rem;
+                color: #aab4c3;
+            }
+
+        .empty-title {
+            color: #475467;
+            font-size: .96rem;
+            font-weight: 950;
+        }
+
+        .empty-text {
+            margin-top: 3px;
+            font-size: .76rem;
+        }
+
+        .text-success {
+            color: #168454 !important;
+        }
+
+        .text-danger {
+            color: #c0362c !important;
+        }
+
+        html[data-nsq-theme="dark"] body {
+            --ns-border: #2d3d54;
+            --ns-muted: #9eacc0;
+            --ns-bg: #0b1220;
+            --ns-surface: #162133;
+            --ns-text: #edf3fb;
+            background: var(--ns-bg);
+            color: var(--ns-text);
+        }
+
+        html[data-nsq-theme="dark"] .topbar {
+            background: linear-gradient(135deg,#12325f,#174b85);
+            border: 1px solid rgba(125,183,255,.2);
+            box-shadow: 0 14px 34px rgba(0,0,0,.24);
+        }
+
+        html[data-nsq-theme="dark"] .toolbar,
+        html[data-nsq-theme="dark"] .summary-strip,
+        html[data-nsq-theme="dark"] .history-shell {
+            background: #162133;
+            border-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .history-head {
+            background: #19263a;
+            border-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .history-title,
+        html[data-nsq-theme="dark"] .period,
+        html[data-nsq-theme="dark"] .winner {
+            color: #f0f5fc;
+        }
+
+        html[data-nsq-theme="dark"] .history-table thead th {
+            background: #111c2c;
+            border-color: #2d3d54;
+            color: #aab6c8;
+        }
+
+        html[data-nsq-theme="dark"] .history-table tbody td {
+            border-bottom-color: #2a394d;
+        }
+
+        html[data-nsq-theme="dark"] .history-table tbody tr:hover {
+            background: #1d2d45;
+        }
+
+        html[data-nsq-theme="dark"] .history-table tbody tr.current-week {
+            background: #172d49;
+        }
+
+        html[data-nsq-theme="dark"] .range-link,
+        html[data-nsq-theme="dark"] .action-link {
+            background: #17253a;
+            border-color: #38506f;
+            color: #c8d8eb;
+        }
+
+            html[data-nsq-theme="dark"] .range-link:hover,
+            html[data-nsq-theme="dark"] .action-link:hover {
+                background: #20334e;
+                color: #fff;
+            }
+
+            html[data-nsq-theme="dark"] .range-link.active,
+            html[data-nsq-theme="dark"] .action-link.primary {
+                background: #17345c;
+                border-color: #466f9f;
+                color: #a9d2ff;
+            }
+
+        html[data-nsq-theme="dark"] .current-badge {
+            background: #123226;
+            color: #79dfa6;
+        }
+
+        @@media(max-width:900px) {
+            .summary-strip {
+                flex-wrap: wrap;
+            }
+
+            .summary-item {
+                flex: 1 1 33.333%;
+            }
+        }
+
+        @@media(max-width:650px) {
+            .page {
+                width: min(100% - 18px,1500px);
+                margin-top: 9px;
+            }
+
+            .topbar {
+                border-radius: 13px;
+                padding: 16px;
+            }
+
+            .title {
+                font-size: 1.22rem;
+            }
+
+            .top-actions {
+                width: 100%;
+            }
+
+                .top-actions .btn {
+                    flex: 1 1 auto;
+                }
+
+            .toolbar {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .toolbar-group {
+                justify-content: center;
+            }
+
+            .summary-item {
+                flex: 1 1 50%;
+            }
+
+            .history-table th:nth-child(4),
+            .history-table td:nth-child(4),
+            .history-table th:nth-child(5),
+            .history-table td:nth-child(5),
+            .history-table th:nth-child(6),
+            .history-table td:nth-child(6) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="page">
+        <header class="topbar">
+            <div class="topbar-main">
+                <div>
+                    <h1 class="title">
+                        <i class="bi bi-clock-history me-2"></i>Historial de Bonus
+                    </h1>
+                    <div class="subtitle">
+                        Comparativo semanal de movimientos y resultados acumulados de Producción.
+                    </div>
+                </div>
+
+                <div class="top-actions">
+                    <a href="@Url.Action("Index", "ProduccionBonus")"
+                       class="btn btn-light btn-sm">
+                        <i class="bi bi-trophy-fill me-1"></i>Ranking actual
+                    </a>
+
+                    <a href="@Url.Action("Index", "Produccion")"
+                       class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-arrow-left me-1"></i>Producción
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <section class="toolbar">
+            <div class="toolbar-group">
+                <span class="toolbar-label">Periodo</span>
+
+                <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = bloqueAnterior.ToString("yyyy-MM-dd"), semanas = semanasMostrar })"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-chevron-double-left me-1"></i>Anteriores
+                </a>
+
+                @if (puedeAvanzar)
+                {
+                    <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = bloqueSiguiente.ToString("yyyy-MM-dd"), semanas = semanasMostrar })"
+                       class="btn btn-outline-secondary btn-sm">
+                        Siguientes<i class="bi bi-chevron-double-right ms-1"></i>
+                    </a>
+                }
+                else
+                {
+                    <button type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            disabled>
+                        Siguientes<i class="bi bi-chevron-double-right ms-1"></i>
+                    </button>
+                }
+
+                @if (Model.Semanas.All(x => !x.EsSemanaActual))
+                {
+                    <a href="@Url.Action("Historial", "ProduccionBonus", new { semanas = semanasMostrar })"
+                       class="btn btn-outline-primary btn-sm">
+                        Ir a semana actual
+                    </a>
+                }
+            </div>
+
+            <div class="toolbar-group">
+                <span class="toolbar-label">Mostrar</span>
+
+                <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = Model.FechaReferencia.ToString("yyyy-MM-dd"), semanas = 8 })"
+                   class="range-link @(semanasMostrar == 8 ? "active" : "")">
+                    8
+                </a>
+
+                <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = Model.FechaReferencia.ToString("yyyy-MM-dd"), semanas = 12 })"
+                   class="range-link @(semanasMostrar == 12 ? "active" : "")">
+                    12
+                </a>
+
+                <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = Model.FechaReferencia.ToString("yyyy-MM-dd"), semanas = 26 })"
+                   class="range-link @(semanasMostrar == 26 ? "active" : "")">
+                    26
+                </a>
+
+                <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = Model.FechaReferencia.ToString("yyyy-MM-dd"), semanas = 52 })"
+                   class="range-link @(semanasMostrar == 52 ? "active" : "")">
+                    52
+                </a>
+
+                <span class="toolbar-label">semanas</span>
+            </div>
+        </section>
+
+        @{
+            var totalOperadoresPeriodo = Model.Semanas.Sum(x => x.TotalOperadores);
+            var totalMovimientosPeriodo = Model.Semanas.Sum(x => x.TotalMovimientos);
+            var totalAbonadoPeriodo = Model.Semanas.Sum(x => x.PiezasAbonadas);
+            var totalDescontadoPeriodo = Model.Semanas.Sum(x => x.PiezasDescontadas);
+            var totalNetoPeriodo = Model.Semanas.Sum(x => x.BonusNeto);
+        }
+
+        <section class="summary-strip">
+            <div class="summary-item">
+                <div class="summary-label">Semanas</div>
+                <div class="summary-value">@Model.Semanas.Count.ToString("N0")</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Movimientos</div>
+                <div class="summary-value">@totalMovimientosPeriodo.ToString("N0")</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Abonado</div>
+                <div class="summary-value text-success">+@totalAbonadoPeriodo.ToString("N0")</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Descontado</div>
+                <div class="summary-value text-danger">-@totalDescontadoPeriodo.ToString("N0")</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Neto del periodo</div>
+                <div class="summary-value @ClaseNeto(totalNetoPeriodo)">
+                    @(totalNetoPeriodo > 0 ? "+" : "")@totalNetoPeriodo.ToString("N0")
+                </div>
+            </div>
+        </section>
+
+        <section class="history-shell">
+            <div class="history-head">
+                <div>
+                    <h2 class="history-title">
+                        <i class="bi bi-calendar3 me-1"></i>Semanas registradas
+                    </h2>
+
+                    <div class="history-subtitle">
+                        Consulta el ranking completo o abre directamente al operador que terminó en primer lugar.
+                    </div>
+                </div>
+
+                <div class="history-count">
+                    @Model.Semanas.Count periodo@(Model.Semanas.Count == 1 ? "" : "s")
+                </div>
+            </div>
+
+            @if (Model.Semanas.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table history-table">
+                        <thead>
+                            <tr>
+                                <th>Semana</th>
+                                <th>Primer lugar</th>
+                                <th class="text-end">Bonus ganador</th>
+                                <th class="text-end">Bonus neto</th>
+                                <th class="text-end">Abonado</th>
+                                <th class="text-end">Descontado</th>
+                                <th class="text-center">Operadores</th>
+                                <th class="text-center">Mov.</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var semana in Model.Semanas.OrderByDescending(x => x.SemanaInicio))
+                            {
+                                <tr class="@(semana.EsSemanaActual ? "current-week" : "")">
+                                    <td>
+                                        <div class="period">
+                                            @semana.SemanaInicio.ToString("dd/MM/yyyy")
+                                            -
+                                            @semana.SemanaFin.ToString("dd/MM/yyyy")
+
+                                            @if (semana.EsSemanaActual)
+                                            {
+                                                <span class="current-badge">
+                                                    <i class="bi bi-broadcast"></i>ACTUAL
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        @if (semana.PrimerLugarOperadorID.HasValue)
+                                        {
+                                            <span class="winner">
+                                                <span class="winner-medal">🥇</span>
+                                                @semana.PrimerLugarOperadorNombre
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="winner-empty">Sin movimientos</span>
+                                        }
+                                    </td>
+
+                                    <td class="text-end">
+                                        @if (semana.PrimerLugarOperadorID.HasValue)
+                                        {
+                                            <span class="net text-success">
+                                                +@semana.PrimerLugarBonus.ToString("N0")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-secondary">-</span>
+                                        }
+                                    </td>
+
+                                    <td class="text-end">
+                                        <span class="net @ClaseNeto(semana.BonusNeto)">
+                                            @(semana.BonusNeto > 0 ? "+" : "")@semana.BonusNeto.ToString("N0")
+                                        </span>
+                                    </td>
+
+                                    <td class="text-end">
+                                        <span class="number text-success">
+                                            +@semana.PiezasAbonadas.ToString("N0")
+                                        </span>
+                                    </td>
+
+                                    <td class="text-end">
+                                        <span class="number @(semana.PiezasDescontadas > 0 ? "text-danger" : "text-secondary")">
+                                            -@semana.PiezasDescontadas.ToString("N0")
+                                        </span>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <span class="number">@semana.TotalOperadores.ToString("N0")</span>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <span class="number">@semana.TotalMovimientos.ToString("N0")</span>
+                                    </td>
+
+                                    <td>
+                                        <div class="actions">
+                                            @if (semana.PrimerLugarOperadorID.HasValue)
+                                            {
+                                                <a href="@Url.Action("DetalleOperador", "ProduccionBonus", new { operadorId = semana.PrimerLugarOperadorID.Value, fecha = semana.SemanaInicio.ToString("yyyy-MM-dd") })"
+                                                   class="action-link"
+                                                   title="Ver detalle del primer lugar">
+                                                    <i class="bi bi-person-lines-fill"></i>
+                                                </a>
+                                            }
+
+                                            <a href="@Url.Action("Index", "ProduccionBonus", new { fecha = semana.SemanaInicio.ToString("yyyy-MM-dd") })"
+                                               class="action-link primary">
+                                                Ranking
+                                                <i class="bi bi-chevron-right"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <i class="bi bi-calendar-x"></i>
+                    <div class="empty-title">No existe historial de bonus para este periodo</div>
+                    <div class="empty-text">
+                        Cambia el periodo o regresa al ranking de la semana actual.
+                    </div>
+                </div>
+            }
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

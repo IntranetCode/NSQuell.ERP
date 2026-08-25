@@ -1,0 +1,400 @@
+﻿@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Calendario de embarques";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" />
+}
+
+@await Html.PartialAsync("_LogisticaNavegacion")
+
+
+<style>
+    .cal-page {
+        padding: 18px 20px 30px
+    }
+
+    .cal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px
+    }
+
+    .cal-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700
+    }
+
+    .cal-subtitle {
+        margin: 3px 0 0;
+        color: #6c757d;
+        font-size: .86rem
+    }
+
+    .cal-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .cal-toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: end;
+        flex-wrap: wrap;
+        padding: 10px 0 12px;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 12px
+    }
+
+    .cal-field {
+        min-width: 150px
+    }
+
+        .cal-field.search {
+            min-width: 240px;
+            flex: 1
+        }
+
+        .cal-field label {
+            display: block;
+            font-size: .69rem;
+            font-weight: 600;
+            color: #6c757d;
+            margin-bottom: 3px
+        }
+
+        .cal-field .form-control, .cal-field .form-select {
+            min-height: 34px;
+            font-size: .8rem
+        }
+
+    .cal-summary {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin: 0 0 10px
+    }
+
+        .cal-summary div {
+            display: flex;
+            gap: 5px;
+            align-items: baseline
+        }
+
+        .cal-summary strong {
+            font-size: .93rem
+        }
+
+        .cal-summary span {
+            font-size: .71rem;
+            color: #6c757d
+        }
+
+    .cal-shell {
+        width: 100%;
+        overflow-x: auto
+    }
+
+    #calendar {
+        min-width: 720px
+    }
+
+    .fc {
+        font-size: .8rem
+    }
+
+        .fc .fc-toolbar-title {
+            font-size: 1rem;
+            font-weight: 700
+        }
+
+        .fc .fc-button {
+            font-size: .74rem;
+            padding: .35rem .55rem
+        }
+
+        .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number {
+            color: #343a40;
+            text-decoration: none
+        }
+
+        .fc .fc-daygrid-event {
+            border: 0;
+            border-radius: 4px;
+            padding: 2px 4px;
+            cursor: pointer
+        }
+
+        .fc .fc-event-title {
+            font-weight: 600
+        }
+
+        .fc .fc-day-today {
+            background: rgba(13,110,253,.04) !important
+        }
+
+    .legend {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+        font-size: .72rem;
+        color: #6c757d
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px
+    }
+
+    .legend-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block
+    }
+
+    .modal-data {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 9px 14px
+    }
+
+        .modal-data label {
+            display: block;
+            font-size: .66rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 1px
+        }
+
+        .modal-data div div {
+            font-size: .82rem;
+            font-weight: 500
+        }
+
+    @@media(max-width:700px) {
+        .cal-page {
+            padding: 14px 10px 24px
+        }
+
+        .cal-actions {
+            width: 100%
+        }
+
+            .cal-actions .btn {
+                flex: 1
+            }
+
+        .cal-field, .cal-field.search {
+            min-width: 100%;
+            width: 100%
+        }
+
+        .modal-data {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+
+<div class="cal-page">
+    <div class="cal-head">
+        <div>
+            <h1 class="cal-title"><i class="fa-solid fa-calendar-days me-1"></i>Calendario de embarques</h1>
+            <p class="cal-subtitle">Cargas, entregas y releases pendientes por programar.</p>
+        </div>
+        <div class="cal-actions">
+            <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Embarques</a>
+            <a asp-controller="LogisticaViajes" asp-action="Calendario" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-route me-1"></i>Viajes</a>
+        </div>
+    </div>
+
+    <div class="cal-toolbar">
+        <div class="cal-field search">
+            <label>Buscar</label>
+            <input id="q" class="form-control" placeholder="Folio, cliente o destino" />
+        </div>
+        <div class="cal-field">
+            <label>Estatus</label>
+            <select id="estatus" class="form-select">
+                <option value="">Todos</option>
+                <option>Programado</option>
+                <option>Preparando</option>
+                <option>Preparado</option>
+                <option>Cargado</option>
+                <option>En ruta</option>
+                <option>Entregado</option>
+                <option>Cancelado</option>
+            </select>
+        </div>
+        <div class="cal-field">
+            <label>Tipo</label>
+            <select id="tipo" class="form-select">
+                <option value="">Todos</option>
+                <option value="PENDIENTE">Pendiente programar</option>
+                <option value="CARGA">Carga</option>
+                <option value="ENTREGA">Entrega</option>
+            </select>
+        </div>
+        <div>
+            <button id="btnAplicar" type="button" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter me-1"></i>Aplicar</button>
+            <button id="btnLimpiar" type="button" class="btn btn-outline-secondary btn-sm">Limpiar</button>
+        </div>
+    </div>
+
+    <div class="cal-summary">
+        <div><strong id="totalEventos">0</strong><span>eventos visibles</span></div>
+        <div><strong id="totalPendientes">0</strong><span>pendientes</span></div>
+        <div><strong id="totalCargas">0</strong><span>cargas</span></div>
+        <div><strong id="totalEntregas">0</strong><span>entregas</span></div>
+    </div>
+
+    <div class="cal-shell"><div id="calendar"></div></div>
+
+    <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#6c757d"></span>Pendiente</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#0d6efd"></span>Carga</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#198754"></span>Entrega</span>
+        <span class="legend-item"><i class="fa-solid fa-triangle-exclamation text-danger"></i>Riesgo / incidencia</span>
+    </div>
+</div>
+
+<div class="modal fade" id="eventoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title fs-6" id="eventoTitulo">Detalle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-data">
+                    <div><label>Tipo</label><div id="mTipo">-</div></div>
+                    <div><label>Estatus</label><div id="mEstatus">-</div></div>
+                    <div><label>Fecha</label><div id="mFecha">-</div></div>
+                    <div><label>Hora</label><div id="mHora">-</div></div>
+                    <div><label>Cliente</label><div id="mCliente">-</div></div>
+                    <div><label>Destino</label><div id="mDestino">-</div></div>
+                    <div><label>Parte</label><div id="mParte">-</div></div>
+                    <div><label>OF</label><div id="mOF">-</div></div>
+                    <div><label>Cajas</label><div id="mCajas">0</div></div>
+                    <div><label>Piezas</label><div id="mPiezas">0</div></div>
+                </div>
+                <div id="mAlerta" class="alert alert-warning py-2 px-3 mt-3 mb-0 d-none"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                <a id="mAbrir" class="btn btn-primary btn-sm">Abrir</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+    <script>
+        (() => {
+            const el=document.getElementById('calendar');
+            const q=document.getElementById('q');
+            const estatus=document.getElementById('estatus');
+            const tipo=document.getElementById('tipo');
+            let eventosRaw=[];
+
+            const colorTipo=t => t==='CARGA' ? '#0d6efd' : t==='ENTREGA' ? '#198754' : '#6c757d';
+
+            const calendar=new FullCalendar.Calendar(el,{
+                locale:'es',
+                initialView:'dayGridMonth',
+                firstDay:1,
+                height:'auto',
+                displayEventTime:false,
+                dayMaxEvents:4,
+                headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,timeGridWeek,listWeek'},
+                buttonText:{today:'Hoy',month:'Mes',week:'Semana',list:'Lista'},
+                datesSet:() => cargar(),
+                eventClick:info => mostrar(info.event.extendedProps),
+                eventDidMount:info => {
+                    const p=info.event.extendedProps;
+                    info.el.title=`${p.tipo} · ${p.cliente||''} · ${p.destino||''}`;
+                }
+            });
+
+            async function cargar(){
+                const inicio=calendar.view.activeStart;
+                const fin=new Date(calendar.view.activeEnd);
+                fin.setDate(fin.getDate()-1);
+                const qs=new URLSearchParams({
+                    desde:inicio.toISOString().slice(0,10),
+                    hasta:fin.toISOString().slice(0,10)
+                });
+                if(q.value.trim()) qs.set('q',q.value.trim());
+                if(estatus.value) qs.set('estatus',estatus.value);
+
+                try{
+                    const r=await fetch('@Url.Action("EventosCalendario", "LogisticaEmbarques")?'+qs.toString(),{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    const data=await r.json();
+                    if(!r.ok || !data.ok) throw new Error(data.mensaje||'No fue posible cargar el calendario.');
+                    eventosRaw=data.eventos||[];
+                    pintar();
+                }catch(e){
+                    calendar.removeAllEvents();
+                    alert(e.message);
+                }
+            }
+
+            function pintar(){
+                const filtro=tipo.value;
+                const visibles=eventosRaw.filter(x=>!filtro || x.tipo===filtro);
+                calendar.removeAllEvents();
+                calendar.addEventSource(visibles.map(x=>({
+                    id:x.id,
+                    title:`${x.hora?x.hora+' ':''}${x.titulo}`,
+                    start:x.fecha,
+                    allDay:true,
+                    backgroundColor:colorTipo(x.tipo),
+                    borderColor:colorTipo(x.tipo),
+                    textColor:'#fff',
+                    extendedProps:x
+                })));
+                document.getElementById('totalEventos').textContent=visibles.length;
+                document.getElementById('totalPendientes').textContent=visibles.filter(x=>x.tipo==='PENDIENTE').length;
+                document.getElementById('totalCargas').textContent=visibles.filter(x=>x.tipo==='CARGA').length;
+                document.getElementById('totalEntregas').textContent=visibles.filter(x=>x.tipo==='ENTREGA').length;
+            }
+
+            function mostrar(p){
+                document.getElementById('eventoTitulo').textContent=p.titulo||'Detalle';
+                document.getElementById('mTipo').textContent=p.tipo==='PENDIENTE'?'Pendiente programar':p.tipo==='CARGA'?'Carga':'Entrega';
+                document.getElementById('mEstatus').textContent=p.estatus||'-';
+                document.getElementById('mFecha').textContent=p.fecha||'-';
+                document.getElementById('mHora').textContent=p.hora||'Sin hora';
+                document.getElementById('mCliente').textContent=p.cliente||'-';
+                document.getElementById('mDestino').textContent=p.destino||'-';
+                document.getElementById('mParte').textContent=p.numeroParte||'-';
+                document.getElementById('mOF').textContent=p.numeroOF||'-';
+                document.getElementById('mCajas').textContent=Number(p.totalCajas||0).toLocaleString('es-MX');
+                document.getElementById('mPiezas').textContent=Number(p.totalPiezas||0).toLocaleString('es-MX');
+                const alerta=document.getElementById('mAlerta');
+                alerta.classList.toggle('d-none',!p.incidencia);
+                alerta.textContent=p.incidencia?'Este evento tiene incidencia o disponibilidad PT insuficiente.':'';
+                document.getElementById('mAbrir').href=p.url||'#';
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('eventoModal')).show();
+            }
+
+            document.getElementById('btnAplicar').addEventListener('click',cargar);
+            document.getElementById('btnLimpiar').addEventListener('click',()=>{q.value='';estatus.value='';tipo.value='';cargar();});
+            tipo.addEventListener('change',pintar);
+            q.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();cargar();}});
+            calendar.render();
+        })();
+    </script>
+}

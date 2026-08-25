@@ -1,0 +1,957 @@
+﻿@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaIndexVm
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Embarques";
+
+    var periodo = ViewBag.Periodo as string ?? "hoy";
+    var tituloPeriodo = ViewBag.PeriodoProgramacion as string ?? "Programación";
+    var mesSeleccionado = ViewBag.MesSeleccionado is int m ? m : DateTime.Today.Month;
+    var anioSeleccionado = ViewBag.AnioSeleccionado is int a ? a : DateTime.Today.Year;
+    var periodoResumen = ViewBag.PeriodoResumen as string ?? DateTime.Today.ToString("MMMM yyyy");
+
+    string BadgeEstatus(string estatus) => estatus switch
+    {
+        "Programado" => "bg-primary",
+        "Preparando" => "bg-info text-dark",
+        "Preparado" => "bg-warning text-dark",
+        "Cargado" => "bg-dark",
+        "En ruta" => "bg-primary",
+        "Entregado" => "bg-success",
+        "Cancelado" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    string TextoFechaHora(DateTime? fecha, TimeSpan? hora)
+    {
+        if (!fecha.HasValue)
+            return "-";
+
+        return hora.HasValue
+            ? $"{fecha.Value:dd/MM/yyyy} {hora.Value:hh\\:mm}"
+            : $"{fecha.Value:dd/MM/yyyy}";
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet"
+          href="~/css/logistica.css"
+          asp-append-version="true" />
+}
+
+@await Html.PartialAsync("_LogisticaNavegacion")
+
+<style>
+    .embarques-page {
+        padding: 18px 20px 30px;
+    }
+
+    .embarques-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .embarques-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+
+    .embarques-subtitle {
+        margin: 3px 0 0;
+        color: #6c757d;
+        font-size: .88rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .resumen-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 22px;
+        padding: 10px 0 12px;
+        margin-bottom: 14px;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .resumen-item {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        white-space: nowrap;
+    }
+
+        .resumen-item strong {
+            font-size: 1rem;
+        }
+
+        .resumen-item span {
+            font-size: .76rem;
+            color: #6c757d;
+        }
+
+        .resumen-item.alerta strong,
+        .resumen-item.alerta span {
+            color: #dc3545;
+        }
+
+        .resumen-item.ok strong {
+            color: #198754;
+        }
+
+    .periodos {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+        .periodos .btn {
+            font-size: .76rem;
+            padding: .32rem .58rem;
+        }
+
+    .periodo-activo {
+        background: #212529 !important;
+        border-color: #212529 !important;
+        color: #fff !important;
+    }
+
+    .selector-mes {
+        display: none;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .selector-mes.visible {
+            display: flex;
+        }
+
+        .selector-mes select,
+        .selector-mes input {
+            min-height: 32px;
+            font-size: .76rem;
+            width: auto;
+        }
+
+    .section {
+        padding: 14px 0;
+        border-top: 1px solid #e9ecef;
+    }
+
+        .section:first-of-type {
+            border-top: 0;
+        }
+
+    .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 9px;
+    }
+
+    .section-title {
+        margin: 0;
+        font-size: .92rem;
+        font-weight: 700;
+    }
+
+    .section-subtitle {
+        margin: 2px 0 0;
+        font-size: .75rem;
+        color: #6c757d;
+    }
+
+    .section-count {
+        font-size: .7rem;
+        font-weight: 600;
+    }
+
+    .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .log-table {
+        margin-bottom: 0;
+        font-size: .79rem;
+        vertical-align: middle;
+    }
+
+        .log-table thead th {
+            background: #f8f9fa;
+            color: #495057;
+            font-size: .69rem;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            white-space: nowrap;
+            border-bottom-width: 1px;
+        }
+
+        .log-table td {
+            vertical-align: middle;
+        }
+
+    .folio {
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .text-truncate-cell {
+        display: block;
+        max-width: 230px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .badge-mini {
+        font-size: .67rem;
+        padding: .34em .54em;
+        font-weight: 600;
+    }
+
+    .fecha {
+        white-space: nowrap;
+    }
+
+    .acciones {
+        white-space: nowrap;
+        text-align: right;
+    }
+
+        .acciones .btn {
+            padding: .23rem .42rem;
+            font-size: .72rem;
+        }
+
+    .pt-ok {
+        color: #198754;
+        font-weight: 600;
+    }
+
+    .pt-falta {
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    .pendiente {
+        font-weight: 700;
+    }
+
+    .empty {
+        padding: 28px 10px;
+        text-align: center;
+        color: #6c757d;
+        font-size: .82rem;
+    }
+
+    .cliente-resumen {
+        display: grid;
+        grid-template-columns: minmax(180px, 1.5fr) repeat(7, minmax(85px, .7fr));
+        gap: 0;
+        border-top: 1px solid #dee2e6;
+        font-size: .78rem;
+    }
+
+        .cliente-resumen > div {
+            padding: 8px 7px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .cliente-resumen.header {
+            background: #f8f9fa;
+            font-size: .69rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: #495057;
+        }
+
+    .cliente-nombre {
+        font-weight: 600;
+    }
+
+    @@media (max-width: 1100px) {
+        .cliente-resumen {
+            min-width: 850px;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .embarques-page {
+            padding: 14px 10px 24px;
+        }
+
+        .header-actions {
+            width: 100%;
+        }
+
+            .header-actions .btn {
+                flex: 1;
+            }
+
+        .resumen-strip {
+            gap: 8px 16px;
+        }
+
+        .periodos {
+            align-items: stretch;
+        }
+
+            .periodos > .btn {
+                flex: 1 1 auto;
+            }
+
+        .selector-mes {
+            width: 100%;
+        }
+
+            .selector-mes select,
+            .selector-mes input {
+                flex: 1;
+                width: 100%;
+            }
+
+        .col-secundaria {
+            display: none;
+        }
+    }
+</style>
+
+<div class="embarques-page">
+
+    <div class="embarques-header">
+
+        <div>
+            <h1 class="embarques-title">
+                <i class="fa-solid fa-truck-ramp-box me-1"></i>
+                Embarques
+            </h1>
+
+            <p class="embarques-subtitle">
+                Programación, preparación, carga, despacho y entrega de producto terminado.
+            </p>
+        </div>
+
+        <div class="header-actions">
+
+            <a asp-controller="LogisticaEmbarques"
+               asp-action="Calendario"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-calendar-days me-1"></i>
+                Calendario
+            </a>
+
+            <a asp-controller="LogisticaCatalogos"
+               asp-action="Index"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-sliders me-1"></i>
+                Catálogos
+            </a>
+
+        </div>
+
+    </div>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-circle-check me-1"></i>
+            @TempData["LogisticaOk"]
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+            @TempData["LogisticaError"]
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (ViewBag.ErrorConfiguracion != null)
+    {
+        <div class="alert alert-warning py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+            @ViewBag.ErrorConfiguracion
+        </div>
+    }
+
+    <div class="resumen-strip">
+
+        <div class="resumen-item">
+            <strong>@Model.DemandasPendientes</strong>
+            <span>por programar</span>
+        </div>
+
+        <div class="resumen-item">
+            <strong>@Model.PiezasPendientes.ToString("N0")</strong>
+            <span>pzas. pendientes</span>
+        </div>
+
+        <div class="resumen-item ok">
+            <strong>@Model.PiezasPTListas.ToString("N0")</strong>
+            <span>pzas. PT disponibles</span>
+        </div>
+
+        <div class="resumen-item">
+            <strong>@Model.EmbarquesActivos</strong>
+            <span>embarques activos</span>
+        </div>
+
+        <div class="resumen-item">
+            <strong>@Model.CargasHoy</strong>
+            <span>cargas hoy</span>
+        </div>
+
+        <div class="resumen-item">
+            <strong>@Model.EmbarquesPreparados</strong>
+            <span>preparados</span>
+        </div>
+
+        <div class="resumen-item">
+            <strong>@Model.EmbarquesCargados</strong>
+            <span>cargados</span>
+        </div>
+
+        <div class="resumen-item">
+            <strong>@Model.EmbarquesEnRuta</strong>
+            <span>en ruta</span>
+        </div>
+
+        @if (Model.EntregasAtrasadas > 0)
+        {
+            <div class="resumen-item alerta">
+                <strong>@Model.EntregasAtrasadas</strong>
+                <span>atrasados</span>
+            </div>
+        }
+
+        @if (Model.EmbarquesConIncidencia > 0)
+        {
+            <div class="resumen-item alerta">
+                <strong>@Model.EmbarquesConIncidencia</strong>
+                <span>con incidencia</span>
+            </div>
+        }
+
+    </div>
+
+    <div class="periodos">
+
+        <a asp-controller="LogisticaEmbarques"
+           asp-action="Index"
+           asp-route-periodo="vencidos"
+           class="btn btn-outline-danger @(periodo == "vencidos" ? "periodo-activo" : "")">
+            Vencidos
+        </a>
+
+        <a asp-controller="LogisticaEmbarques"
+           asp-action="Index"
+           asp-route-periodo="hoy"
+           class="btn btn-outline-secondary @(periodo == "hoy" ? "periodo-activo" : "")">
+            Hoy
+        </a>
+
+        <a asp-controller="LogisticaEmbarques"
+           asp-action="Index"
+           asp-route-periodo="semana"
+           class="btn btn-outline-secondary @(periodo == "semana" ? "periodo-activo" : "")">
+            Esta semana
+        </a>
+
+        <a asp-controller="LogisticaEmbarques"
+           asp-action="Index"
+           asp-route-periodo="mes"
+           class="btn btn-outline-secondary @(periodo == "mes" ? "periodo-activo" : "")">
+            Este mes
+        </a>
+
+        <button type="button"
+                class="btn btn-outline-secondary @(periodo == "seleccionar_mes" ? "periodo-activo" : "")"
+                id="btnSeleccionarMes">
+            Seleccionar mes
+        </button>
+
+        <form asp-controller="LogisticaEmbarques"
+              asp-action="Index"
+              method="get"
+              class="selector-mes @(periodo == "seleccionar_mes" ? "visible" : "")"
+              id="formSeleccionMes">
+
+            <input type="hidden"
+                   name="periodo"
+                   value="seleccionar_mes" />
+
+            <select name="mes"
+                    class="form-select form-select-sm">
+
+                @for (var i = 1; i <= 12; i++)
+                {
+                    var nombreMes =
+                    new DateTime(2026, i, 1)
+                    .ToString("MMMM");
+
+                    <option value="@i"
+                            selected="@(i == mesSeleccionado)">
+                        @nombreMes
+                    </option>
+                }
+
+            </select>
+
+            <input type="number"
+                   name="anio"
+                   min="2020"
+                   max="2100"
+                   value="@anioSeleccionado"
+                   class="form-control form-control-sm" />
+
+            <button type="submit"
+                    class="btn btn-dark btn-sm">
+                Aplicar
+            </button>
+
+        </form>
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-head">
+
+            <div>
+                <h2 class="section-title">
+                    Salidas pendientes de programación
+                </h2>
+
+                <p class="section-subtitle">
+                    @tituloPeriodo
+                </p>
+            </div>
+
+            <span class="badge bg-light text-dark section-count">
+                @Model.Demandas.Count registro(s)
+            </span>
+
+        </div>
+
+        <div class="table-wrap">
+
+            <table class="table table-sm table-hover log-table">
+
+                <thead>
+                    <tr>
+                        <th>Release</th>
+                        <th>Cliente</th>
+                        <th>Parte</th>
+                        <th class="col-secundaria">Descripción</th>
+                        <th>OF</th>
+                        <th>Carga</th>
+                        <th>Entrega</th>
+                        <th>Requerido</th>
+                        <th>Programado</th>
+                        <th>Pendiente</th>
+                        <th>PT</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @if (Model.Demandas == null ||
+                                        Model.Demandas.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="12">
+                                <div class="empty">
+                                    <i class="fa-solid fa-circle-check me-1"></i>
+                                    No hay salidas pendientes para este periodo.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var demanda in Model.Demandas)
+                        {
+                            var suficientePT =
+                            demanda.PiezasPTDisponibles >=
+                            demanda.PendienteProgramar;
+
+                            <tr>
+
+                                <td class="folio">
+                                    @demanda.FolioRelease
+
+                                    @if (demanda.SecuenciaEntrega.HasValue)
+                                    {
+                                        <div class="text-muted small">
+                                            Sec. @demanda.SecuenciaEntrega
+                                        </div>
+                                    }
+                        </td>
+
+                        <td>
+                            <span class="text-truncate-cell"
+                                  title="@demanda.Cliente">
+                                @demanda.Cliente
+                            </span>
+                        </td>
+
+                        <td class="fw-semibold">
+                            @demanda.NumeroParte
+                        </td>
+
+                        <td class="col-secundaria">
+                            <span class="text-truncate-cell"
+                                  title="@demanda.Descripcion">
+                                @(string.IsNullOrWhiteSpace(demanda.Descripcion)
+                                                                ? "-"
+                                                                : demanda.Descripcion)
+                                                                                  </span>
+                                                                              </td>
+
+                        <td>
+                            @(string.IsNullOrWhiteSpace(demanda.NumeroOF)
+                                                        ? "-"
+                                                        : demanda.NumeroOF)
+                                                                       </td>
+
+                        <td class="fecha">
+                            @(demanda.FechaCarga.HasValue
+                                                        ? demanda.FechaCarga.Value.ToString("dd/MM/yyyy")
+                                                        : demanda.FechaEntrega.AddDays(-1).ToString("dd/MM/yyyy"))
+                        </td>
+
+                                <td class="fecha">
+                                    @demanda.FechaEntrega.ToString("dd/MM/yyyy")
+                                </td>
+
+                                <td class="text-end">
+                                    @demanda.CantidadRequerida.ToString("N0")
+                                </td>
+
+                                <td class="text-end">
+                                    @demanda.CantidadProgramada.ToString("N0")
+                                </td>
+
+                                <td class="text-end pendiente">
+                                    @demanda.PendienteProgramar.ToString("N0")
+                                </td>
+
+                                <td>
+                                    <span class="@(suficientePT ? "pt-ok" : "pt-falta")">
+                                        @demanda.PiezasPTDisponibles.ToString("N0")
+                                    </span>
+
+                                    <div class="text-muted small">
+                                        @demanda.CajasPTDisponibles.ToString("N0") caja(s)
+                                    </div>
+                                </td>
+
+                                <td class="acciones">
+
+                            @if (demanda.PendienteProgramar > 0)
+                                    {
+                                        <a asp-controller="LogisticaEmbarques"
+                                           asp-action="Crear"
+                                           asp-route-releaseDetalleId="@demanda.ReleaseDetalleID"
+                                           class="btn btn-primary btn-sm"
+                                           title="Programar embarque">
+
+                                            <i class="fa-solid fa-plus me-1"></i>
+                                            Programar
+
+                                        </a>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-head">
+
+            <div>
+                <h2 class="section-title">
+                    Embarques
+                </h2>
+
+                <p class="section-subtitle">
+                    Seguimiento operativo de embarques programados.
+                </p>
+            </div>
+
+            <span class="badge bg-light text-dark section-count">
+                @Model.Embarques.Count registro(s)
+            </span>
+
+        </div>
+
+        <div class="table-wrap">
+
+            <table class="table table-sm table-hover log-table">
+
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Cliente</th>
+                        <th>Destino</th>
+                        <th>Carga</th>
+                        <th>Entrega</th>
+                        <th>Partidas</th>
+                        <th>Cajas</th>
+                        <th>Piezas</th>
+                        <th>Estatus</th>
+                        <th>Inc.</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @if (Model.Embarques == null ||
+                                        Model.Embarques.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="11">
+                                <div class="empty">
+                                    <i class="fa-solid fa-truck-ramp-box me-1"></i>
+                                    No hay embarques registrados.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var embarque in Model.Embarques)
+                        {
+                            <tr>
+
+                                <td class="folio">
+                                    @embarque.Folio
+                                </td>
+
+                                <td>
+                                    <span class="text-truncate-cell"
+                                          title="@embarque.Cliente">
+                                        @embarque.Cliente
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="text-truncate-cell"
+                                          title="@embarque.Destino">
+                                        @embarque.Destino
+                                    </span>
+                                </td>
+
+                                <td class="fecha">
+                                    @TextoFechaHora(
+                                    embarque.FechaCargaProgramada,
+                                                        embarque.HoraCargaProgramada)
+                        </td>
+
+                        <td class="fecha">
+                            @TextoFechaHora(
+                                                        embarque.FechaEntregaProgramada,
+                                                        embarque.HoraEntregaProgramada)
+                        </td>
+
+                        <td class="text-center">
+                            @embarque.TotalPartidas
+                        </td>
+
+                        <td class="text-center">
+                            @embarque.TotalCajas
+                        </td>
+
+                        <td class="text-end">
+                            @embarque.TotalPiezasSolicitadas.ToString("N0")
+
+                            @if (embarque.TotalPiezasDespachadas > 0)
+                                    {
+                                        <div class="small text-success">
+                                            @embarque.TotalPiezasDespachadas.ToString("N0") desp.
+                                        </div>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="badge badge-mini @BadgeEstatus(embarque.Estatus)">
+                                        @embarque.Estatus
+                                    </span>
+                                </td>
+
+                                <td class="text-center">
+                                    @if (embarque.TieneIncidencia)
+                                    {
+                                        <span class="text-danger"
+                                              title="Tiene incidencias">
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+
+                                <td class="acciones">
+
+                                    <a asp-controller="LogisticaEmbarques"
+                                       asp-action="Detalle"
+                                       asp-route-id="@embarque.EmbarqueID"
+                                       class="btn btn-outline-primary btn-sm"
+                                       title="Ver embarque">
+
+                                        <i class="fa-solid fa-eye"></i>
+
+                                    </a>
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+    @if (Model.ResumenClientes != null &&
+        Model.ResumenClientes.Count > 0)
+    {
+        <div class="section">
+
+            <div class="section-head">
+
+                <div>
+                    <h2 class="section-title">
+                        Resumen por cliente
+                    </h2>
+
+                    <p class="section-subtitle">
+                        @periodoResumen
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="table-wrap">
+
+                <div class="cliente-resumen header">
+                    <div>Cliente</div>
+                    <div>Total</div>
+                    <div>Preparados</div>
+                    <div>Cargados</div>
+                    <div>En ruta</div>
+                    <div>Entregados</div>
+                    <div>Incidencias</div>
+                    <div>Cumplimiento</div>
+                </div>
+
+                @foreach (var cliente in Model.ResumenClientes)
+                {
+                    <div class="cliente-resumen">
+
+                        <div class="cliente-nombre">
+                            @cliente.Cliente
+                        </div>
+
+                        <div>
+                            @cliente.TotalEmbarques
+                        </div>
+
+                        <div>
+                            @cliente.Preparados
+                        </div>
+
+                        <div>
+                            @cliente.Cargados
+                        </div>
+
+                        <div>
+                            @cliente.EnRuta
+                        </div>
+
+                        <div>
+                            @cliente.Entregados
+                        </div>
+
+                        <div class="@(cliente.ConIncidencia > 0 ? "text-danger fw-semibold" : "")">
+                            @cliente.ConIncidencia
+                        </div>
+
+                        <div>
+                            @cliente.PorcentajeCumplimiento.ToString("N1")%
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+<script>
+    (() => {
+
+        const btnSeleccionarMes =
+            document.getElementById('btnSeleccionarMes');
+
+        const formSeleccionMes =
+            document.getElementById('formSeleccionMes');
+
+        btnSeleccionarMes?.addEventListener(
+            'click',
+            () => {
+
+                formSeleccionMes
+                    ?.classList
+                    .toggle('visible');
+            });
+
+    })();
+</script>

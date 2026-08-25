@@ -8,13 +8,13 @@ using System.Data;
 namespace ERP.NSQuell.Controllers;
 
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class LogisticaController : Controller
+public sealed class LogisticaEmbarquesController : Controller
 {
     private readonly IConfiguration _configuration;
     private readonly IServicioAcceso _acceso;
     private readonly IWebHostEnvironment _environment;
 
-    public LogisticaController(IConfiguration configuration, IServicioAcceso acceso, IWebHostEnvironment environment)
+    public LogisticaEmbarquesController(IConfiguration configuration, IServicioAcceso acceso, IWebHostEnvironment environment)
     {
         _configuration = configuration;
         _acceso = acceso;
@@ -291,6 +291,7 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
             Destino = demanda.Cliente,
             FechaCargaProgramada = demanda.FechaCarga?.Date ?? demanda.FechaEntrega.Date.AddDays(-1),
             FechaEntregaProgramada = demanda.FechaEntrega.Date,
+            TipoOperacion = "Nacional",
             Demanda = demanda
         };
 
@@ -318,6 +319,9 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
         vm.DireccionEntrega = vm.DireccionEntrega?.Trim();
         vm.OperadorTexto = vm.OperadorTexto?.Trim();
         vm.Observaciones = vm.Observaciones?.Trim();
+        vm.TipoOperacion = NormalizarTipoOperacion(vm.TipoOperacion);
+        if (string.IsNullOrWhiteSpace(vm.TipoOperacion))
+            ModelState.AddModelError(nameof(vm.TipoOperacion), "Selecciona un tipo de operación válido: Nacional o Exportación.");
 
         if (vm.ReleaseDetalleID <= 0)
             ModelState.AddModelError(nameof(vm.ReleaseDetalleID), "Selecciona una entrega de Release válida.");
@@ -424,7 +428,7 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
             const string sqlHeader = @"
 INSERT dbo.Logistica_Embarques
 (
-    Folio,ClienteID,ClienteNombreSnapshot,Destino,DireccionEntrega,
+    Folio,ClienteID,ClienteNombreSnapshot,Destino,DireccionEntrega,TipoOperacion,
     FechaProgramada,FechaCargaProgramada,HoraCargaProgramada,
     FechaEntregaProgramada,HoraEntregaProgramada,Estatus,RutaID,UnidadID,
     OperadorTexto,ResponsableUsuarioID,ResponsableNombreSnapshot,
@@ -432,7 +436,7 @@ INSERT dbo.Logistica_Embarques
 )
 VALUES
 (
-    NULL,@ClienteID,@ClienteNombre,@Destino,@DireccionEntrega,
+    NULL,@ClienteID,@ClienteNombre,@Destino,@DireccionEntrega,@TipoOperacion,
     @FechaCargaProgramada,@FechaCargaProgramada,@HoraCargaProgramada,
     @FechaEntregaProgramada,@HoraEntregaProgramada,N'Programado',@RutaID,@UnidadID,
     @OperadorTexto,@UsuarioID,@UsuarioNombre,@Observaciones,SYSDATETIME(),@UsuarioNombre,1
@@ -447,6 +451,7 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 cmd.Parameters.Add("@ClienteNombre", SqlDbType.NVarChar, 200).Value = demanda.Cliente.Trim();
                 cmd.Parameters.Add("@Destino", SqlDbType.NVarChar, 300).Value = vm.Destino;
                 cmd.Parameters.Add("@DireccionEntrega", SqlDbType.NVarChar, 600).Value = Db(vm.DireccionEntrega);
+                cmd.Parameters.Add("@TipoOperacion", SqlDbType.NVarChar, 30).Value = vm.TipoOperacion;
                 cmd.Parameters.Add("@FechaCargaProgramada", SqlDbType.Date).Value = vm.FechaCargaProgramada.Date;
                 cmd.Parameters.Add("@HoraCargaProgramada", SqlDbType.Time).Value = Db(vm.HoraCargaProgramada);
                 cmd.Parameters.Add("@FechaEntregaProgramada", SqlDbType.Date).Value = vm.FechaEntregaProgramada.Date;
@@ -1185,6 +1190,7 @@ SELECT
     e.ClienteID,
     ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'') AS Cliente,
     ISNULL(NULLIF(LTRIM(RTRIM(e.Destino)),N''),N'') AS Destino,
+    ISNULL(NULLIF(LTRIM(RTRIM(e.TipoOperacion)),N''),N'Nacional') AS TipoOperacion,
     e.RutaID,
     e.UnidadID,
     ISNULL(NULLIF(LTRIM(RTRIM(e.OperadorTexto)),N''),N'') AS Operador,
@@ -1223,6 +1229,7 @@ WHERE e.EmbarqueID=@EmbarqueID
             int clienteId;
             string cliente;
             string destino;
+            string tipoOperacion;
             int? rutaId;
             int? unidadId;
             string operador;
@@ -1244,6 +1251,8 @@ WHERE e.EmbarqueID=@EmbarqueID
                 clienteId = Entero(rd, "ClienteID");
                 cliente = Texto(rd, "Cliente");
                 destino = Texto(rd, "Destino");
+                tipoOperacion = NormalizarTipoOperacion(Texto(rd, "TipoOperacion"));
+                if (string.IsNullOrWhiteSpace(tipoOperacion)) tipoOperacion = "Nacional";
                 rutaId = EnteroNullable(rd, "RutaID");
                 unidadId = EnteroNullable(rd, "UnidadID");
                 operador = Texto(rd, "Operador");
@@ -1298,6 +1307,10 @@ WHERE e.EmbarqueID=@EmbarqueID
                         incidenciasCriticas == 1
                             ? "El embarque tiene una incidencia crítica abierta. Debe resolverse antes de confirmar la salida."
                             : $"El embarque tiene {incidenciasCriticas:N0} incidencias críticas abiertas. Deben resolverse antes de confirmar la salida.");
+
+                var documentosFaltantes = await ObtenerDocumentosFaltantesAsync(cn, embarqueId, tipoOperacion, cancellationToken);
+                if (documentosFaltantes.Count > 0)
+                    throw new InvalidOperationException($"No se puede confirmar la salida. Faltan documentos obligatorios validados: {string.Join(", ", documentosFaltantes)}.");
             }
 
             await using var sp = new SqlCommand(
@@ -1878,123 +1891,6 @@ WHERE EmbarqueID=@Id;",
         return RedirectToAction(nameof(Detalle), new { id = embarqueId });
     }
 
-    [HttpGet]
-    public async Task<IActionResult> Catalogos(CancellationToken cancellationToken)
-    {
-        var acceso = await ValidarAccesoAsync("Rutas y unidades");
-        if (acceso != null) return acceso;
-
-        await using var cn = await AbrirAsync(cancellationToken);
-        var vm = new LogisticaCatalogosVm();
-        const string sql = @"
-SELECT RutaID,Codigo,Nombre,ISNULL(Descripcion,N'') AS Descripcion,Activo
-FROM dbo.Logistica_Rutas ORDER BY Activo DESC,Codigo;
-SELECT UnidadID,NumeroEconomico,ISNULL(Placas,N'') AS Placas,ISNULL(Marca,N'') AS Marca,
-       ISNULL(Modelo,N'') AS Modelo,CapacidadPiezas,Activo
-FROM dbo.Logistica_Unidades ORDER BY Activo DESC,NumeroEconomico;";
-
-        await using var cmd = new SqlCommand(sql, cn);
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await rd.ReadAsync(cancellationToken))
-        {
-            vm.Rutas.Add(new LogisticaRutaVm
-            {
-                RutaID = Entero(rd, "RutaID"),
-                Codigo = Texto(rd, "Codigo"),
-                Nombre = Texto(rd, "Nombre"),
-                Descripcion = Texto(rd, "Descripcion"),
-                Activo = Booleano(rd, "Activo")
-            });
-        }
-        if (await rd.NextResultAsync(cancellationToken))
-        {
-            while (await rd.ReadAsync(cancellationToken))
-            {
-                vm.Unidades.Add(new LogisticaUnidadVm
-                {
-                    UnidadID = Entero(rd, "UnidadID"),
-                    NumeroEconomico = Texto(rd, "NumeroEconomico"),
-                    Placas = Texto(rd, "Placas"),
-                    Marca = Texto(rd, "Marca"),
-                    Modelo = Texto(rd, "Modelo"),
-                    CapacidadPiezas = EnteroNullable(rd, "CapacidadPiezas"),
-                    Activo = Booleano(rd, "Activo")
-                });
-            }
-        }
-        return View(vm);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> GuardarRuta(LogisticaRutaVm model, CancellationToken cancellationToken)
-    {
-        var acceso = await ValidarAccesoAsync("Rutas y unidades");
-        if (acceso != null) return acceso;
-
-        if (string.IsNullOrWhiteSpace(model.Codigo) || string.IsNullOrWhiteSpace(model.Nombre))
-        {
-            TempData["LogisticaError"] = "Codigo y nombre de ruta son obligatorios.";
-            return RedirectToAction(nameof(Catalogos));
-        }
-
-        try
-        {
-            await using var cn = await AbrirAsync(cancellationToken);
-            const string sql = @"
-INSERT dbo.Logistica_Rutas(Codigo,Nombre,Descripcion,Activo,FechaCreacion,CreadoPor)
-VALUES(@Codigo,@Nombre,@Descripcion,1,SYSDATETIME(),@Usuario);";
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@Codigo", SqlDbType.NVarChar, 30).Value = model.Codigo.Trim();
-            cmd.Parameters.Add("@Nombre", SqlDbType.NVarChar, 150).Value = model.Nombre.Trim();
-            cmd.Parameters.Add("@Descripcion", SqlDbType.NVarChar, 500).Value = Db(model.Descripcion?.Trim());
-            cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Ruta creada.";
-        }
-        catch (Exception ex)
-        {
-            TempData["LogisticaError"] = ex.Message;
-        }
-        return RedirectToAction(nameof(Catalogos));
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> GuardarUnidad(LogisticaUnidadVm model, CancellationToken cancellationToken)
-    {
-        var acceso = await ValidarAccesoAsync("Rutas y unidades");
-        if (acceso != null) return acceso;
-
-        if (string.IsNullOrWhiteSpace(model.NumeroEconomico))
-        {
-            TempData["LogisticaError"] = "El numero economico es obligatorio.";
-            return RedirectToAction(nameof(Catalogos));
-        }
-
-        try
-        {
-            await using var cn = await AbrirAsync(cancellationToken);
-            const string sql = @"
-INSERT dbo.Logistica_Unidades(NumeroEconomico,Placas,Marca,Modelo,CapacidadPiezas,Activo,FechaCreacion,CreadoPor)
-VALUES(@NumeroEconomico,@Placas,@Marca,@Modelo,@CapacidadPiezas,1,SYSDATETIME(),@Usuario);";
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@NumeroEconomico", SqlDbType.NVarChar, 50).Value = model.NumeroEconomico.Trim();
-            cmd.Parameters.Add("@Placas", SqlDbType.NVarChar, 30).Value = Db(model.Placas?.Trim());
-            cmd.Parameters.Add("@Marca", SqlDbType.NVarChar, 80).Value = Db(model.Marca?.Trim());
-            cmd.Parameters.Add("@Modelo", SqlDbType.NVarChar, 80).Value = Db(model.Modelo?.Trim());
-            cmd.Parameters.Add("@CapacidadPiezas", SqlDbType.Int).Value = Db(model.CapacidadPiezas);
-            cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Unidad creada.";
-        }
-        catch (Exception ex)
-        {
-            TempData["LogisticaError"] = ex.Message;
-        }
-        return RedirectToAction(nameof(Catalogos));
-    }
-
     private static async Task<bool> TieneFase1Async(SqlConnection cn, CancellationToken cancellationToken)
     {
         const string sql = @"
@@ -2027,8 +1923,8 @@ FROM dbo.vw_Logistica_DemandaRelease
 WHERE (@SoloPendientes=0 OR PendienteProgramar>0)
   AND (@ClienteID IS NULL OR ClienteID=@ClienteID)
   AND (@Q IS NULL OR FolioRelease LIKE N'%' + @Q + N'%' OR Cliente LIKE N'%' + @Q + N'%' OR NumeroParte LIKE N'%' + @Q + N'%' OR NumeroOF LIKE N'%' + @Q + N'%')
-  AND (@FechaDesde IS NULL OR FechaRequerida>=@FechaDesde)
-  AND (@FechaHasta IS NULL OR FechaRequerida<=@FechaHasta)
+  AND (@FechaDesde IS NULL OR COALESCE(FechaCarga,DATEADD(DAY,-1,FechaRequerida))>=@FechaDesde)
+  AND (@FechaHasta IS NULL OR COALESCE(FechaCarga,DATEADD(DAY,-1,FechaRequerida))<=@FechaHasta)
 ORDER BY COALESCE(FechaCarga,DATEADD(DAY,-1,FechaRequerida)),FechaRequerida,Cliente,NumeroParte;";
 
         await using var cmd = new SqlCommand(sql, cn);
@@ -2381,7 +2277,7 @@ VALUES
     {
         const string sqlHeader = @"
 SELECT e.EmbarqueID,ISNULL(e.Folio,N'') AS Folio,e.ClienteID,e.ClienteNombreSnapshot,e.Destino,
-       ISNULL(e.DireccionEntrega,N'') AS DireccionEntrega,e.Estatus,e.FechaCargaProgramada,e.HoraCargaProgramada,
+       ISNULL(e.DireccionEntrega,N'') AS DireccionEntrega,ISNULL(e.TipoOperacion,N'Nacional') AS TipoOperacion,e.Estatus,e.FechaCargaProgramada,e.HoraCargaProgramada,
        e.FechaEntregaProgramada,e.HoraEntregaProgramada,
        ISNULL(r.Codigo + N' - ' + r.Nombre,N'') AS Ruta,
        ISNULL(u.NumeroEconomico + CASE WHEN NULLIF(u.Placas,N'') IS NULL THEN N'' ELSE N' - ' + u.Placas END,N'') AS Unidad,
@@ -2407,6 +2303,8 @@ WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
             vm.Cliente = Texto(rd, "ClienteNombreSnapshot");
             vm.Destino = Texto(rd, "Destino");
             vm.DireccionEntrega = Texto(rd, "DireccionEntrega");
+            vm.TipoOperacion = NormalizarTipoOperacion(Texto(rd, "TipoOperacion"));
+            if (string.IsNullOrWhiteSpace(vm.TipoOperacion)) vm.TipoOperacion = "Nacional";
             vm.Estatus = Texto(rd, "Estatus");
             vm.FechaCargaProgramada = Fecha(rd, "FechaCargaProgramada");
             vm.HoraCargaProgramada = Hora(rd, "HoraCargaProgramada");
@@ -2556,6 +2454,7 @@ ORDER BY FechaEvento DESC,HistorialID DESC;";
 
         await CargarIncidenciasAsync(cn, vm, cancellationToken);
         await CargarEvidenciasAsync(cn, vm, cancellationToken);
+        await CargarDocumentosAsync(cn, vm, cancellationToken);
         await CargarRetornoAsync(cn, vm, cancellationToken);
         CalcularEstadoOperativo(vm);
         return vm;
@@ -3082,6 +2981,404 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
         return nombre.Replace("\"", string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
     }
 
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(12 * 1024 * 1024)]
+    public async Task<IActionResult> SubirDocumento(int embarqueId, string tipoDocumento, IFormFile? archivo, string? observaciones, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        if (embarqueId <= 0) { TempData["LogisticaError"] = "El embarque indicado no es válido."; return RedirectToAction(nameof(Index)); }
+
+        tipoDocumento = NormalizarTipoDocumento(tipoDocumento);
+        observaciones = observaciones?.Trim();
+        if (string.IsNullOrWhiteSpace(tipoDocumento) || !TiposDocumentoPermitidos.Contains(tipoDocumento))
+        {
+            TempData["LogisticaError"] = "Selecciona un tipo de documento válido.";
+            return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        }
+        if (archivo == null || archivo.Length <= 0)
+        {
+            TempData["LogisticaError"] = "Selecciona un archivo.";
+            return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        }
+
+        const long tamanoMaximo = 10 * 1024 * 1024;
+        if (archivo.Length > tamanoMaximo)
+        {
+            TempData["LogisticaError"] = "El archivo excede el tamaño máximo permitido de 10 MB.";
+            return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        }
+
+        var nombreOriginal = Path.GetFileName(archivo.FileName);
+        var extension = Path.GetExtension(nombreOriginal).ToLowerInvariant();
+        var extensionesPermitidas = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".pdf", ".xml", ".xlsx", ".xls", ".docx", ".doc", ".jpg", ".jpeg", ".png" };
+        if (!extensionesPermitidas.Contains(extension))
+        {
+            TempData["LogisticaError"] = "Solo se permiten archivos PDF, XML, Excel, Word, JPG, JPEG o PNG.";
+            return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        }
+
+        string? rutaFisicaCreada = null;
+        var tipoContenido = archivo.ContentType?.Trim() ?? "application/octet-stream";
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
+        try
+        {
+            var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken)
+                ?? throw new InvalidOperationException("El embarque no existe.");
+            if (header.Estatus == "Cancelado") throw new InvalidOperationException("No se pueden agregar documentos a un embarque cancelado.");
+
+            const string sqlTipo = @"SELECT ISNULL(NULLIF(LTRIM(RTRIM(TipoOperacion)),N''),N'Nacional') FROM dbo.Logistica_Embarques WITH (UPDLOCK,HOLDLOCK) WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
+            string tipoOperacion;
+            await using (var cmd = new SqlCommand(sqlTipo, cn, tx))
+            {
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+                tipoOperacion = NormalizarTipoOperacion(Convert.ToString(await cmd.ExecuteScalarAsync(cancellationToken)));
+            }
+            if (string.IsNullOrWhiteSpace(tipoOperacion)) tipoOperacion = "Nacional";
+
+            var definicion = ObtenerDefinicionDocumentos(tipoOperacion).FirstOrDefault(x => string.Equals(x.TipoDocumento, tipoDocumento, StringComparison.OrdinalIgnoreCase));
+            var esObligatorio = definicion.TipoDocumento != null && definicion.Obligatorio;
+            var areaResponsable = definicion.TipoDocumento != null ? definicion.AreaResponsable : ObtenerAreaDocumento(tipoDocumento);
+
+            const string sqlDuplicado = @"SELECT COUNT_BIG(*) FROM dbo.Logistica_EmbarqueDocumentos WITH (UPDLOCK,HOLDLOCK) WHERE EmbarqueID=@EmbarqueID AND TipoDocumento=@TipoDocumento AND Activo=1;";
+            await using (var cmd = new SqlCommand(sqlDuplicado, cn, tx))
+            {
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+                cmd.Parameters.Add("@TipoDocumento", SqlDbType.NVarChar, 80).Value = tipoDocumento;
+                if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) > 0)
+                    throw new InvalidOperationException($"Ya existe un documento activo de tipo {tipoDocumento}. Retíralo antes de cargar una nueva versión.");
+            }
+
+            var carpetaRelativa = Path.Combine("Logistica", "Documentos", embarqueId.ToString());
+            var carpetaFisica = Path.Combine(_environment.ContentRootPath, "App_Data", carpetaRelativa);
+            Directory.CreateDirectory(carpetaFisica);
+            var nombreFisico = $"{Guid.NewGuid():N}{extension}";
+            rutaFisicaCreada = Path.Combine(carpetaFisica, nombreFisico);
+            await using (var stream = new FileStream(rutaFisicaCreada, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+                await archivo.CopyToAsync(stream, cancellationToken);
+            var rutaRelativa = Path.Combine("App_Data", carpetaRelativa, nombreFisico).Replace('\\', '/');
+
+            const string sqlInsert = @"
+INSERT dbo.Logistica_EmbarqueDocumentos
+(EmbarqueID,TipoDocumento,NombreOriginal,NombreFisico,RutaRelativa,TipoContenido,TamanoBytes,AreaResponsable,EsObligatorio,Validado,UsuarioCargaID,UsuarioCargaNombre,FechaCarga,UsuarioValidaID,UsuarioValidaNombre,FechaValidacion,Observaciones,Activo,FechaCreacion)
+VALUES
+(@EmbarqueID,@TipoDocumento,@NombreOriginal,@NombreFisico,@RutaRelativa,@TipoContenido,@TamanoBytes,@AreaResponsable,@EsObligatorio,0,@UsuarioID,@UsuarioNombre,SYSDATETIME(),NULL,NULL,NULL,@Observaciones,1,SYSDATETIME());
+SELECT CONVERT(int,SCOPE_IDENTITY());";
+            int documentoId;
+            await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
+            {
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+                cmd.Parameters.Add("@TipoDocumento", SqlDbType.NVarChar, 80).Value = tipoDocumento;
+                cmd.Parameters.Add("@NombreOriginal", SqlDbType.NVarChar, 260).Value = nombreOriginal;
+                cmd.Parameters.Add("@NombreFisico", SqlDbType.NVarChar, 260).Value = nombreFisico;
+                cmd.Parameters.Add("@RutaRelativa", SqlDbType.NVarChar, 600).Value = rutaRelativa;
+                cmd.Parameters.Add("@TipoContenido", SqlDbType.NVarChar, 150).Value = tipoContenido;
+                cmd.Parameters.Add("@TamanoBytes", SqlDbType.BigInt).Value = archivo.Length;
+                cmd.Parameters.Add("@AreaResponsable", SqlDbType.NVarChar, 80).Value = Db(areaResponsable);
+                cmd.Parameters.Add("@EsObligatorio", SqlDbType.Bit).Value = esObligatorio;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+                cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = Db(string.IsNullOrWhiteSpace(observaciones) ? null : observaciones);
+                documentoId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
+            }
+
+            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_AGREGADO", header.Estatus, header.Estatus,
+                $"Documento DOC-{documentoId:000000} agregado. Tipo: {tipoDocumento}. Archivo: {nombreOriginal}. Responsable: {areaResponsable}.", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = $"Documento DOC-{documentoId:000000} cargado correctamente. Queda pendiente de validación.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(rutaFisicaCreada) && System.IO.File.Exists(rutaFisicaCreada))
+            {
+                try { System.IO.File.Delete(rutaFisicaCreada); } catch { }
+            }
+            TempData["LogisticaError"] = $"No fue posible cargar el documento: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ValidarDocumento(int documentoId, int embarqueId, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        if (documentoId <= 0 || embarqueId <= 0)
+        {
+            TempData["LogisticaError"] = "El documento indicado no es válido.";
+            return embarqueId > 0 ? RedirectToAction(nameof(Detalle), new { id = embarqueId }) : RedirectToAction(nameof(Index));
+        }
+
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken)
+                ?? throw new InvalidOperationException("El embarque no existe.");
+
+            const string sql = @"
+UPDATE dbo.Logistica_EmbarqueDocumentos
+SET Validado=1,UsuarioValidaID=@UsuarioID,UsuarioValidaNombre=@UsuarioNombre,FechaValidacion=SYSDATETIME()
+WHERE EmbarqueDocumentoID=@DocumentoID AND EmbarqueID=@EmbarqueID AND Activo=1 AND Validado=0;
+SELECT @@ROWCOUNT;";
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+                cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@DocumentoID", SqlDbType.Int).Value = documentoId;
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
+                    throw new InvalidOperationException("El documento no existe, ya fue validado o cambió durante la operación.");
+            }
+
+            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_VALIDADO", header.Estatus, header.Estatus,
+                $"Documento DOC-{documentoId:000000} validado por {UsuarioNombre}.", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = "Documento validado correctamente.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            TempData["LogisticaError"] = $"No fue posible validar el documento: {ex.Message}";
+        }
+        return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RetirarDocumento(int documentoId, int embarqueId, string? motivo, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        motivo = motivo?.Trim();
+        if (documentoId <= 0 || embarqueId <= 0 || string.IsNullOrWhiteSpace(motivo))
+        {
+            TempData["LogisticaError"] = "Documento y motivo de retiro son obligatorios.";
+            return embarqueId > 0 ? RedirectToAction(nameof(Detalle), new { id = embarqueId }) : RedirectToAction(nameof(Index));
+        }
+
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken)
+                ?? throw new InvalidOperationException("El embarque no existe.");
+            const string sql = @"
+UPDATE dbo.Logistica_EmbarqueDocumentos
+SET Activo=0,
+Observaciones=CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN CONCAT(N'Retirado: ',@Motivo)
+ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),N'Retirado: ',@Motivo) END
+WHERE EmbarqueDocumentoID=@DocumentoID AND EmbarqueID=@EmbarqueID AND Activo=1;
+SELECT @@ROWCOUNT;";
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 1000).Value = motivo;
+                cmd.Parameters.Add("@DocumentoID", SqlDbType.Int).Value = documentoId;
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
+                    throw new InvalidOperationException("El documento no existe, ya fue retirado o cambió durante la operación.");
+            }
+
+            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_RETIRADO", header.Estatus, header.Estatus,
+                $"Documento DOC-{documentoId:000000} retirado. Motivo: {motivo}", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = "Documento retirado. El archivo físico permanece conservado para auditoría.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            TempData["LogisticaError"] = $"No fue posible retirar el documento: {ex.Message}";
+        }
+        return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> VerDocumento(int id, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        if (id <= 0) return NotFound();
+
+        await using var cn = await AbrirAsync(cancellationToken);
+        const string sql = @"SELECT NombreOriginal,NombreFisico,RutaRelativa,ISNULL(TipoContenido,N'application/octet-stream') AS TipoContenido FROM dbo.Logistica_EmbarqueDocumentos WHERE EmbarqueDocumentoID=@DocumentoID AND Activo=1;";
+        string nombreOriginal, nombreFisico, rutaRelativa, tipoContenido;
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.Add("@DocumentoID", SqlDbType.Int).Value = id;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken)) return NotFound();
+            nombreOriginal = Texto(rd, "NombreOriginal");
+            nombreFisico = Texto(rd, "NombreFisico");
+            rutaRelativa = Texto(rd, "RutaRelativa");
+            tipoContenido = Texto(rd, "TipoContenido");
+        }
+
+        var rutaFisica = ObtenerRutaFisicaDocumento(rutaRelativa, nombreFisico);
+        if (!System.IO.File.Exists(rutaFisica)) return NotFound();
+        var stream = new FileStream(rutaFisica, FileMode.Open, FileAccess.Read, FileShare.Read);
+        Response.Headers.ContentDisposition = $"inline; filename=\"{SanitizarNombreCabecera(nombreOriginal)}\"";
+        return File(stream, string.IsNullOrWhiteSpace(tipoContenido) ? "application/octet-stream" : tipoContenido);
+    }
+
+    private async Task CargarDocumentosAsync(SqlConnection cn, LogisticaDetalleVm vm, CancellationToken cancellationToken)
+    {
+        vm.Documentos.Clear();
+        vm.DocumentosRequeridos.Clear();
+
+        const string sql = @"
+SELECT EmbarqueDocumentoID,EmbarqueID,ISNULL(TipoDocumento,N'') AS TipoDocumento,ISNULL(NombreOriginal,N'') AS NombreOriginal,
+ISNULL(NombreFisico,N'') AS NombreFisico,ISNULL(RutaRelativa,N'') AS RutaRelativa,ISNULL(TipoContenido,N'') AS TipoContenido,
+ISNULL(TamanoBytes,0) AS TamanoBytes,ISNULL(AreaResponsable,N'') AS AreaResponsable,ISNULL(EsObligatorio,0) AS EsObligatorio,
+ISNULL(Validado,0) AS Validado,UsuarioCargaID,ISNULL(UsuarioCargaNombre,N'') AS UsuarioCargaNombre,FechaCarga,UsuarioValidaID,
+ISNULL(UsuarioValidaNombre,N'') AS UsuarioValidaNombre,FechaValidacion,ISNULL(Observaciones,N'') AS Observaciones,ISNULL(Activo,0) AS Activo
+FROM dbo.Logistica_EmbarqueDocumentos
+WHERE EmbarqueID=@EmbarqueID AND Activo=1
+ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = vm.EmbarqueID;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await rd.ReadAsync(cancellationToken))
+            {
+                vm.Documentos.Add(new LogisticaDocumentoVm
+                {
+                    EmbarqueDocumentoID = Entero(rd, "EmbarqueDocumentoID"),
+                    EmbarqueID = Entero(rd, "EmbarqueID"),
+                    TipoDocumento = Texto(rd, "TipoDocumento"),
+                    NombreOriginal = Texto(rd, "NombreOriginal"),
+                    NombreFisico = Texto(rd, "NombreFisico"),
+                    RutaRelativa = Texto(rd, "RutaRelativa"),
+                    TipoContenido = Texto(rd, "TipoContenido"),
+                    TamanoBytes = EnteroLargo(rd, "TamanoBytes"),
+                    AreaResponsable = Texto(rd, "AreaResponsable"),
+                    EsObligatorio = Booleano(rd, "EsObligatorio"),
+                    Validado = Booleano(rd, "Validado"),
+                    UsuarioCargaID = EnteroNullable(rd, "UsuarioCargaID"),
+                    UsuarioCargaNombre = Texto(rd, "UsuarioCargaNombre"),
+                    FechaCarga = Fecha(rd, "FechaCarga") ?? DateTime.MinValue,
+                    UsuarioValidaID = EnteroNullable(rd, "UsuarioValidaID"),
+                    UsuarioValidaNombre = Texto(rd, "UsuarioValidaNombre"),
+                    FechaValidacion = Fecha(rd, "FechaValidacion"),
+                    Observaciones = Texto(rd, "Observaciones"),
+                    Activo = Booleano(rd, "Activo")
+                });
+            }
+        }
+
+        foreach (var definicion in ObtenerDefinicionDocumentos(vm.TipoOperacion))
+        {
+            var documento = vm.Documentos.FirstOrDefault(x => string.Equals(x.TipoDocumento, definicion.TipoDocumento, StringComparison.OrdinalIgnoreCase));
+            vm.DocumentosRequeridos.Add(new LogisticaDocumentoRequeridoVm
+            {
+                TipoDocumento = definicion.TipoDocumento,
+                AreaResponsable = definicion.AreaResponsable,
+                Obligatorio = definicion.Obligatorio,
+                Cargado = documento != null,
+                Validado = documento?.Validado == true,
+                Documento = documento
+            });
+        }
+    }
+
+    private static async Task<List<string>> ObtenerDocumentosFaltantesAsync(SqlConnection cn, int embarqueId, string tipoOperacion, CancellationToken cancellationToken)
+    {
+        var requeridos = ObtenerDefinicionDocumentos(tipoOperacion).Where(x => x.Obligatorio).ToList();
+        var validados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        const string sql = @"SELECT DISTINCT TipoDocumento FROM dbo.Logistica_EmbarqueDocumentos WHERE EmbarqueID=@EmbarqueID AND Activo=1 AND Validado=1;";
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await rd.ReadAsync(cancellationToken)) validados.Add(Texto(rd, "TipoDocumento"));
+        }
+        return requeridos.Where(x => !validados.Contains(x.TipoDocumento)).Select(x => x.TipoDocumento).ToList();
+    }
+
+    private static List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)> ObtenerDefinicionDocumentos(string? tipoOperacion)
+    {
+        var documentos = new List<(string, string, bool)>
+        {
+            ("Commercial Invoice","Planeación",true),
+            ("Packing List","Planeación",true),
+            ("Factura","Finanzas",true),
+            ("Remisión","Almacén",false)
+        };
+        if (NormalizarTipoOperacion(tipoOperacion) == "Exportacion")
+        {
+            documentos.Add(("XML", "Finanzas", true));
+            documentos.Add(("Carta de instrucciones", "Planeación", true));
+            documentos.Add(("Booking", "Planeación", false));
+            documentos.Add(("Pedimento", "Aduanas", false));
+        }
+        return documentos;
+    }
+
+    private static readonly HashSet<string> TiposDocumentoPermitidos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Commercial Invoice","Packing List","Factura","Remisión","XML","Carta de instrucciones","Booking","Pedimento","Otro"
+    };
+
+    private static string NormalizarTipoDocumento(string? valor)
+    {
+        valor = valor?.Trim() ?? string.Empty;
+        if (valor.Equals("Commercial Invoice", StringComparison.OrdinalIgnoreCase) || valor.Equals("Commercial List", StringComparison.OrdinalIgnoreCase) || valor.Equals("Comercial List", StringComparison.OrdinalIgnoreCase)) return "Commercial Invoice";
+        if (valor.Equals("Packing List", StringComparison.OrdinalIgnoreCase)) return "Packing List";
+        if (valor.Equals("Factura", StringComparison.OrdinalIgnoreCase)) return "Factura";
+        if (valor.Equals("Remision", StringComparison.OrdinalIgnoreCase) || valor.Equals("Remisión", StringComparison.OrdinalIgnoreCase)) return "Remisión";
+        if (valor.Equals("XML", StringComparison.OrdinalIgnoreCase)) return "XML";
+        if (valor.Equals("Carta de instrucciones", StringComparison.OrdinalIgnoreCase)) return "Carta de instrucciones";
+        if (valor.Equals("Booking", StringComparison.OrdinalIgnoreCase)) return "Booking";
+        if (valor.Equals("Pedimento", StringComparison.OrdinalIgnoreCase)) return "Pedimento";
+        if (valor.Equals("Otro", StringComparison.OrdinalIgnoreCase)) return "Otro";
+        return string.Empty;
+    }
+
+    private static string ObtenerAreaDocumento(string tipoDocumento) => tipoDocumento switch
+    {
+        "Commercial Invoice" => "Planeación",
+        "Packing List" => "Planeación",
+        "Factura" => "Finanzas",
+        "XML" => "Finanzas",
+        "Carta de instrucciones" => "Planeación",
+        "Booking" => "Planeación",
+        "Pedimento" => "Aduanas",
+        "Remisión" => "Almacén",
+        _ => "Logística"
+    };
+
+    private static string NormalizarTipoOperacion(string? valor)
+    {
+        valor = valor?.Trim() ?? string.Empty;
+        if (valor.Equals("Nacional", StringComparison.OrdinalIgnoreCase)) return "Nacional";
+        if (valor.Equals("Exportacion", StringComparison.OrdinalIgnoreCase) || valor.Equals("Exportación", StringComparison.OrdinalIgnoreCase)) return "Exportacion";
+        return string.Empty;
+    }
+
+    private string ObtenerRutaFisicaDocumento(string rutaRelativa, string nombreFisico)
+    {
+        var raizPermitida = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, "App_Data", "Logistica", "Documentos"));
+        string rutaFisica;
+        if (!string.IsNullOrWhiteSpace(rutaRelativa))
+        {
+            var relativa = rutaRelativa.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            if (relativa.StartsWith($"App_Data{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                relativa = relativa[("App_Data" + Path.DirectorySeparatorChar).Length..];
+            rutaFisica = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, "App_Data", relativa));
+        }
+        else rutaFisica = Path.GetFullPath(Path.Combine(raizPermitida, nombreFisico));
+
+        if (!rutaFisica.StartsWith(raizPermitida + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("La ruta del documento no es válida.");
+        return rutaFisica;
+    }
+
     private static void CalcularEstadoOperativo(LogisticaDetalleVm vm)
     {
         var ahora = DateTime.Now;
@@ -3120,7 +3417,7 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
                 vm.FechaEntregaProgramada,
                 vm.HoraEntregaProgramada);
 
-      
+
         vm.PorcentajeAvance = vm.Estatus switch
         {
             "Programado" => 10,
@@ -3176,10 +3473,10 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
 
             case "Cargado":
 
-                vm.ProximaAccion = "Validar salida";
-
-                vm.ProximaAccionDetalle =
-                    "Confirmar checklist de salida y despachar el embarque.";
+                vm.ProximaAccion = vm.DocumentacionCompleta ? "Validar salida" : "Completar documentación";
+                vm.ProximaAccionDetalle = vm.DocumentacionCompleta
+                    ? "Confirmar checklist de salida y despachar el embarque."
+                    : $"Faltan {vm.DocumentosFaltantes} documento(s) obligatorio(s) por cargar o validar.";
 
                 break;
 
@@ -3224,7 +3521,7 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
                 break;
         }
 
-    
+
 
         if (vm.FechaHoraCargaProgramada.HasValue)
         {
@@ -3387,6 +3684,15 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
             Completo = vm.CargaCompleta
         },
 
+        new()
+        {
+            Codigo = "DOCUMENTOS",
+            Concepto = "Documentación completa",
+            Descripcion = vm.DocumentacionCompleta
+                ? $"{vm.DocumentosObligatoriosCompletos} de {vm.DocumentosObligatorios} documentos obligatorios validados."
+                : $"{vm.DocumentosFaltantes} documento(s) obligatorio(s) pendiente(s) de carga o validación.",
+            Completo = vm.DocumentacionCompleta
+        },
         new()
         {
             Codigo = "INCIDENCIAS",
@@ -3899,7 +4205,7 @@ ORDER BY
                         totalCajas,
                         totalPiezas,
                         incidencia,
-                        url = Url.Action(nameof(Detalle), "Logistica", new { id = embarqueId })
+                        url = Url.Action(nameof(Detalle), "LogisticaEmbarques", new { id = embarqueId })
                     });
                 }
                 if (fechaEntrega.HasValue && fechaEntrega.Value.Date >= desde && fechaEntrega.Value.Date <= hasta)
@@ -3918,7 +4224,7 @@ ORDER BY
                         totalCajas,
                         totalPiezas,
                         incidencia,
-                        url = Url.Action(nameof(Detalle), "Logistica", new { id = embarqueId })
+                        url = Url.Action(nameof(Detalle), "LogisticaEmbarques", new { id = embarqueId })
                     });
                 }
             }
@@ -3944,7 +4250,7 @@ ORDER BY
                 totalCajas = demanda.CajasPTDisponibles,
                 totalPiezas = demanda.PendienteProgramar,
                 incidencia = demanda.PiezasPTDisponibles < demanda.PendienteProgramar,
-                url = Url.Action(nameof(Crear), "Logistica", new { releaseDetalleId = demanda.ReleaseDetalleID })
+                url = Url.Action(nameof(Crear), "LogisticaEmbarques", new { releaseDetalleId = demanda.ReleaseDetalleID })
             });
         }
         return Json(new

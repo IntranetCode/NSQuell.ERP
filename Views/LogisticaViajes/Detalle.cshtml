@@ -1,0 +1,1213 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm
+
+@{
+    ViewData["Title"] = $"Viaje {Model.Folio}";
+    Layout = "_Layout";
+
+    string BadgeEstatus(string estatus) => estatus switch
+    {
+        "Programado" => "bg-primary",
+        "En curso" => "bg-warning text-dark",
+        "Completado" => "bg-success",
+        "Cancelado" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    string BadgeSeveridad(string severidad) => severidad switch
+    {
+        "Crítica" => "bg-danger",
+        "Alta" => "bg-warning text-dark",
+        "Media" => "bg-info text-dark",
+        "Baja" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    string BadgeIncidencia(string estatus) => estatus switch
+    {
+        "Abierta" => "bg-danger",
+        "En seguimiento" => "bg-warning text-dark",
+        "Cerrada" => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    var ahora = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+}
+
+<style>
+    .viaje-detalle-page {
+        padding: 18px 20px 30px;
+    }
+
+    .detalle-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .detalle-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+
+    .detalle-subtitle {
+        margin: 3px 0 0;
+        color: #6c757d;
+        font-size: .88rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .estado-strip {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 10px 0 12px;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 16px;
+    }
+
+    .estado-item {
+        display: flex;
+        gap: 6px;
+        align-items: baseline;
+        white-space: nowrap;
+    }
+
+        .estado-item strong {
+            font-size: .9rem;
+        }
+
+        .estado-item span {
+            color: #6c757d;
+            font-size: .78rem;
+        }
+
+    .section {
+        padding: 14px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .section-title {
+        margin-bottom: 10px;
+        font-size: .87rem;
+        font-weight: 700;
+        color: #343a40;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px 18px;
+    }
+
+    .info-2 {
+        grid-column: span 2;
+    }
+
+    .info-3 {
+        grid-column: span 3;
+    }
+
+    .info-4 {
+        grid-column: span 4;
+    }
+
+    .info-6 {
+        grid-column: span 6;
+    }
+
+    .info-8 {
+        grid-column: span 8;
+    }
+
+    .info-12 {
+        grid-column: span 12;
+    }
+
+    .info-label {
+        font-size: .72rem;
+        color: #6c757d;
+        margin-bottom: 2px;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+    }
+
+    .info-value {
+        font-size: .86rem;
+        font-weight: 500;
+        word-break: break-word;
+    }
+
+    .action-block {
+        padding: 14px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .action-title {
+        font-size: .86rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+
+    .compact-form {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 8px;
+        align-items: end;
+    }
+
+    .form-2 {
+        grid-column: span 2;
+    }
+
+    .form-3 {
+        grid-column: span 3;
+    }
+
+    .form-4 {
+        grid-column: span 4;
+    }
+
+    .form-5 {
+        grid-column: span 5;
+    }
+
+    .form-6 {
+        grid-column: span 6;
+    }
+
+    .form-8 {
+        grid-column: span 8;
+    }
+
+    .form-12 {
+        grid-column: span 12;
+    }
+
+    .compact-form label {
+        display: block;
+        font-size: .73rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 3px;
+    }
+
+    .compact-form .form-control,
+    .compact-form .form-select {
+        min-height: 36px;
+        font-size: .82rem;
+    }
+
+    .compact-form textarea.form-control {
+        min-height: 68px;
+        resize: vertical;
+    }
+
+    .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .compact-table {
+        margin-bottom: 0;
+        font-size: .8rem;
+        vertical-align: middle;
+    }
+
+        .compact-table thead th {
+            background: #f8f9fa;
+            color: #495057;
+            font-size: .71rem;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            white-space: nowrap;
+        }
+
+        .compact-table td {
+            vertical-align: middle;
+        }
+
+    .badge-mini {
+        font-size: .7rem;
+        padding: .35em .55em;
+        font-weight: 600;
+    }
+
+    .history-row {
+        display: grid;
+        grid-template-columns: 145px 160px 1fr 150px;
+        gap: 12px;
+        padding: 8px 4px;
+        border-bottom: 1px solid #f1f3f5;
+        font-size: .8rem;
+    }
+
+        .history-row:last-child {
+            border-bottom: 0;
+        }
+
+    .history-date,
+    .history-user {
+        color: #6c757d;
+    }
+
+    .history-event {
+        font-weight: 600;
+    }
+
+    .empty {
+        padding: 25px 10px;
+        color: #6c757d;
+        text-align: center;
+        font-size: .82rem;
+    }
+
+    .danger-zone {
+        padding-top: 14px;
+    }
+
+    @@media (max-width: 900px) {
+        .info-2,
+        .info-3,
+        .info-4,
+        .info-6,
+        .info-8 {
+            grid-column: span 6;
+        }
+
+        .form-2,
+        .form-3,
+        .form-4,
+        .form-5,
+        .form-6,
+        .form-8 {
+            grid-column: span 6;
+        }
+
+        .history-row {
+            grid-template-columns: 130px 140px 1fr;
+        }
+
+        .history-user {
+            display: none;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .viaje-detalle-page {
+            padding: 14px 10px 24px;
+        }
+
+        .info-2,
+        .info-3,
+        .info-4,
+        .info-6,
+        .info-8,
+        .info-12,
+        .form-2,
+        .form-3,
+        .form-4,
+        .form-5,
+        .form-6,
+        .form-8,
+        .form-12 {
+            grid-column: span 12;
+        }
+
+        .header-actions {
+            width: 100%;
+        }
+
+            .header-actions .btn {
+                flex: 1;
+            }
+
+        .history-row {
+            display: block;
+        }
+
+        .history-date,
+        .history-event,
+        .history-user {
+            display: block;
+            margin-bottom: 3px;
+        }
+    }
+</style>
+
+<div class="viaje-detalle-page">
+
+    <div class="detalle-header">
+
+        <div>
+            <h1 class="detalle-title">
+                <i class="fa-solid fa-route me-1"></i>
+                @Model.Folio
+            </h1>
+
+            <div class="detalle-subtitle">
+                @Model.TipoViaje · @Model.Origen → @Model.Destino
+            </div>
+        </div>
+
+        <div class="header-actions">
+
+            <a asp-controller="LogisticaViajes"
+               asp-action="Index"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i>
+                Regresar
+            </a>
+
+            @if (Model.PuedeEditar)
+            {
+                <a asp-controller="LogisticaViajes"
+                   asp-action="Editar"
+                   asp-route-id="@Model.ViajeID"
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="fa-solid fa-pen me-1"></i>
+                    Editar
+                </a>
+            }
+
+        </div>
+
+    </div>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-circle-check me-1"></i>
+            @TempData["LogisticaOk"]
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>
+            @TempData["LogisticaError"]
+
+            <button type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="estado-strip">
+
+        <div class="estado-item">
+            <span>Estatus</span>
+
+            <strong>
+                <span class="badge badge-mini @BadgeEstatus(Model.Estatus)">
+                    @Model.Estatus
+                </span>
+            </strong>
+        </div>
+
+        <div class="estado-item">
+            <span>Programado</span>
+
+            <strong>
+                @Model.FechaProgramada.ToString("dd/MM/yyyy")
+
+                @if (Model.HoraSalidaProgramada.HasValue)
+                {
+                    @Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm")
+                }
+            </strong>
+        </div>
+
+        <div class="estado-item">
+            <span>Transporte</span>
+            <strong>@Model.TipoTransporte</strong>
+        </div>
+
+        <div class="estado-item">
+            <span>Unidad</span>
+            <strong>@Model.RecursoTransporte</strong>
+        </div>
+
+        <div class="estado-item">
+            <span>Operador</span>
+            <strong>@Model.OperadorMostrar</strong>
+        </div>
+
+        @if (Model.TieneIncidencia)
+        {
+            <div class="estado-item text-danger">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <strong>Con incidencia</strong>
+            </div>
+        }
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-title">
+            Datos del viaje
+        </div>
+
+        <div class="info-grid">
+
+            <div class="info-3">
+                <div class="info-label">Tipo de viaje</div>
+                <div class="info-value">@Model.TipoViaje</div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Tipo de transporte</div>
+                <div class="info-value">@Model.TipoTransporte</div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Fecha programada</div>
+                <div class="info-value">
+                    @Model.FechaProgramada.ToString("dd/MM/yyyy")
+                </div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Salida programada</div>
+
+                <div class="info-value">
+                    @(Model.HoraSalidaProgramada.HasValue
+                                        ? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm")
+                                        : "-")
+                </div>
+            </div>
+
+            <div class="info-6">
+                <div class="info-label">Origen</div>
+                <div class="info-value">@Model.Origen</div>
+            </div>
+
+            <div class="info-6">
+                <div class="info-label">Destino</div>
+                <div class="info-value">@Model.Destino</div>
+            </div>
+
+            <div class="info-8">
+                <div class="info-label">Motivo</div>
+                <div class="info-value">@Model.Motivo</div>
+            </div>
+
+            <div class="info-4">
+                <div class="info-label">Ruta</div>
+
+                <div class="info-value">
+                    @(string.IsNullOrWhiteSpace(Model.Ruta)
+                                        ? "Sin ruta específica"
+                                        : Model.Ruta)
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-title">
+            Transporte
+        </div>
+
+        @if (Model.EsTransporteInterno)
+        {
+            <div class="info-grid">
+
+                <div class="info-6">
+                    <div class="info-label">Unidad</div>
+                    <div class="info-value">
+                        @(string.IsNullOrWhiteSpace(Model.Unidad)
+                                            ? "-"
+                                            : Model.Unidad)
+                                                       </div>
+                                                   </div>
+
+                <div class="info-6">
+                    <div class="info-label">Operador / chofer</div>
+                    <div class="info-value">
+                        @(string.IsNullOrWhiteSpace(Model.Operador)
+                                            ? "-"
+                                            : Model.Operador)
+                </div>
+            </div>
+
+            </div>
+                }
+        else
+        {
+            <div class="info-grid">
+
+                <div class="info-3">
+                    <div class="info-label">Transportista</div>
+                    <div class="info-value">
+                        @(string.IsNullOrWhiteSpace(Model.TransportistaExterno)
+                                            ? "-"
+                                            : Model.TransportistaExterno)
+                                                                     </div>
+                                                                 </div>
+
+                <div class="info-3">
+                    <div class="info-label">Unidad</div>
+                    <div class="info-value">
+                        @(string.IsNullOrWhiteSpace(Model.UnidadExterna)
+                                            ? "-"
+                                            : Model.UnidadExterna)
+                                                              </div>
+                                                          </div>
+
+                <div class="info-3">
+                    <div class="info-label">Placas</div>
+                    <div class="info-value">
+                        @(string.IsNullOrWhiteSpace(Model.PlacasExternas)
+                                            ? "-"
+                                            : Model.PlacasExternas)
+                                                               </div>
+                                                           </div>
+
+                <div class="info-3">
+                    <div class="info-label">Chofer</div>
+                    <div class="info-value">
+                        @(string.IsNullOrWhiteSpace(Model.ChoferExterno)
+                                            ? "-"
+                                            : Model.ChoferExterno)
+                </div>
+            </div>
+
+            </div>
+                }
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-title">
+            Seguimiento
+        </div>
+
+        <div class="info-grid">
+
+            <div class="info-3">
+                <div class="info-label">Salida real</div>
+
+                <div class="info-value">
+                    @(Model.FechaSalidaReal.HasValue
+                                        ? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm")
+                                        : "Pendiente")
+                </div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Regreso estimado</div>
+
+                <div class="info-value">
+                    @(Model.HoraRegresoProgramada.HasValue
+                                        ? Model.HoraRegresoProgramada.Value.ToString(@"hh\:mm")
+                                        : "-")
+                </div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Regreso real</div>
+
+                <div class="info-value">
+                    @(Model.FechaRegresoReal.HasValue
+                                        ? Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm")
+                                        : "Pendiente")
+                </div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Estado operativo</div>
+
+                <div class="info-value">
+                    @if (Model.RetornoPendiente)
+                    {
+                        <span class="text-warning">
+                            <i class="fa-solid fa-clock me-1"></i>
+                            Retorno pendiente
+                        </span>
+                    }
+                    else if (Model.Estatus == "Completado")
+                    {
+                        <span class="text-success">
+                            <i class="fa-solid fa-circle-check me-1"></i>
+                            Viaje cerrado
+                        </span>
+                    }
+                    else
+                    {
+                        @Model.Estatus
+                    }
+                </div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Kilometraje salida</div>
+
+                <div class="info-value">
+                    @(Model.KilometrajeSalida.HasValue
+                                        ? $"{Model.KilometrajeSalida.Value:N0} km"
+                                        : "-")
+                </div>
+            </div>
+
+            <div class="info-3">
+                <div class="info-label">Kilometraje regreso</div>
+
+                <div class="info-value">
+                    @(Model.KilometrajeRegreso.HasValue
+                                        ? $"{Model.KilometrajeRegreso.Value:N0} km"
+                                        : "-")
+                </div>
+            </div>
+
+            @if (Model.KilometrajeSalida.HasValue &&
+                        Model.KilometrajeRegreso.HasValue &&
+                        Model.KilometrajeRegreso >= Model.KilometrajeSalida)
+            {
+                <div class="info-3">
+                    <div class="info-label">Recorrido</div>
+
+                    <div class="info-value">
+                        @((Model.KilometrajeRegreso.Value -
+                                            Model.KilometrajeSalida.Value).ToString("N0")) km
+                </div>
+            </div>
+                        }
+
+        </div>
+
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+    {
+        <div class="section">
+
+            <div class="section-title">
+                Observaciones
+            </div>
+
+            <div class="info-value"
+                 style="white-space:pre-line">
+                @Model.Observaciones
+            </div>
+
+        </div>
+    }
+
+    @if (Model.PuedeRegistrarSalida)
+    {
+        <div class="action-block">
+
+            <div class="action-title">
+                <i class="fa-solid fa-play me-1"></i>
+                Registrar salida
+            </div>
+
+            <form asp-controller="LogisticaViajes"
+                  asp-action="RegistrarSalida"
+                  method="post"
+                  class="compact-form">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="ViajeID"
+                       value="@Model.ViajeID" />
+
+                <div class="form-4">
+                    <label>Fecha y hora de salida</label>
+
+                    <input type="datetime-local"
+                           name="FechaSalida"
+                           value="@ahora"
+                           class="form-control"
+                           required />
+                </div>
+
+                <div class="form-3">
+                    <label>Kilometraje salida</label>
+
+                    <input type="number"
+                           name="KilometrajeSalida"
+                           min="0"
+                           class="form-control"
+                           placeholder="Opcional" />
+                </div>
+
+                <div class="form-4">
+                    <label>Observaciones</label>
+
+                    <input type="text"
+                           name="Observaciones"
+                           maxlength="1000"
+                           class="form-control"
+                           placeholder="Opcional" />
+                </div>
+
+                <div class="form-1">
+                    <button type="submit"
+                            class="btn btn-success btn-sm w-100"
+                            onclick="return confirm('¿Confirmar la salida de este viaje?');">
+                        <i class="fa-solid fa-play"></i>
+                        Salir
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    }
+
+    @if (Model.PuedeRegistrarRegreso)
+    {
+        <div class="action-block">
+
+            <div class="action-title">
+                <i class="fa-solid fa-flag-checkered me-1"></i>
+                Registrar regreso
+            </div>
+
+            <form asp-controller="LogisticaViajes"
+                  asp-action="RegistrarRetorno"
+                  method="post"
+                  class="compact-form">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="ViajeID"
+                       value="@Model.ViajeID" />
+
+                <div class="form-4">
+                    <label>Fecha y hora de regreso</label>
+
+                    <input type="datetime-local"
+                           name="FechaRegreso"
+                           value="@ahora"
+                           class="form-control"
+                           required />
+                </div>
+
+                <div class="form-3">
+                    <label>Kilometraje regreso</label>
+
+                    <input type="number"
+                           name="KilometrajeRegreso"
+                           min="0"
+                           class="form-control"
+                           placeholder="Opcional" />
+                </div>
+
+                <div class="form-4">
+                    <label>Observaciones</label>
+
+                    <input type="text"
+                           name="Observaciones"
+                           maxlength="1000"
+                           class="form-control"
+                           placeholder="Opcional" />
+                </div>
+
+                <div class="form-1">
+                    <button type="submit"
+                            class="btn btn-success btn-sm w-100"
+                            onclick="return confirm('¿Confirmar el regreso y cerrar el viaje?');">
+                        <i class="fa-solid fa-flag-checkered"></i>
+                        Regresar
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    }
+
+    @if (Model.Estatus != "Cancelado")
+    {
+        <div class="section">
+
+            <div class="section-title">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                Registrar incidencia
+            </div>
+
+            <form asp-controller="LogisticaViajes"
+                  asp-action="RegistrarIncidencia"
+                  method="post"
+                  class="compact-form">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="ViajeID"
+                       value="@Model.ViajeID" />
+
+                <div class="form-3">
+                    <label>Tipo</label>
+
+                    <select name="Tipo"
+                            class="form-select"
+                            required>
+                        <option value="">Selecciona...</option>
+                        <option value="Unidad">Unidad</option>
+                        <option value="Operador">Operador</option>
+                        <option value="Tráfico">Tráfico</option>
+                        <option value="Retraso">Retraso</option>
+                        <option value="Ruta">Ruta</option>
+                        <option value="Material">Material</option>
+                        <option value="Recolección">Recolección</option>
+                        <option value="Cliente / destino">Cliente / destino</option>
+                        <option value="Seguridad">Seguridad</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+
+                <div class="form-2">
+                    <label>Severidad</label>
+
+                    <select name="Severidad"
+                            class="form-select"
+                            required>
+                        <option value="Baja">Baja</option>
+                        <option value="Media" selected>Media</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Crítica">Crítica</option>
+                    </select>
+                </div>
+
+                <div class="form-3">
+                    <label>Responsable</label>
+
+                    <input type="text"
+                           name="Responsable"
+                           maxlength="200"
+                           class="form-control"
+                           placeholder="Opcional" />
+                </div>
+
+                <div class="form-4">
+                    <label>Descripción</label>
+
+                    <input type="text"
+                           name="Descripcion"
+                           maxlength="1200"
+                           class="form-control"
+                           required
+                           placeholder="Describe la incidencia" />
+                </div>
+
+                <div class="form-12 text-end">
+                    <button type="submit"
+                            class="btn btn-outline-danger btn-sm">
+                        <i class="fa-solid fa-plus me-1"></i>
+                        Registrar incidencia
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    }
+
+    <div class="section">
+
+        <div class="section-title">
+            Incidencias
+        </div>
+
+        <div class="table-wrap">
+
+            <table class="table table-sm table-hover compact-table">
+
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Severidad</th>
+                        <th>Descripción</th>
+                        <th>Responsable</th>
+                        <th>Estatus</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @if (Model.Incidencias == null ||
+                                        Model.Incidencias.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8">
+                                <div class="empty">
+                                    Sin incidencias registradas.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var incidencia in Model.Incidencias)
+                        {
+                            <tr>
+
+                                <td>
+                                    VINC-@incidencia.ViajeIncidenciaID.ToString("000000")
+                                </td>
+
+                                <td class="text-nowrap">
+                                    @incidencia.FechaRegistro.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+
+                                <td>
+                                    @incidencia.Tipo
+                                </td>
+
+                                <td>
+                                    <span class="badge badge-mini @BadgeSeveridad(incidencia.Severidad)">
+                                        @incidencia.Severidad
+                                    </span>
+                                </td>
+
+                                <td style="min-width:220px">
+                                    @incidencia.Descripcion
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(incidencia.Responsable)
+                                                                ? "-"
+                                                                : incidencia.Responsable)
+                        </td>
+
+                                <td>
+                                    <span class="badge badge-mini @BadgeIncidencia(incidencia.Estatus)">
+                                        @incidencia.Estatus
+                                    </span>
+                                </td>
+
+                                <td style="min-width:220px">
+
+                            @if (incidencia.EstaAbierta)
+                                    {
+                                        <form asp-controller="LogisticaViajes"
+                                              asp-action="CerrarIncidencia"
+                                              method="post"
+                                              class="d-flex gap-1">
+
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden"
+                                                   name="ViajeID"
+                                                   value="@Model.ViajeID" />
+
+                                            <input type="hidden"
+                                                   name="ViajeIncidenciaID"
+                                                   value="@incidencia.ViajeIncidenciaID" />
+
+                                            <input type="text"
+                                                   name="Solucion"
+                                                   maxlength="1200"
+                                                   class="form-control form-control-sm"
+                                                   placeholder="Solución aplicada"
+                                                   required />
+
+                                            <button type="submit"
+                                                    class="btn btn-outline-success btn-sm"
+                                                    title="Cerrar incidencia">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-success">
+                                            <i class="fa-solid fa-circle-check me-1"></i>
+                                            Cerrada
+                                        </span>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-title">
+            Historial
+        </div>
+
+        @if (Model.Historial == null ||
+                Model.Historial.Count == 0)
+        {
+            <div class="empty">
+                Sin movimientos registrados.
+            </div>
+        }
+        else
+        {
+            foreach (var movimiento in Model.Historial)
+            {
+                <div class="history-row">
+
+                    <div class="history-date">
+                        @movimiento.FechaEvento.ToString("dd/MM/yyyy HH:mm")
+                    </div>
+
+                    <div class="history-event">
+                        @movimiento.Evento.Replace("_", " ")
+                    </div>
+
+                    <div>
+                        @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior) ||
+                                        !string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
+                        {
+                            <div class="mb-1">
+                                @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior))
+                                {
+                                    <span>@movimiento.EstadoAnterior</span>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
+                                {
+                                    <span>
+                                        →
+                                        @movimiento.EstadoNuevo
+                                    </span>
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(movimiento.Observaciones))
+                        {
+                            <div class="text-muted">
+                                @movimiento.Observaciones
+                            </div>
+                        }
+                    </div>
+
+                    <div class="history-user">
+                        @movimiento.Usuario
+                    </div>
+
+                </div>
+            }
+        }
+
+    </div>
+
+    <div class="section">
+
+        <div class="section-title">
+            Registro
+        </div>
+
+        <div class="info-grid">
+
+            <div class="info-4">
+                <div class="info-label">Responsable</div>
+
+                <div class="info-value">
+                    @(string.IsNullOrWhiteSpace(Model.UsuarioResponsable)
+                                        ? "-"
+                                        : Model.UsuarioResponsable)
+                </div>
+            </div>
+
+            <div class="info-4">
+                <div class="info-label">Creado por</div>
+
+                <div class="info-value">
+                    @(string.IsNullOrWhiteSpace(Model.CreadoPor)
+                                        ? "-"
+                                        : Model.CreadoPor)
+                </div>
+            </div>
+
+            <div class="info-4">
+                <div class="info-label">Fecha de creación</div>
+
+                <div class="info-value">
+                    @Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    @if (Model.PuedeCancelar)
+    {
+        <div class="danger-zone">
+
+            <div class="section-title text-danger">
+                Cancelar viaje
+            </div>
+
+            <form asp-controller="LogisticaViajes"
+                  asp-action="Cancelar"
+                  method="post"
+                  class="compact-form">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="ViajeID"
+                       value="@Model.ViajeID" />
+
+                <div class="form-10">
+                    <label>Motivo de cancelación</label>
+
+                    <input type="text"
+                           name="Motivo"
+                           maxlength="1000"
+                           class="form-control"
+                           required
+                           placeholder="Indica por qué se cancela el viaje" />
+                </div>
+
+                <div class="form-2">
+                    <button type="submit"
+                            class="btn btn-outline-danger btn-sm w-100"
+                            onclick="return confirm('¿Seguro que deseas cancelar este viaje?');">
+                        <i class="fa-solid fa-ban me-1"></i>
+                        Cancelar viaje
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    }
+
+</div>

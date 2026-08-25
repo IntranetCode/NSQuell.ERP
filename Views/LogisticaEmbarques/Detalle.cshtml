@@ -1,0 +1,1008 @@
+﻿@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaDetalleVm
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = $"Embarque {Model.Folio}";
+
+    string BadgeEstatus(string estatus) => estatus switch
+    {
+        "Programado" => "bg-primary",
+        "Preparando" => "bg-info text-dark",
+        "Preparado" => "bg-warning text-dark",
+        "Cargado" => "bg-dark",
+        "En ruta" => "bg-primary",
+        "Entregado" => "bg-success",
+        "Cancelado" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    string BadgeSeveridad(string severidad) => severidad switch
+    {
+        "Crítica" => "bg-danger",
+        "Alta" => "bg-warning text-dark",
+        "Media" => "bg-info text-dark",
+        "Baja" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    string TextoFechaHora(DateTime? fecha, TimeSpan? hora)
+    {
+        if (!fecha.HasValue) return "-";
+        return hora.HasValue
+            ? $"{fecha.Value:dd/MM/yyyy} {hora.Value:hh\\:mm}"
+            : fecha.Value.ToString("dd/MM/yyyy");
+    }
+
+    var puedePreparar = Model.Estatus is "Programado" or "Preparando";
+    var puedeCargar = Model.Estatus == "Preparado";
+    var puedeDespachar = Model.Estatus == "Cargado";
+    var puedeEntregar = Model.Estatus == "En ruta";
+    var puedeCancelar = Model.Estatus is "Programado" or "Preparando" or "Preparado";
+    var puedeReprogramar = Model.Estatus is "Programado" or "Preparando" or "Preparado";
+    var puedeEditarCajas = Model.Estatus is "Programado" or "Preparando";
+    var puedeAgregarPartida = Model.Estatus is "Programado" or "Preparando";
+    var ahora = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
+}
+
+@await Html.PartialAsync("_LogisticaNavegacion")
+
+<style>
+    .detalle-page {
+        padding: 18px 20px 30px
+    }
+
+    .detalle-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px
+    }
+
+    .detalle-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700
+    }
+
+    .detalle-subtitle {
+        margin: 3px 0 0;
+        color: #6c757d;
+        font-size: .88rem
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .status-strip {
+        display: flex;
+        align-items: center;
+        gap: 10px 22px;
+        flex-wrap: wrap;
+        padding: 10px 0 12px;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 12px
+    }
+
+    .status-item {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        white-space: nowrap
+    }
+
+        .status-item strong {
+            font-size: .9rem
+        }
+
+        .status-item span {
+            font-size: .73rem;
+            color: #6c757d
+        }
+
+    .progress-line {
+        height: 5px;
+        background: #e9ecef;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 8px 0 15px
+    }
+
+        .progress-line > div {
+            height: 100%;
+            background: #0d6efd
+        }
+
+    .section {
+        padding: 14px 0;
+        border-top: 1px solid #e9ecef
+    }
+
+        .section:first-of-type {
+            border-top: 0
+        }
+
+    .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 9px
+    }
+
+    .section-title {
+        margin: 0;
+        font-size: .9rem;
+        font-weight: 700
+    }
+
+    .section-subtitle {
+        margin: 2px 0 0;
+        font-size: .73rem;
+        color: #6c757d
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(12,1fr);
+        gap: 10px 16px
+    }
+
+    .i2 {
+        grid-column: span 2
+    }
+
+    .i3 {
+        grid-column: span 3
+    }
+
+    .i4 {
+        grid-column: span 4
+    }
+
+    .i6 {
+        grid-column: span 6
+    }
+
+    .i8 {
+        grid-column: span 8
+    }
+
+    .i12 {
+        grid-column: span 12
+    }
+
+    .info-label {
+        font-size: .68rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+        margin-bottom: 2px
+    }
+
+    .info-value {
+        font-size: .83rem;
+        font-weight: 500;
+        word-break: break-word
+    }
+
+    .action-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .table-wrap {
+        width: 100%;
+        overflow-x: auto
+    }
+
+    .compact-table {
+        font-size: .78rem;
+        margin-bottom: 0;
+        vertical-align: middle
+    }
+
+        .compact-table thead th {
+            background: #f8f9fa;
+            color: #495057;
+            font-size: .68rem;
+            text-transform: uppercase;
+            white-space: nowrap
+        }
+
+        .compact-table td {
+            vertical-align: middle
+        }
+
+    .badge-mini {
+        font-size: .67rem;
+        padding: .34em .54em;
+        font-weight: 600
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(12,1fr);
+        gap: 8px;
+        align-items: end
+    }
+
+    .f2 {
+        grid-column: span 2
+    }
+
+    .f3 {
+        grid-column: span 3
+    }
+
+    .f4 {
+        grid-column: span 4
+    }
+
+    .f5 {
+        grid-column: span 5
+    }
+
+    .f6 {
+        grid-column: span 6
+    }
+
+    .f8 {
+        grid-column: span 8
+    }
+
+    .f10 {
+        grid-column: span 10
+    }
+
+    .f12 {
+        grid-column: span 12
+    }
+
+    .form-grid label {
+        display: block;
+        font-size: .71rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 3px
+    }
+
+    .form-grid .form-control, .form-grid .form-select {
+        min-height: 35px;
+        font-size: .8rem
+    }
+
+    .empty {
+        padding: 24px 10px;
+        text-align: center;
+        color: #6c757d;
+        font-size: .8rem
+    }
+
+    .checklist {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 6px 16px
+    }
+
+    .check-item {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 6px 0
+    }
+
+        .check-item i {
+            margin-top: 2px
+        }
+
+        .check-item strong {
+            display: block;
+            font-size: .79rem
+        }
+
+        .check-item small {
+            display: block;
+            color: #6c757d;
+            font-size: .71rem
+        }
+
+    .doc-required {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 8px;
+        margin-bottom: 10px
+    }
+
+    .doc-required-item {
+        padding: 7px 8px;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        font-size: .75rem
+    }
+
+    .history-row {
+        display: grid;
+        grid-template-columns: 145px 160px 1fr 150px;
+        gap: 10px;
+        padding: 7px 3px;
+        border-bottom: 1px solid #f1f3f5;
+        font-size: .77rem
+    }
+
+    .history-date, .history-user {
+        color: #6c757d
+    }
+
+    .danger-zone {
+        padding-top: 14px;
+        border-top: 1px solid #f1b0b7
+    }
+
+    @@media(max-width:900px) {
+        .i2, .i3, .i4, .i6, .i8, .f2, .f3, .f4, .f5, .f6, .f8, .f10 {
+            grid-column: span 6
+        }
+
+        .doc-required {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .history-row {
+            grid-template-columns: 125px 140px 1fr
+        }
+
+        .history-user {
+            display: none
+        }
+    }
+
+    @@media(max-width:600px) {
+        .detalle-page {
+            padding: 14px 10px 24px
+        }
+
+        .i2, .i3, .i4, .i6, .i8, .i12, .f2, .f3, .f4, .f5, .f6, .f8, .f10, .f12 {
+            grid-column: span 12
+        }
+
+        .checklist, .doc-required {
+            grid-template-columns: 1fr
+        }
+
+        .header-actions {
+            width: 100%
+        }
+
+            .header-actions .btn {
+                flex: 1
+            }
+
+        .history-row {
+            display: block
+        }
+
+        .history-date, .history-user {
+            display: block;
+            margin-bottom: 3px
+        }
+    }
+</style>
+
+<div class="detalle-page">
+    <div class="detalle-header">
+        <div>
+            <h1 class="detalle-title"><i class="fa-solid fa-truck-ramp-box me-1"></i>@Model.Folio</h1>
+            <p class="detalle-subtitle">@Model.Cliente · @Model.Destino</p>
+        </div>
+        <div class="header-actions">
+            <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i>Regresar
+            </a>
+            <a asp-controller="LogisticaEmbarques" asp-action="Calendario" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-calendar-days me-1"></i>Calendario
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-circle-check me-1"></i>@TempData["LogisticaOk"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="status-strip">
+        <div class="status-item"><span>Estatus</span><strong><span class="badge @BadgeEstatus(Model.Estatus)">@Model.Estatus</span></strong></div>
+        <div class="status-item"><span>Avance</span><strong>@Model.PorcentajeAvance%</strong></div>
+        <div class="status-item"><span>Preparado</span><strong>@Model.TotalPiezasPreparadas.ToString("N0") / @Model.TotalPiezasSolicitadas.ToString("N0")</strong></div>
+        <div class="status-item"><span>Cajas</span><strong>@Model.TotalCajasAsignadas</strong></div>
+        <div class="status-item"><span>Cargadas</span><strong>@Model.TotalCajasCargadas</strong></div>
+        @if (Model.IncidenciasAbiertas > 0)
+        {
+            <div class="status-item text-danger"><span>Incidencias</span><strong>@Model.IncidenciasAbiertas</strong></div>
+        }
+        @if (Model.EnRiesgo)
+        {
+            <div class="status-item text-danger"><span>Riesgo</span><strong>@Model.MensajeRiesgo</strong></div>
+        }
+    </div>
+
+    <div class="progress-line"><div style="width:@Math.Clamp(Model.PorcentajeAvance, 0, 100)%"></div></div>
+
+    <div class="section">
+        <div class="section-head">
+            <div>
+                <h2 class="section-title">Datos del embarque</h2>
+                <p class="section-subtitle">@Model.ProximaAccion · @Model.ProximaAccionDetalle</p>
+            </div>
+        </div>
+        <div class="info-grid">
+            <div class="i3"><div class="info-label">Cliente</div><div class="info-value">@Model.Cliente</div></div>
+            <div class="i3"><div class="info-label">Destino</div><div class="info-value">@Model.Destino</div></div>
+            <div class="i3"><div class="info-label">Tipo operación</div><div class="info-value">@Model.TipoOperacion</div></div>
+            <div class="i3"><div class="info-label">Referencia</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.ReferenciaOperacion) ? "-" : Model.ReferenciaOperacion)</div></div>
+            <div class="i6"><div class="info-label">Dirección</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.DireccionEntrega) ? "-" : Model.DireccionEntrega)</div></div>
+            <div class="i3"><div class="info-label">Carga programada</div><div class="info-value">@TextoFechaHora(Model.FechaCargaProgramada, Model.HoraCargaProgramada)</div></div>
+            <div class="i3"><div class="info-label">Entrega programada</div><div class="info-value">@TextoFechaHora(Model.FechaEntregaProgramada, Model.HoraEntregaProgramada)</div></div>
+            <div class="i4"><div class="info-label">Ruta</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.Ruta) ? "Pendiente" : Model.Ruta)</div></div>
+            <div class="i4"><div class="info-label">Unidad</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.Unidad) ? "Pendiente" : Model.Unidad)</div></div>
+            <div class="i4"><div class="info-label">Operador</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.Operador) ? "Pendiente" : Model.Operador)</div></div>
+            @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+            {
+                <div class="i12"><div class="info-label">Observaciones</div><div class="info-value" style="white-space:pre-line">@Model.Observaciones</div></div>
+            }
+        </div>
+    </div>
+
+    @if (puedeReprogramar)
+    {
+        <div class="section">
+            <div class="section-title mb-2">Reprogramar</div>
+            <form asp-controller="LogisticaEmbarques" asp-action="Reprogramar" method="post" class="form-grid">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+                <div class="f2"><label>Nueva fecha carga</label><input type="date" name="FechaCargaProgramada" value="@Model.FechaCargaProgramada?.ToString("yyyy-MM-dd")" class="form-control" required /></div>
+                <div class="f2"><label>Hora carga</label><input type="time" name="HoraCargaProgramada" value="@Model.HoraCargaProgramada?.ToString(@"hh\:mm")" class="form-control" /></div>
+                <div class="f2"><label>Nueva fecha entrega</label><input type="date" name="FechaEntregaProgramada" value="@Model.FechaEntregaProgramada?.ToString("yyyy-MM-dd")" class="form-control" required /></div>
+                <div class="f2"><label>Hora entrega</label><input type="time" name="HoraEntregaProgramada" value="@Model.HoraEntregaProgramada?.ToString(@"hh\:mm")" class="form-control" /></div>
+                <div class="f2"><label>Motivo</label><input type="text" name="Motivo" maxlength="80" class="form-control" required /></div>
+                <div class="f2"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" class="form-control" /></div>
+                <div class="f12 text-end"><button class="btn btn-outline-primary btn-sm" type="submit"><i class="fa-solid fa-calendar-check me-1"></i>Reprogramar</button></div>
+            </form>
+        </div>
+    }
+
+    <div class="section">
+        <div class="section-head">
+            <div>
+                <h2 class="section-title">Partidas</h2>
+                <p class="section-subtitle">Release, parte, OF y cantidades del embarque.</p>
+            </div>
+        </div>
+
+        @if (puedeAgregarPartida && Model.DemandasDisponibles.Any())
+        {
+            <form asp-controller="LogisticaEmbarques" asp-action="AgregarDetalle" method="post" class="form-grid mb-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+                <div class="f8">
+                    <label>Agregar salida del mismo cliente</label>
+                    <select name="ReleaseDetalleID" id="releaseAgregar" class="form-select" required>
+                        <option value="">Selecciona...</option>
+                        @foreach (var d in Model.DemandasDisponibles)
+                        {
+                            <option value="@d.ReleaseDetalleID" data-pendiente="@d.PendienteProgramar">
+                                @d.FolioRelease · @d.NumeroParte · OF @d.NumeroOF · pendiente @d.PendienteProgramar.ToString("N0")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="f2"><label>Cantidad</label><input type="number" name="CantidadSolicitada" id="cantidadAgregar" min="1" class="form-control" required /></div>
+                <div class="f2"><button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="fa-solid fa-plus me-1"></i>Agregar</button></div>
+            </form>
+        }
+
+        <div class="table-wrap">
+            <table class="table table-sm table-hover compact-table">
+                <thead>
+                    <tr><th>Release</th><th>Parte</th><th>Descripción</th><th>OF</th><th class="text-end">Solicitado</th><th class="text-end">Asignado</th><th class="text-end">Despachado</th><th class="text-end">Pendiente</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.Partidas)
+                    {
+                        <tr>
+                            <td>@p.FolioRelease</td>
+                            <td class="fw-semibold">@p.NumeroParte</td>
+                            <td>@(string.IsNullOrWhiteSpace(p.Descripcion) ? "-" : p.Descripcion)</td>
+                            <td>@(string.IsNullOrWhiteSpace(p.NumeroOF) ? "-" : p.NumeroOF)</td>
+                            <td class="text-end">@p.CantidadSolicitada.ToString("N0")</td>
+                            <td class="text-end">@p.CantidadAsignada.ToString("N0")</td>
+                            <td class="text-end">@p.CantidadDespachada.ToString("N0")</td>
+                            <td class="text-end fw-semibold">@p.PendienteAsignar.ToString("N0")</td>
+                        </tr>
+                    }
+                    @if (!Model.Partidas.Any())
+                    {
+                        <tr><td colspan="8"><div class="empty">Sin partidas.</div></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <div>
+                <h2 class="section-title">Cajas asignadas</h2>
+                <p class="section-subtitle">@Model.TotalPiezasPreparadas.ToString("N0") de @Model.TotalPiezasSolicitadas.ToString("N0") piezas preparadas.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="table table-sm table-hover compact-table">
+                <thead><tr><th>Caja</th><th>Etiqueta</th><th>Parte</th><th>OF</th><th>Lote</th><th class="text-end">Cantidad</th><th>Estatus</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in Model.CajasAsignadas)
+                    {
+                        <tr>
+                            <td>#@c.NumeroCaja</td>
+                            <td class="fw-semibold">@c.Etiqueta</td>
+                            <td>@c.NumeroParte</td>
+                            <td>@c.NumeroOF</td>
+                            <td>@c.Lote</td>
+                            <td class="text-end">@c.CantidadAsignada.ToString("N0")</td>
+                            <td><span class="badge bg-light text-dark badge-mini">@c.Estatus</span></td>
+                            <td class="text-end">
+                                @if (puedeEditarCajas)
+                                {
+                                    <form asp-controller="LogisticaEmbarques" asp-action="LiberarCaja" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                        <input type="hidden" name="embarqueCajaId" value="@c.EmbarqueCajaID" />
+                                        <button class="btn btn-outline-danger btn-sm" type="submit" onclick="return confirm('¿Liberar esta caja?');"><i class="fa-solid fa-xmark"></i></button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.CajasAsignadas.Any())
+                    {
+                        <tr><td colspan="8"><div class="empty">Todavía no hay cajas asignadas.</div></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (puedeEditarCajas)
+    {
+        <div class="section">
+            <div class="section-head">
+                <div><h2 class="section-title">Cajas PT disponibles</h2><p class="section-subtitle">Reserva cajas completas para las partidas pendientes.</p></div>
+            </div>
+            <div class="table-wrap">
+                <table class="table table-sm table-hover compact-table">
+                    <thead><tr><th>Caja</th><th>Etiqueta</th><th>Parte</th><th>OF</th><th>Lote</th><th>Ubicación</th><th class="text-end">Disponible</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in Model.CajasDisponibles)
+                        {
+                            <tr>
+                                <td>#@c.NumeroCaja</td>
+                                <td class="fw-semibold">@c.Etiqueta</td>
+                                <td>@c.NumeroParte</td>
+                                <td>@c.NumeroOF</td>
+                                <td>@c.Lote</td>
+                                <td>@c.Ubicacion</td>
+                                <td class="text-end fw-semibold">@c.Disponible.ToString("N0")</td>
+                                <td class="text-end">
+                                    <form asp-controller="LogisticaEmbarques" asp-action="ReservarCaja" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                        <input type="hidden" name="embarqueDetalleId" value="@c.EmbarqueDetalleID" />
+                                        <input type="hidden" name="cajaId" value="@c.CajaID" />
+                                        <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-box me-1"></i>Reservar</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        @if (!Model.CajasDisponibles.Any())
+                        {
+                            <tr><td colspan="8"><div class="empty">No hay cajas PT disponibles para reservar.</div></td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="section">
+        <div class="section-head">
+            <div><h2 class="section-title">Checklist de salida</h2><p class="section-subtitle">Condiciones operativas antes de despachar.</p></div>
+        </div>
+        <div class="checklist">
+            @foreach (var item in Model.Checklist)
+            {
+                <div class="check-item">
+                    <i class="fa-solid @item.Icono text-@item.Clase"></i>
+                    <div><strong>@item.Concepto</strong><small>@item.Descripcion</small></div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <div><h2 class="section-title">Documentación</h2><p class="section-subtitle">Control documental del embarque @Model.TipoOperacion.</p></div>
+            <span class="badge @(Model.DocumentacionCompleta ? "bg-success" : "bg-warning text-dark")">
+                @(Model.DocumentacionCompleta ? "Completa" : $"{Model.DocumentosFaltantes} pendiente(s)")
+            </span>
+        </div>
+
+        <div class="doc-required">
+            @foreach (var r in Model.DocumentosRequeridos)
+            {
+                <div class="doc-required-item">
+                    <div class="fw-semibold">@r.TipoDocumento</div>
+                    <div class="text-muted">@r.AreaResponsable</div>
+                    <div class="mt-1">
+                        @if (r.Cargado)
+                        {
+                            <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Cargado</span>
+                            @if (r.Validado)
+                            {
+                                <span class="text-success ms-2">Validado</span>
+                            }
+                            else
+                            {
+                                <span class="text-warning ms-2">Pendiente validar</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-danger"><i class="fa-solid fa-circle-xmark me-1"></i>Faltante</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <form asp-controller="LogisticaEmbarques" asp-action="SubirDocumento" method="post" enctype="multipart/form-data" class="form-grid mb-2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+            <div class="f3">
+                <label>Tipo documento</label>
+                <select name="tipoDocumento" class="form-select" required>
+                    <option value="">Selecciona...</option>
+                    <option>Commercial Invoice</option>
+                    <option>Packing List</option>
+                    <option>Factura</option>
+                    <option>Remisión</option>
+                    <option>XML</option>
+                    <option>Carta de instrucciones</option>
+                    <option>Booking</option>
+                    <option>Pedimento</option>
+                    <option>Otro</option>
+                </select>
+            </div>
+            <div class="f4"><label>Archivo</label><input type="file" name="archivo" class="form-control" accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png" required /></div>
+            <div class="f3"><label>Observaciones</label><input type="text" name="observaciones" maxlength="1000" class="form-control" /></div>
+            <div class="f2"><button class="btn btn-outline-primary btn-sm w-100" type="submit"><i class="fa-solid fa-upload me-1"></i>Subir</button></div>
+        </form>
+
+        <div class="table-wrap">
+            <table class="table table-sm compact-table">
+                <thead><tr><th>Tipo</th><th>Archivo</th><th>Área</th><th>Carga</th><th>Validación</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var d in Model.Documentos)
+                    {
+                        <tr>
+                            <td>@d.TipoDocumento</td>
+                            <td>@d.NombreOriginal</td>
+                            <td>@d.AreaResponsable</td>
+                            <td>@d.FechaCarga.ToString("dd/MM/yyyy HH:mm") · @d.UsuarioCargaNombre</td>
+                            <td>
+                                @if (d.Validado)
+                                {
+                                    <span class="text-success">Validado @(d.FechaValidacion?.ToString("dd/MM/yyyy HH:mm"))</span>
+                                }
+                                else
+                                {
+                                    <span class="text-warning">Pendiente</span>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a asp-controller="LogisticaEmbarques" asp-action="VerDocumento" asp-route-id="@d.EmbarqueDocumentoID" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-eye"></i></a>
+                                @if (!d.Validado)
+                                {
+                                    <form asp-controller="LogisticaEmbarques" asp-action="ValidarDocumento" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="documentoId" value="@d.EmbarqueDocumentoID" />
+                                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                        <button class="btn btn-outline-success btn-sm" type="submit"><i class="fa-solid fa-check"></i></button>
+                                    </form>
+                                }
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="mostrarRetiroDocumento(@d.EmbarqueDocumentoID)"><i class="fa-solid fa-xmark"></i></button>
+                                <form id="retirar-doc-@d.EmbarqueDocumentoID" asp-controller="LogisticaEmbarques" asp-action="RetirarDocumento" method="post" class="d-none">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="documentoId" value="@d.EmbarqueDocumentoID" />
+                                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                    <input type="hidden" name="motivo" id="motivo-doc-@d.EmbarqueDocumentoID" />
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Documentos.Any())
+                    {
+                        <tr><td colspan="6"><div class="empty">Sin documentos cargados.</div></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head"><div><h2 class="section-title">Evidencias</h2><p class="section-subtitle">Carga, salida, entrega o incidencia.</p></div></div>
+        <form asp-controller="LogisticaEmbarques" asp-action="SubirEvidencia" method="post" enctype="multipart/form-data" class="form-grid mb-2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+            <div class="f3"><label>Tipo</label><select name="tipoEvidencia" class="form-select" required><option value="">Selecciona...</option><option>Carga</option><option>Salida</option><option>Entrega</option><option>Incidencia</option></select></div>
+            <div class="f4"><label>Archivo</label><input type="file" name="archivo" accept=".jpg,.jpeg,.png,.pdf" class="form-control" required /></div>
+            <div class="f3"><label>Observaciones</label><input type="text" name="observaciones" maxlength="1000" class="form-control" /></div>
+            <div class="f2"><button class="btn btn-outline-primary btn-sm w-100" type="submit"><i class="fa-solid fa-upload me-1"></i>Subir</button></div>
+        </form>
+        <div class="table-wrap">
+            <table class="table table-sm compact-table">
+                <thead><tr><th>Tipo</th><th>Archivo</th><th>Tamaño</th><th>Usuario</th><th>Fecha</th><th>Observaciones</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var e in Model.Evidencias)
+                    {
+                        <tr>
+                            <td>@e.TipoEvidencia</td>
+                            <td>@e.NombreOriginal</td>
+                            <td>@e.TamanoTexto</td>
+                            <td>@e.UsuarioNombre</td>
+                            <td>@e.FechaCarga.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@e.Observaciones</td>
+                            <td class="text-end text-nowrap">
+                                <a asp-controller="LogisticaEmbarques" asp-action="VerEvidencia" asp-route-id="@e.EvidenciaID" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-eye"></i></a>
+                                <a asp-controller="LogisticaEmbarques" asp-action="DescargarEvidencia" asp-route-id="@e.EvidenciaID" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-download"></i></a>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="retirarEvidencia(@e.EvidenciaID)"><i class="fa-solid fa-xmark"></i></button>
+                                <form id="retirar-evidencia-@e.EvidenciaID" asp-controller="LogisticaEmbarques" asp-action="EliminarEvidencia" method="post" class="d-none">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="evidenciaId" value="@e.EvidenciaID" />
+                                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                    <input type="hidden" name="motivo" id="motivo-evidencia-@e.EvidenciaID" />
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Evidencias.Any())
+                    {
+                        <tr><td colspan="7"><div class="empty">Sin evidencias.</div></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (Model.Estatus != "Cancelado")
+    {
+        <div class="section">
+            <div class="section-title mb-2">Registrar incidencia</div>
+            <form asp-controller="LogisticaEmbarques" asp-action="RegistrarIncidencia" method="post" class="form-grid">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+                <div class="f3"><label>Tipo</label><select name="Tipo" class="form-select" required><option value="">Selecciona...</option><option>Producto incompleto</option><option>Caja dañada</option><option>Unidad no disponible</option><option>Retraso</option><option>Ruta</option><option>Documentación</option><option>Cliente / destino</option><option>Seguridad</option><option>Otro</option></select></div>
+                <div class="f2"><label>Severidad</label><select name="Severidad" class="form-select" required><option>Baja</option><option selected>Media</option><option>Alta</option><option>Crítica</option></select></div>
+                <div class="f2"><label>Responsable</label><input type="text" name="Responsable" maxlength="200" class="form-control" /></div>
+                <div class="f2"><label>Compromiso</label><input type="datetime-local" name="FechaCompromiso" class="form-control" /></div>
+                <div class="f3"><label>Descripción</label><input type="text" name="Descripcion" maxlength="1200" class="form-control" required /></div>
+                <div class="f12 text-end"><button class="btn btn-outline-danger btn-sm" type="submit"><i class="fa-solid fa-triangle-exclamation me-1"></i>Registrar</button></div>
+            </form>
+        </div>
+    }
+
+    <div class="section">
+        <div class="section-title mb-2">Incidencias</div>
+        <div class="table-wrap">
+            <table class="table table-sm compact-table">
+                <thead><tr><th>Folio</th><th>Fecha</th><th>Tipo</th><th>Severidad</th><th>Descripción</th><th>Responsable</th><th>Estatus</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var i in Model.Incidencias)
+                    {
+                        <tr>
+                            <td>@i.Folio</td>
+                            <td>@i.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@i.Tipo</td>
+                            <td><span class="badge @BadgeSeveridad(i.Severidad) badge-mini">@i.Severidad</span></td>
+                            <td>@i.Descripcion</td>
+                            <td>@i.Responsable</td>
+                            <td>@i.Estatus</td>
+                            <td>
+                                @if (i.EstaAbierta)
+                                {
+                                    <form asp-controller="LogisticaEmbarques" asp-action="CerrarIncidencia" method="post" class="d-flex gap-1">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="IncidenciaID" value="@i.IncidenciaID" />
+                                        <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+                                        <input type="text" name="Solucion" maxlength="1200" class="form-control form-control-sm" placeholder="Solución" required />
+                                        <button class="btn btn-outline-success btn-sm" type="submit"><i class="fa-solid fa-check"></i></button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Incidencias.Any())
+                    {
+                        <tr><td colspan="8"><div class="empty">Sin incidencias.</div></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head"><div><h2 class="section-title">Acciones operativas</h2><p class="section-subtitle">Avanza el embarque según su estado actual.</p></div></div>
+        <div class="action-row">
+            @if (puedePreparar)
+            {
+                <form asp-controller="LogisticaEmbarques" asp-action="MarcarPreparado" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <button class="btn btn-warning btn-sm" type="submit" onclick="return confirm('¿Confirmar que la preparación está completa?');"><i class="fa-solid fa-boxes-packing me-1"></i>Marcar preparado</button>
+                </form>
+            }
+            @if (puedeCargar)
+            {
+                <form asp-controller="LogisticaEmbarques" asp-action="MarcarCargado" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <button class="btn btn-dark btn-sm" type="submit" onclick="return confirm('¿Confirmar carga física?');"><i class="fa-solid fa-truck-loading me-1"></i>Marcar cargado</button>
+                </form>
+            }
+            @if (puedeDespachar)
+            {
+                <form asp-controller="LogisticaEmbarques" asp-action="Despachar" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <button class="btn btn-primary btn-sm" type="submit" onclick="return confirm('¿Confirmar salida del embarque?');"><i class="fa-solid fa-truck-fast me-1"></i>Despachar</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    @if (puedeEntregar)
+    {
+        <div class="section">
+            <div class="section-title mb-2">Registrar entrega</div>
+            <form asp-controller="LogisticaEmbarques" asp-action="Entregar" method="post" class="form-grid">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+                <div class="f4"><label>Recibe</label><input type="text" name="ReceptorNombre" maxlength="200" class="form-control" required /></div>
+                <div class="f3"><label>Folio remisión</label><input type="text" name="FolioRemision" maxlength="100" class="form-control" /></div>
+                <div class="f3"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" class="form-control" /></div>
+                <div class="f2"><button class="btn btn-success btn-sm w-100" type="submit" onclick="return confirm('¿Confirmar entrega?');"><i class="fa-solid fa-circle-check me-1"></i>Entregar</button></div>
+            </form>
+        </div>
+    }
+
+    @if (Model.Estatus == "Entregado" && !Model.UnidadRetornada)
+    {
+        <div class="section">
+            <div class="section-title mb-2">Retorno de unidad</div>
+            <form asp-controller="LogisticaEmbarques" asp-action="RegistrarRetorno" method="post" class="form-grid">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
+                <div class="f4"><label>Fecha y hora retorno</label><input type="datetime-local" name="FechaRetorno" value="@ahora" class="form-control" required /></div>
+                <div class="f3"><label>Kilometraje</label><input type="number" name="KilometrajeRetorno" min="0" class="form-control" /></div>
+                <div class="f3"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" class="form-control" /></div>
+                <div class="f2"><button class="btn btn-outline-success btn-sm w-100" type="submit"><i class="fa-solid fa-rotate-left me-1"></i>Registrar</button></div>
+            </form>
+        </div>
+    }
+    else if (Model.UnidadRetornada)
+    {
+        <div class="section">
+            <div class="section-title mb-2">Retorno de unidad</div>
+            <div class="info-grid">
+                <div class="i3"><div class="info-label">Fecha</div><div class="info-value">@Model.FechaRetornoUnidad?.ToString("dd/MM/yyyy HH:mm")</div></div>
+                <div class="i3"><div class="info-label">Kilometraje</div><div class="info-value">@(Model.KilometrajeRetorno.HasValue ? $"{Model.KilometrajeRetorno.Value:N0} km" : "-")</div></div>
+                <div class="i3"><div class="info-label">Usuario</div><div class="info-value">@Model.UsuarioRetorno</div></div>
+                <div class="i3"><div class="info-label">Observaciones</div><div class="info-value">@Model.ObservacionesRetorno</div></div>
+            </div>
+        </div>
+    }
+
+    <div class="section">
+        <div class="section-title mb-2">Historial</div>
+        @foreach (var h in Model.Historial)
+        {
+            <div class="history-row">
+                <div class="history-date">@h.Fecha.ToString("dd/MM/yyyy HH:mm")</div>
+                <div class="fw-semibold">@h.Evento.Replace("_", " ")</div>
+                <div>
+                    @if (!string.IsNullOrWhiteSpace(h.EstadoAnterior) || !string.IsNullOrWhiteSpace(h.EstadoNuevo))
+                    {
+                        <div>@h.EstadoAnterior @if (!string.IsNullOrWhiteSpace(h.EstadoNuevo)) {
+                        <text>→ @h.EstadoNuevo</text>
+                    }
+    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(h.Observaciones))
+                {
+                    <div class="text-muted">@h.Observaciones</div>
+                }
+            </div>
+            <div class="history-user">@h.Usuario</div>
+        </div>
+                }
+        @if (!Model.Historial.Any())
+        {
+            <div class="empty">Sin historial.</div>
+        }
+    </div>
+
+    @if (puedeCancelar)
+    {
+        <div class="danger-zone">
+            <div class="section-title text-danger mb-2">Cancelar embarque</div>
+            <form asp-controller="LogisticaEmbarques" asp-action="Cancelar" method="post" class="form-grid">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                <div class="f10"><label>Motivo</label><input type="text" name="motivo" maxlength="1200" class="form-control" required /></div>
+                <div class="f2"><button class="btn btn-outline-danger btn-sm w-100" type="submit" onclick="return confirm('¿Seguro que deseas cancelar este embarque?');"><i class="fa-solid fa-ban me-1"></i>Cancelar</button></div>
+            </form>
+        </div>
+    }
+</div>
+
+<script>
+    (() => {
+        const release = document.getElementById('releaseAgregar');
+        const cantidad = document.getElementById('cantidadAgregar');
+        release?.addEventListener('change', () => {
+            const option = release.options[release.selectedIndex];
+            const max = Number(option?.dataset?.pendiente || 0);
+            if (cantidad && max > 0) {
+                cantidad.max = max;
+                cantidad.value = max;
+            }
+        });
+
+        window.mostrarRetiroDocumento = function(id) {
+            const motivo = prompt('Motivo para retirar el documento:');
+            if (!motivo || !motivo.trim()) return;
+            const input = document.getElementById(`motivo-doc-${id}`);
+            const form = document.getElementById(`retirar-doc-${id}`);
+            if (input && form) { input.value = motivo.trim(); form.submit(); }
+        };
+
+        window.retirarEvidencia = function(id) {
+            const motivo = prompt('Motivo para retirar la evidencia:');
+            if (!motivo || !motivo.trim()) return;
+            const input = document.getElementById(`motivo-evidencia-${id}`);
+            const form = document.getElementById(`retirar-evidencia-${id}`);
+            if (input && form) { input.value = motivo.trim(); form.submit(); }
+        };
+    })();
+</script>

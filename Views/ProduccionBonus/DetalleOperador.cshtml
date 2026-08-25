@@ -1,0 +1,1077 @@
+﻿@model ERP.NSQuell.Models.ProduccionBonusDetalleOperadorVm
+@{
+    Layout = null;
+    ViewData["Title"] = "Detalle de Bonus";
+
+    var semanaAnterior = Model.SemanaInicio.AddDays(-7);
+    var semanaSiguiente = Model.SemanaInicio.AddDays(7);
+    var puedeAvanzarSemana = semanaSiguiente.Date <= DateTime.Today;
+
+    string ClaseNeto(long valor)
+    {
+        if (valor > 0) return "text-success";
+        if (valor < 0) return "text-danger";
+        return "text-secondary";
+    }
+
+    string ClaseMovimiento(int valor)
+    {
+        if (valor > 0) return "movement-positive";
+        if (valor < 0) return "movement-negative";
+        return "movement-neutral";
+    }
+
+    string IconoMovimiento(int valor)
+    {
+        if (valor > 0) return "bi-plus-circle-fill";
+        if (valor < 0) return "bi-dash-circle-fill";
+        return "bi-circle-fill";
+    }
+
+    string ClasePosicion(int posicion)
+    {
+        return posicion switch
+        {
+            1 => "position-gold",
+            2 => "position-silver",
+            3 => "position-bronze",
+            _ => string.Empty
+        };
+    }
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+
+    <style>
+        :root {
+            --ns-blue: #004aad;
+            --ns-blue-dark: #073b7a;
+            --ns-border: #dfe5ec;
+            --ns-muted: #667085;
+            --ns-bg: #f5f7fa;
+            --ns-surface: #ffffff;
+            --ns-text: #172033;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            min-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--ns-bg);
+            color: var(--ns-text);
+            font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        }
+
+        .page {
+            width: min(1500px,calc(100% - 28px));
+            margin: 18px auto 40px;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg,var(--ns-blue-dark),var(--ns-blue));
+            color: #fff;
+            border-radius: 16px;
+            padding: 20px 22px;
+            box-shadow: 0 12px 30px rgba(0,74,173,.14);
+        }
+
+        .topbar-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 950;
+            letter-spacing: -.02em;
+        }
+
+        .subtitle {
+            margin-top: 4px;
+            color: rgba(255,255,255,.8);
+            font-size: .86rem;
+            font-weight: 650;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+            .top-actions .btn {
+                border-radius: 9px;
+                font-weight: 850;
+            }
+
+        .week-bar {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 12px;
+            margin: 15px 0 10px;
+            padding: 11px 14px;
+            border: 1px solid var(--ns-border);
+            background: var(--ns-surface);
+            border-radius: 12px;
+        }
+
+        .week-left {
+            display: flex;
+            justify-content: flex-start;
+            gap: 7px;
+        }
+
+        .week-right {
+            display: flex;
+            justify-content: flex-end;
+            gap: 7px;
+        }
+
+        .week-center {
+            text-align: center;
+        }
+
+        .week-label {
+            color: var(--ns-muted);
+            text-transform: uppercase;
+            font-size: .64rem;
+            font-weight: 950;
+            letter-spacing: .07em;
+        }
+
+        .week-value {
+            font-size: .96rem;
+            font-weight: 950;
+        }
+
+        .week-current {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 6px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: #eaf7ef;
+            color: #18794e;
+            font-size: .64rem;
+            font-weight: 950;
+        }
+
+        .week-bar .btn {
+            border-radius: 8px;
+            font-weight: 850;
+        }
+
+        .summary-strip {
+            display: flex;
+            align-items: stretch;
+            border: 1px solid var(--ns-border);
+            background: var(--ns-surface);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+
+        .summary-item {
+            flex: 1 1 0;
+            min-width: 130px;
+            padding: 11px 14px;
+            border-right: 1px solid var(--ns-border);
+        }
+
+            .summary-item:last-child {
+                border-right: 0;
+            }
+
+        .summary-label {
+            font-size: .63rem;
+            font-weight: 950;
+            letter-spacing: .055em;
+            text-transform: uppercase;
+            color: var(--ns-muted);
+        }
+
+        .summary-value {
+            margin-top: 3px;
+            font-weight: 950;
+            font-size: 1.05rem;
+        }
+
+        .summary-main .summary-value {
+            color: var(--ns-blue);
+            font-size: 1.3rem;
+        }
+
+        .position-gold {
+            color: #a66d00;
+        }
+
+        .position-silver {
+            color: #667085;
+        }
+
+        .position-bronze {
+            color: #a65a2e;
+        }
+
+        .content-shell {
+            border: 1px solid var(--ns-border);
+            border-radius: 13px;
+            overflow: hidden;
+            background: var(--ns-surface);
+        }
+
+        .content-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--ns-border);
+            background: #fbfcfe;
+        }
+
+        .content-title {
+            margin: 0;
+            font-size: .96rem;
+            font-weight: 950;
+        }
+
+        .content-subtitle {
+            margin-top: 2px;
+            color: var(--ns-muted);
+            font-size: .72rem;
+            font-weight: 650;
+        }
+
+        .content-count {
+            color: var(--ns-muted);
+            font-size: .75rem;
+            font-weight: 850;
+            white-space: nowrap;
+        }
+
+        .of-item {
+            border-bottom: 1px solid var(--ns-border);
+        }
+
+            .of-item:last-child {
+                border-bottom: 0;
+            }
+
+            .of-item > summary {
+                list-style: none;
+                cursor: pointer;
+                padding: 0;
+                background: var(--ns-surface);
+            }
+
+                .of-item > summary::-webkit-details-marker {
+                    display: none;
+                }
+
+                .of-item > summary:hover {
+                    background: #f8faff;
+                }
+
+        .of-summary {
+            display: grid;
+            grid-template-columns: minmax(190px,1.4fr) minmax(160px,1fr) minmax(145px,.8fr) 110px 120px 36px;
+            align-items: center;
+            gap: 10px;
+            padding: 13px 15px;
+        }
+
+        .of-main {
+            min-width: 0;
+        }
+
+        .of-number {
+            font-size: .91rem;
+            font-weight: 950;
+            color: #172033;
+        }
+
+        .of-part {
+            margin-top: 2px;
+            font-size: .7rem;
+            color: var(--ns-muted);
+            font-weight: 650;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .of-label {
+            font-size: .6rem;
+            text-transform: uppercase;
+            letter-spacing: .055em;
+            font-weight: 950;
+            color: #98a2b3;
+        }
+
+        .of-value {
+            margin-top: 2px;
+            font-size: .78rem;
+            font-weight: 850;
+            color: #344054;
+        }
+
+        .of-net {
+            text-align: right;
+            font-size: 1rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .of-movements {
+            text-align: center;
+            color: var(--ns-muted);
+            font-size: .78rem;
+            font-weight: 850;
+        }
+
+        .of-chevron {
+            text-align: right;
+            color: #98a2b3;
+            transition: transform .15s ease;
+        }
+
+        .of-item[open] .of-chevron {
+            transform: rotate(180deg);
+        }
+
+        .of-detail {
+            border-top: 1px solid var(--ns-border);
+            background: #fbfcfe;
+        }
+
+        .of-detail-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--ns-border);
+        }
+
+        .of-detail-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            color: var(--ns-muted);
+            font-size: .7rem;
+            font-weight: 700;
+        }
+
+            .of-detail-meta strong {
+                color: #344054;
+            }
+
+        .production-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 8px;
+            border: 1px solid #cfd8e6;
+            border-radius: 7px;
+            background: #fff;
+            color: #30445f;
+            text-decoration: none;
+            font-size: .68rem;
+            font-weight: 900;
+        }
+
+            .production-link:hover {
+                background: #f1f6fd;
+                border-color: #8eaae0;
+                color: var(--ns-blue);
+            }
+
+        .movement-table {
+            margin: 0;
+            vertical-align: middle;
+        }
+
+            .movement-table thead th {
+                padding: 8px 12px;
+                border-bottom: 1px solid var(--ns-border);
+                background: #f5f7fa;
+                color: #667085;
+                font-size: .61rem;
+                font-weight: 950;
+                text-transform: uppercase;
+                letter-spacing: .05em;
+                white-space: nowrap;
+            }
+
+            .movement-table tbody td {
+                padding: 9px 12px;
+                font-size: .75rem;
+                border-bottom-color: #e8edf3;
+            }
+
+            .movement-table tbody tr:last-child td {
+                border-bottom: 0;
+            }
+
+        .movement-date {
+            white-space: nowrap;
+            font-weight: 800;
+            color: #344054;
+        }
+
+        .movement-origin {
+            font-weight: 850;
+            color: #344054;
+        }
+
+            .movement-origin small {
+                display: block;
+                margin-top: 1px;
+                font-size: .62rem;
+                font-weight: 650;
+                color: var(--ns-muted);
+            }
+
+        .movement-type {
+            font-weight: 800;
+            color: #475467;
+        }
+
+        .movement-reason {
+            max-width: 360px;
+            color: #667085;
+            font-size: .7rem;
+        }
+
+        .movement-reference {
+            font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+            font-size: .64rem;
+            color: #98a2b3;
+            max-width: 230px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .movement-amount {
+            font-weight: 950;
+            font-size: .88rem;
+            white-space: nowrap;
+        }
+
+        .movement-positive {
+            color: #168454;
+        }
+
+        .movement-negative {
+            color: #c0362c;
+        }
+
+        .movement-neutral {
+            color: #667085;
+        }
+
+        .movement-classification {
+            display: flex;
+            gap: 7px;
+            white-space: nowrap;
+            font-size: .64rem;
+            font-weight: 800;
+        }
+
+        .ok {
+            color: #168454;
+        }
+
+        .suspect {
+            color: #b7791f;
+        }
+
+        .scrap {
+            color: #c0362c;
+        }
+
+        .empty-state {
+            padding: 60px 18px;
+            text-align: center;
+            color: var(--ns-muted);
+        }
+
+            .empty-state i {
+                display: block;
+                margin-bottom: 8px;
+                font-size: 2rem;
+                color: #aab4c3;
+            }
+
+        .empty-title {
+            color: #475467;
+            font-size: .96rem;
+            font-weight: 950;
+        }
+
+        .empty-text {
+            margin-top: 3px;
+            font-size: .76rem;
+        }
+
+        .text-success {
+            color: #168454 !important;
+        }
+
+        .text-danger {
+            color: #c0362c !important;
+        }
+
+        html[data-nsq-theme="dark"] body {
+            --ns-border: #2d3d54;
+            --ns-muted: #9eacc0;
+            --ns-bg: #0b1220;
+            --ns-surface: #162133;
+            --ns-text: #edf3fb;
+            background: var(--ns-bg);
+            color: var(--ns-text);
+        }
+
+        html[data-nsq-theme="dark"] .topbar {
+            background: linear-gradient(135deg,#12325f,#174b85);
+            border: 1px solid rgba(125,183,255,.20);
+            box-shadow: 0 14px 34px rgba(0,0,0,.24);
+        }
+
+        html[data-nsq-theme="dark"] .week-bar,
+        html[data-nsq-theme="dark"] .summary-strip,
+        html[data-nsq-theme="dark"] .content-shell,
+        html[data-nsq-theme="dark"] .of-item > summary {
+            background: #162133;
+            border-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .content-head,
+        html[data-nsq-theme="dark"] .of-detail {
+            background: #19263a;
+            border-color: #2d3d54;
+        }
+
+        html[data-nsq-theme="dark"] .of-item > summary:hover {
+            background: #1d2d45;
+        }
+
+        html[data-nsq-theme="dark"] .of-number,
+        html[data-nsq-theme="dark"] .week-value,
+        html[data-nsq-theme="dark"] .content-title,
+        html[data-nsq-theme="dark"] .of-value {
+            color: #f2f6fc;
+        }
+
+        html[data-nsq-theme="dark"] .of-detail-meta strong,
+        html[data-nsq-theme="dark"] .movement-date,
+        html[data-nsq-theme="dark"] .movement-origin {
+            color: #dce5f1;
+        }
+
+        html[data-nsq-theme="dark"] .movement-table thead th {
+            background: #111c2c;
+            border-color: #2d3d54;
+            color: #aab6c8;
+        }
+
+        html[data-nsq-theme="dark"] .movement-table tbody td {
+            border-bottom-color: #2a394d;
+        }
+
+        html[data-nsq-theme="dark"] .production-link {
+            background: #17253a;
+            border-color: #38506f;
+            color: #c8d8eb;
+        }
+
+            html[data-nsq-theme="dark"] .production-link:hover {
+                background: #20334e;
+                color: #fff;
+            }
+
+        html[data-nsq-theme="dark"] .week-current {
+            background: #123226;
+            color: #79dfa6;
+        }
+
+        @@media(max-width:1100px) {
+            .of-summary {
+                grid-template-columns: minmax(180px,1.4fr) minmax(130px,1fr) 100px 100px 36px;
+            }
+
+                .of-summary > div:nth-child(3) {
+                    display: none;
+                }
+
+            .summary-strip {
+                flex-wrap: wrap;
+            }
+
+            .summary-item {
+                flex: 1 1 33.333%;
+            }
+        }
+
+        @@media(max-width:750px) {
+            .page {
+                width: min(100% - 18px,1500px);
+                margin-top: 9px;
+            }
+
+            .topbar {
+                border-radius: 13px;
+                padding: 16px;
+            }
+
+            .title {
+                font-size: 1.22rem;
+            }
+
+            .top-actions {
+                width: 100%;
+            }
+
+                .top-actions .btn {
+                    flex: 1 1 auto;
+                }
+
+            .week-bar {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .week-center {
+                grid-column: 1 / -1;
+                grid-row: 1;
+            }
+
+            .week-left {
+                grid-column: 1;
+                grid-row: 2;
+            }
+
+            .week-right {
+                grid-column: 2;
+                grid-row: 2;
+            }
+
+            .summary-item {
+                flex: 1 1 50%;
+            }
+
+            .of-summary {
+                grid-template-columns: minmax(160px,1fr) 100px 34px;
+                gap: 7px;
+            }
+
+                .of-summary > div:nth-child(2),
+                .of-summary > div:nth-child(3),
+                .of-summary > div:nth-child(5) {
+                    display: none;
+                }
+
+            .movement-table th:nth-child(4),
+            .movement-table td:nth-child(4),
+            .movement-table th:nth-child(5),
+            .movement-table td:nth-child(5) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="page">
+        <header class="topbar">
+            <div class="topbar-main">
+                <div>
+                    <h1 class="title">
+                        <i class="bi bi-person-badge-fill me-2"></i>@Model.OperadorNombre
+                    </h1>
+                    <div class="subtitle">
+                        Detalle auditable del bonus semanal por orden de fabricación.
+                    </div>
+                </div>
+
+                <div class="top-actions">
+                    <a href="@Url.Action("Index", "ProduccionBonus", new { fecha = Model.FechaReferencia.ToString("yyyy-MM-dd") })"
+                       class="btn btn-light btn-sm">
+                        <i class="bi bi-trophy-fill me-1"></i>Ranking
+                    </a>
+
+                    <a href="@Url.Action("Historial", "ProduccionBonus", new { fecha = Model.FechaReferencia.ToString("yyyy-MM-dd") })"
+                       class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-clock-history me-1"></i>Histórico
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <section class="week-bar">
+            <div class="week-left">
+                <a href="@Url.Action("DetalleOperador", "ProduccionBonus", new { operadorId = Model.OperadorID, fecha = semanaAnterior.ToString("yyyy-MM-dd") })"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+
+                @if (!Model.EsSemanaActual)
+                {
+                    <a href="@Url.Action("DetalleOperador", "ProduccionBonus", new { operadorId = Model.OperadorID })"
+                       class="btn btn-outline-primary btn-sm">
+                        Semana actual
+                    </a>
+                }
+            </div>
+
+            <div class="week-center">
+                <div class="week-label">Periodo</div>
+                <div class="week-value">
+                    @Model.SemanaInicio.ToString("dd MMM") - @Model.SemanaFin.ToString("dd MMM yyyy")
+                    @if (Model.EsSemanaActual)
+                    {
+                        <span class="week-current">
+                            <i class="bi bi-broadcast"></i>ACTUAL
+                        </span>
+                    }
+                </div>
+            </div>
+
+            <div class="week-right">
+                @if (puedeAvanzarSemana)
+                {
+                    <a href="@Url.Action("DetalleOperador", "ProduccionBonus", new { operadorId = Model.OperadorID, fecha = semanaSiguiente.ToString("yyyy-MM-dd") })"
+                       class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                }
+            </div>
+        </section>
+
+        <section class="summary-strip">
+            <div class="summary-item">
+                <div class="summary-label">Posición</div>
+                <div class="summary-value @ClasePosicion(Model.PosicionRanking)">
+                    @Model.PosicionTexto
+                </div>
+            </div>
+
+            <div class="summary-item summary-main">
+                <div class="summary-label">Bonus neto</div>
+                <div class="summary-value @ClaseNeto(Model.BonusNeto)">
+                    @(Model.BonusNeto > 0 ? "+" : "")@Model.BonusNeto.ToString("N0")
+                </div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Abonado</div>
+                <div class="summary-value text-success">
+                    +@Model.PiezasAbonadas.ToString("N0")
+                </div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Descontado</div>
+                <div class="summary-value text-danger">
+                    -@Model.PiezasDescontadas.ToString("N0")
+                </div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">OF trabajadas</div>
+                <div class="summary-value">@Model.TotalOF.ToString("N0")</div>
+            </div>
+
+            <div class="summary-item">
+                <div class="summary-label">Movimientos</div>
+                <div class="summary-value">@Model.TotalMovimientos.ToString("N0")</div>
+            </div>
+        </section>
+
+        <section class="content-shell">
+            <div class="content-head">
+                <div>
+                    <h2 class="content-title">
+                        <i class="bi bi-list-columns-reverse me-1"></i>Desglose por OF
+                    </h2>
+                    <div class="content-subtitle">
+                        Abre una orden para consultar exactamente dónde se generó o ajustó el bonus.
+                    </div>
+                </div>
+
+                <div class="content-count">
+                    @Model.OrdenesFabricacion.Count orden@(Model.OrdenesFabricacion.Count == 1 ? "" : "es")
+                </div>
+            </div>
+
+            @if (Model.OrdenesFabricacion.Any())
+            {
+                var indiceOf = 0;
+
+                @foreach (var orden in Model.OrdenesFabricacion)
+                {
+                    indiceOf++;
+
+                    <details class="of-item" @(indiceOf == 1 ? "open" : "")>
+                        <summary>
+                            <div class="of-summary">
+                                <div class="of-main">
+                                    <div class="of-number">
+                                        @orden.NumeroOFTexto
+                                    </div>
+                                    <div class="of-part">
+                                        @orden.ParteTexto
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="of-label">Máquina</div>
+                                    <div class="of-value">@orden.MaquinaTexto</div>
+                                </div>
+
+                                <div>
+                                    <div class="of-label">Capturas</div>
+                                    <div class="of-value">
+                                        @orden.TotalCapturas
+                                        @if (orden.TotalCapturasTiempoExtra > 0)
+                                        {
+                                            <span> · @orden.TotalCapturasTiempoExtra extra</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="of-net @ClaseNeto(orden.BonusNeto)">
+                                    @(orden.BonusNeto > 0 ? "+" : "")@orden.BonusNeto.ToString("N0")
+                                </div>
+
+                                <div class="of-movements">
+                                    @orden.TotalMovimientos mov.
+                                </div>
+
+                                <div class="of-chevron">
+                                    <i class="bi bi-chevron-down"></i>
+                                </div>
+                            </div>
+                        </summary>
+
+                        <div class="of-detail">
+                            <div class="of-detail-bar">
+                                <div class="of-detail-meta">
+                                    @if (!string.IsNullOrWhiteSpace(orden.NumeroParte))
+                                    {
+                                        <span>
+                                            Parte:
+                                            <strong>@orden.NumeroParte</strong>
+                                        </span>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(orden.ReferenciaSAP))
+                                    {
+                                        <span>
+                                            SAP:
+                                            <strong>@orden.ReferenciaSAP</strong>
+                                        </span>
+                                    }
+
+                                    @if (orden.FechaInicioReal.HasValue)
+                                    {
+                                        <span>
+                                            Inicio:
+                                            <strong>@orden.FechaInicioReal.Value.ToString("dd/MM/yyyy HH:mm")</strong>
+                                        </span>
+                                    }
+
+                                    @if (orden.FechaFinReal.HasValue)
+                                    {
+                                        <span>
+                                            Fin:
+                                            <strong>@orden.FechaFinReal.Value.ToString("dd/MM/yyyy HH:mm")</strong>
+                                        </span>
+                                    }
+
+                                    <span>
+                                        Abonado:
+                                        <strong class="text-success">+@orden.PiezasAbonadas.ToString("N0")</strong>
+                                    </span>
+
+                                    <span>
+                                        Descontado:
+                                        <strong class="text-danger">-@orden.PiezasDescontadas.ToString("N0")</strong>
+                                    </span>
+                                </div>
+
+                                @if (orden.EjecucionProduccionID > 0)
+                                {
+                                    <a href="@Url.Action("Detalle", "Produccion", new { id = orden.EjecucionProduccionID })"
+                                       class="production-link">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                        Ver Producción
+                                    </a>
+                                }
+                            </div>
+
+                            @if (orden.Movimientos.Any())
+                            {
+                                <div class="table-responsive">
+                                    <table class="table movement-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha / hora</th>
+                                                <th>Origen</th>
+                                                <th>Movimiento</th>
+                                                <th>Motivo</th>
+                                                <th>Referencia</th>
+                                                <th>Clasificación</th>
+                                                <th class="text-end">Piezas</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            @foreach (var movimiento in orden.Movimientos)
+                                            {
+                                                <tr>
+                                                    <td class="movement-date">
+                                                        @movimiento.FechaMovimiento.ToString("dd/MM/yyyy")
+                                                        <br />
+                                                        <span class="text-secondary">
+                                                            @movimiento.FechaMovimiento.ToString("HH:mm")
+                                                        </span>
+                                                    </td>
+
+                                                    <td>
+                                                        <div class="movement-origin">
+                                                            @movimiento.TipoRegistroTexto
+
+                                                            @if (!string.IsNullOrWhiteSpace(movimiento.RangoHoraTexto))
+                                                            {
+                                                                <small>@movimiento.RangoHoraTexto</small>
+                                                            }
+                                                            else if (movimiento.RegistroHoraID.HasValue)
+                                                            {
+                                                                <small>Registro #@movimiento.RegistroHoraID</small>
+                                                            }
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    <div class="movement-type">
+                                                        @movimiento.TipoMovimientoNombre
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    <div class="movement-reason">
+                                                        @(string.IsNullOrWhiteSpace(movimiento.Motivo)
+                                                                                                    ? "-"
+                                                                                                    : movimiento.Motivo)
+                                                                                                                    </div>
+                                                                                                                </td>
+
+                                                <td>
+                                                    <div class="movement-reference"
+                                                         title="@movimiento.ReferenciaEvento">
+                                                        @(string.IsNullOrWhiteSpace(movimiento.ReferenciaEvento)
+                                                                                                    ? "-"
+                                                                                                    : movimiento.ReferenciaEvento)
+                                        </div>
+                                    </td>
+
+                                                    <td>
+                                        @if (movimiento.RegistroHoraID.HasValue)
+                                                        {
+                                                            <div class="movement-classification">
+                                                                @if (movimiento.CantidadOK.HasValue)
+                                                                {
+                                                                    <span class="ok">
+                                                                        OK @movimiento.CantidadOK.Value.ToString("N0")
+                                                                    </span>
+                                                                }
+
+                                                                @if ((movimiento.CantidadSospechosa ?? 0) > 0)
+                                                                {
+                                                                    <span class="suspect">
+                                                                        S @movimiento.CantidadSospechosa!.Value.ToString("N0")
+                                                                    </span>
+                                                                }
+
+                                                                @if ((movimiento.CantidadScrap ?? 0) > 0)
+                                                                {
+                                                                    <span class="scrap">
+                                                                        SCR @movimiento.CantidadScrap!.Value.ToString("N0")
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-secondary">-</span>
+                                                        }
+                                                    </td>
+
+                                                    <td class="text-end">
+                                                        <span class="movement-amount @ClaseMovimiento(movimiento.PiezasMovimiento)">
+                                                            <i class="bi @IconoMovimiento(movimiento.PiezasMovimiento) me-1"></i>
+                                                            @(movimiento.PiezasMovimiento > 0 ? "+" : "")@movimiento.PiezasMovimiento.ToString("N0")
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="bi bi-journal-text"></i>
+                                    <div class="empty-title">No hay movimientos para esta OF</div>
+                                </div>
+                            }
+                        </div>
+                    </details>
+                }
+            }
+            else
+            {
+                <div class="empty-state">
+                    <i class="bi bi-person-check"></i>
+                    <div class="empty-title">Este operador no tiene movimientos de bonus en la semana seleccionada</div>
+                    <div class="empty-text">
+                        Puedes cambiar de semana con los controles superiores.
+                    </div>
+                </div>
+            }
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
