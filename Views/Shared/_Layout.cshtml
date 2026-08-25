@@ -43,8 +43,10 @@
         :root {
             --nsq-z-navbar: 3000;
             --nsq-z-alert: 8000;
-            --nsq-z-modal-backdrop: 9000;
-            --nsq-z-modal: 9010;
+            --nsq-z-offcanvas-backdrop: 9000;
+            --nsq-z-offcanvas: 9010;
+            --nsq-z-modal-backdrop: 9100;
+            --nsq-z-modal: 9110;
         }
 
         html,
@@ -111,6 +113,31 @@
             box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
         }
 
+
+
+        /* =========================================================
+           CAPA GLOBAL DE OFFCANVAS
+           El navbar vive en z-index 3000. Bootstrap deja offcanvas
+           cerca de 1045, por eso el navbar quedaba encima del panel.
+           ========================================================= */
+        .offcanvas-backdrop {
+            z-index: var(--nsq-z-offcanvas-backdrop) !important;
+            --bs-backdrop-bg: #07111f;
+            --bs-backdrop-opacity: .68;
+        }
+
+        html[data-nsq-theme="dark"] .offcanvas-backdrop {
+            --bs-backdrop-bg: #020711;
+            --bs-backdrop-opacity: .78;
+        }
+
+        .offcanvas {
+            z-index: var(--nsq-z-offcanvas) !important;
+        }
+
+        body:has(.offcanvas.show) .global-navbar-host {
+            pointer-events: none;
+        }
 
 
         /* =========================================================

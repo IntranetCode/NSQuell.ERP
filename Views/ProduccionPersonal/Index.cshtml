@@ -485,7 +485,7 @@
                                 <button type="button" class="ppv3-support-cell"
                                         data-support-open data-turno-id="@t.TurnoID" data-role="TECNICO">
                                     <span>@NombrePersona(t.TecnicoProduccionID)</span>
-                                    <small>clic para modificar</small>
+                                    <small class="ppv3-support-status">Sincronizado con programación · clic para modificar</small>
                                 </button>
                             </td>
                             <td data-role-cell="SMED">
@@ -513,7 +513,7 @@
                                 <button type="button" class="ppv3-support-cell"
                                         data-support-open data-turno-id="@t.TurnoID" data-role="SMED">
                                     <span>@NombrePersona(t.SmedID)</span>
-                                    <small>SMED o Técnico</small>
+                                    <small class="ppv3-support-status">SMED o Técnico · clic para modificar</small>
                                 </button>
                             </td>
                             <td data-role-cell="AUXILIAR">
@@ -538,7 +538,7 @@
                                 <button type="button" class="ppv3-support-cell"
                                         data-support-open data-turno-id="@t.TurnoID" data-role="AUXILIAR">
                                     <span>@NombrePersona(t.AuxiliarID)</span>
-                                    <small>clic para modificar</small>
+                                    <small class="ppv3-support-status">Sincronizado con programación · clic para modificar</small>
                                 </button>
                             </td>
                         </tr>
@@ -612,6 +612,34 @@
     </div>
     <div class="offcanvas-body">
         <div class="ppv3-drawer-summary" id="ppv3DrawerSummary"></div>
+
+        <div class="ppv3-candidate-search-wrap">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search"
+                   id="ppv3CandidateSearch"
+                   class="form-control"
+                   autocomplete="off"
+                   placeholder="Buscar operador por nombre o No. control..." />
+            <button type="button"
+                    id="ppv3CandidateSearchClear"
+                    class="ppv3-candidate-search-clear"
+                    title="Limpiar busqueda"
+                    aria-label="Limpiar busqueda">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="ppv3-candidate-search-meta">
+            <span id="ppv3CandidateSearchCount"></span>
+            <span>Filtra sin perder nivel, escala, carga ni disponibilidad.</span>
+        </div>
+
+        <div id="ppv3CandidateNoResults"
+             class="ppv3-candidate-no-results d-none">
+            <i class="fa-solid fa-user-slash"></i>
+            No hay operadores que coincidan con la busqueda.
+        </div>
+
         <div class="ppv3-candidate-list" id="ppv3CandidateList"></div>
     </div>
 </div>
@@ -664,6 +692,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const supportModal = supportModalEl ? bootstrap.Modal.getOrCreateInstance(supportModalEl) : null;
     const availabilityEl = document.getElementById('ppv3Availability');
     const availability = availabilityEl ? bootstrap.Offcanvas.getOrCreateInstance(availabilityEl) : null;
+    const candidateSearch = document.getElementById('ppv3CandidateSearch');
+    const candidateSearchClear = document.getElementById('ppv3CandidateSearchClear');
+    const candidateSearchCount = document.getElementById('ppv3CandidateSearchCount');
+    const candidateNoResults = document.getElementById('ppv3CandidateNoResults');
 
     function normalize(value) {
         return (value || '')
@@ -983,6 +1015,48 @@ document.addEventListener('DOMContentLoaded', function () {
             .replaceAll("'",'&#039;');
     }
 
+    function filterCandidateCards() {
+        const list = document.getElementById('ppv3CandidateList');
+        if (!list) return;
+
+        const query = normalize(candidateSearch?.value);
+        const cards = Array.from(list.querySelectorAll('.ppv3-candidate'));
+        let visible = 0;
+
+        cards.forEach(card => {
+            const haystack = normalize(card.dataset.candidateSearch || card.textContent || '');
+            const show = !query || haystack.includes(query);
+            card.classList.toggle('d-none', !show);
+            if (show) visible++;
+        });
+
+        if (candidateSearchCount) {
+            candidateSearchCount.textContent = cards.length
+                ? `${visible} de ${cards.length} operador(es)`
+                : '0 operadores';
+        }
+
+        if (candidateNoResults) {
+            candidateNoResults.classList.toggle(
+                'd-none',
+                !(cards.length > 0 && visible === 0)
+            );
+        }
+    }
+
+    candidateSearch?.addEventListener('input', filterCandidateCards);
+
+    candidateSearchClear?.addEventListener('click', function () {
+        if (!candidateSearch) return;
+        candidateSearch.value = '';
+        filterCandidateCards();
+        candidateSearch.focus();
+    });
+
+    availabilityEl?.addEventListener('shown.bs.offcanvas', function () {
+        candidateSearch?.focus();
+    });
+
     function openAvailability(programID) {
         const program = programMap.get(Number(programID));
         if (!program || !availability) return;
@@ -991,6 +1065,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const context = document.getElementById('ppv3AvailabilityContext');
         const summary = document.getElementById('ppv3DrawerSummary');
         const list = document.getElementById('ppv3CandidateList');
+
+        if (candidateSearch) candidateSearch.value = '';
+        if (candidateNoResults) candidateNoResults.classList.add('d-none');
 
         title.textContent = `OF ${program.of || program.programaID}`;
         context.textContent = `${program.parte || 'Sin parte'} · ${program.maquina || 'Sin máquina'} · ${program.turno || 'Sin turno'}`;
@@ -1039,6 +1116,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const card = document.createElement('article');
             const busy = c.conflicts.length > 0;
             card.className = `ppv3-candidate ${busy ? 'busy' : 'available'} ${c.current ? 'current' : ''}`;
+            card.dataset.candidateSearch = [
+                c.nombre || '',
+                c.numeroControl || '',
+                c.nivel ? `N${c.nivel}` : '',
+                c.enEscala ? 'en escala' : 'fuera de escala',
+                c.turnoEscala || ''
+            ].join(' ');
 
             const conflictText = busy
                 ? `Ocupado: ${c.conflicts.map(x => `OF ${x.of} ${toDate(x.inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}-${toDate(x.fin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}`).join(', ')}`
@@ -1070,6 +1154,7 @@ document.addEventListener('DOMContentLoaded', function () {
             list.appendChild(card);
         });
 
+        filterCandidateCards();
         availability.show();
     }
 
@@ -1158,14 +1243,64 @@ document.addEventListener('DOMContentLoaded', function () {
         syncSupportRows();
     }
 
+    function supportRoleLabel(role) {
+        if (role === 'TECNICO') return 'Técnico';
+        if (role === 'SMED') return 'SMED';
+        return 'Auxiliar';
+    }
+
+    function refreshSupportCell(turnID, role) {
+        const hidden = document.querySelector(
+            `.ppv3-support-hidden[data-turno-id="${turnID}"][data-role="${role}"]`
+        );
+        const button = document.querySelector(
+            `[data-support-open][data-turno-id="${turnID}"][data-role="${role}"]`
+        );
+
+        if (!hidden || !button) return;
+
+        const value = Number(hidden.value || 0);
+        const option = hidden.selectedOptions?.[0];
+        const selectedText = option?.textContent?.trim() || '';
+
+        const name = button.querySelector('span');
+        const status = button.querySelector('.ppv3-support-status') || button.querySelector('small');
+
+        if (name) {
+            name.textContent = value > 0 && selectedText
+                ? selectedText
+                : 'Sin asignar';
+        }
+
+        button.classList.toggle('assigned', value > 0);
+        button.classList.toggle('unassigned', value <= 0);
+
+        if (status) {
+            if (value > 0) {
+                status.textContent = role === 'SMED'
+                    ? 'Asignado · SMED o Técnico · clic para modificar'
+                    : `Asignado como ${supportRoleLabel(role)} · clic para modificar`;
+            } else {
+                status.textContent = role === 'SMED'
+                    ? 'Sin asignar · SMED o Técnico · clic para modificar'
+                    : `Sin ${supportRoleLabel(role).toLowerCase()} · clic para modificar`;
+            }
+        }
+    }
+
     function syncSupportRows() {
         document.querySelectorAll('.ppv3-support-row').forEach(row => {
             const turnID = Number(row.dataset.turnId);
             const turn = turnos.find(x => Number(x.turnoID) === turnID);
             if (!turn) return;
+
             row.dataset.techId = String(turn.tecnicoID || 0);
             row.dataset.smedId = String(turn.smedID || 0);
             row.dataset.auxId = String(turn.auxiliarID || 0);
+
+            refreshSupportCell(turnID, 'TECNICO');
+            refreshSupportCell(turnID, 'SMED');
+            refreshSupportCell(turnID, 'AUXILIAR');
         });
     }
 
@@ -1205,13 +1340,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
         hidden.value = select.value;
         const selectedText = select.selectedOptions[0]?.textContent?.trim() || 'Sin asignar';
-        button.querySelector('span').textContent = select.value ? selectedText : 'Sin asignar';
 
         const id = Number(select.value || 0) || null;
+
+        if (id && selectedText) {
+            people.set(id, selectedText);
+        }
         if (role === 'TECNICO') turn.tecnicoID = id;
         if (role === 'SMED') turn.smedID = id;
         if (role === 'AUXILIAR') turn.auxiliarID = id;
 
+        refreshSupportCell(turnID, role);
         supportModal.hide();
         recomputeAll();
     });

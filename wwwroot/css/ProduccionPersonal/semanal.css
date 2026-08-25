@@ -49,3 +49,148 @@ html[data-nsq-theme="dark"] .ppv3-header,html[data-nsq-theme="dark"] .ppv3-filte
 html[data-nsq-theme="dark"] .ppv3-planner th,html[data-nsq-theme="dark"] .ppv3-support-table th,html[data-nsq-theme="dark"] .ppv3-pending-table th,html[data-nsq-theme="dark"] .ppv3-person-head,html[data-nsq-theme="dark"] .ppv3-day-head,body.dark-mode .ppv3-planner th,body.dark-mode .ppv3-support-table th,body.dark-mode .ppv3-pending-table th,body.dark-mode .ppv3-person-head,body.dark-mode .ppv3-day-head{background:#172233;color:#c2cfdf;border-color:#2c3c52}
 html[data-nsq-theme="dark"] .ppv3-planner td,html[data-nsq-theme="dark"] .ppv3-support-table td,html[data-nsq-theme="dark"] .ppv3-pending-table td,html[data-nsq-theme="dark"] .ppv3-person-name,html[data-nsq-theme="dark"] .ppv3-person-day,body.dark-mode .ppv3-planner td,body.dark-mode .ppv3-support-table td,body.dark-mode .ppv3-pending-table td,body.dark-mode .ppv3-person-name,body.dark-mode .ppv3-person-day{border-color:#233247}
 html[data-nsq-theme="dark"] .ppv3-assign-cell,html[data-nsq-theme="dark"] .ppv3-support-cell,body.dark-mode .ppv3-assign-cell,body.dark-mode .ppv3-support-cell{background:#0f1825;border-color:#33455e;color:#edf4ff}
+
+/* ================================================================
+   NSQ PRODUCCION PERSONAL V4 - BUSCADOR DE OPERADOR
+   ================================================================ */
+.ppv3-candidate-search-wrap{
+    position:sticky;
+    top:-16px;
+    z-index:8;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:0 -16px 8px;
+    padding:10px 16px 8px;
+    background:rgba(255,255,255,.98);
+    border-bottom:1px solid var(--pp-border);
+    backdrop-filter:blur(8px);
+}
+.ppv3-candidate-search-wrap>i{
+    position:absolute;
+    left:29px;
+    color:#667085;
+    pointer-events:none;
+}
+.ppv3-candidate-search-wrap .form-control{
+    min-height:40px;
+    padding-left:34px;
+    padding-right:40px;
+    border:1px solid #b9cbe0;
+    border-radius:10px;
+    font-size:.72rem;
+    font-weight:700;
+}
+.ppv3-candidate-search-wrap .form-control:focus{
+    border-color:#2e75bd;
+    box-shadow:0 0 0 .18rem rgba(31,103,184,.12);
+}
+.ppv3-candidate-search-clear{
+    position:absolute;
+    right:24px;
+    width:28px;
+    height:28px;
+    border:0;
+    border-radius:7px;
+    background:transparent;
+    color:#667085;
+}
+.ppv3-candidate-search-clear:hover{
+    background:#eef4fb;
+    color:var(--pp-blue);
+}
+.ppv3-candidate-search-meta{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin:0 0 8px;
+    color:#667085;
+    font-size:.57rem;
+    font-weight:700;
+}
+.ppv3-candidate-search-meta #ppv3CandidateSearchCount{
+    color:var(--pp-blue);
+    font-weight:950;
+}
+.ppv3-candidate-no-results{
+    margin:8px 0;
+    padding:16px 12px;
+    border:1px dashed #cbd5e1;
+    border-radius:10px;
+    background:#f8fafc;
+    color:#667085;
+    text-align:center;
+    font-size:.66rem;
+    font-weight:800;
+}
+.ppv3-candidate-no-results i{
+    margin-right:5px;
+}
+
+/* Tema oscuro: el buscador no debe quedar blanco encima del drawer. */
+html[data-nsq-theme="dark"] .ppv3-candidate-search-wrap{
+    background:rgba(12,20,33,.98);
+}
+html[data-nsq-theme="dark"] .ppv3-candidate-no-results{
+    background:#111c2d;
+    border-color:#334155;
+    color:#cbd5e1;
+}
+
+/* ================================================================
+   NSQ PRODUCCION PERSONAL V6 - COBERTURA VISIBLE
+   ================================================================ */
+.ppv3-support-cell{
+    position:relative;
+    min-height:48px;
+}
+.ppv3-support-cell > span{
+    display:block !important;
+    width:100%;
+    color:var(--pp-text) !important;
+    font-size:.72rem !important;
+    font-weight:950 !important;
+    line-height:1.2;
+    white-space:normal;
+    overflow-wrap:anywhere;
+}
+.ppv3-support-cell > small.ppv3-support-status{
+    display:block !important;
+    margin-top:3px;
+    color:#667085;
+    font-size:.56rem;
+    font-weight:750;
+}
+.ppv3-support-cell.assigned{
+    border-color:#8bc7aa;
+    background:#f3fbf7;
+    box-shadow:inset 3px 0 0 #12a76a;
+}
+.ppv3-support-cell.assigned > span{
+    color:#075d3b !important;
+}
+.ppv3-support-cell.unassigned{
+    border-style:dashed;
+    background:#fffdf8;
+}
+.ppv3-support-cell.unassigned > span{
+    color:#8a5b00 !important;
+}
+html[data-nsq-theme="dark"] .ppv3-support-cell.assigned{
+    background:#0c241b;
+    border-color:#28684c;
+}
+html[data-nsq-theme="dark"] .ppv3-support-cell.assigned > span{
+    color:#8ee5b8 !important;
+}
+html[data-nsq-theme="dark"] .ppv3-support-cell.unassigned{
+    background:#211c10;
+    border-color:#66582f;
+}
+html[data-nsq-theme="dark"] .ppv3-support-cell.unassigned > span{
+    color:#f1cf75 !important;
+}
+html[data-nsq-theme="dark"] .ppv3-support-cell > small.ppv3-support-status{
+    color:#a8b3c4;
+}

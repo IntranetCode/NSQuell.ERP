@@ -2920,6 +2920,55 @@
                         <div class="small text-muted mt-1" id="detalleOperadorSugerido">-</div>
                     </div>
 
+                    <div class="border rounded-3 p-3 mb-3 bg-body-tertiary"
+                         id="ppProduccionPersonalProgramadoResumen">
+                        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                            <div>
+                                <div class="fw-bold text-primary">
+                                    <i class="bi bi-people-fill me-1"></i>
+                                    Programacion de Personal aplicada a Produccion
+                                </div>
+                                <div class="small text-muted">
+                                    Se consulta en vivo desde la programacion semanal antes de iniciar esta OF.
+                                </div>
+                            </div>
+                            <span class="badge rounded-pill text-bg-primary"
+                                  id="ppProdTurnoProgramado">Turno: -</span>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="border rounded-3 p-2 h-100 bg-body">
+                                    <div class="small text-muted fw-bold">OPERADOR</div>
+                                    <div class="fw-bold" id="ppProdOperadorProgramado">-</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="border rounded-3 p-2 h-100 bg-body">
+                                    <div class="small text-muted fw-bold">AUXILIAR</div>
+                                    <div class="fw-bold" id="ppProdAuxiliarProgramado">-</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="border rounded-3 p-2 h-100 bg-body">
+                                    <div class="small text-muted fw-bold">TECNICO</div>
+                                    <div class="fw-bold" id="ppProdTecnicoProgramado">-</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="border rounded-3 p-2 h-100 bg-body">
+                                    <div class="small text-muted fw-bold">SMED</div>
+                                    <div class="fw-bold" id="ppProdSmedProgramado">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="small text-muted mt-2">
+                            SMED se conserva como cobertura de turno. Operador, Auxiliar y Tecnico
+                            se aplican al flujo de inicio de Produccion segun corresponda.
+                        </div>
+                    </div>
+
                     <div class="modal-validation-message" id="mensajeValidacionOperadores" role="alert">
                         <i class="bi bi-exclamation-triangle-fill mt-1"></i>
                         <div id="textoValidacionOperadores"></div>
@@ -4231,6 +4280,35 @@
             });
             if (!response.ok) return;
             const data = await response.json();
+
+            const setProgramado = (id, value, emptyText = 'Sin asignar') => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value || emptyText;
+            };
+
+            setProgramado(
+                'ppProdOperadorProgramado',
+                data?.asignado ? data.operadorNombre : null
+            );
+            setProgramado(
+                'ppProdAuxiliarProgramado',
+                data?.asignado ? data.auxiliarNombre : null
+            );
+            setProgramado(
+                'ppProdTecnicoProgramado',
+                data?.asignado ? data.tecnicoProduccionNombre : null
+            );
+            setProgramado(
+                'ppProdSmedProgramado',
+                data?.asignado ? data.smedNombre : null
+            );
+
+            const turnoBadge = document.getElementById('ppProdTurnoProgramado');
+            if (turnoBadge) {
+                turnoBadge.textContent =
+                    'Turno: ' + (data?.asignado && data.turno ? data.turno : '-');
+            }
+
             if (!data?.ok || !data?.asignado) return;
 
             const selectWhenReady = (id, value) => {

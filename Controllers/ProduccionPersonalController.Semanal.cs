@@ -1228,10 +1228,9 @@ ORDER BY ProgramaOperadorID DESC;";
             }
         }
 
-        if (operadorId == personaActual)
-            return;
+        var cambioPrograma = operadorId != personaActual;
 
-        if (registroId.HasValue)
+        if (cambioPrograma && registroId.HasValue)
         {
             const string desactivar = @"
 UPDATE dbo.Planeacion_ProgramaOperadores
@@ -1246,10 +1245,9 @@ WHERE ProgramaOperadorID=@ID;";
             await cmd.ExecuteNonQueryAsync();
         }
 
-        if (!operadorId.HasValue)
-            return;
-
-        const string insertar = @"
+        if (cambioPrograma && operadorId.HasValue)
+        {
+            const string insertar = @"
 INSERT INTO dbo.Planeacion_ProgramaOperadores
 (
     ProgramaProduccionID,PersonaID,RolOperador,Activo,
@@ -1260,12 +1258,104 @@ VALUES
     @ProgramaID,@PersonaID,N'PRINCIPAL',1,@UsuarioID,GETDATE()
 );";
 
-        await using (var cmd = new SqlCommand(insertar, cn, tx))
-        {
+            await using var cmd = new SqlCommand(insertar, cn, tx);
             cmd.Parameters.Add("@ProgramaID", SqlDbType.Int).Value = programaId;
             cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = operadorId.Value;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
+
+        await SincronizarOperadorEjecucionActivaV2Async(
+            programaId,
+            operadorId,
+            usuarioId,
+            cn,
+            tx);
+    }
+
+    private static async Task SincronizarOperadorEjecucionActivaV2Async(
+        int programaId,
+        int? operadorId,
+        int usuarioId,
+        SqlConnection cn,
+        SqlTransaction tx)
+    {
+        string? operadorNombre = null;
+
+        if (operadorId.HasValue)
+        {
+            const string nombreSql = @"
+SELECT TOP (1)
+    LTRIM(RTRIM(CONCAT(
+        ISNULL(Nombre,N''),N' ',
+        ISNULL(ApellidoPaterno,N''),N' ',
+        ISNULL(ApellidoMaterno,N'')
+    )))
+FROM dbo.Persona
+WHERE PersonaID=@PersonaID
+  AND ISNULL(EsColaboradorActivo,1)=1;";
+
+            await using var nombreCmd = new SqlCommand(nombreSql, cn, tx);
+            nombreCmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = operadorId.Value;
+
+            var nombreValue = await nombreCmd.ExecuteScalarAsync();
+
+            if (nombreValue == null ||
+                nombreValue == DBNull.Value ||
+                string.IsNullOrWhiteSpace(nombreValue.ToString()))
+            {
+                throw new InvalidOperationException(
+                    $"No fue posible resolver al operador {operadorId.Value} para sincronizar Produccion.");
+            }
+
+            operadorNombre = nombreValue.ToString()!.Trim();
+        }
+
+        /*
+         * ProduccionPersonal es la fuente de programacion.
+         *
+         * Si la OF YA se encuentra en Preparacion / Produccion / Pausa,
+         * mantenemos Produccion_Ejecucion sincronizada para que:
+         * - Produccion/Detalle
+         * - tablet del operador
+         * - permisos por operador
+         * vean a la misma persona.
+         *
+         * NO se pisan:
+         * - cambios manuales de operadores hechos desde Produccion;
+         * - excepciones controladas desde Calendario.
+         */
+        const string syncSql = @"
+UPDATE e
+SET
+    e.OperadorID=@OperadorID,
+    e.OperadorNombre=@OperadorNombre,
+    e.UsuarioModificacionID=@UsuarioID,
+    e.FechaModificacion=SYSDATETIME()
+FROM dbo.Produccion_Ejecucion e
+WHERE e.ProgramaProduccionID=@ProgramaID
+  AND e.Activo=1
+  AND e.FechaFinReal IS NULL
+  AND e.EstatusID IN (2,3,4)
+  AND ISNULL(e.OperadoresModificadosManual,0)=0
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_OperadorExcepciones ex
+      WHERE ex.ProgramaProduccionID=e.ProgramaProduccionID
+        AND ex.Activo=1
+  );";
+
+        await using var syncCmd = new SqlCommand(syncSql, cn, tx);
+        syncCmd.Parameters.Add("@ProgramaID", SqlDbType.Int).Value = programaId;
+        syncCmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value =
+            operadorId.HasValue ? operadorId.Value : DBNull.Value;
+        syncCmd.Parameters.Add("@OperadorNombre", SqlDbType.NVarChar, 200).Value =
+            string.IsNullOrWhiteSpace(operadorNombre)
+                ? DBNull.Value
+                : operadorNombre;
+        syncCmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+        await syncCmd.ExecuteNonQueryAsync();
     }
 }
