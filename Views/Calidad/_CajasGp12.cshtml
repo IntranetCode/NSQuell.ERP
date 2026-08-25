@@ -1,8 +1,19 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
 @using ERP.NSQuell.Models
+@using System
+@using System.Linq
+
 @{
     string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+
+    var cajas = Model.CajasProduccion;
+    var totalCajas = Model.TotalCajasProduccion;
+    var cajasPendientes = Model.CajasPendientesRevision;
+    var cajasLiberadas = Model.CajasLiberadasCalidad;
+    var cajasGP12 = Model.CajasEnGP12;
+    var cajasDevueltas = Model.CajasDevueltasCalidad;
 }
+
 <style>
     .quality-boxes {
         --qb-border: #dfe5ec;
@@ -10,6 +21,9 @@
         --qb-muted: #64748b;
         --qb-navy: #14213d;
         --qb-orange: #f97316;
+        --qb-green: #15803d;
+        --qb-red: #b91c1c;
+        --qb-yellow: #b45309;
         color: var(--qb-text)
     }
 
@@ -81,13 +95,254 @@
             border-radius: 9px;
             font-size: .86rem;
             font-weight: 750;
-            text-decoration: none
+            text-decoration: none;
+            transition: .15s ease
         }
+
+            .quality-boxes .quality-btn:disabled {
+                opacity: .55;
+                cursor: not-allowed
+            }
 
         .quality-boxes .quality-btn-primary {
             background: var(--qb-orange);
             color: #fff;
             border-color: var(--qb-orange)
+        }
+
+            .quality-boxes .quality-btn-primary:hover {
+                background: #ea580c;
+                color: #fff
+            }
+
+        .quality-boxes .quality-btn-success {
+            background: #15803d;
+            color: #fff;
+            border-color: #15803d
+        }
+
+            .quality-boxes .quality-btn-success:hover {
+                background: #166534;
+                color: #fff
+            }
+
+        .quality-boxes .quality-btn-warning {
+            background: #d97706;
+            color: #fff;
+            border-color: #d97706
+        }
+
+            .quality-boxes .quality-btn-warning:hover {
+                background: #b45309;
+                color: #fff
+            }
+
+        .quality-boxes .quality-btn-danger {
+            background: #dc2626;
+            color: #fff;
+            border-color: #dc2626
+        }
+
+            .quality-boxes .quality-btn-danger:hover {
+                background: #b91c1c;
+                color: #fff
+            }
+
+        .quality-boxes .quality-scan-reception {
+            margin-bottom: 20px;
+            padding: 18px;
+            border: 2px solid #fdba74;
+            border-radius: 14px;
+            background: linear-gradient(135deg,#fff7ed 0%,#fff 72%)
+        }
+
+        .quality-boxes .quality-scan-reception-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 14px
+        }
+
+        .quality-boxes .quality-scan-reception-title {
+            margin: 0;
+            color: var(--qb-navy);
+            font-size: 1rem;
+            font-weight: 850
+        }
+
+            .quality-boxes .quality-scan-reception-title i {
+                color: var(--qb-orange);
+                margin-right: 7px
+            }
+
+        .quality-boxes .quality-scan-reception-form {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) auto;
+            gap: 10px
+        }
+
+        .quality-boxes .quality-scan-reception-input {
+            min-height: 52px;
+            border: 2px solid #fdba74;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 700;
+            outline: none
+        }
+
+            .quality-boxes .quality-scan-reception-input:focus {
+                border-color: var(--qb-orange);
+                box-shadow: 0 0 0 4px rgba(249,115,22,.12)
+            }
+
+        .quality-boxes .quality-flow {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-top: 14px
+        }
+
+        .quality-boxes .quality-flow-step {
+            position: relative;
+            min-height: 74px;
+            padding: 11px;
+            border: 1px solid #fed7aa;
+            border-radius: 11px;
+            background: #fff;
+            text-align: center
+        }
+
+        .quality-boxes .quality-flow-number {
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 5px;
+            border-radius: 50%;
+            background: #ffedd5;
+            color: #c2410c;
+            font-size: .72rem;
+            font-weight: 900
+        }
+
+        .quality-boxes .quality-flow-step strong {
+            display: block;
+            color: #334155;
+            font-size: .78rem
+        }
+
+        .quality-boxes .quality-flow-step small {
+            display: block;
+            margin-top: 3px;
+            color: var(--qb-muted);
+            font-size: .68rem
+        }
+
+        .quality-boxes .quality-metrics {
+            display: grid;
+            grid-template-columns: repeat(5,minmax(0,1fr));
+            gap: 10px;
+            margin-bottom: 20px
+        }
+
+        .quality-boxes .quality-metric {
+            min-height: 83px;
+            padding: 13px;
+            border: 1px solid var(--qb-border);
+            border-radius: 12px;
+            background: #fff
+        }
+
+        .quality-boxes .quality-metric-number {
+            margin-top: 5px;
+            font-size: 1.4rem;
+            font-weight: 900
+        }
+
+        .quality-boxes .quality-metric.pending {
+            border-color: #fde68a;
+            background: #fffbeb
+        }
+
+        .quality-boxes .quality-metric.success {
+            border-color: #86efac;
+            background: #f0fdf4
+        }
+
+        .quality-boxes .quality-metric.gp12 {
+            border-color: #fcd34d;
+            background: #fffbeb
+        }
+
+        .quality-boxes .quality-metric.danger {
+            border-color: #fca5a5;
+            background: #fef2f2
+        }
+
+        .quality-boxes .quality-empty {
+            padding: 26px 18px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            background: #f8fafc;
+            text-align: center;
+            color: #64748b
+        }
+
+            .quality-boxes .quality-empty i {
+                display: block;
+                margin-bottom: 8px;
+                color: #94a3b8;
+                font-size: 1.8rem
+            }
+
+        .quality-boxes .quality-reception-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 800
+        }
+
+            .quality-boxes .quality-reception-state.is-received {
+                color: #047857;
+                background: #ecfdf5;
+                border: 1px solid #a7f3d0
+            }
+
+            .quality-boxes .quality-reception-state.is-pending {
+                color: #c2410c;
+                background: #fff7ed;
+                border: 1px solid #fed7aa
+            }
+
+        .quality-boxes .quality-label-data {
+            margin-bottom: 14px;
+            padding: 11px 12px;
+            border: 1px solid #dbeafe;
+            border-radius: 11px;
+            background: #eff6ff
+        }
+
+        .quality-boxes .quality-label-grid {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .quality-boxes .quality-label-code {
+            max-width: 100%;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: Consolas,monospace;
+            color: #475569;
+            font-size: .73rem
         }
 
         .quality-boxes .quality-result-selector {
@@ -172,59 +427,6 @@
             font-weight: 800
         }
 
-        .quality-boxes .quality-monitor-result-grid {
-            display: grid;
-            grid-template-columns: repeat(3,minmax(0,1fr));
-            gap: 10px
-        }
-
-        .quality-boxes .quality-monitor-result-choice {
-            position: relative;
-            cursor: pointer;
-            margin: 0
-        }
-
-            .quality-boxes .quality-monitor-result-choice > input {
-                position: absolute;
-                opacity: 0;
-                pointer-events: none
-            }
-
-        .quality-boxes .quality-monitor-result-card {
-            min-height: 82px;
-            border: 1px solid var(--qb-border);
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 4px;
-            background: #fff
-        }
-
-            .quality-boxes .quality-monitor-result-card small {
-                color: var(--qb-muted);
-                line-height: 1.25
-            }
-
-        .quality-boxes .quality-monitor-result-choice.is-conforme > input:checked + .quality-monitor-result-card {
-            border-color: #16a34a;
-            box-shadow: 0 0 0 3px rgba(22,163,74,.13);
-            background: #f0fdf4
-        }
-
-        .quality-boxes .quality-monitor-result-choice.is-sospechoso > input:checked + .quality-monitor-result-card {
-            border-color: #d97706;
-            box-shadow: 0 0 0 3px rgba(217,119,6,.13);
-            background: #fffbeb
-        }
-
-        .quality-boxes .quality-monitor-result-choice.is-noconforme > input:checked + .quality-monitor-result-card {
-            border-color: #dc2626;
-            box-shadow: 0 0 0 3px rgba(220,38,38,.13);
-            background: #fef2f2
-        }
-
         .quality-boxes .quality-box-validation-grid {
             display: grid;
             grid-template-columns: repeat(3,minmax(0,1fr));
@@ -232,9 +434,9 @@
         }
 
         .quality-boxes .quality-box-validation-item {
+            padding: 12px;
             border: 1px solid var(--qb-border);
             border-radius: 12px;
-            padding: 12px;
             background: #fff
         }
 
@@ -248,32 +450,85 @@
                 background: #fef2f2
             }
 
-        .quality-boxes .quality-box-panel {
+        .quality-boxes .quality-monitor-result-grid {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .quality-boxes .quality-monitor-result-choice {
+            position: relative;
+            margin: 0;
+            cursor: pointer
+        }
+
+            .quality-boxes .quality-monitor-result-choice > input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+        .quality-boxes .quality-monitor-result-card {
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+            padding: 12px;
             border: 1px solid var(--qb-border);
             border-radius: 12px;
+            background: #fff
+        }
+
+            .quality-boxes .quality-monitor-result-card small {
+                color: var(--qb-muted);
+                line-height: 1.25
+            }
+
+        .quality-boxes .quality-monitor-result-choice.is-conforme > input:checked + .quality-monitor-result-card {
+            border-color: #16a34a;
+            background: #f0fdf4;
+            box-shadow: 0 0 0 3px rgba(22,163,74,.13)
+        }
+
+        .quality-boxes .quality-monitor-result-choice.is-sospechoso > input:checked + .quality-monitor-result-card {
+            border-color: #d97706;
+            background: #fffbeb;
+            box-shadow: 0 0 0 3px rgba(217,119,6,.13)
+        }
+
+        .quality-boxes .quality-monitor-result-choice.is-noconforme > input:checked + .quality-monitor-result-card {
+            border-color: #dc2626;
+            background: #fef2f2;
+            box-shadow: 0 0 0 3px rgba(220,38,38,.13)
+        }
+
+        .quality-boxes .quality-box-panel {
             padding: 14px;
+            border: 1px solid var(--qb-border);
+            border-radius: 12px;
             background: #f8fafc
         }
 
-            .quality-boxes .quality-box-panel[hidden], .quality-boxes .quality-gp12-defects[hidden] {
+            .quality-boxes .quality-box-panel[hidden] {
                 display: none !important
             }
 
-        .quality-boxes .quality-box-submit-note, .quality-boxes .quality-gp12-balance {
-            border-radius: 10px;
+        .quality-boxes .quality-box-submit-note {
             padding: 10px 12px;
             border: 1px solid var(--qb-border);
+            border-radius: 10px;
             background: #f8fafc;
             font-weight: 600
         }
 
-            .quality-boxes .quality-box-submit-note.is-ready, .quality-boxes .quality-gp12-balance.is-complete {
+            .quality-boxes .quality-box-submit-note.is-ready {
                 color: #166534;
                 border-color: #86efac;
                 background: #f0fdf4
             }
 
-            .quality-boxes .quality-box-submit-note.is-warning, .quality-boxes .quality-gp12-balance.is-invalid {
+            .quality-boxes .quality-box-submit-note.is-warning {
                 color: #991b1b;
                 border-color: #fca5a5;
                 background: #fef2f2
@@ -286,7 +541,11 @@
         --qb-navy: #f8fafc
     }
 
-        html[data-nsq-theme="dark"] .quality-boxes .quality-card, html[data-nsq-theme="dark"] .quality-boxes article, html[data-nsq-theme="dark"] .quality-boxes .quality-monitor-result-card, html[data-nsq-theme="dark"] .quality-boxes .quality-box-validation-item {
+        html[data-nsq-theme="dark"] .quality-boxes .quality-card,
+        html[data-nsq-theme="dark"] .quality-boxes article,
+        html[data-nsq-theme="dark"] .quality-boxes .quality-monitor-result-card,
+        html[data-nsq-theme="dark"] .quality-boxes .quality-box-validation-item,
+        html[data-nsq-theme="dark"] .quality-boxes .quality-metric {
             background: #111c2d
         }
 
@@ -294,14 +553,30 @@
             background: #0e1828
         }
 
-        html[data-nsq-theme="dark"] .quality-boxes .form-control, html[data-nsq-theme="dark"] .quality-boxes .form-select {
+        html[data-nsq-theme="dark"] .quality-boxes .form-control,
+        html[data-nsq-theme="dark"] .quality-boxes .form-select {
             background: #0b1422;
             color: #f8fafc;
             border-color: rgba(255,255,255,.13)
         }
 
+    @@media(max-width:991.98px) {
+        .quality-boxes .quality-metrics {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .quality-boxes .quality-label-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .quality-boxes .quality-flow {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+    }
+
     @@media(max-width:767.98px) {
-        .quality-boxes .quality-card-header {
+        .quality-boxes .quality-card-header,
+        .quality-boxes .quality-scan-reception-head {
             flex-direction: column
         }
 
@@ -309,125 +584,37 @@
             padding: 15px
         }
 
-        .quality-boxes .quality-monitor-result-grid, .quality-boxes .quality-box-validation-grid {
+        .quality-boxes .quality-scan-reception-form,
+        .quality-boxes .quality-monitor-result-grid,
+        .quality-boxes .quality-box-validation-grid,
+        .quality-boxes .quality-metrics,
+        .quality-boxes .quality-label-grid,
+        .quality-boxes .quality-flow {
             grid-template-columns: 1fr
         }
-    }
 
-    .quality-boxes .quality-scan-reception {
-        margin-bottom: 20px;
-        padding: 16px;
-        border: 1px solid #fed7aa;
-        border-radius: 12px;
-        background: linear-gradient(135deg,#fff7ed 0%,#ffffff 72%);
-    }
-
-    .quality-boxes .quality-scan-reception-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 14px;
-        margin-bottom: 12px;
-    }
-
-    .quality-boxes .quality-scan-reception-title {
-        margin: 0;
-        color: var(--qb-navy);
-        font-size: .95rem;
-        font-weight: 850;
-    }
-
-        .quality-boxes .quality-scan-reception-title i {
-            color: var(--qb-orange);
-            margin-right: 7px;
-        }
-
-    .quality-boxes .quality-scan-reception-form {
-        display: grid;
-        grid-template-columns: minmax(0,1fr) auto;
-        gap: 10px;
-    }
-
-    .quality-boxes .quality-scan-reception-input {
-        min-height: 48px;
-        border: 2px solid #fdba74;
-        border-radius: 10px;
-        padding: 10px 14px;
-        font-weight: 650;
-        outline: none;
-    }
-
-        .quality-boxes .quality-scan-reception-input:focus {
-            border-color: var(--qb-orange);
-            box-shadow: 0 0 0 4px rgba(249,115,22,.12);
-        }
-
-    .quality-boxes .quality-reception-state {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 8px;
-        padding: 5px 9px;
-        border-radius: 999px;
-        font-size: .72rem;
-        font-weight: 800;
-    }
-
-        .quality-boxes .quality-reception-state.is-pending {
-            background: #fff7ed;
-            color: #c2410c;
-            border: 1px solid #fed7aa;
-        }
-
-        .quality-boxes .quality-reception-state.is-received {
-            background: #ecfdf5;
-            color: #047857;
-            border: 1px solid #a7f3d0;
-        }
-
-    .quality-boxes .quality-reception-waiting {
-        padding: 14px;
-        border: 1px dashed #fdba74;
-        border-radius: 10px;
-        background: #fffaf5;
-        color: #9a3412;
-        font-size: .84rem;
-        font-weight: 650;
-    }
-
-    @@media(max - width:767.98px) {
-        .quality-boxes .quality-scan-reception-head
-
-    {
-        flex-direction: column;
-    }
-
-    .quality-boxes .quality-scan-reception-form {
-        grid-template-columns: 1fr;
-    }
-
-        .quality-boxes .quality-scan-reception-form .quality-btn {
-            width: 100%;
-        }
-
+            .quality-boxes .quality-scan-reception-form .quality-btn {
+                width: 100%
+            }
     }
 </style>
-<div class="quality-boxes">
-    @if (Model.CajasProduccion.Any())
-    {
-        <section class="quality-card" id="cajas-produccion">
-            <div class="quality-card-header">
-                <div>
-                    <h2>
-                        <i class="fa-solid fa-boxes-stacked"></i>
-                        Liberación de cajas por Calidad
-                    </h2>
-                    <div class="quality-help">
-                        Calidad valida empaque, etiqueta y trazabilidad. Cada caja puede liberarse,
-                        enviarse a GP12 o devolverse para corrección sin detener el monitoreo horario.
-                    </div>
-                </div>
 
+<div class="quality-boxes">
+    <section class="quality-card" id="cajas-produccion">
+        <div class="quality-card-header">
+            <div>
+                <h2>
+                    <i class="fa-solid fa-barcode"></i>
+                    Escaneo y liberación de cajas
+                </h2>
+                <div class="quality-help">
+                    Calidad realiza el primer escaneo de la caja física. El ERP identifica la OF, parte y cantidad de la etiqueta y registra automáticamente la caja real. Después Calidad decide si libera en verde, envía a GP12 o devuelve a Producción.
+                </div>
+            </div>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <span class="badge bg-light text-dark border">
+                    Inspección #@Model.InspeccionID
+                </span>
                 @if (Model.CajasPendientesRevision > 0)
                 {
                     <span class="badge bg-warning text-dark">
@@ -435,115 +622,147 @@
                     </span>
                 }
             </div>
+        </div>
 
-            <div class="quality-card-body">
-
-                <div class="quality-scan-reception" id="recepcion-cajas-escaner">
-                    <div class="quality-scan-reception-head">
-                        <div>
-                            <h3 class="quality-scan-reception-title">
-                                <i class="fa-solid fa-barcode"></i>
-                                Recibir cajas físicas de esta OF
-                            </h3>
-                            <div class="quality-help">
-                                Mantén esta OF abierta y escanea una caja a la vez. Una etiqueta de otra corrida será rechazada sin registrar su recepción.
-                            </div>
-                        </div>
-                        <span class="badge bg-light text-dark border">
-                            Inspección #@Model.InspeccionID
-                        </span>
-                    </div>
-                    <form asp-controller="Calidad"
-                          asp-action="EscanearCajaCalidad"
-                          method="post"
-                          class="quality-scan-reception-form"
-                          data-quality-detail-scan-form>
-                        @Html.AntiForgeryToken()
-                        <input type="hidden"
-                               name="InspeccionID"
-                               value="@Model.InspeccionID" />
-                        <input type="text"
-                               name="CodigoBarras"
-                               maxlength="500"
-                               autocomplete="off"
-                               class="form-control quality-scan-reception-input"
-                               placeholder="Escanea la siguiente caja de esta OF..."
-                               aria-label="Código de barras de la caja"
-                               data-quality-detail-scan-input />
-                        <button type="submit"
-                                class="quality-btn quality-btn-primary"
-                                data-quality-detail-scan-submit>
+        <div class="quality-card-body">
+            <div class="quality-scan-reception" id="recepcion-cajas-escaner">
+                <div class="quality-scan-reception-head">
+                    <div>
+                        <h3 class="quality-scan-reception-title">
                             <i class="fa-solid fa-barcode"></i>
-                            Recibir caja
-                        </button>
-                    </form>
-                    <div class="quality-help">
-                        El lector puede enviar ENTER. Después de recibir una caja volverás a este mismo detalle para escanear la siguiente.
+                            Escanear caja física
+                        </h3>
+                        <div class="quality-help">
+                            Escanea la etiqueta colocada físicamente por Planeación. No es necesario que Producción haya creado previamente la caja en ERP. El primer escaneo de Calidad la registra automáticamente.
+                        </div>
                     </div>
+                    <span class="badge bg-warning text-dark">
+                        <i class="fa-solid fa-circle me-1"></i>
+                        Lector disponible
+                    </span>
                 </div>
 
-                @if (TempData["InspeccionCajaEscaneadaID"] is int inspeccionCajaEscaneadaId && inspeccionCajaEscaneadaId > 0)
-                {
-                    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                        <div>
-                            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                            La última etiqueta pertenece a otra OF. No se registró la recepción.
-                        </div>
-                        <a asp-controller="Calidad"
-                           asp-action="Detalle"
-                           asp-route-id="@inspeccionCajaEscaneadaId"
-                           asp-fragment="recepcion-cajas-escaner"
-                           class="quality-btn quality-btn-primary">
-                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                            Ir a la OF correcta
-                        </a>
-                    </div>
-                }
+                <form asp-controller="Calidad"
+                      asp-action="EscanearCajaCalidad"
+                      method="post"
+                      class="quality-scan-reception-form"
+                      data-quality-detail-scan-form>
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+                    <input type="text"
+                           name="CodigoBarras"
+                           maxlength="500"
+                           autocomplete="off"
+                           autocapitalize="off"
+                           spellcheck="false"
+                           class="form-control quality-scan-reception-input"
+                           placeholder="Escanea la etiqueta de la caja..."
+                           aria-label="Código de barras de la caja"
+                           data-quality-detail-scan-input />
+                    <button type="submit"
+                            class="quality-btn quality-btn-primary"
+                            data-quality-detail-scan-submit>
+                        <i class="fa-solid fa-barcode"></i>
+                        Escanear caja
+                    </button>
+                </form>
 
-                <div class="row g-3 mb-4">
-                    <div class="col-6 col-lg">
-                        <div class="border rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Total cajas</div>
-                            <div class="fw-bold fs-5">@Model.TotalCajasProduccion</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-lg">
-                        <div class="border border-warning rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Pendientes</div>
-                            <div class="fw-bold fs-5 text-warning">@Model.CajasPendientesRevision</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-lg">
-                        <div class="border border-success rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Liberadas</div>
-                            <div class="fw-bold fs-5 text-success">@Model.CajasLiberadasCalidad</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-lg">
-                        <div class="border border-warning rounded-3 p-3 h-100">
-                            <div class="quality-data-label">En GP12</div>
-                            <div class="fw-bold fs-5 text-warning">@Model.CajasEnGP12</div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-lg">
-                        <div class="border border-danger rounded-3 p-3 h-100">
-                            <div class="quality-data-label">Devueltas</div>
-                            <div class="fw-bold fs-5 text-danger">@Model.CajasDevueltasCalidad</div>
-                        </div>
-                    </div>
+                <div class="quality-help">
+                    Si tu lector envía ENTER, no necesitas presionar el botón. Después del escaneo la caja aparecerá inmediatamente abajo lista para revisión.
                 </div>
 
-                @if (Model.DisposicionesPendientes > 0)
-                {
-                    <div class="alert alert-warning">
+                <div class="quality-flow">
+                    <div class="quality-flow-step">
+                        <span class="quality-flow-number">1</span>
+                        <strong>Producción forma físicamente</strong>
+                        <small>Sin captura adicional en ERP.</small>
+                    </div>
+                    <div class="quality-flow-step">
+                        <span class="quality-flow-number">2</span>
+                        <strong>Calidad escanea</strong>
+                        <small>La caja real nace en ERP.</small>
+                    </div>
+                    <div class="quality-flow-step">
+                        <span class="quality-flow-number">3</span>
+                        <strong>Calidad valida</strong>
+                        <small>Verde, GP12 o devolución.</small>
+                    </div>
+                    <div class="quality-flow-step">
+                        <span class="quality-flow-number">4</span>
+                        <strong>Producción entrega</strong>
+                        <small>Escanea al entregar a Almacén.</small>
+                    </div>
+                </div>
+            </div>
+
+            @if (TempData["InspeccionCajaEscaneadaID"] is int inspeccionCajaEscaneadaId && inspeccionCajaEscaneadaId > 0)
+            {
+                <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div>
                         <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                        Existen <strong>@Model.DisposicionesPendientes disposición(es) de material pendientes</strong>.
-                        Las cajas pueden enviarse a GP12 o devolverse, pero la liberación directa a Almacén
-                        permanecerá bloqueada hasta resolverlas.
+                        La etiqueta escaneada corresponde a otra inspección / OF. No se registró en esta corrida.
                     </div>
-                }
+                    <a asp-controller="Calidad"
+                       asp-action="Detalle"
+                       asp-route-id="@inspeccionCajaEscaneadaId"
+                       asp-fragment="recepcion-cajas-escaner"
+                       class="quality-btn quality-btn-primary">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        Ir a la OF correcta
+                    </a>
+                </div>
+            }
 
-                @foreach (var caja in Model.CajasProduccion)
+            <div class="quality-metrics">
+                <div class="quality-metric">
+                    <div class="quality-data-label">Cajas reales</div>
+                    <div class="quality-metric-number">@totalCajas</div>
+                    <div class="quality-help">Registradas mediante escaneo físico.</div>
+                </div>
+                <div class="quality-metric pending">
+                    <div class="quality-data-label">Pendientes</div>
+                    <div class="quality-metric-number text-warning">@cajasPendientes</div>
+                    <div class="quality-help">Esperando decisión de Calidad.</div>
+                </div>
+                <div class="quality-metric success">
+                    <div class="quality-data-label">Liberadas</div>
+                    <div class="quality-metric-number text-success">@cajasLiberadas</div>
+                    <div class="quality-help">Pendientes de entrega a Almacén.</div>
+                </div>
+                <div class="quality-metric gp12">
+                    <div class="quality-data-label">En GP12</div>
+                    <div class="quality-metric-number text-warning">@cajasGP12</div>
+                    <div class="quality-help">En inspección reforzada.</div>
+                </div>
+                <div class="quality-metric danger">
+                    <div class="quality-data-label">Devueltas</div>
+                    <div class="quality-metric-number text-danger">@cajasDevueltas</div>
+                    <div class="quality-help">Pendientes de corrección.</div>
+                </div>
+            </div>
+
+            @if (Model.DisposicionesPendientes > 0)
+            {
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                    Existen <strong>@Model.DisposicionesPendientes disposición(es) de material pendientes</strong>.
+                    Puedes enviar cajas a GP12 o devolverlas, pero la liberación directa hacia Almacén permanecerá bloqueada hasta resolverlas.
+                </div>
+            }
+
+            @if (!cajas.Any())
+            {
+                <div class="quality-empty">
+                    <i class="fa-solid fa-box-open"></i>
+                    <strong>Todavía no hay cajas reales registradas.</strong>
+                    <div class="quality-help mt-1">
+                        Escanea arriba la primera caja física de esta OF. El ERP la creará automáticamente y aparecerá aquí para su validación.
+                    </div>
+                </div>
+            }
+            else
+            {
+                @foreach (var caja in cajas.OrderByDescending(x => x.CajaProduccionID))
                 {
                     <article class="border @caja.EstadoBordeClase rounded-4 p-3 mb-3 bg-white">
                         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -553,11 +772,9 @@
                                     @Mostrar(caja.FolioCaja)
                                 </h3>
                                 <div class="quality-help">
-                                    Caja #@caja.NumeroCaja · ID @caja.CajaProduccionID ·
-                                    formada @caja.FechaFormacion.ToString("dd/MM/yyyy HH:mm")
+                                    Caja #@caja.NumeroCaja · ID @caja.CajaProduccionID · registrada @caja.FechaFormacion.ToString("dd/MM/yyyy HH:mm")
                                 </div>
                             </div>
-
                             <div class="text-end">
                                 <span class="badge @caja.EstadoBadgeClase">
                                     @caja.EstadoVisualTexto
@@ -566,16 +783,45 @@
                                 {
                                     <div class="quality-reception-state is-received">
                                         <i class="fa-solid fa-circle-check"></i>
-                                        Recibida físicamente · @caja.FechaEscaneoCalidad.Value.ToString("dd/MM HH:mm")
+                                        Escaneada por Calidad · @caja.FechaEscaneoCalidad.Value.ToString("dd/MM HH:mm")
                                     </div>
                                 }
                                 else if (caja.EstadoCajaID == ProduccionCajaEstatus.PendienteCalidad)
                                 {
                                     <div class="quality-reception-state is-pending">
-                                        <i class="fa-solid fa-barcode"></i>
-                                        Pendiente de escaneo físico
+                                        <i class="fa-solid fa-clock"></i>
+                                        Registro anterior pendiente de escaneo
                                     </div>
                                 }
+                            </div>
+                        </div>
+
+                        <div class="quality-label-data">
+                            <div class="quality-data-label">
+                                <i class="fa-solid fa-barcode me-1"></i>
+                                Datos leídos de la etiqueta física
+                            </div>
+                            <div class="quality-label-grid">
+                                <div>
+                                    <div class="quality-data-label">OF etiqueta</div>
+                                    <div class="fw-semibold">@Mostrar(caja.NumeroOFEtiqueta)</div>
+                                </div>
+                                <div>
+                                    <div class="quality-data-label">Parte etiqueta</div>
+                                    <div class="fw-semibold">@Mostrar(caja.NumeroParteEtiqueta)</div>
+                                </div>
+                                <div>
+                                    <div class="quality-data-label">Cantidad etiqueta</div>
+                                    <div class="fw-bold">
+                                        @(caja.CantidadEtiqueta.HasValue? caja.CantidadEtiqueta.Value.ToString("N0") : caja.CantidadPiezas.ToString("N0"))
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="quality-data-label">Código físico</div>
+                                    <div class="quality-label-code" title="@caja.CodigoBarrasOrigen">
+                                        @Mostrar(caja.CodigoBarrasOrigen)
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -593,14 +839,12 @@
                                 <div class="fw-semibold">@Mostrar(caja.LoteMaterial)</div>
                             </div>
                             <div class="col-md-3">
-                                <div class="quality-data-label">Etiqueta / folio</div>
-                                <div class="fw-semibold">@Mostrar(caja.EtiquetaFolio)</div>
+                                <div class="quality-data-label">Parte / corrida</div>
+                                <div class="fw-semibold">@Mostrar(caja.NumeroParte)</div>
                             </div>
                             <div class="col-md-3">
-                                <div class="quality-data-label">Solicitud a Calidad</div>
-                                <div class="fw-semibold">
-                                    @(caja.FechaSolicitudCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "—")
-                                </div>
+                                <div class="quality-data-label">Máquina</div>
+                                <div class="fw-semibold">@Mostrar(caja.Maquina)</div>
                             </div>
                         </div>
 
@@ -611,17 +855,13 @@
                                   method="post"
                                   data-box-review-form>
                                 @Html.AntiForgeryToken()
-
-                                <input type="hidden"
-                                       name="InspeccionID"
-                                       value="@Model.InspeccionID" />
-                                <input type="hidden"
-                                       name="CajaProduccionID"
-                                       value="@caja.CajaProduccionID" />
+                                <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+                                <input type="hidden" name="CajaProduccionID" value="@caja.CajaProduccionID" />
 
                                 <div class="alert alert-info py-2">
-                                    <strong>1. Confirma la revisión física.</strong>
-                                    Después selecciona una sola decisión para esta caja.
+                                    <i class="fa-solid fa-list-check me-1"></i>
+                                    <strong>Revisa físicamente esta caja.</strong>
+                                    Después selecciona una única decisión.
                                 </div>
 
                                 <div class="quality-box-validation-grid mb-4">
@@ -683,7 +923,8 @@
                                     </div>
                                 </div>
 
-                                <div class="fw-bold mb-2">2. Selecciona la decisión</div>
+                                <div class="fw-bold mb-2">Decisión de Calidad</div>
+
                                 <div class="quality-monitor-result-grid mb-3">
                                     <label class="quality-monitor-result-choice is-conforme">
                                         <input type="radio"
@@ -692,8 +933,8 @@
                                                data-box-decision />
                                         <span class="quality-monitor-result-card">
                                             <i class="fa-solid fa-circle-check text-success"></i>
-                                            <strong>Liberar</strong>
-                                            <small>Etiqueta verde y destino Almacén.</small>
+                                            <strong>Liberar verde</strong>
+                                            <small>Quedará pendiente de entrega de Producción a Almacén PT.</small>
                                         </span>
                                     </label>
 
@@ -705,7 +946,7 @@
                                         <span class="quality-monitor-result-card">
                                             <i class="fa-solid fa-microscope text-warning"></i>
                                             <strong>Enviar a GP12</strong>
-                                            <small>Inspección reforzada del 100 % de la caja.</small>
+                                            <small>La caja queda retenida para inspección reforzada.</small>
                                         </span>
                                     </label>
 
@@ -717,7 +958,7 @@
                                         <span class="quality-monitor-result-card">
                                             <i class="fa-solid fa-rotate-left text-danger"></i>
                                             <strong>Devolver</strong>
-                                            <small>Regresa para corrección antes de una nueva solicitud.</small>
+                                            <small>Producción deberá corregir antes de una nueva revisión.</small>
                                         </span>
                                     </label>
                                 </div>
@@ -726,7 +967,7 @@
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <label class="form-label fw-semibold">
-                                                Número de operador en etiqueta
+                                                Número de operador indicado en etiqueta
                                             </label>
                                             <input type="text"
                                                    name="NumeroOperadorEtiqueta"
@@ -741,7 +982,7 @@
                                                    name="Tarima"
                                                    maxlength="100"
                                                    class="form-control"
-                                                   placeholder="Folio o ubicación de tarima, cuando aplique" />
+                                                   placeholder="Folio o ubicación, cuando aplique" />
                                         </div>
                                         <div class="col-12">
                                             <label class="form-label fw-semibold">Observaciones de liberación</label>
@@ -749,8 +990,7 @@
                                           rows="2"
                                           maxlength="1000"
                                           class="form-control"
-                                          data-box-release-observation
-                                          placeholder="Opcional: documenta condiciones o referencias de la liberación."></textarea>
+                                          placeholder="Opcional: observaciones de la liberación."></textarea>
                                         </div>
                                     </div>
                                 </div>
@@ -762,7 +1002,7 @@
                                   maxlength="500"
                                   class="form-control"
                                   data-box-gp12-reason
-                                  placeholder="Describe el hallazgo, riesgo o condición que requiere inspección reforzada."></textarea>
+                                  placeholder="Describe el hallazgo o condición que requiere inspección reforzada."></textarea>
                                 </div>
 
                                 <div class="quality-box-panel mb-3" data-box-panel="DEVOLVER" hidden>
@@ -772,7 +1012,7 @@
                                   maxlength="1000"
                                   class="form-control"
                                   data-box-return-reason
-                                  placeholder="Describe exactamente qué debe corregirse antes de volver a solicitar la revisión."></textarea>
+                                  placeholder="Describe exactamente qué debe corregirse."></textarea>
                                 </div>
 
                                 <div class="quality-box-submit-note mb-3" data-box-submit-note>
@@ -790,9 +1030,9 @@
                         }
                         else if (caja.PuedeRevisar && !caja.FechaEscaneoCalidad.HasValue)
                         {
-                            <div class="quality-reception-waiting">
-                                <i class="fa-solid fa-barcode me-1"></i>
-                                Esta caja ya fue avisada por Producción, pero todavía no ha sido recibida físicamente. Escanea su etiqueta arriba antes de liberar, enviar a GP12 o devolver.
+                            <div class="alert alert-warning mb-0">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                Esta caja pertenece al flujo anterior y todavía no tiene registrado el escaneo físico de Calidad. Escanea su etiqueta arriba para continuar.
                             </div>
                         }
                         else
@@ -810,66 +1050,134 @@
                                 </div>
                                 <div class="col-md-2">
                                     <div class="quality-data-label">Etiqueta verde</div>
-                                    <div class="fw-semibold">@(caja.EtiquetaVerde ? "Sí" : "No")</div>
+                                    <div class="fw-semibold">
+                                        @(caja.EtiquetaVerde ? "Sí" : "No")
+                                    </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="quality-data-label">Motivo / observaciones</div>
                                     <div class="fw-semibold">@Mostrar(caja.MotivoCalidad)</div>
                                 </div>
                             </div>
+
+                            @if (caja.EtiquetaVerde)
+                            {
+                                <div class="alert alert-success mt-3 mb-0">
+                                    <i class="fa-solid fa-truck-ramp-box me-1"></i>
+                                    Caja validada con etiqueta verde. Producción ya puede verla como <strong>Pendiente entrega a Almacén</strong>.
+                                </div>
+                            }
                         }
                     </article>
                 }
-            </div>
-        </section>
-    }
+            }
+        </div>
+    </section>
 
     @if (Model.RegistrosGP12.Any())
     {
         <section class="quality-card" id="gp12-cajas">
             <div class="quality-card-header">
                 <div>
-                    <h2><i class="fa-solid fa-microscope"></i>Seguimiento GP12</h2>
+                    <h2>
+                        <i class="fa-solid fa-microscope"></i>
+                        Seguimiento GP12
+                    </h2>
                     <div class="quality-help">
-                        Calidad solo consulta el avance. La recepción, programación, asignación e inspección se realizan en el módulo GP12.
+                        Calidad consulta el avance. La recepción, programación, asignación e inspección se realizan en el módulo GP12.
                     </div>
                 </div>
                 @if (Model.GP12Pendientes > 0)
                 {
-                    <span class="badge bg-warning text-dark">@Model.GP12Pendientes activo(s)</span>
+                    <span class="badge bg-warning text-dark">
+                        @Model.GP12Pendientes activo(s)
+                    </span>
                 }
             </div>
+
             <div class="quality-card-body">
                 <div class="row g-3 mb-4">
-                    <div class="col-md-3"><div class="border rounded-3 p-3 h-100"><div class="quality-data-label">Solicitudes</div><div class="fw-bold fs-5">@Model.TotalRegistrosGP12</div></div></div>
-                    <div class="col-md-3"><div class="border border-warning rounded-3 p-3 h-100"><div class="quality-data-label">Activas</div><div class="fw-bold fs-5 text-warning">@Model.GP12Pendientes</div></div></div>
-                    <div class="col-md-3"><div class="border border-danger rounded-3 p-3 h-100"><div class="quality-data-label">Con NOK</div><div class="fw-bold fs-5 text-danger">@Model.GP12EnReinspeccion</div></div></div>
-                    <div class="col-md-3"><div class="border border-success rounded-3 p-3 h-100"><div class="quality-data-label">Liberadas</div><div class="fw-bold fs-5 text-success">@Model.GP12Liberados</div></div></div>
+                    <div class="col-md-3">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="quality-data-label">Solicitudes</div>
+                            <div class="fw-bold fs-5">@Model.TotalRegistrosGP12</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border border-warning rounded-3 p-3 h-100">
+                            <div class="quality-data-label">Activas</div>
+                            <div class="fw-bold fs-5 text-warning">@Model.GP12Pendientes</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border border-danger rounded-3 p-3 h-100">
+                            <div class="quality-data-label">Con NOK</div>
+                            <div class="fw-bold fs-5 text-danger">@Model.GP12EnReinspeccion</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border border-success rounded-3 p-3 h-100">
+                            <div class="quality-data-label">Liberadas</div>
+                            <div class="fw-bold fs-5 text-success">@Model.GP12Liberados</div>
+                        </div>
+                    </div>
                 </div>
+
                 @foreach (var gp12 in Model.RegistrosGP12)
                 {
                     <article class="border @gp12.EstadoBordeClase rounded-4 p-3 mb-3 bg-white">
                         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                             <div>
-                                <h3 class="h5 mb-1 fw-bold"><i class="fa-solid fa-box-open me-1"></i>@Mostrar(gp12.FolioCaja)</h3>
-                                <div class="quality-help">Solicitud GP12 #@gp12.GP12ID · @gp12.FechaEntrada.ToString("dd/MM/yyyy HH:mm") · @gp12.TotalRevisiones inspección(es)</div>
+                                <h3 class="h5 mb-1 fw-bold">
+                                    <i class="fa-solid fa-box-open me-1"></i>
+                                    @Mostrar(gp12.FolioCaja)
+                                </h3>
+                                <div class="quality-help">
+                                    Solicitud GP12 #@gp12.GP12ID · @gp12.FechaEntrada.ToString("dd/MM/yyyy HH:mm") · @gp12.TotalRevisiones inspección(es)
+                                </div>
                             </div>
-                            <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <span class="badge @gp12.EstadoBadgeClase">@gp12.EstadoTexto</span>
-                                
-                            </div>
+                            <span class="badge @gp12.EstadoBadgeClase">
+                                @gp12.EstadoTexto
+                            </span>
                         </div>
+
                         <div class="row g-3 mb-3">
-                            <div class="col-md-2"><div class="quality-data-label">Cantidad</div><div class="fw-bold">@gp12.CantidadEntrada.ToString("N0")</div></div>
-                            <div class="col-md-5"><div class="quality-data-label">Motivo</div><div class="fw-semibold">@Mostrar(gp12.Motivo)</div></div>
-                            <div class="col-md-2"><div class="quality-data-label">NOK acumulado</div><div class="fw-bold text-danger">@gp12.TotalNokAcumulado</div></div>
-                            <div class="col-md-3"><div class="quality-data-label">Fin / salida</div><div class="fw-semibold">@(gp12.FechaSalida?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")</div></div>
+                            <div class="col-md-2">
+                                <div class="quality-data-label">Cantidad</div>
+                                <div class="fw-bold">@gp12.CantidadEntrada.ToString("N0")</div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="quality-data-label">Motivo</div>
+                                <div class="fw-semibold">@Mostrar(gp12.Motivo)</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="quality-data-label">NOK acumulado</div>
+                                <div class="fw-bold text-danger">@gp12.TotalNokAcumulado</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="quality-data-label">Fin / salida</div>
+                                <div class="fw-semibold">
+                                    @(gp12.FechaSalida?.ToString("dd/MM/yyyy HH:mm") ?? "Pendiente")
+                                </div>
+                            </div>
                         </div>
+
                         @if (gp12.Revisiones.Any())
                         {
                             <div class="table-responsive">
                                 <table class="table table-sm align-middle mb-0">
-                                    <thead><tr><th>Inspección</th><th>Fecha</th><th>Revisadas</th><th>OK</th><th>NOK</th><th>Resultado</th><th>Defectos</th><th>Observaciones</th></tr></thead>
+                                    <thead>
+                                        <tr>
+                                            <th>Inspección</th>
+                                            <th>Fecha</th>
+                                            <th>Revisadas</th>
+                                            <th>OK</th>
+                                            <th>NOK</th>
+                                            <th>Resultado</th>
+                                            <th>Defectos</th>
+                                            <th>Observaciones</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         @foreach (var revision in gp12.Revisiones)
                                         {
@@ -879,170 +1187,236 @@
                                                 <td>@revision.CantidadRevisada</td>
                                                 <td class="text-success fw-bold">@revision.CantidadOK</td>
                                                 <td class="text-danger fw-bold">@revision.CantidadNOK</td>
-                                                <td><span class="badge @revision.ResultadoBadgeClase">@revision.ResultadoTexto</span></td>
-                                                <td>@(revision.Defectos.Any() ? string.Join(", ", revision.Defectos.Select(x => $"{x.Codigo}: {x.Cantidad}")) : "—")</td>
-                                                <td>@Mostrar(revision.Observaciones)</td>
-                                            </tr>
-                                        }
+                                                <td>
+                                                    <span class="badge @revision.ResultadoBadgeClase">
+                                                        @revision.ResultadoTexto
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @(revision.Defectos.Any()
+                                                                                        ? string.Join(", ", revision.Defectos.Select(x => $"{x.Codigo}: {x.Cantidad}"))
+                                                                                        : "—")
+                                </td>
+                                <td>@Mostrar(revision.Observaciones)</td>
+                            </tr>
+                                                        }
                                     </tbody>
                                 </table>
                             </div>
                         }
                         else
                         {
-                            <div class="alert alert-light border mb-0"><i class="fa-solid fa-clock me-1"></i>La solicitud ya está en GP12, pero todavía no tiene inspecciones registradas.</div>
+                            <div class="alert alert-light border mb-0">
+                                <i class="fa-solid fa-clock me-1"></i>
+                                La solicitud ya se encuentra en GP12, pero todavía no tiene inspecciones registradas.
+                            </div>
                         }
                     </article>
                 }
             </div>
         </section>
     }
+
     <script>
-        const qualityDetailScanForm = document.querySelector('[data-quality-detail-scan-form]');
-        const qualityDetailScanInput = qualityDetailScanForm?.querySelector('[data-quality-detail-scan-input]');
-        const qualityDetailScanSubmit = qualityDetailScanForm?.querySelector('[data-quality-detail-scan-submit]');
+        (() => {
+            const scanForm = document.querySelector('[data-quality-detail-scan-form]');
+            const scanInput = scanForm?.querySelector('[data-quality-detail-scan-input]');
+            const scanSubmit = scanForm?.querySelector('[data-quality-detail-scan-submit]');
+            let scanSubmitting = false;
 
-        if (qualityDetailScanForm && qualityDetailScanInput) {
-            setTimeout(function () {
-                qualityDetailScanInput.focus();
-                qualityDetailScanInput.select();
-            }, 80);
+            if (scanForm && scanInput) {
+                setTimeout(() => {
+                    scanInput.focus();
+                    scanInput.select();
+                }, 80);
 
-            qualityDetailScanForm.addEventListener('submit', function (event) {
-                if (!qualityDetailScanInput.value.trim()) {
+                scanInput.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter') return;
                     event.preventDefault();
-                    qualityDetailScanInput.focus();
-                    return;
-                }
+                    if (scanSubmitting) return;
+                    if (!scanInput.value.trim()) {
+                        scanInput.focus();
+                        return;
+                    }
+                    scanForm.requestSubmit();
+                });
 
-                if (qualityDetailScanSubmit) {
-                    qualityDetailScanSubmit.disabled = true;
-                    qualityDetailScanSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recibiendo...';
-                }
-            });
-        }
+                scanForm.addEventListener('submit', event => {
+                    if (scanSubmitting) {
+                        event.preventDefault();
+                        return;
+                    }
 
-        document.querySelectorAll('[data-box-review-form]').forEach(function (form) {
-            const validationItems = form.querySelectorAll('[data-box-validation-item]');
-            const decisions = form.querySelectorAll('[data-box-decision]');
-            const panels = form.querySelectorAll('[data-box-panel]');
-            const submit = form.querySelector('[data-box-submit]');
-            const note = form.querySelector('[data-box-submit-note]');
+                    const codigo = scanInput.value.trim();
 
-            validationItems.forEach(function (item) {
-                const toggle = item.querySelector('[data-box-validation-switch]');
-                const value = item.querySelector('[data-box-validation-value]');
-                const caption = item.querySelector('[data-box-validation-caption]');
+                    if (!codigo) {
+                        event.preventDefault();
+                        scanInput.focus();
+                        return;
+                    }
 
-                if (!toggle || !value) return;
+                    scanSubmitting = true;
+                    scanInput.readOnly = true;
 
-                toggle.addEventListener('change', function () {
-                    value.value = toggle.checked ? 'true' : 'false';
-                    item.classList.toggle('is-complete', toggle.checked);
-                    item.classList.toggle('is-incomplete', !toggle.checked);
-                    if (caption) {
-                        caption.textContent = toggle.checked ? 'Cumple' : 'No cumple';
+                    if (scanSubmit) {
+                        scanSubmit.disabled = true;
+                        scanSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Escaneando...';
                     }
                 });
-            });
-
-            function selectedDecision() {
-                return form.querySelector('[data-box-decision]:checked')?.value || '';
             }
 
-            function updateDecision() {
-                const decision = selectedDecision();
+            document.querySelectorAll('[data-box-review-form]').forEach(form => {
+                const validationItems = form.querySelectorAll('[data-box-validation-item]');
+                const decisions = form.querySelectorAll('[data-box-decision]');
+                const panels = form.querySelectorAll('[data-box-panel]');
+                const submit = form.querySelector('[data-box-submit]');
+                const note = form.querySelector('[data-box-submit-note]');
+                let submitting = false;
 
-                panels.forEach(function (panel) {
-                    const active = panel.dataset.boxPanel === decision;
-                    panel.hidden = !active;
-                    panel.querySelectorAll('input, textarea, select').forEach(function (control) {
-                        control.disabled = !active;
+                validationItems.forEach(item => {
+                    const toggle = item.querySelector('[data-box-validation-switch]');
+                    const value = item.querySelector('[data-box-validation-value]');
+                    const caption = item.querySelector('[data-box-validation-caption]');
+
+                    if (!toggle || !value) return;
+
+                    toggle.addEventListener('change', () => {
+                        value.value = toggle.checked ? 'true' : 'false';
+                        item.classList.toggle('is-complete', toggle.checked);
+                        item.classList.toggle('is-incomplete', !toggle.checked);
+
+                        if (caption) {
+                            caption.textContent = toggle.checked ? 'Cumple' : 'No cumple';
+                            caption.style.color = toggle.checked ? '#15803d' : '#b91c1c';
+                        }
+
+                        updateDecision();
                     });
                 });
 
-                if (!submit || !note) return;
-
-                submit.disabled = !decision;
-                submit.className = 'quality-btn ' +
-                    (decision === 'LIBERAR'
-                        ? 'quality-btn-success'
-                        : decision === 'GP12'
-                            ? 'quality-btn-warning'
-                            : decision === 'DEVOLVER'
-                                ? 'quality-btn-danger'
-                                : 'quality-btn-primary');
-
-                submit.innerHTML = decision === 'LIBERAR'
-                    ? '<i class="fa-solid fa-circle-check"></i> Liberar caja'
-                    : decision === 'GP12'
-                        ? '<i class="fa-solid fa-microscope"></i> Enviar a GP12'
-                        : decision === 'DEVOLVER'
-                            ? '<i class="fa-solid fa-rotate-left"></i> Devolver caja'
-                            : '<i class="fa-solid fa-floppy-disk"></i> Confirmar decisión';
-
-                note.classList.remove('is-ready', 'is-warning');
-                if (decision === 'LIBERAR') {
-                    note.textContent = 'Para liberar, las tres validaciones deben quedar conformes y debe capturarse el número de operador.';
-                } else if (decision === 'GP12') {
-                    note.textContent = 'La caja quedará bloqueada con etiqueta amarilla hasta concluir GP12.';
-                    note.classList.add('is-warning');
-                } else if (decision === 'DEVOLVER') {
-                    note.textContent = 'La caja regresará para corrección y deberá solicitarse nuevamente a Calidad.';
-                    note.classList.add('is-warning');
-                } else {
-                    note.textContent = 'Selecciona una decisión para continuar.';
+                function selectedDecision() {
+                    return form.querySelector('[data-box-decision]:checked')?.value || '';
                 }
-            }
 
-            decisions.forEach(function (radio) {
-                radio.addEventListener('change', updateDecision);
+                function allValidationsOk() {
+                    return Array.from(form.querySelectorAll('[data-box-validation-value]'))
+                        .every(input => input.value === 'true');
+                }
+
+                function updateDecision() {
+                    const decision = selectedDecision();
+
+                    panels.forEach(panel => {
+                        const active = panel.dataset.boxPanel === decision;
+                        panel.hidden = !active;
+
+                        panel.querySelectorAll('input,textarea,select').forEach(control => {
+                            control.disabled = !active;
+                        });
+                    });
+
+                    if (!submit || !note) return;
+
+                    submit.disabled = !decision;
+
+                    submit.className = 'quality-btn ' +
+                        (decision === 'LIBERAR'
+                            ? 'quality-btn-success'
+                            : decision === 'GP12'
+                                ? 'quality-btn-warning'
+                                : decision === 'DEVOLVER'
+                                    ? 'quality-btn-danger'
+                                    : 'quality-btn-primary');
+
+                    submit.innerHTML =
+                        decision === 'LIBERAR'
+                            ? '<i class="fa-solid fa-circle-check"></i> Liberar verde'
+                            : decision === 'GP12'
+                                ? '<i class="fa-solid fa-microscope"></i> Enviar a GP12'
+                                : decision === 'DEVOLVER'
+                                    ? '<i class="fa-solid fa-rotate-left"></i> Devolver a Producción'
+                                    : '<i class="fa-solid fa-floppy-disk"></i> Confirmar decisión';
+
+                    note.classList.remove('is-ready','is-warning');
+
+                    if (decision === 'LIBERAR') {
+                        note.textContent = allValidationsOk()
+                            ? 'Las tres validaciones están conformes. Captura el número de operador para liberar.'
+                            : 'Para liberar, las tres validaciones deben quedar conformes y debes capturar el número de operador.';
+                        if (allValidationsOk()) note.classList.add('is-ready');
+                    } else if (decision === 'GP12') {
+                        note.textContent = 'La caja quedará retenida y será enviada al módulo GP12.';
+                        note.classList.add('is-warning');
+                    } else if (decision === 'DEVOLVER') {
+                        note.textContent = 'La caja regresará a Producción para corrección. Después deberá volver a ser revisada por Calidad.';
+                        note.classList.add('is-warning');
+                    } else {
+                        note.textContent = 'Selecciona una decisión para continuar.';
+                    }
+                }
+
+                decisions.forEach(radio => {
+                    radio.addEventListener('change', updateDecision);
+                });
+
+                form.addEventListener('submit', event => {
+                    if (submitting) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    const decision = selectedDecision();
+                    const allValid = allValidationsOk();
+                    const operator = form.querySelector('[data-box-operator]')?.value.trim() || '';
+                    const gp12Reason = form.querySelector('[data-box-gp12-reason]')?.value.trim() || '';
+                    const returnReason = form.querySelector('[data-box-return-reason]')?.value.trim() || '';
+
+                    if (!decision) {
+                        event.preventDefault();
+                        window.alert('Selecciona una decisión para la caja.');
+                        return;
+                    }
+
+                    if (decision === 'LIBERAR' && (!allValid || !operator)) {
+                        event.preventDefault();
+                        window.alert('Para liberar la caja confirma las tres validaciones y captura el número de operador indicado en la etiqueta.');
+                        return;
+                    }
+
+                    if (decision === 'GP12' && !gp12Reason) {
+                        event.preventDefault();
+                        window.alert('Captura el motivo para enviar la caja a GP12.');
+                        return;
+                    }
+
+                    if (decision === 'DEVOLVER' && !returnReason) {
+                        event.preventDefault();
+                        window.alert('Captura el motivo de devolución.');
+                        return;
+                    }
+
+                    const message =
+                        decision === 'LIBERAR'
+                            ? '¿Confirmas la liberación de esta caja con etiqueta verde? Después Producción podrá entregarla a Almacén PT.'
+                            : decision === 'GP12'
+                                ? '¿Confirmas el envío de esta caja a GP12?'
+                                : '¿Confirmas la devolución de esta caja a Producción para corrección?';
+
+                    if (!window.confirm(message)) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    submitting = true;
+
+                    if (submit) {
+                        submit.disabled = true;
+                        submit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+                    }
+                });
+
+                updateDecision();
             });
-
-            form.addEventListener('submit', function (event) {
-                const decision = selectedDecision();
-                const allValid = Array.from(form.querySelectorAll('[data-box-validation-value]'))
-                    .every(function (input) { return input.value === 'true'; });
-                const operator = form.querySelector('[data-box-operator]')?.value.trim() || '';
-                const gp12Reason = form.querySelector('[data-box-gp12-reason]')?.value.trim() || '';
-                const returnReason = form.querySelector('[data-box-return-reason]')?.value.trim() || '';
-
-                if (!decision) {
-                    event.preventDefault();
-                    window.alert('Selecciona una decisión para la caja.');
-                    return;
-                }
-
-                if (decision === 'LIBERAR' && (!allValid || !operator)) {
-                    event.preventDefault();
-                    window.alert('Para liberar la caja confirma las tres validaciones y captura el número de operador de la etiqueta.');
-                    return;
-                }
-
-                if (decision === 'GP12' && !gp12Reason) {
-                    event.preventDefault();
-                    window.alert('Captura el motivo para enviar la caja a GP12.');
-                    return;
-                }
-
-                if (decision === 'DEVOLVER' && !returnReason) {
-                    event.preventDefault();
-                    window.alert('Captura el motivo de devolución.');
-                    return;
-                }
-
-                const message = decision === 'LIBERAR'
-                    ? '¿Confirmas la liberación de esta caja con etiqueta verde?'
-                    : decision === 'GP12'
-                        ? '¿Confirmas el envío de esta caja a GP12?'
-                        : '¿Confirmas la devolución de esta caja para corrección?';
-
-                if (!window.confirm(message)) {
-                    event.preventDefault();
-                }
-            });
-
-            updateDecision();
-        });
+        })();
     </script>
 </div>

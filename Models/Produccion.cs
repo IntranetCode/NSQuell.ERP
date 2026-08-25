@@ -2710,70 +2710,149 @@ public sealed class ProduccionEtiquetasBlancasInicioVm
                 : $"Parte {ParteID}";
 }
 
+public sealed class ProduccionCajaEstimadaVm
+{
+    public int NumeroEstimado { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int CantidadPiezas { get; set; }
+    public int CapacidadCaja { get; set; }
+    public bool EsUltimaPlaneada { get; set; }
+
+    public bool EsParcial =>
+        CapacidadCaja > 0 &&
+        CantidadPiezas > 0 &&
+        CantidadPiezas < CapacidadCaja;
+
+    public bool EsCompleta =>
+        CapacidadCaja > 0 &&
+        CantidadPiezas >= CapacidadCaja;
+
+    public int PiezasFaltantes =>
+        CapacidadCaja > 0
+            ? Math.Max(0, CapacidadCaja - CantidadPiezas)
+            : 0;
+
+    public decimal PorcentajeLlenado =>
+        CapacidadCaja > 0
+            ? Math.Round((decimal)CantidadPiezas * 100m / CapacidadCaja, 1)
+            : 0m;
+
+    public string ClaveEstimada =>
+        $"EST-{NumeroEstimado:000}";
+
+    public string Estado =>
+        "PENDIENTE_ESCANEO_CALIDAD";
+
+    public string EstadoTexto =>
+        "Pendiente escaneo Calidad";
+
+    public string TipoTexto =>
+        EsParcial
+            ? "Última caja parcial"
+            : "Caja completa";
+}
 public sealed class ProduccionOperadorCajasVm
 {
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
-
     public int? SolicitudProduccionDetalleID { get; set; }
     public string? FolioSolicitud { get; set; }
     public string? NumeroOFRecibida { get; set; }
     public string? ClienteNombre { get; set; }
-
     public string? MaquinaCodigo { get; set; }
     public string? MaquinaNombre { get; set; }
-
     public int? ParteID { get; set; }
-
     public string? NumeroParte { get; set; }
     public string? ReferenciaSAP { get; set; }
     public string? DescripcionParte { get; set; }
-
     public string? MoldeCodigo { get; set; }
-
     public string? MaterialCodigo { get; set; }
     public string? MaterialDescripcion { get; set; }
-
     public string? EmbalajeCodigo { get; set; }
     public string? EmbalajeDescripcion { get; set; }
-
     public int CantidadPlaneada { get; set; }
     public int CantidadOKTotal { get; set; }
     public int CantidadSospechosaTotal { get; set; }
     public int CantidadScrapTotal { get; set; }
-
     public int EstatusID { get; set; }
     public bool TieneParoAbierto { get; set; }
-
     public DateTime? FechaLiberacionMaquina { get; set; }
 
     public bool MaquinaLiberada =>
         FechaLiberacionMaquina.HasValue;
 
     public List<ProduccionOperadorCajaVm> Cajas { get; set; } = new();
-
     public List<ProduccionCajaIncompletaDisponibleVm> CajasIncompletasDisponibles { get; set; } = new();
+
+    // Estas NO existen en Produccion_Cajas.
+    // Son una proyección calculada en memoria.
+    public List<ProduccionCajaEstimadaVm> CajasEstimadas { get; set; } = new();
+
+    // Piezas OK que ya existen pero todavía no alcanzan
+    // para formar otra caja completa.
+    public int PiezasAcumuladasSiguienteCaja { get; set; }
+
+    // Cuántas faltan para que esa acumulación llegue
+    // a la capacidad estándar del embalaje.
+    public int PiezasFaltantesSiguienteCaja { get; set; }
+
+    public int TotalCajasEstimadas =>
+        CajasEstimadas.Count;
+
+    public int TotalPiezasEstimadas =>
+        CajasEstimadas.Sum(x => x.CantidadPiezas);
+
+    public int CajasEstimadasCompletas =>
+        CajasEstimadas.Count(x => x.EsCompleta);
+
+    public int CajasEstimadasParciales =>
+        CajasEstimadas.Count(x => x.EsParcial);
+
+    public bool TieneCajasEstimadas =>
+        CajasEstimadas.Count > 0;
+
+    public bool TieneAcumulacionSiguienteCaja =>
+        PiezasAcumuladasSiguienteCaja > 0;
 
     public int CantidadOKEnCajas { get; set; }
     public int CantidadSospechosaEnCajas { get; set; }
     public int CantidadScrapEnCajas { get; set; }
     public int CantidadRetencionEnCajas { get; set; }
 
-    public int CantidadOKPlaneadaEmpacada => Math.Min(CantidadPlaneada, CantidadOKEnCajas);
-    public int CantidadOKExcedenteProducida => Math.Max(0, CantidadOKTotal - CantidadPlaneada);
+    public int CantidadOKPlaneadaEmpacada =>
+        Math.Min(CantidadPlaneada, CantidadOKEnCajas);
+
+    public int CantidadOKExcedenteProducida =>
+        Math.Max(0, CantidadOKTotal - CantidadPlaneada);
+
     public int CantidadOKExcedentePendienteResguardo
     {
         get
         {
-            var incompletoPropio = Cajas.Where(x => x.EsProductoIncompleto && x.ActivoParaCalculo).Sum(x => x.CantidadPiezas);
-            return Math.Max(0, CantidadOKTotal - CantidadPlaneada - incompletoPropio);
+            var incompletoPropio = Cajas
+                .Where(x => x.EsProductoIncompleto && x.ActivoParaCalculo)
+                .Sum(x => x.CantidadPiezas);
+
+            return Math.Max(
+                0,
+                CantidadOKTotal -
+                CantidadPlaneada -
+                incompletoPropio);
         }
     }
-    public bool TieneExcedentePendiente => CantidadOKExcedentePendienteResguardo > 0;
-    public bool TieneCajasIncompletasDisponibles => CajasIncompletasDisponibles.Count > 0;
+
+    public bool TieneExcedentePendiente =>
+        CantidadOKExcedentePendienteResguardo > 0;
+
+    public bool TieneCajasIncompletasDisponibles =>
+        CajasIncompletasDisponibles.Count > 0;
 
     public int SiguienteNumeroCaja { get; set; } = 1;
+
+    // Se conserva temporalmente porque todavía existen
+    // métodos/vistas anteriores que pueden referenciarlo.
+    // Para cajas OK normales ya no lo utilizaremos.
     public bool PuedeFormarCaja { get; set; }
 
     public decimal? PiezasPorEmbalaje { get; set; }
@@ -2783,10 +2862,12 @@ public sealed class ProduccionOperadorCajasVm
     {
         get
         {
-            if (!PiezasPorEmbalaje.HasValue || PiezasPorEmbalaje.Value <= 0)
+            if (!PiezasPorEmbalaje.HasValue ||
+                PiezasPorEmbalaje.Value <= 0)
                 return 0;
 
-            return Convert.ToInt32(Math.Floor(PiezasPorEmbalaje.Value));
+            return Convert.ToInt32(
+                Math.Floor(PiezasPorEmbalaje.Value));
         }
     }
 
@@ -2794,48 +2875,55 @@ public sealed class ProduccionOperadorCajasVm
     {
         get
         {
-            if (!CantidadEmbalajes.HasValue || CantidadEmbalajes.Value <= 0)
+            if (!CantidadEmbalajes.HasValue ||
+                CantidadEmbalajes.Value <= 0)
                 return 0;
 
-            return Convert.ToInt32(Math.Ceiling(CantidadEmbalajes.Value));
+            return Convert.ToInt32(
+                Math.Ceiling(CantidadEmbalajes.Value));
         }
     }
 
+    // Se conservan por compatibilidad.
+    // Ahora representan cajas REALES registradas en ERP.
     public int CajasOKFormadas
     {
         get
         {
-            return Cajas
-                .Where(x => string.Equals(x.TipoCaja, "OK", StringComparison.OrdinalIgnoreCase))
-                .Count();
+            return Cajas.Count(x =>
+                string.Equals(
+                    x.TipoCaja,
+                    "OK",
+                    StringComparison.OrdinalIgnoreCase));
         }
     }
 
-    public int CajasPendientes
-    {
-        get
-        {
-            return Math.Max(0, CajasEsperadas - CajasOKFormadas);
-        }
-    }
+    public int CajasPendientes =>
+        Math.Max(
+            0,
+            CajasEsperadas - CajasOKFormadas);
 
-    public int PiezasOKEmpacadas => CantidadOKEnCajas;
+    // Una caja que Calidad ya escaneó sí es una caja real.
+    public int CajasOKReales =>
+        Cajas.Count(x =>
+            string.Equals(
+                x.TipoCaja,
+                ProduccionCajaTipo.Ok,
+                StringComparison.OrdinalIgnoreCase) &&
+            !x.EsProductoIncompleto);
 
-    public int PiezasPendientesEmpacar
-    {
-        get
-        {
-            return Math.Max(0, CantidadOKTotal - PiezasOKEmpacadas);
-        }
-    }
+    public int PiezasOKEmpacadas =>
+        CantidadOKEnCajas;
 
-    public int PiezasPlaneadasPendientesDeCaja
-    {
-        get
-        {
-            return Math.Max(0, CantidadPlaneada - PiezasOKEmpacadas);
-        }
-    }
+    public int PiezasPendientesEmpacar =>
+        Math.Max(
+            0,
+            CantidadOKTotal - PiezasOKEmpacadas);
+
+    public int PiezasPlaneadasPendientesDeCaja =>
+        Math.Max(
+            0,
+            CantidadPlaneada - PiezasOKEmpacadas);
 
     public int CantidadSugeridaSiguienteCaja
     {
@@ -2847,38 +2935,37 @@ public sealed class ProduccionOperadorCajasVm
             if (PiezasPorCajaSugeridas <= 0)
                 return PiezasPendientesEmpacar;
 
-            return Math.Min(PiezasPendientesEmpacar, PiezasPorCajaSugeridas);
+            return Math.Min(
+                PiezasPendientesEmpacar,
+                PiezasPorCajaSugeridas);
         }
     }
 
-    public bool TieneConfiguracionEmbalaje
-    {
-        get
-        {
-            return PiezasPorEmbalaje.HasValue &&
-                   PiezasPorEmbalaje.Value > 0 &&
-                   CantidadEmbalajes.HasValue &&
-                   CantidadEmbalajes.Value > 0;
-        }
-    }
+    public bool TieneConfiguracionEmbalaje =>
+        PiezasPorEmbalaje.HasValue &&
+        PiezasPorEmbalaje.Value > 0 &&
+        CantidadEmbalajes.HasValue &&
+        CantidadEmbalajes.Value > 0;
 
-    public sealed class ProduccionEscanearCajaPostVm
-    {
-        public int EjecucionProduccionID { get; set; }
-        public string CodigoBarras { get; set; } = string.Empty;
-    }
+    // Las piezas OK que todavía NO están relacionadas
+    // con una caja real creada por el escaneo de Calidad.
     public int CantidadOKDisponible =>
-        Math.Max(0, CantidadOKTotal - CantidadOKEnCajas);
+        Math.Max(
+            0,
+            CantidadOKTotal - CantidadOKEnCajas);
 
     public int CantidadSospechosaDisponible =>
         Math.Max(
             0,
-            CantidadSospechosaTotal
-            - CantidadSospechosaEnCajas
-            - CantidadRetencionEnCajas);
+            CantidadSospechosaTotal -
+            CantidadSospechosaEnCajas -
+            CantidadRetencionEnCajas);
 
     public int CantidadScrapDisponible =>
-        Math.Max(0, CantidadScrapTotal - CantidadScrapEnCajas);
+        Math.Max(
+            0,
+            CantidadScrapTotal -
+            CantidadScrapEnCajas);
 
     public string EstatusNombre =>
         ProduccionEstatus.Nombre(EstatusID);
@@ -2917,4 +3004,10 @@ public sealed class ProduccionOperadorCajasVm
             : string.IsNullOrWhiteSpace(MaquinaNombre)
                 ? MaquinaCodigo
                 : $"{MaquinaCodigo} - {MaquinaNombre}";
+
+    public sealed class ProduccionEscanearCajaPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+        public string CodigoBarras { get; set; } = string.Empty;
+    }
 }

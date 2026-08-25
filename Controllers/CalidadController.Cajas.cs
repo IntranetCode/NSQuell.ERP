@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using ERP.NSQuell.Servicios.Almacen;
 
 namespace ERP.NSQuell.Controllers
 {
@@ -200,104 +201,59 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ResolverCajaProduccion(
-            CalidadCajaDecisionViewModel model)
+        public async Task<IActionResult> ResolverCajaProduccion(CalidadCajaDecisionViewModel model)
         {
-            var decision = model.Decision?
-                .Trim()
-                .ToUpperInvariant();
+            var decision = model.Decision?.Trim().ToUpperInvariant();
 
-            if (!ModelState.IsValid ||
-                (decision != DecisionCajaLiberar &&
-                 decision != DecisionCajaGP12 &&
-                 decision != DecisionCajaDevolver))
+            if (!ModelState.IsValid || (decision != DecisionCajaLiberar && decision != DecisionCajaGP12 && decision != DecisionCajaDevolver))
             {
-                TempData["Error"] =
-                    "No se recibió una decisión válida para la caja.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = model.InspeccionID });
+                TempData["Error"] = "No se recibió una decisión válida para la caja.";
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
 
             model.Decision = decision ?? string.Empty;
-
-            model.NumeroOperadorEtiqueta =
-                model.NumeroOperadorEtiqueta?.Trim();
-
-            model.Tarima =
-                model.Tarima?.Trim();
-
-            model.MotivoGP12 =
-                model.MotivoGP12?.Trim();
-
-            model.Observaciones =
-                model.Observaciones?.Trim();
+            model.NumeroOperadorEtiqueta = model.NumeroOperadorEtiqueta?.Trim();
+            model.Tarima = model.Tarima?.Trim();
+            model.MotivoGP12 = model.MotivoGP12?.Trim();
+            model.Observaciones = model.Observaciones?.Trim();
 
             if (decision == DecisionCajaLiberar)
             {
-                if (!model.EstandarPackCumple ||
-                    !model.EtiquetaProductoCorrecta ||
-                    !model.TecnicoConfirmoInformacion)
+                if (!model.EstandarPackCumple || !model.EtiquetaProductoCorrecta || !model.TecnicoConfirmoInformacion)
                 {
-                    TempData["Error"] =
-                        "Para liberar la caja debes confirmar empaque, etiqueta y validación del técnico.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = "Para liberar la caja debes confirmar empaque, etiqueta y validación del técnico.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
-                if (string.IsNullOrWhiteSpace(
-                    model.NumeroOperadorEtiqueta))
+                if (string.IsNullOrWhiteSpace(model.NumeroOperadorEtiqueta))
                 {
-                    TempData["Error"] =
-                        "Captura el número de operador indicado en la etiqueta.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = "Captura el número de operador indicado en la etiqueta.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
             }
 
-            if (decision == DecisionCajaGP12 &&
-                string.IsNullOrWhiteSpace(model.MotivoGP12))
+            if (decision == DecisionCajaGP12 && string.IsNullOrWhiteSpace(model.MotivoGP12))
             {
-                TempData["Error"] =
-                    "Captura el motivo para enviar la caja a GP12.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = model.InspeccionID });
+                TempData["Error"] = "Captura el motivo para enviar la caja a GP12.";
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
 
-            if (decision == DecisionCajaDevolver &&
-                string.IsNullOrWhiteSpace(model.Observaciones))
+            if (decision == DecisionCajaDevolver && string.IsNullOrWhiteSpace(model.Observaciones))
             {
-                TempData["Error"] =
-                    "Captura el motivo para devolver la caja a Producción.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = model.InspeccionID });
+                TempData["Error"] = "Captura el motivo para devolver la caja a Producción.";
+                return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
             }
 
             var usuarioId = ObtenerUsuarioIdActual();
-
-            if (!usuarioId.HasValue || usuarioId.Value <= 0)
-                return Unauthorized();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
 
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
-                var caja = await ObtenerCajaParaDecisionAsync(
-                    model.CajaProduccionID,
-                    model.InspeccionID,
-                    cn,
-                    tx);
+                var caja = await ObtenerCajaParaDecisionAsync(model.CajaProduccionID, model.InspeccionID, cn, tx);
 
                 if (caja == null)
                 {
@@ -305,72 +261,46 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
                     return NotFound();
                 }
 
-                if (caja.EstadoCajaID != 2)
+                if (caja.EstadoCajaID != ProduccionCajaEstatus.PendienteCalidad)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La caja ya no se encuentra pendiente de revisión de Calidad.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = "La caja ya no se encuentra pendiente de revisión de Calidad.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
                 if (!caja.FechaEscaneoCalidad.HasValue)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La caja todavía no ha sido recibida físicamente por Calidad. Escanea la etiqueta antes de liberarla, devolverla o enviarla a GP12.";
+                    TempData["Error"] = "Primero escanea físicamente la etiqueta de la caja antes de tomar una decisión.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
                 if (caja.ConfiguracionInvalidada)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La configuración de la corrida fue invalidada. No se puede resolver la caja hasta completar la reliberación correspondiente.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = "La configuración de la corrida fue invalidada. No se puede resolver la caja hasta completar la reliberación correspondiente.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
                 if (EstadoBloqueaRevisionCaja(caja.EstadoInspeccion))
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "El proceso de Calidad se encuentra cerrado o bloqueado y ya no permite decisiones sobre cajas.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = "El proceso de Calidad se encuentra cerrado o bloqueado y ya no permite decisiones sobre cajas.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
                 if (caja.CantidadPiezas <= 0)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La caja no tiene una cantidad válida de piezas para revisión.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = "La caja no tiene una cantidad válida de piezas para revisión.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
-                if (decision == DecisionCajaLiberar &&
-                    caja.DisposicionesPendientes > 0)
+                if (decision == DecisionCajaLiberar && caja.DisposicionesPendientes > 0)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        $"No se puede liberar la caja a Almacén mientras existan {caja.DisposicionesPendientes} disposición(es) de material pendientes. Resuélvelas o envía la caja a GP12.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = model.InspeccionID });
+                    TempData["Error"] = $"No se puede validar la caja para Almacén mientras existan {caja.DisposicionesPendientes} disposición(es) de material pendientes. Resuélvelas o envía la caja a GP12.";
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
                 var ahora = DateTime.Now;
@@ -390,11 +320,10 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
                     etiquetaLiberacion = "VERDE";
                     destino = CalidadDestinoCaja.Almacen;
                     estadoRegistroCalidad = CalidadEstadoCaja.Liberada;
-                    estadoCajaId = 3;
-                    estadoCajaNombre = "Liberada por Calidad";
+                    estadoCajaId = ProduccionCajaEstatus.LiberadaCalidad;
+                    estadoCajaNombre = "Pendiente entrega a Almacén";
                     estatusCalidad = "LIBERADA";
-                    comentarioHistorial =
-                        $"Caja {caja.FolioCaja} liberada con etiqueta verde para Almacén.";
+                    comentarioHistorial = $"Caja {caja.FolioCaja} escaneada y validada por Calidad con etiqueta verde. Queda pendiente de entrega física de Producción a Almacén PT.";
                 }
                 else if (decision == DecisionCajaGP12)
                 {
@@ -402,11 +331,10 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
                     etiquetaLiberacion = "AMARILLA";
                     destino = CalidadDestinoCaja.GP12;
                     estadoRegistroCalidad = CalidadEstadoCaja.EnGP12;
-                    estadoCajaId = 4;
+                    estadoCajaId = ProduccionCajaEstatus.RetenidaGp12Scrap;
                     estadoCajaNombre = "En GP12";
                     estatusCalidad = "GP12";
-                    comentarioHistorial =
-                        $"Caja {caja.FolioCaja} enviada a GP12. Motivo: {model.MotivoGP12}";
+                    comentarioHistorial = $"Caja {caja.FolioCaja} enviada a GP12. Motivo: {model.MotivoGP12}";
                 }
                 else
                 {
@@ -414,16 +342,13 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
                     etiquetaLiberacion = null;
                     destino = null;
                     estadoRegistroCalidad = CalidadEstadoCaja.Devuelta;
-                    estadoCajaId = 1;
+                    estadoCajaId = ProduccionCajaEstatus.FormadaProduccion;
                     estadoCajaNombre = "Devuelta por Calidad";
                     estatusCalidad = "DEVUELTA";
-                    comentarioHistorial =
-                        $"Caja {caja.FolioCaja} devuelta a Producción. Motivo: {model.Observaciones}";
+                    comentarioHistorial = $"Caja {caja.FolioCaja} devuelta a Producción. Motivo: {model.Observaciones}";
                 }
 
-                var motivoCalidad = decision == DecisionCajaGP12
-                    ? model.MotivoGP12
-                    : model.Observaciones;
+                var motivoCalidad = decision == DecisionCajaGP12 ? model.MotivoGP12 : model.Observaciones;
 
                 await ActualizarCajaProduccionDecisionAsync(
                     caja.CajaProduccionID,
@@ -438,17 +363,16 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
                     cn,
                     tx);
 
-                var cajaLiberadaId =
-                    await RegistrarOActualizarCajaCalidadAsync(
-                        caja,
-                        model,
-                        estadoRegistroCalidad,
-                        destino,
-                        etiquetaLiberacion,
-                        ahora,
-                        usuarioId.Value,
-                        cn,
-                        tx);
+                var cajaLiberadaId = await RegistrarOActualizarCajaCalidadAsync(
+                    caja,
+                    model,
+                    estadoRegistroCalidad,
+                    destino,
+                    etiquetaLiberacion,
+                    ahora,
+                    usuarioId.Value,
+                    cn,
+                    tx);
 
                 if (decision == DecisionCajaGP12)
                 {
@@ -477,27 +401,18 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
 
                 TempData["Mensaje"] = decision switch
                 {
-                    DecisionCajaLiberar =>
-                        "Caja liberada con etiqueta verde.",
-
-                    DecisionCajaGP12 =>
-                        "Caja enviada a GP12.",
-
-                    _ =>
-                        "Caja devuelta a Producción para corrección."
+                    DecisionCajaLiberar => $"Caja {caja.FolioCaja} validada con etiqueta verde. Producción ya la verá como PENDIENTE ENTREGA A ALMACÉN.",
+                    DecisionCajaGP12 => "Caja enviada a GP12.",
+                    _ => "Caja devuelta a Producción para corrección."
                 };
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No fue posible resolver la caja: " + ex.Message;
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "No fue posible resolver la caja: " + ex.Message;
             }
 
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = model.InspeccionID });
+            return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
         }
 
         private async Task<CajaProduccionCalidadOrigen?> ObtenerCajaParaDecisionAsync(long cajaProduccionId, int inspeccionId, SqlConnection cn, SqlTransaction tx)
@@ -1776,17 +1691,42 @@ ORDER BY
             var codigo = model.CodigoBarras?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(codigo))
             {
-                TempData["Error"] = "Escanea la etiqueta física de la caja.";
-                return model.InspeccionID.HasValue
-                    ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                    : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+                TempData["Error"] = "Escanea la etiqueta física colocada por Planeación.";
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
             }
             if (codigo.Length > 500)
             {
                 TempData["Error"] = "El código escaneado excede la longitud permitida.";
-                return model.InspeccionID.HasValue
-                    ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                    : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+            }
+            if (!AlmacenPTCodigoBarrasService.TryParse(codigo, out var parseado, out var error) || parseado == null)
+            {
+                TempData["Error"] = string.IsNullOrWhiteSpace(error) ? "No fue posible interpretar la etiqueta colocada por Planeación." : error;
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+            }
+            if (parseado.Cantidad <= 0)
+            {
+                TempData["Error"] = "La etiqueta no contiene una cantidad válida.";
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+            }
+            var numeroOF = parseado.NumeroOF?.Trim();
+            var numeroParte = parseado.NumeroParte?.Trim();
+            if (string.IsNullOrWhiteSpace(numeroOF))
+            {
+                TempData["Error"] = "La etiqueta no contiene una Orden de Fabricación válida.";
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+            }
+            if (string.IsNullOrWhiteSpace(numeroParte))
+            {
+                TempData["Error"] = "La etiqueta no contiene un número de parte válido.";
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+            }
+            var codigoFisico = parseado.CodigoOriginal?.Trim();
+            if (string.IsNullOrWhiteSpace(codigoFisico)) codigoFisico = codigo;
+            if (codigoFisico.Length > 500)
+            {
+                TempData["Error"] = "El código físico de la etiqueta excede la longitud permitida.";
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
             }
             var usuarioId = ObtenerUsuarioIdActual();
             if (!usuarioId.HasValue || usuarioId.Value <= 0) return Unauthorized();
@@ -1795,215 +1735,458 @@ ORDER BY
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
-                const string sqlCaja = @"
+                const string sqlExistente = @"
 SELECT TOP(1)
     pc.CajaProduccionID,
     pc.EjecucionProduccionID,
-    ISNULL(pc.NumeroCaja,0) AS NumeroCaja,
-    COALESCE(NULLIF(pc.FolioCaja,N''),NULLIF(pc.Etiqueta,N''),CONVERT(NVARCHAR(100),pc.CajaProduccionID)) AS FolioCaja,
-    ISNULL(pc.CantidadPiezas,ISNULL(pc.Cantidad,0)) AS CantidadPiezas,
     ISNULL(pc.EstadoCajaID,1) AS EstadoCajaID,
-    ISNULL(pc.EstadoCajaNombre,N'Formada en Producción') AS EstadoCajaNombre,
-    pc.CodigoBarrasOrigen,
-    pc.NumeroOFEtiqueta,
-    pc.NumeroParteEtiqueta,
-    pc.CantidadEtiqueta,
-    pc.FechaEscaneoProduccion,
+    ISNULL(pc.EstadoCajaNombre,N'') AS EstadoCajaNombre,
     pc.FechaEscaneoCalidad,
-    pc.UsuarioEscaneoCalidadID,
     ci.InspeccionID,
     ci.Estado AS EstadoInspeccion,
-    ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada,
-    COALESCE(
-        NULLIF(LTRIM(RTRIM(sp.NumeroOFRecibida)),N''),
-        NULLIF(LTRIM(RTRIM(sp.FolioSolicitud)),N''),
-        NULLIF(LTRIM(RTRIM(ci.OrdenTrabajo)),N''),
-        NULLIF(LTRIM(RTRIM(pc.NumeroOFEtiqueta)),N''),
-        CASE
-            WHEN sp.SolicitudProduccionID IS NOT NULL
-                THEN CONCAT(N'OF-ID-',sp.SolicitudProduccionID)
-            ELSE NULL
-        END
-    ) AS OrdenFabricacion,
-    COALESCE(
-        NULLIF(LTRIM(RTRIM(pc.NumeroParteEtiqueta)),N''),
-        NULLIF(LTRIM(RTRIM(ci.NumeroParte)),N'')
-    ) AS NumeroParte
+    ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada
 FROM dbo.Produccion_Cajas pc WITH(UPDLOCK,HOLDLOCK)
-CROSS APPLY
+OUTER APPLY
 (
-    SELECT TOP(1)
-        i.InspeccionID,
-        i.Estado,
-        i.ConfiguracionInvalidada,
-        i.OrdenTrabajo,
-        i.NumeroParte,
-        i.SolicitudProduccionID
+    SELECT TOP(1) i.InspeccionID,i.Estado,i.ConfiguracionInvalidada
     FROM dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
     WHERE i.EjecucionProduccionID=pc.EjecucionProduccionID
       AND i.Estado<>N'CERRADA'
-    ORDER BY
-        ISNULL(i.ConfiguracionInvalidada,0),
-        i.InspeccionID DESC
+    ORDER BY ISNULL(i.ConfiguracionInvalidada,0),i.InspeccionID DESC
 ) ci
-LEFT JOIN dbo.SolicitudesProduccion sp
-    ON sp.SolicitudProduccionID=ci.SolicitudProduccionID
-   AND sp.Activo=1
 WHERE pc.Activo=1
   AND pc.CodigoBarrasOrigen=@CodigoBarras
 ORDER BY pc.CajaProduccionID DESC;";
-                long cajaProduccionId;
-                int inspeccionIdReal;
-                int estadoCajaId;
-                string folioCaja;
-                int cantidadPiezas;
-                string? ordenFabricacion;
-                string? numeroParte;
-                DateTime? fechaEscaneoProduccion;
-                DateTime? fechaEscaneoCalidad;
-                string estadoInspeccion;
-                bool configuracionInvalidada;
-                await using (var cmd = new SqlCommand(sqlCaja, cn, tx))
+                long? cajaExistenteId = null;
+                int? inspeccionExistenteId = null;
+                int estadoCajaExistente = 0;
+                string estadoCajaNombreExistente = string.Empty;
+                DateTime? fechaEscaneoCalidadExistente = null;
+                string estadoInspeccionExistente = string.Empty;
+                bool configuracionInvalidadaExistente = false;
+                await using (var cmd = new SqlCommand(sqlExistente, cn, tx))
                 {
-                    cmd.Parameters.Add("@CodigoBarras", SqlDbType.NVarChar, 500).Value = codigo;
+                    cmd.Parameters.Add("@CodigoBarras", SqlDbType.NVarChar, 500).Value = codigoFisico;
                     await using var rd = await cmd.ExecuteReaderAsync();
-                    if (!await rd.ReadAsync())
+                    if (await rd.ReadAsync())
+                    {
+                        cajaExistenteId = Convert.ToInt64(rd["CajaProduccionID"]);
+                        estadoCajaExistente = Convert.ToInt32(rd["EstadoCajaID"]);
+                        estadoCajaNombreExistente = rd["EstadoCajaNombre"]?.ToString()?.Trim() ?? string.Empty;
+                        fechaEscaneoCalidadExistente = rd["FechaEscaneoCalidad"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaEscaneoCalidad"]);
+                        inspeccionExistenteId = rd["InspeccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["InspeccionID"]);
+                        estadoInspeccionExistente = rd["EstadoInspeccion"] == DBNull.Value ? string.Empty : rd["EstadoInspeccion"]?.ToString()?.Trim() ?? string.Empty;
+                        configuracionInvalidadaExistente = rd["ConfiguracionInvalidada"] != DBNull.Value && Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+                    }
+                }
+                if (cajaExistenteId.HasValue)
+                {
+                    if (!inspeccionExistenteId.HasValue)
                     {
                         await tx.RollbackAsync();
-                        TempData["Error"] = "La etiqueta escaneada no corresponde a ninguna caja registrada por Producción.";
-                        return model.InspeccionID.HasValue
-                            ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                            : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+                        TempData["Error"] = "La etiqueta ya pertenece a una caja, pero la corrida no tiene una inspección activa de Calidad.";
+                        return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
                     }
-                    cajaProduccionId = Convert.ToInt64(rd["CajaProduccionID"]);
-                    inspeccionIdReal = Convert.ToInt32(rd["InspeccionID"]);
-                    estadoCajaId = Convert.ToInt32(rd["EstadoCajaID"]);
-                    folioCaja = rd["FolioCaja"]?.ToString()?.Trim() ?? cajaProduccionId.ToString();
-                    cantidadPiezas = Convert.ToInt32(rd["CantidadPiezas"]);
-                    ordenFabricacion = rd["OrdenFabricacion"] == DBNull.Value ? null : rd["OrdenFabricacion"]?.ToString()?.Trim();
-                    numeroParte = rd["NumeroParte"] == DBNull.Value ? null : rd["NumeroParte"]?.ToString()?.Trim();
-                    fechaEscaneoProduccion = rd["FechaEscaneoProduccion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaEscaneoProduccion"]);
-                    fechaEscaneoCalidad = rd["FechaEscaneoCalidad"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaEscaneoCalidad"]);
-                    estadoInspeccion = rd["EstadoInspeccion"]?.ToString()?.Trim() ?? string.Empty;
-                    configuracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
-                }
-                if (model.InspeccionID.HasValue && model.InspeccionID.Value > 0 && model.InspeccionID.Value != inspeccionIdReal)
-                {
-                    await tx.RollbackAsync();
-                    var ofTexto = string.IsNullOrWhiteSpace(ordenFabricacion) ? $"inspección #{inspeccionIdReal}" : $"OF {ordenFabricacion}";
-                    var parteTexto = string.IsNullOrWhiteSpace(numeroParte) ? string.Empty : $" · Parte {numeroParte}";
-                    TempData["Error"] = $"La etiqueta pertenece a otra corrida: {ofTexto}{parteTexto}. No se registró la recepción. Termina o cambia al detalle correcto antes de escanearla.";
-                    TempData["InspeccionCajaEscaneadaID"] = inspeccionIdReal;
-                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value });
-                }
-                if (estadoCajaId != ProduccionCajaEstatus.PendienteCalidad)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = $"La caja {folioCaja} ya no se encuentra pendiente de recepción de Calidad.";
-                    return model.InspeccionID.HasValue
-                        ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                        : RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
-                }
-                if (!fechaEscaneoProduccion.HasValue)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = $"La caja {folioCaja} existe, pero no tiene registrado el escaneo de salida desde Producción.";
-                    return model.InspeccionID.HasValue
-                        ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                        : RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
-                }
-                if (configuracionInvalidada)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "La configuración de la corrida fue invalidada. La caja no puede recibirse hasta completar la reliberación correspondiente.";
-                    return model.InspeccionID.HasValue
-                        ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                        : RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
-                }
-                if (EstadoBloqueaRevisionCaja(estadoInspeccion))
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "La inspección de Calidad está cerrada o bloqueada y no permite recibir cajas.";
-                    return model.InspeccionID.HasValue
-                        ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                        : RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
-                }
-                if (fechaEscaneoCalidad.HasValue)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Mensaje"] = $"La caja {folioCaja} ya había sido recibida físicamente por Calidad el {fechaEscaneoCalidad.Value:dd/MM/yyyy HH:mm}.";
-                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
-                }
-                var ahora = DateTime.Now;
-                const string sqlUpdate = @"
+                    if (model.InspeccionID.HasValue && model.InspeccionID.Value > 0 && model.InspeccionID.Value != inspeccionExistenteId.Value)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La etiqueta ya pertenece a una caja de otra inspección.";
+                        TempData["InspeccionCajaEscaneadaID"] = inspeccionExistenteId.Value;
+                        return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value });
+                    }
+                    if (estadoCajaExistente != ProduccionCajaEstatus.PendienteCalidad)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Mensaje"] = $"La etiqueta ya fue registrada y la caja se encuentra en estado: {(string.IsNullOrWhiteSpace(estadoCajaNombreExistente) ? ProduccionCajaEstatus.Nombre(estadoCajaExistente) : estadoCajaNombreExistente)}.";
+                        return RedirectToAction(nameof(Detalle), new { id = inspeccionExistenteId.Value });
+                    }
+                    if (fechaEscaneoCalidadExistente.HasValue)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Mensaje"] = $"Esta caja ya fue escaneada por Calidad el {fechaEscaneoCalidadExistente.Value:dd/MM/yyyy HH:mm}. Está pendiente de decisión.";
+                        return RedirectToAction(nameof(Detalle), new { id = inspeccionExistenteId.Value });
+                    }
+                    if (configuracionInvalidadaExistente)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La configuración de la corrida fue invalidada. La caja no puede revisarse hasta completar la reliberación correspondiente.";
+                        return RedirectToAction(nameof(Detalle), new { id = inspeccionExistenteId.Value });
+                    }
+                    if (EstadoBloqueaRevisionCaja(estadoInspeccionExistente))
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La inspección de Calidad está cerrada o bloqueada y no permite recibir cajas.";
+                        return RedirectToAction(nameof(Detalle), new { id = inspeccionExistenteId.Value });
+                    }
+                    var ahoraExistente = DateTime.Now;
+                    const string sqlActualizarLegacy = @"
 UPDATE dbo.Produccion_Cajas
-SET
+SET NumeroOFEtiqueta=COALESCE(NULLIF(NumeroOFEtiqueta,N''),@NumeroOF),
+    NumeroParteEtiqueta=COALESCE(NULLIF(NumeroParteEtiqueta,N''),@NumeroParte),
+    DesignacionEtiqueta=COALESCE(NULLIF(DesignacionEtiqueta,N''),@Designacion),
+    CantidadEtiqueta=COALESCE(CantidadEtiqueta,@Cantidad),
+    LoteEtiqueta=COALESCE(NULLIF(LoteEtiqueta,N''),@Lote),
+    LoteMaterial=COALESCE(NULLIF(LoteMaterial,N''),@Lote),
     FechaEscaneoCalidad=@Ahora,
     UsuarioEscaneoCalidadID=@UsuarioID,
+    EstadoCajaNombre=N'Escaneada por Calidad - pendiente validación',
+    EstatusCalidad=N'ESCANEADA',
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=@Ahora
 WHERE CajaProduccionID=@CajaProduccionID
   AND Activo=1
   AND EstadoCajaID=@PendienteCalidad
   AND FechaEscaneoCalidad IS NULL;
-IF @@ROWCOUNT<>1
-    THROW 51401,'La caja cambió de estado o ya fue recibida por Calidad.',1;";
-                await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
-                {
-                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
-                    cmd.Parameters.Add("@PendienteCalidad", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
-                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
-                    await cmd.ExecuteNonQueryAsync();
-                }
-                const string sqlHistorial = @"
+IF @@ROWCOUNT<>1 THROW 51401,'La caja cambió de estado mientras Calidad realizaba el escaneo.',1;
+
 INSERT INTO dbo.Calidad_InspeccionHistorial
 (
-    InspeccionID,
-    Movimiento,
-    EstadoAnterior,
-    EstadoNuevo,
-    ResultadoCalidad,
-    Etiqueta,
-    Comentario,
-    UsuarioID,
-    FechaMovimiento
+    InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,Etiqueta,Comentario,UsuarioID,FechaMovimiento
 )
 VALUES
 (
-    @InspeccionID,
-    N'CAJA_RECIBIDA_FISICAMENTE',
-    @Estado,
-    @Estado,
-    NULL,
-    NULL,
-    @Comentario,
-    @UsuarioID,
-    @Ahora
+    @InspeccionID,N'CAJA_ESCANEADA_CALIDAD',@Estado,@Estado,NULL,NULL,@Comentario,@UsuarioID,@Ahora
+);";
+                    await using (var cmd = new SqlCommand(sqlActualizarLegacy, cn, tx))
+                    {
+                        cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaExistenteId.Value;
+                        cmd.Parameters.Add("@PendienteCalidad", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
+                        cmd.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 120).Value = numeroOF;
+                        cmd.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 150).Value = numeroParte;
+                        cmd.Parameters.Add("@Designacion", SqlDbType.NVarChar, 300).Value = string.IsNullOrWhiteSpace(parseado.Designacion) ? DBNull.Value : parseado.Designacion.Trim();
+                        cmd.Parameters.Add("@Cantidad", SqlDbType.Int).Value = parseado.Cantidad;
+                        cmd.Parameters.Add("@Lote", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(parseado.Lote) ? DBNull.Value : parseado.Lote.Trim();
+                        cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahoraExistente;
+                        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                        cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionExistenteId.Value;
+                        cmd.Parameters.Add("@Estado", SqlDbType.NVarChar, 50).Value = estadoInspeccionExistente;
+                        cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = $"Calidad realizó el primer escaneo físico de una caja existente. OF: {numeroOF}. Parte: {numeroParte}. Cantidad: {parseado.Cantidad:N0}.";
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+                    await tx.CommitAsync();
+                    TempData["Mensaje"] = $"Caja escaneada correctamente. OF: {numeroOF}. Parte: {numeroParte}. Cantidad: {parseado.Cantidad:N0}. Ahora Calidad puede validarla.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionExistenteId.Value });
+                }
+
+                const string sqlContexto = @"
+;WITH Candidatos AS
+(
+    SELECT
+        i.InspeccionID,
+        i.EjecucionProduccionID,
+        ISNULL(e.ProgramaProduccionID,ISNULL(i.ProgramaProduccionID,0)) AS ProgramaProduccionID,
+        COALESCE(e.SolicitudProduccionID,i.SolicitudProduccionID) AS SolicitudProduccionID,
+        COALESCE(e.SolicitudProduccionDetalleID,i.SolicitudProduccionDetalleID) AS SolicitudProduccionDetalleID,
+        COALESCE(e.ReleaseID,i.ReleaseID) AS ReleaseID,
+        COALESCE(e.ReleaseDetalleID,i.ReleaseDetalleID) AS ReleaseDetalleID,
+        ISNULL(e.CantidadPlaneada,0) AS CantidadPlaneada,
+        ISNULL(e.CantidadOKTotal,0) AS CantidadOKTotal,
+        d.PiezasPorEmbalaje,
+        d.CantidadEmbalajes,
+        i.Estado AS EstadoInspeccion,
+        ISNULL(i.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada,
+        COALESCE(NULLIF(LTRIM(RTRIM(sp.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(sp.FolioSolicitud)),N''),NULLIF(LTRIM(RTRIM(i.OrdenTrabajo)),N'')) AS OrdenFabricacion,
+        COALESCE(NULLIF(LTRIM(RTRIM(e.ReferenciaSAP)),N''),NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(i.NumeroParte)),N'')) AS NumeroParteEsperado,
+        ROW_NUMBER() OVER(PARTITION BY i.EjecucionProduccionID ORDER BY ISNULL(i.ConfiguracionInvalidada,0),i.InspeccionID DESC) AS rn
+    FROM dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+    INNER JOIN dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+        ON e.EjecucionProduccionID=i.EjecucionProduccionID
+       AND e.Activo=1
+    LEFT JOIN dbo.SolicitudesProduccion sp
+        ON sp.SolicitudProduccionID=COALESCE(e.SolicitudProduccionID,i.SolicitudProduccionID)
+       AND sp.Activo=1
+    LEFT JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionDetalleID=COALESCE(e.SolicitudProduccionDetalleID,i.SolicitudProduccionDetalleID)
+       AND d.Activo=1
+    WHERE i.Estado<>N'CERRADA'
+      AND
+      (
+          UPPER(LTRIM(RTRIM(ISNULL(sp.NumeroOFRecibida,N''))))=@NumeroOF
+          OR UPPER(LTRIM(RTRIM(ISNULL(sp.FolioSolicitud,N''))))=@NumeroOF
+          OR UPPER(LTRIM(RTRIM(ISNULL(i.OrdenTrabajo,N''))))=@NumeroOF
+      )
+      AND
+      (
+          UPPER(LTRIM(RTRIM(ISNULL(e.NumeroParte,N''))))=@NumeroParte
+          OR UPPER(LTRIM(RTRIM(ISNULL(e.ReferenciaSAP,N''))))=@NumeroParte
+          OR UPPER(LTRIM(RTRIM(ISNULL(i.NumeroParte,N''))))=@NumeroParte
+      )
+)
+SELECT TOP(1)
+    InspeccionID,EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,
+    ReleaseID,ReleaseDetalleID,CantidadPlaneada,CantidadOKTotal,PiezasPorEmbalaje,CantidadEmbalajes,
+    EstadoInspeccion,ConfiguracionInvalidada,OrdenFabricacion,NumeroParteEsperado,
+    COUNT(1) OVER() AS TotalCoincidencias
+FROM Candidatos
+WHERE rn=1
+ORDER BY CASE WHEN @InspeccionSolicitada IS NOT NULL AND InspeccionID=@InspeccionSolicitada THEN 0 ELSE 1 END,InspeccionID DESC;";
+                int inspeccionIdReal;
+                int ejecucionProduccionId;
+                int programaProduccionId;
+                int? solicitudProduccionId;
+                int? solicitudProduccionDetalleId;
+                int? releaseId;
+                int? releaseDetalleId;
+                int cantidadPlaneada;
+                int cantidadOKTotal;
+                decimal? piezasPorEmbalaje;
+                decimal? cantidadEmbalajes;
+                string estadoInspeccion;
+                bool configuracionInvalidada;
+                string ordenFabricacion;
+                string parteEsperada;
+                int totalCoincidencias;
+                await using (var cmd = new SqlCommand(sqlContexto, cn, tx))
+                {
+                    cmd.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 120).Value = numeroOF.ToUpperInvariant();
+                    cmd.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 150).Value = numeroParte.ToUpperInvariant();
+                    cmd.Parameters.Add("@InspeccionSolicitada", SqlDbType.Int).Value = model.InspeccionID.HasValue && model.InspeccionID.Value > 0 ? model.InspeccionID.Value : DBNull.Value;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"No se encontró una corrida activa de Calidad que corresponda a la etiqueta. OF: {numeroOF}. Parte: {numeroParte}.";
+                        return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+                    }
+                    inspeccionIdReal = Convert.ToInt32(rd["InspeccionID"]);
+                    ejecucionProduccionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
+                    programaProduccionId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                    solicitudProduccionId = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]);
+                    solicitudProduccionDetalleId = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]);
+                    releaseId = rd["ReleaseID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseID"]);
+                    releaseDetalleId = rd["ReleaseDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseDetalleID"]);
+                    cantidadPlaneada = Convert.ToInt32(rd["CantidadPlaneada"]);
+                    cantidadOKTotal = Convert.ToInt32(rd["CantidadOKTotal"]);
+                    piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
+                    cantidadEmbalajes = rd["CantidadEmbalajes"] == DBNull.Value ? null : Convert.ToDecimal(rd["CantidadEmbalajes"]);
+                    estadoInspeccion = rd["EstadoInspeccion"]?.ToString()?.Trim() ?? string.Empty;
+                    configuracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+                    ordenFabricacion = rd["OrdenFabricacion"]?.ToString()?.Trim() ?? numeroOF;
+                    parteEsperada = rd["NumeroParteEsperado"]?.ToString()?.Trim() ?? numeroParte;
+                    totalCoincidencias = Convert.ToInt32(rd["TotalCoincidencias"]);
+                }
+                if (model.InspeccionID.HasValue && model.InspeccionID.Value > 0 && model.InspeccionID.Value != inspeccionIdReal)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La etiqueta corresponde a otra inspección. OF: {ordenFabricacion}. Parte: {parteEsperada}.";
+                    TempData["InspeccionCajaEscaneadaID"] = inspeccionIdReal;
+                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value });
+                }
+                if (!model.InspeccionID.HasValue && totalCoincidencias > 1)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La etiqueta coincide con más de una corrida activa. Abre la inspección correspondiente y vuelve a escanear la caja.";
+                    return RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+                }
+                if (configuracionInvalidada)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La configuración de la corrida fue invalidada. La caja no puede registrarse hasta completar la reliberación correspondiente.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                if (EstadoBloqueaRevisionCaja(estadoInspeccion))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La inspección de Calidad está cerrada o bloqueada y no permite recibir cajas.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                if (!piezasPorEmbalaje.HasValue || piezasPorEmbalaje.Value <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La pieza no tiene configurada la capacidad de piezas por embalaje.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                var capacidadCaja = Convert.ToInt32(Math.Floor(piezasPorEmbalaje.Value));
+                if (capacidadCaja <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La capacidad configurada del embalaje no es válida.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                if (parseado.Cantidad > capacidadCaja)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La etiqueta indica {parseado.Cantidad:N0} pieza(s), pero el embalaje permite como máximo {capacidadCaja:N0}.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                if (cantidadPlaneada <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La ejecución no tiene una cantidad planeada válida.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+
+                const string sqlConsumo = @"
+SELECT
+    ISNULL((
+        SELECT SUM(ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)))
+        FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
+        WHERE c.EjecucionProduccionID=@EjecucionProduccionID
+          AND c.Activo=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK'
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.Produccion_CajaOrigenDetalle od
+              WHERE od.CajaProduccionID=c.CajaProduccionID
+                AND od.Activo=1
+          )
+    ),0) AS OkNormal,
+    ISNULL((
+        SELECT SUM(od.CantidadPiezas)
+        FROM dbo.Produccion_CajaOrigenDetalle od WITH(UPDLOCK,HOLDLOCK)
+        INNER JOIN dbo.Produccion_Cajas c ON c.CajaProduccionID=od.CajaProduccionID AND c.Activo=1
+        WHERE od.EjecucionProduccionID=@EjecucionProduccionID
+          AND od.Activo=1
+    ),0) AS OkDetalle,
+    ISNULL((
+        SELECT COUNT(1)
+        FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
+        WHERE c.EjecucionProduccionID=@EjecucionProduccionID
+          AND c.Activo=1
+          AND UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK'
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.Produccion_CajaOrigenDetalle od
+              WHERE od.CajaProduccionID=c.CajaProduccionID
+                AND od.Activo=1
+          )
+    ),0) AS CajasNormales,
+    ISNULL((
+        SELECT MAX(ISNULL(c.NumeroCaja,0))
+        FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
+        WHERE c.EjecucionProduccionID=@EjecucionProduccionID
+          AND c.Activo=1
+    ),0)+1 AS SiguienteNumero;";
+                int consumoOk;
+                int cajasNormales;
+                int siguienteNumero;
+                await using (var cmd = new SqlCommand(sqlConsumo, cn, tx))
+                {
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    await rd.ReadAsync();
+                    consumoOk = Convert.ToInt32(rd["OkNormal"]) + Convert.ToInt32(rd["OkDetalle"]);
+                    cajasNormales = Convert.ToInt32(rd["CajasNormales"]);
+                    siguienteNumero = Convert.ToInt32(rd["SiguienteNumero"]);
+                }
+                var planeadoPendiente = Math.Max(0, cantidadPlaneada - consumoOk);
+                if (planeadoPendiente <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La cantidad planeada ya se encuentra completamente aplicada a cajas. La sobreproducción debe manejarse mediante producto incompleto/etiqueta blanca.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                var cantidadEsperadaCaja = Math.Min(capacidadCaja, planeadoPendiente);
+                if (parseado.Cantidad != cantidadEsperadaCaja)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La cantidad de la etiqueta no corresponde a la siguiente caja esperada. Esperada: {cantidadEsperadaCaja:N0} pieza(s). Etiqueta: {parseado.Cantidad:N0} pieza(s).";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                var cantidadOKDisponible = Math.Max(0, cantidadOKTotal - consumoOk);
+                if (parseado.Cantidad > cantidadOKDisponible)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Todavía no existen suficientes piezas OK producidas para registrar esta caja. Etiqueta: {parseado.Cantidad:N0}; disponibles: {cantidadOKDisponible:N0}.";
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                }
+                if (cantidadEmbalajes.HasValue && cantidadEmbalajes.Value > 0)
+                {
+                    var cajasEsperadas = Convert.ToInt32(Math.Ceiling(cantidadEmbalajes.Value));
+                    if (cajasNormales >= cajasEsperadas)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"Ya se registraron las {cajasEsperadas:N0} caja(s) normales esperadas para esta orden.";
+                        return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+                    }
+                }
+
+                var ahora = DateTime.Now;
+                var folioCaja = $"PROD-{ejecucionProduccionId}-C{siguienteNumero:000}";
+                const string sqlInsert = @"
+INSERT INTO dbo.Produccion_Cajas
+(
+    EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,
+    NumeroCaja,FolioCaja,CantidadPiezas,TipoCaja,LoteMaterial,EtiquetaFolio,EstadoCajaID,EstadoCajaNombre,EtiquetaVerde,
+    FechaFormacion,UsuarioFormacionID,FechaSolicitudCalidad,UsuarioSolicitudCalidadID,Observaciones,Activo,UsuarioCreacionID,FechaCreacion,
+    Etiqueta,Cantidad,EstatusCalidad,OperadorUsuarioID,EsProductoIncompleto,
+    CodigoBarrasOrigen,NumeroOFEtiqueta,NumeroParteEtiqueta,DesignacionEtiqueta,CantidadEtiqueta,LoteEtiqueta,
+    FechaEscaneoProduccion,UsuarioEscaneoProduccionID,FechaEscaneoCalidad,UsuarioEscaneoCalidadID,
+    UsuarioModificacionID,FechaModificacion
+)
+OUTPUT INSERTED.CajaProduccionID
+VALUES
+(
+    @EjecucionProduccionID,@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,@ReleaseID,@ReleaseDetalleID,
+    @NumeroCaja,@FolioCaja,@CantidadPiezas,N'OK',@Lote,NULL,@EstadoCajaID,N'Escaneada por Calidad - pendiente validación',0,
+    @Ahora,NULL,@Ahora,NULL,@Observaciones,1,@UsuarioID,@Ahora,
+    @FolioCaja,@CantidadPiezas,N'ESCANEADA',NULL,0,
+    @CodigoBarras,@NumeroOF,@NumeroParte,@Designacion,@CantidadPiezas,@Lote,
+    NULL,NULL,@Ahora,@UsuarioID,
+    @UsuarioID,@Ahora
+);";
+                long cajaProduccionId;
+                await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
+                {
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)solicitudProduccionId ?? DBNull.Value;
+                    cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = (object?)solicitudProduccionDetalleId ?? DBNull.Value;
+                    cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = (object?)releaseId ?? DBNull.Value;
+                    cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = (object?)releaseDetalleId ?? DBNull.Value;
+                    cmd.Parameters.Add("@NumeroCaja", SqlDbType.Int).Value = siguienteNumero;
+                    cmd.Parameters.Add("@FolioCaja", SqlDbType.NVarChar, 100).Value = folioCaja;
+                    cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = parseado.Cantidad;
+                    cmd.Parameters.Add("@Lote", SqlDbType.NVarChar, 150).Value = string.IsNullOrWhiteSpace(parseado.Lote) ? DBNull.Value : parseado.Lote.Trim();
+                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = "Caja registrada automáticamente al primer escaneo físico realizado por Calidad. La formación de la caja se realiza físicamente en Producción.";
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@CodigoBarras", SqlDbType.NVarChar, 500).Value = codigoFisico;
+                    cmd.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 120).Value = numeroOF;
+                    cmd.Parameters.Add("@NumeroParte", SqlDbType.NVarChar, 150).Value = numeroParte;
+                    cmd.Parameters.Add("@Designacion", SqlDbType.NVarChar, 300).Value = string.IsNullOrWhiteSpace(parseado.Designacion) ? DBNull.Value : parseado.Designacion.Trim();
+                    cajaProduccionId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
+                }
+
+                const string sqlHistorial = @"
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,Etiqueta,Comentario,UsuarioID,FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,N'CAJA_ESCANEADA_CALIDAD',@Estado,@Estado,NULL,NULL,@Comentario,@UsuarioID,@Ahora
 );";
                 await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
                 {
-                    var contexto = string.IsNullOrWhiteSpace(ordenFabricacion)
-                        ? string.Empty
-                        : $" OF: {ordenFabricacion}.";
+                    var comentario = $"Calidad realizó el primer escaneo físico y registró la caja {folioCaja} en ERP. OF: {numeroOF}. Parte: {numeroParte}. Cantidad: {parseado.Cantidad:N0}.";
+                    if (comentario.Length > 1000) comentario = comentario[..1000];
                     cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionIdReal;
                     cmd.Parameters.Add("@Estado", SqlDbType.NVarChar, 50).Value = estadoInspeccion;
-                    cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = $"Caja {folioCaja} recibida físicamente por Calidad mediante escaneo. Cantidad: {cantidadPiezas:N0} pieza(s).{contexto}";
+                    cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = comentario;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
                     cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
                     await cmd.ExecuteNonQueryAsync();
                 }
+
                 await tx.CommitAsync();
-                TempData["Mensaje"] = $"Caja {folioCaja} recibida físicamente por Calidad. Ya puede revisarse y decidirse.";
+                TempData["Mensaje"] = $"Caja {folioCaja} registrada y escaneada correctamente por Calidad con {parseado.Cantidad:N0} pieza(s). Ahora puede validarse como verde, GP12 o devolverse a Producción.";
                 return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
+            }
+            catch (SqlException ex) when (ex.Number is 2601 or 2627)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "La etiqueta ya fue registrada. No se generó una caja duplicada.";
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
             }
             catch (Exception ex)
             {
                 try { await tx.RollbackAsync(); } catch { }
-                TempData["Error"] = "No fue posible recibir la caja: " + ex.Message;
-                return model.InspeccionID.HasValue
-                    ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
-                    : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+                TempData["Error"] = "No fue posible escanear la caja en Calidad: " + ex.Message;
+                return model.InspeccionID.HasValue ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value }) : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
             }
         }
         private static string? LeerTextoCaja(
