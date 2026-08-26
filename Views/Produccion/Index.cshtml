@@ -1811,6 +1811,51 @@
 
 
 
+
+        /* NSQ_MODAL_PREPARACION_PERSONAL_CONTRASTE_V77
+           Evita que Bootstrap pinte .bg-body oscuro mientras el modal NSQ
+           permanece claro. Tambien deja contraste correcto en tema oscuro. */
+        #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen {
+            background: #f4f8ff !important;
+            border-color: #c9d9ee !important;
+            color: #16263b !important;
+        }
+
+        #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen .bg-body {
+            background: #ffffff !important;
+            border-color: #d5e0ed !important;
+            color: #16263b !important;
+            box-shadow: 0 2px 7px rgba(16,42,78,.045);
+        }
+
+        #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen .bg-body > .fw-bold:not(.text-muted) {
+            color: #102b4c !important;
+        }
+
+        #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen .text-muted {
+            color: #66758a !important;
+        }
+
+        html[data-nsq-theme="dark"] #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen {
+            background: #111c2d !important;
+            border-color: #334861 !important;
+            color: #eaf2ff !important;
+        }
+
+        html[data-nsq-theme="dark"] #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen .bg-body {
+            background: #18283f !important;
+            border-color: #3a506c !important;
+            color: #f3f7ff !important;
+            box-shadow: none;
+        }
+
+        html[data-nsq-theme="dark"] #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen .bg-body > .fw-bold:not(.text-muted) {
+            color: #f3f7ff !important;
+        }
+
+        html[data-nsq-theme="dark"] #modalIniciarPreparacion #ppProduccionPersonalProgramadoResumen .text-muted {
+            color: #aebdd0 !important;
+        }
         /* NSQ_MODAL_PREPARACION_LIGHT_V1
                    El encabezado azul debe conservar contraste tambien en tema claro. */
         #modalIniciarPreparacion .modal-header .modal-title,

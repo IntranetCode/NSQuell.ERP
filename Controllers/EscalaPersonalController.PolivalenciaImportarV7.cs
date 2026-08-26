@@ -75,10 +75,15 @@ SELECT
             }
             const string duplicado=@"SELECT COUNT(1) FROM dbo.RRHH_PolivalenciaImportaciones WHERE HashSHA256=@Hash AND Resultado IN(N'EXITO',N'SIN_CAMBIOS');";await using(var cmd=new SqlCommand(duplicado,cn)){cmd.Parameters.Add("@Hash",SqlDbType.VarChar,64).Value=hash;if(Convert.ToInt32(await cmd.ExecuteScalarAsync())>0){TempData["Exito"]="Este mismo archivo ya fue procesado correctamente. No se duplicaron registros.";return RedirectToAction(nameof(Polivalencia));}}
             var personasDb=await CargarPersonasPoliV7Async(cn);var partes=await CargarPartesPoliV7Async(cn);
+            // POLIVALENCIA_MATCHER_GENERAL_V77
+            // Reutiliza primero los enlaces de la matriz activa. La matriz de polivalencia
+            // cambia poco, por lo que un encabezado ya validado no debe volver a resolverse
+            // por similitud en cada importacion.
+            var historicoPartes=await CargarMapeoHistoricoPartesPoliV77Async(cn,partes);
             var personas=ExtraerPersonasV7(ws,headerRow,personasDb);
             if(personas.Count==0)throw new InvalidOperationException("No se encontraron operadores/auxiliares válidos en la matriz.");
             if(personas.GroupBy(x=>x.Control,StringComparer.OrdinalIgnoreCase).Any(g=>g.Count()>1))throw new InvalidOperationException("La matriz contiene números de control duplicados.");
-            var comps=ExtraerCompetenciasV7(ws,pieceRow,personas,partes);
+            var comps=ExtraerCompetenciasV7(ws,pieceRow,personas,partes,historicoPartes);
             if(comps.Count==0)throw new InvalidOperationException("No se encontraron competencias N1-N4 para importar.");
 
             if (await MatrizActivaCoincideV7Async(comps,cn))
@@ -180,15 +185,246 @@ GROUP BY PersonalID,ParteID;";
     private static async Task<Dictionary<string,(int Id,string Nombre,string Puesto)>> CargarPersonasPoliV7Async(SqlConnection cn){const string sql=@"SELECT PersonaID,ISNULL(NumeroControl,N'') NumeroControl,LTRIM(RTRIM(CONCAT(ISNULL(Nombre,N''),N' ',ISNULL(ApellidoPaterno,N''),N' ',ISNULL(ApellidoMaterno,N'')))) Nombre,ISNULL(Puesto,N'') Puesto FROM dbo.Persona WHERE NULLIF(LTRIM(RTRIM(NumeroControl)),N'') IS NOT NULL ORDER BY NumeroControl,PersonaID;";var d=new Dictionary<string,(int,string,string)>(StringComparer.OrdinalIgnoreCase);await using var cmd=new SqlCommand(sql,cn);await using var rd=await cmd.ExecuteReaderAsync();while(await rd.ReadAsync()){var k=rd["NumeroControl"]?.ToString()?.Trim();if(string.IsNullOrWhiteSpace(k))continue;if(d.ContainsKey(k))throw new InvalidOperationException($"El número de control {k} está duplicado en Persona. Corrige el catálogo antes de importar la matriz.");d[k]=(Convert.ToInt32(rd["PersonaID"]),rd["Nombre"]?.ToString()?.Trim()??"",rd["Puesto"]?.ToString()?.Trim()??"");}return d;}
     private static async Task<List<PoliParteV7>> CargarPartesPoliV7Async(SqlConnection cn){const string sql=@"SELECT ParteID,ISNULL(NumeroParte,N'') NumeroParte,ISNULL(ReferenciaSAP,N'') ReferenciaSAP,ISNULL(Designacion,N'') Designacion,ISNULL(Descripcion,N'') Descripcion FROM dbo.ERP_Partes WHERE Activo=1;";var l=new List<PoliParteV7>();await using var cmd=new SqlCommand(sql,cn);await using var rd=await cmd.ExecuteReaderAsync();while(await rd.ReadAsync())l.Add(new PoliParteV7{ParteID=Convert.ToInt32(rd["ParteID"]),Numero=rd["NumeroParte"]?.ToString()??"",Sap=rd["ReferenciaSAP"]?.ToString()??"",Designacion=rd["Designacion"]?.ToString()??"",Descripcion=rd["Descripcion"]?.ToString()??""});return l;}
     private static List<PoliPersonaV7> ExtraerPersonasV7(IXLWorksheet ws,int headerRow,Dictionary<string,(int Id,string Nombre,string Puesto)> db){var l=new List<PoliPersonaV7>();var last=Math.Min(ws.LastRowUsed()?.RowNumber()??headerRow,500);for(int r=headerRow+1;r<=last;r++){var nombre=(ws.Cell(r,2).GetString()??"").Trim();var control=Control(ws.Cell(r,3));var puesto=(ws.Cell(r,4).GetString()??"").Trim();var up=puesto.ToUpperInvariant();if(string.IsNullOrWhiteSpace(nombre)||string.IsNullOrWhiteSpace(control)||!(up.Contains("OPERADOR")||up.Contains("AUXILIAR DE PRODU")))continue;if(!db.TryGetValue(control,out var p))throw new InvalidOperationException($"El control {control} ({nombre}) no existe en Persona.");l.Add(new PoliPersonaV7{PersonaID=p.Id,Control=control,Nombre=nombre,Puesto=puesto,Row=r});}return l;}
-    private static List<PoliCompetenciaV7> ExtraerCompetenciasV7(IXLWorksheet ws,int pieceRow,List<PoliPersonaV7> personas,List<PoliParteV7> partes){var lastCol=Math.Min(ws.LastColumnUsed()?.ColumnNumber()??4,500);var headers=new List<(int Col,string Texto)>();for(int c=5;c<=lastCol;c++){var h=(ws.Cell(pieceRow,c).GetString()??"").Trim();if(!string.IsNullOrWhiteSpace(h))headers.Add((c,h));}var result=new List<PoliCompetenciaV7>();foreach(var h in headers){var niveles=new Dictionary<PoliPersonaV7,int>();foreach(var p in personas){var next=personas.Where(x=>x.Row>p.Row).Select(x=>x.Row).DefaultIfEmpty(p.Row+3).Min();var max=0;for(int r=p.Row;r<Math.Min(next,p.Row+3);r++)for(int c=h.Col;c<=Math.Min(h.Col+1,lastCol);c++){var s=(ws.Cell(r,c).GetString()??"").Trim();if(int.TryParse(s,out var n)&&n>=1&&n<=4)max=Math.Max(max,n);}if(max>0)niveles[p]=max;}if(niveles.Count==0)continue;var m=MapearPartesHeaderV7(h.Texto,partes);if(m.Count==0){if(ParteSinActivoConocidaV76(h.Texto))continue;throw new InvalidOperationException($"No se pudo relacionar de forma segura la columna {XLHelper.GetColumnLetterFromNumber(h.Col)} '{h.Texto.Replace("\n"," ")}' con ERP_Partes."+SugerenciasParteHeaderV75(h.Texto,partes));}foreach(var kv in niveles)foreach(var parte in m)result.Add(new PoliCompetenciaV7{PersonaID=kv.Key.PersonaID,Control=kv.Key.Control,Puesto=kv.Key.Puesto,ParteID=parte.ParteID,Clave=XLHelper.GetColumnLetterFromNumber(h.Col),Encabezado=h.Texto,Nivel=kv.Value});}return result.GroupBy(x=>new{x.PersonaID,x.ParteID}).Select(g=>g.OrderByDescending(x=>x.Nivel).First()).ToList();}
+    // POLIVALENCIA_MATCHER_GENERAL_V77
+    private static async Task<Dictionary<string,List<PoliParteV7>>> CargarMapeoHistoricoPartesPoliV77Async(
+        SqlConnection cn,
+        List<PoliParteV7> partes)
+    {
+        var porId=partes
+            .GroupBy(x=>x.ParteID)
+            .ToDictionary(g=>g.Key,g=>g.First());
+
+        var mapa=new Dictionary<string,List<PoliParteV7>>(StringComparer.OrdinalIgnoreCase);
+
+        const string sql=@"
+SELECT DISTINCT
+    EncabezadoMatriz,
+    ParteID
+FROM dbo.RRHH_PolivalenciaCompetencias
+WHERE Activo=1
+  AND NULLIF(LTRIM(RTRIM(EncabezadoMatriz)),N'') IS NOT NULL;";
+
+        await using var cmd=new SqlCommand(sql,cn);
+        await using var rd=await cmd.ExecuteReaderAsync();
+
+        while(await rd.ReadAsync())
+        {
+            var encabezado=rd["EncabezadoMatriz"]?.ToString()?.Trim();
+            if(string.IsNullOrWhiteSpace(encabezado)) continue;
+
+            var parteId=Convert.ToInt32(rd["ParteID"]);
+            if(!porId.TryGetValue(parteId,out var parte)) continue;
+
+            var clave=N(encabezado);
+            if(string.IsNullOrWhiteSpace(clave)) continue;
+
+            if(!mapa.TryGetValue(clave,out var lista))
+            {
+                lista=new List<PoliParteV7>();
+                mapa[clave]=lista;
+            }
+
+            if(!lista.Any(x=>x.ParteID==parte.ParteID))
+                lista.Add(parte);
+        }
+
+        return mapa;
+    }
+
+    private static List<PoliCompetenciaV7> ExtraerCompetenciasV7(
+        IXLWorksheet ws,
+        int pieceRow,
+        List<PoliPersonaV7> personas,
+        List<PoliParteV7> partes,
+        Dictionary<string,List<PoliParteV7>> historicoPartes)
+    {
+        var lastCol=Math.Min(ws.LastColumnUsed()?.ColumnNumber()??4,500);
+        var headers=new List<(int Col,string Texto)>();
+
+        for(int c=5;c<=lastCol;c++)
+        {
+            var h=(ws.Cell(pieceRow,c).GetString()??"").Trim();
+            if(string.IsNullOrWhiteSpace(h))
+                continue;
+
+            // POLIVALENCIA_COLUMNAS_PIEZA_V78
+            // La matriz contiene columnas auxiliares/administrativas que NO son
+            // piezas (por ejemplo SERIE). Deben excluirse antes del matcher.
+            if(EsColumnaAdministrativaPoliV78(h))
+                continue;
+
+            headers.Add((c,h));
+        }
+
+        var result=new List<PoliCompetenciaV7>();
+        var noResueltas=new List<string>();
+
+        foreach(var h in headers)
+        {
+            var niveles=new Dictionary<PoliPersonaV7,int>();
+
+            foreach(var p in personas)
+            {
+                var next=personas
+                    .Where(x=>x.Row>p.Row)
+                    .Select(x=>x.Row)
+                    .DefaultIfEmpty(p.Row+3)
+                    .Min();
+
+                var max=0;
+
+                for(int r=p.Row;r<Math.Min(next,p.Row+3);r++)
+                for(int c=h.Col;c<=Math.Min(h.Col+1,lastCol);c++)
+                {
+                    var s=(ws.Cell(r,c).GetString()??"").Trim();
+                    if(int.TryParse(s,out var n)&&n>=1&&n<=4)
+                        max=Math.Max(max,n);
+                }
+
+                if(max>0)
+                    niveles[p]=max;
+            }
+
+            if(niveles.Count==0)
+                continue;
+
+            var m=MapearPartesHeaderV7(h.Texto,partes,historicoPartes);
+
+            if(m.Count==0)
+            {
+                if(ParteSinActivoConocidaV76(h.Texto))
+                    continue;
+
+                var columna=XLHelper.GetColumnLetterFromNumber(h.Col);
+                var encabezadoLimpio=h.Texto.Replace("\r"," ").Replace("\n"," ").Trim();
+                noResueltas.Add(
+                    $"{columna} '{encabezadoLimpio}'{SugerenciasParteHeaderV75(h.Texto,partes)}");
+                continue;
+            }
+
+            foreach(var kv in niveles)
+            foreach(var parte in m)
+            {
+                result.Add(new PoliCompetenciaV7
+                {
+                    PersonaID=kv.Key.PersonaID,
+                    Control=kv.Key.Control,
+                    Puesto=kv.Key.Puesto,
+                    ParteID=parte.ParteID,
+                    Clave=XLHelper.GetColumnLetterFromNumber(h.Col),
+                    Encabezado=h.Texto,
+                    Nivel=kv.Value
+                });
+            }
+        }
+
+        // Ya no se detiene en la primera columna. Si quedara una ambiguedad real,
+        // se reportan TODAS juntas para no obligar a corregir una por una.
+        if(noResueltas.Count>0)
+        {
+            throw new InvalidOperationException(
+                $"No se pudieron relacionar de forma segura {noResueltas.Count} columna(s) con ERP_Partes. " +
+                string.Join(" || ",noResueltas));
+        }
+
+        return result
+            .GroupBy(x=>new{x.PersonaID,x.ParteID})
+            .Select(g=>g.OrderByDescending(x=>x.Nivel).First())
+            .ToList();
+    }
+    // POLIVALENCIA_COLUMNAS_PIEZA_V78
+    private static bool EsColumnaAdministrativaPoliV78(string? encabezado)
+    {
+        var n=N(encabezado);
+        if(string.IsNullOrWhiteSpace(n))
+            return true;
+
+        // GQ-F-RH02-05: SERIE es una columna informativa, NO una pieza.
+        // Se incluyen tambien variantes de encabezados administrativos para
+        // evitar que futuras versiones intenten mapearlas contra ERP_Partes.
+        var exactas=new HashSet<string>(
+            new[]
+            {
+                "SERIE",
+                "SERIES",
+                "NOMBRE",
+                "NOMBRES",
+                "NOCONTROL",
+                "NUMEROCONTROL",
+                "CONTROL",
+                "PUESTO",
+                "FIRMA",
+                "OBSERVACIONES",
+                "OBSERVACION",
+                "COMENTARIOS",
+                "COMENTARIO",
+                "TOTAL",
+                "PROMEDIO",
+                "NIVEL",
+                "NIVELES"
+            },
+            StringComparer.OrdinalIgnoreCase);
+
+        if(exactas.Contains(n))
+            return true;
+
+        // Encabezados de metadatos típicos del formato.
+        if(n.StartsWith("SERIE",StringComparison.OrdinalIgnoreCase) &&
+           n.Length <= 15)
+            return true;
+
+        return false;
+    }
     private static string N(string? s)=>Regex.Replace((s??"").Normalize(NormalizationForm.FormD).ToUpperInvariant(),@"[^A-Z0-9]","");
-    private static List<PoliParteV7> MapearPartesHeaderV7(string header,List<PoliParteV7> partes)
+    private static List<PoliParteV7> MapearPartesHeaderV7(
+        string header,
+        List<PoliParteV7> partes,
+        Dictionary<string,List<PoliParteV7>> historicoPartes)
     {
         var h=N(header);
+        if(string.IsNullOrWhiteSpace(h))
+            return new List<PoliParteV7>();
 
-        // V7.5 - aliases oficiales conocidos de la matriz GQ-F-RH02-05.
-        // Se resuelven por NumeroParte/ReferenciaSAP, NO por ParteID, para que
-        // Test y Produccion puedan tener identities distintos.
+        // 0) Primera prioridad: el mismo encabezado ya validado en la matriz activa.
+        // Esto evita volver a "adivinar" las mismas columnas cada mes.
+        if(historicoPartes.TryGetValue(h,out var historicas) && historicas.Count>0)
+        {
+            return historicas
+                .GroupBy(x=>x.ParteID)
+                .Select(g=>g.First())
+                .ToList();
+        }
+
+        // 1) Igualdad exacta contra designacion o descripcion.
+        // Un 100% real debe ganar aunque exista otro candidato parecido al 94%.
+        var exactas=partes
+            .Where(p=>N(p.Designacion)==h || N(p.Descripcion)==h)
+            .GroupBy(x=>x.ParteID)
+            .Select(g=>g.First())
+            .ToList();
+
+        if(exactas.Count==1)
+            return exactas;
+
+        // 2) Igualdad del nombre funcional ignorando codigos/numeros.
+        // Ej.: "Lock Cylinder V363" -> "LOCK CYLINDER".
+        var nombreBase=NombreBasePoliV77(header);
+        if(nombreBase.Length>=8)
+        {
+            var baseExacta=partes
+                .Where(p=>
+                    NombreBasePoliV77(p.Designacion)==nombreBase ||
+                    NombreBasePoliV77(p.Descripcion)==nombreBase)
+                .GroupBy(x=>x.ParteID)
+                .Select(g=>g.First())
+                .ToList();
+
+            if(baseExacta.Count==1)
+                return baseExacta;
+        }
+
+        // Compatibilidad con correcciones documentales historicas ya conocidas.
+        // Estas siguen resolviendose por NumeroParte/ReferenciaSAP, nunca por ParteID.
         var aliasNumero=new Dictionary<string,string[]>(StringComparer.OrdinalIgnoreCase)
         {
             [N("S/C Bushing +S/C rewPF-KI")]=new[]{"66101496"},
@@ -212,33 +448,38 @@ GROUP BY PersonalID,ParteID;";
                 .Select(x=>x.First())
                 .ToList();
 
-            if(alias.Count>0) return alias;
+            if(alias.Count>0)
+                return alias;
         }
 
-        // 1) Numero de parte / SAP contenido en el encabezado: prioridad maxima.
+        // 3) Numero de parte / SAP contenido en el encabezado.
         var fuertes=partes
-            .Where(p=>(N(p.Numero).Length>=4&&h.Contains(N(p.Numero))) ||
-                      (N(p.Sap).Length>=4&&h.Contains(N(p.Sap))))
+            .Where(p=>
+                (N(p.Numero).Length>=4&&h.Contains(N(p.Numero))) ||
+                (N(p.Sap).Length>=4&&h.Contains(N(p.Sap))))
             .GroupBy(x=>x.ParteID)
             .Select(x=>x.First())
             .ToList();
-        if(fuertes.Count>0) return fuertes;
 
-        // 2) Designacion/descripcion equivalente por inclusion.
+        if(fuertes.Count>0)
+            return fuertes;
+
+        // 4) Designacion/descripcion equivalente por inclusion.
         var suaves=partes
-            .Where(p=>(N(p.Designacion).Length>=8 &&
-                       (h.Contains(N(p.Designacion))||N(p.Designacion).Contains(h))) ||
-                      (N(p.Descripcion).Length>=10 &&
-                       (h.Contains(N(p.Descripcion))||N(p.Descripcion).Contains(h))))
+            .Where(p=>
+                (N(p.Designacion).Length>=8 &&
+                 (h.Contains(N(p.Designacion))||N(p.Designacion).Contains(h))) ||
+                (N(p.Descripcion).Length>=10 &&
+                 (h.Contains(N(p.Descripcion))||N(p.Descripcion).Contains(h))))
             .GroupBy(x=>x.ParteID)
             .Select(x=>x.First())
             .ToList();
-        if(suaves.Count==1) return suaves;
 
-        // 3) Fallback por nombre cercano. Solo se acepta cuando la coincidencia
-        // es alta Y existe separacion suficiente contra el segundo candidato.
-        // Asi evitamos relacionar automaticamente encabezados genericos como
-        // "Bushing" con una pieza equivocada.
+        if(suaves.Count==1)
+            return suaves;
+
+        // 5) Fuzzy general. Se usan escalones de confianza.
+        // Un match exacto (100%) ya no se invalida solo porque exista otro al 94%.
         var ranking=partes
             .Select(p=>new
             {
@@ -252,16 +493,53 @@ GROUP BY PersonalID,ParteID;";
             .ThenBy(x=>x.Parte.Numero)
             .ToList();
 
-        if(ranking.Count==0) return new List<PoliParteV7>();
+        if(ranking.Count==0)
+            return new List<PoliParteV7>();
 
         var primero=ranking[0];
         var segundo=ranking.Count>1?ranking[1].Score:0d;
-        if(primero.Score>=0.78 && primero.Score-segundo>=0.08)
+        var diferencia=primero.Score-segundo;
+
+        var empateSuperior=ranking
+            .Skip(1)
+            .Any(x=>Math.Abs(x.Score-primero.Score)<0.0001d &&
+                    x.Parte.ParteID!=primero.Parte.ParteID);
+
+        if(!empateSuperior && primero.Score>=0.995d)
+            return new List<PoliParteV7>{primero.Parte};
+
+        if(!empateSuperior && primero.Score>=0.96d && diferencia>=0.015d)
+            return new List<PoliParteV7>{primero.Parte};
+
+        if(!empateSuperior && primero.Score>=0.92d && diferencia>=0.04d)
+            return new List<PoliParteV7>{primero.Parte};
+
+        if(!empateSuperior && primero.Score>=0.86d && diferencia>=0.08d)
             return new List<PoliParteV7>{primero.Parte};
 
         return new List<PoliParteV7>();
     }
 
+    private static string NombreBasePoliV77(string? value)
+    {
+        var limpio=NombreFuzzyPoliV75(value);
+        if(string.IsNullOrWhiteSpace(limpio))
+            return string.Empty;
+
+        var stop=new HashSet<string>(
+            new[]{"ASSY","ASSEMBLY","PART","PIEZA","PZA","THE","AND","OR"},
+            StringComparer.OrdinalIgnoreCase);
+
+        var tokens=limpio
+            .Split(' ',StringSplitOptions.RemoveEmptyEntries)
+            .Where(t=>
+                t.Length>1 &&
+                !t.Any(char.IsDigit) &&
+                !stop.Contains(t))
+            .ToList();
+
+        return string.Join(" ",tokens);
+    }
     private static string NombreFuzzyPoliV75(string? value)
     {
         var descomp=(value??string.Empty).Normalize(NormalizationForm.FormD).ToUpperInvariant();

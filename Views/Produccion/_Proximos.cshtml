@@ -93,6 +93,18 @@
         ViewBag.MaquinasOcupadas as HashSet<int>
         ?? new HashSet<int>();
 
+    // NSQ_PREPARACION_MOLDE_UI_V1
+    var estadosCambioMolde =
+        ViewBag.EstadosCambioMolde as Dictionary<int, string>
+        ?? new Dictionary<int, string>();
+
+    string EstadoCambioMolde(int programaProduccionId)
+    {
+        return estadosCambioMolde.TryGetValue(programaProduccionId, out var estado)
+            ? estado
+            : "NO_APLICA";
+    }
+
     var proximos = Model.ProximosAIniciar
         .Where(x => x.FechaInicioProgramada.HasValue)
         .OrderBy(x => x.FechaInicioProgramada)
@@ -119,11 +131,19 @@
             x.MaquinaID.HasValue &&
             maquinasOcupadas.Contains(x.MaquinaID.Value));
 
+    var pendientesCambioMolde = proximos
+        .Count(x => EstadoCambioMolde(x.ProgramaProduccionID) == "PENDIENTE");
+
+    var enCambioMolde = proximos
+        .Count(x => EstadoCambioMolde(x.ProgramaProduccionID) == "EN_PROCESO");
+
     var disponiblesParaIniciar = proximos
         .Count(x =>
             x.PuedeIniciar &&
             x.MaquinaID.HasValue &&
-            !maquinasOcupadas.Contains(x.MaquinaID.Value));
+            !maquinasOcupadas.Contains(x.MaquinaID.Value) &&
+            EstadoCambioMolde(x.ProgramaProduccionID) != "PENDIENTE" &&
+            EstadoCambioMolde(x.ProgramaProduccionID) != "EN_PROCESO");
 }
 
 
@@ -449,6 +469,51 @@
             }
     }
 
+    /* NSQ_PREPARACION_MOLDE_UI_V1 */
+    .prox-summary-pill.is-mold-pending {
+        border-color: #fdb022;
+        background: #fffaeb;
+        color: #b54708;
+    }
+
+    .prox-summary-pill.is-mold-progress {
+        border-color: #84adff;
+        background: #eff4ff;
+        color: #175cd3;
+    }
+
+    .prox-summary-pill.is-mold-ready {
+        border-color: #abefc6;
+        background: #ecfdf3;
+        color: #067647;
+    }
+
+    .prox-card.is-mold-pending {
+        box-shadow: inset 0 0 0 1px rgba(245,158,11,.30);
+    }
+
+    .prox-card.is-mold-progress {
+        box-shadow: inset 0 0 0 1px rgba(47,128,237,.28);
+    }
+
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-mold-pending {
+        background: rgba(245,158,11,.10);
+        border-color: rgba(251,191,36,.38);
+        color: #ffd27a;
+    }
+
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-mold-progress {
+        background: rgba(59,130,246,.10);
+        border-color: rgba(96,165,250,.38);
+        color: #93c5fd;
+    }
+
+    html[data-nsq-theme="dark"] .prox-summary-pill.is-mold-ready {
+        background: rgba(34,197,94,.09);
+        border-color: rgba(74,222,128,.30);
+        color: #83e6a8;
+    }
+
     /* Tema oscuro heredado desde Index.cshtml */
     html[data-nsq-theme="dark"] .prox-panel {
         --prox-blue: #7db7ff;
@@ -706,6 +771,18 @@
                 <strong>@bloqueadosPorMaquina</strong>
                 bloqueada(s) por máquina
             </span>
+
+            <span class="prox-summary-pill is-mold-pending">
+                <i class="bi bi-exclamation-diamond"></i>
+                <strong>@pendientesCambioMolde</strong>
+                pendiente(s) de cambio de molde
+            </span>
+
+            <span class="prox-summary-pill is-mold-progress">
+                <i class="bi bi-gear-wide-connected"></i>
+                <strong>@enCambioMolde</strong>
+                en cambio de molde
+            </span>
         </div>
     </div>
 
@@ -742,7 +819,19 @@
                 item.MaquinaID.HasValue &&
                 maquinasOcupadas.Contains(item.MaquinaID.Value);
 
-                <article class="prox-card @ClaseTiempo(fechaInicio) @(maquinaOcupada ? "is-machine-busy" : "")">
+                var estadoCambioMolde =
+                EstadoCambioMolde(item.ProgramaProduccionID);
+
+                var pendienteCambioMolde =
+                estadoCambioMolde == "PENDIENTE";
+
+                var cambioMoldeEnProceso =
+                estadoCambioMolde == "EN_PROCESO";
+
+                var cambioMoldeConfirmado =
+                estadoCambioMolde == "CONFIRMADA";
+
+                <article class="prox-card @ClaseTiempo(fechaInicio) @(maquinaOcupada ? "is-machine-busy" : "") @(pendienteCambioMolde ? "is-mold-pending" : "") @(cambioMoldeEnProceso ? "is-mold-progress" : "")">
 
                     <div class="prox-main">
                         <div class="prox-program">
@@ -797,6 +886,28 @@
                             <i class="bi bi-box"></i>
                             @Num(item.CantidadProgramada)
                         </span>
+
+                        @if (pendienteCambioMolde)
+                        {
+                            <span class="prox-summary-pill is-mold-pending">
+                                <i class="bi bi-exclamation-diamond"></i>
+                                Pendiente de cambio de molde
+                            </span>
+                        }
+                        else if (cambioMoldeEnProceso)
+                        {
+                            <span class="prox-summary-pill is-mold-progress">
+                                <i class="bi bi-gear-wide-connected"></i>
+                                En cambio de molde
+                            </span>
+                        }
+                        else if (cambioMoldeConfirmado)
+                        {
+                            <span class="prox-summary-pill is-mold-ready">
+                                <i class="bi bi-check-circle"></i>
+                                Cambio de molde listo
+                            </span>
+                        }
                     </div>
                 </div>
 
@@ -873,6 +984,34 @@
                             </div>
                             <div class="prox-blocked-note">
                                 Esperando cierre de la OF anterior.
+                            </div>
+                        }
+                        else if (pendienteCambioMolde || cambioMoldeEnProceso)
+                        {
+                            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                                <a class="btn btn-sm btn-outline-primary"
+                                   href="@Url.Action(
+                                       "CambioMolde",
+                                       "ProduccionPreparacion",
+                                       new { maquinaId = item.MaquinaID })">
+                                    <i class="bi bi-gear-wide-connected me-1"></i>
+                                    Ir a cambio de molde
+                                </a>
+
+                                <button type="button"
+                                        class="btn btn-sm @(cambioMoldeEnProceso ? "btn-info" : "btn-warning")"
+                                        disabled>
+                                    <i class="bi @(cambioMoldeEnProceso ? "bi-arrow-repeat" : "bi-exclamation-diamond") me-1"></i>
+                                    @(cambioMoldeEnProceso
+                                        ? "En cambio de molde"
+                                        : "Pendiente de cambio de molde")
+                                </button>
+                            </div>
+
+                            <div class="prox-blocked-note">
+                                @(cambioMoldeEnProceso
+                                    ? "Finaliza y confirma el cambio de molde antes de iniciar esta OF."
+                                    : "Realiza y confirma el cambio de molde antes de iniciar esta OF.")
                             </div>
                         }
                         else
