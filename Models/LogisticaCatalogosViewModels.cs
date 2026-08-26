@@ -76,19 +76,16 @@ public sealed class LogisticaUnidadVm
         ErrorMessage = "La marca no puede exceder 80 caracteres.")]
     [Display(Name = "Marca")]
     public string? Marca { get; set; }
-
+     
     [StringLength(
         80,
         ErrorMessage = "El modelo no puede exceder 80 caracteres.")]
     [Display(Name = "Modelo")]
     public string? Modelo { get; set; }
 
-    [Range(
-        1,
-        int.MaxValue,
-        ErrorMessage = "La capacidad debe ser mayor a cero.")]
-    [Display(Name = "Capacidad en piezas")]
-    public int? CapacidadPiezas { get; set; }
+    [Range(typeof(decimal), "0.01", "9999999999999999.99", ErrorMessage = "La capacidad debe ser mayor a cero.")]
+    [Display(Name = "Capacidad de carga (kg)")]
+    public decimal? CapacidadPesoKg { get; set; }
 
     public bool Activo { get; set; }
 

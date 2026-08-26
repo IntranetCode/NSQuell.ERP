@@ -77,7 +77,7 @@ SELECT
     ISNULL(Placas,N'') AS Placas,
     ISNULL(Marca,N'') AS Marca,
     ISNULL(Modelo,N'') AS Modelo,
-    CapacidadPiezas,
+    CapacidadPesoKg,
     ISNULL(Activo,0) AS Activo
 FROM dbo.Logistica_Unidades
 ORDER BY
@@ -116,10 +116,7 @@ ORDER BY
                         Placas = Texto(rd, "Placas"),
                         Marca = Texto(rd, "Marca"),
                         Modelo = Texto(rd, "Modelo"),
-                        CapacidadPiezas =
-                            EnteroNullable(
-                                rd,
-                                "CapacidadPiezas"),
+                        CapacidadPesoKg = DecimalNullable(rd, "CapacidadPesoKg"),
                         Activo = Booleano(rd, "Activo")
                     });
             }
@@ -596,353 +593,131 @@ SELECT @@ROWCOUNT;";
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> GuardarUnidad(
-        LogisticaUnidadVm model,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> GuardarUnidad(LogisticaUnidadVm model, CancellationToken cancellationToken)
     {
-        if (!UsuarioEnSesion())
-            return RedirectToAction("Login", "Login");
-
-        model.NumeroEconomico =
-            model.NumeroEconomico?.Trim() ?? string.Empty;
-
-        model.Placas =
-            model.Placas?.Trim() ?? string.Empty;
-
-        model.Marca =
-            model.Marca?.Trim() ?? string.Empty;
-
-        model.Modelo =
-            model.Modelo?.Trim() ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(
-                model.NumeroEconomico))
+        if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+        model.NumeroEconomico = model.NumeroEconomico?.Trim() ?? string.Empty;
+        model.Placas = model.Placas?.Trim() ?? string.Empty;
+        model.Marca = model.Marca?.Trim() ?? string.Empty;
+        model.Modelo = model.Modelo?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(model.NumeroEconomico))
         {
-            TempData["LogisticaError"] =
-                "El número económico es obligatorio.";
-
+            TempData["LogisticaError"] = "El número económico es obligatorio.";
             return RedirectToAction(nameof(Index));
         }
-
         if (model.NumeroEconomico.Length > 50)
         {
-            TempData["LogisticaError"] =
-                "El número económico no puede exceder 50 caracteres.";
-
+            TempData["LogisticaError"] = "El número económico no puede exceder 50 caracteres.";
             return RedirectToAction(nameof(Index));
         }
-
         if (model.Placas.Length > 30)
         {
-            TempData["LogisticaError"] =
-                "Las placas no pueden exceder 30 caracteres.";
-
+            TempData["LogisticaError"] = "Las placas no pueden exceder 30 caracteres.";
             return RedirectToAction(nameof(Index));
         }
-
         if (model.Marca.Length > 80)
         {
-            TempData["LogisticaError"] =
-                "La marca no puede exceder 80 caracteres.";
-
+            TempData["LogisticaError"] = "La marca no puede exceder 80 caracteres.";
             return RedirectToAction(nameof(Index));
         }
-
         if (model.Modelo.Length > 80)
         {
-            TempData["LogisticaError"] =
-                "El modelo no puede exceder 80 caracteres.";
-
+            TempData["LogisticaError"] = "El modelo no puede exceder 80 caracteres.";
             return RedirectToAction(nameof(Index));
         }
-
-        if (model.CapacidadPiezas.HasValue &&
-            model.CapacidadPiezas.Value < 0)
+        if (model.CapacidadPesoKg.HasValue && model.CapacidadPesoKg.Value <= 0)
         {
-            TempData["LogisticaError"] =
-                "La capacidad no puede ser negativa.";
-
+            TempData["LogisticaError"] = "La capacidad de carga debe ser mayor a cero.";
             return RedirectToAction(nameof(Index));
         }
-
-        await using var cn =
-            await AbrirAsync(cancellationToken);
-
-        await using var tx =
-            (SqlTransaction)await cn.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
             const string sqlDuplicado = @"
 SELECT COUNT_BIG(*)
-FROM dbo.Logistica_Unidades WITH (UPDLOCK,HOLDLOCK)
-WHERE
-    Activo=1
-    AND
+FROM dbo.Logistica_Unidades WITH(UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+AND
+(
+    UPPER(LTRIM(RTRIM(NumeroEconomico)))=UPPER(LTRIM(RTRIM(@NumeroEconomico)))
+    OR
     (
-        UPPER(LTRIM(RTRIM(NumeroEconomico))) =
-            UPPER(LTRIM(RTRIM(@NumeroEconomico)))
-        OR
-        (
-            NULLIF(LTRIM(RTRIM(@Placas)),N'') IS NOT NULL
-            AND
-            UPPER(LTRIM(RTRIM(ISNULL(Placas,N'')))) =
-                UPPER(LTRIM(RTRIM(@Placas)))
-        )
+        NULLIF(LTRIM(RTRIM(@Placas)),N'') IS NOT NULL
+        AND UPPER(LTRIM(RTRIM(ISNULL(Placas,N''))))=UPPER(LTRIM(RTRIM(@Placas)))
     )
-    AND (@UnidadID<=0 OR UnidadID<>@UnidadID);";
-
-            await using (var cmd =
-                new SqlCommand(
-                    sqlDuplicado,
-                    cn,
-                    tx))
+)
+AND (@UnidadID<=0 OR UnidadID<>@UnidadID);";
+            await using (var cmd = new SqlCommand(sqlDuplicado, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@NumeroEconomico",
-                    SqlDbType.NVarChar,
-                    50).Value =
-                    model.NumeroEconomico;
-
-                cmd.Parameters.Add(
-                    "@Placas",
-                    SqlDbType.NVarChar,
-                    30).Value =
-                    model.Placas;
-
-                cmd.Parameters.Add(
-                    "@UnidadID",
-                    SqlDbType.Int).Value =
-                    model.UnidadID;
-
-                var duplicados =
-                    Convert.ToInt64(
-                        await cmd.ExecuteScalarAsync(
-                            cancellationToken));
-
-                if (duplicados > 0)
-                {
-                    throw new InvalidOperationException(
-                        "Ya existe una unidad activa con el mismo número económico o placas.");
-                }
+                cmd.Parameters.Add("@NumeroEconomico", SqlDbType.NVarChar, 50).Value = model.NumeroEconomico;
+                cmd.Parameters.Add("@Placas", SqlDbType.NVarChar, 30).Value = model.Placas;
+                cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = model.UnidadID;
+                var duplicados = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken));
+                if (duplicados > 0) throw new InvalidOperationException("Ya existe una unidad activa con el mismo número económico o placas.");
             }
-
             if (model.UnidadID <= 0)
             {
                 const string sqlInsert = @"
 INSERT dbo.Logistica_Unidades
-(
-    NumeroEconomico,
-    Placas,
-    Marca,
-    Modelo,
-    CapacidadPiezas,
-    Activo,
-    FechaCreacion,
-    CreadoPor
-)
+(NumeroEconomico,Placas,Marca,Modelo,CapacidadPesoKg,Activo,FechaCreacion,CreadoPor)
 VALUES
-(
-    @NumeroEconomico,
-    @Placas,
-    @Marca,
-    @Modelo,
-    @CapacidadPiezas,
-    1,
-    SYSDATETIME(),
-    @Usuario
-);
-
+(@NumeroEconomico,@Placas,@Marca,@Modelo,@CapacidadPesoKg,1,SYSDATETIME(),@Usuario);
 SELECT CONVERT(int,SCOPE_IDENTITY());";
-
                 int unidadId;
-
-                await using (var cmd =
-                    new SqlCommand(
-                        sqlInsert,
-                        cn,
-                        tx))
+                await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
                 {
-                    cmd.Parameters.Add(
-                        "@NumeroEconomico",
-                        SqlDbType.NVarChar,
-                        50).Value =
-                        model.NumeroEconomico;
-
-                    cmd.Parameters.Add(
-                        "@Placas",
-                        SqlDbType.NVarChar,
-                        30).Value =
-                        Db(
-                            string.IsNullOrWhiteSpace(
-                                model.Placas)
-                                ? null
-                                : model.Placas);
-
-                    cmd.Parameters.Add(
-                        "@Marca",
-                        SqlDbType.NVarChar,
-                        80).Value =
-                        Db(
-                            string.IsNullOrWhiteSpace(
-                                model.Marca)
-                                ? null
-                                : model.Marca);
-
-                    cmd.Parameters.Add(
-                        "@Modelo",
-                        SqlDbType.NVarChar,
-                        80).Value =
-                        Db(
-                            string.IsNullOrWhiteSpace(
-                                model.Modelo)
-                                ? null
-                                : model.Modelo);
-
-                    cmd.Parameters.Add(
-                        "@CapacidadPiezas",
-                        SqlDbType.Int).Value =
-                        Db(model.CapacidadPiezas);
-
-                    cmd.Parameters.Add(
-                        "@Usuario",
-                        SqlDbType.NVarChar,
-                        120).Value =
-                        UsuarioNombre;
-
-                    unidadId =
-                        Convert.ToInt32(
-                            await cmd.ExecuteScalarAsync(
-                                cancellationToken));
+                    cmd.Parameters.Add("@NumeroEconomico", SqlDbType.NVarChar, 50).Value = model.NumeroEconomico;
+                    cmd.Parameters.Add("@Placas", SqlDbType.NVarChar, 30).Value = Db(string.IsNullOrWhiteSpace(model.Placas) ? null : model.Placas);
+                    cmd.Parameters.Add("@Marca", SqlDbType.NVarChar, 80).Value = Db(string.IsNullOrWhiteSpace(model.Marca) ? null : model.Marca);
+                    cmd.Parameters.Add("@Modelo", SqlDbType.NVarChar, 80).Value = Db(string.IsNullOrWhiteSpace(model.Modelo) ? null : model.Modelo);
+                    var pCapacidad = cmd.Parameters.Add("@CapacidadPesoKg", SqlDbType.Decimal);
+                    pCapacidad.Precision = 18;
+                    pCapacidad.Scale = 2;
+                    pCapacidad.Value = Db(model.CapacidadPesoKg);
+                    cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
+                    unidadId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
                 }
-
                 await tx.CommitAsync(cancellationToken);
-
-                TempData["LogisticaOk"] =
-                    $"Unidad {model.NumeroEconomico} creada correctamente.";
-
+                TempData["LogisticaOk"] = $"Unidad {model.NumeroEconomico} creada correctamente.";
                 return RedirectToAction(nameof(Index));
             }
-
-            const string sqlExiste = @"
-SELECT COUNT_BIG(*)
-FROM dbo.Logistica_Unidades WITH (UPDLOCK,HOLDLOCK)
-WHERE UnidadID=@UnidadID;";
-
-            await using (var cmd =
-                new SqlCommand(
-                    sqlExiste,
-                    cn,
-                    tx))
+            const string sqlExiste = @"SELECT COUNT_BIG(*) FROM dbo.Logistica_Unidades WITH(UPDLOCK,HOLDLOCK) WHERE UnidadID=@UnidadID;";
+            await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@UnidadID",
-                    SqlDbType.Int).Value =
-                    model.UnidadID;
-
-                var existe =
-                    Convert.ToInt64(
-                        await cmd.ExecuteScalarAsync(
-                            cancellationToken));
-
-                if (existe <= 0)
-                {
-                    throw new InvalidOperationException(
-                        "La unidad que intentas editar ya no existe.");
-                }
+                cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = model.UnidadID;
+                if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) throw new InvalidOperationException("La unidad que intentas editar ya no existe.");
             }
-
             const string sqlUpdate = @"
 UPDATE dbo.Logistica_Unidades
-SET
-    NumeroEconomico=@NumeroEconomico,
+SET NumeroEconomico=@NumeroEconomico,
     Placas=@Placas,
     Marca=@Marca,
     Modelo=@Modelo,
-    CapacidadPiezas=@CapacidadPiezas
+    CapacidadPesoKg=@CapacidadPesoKg
 WHERE UnidadID=@UnidadID;
-
 SELECT @@ROWCOUNT;";
-
-            await using (var cmd =
-                new SqlCommand(
-                    sqlUpdate,
-                    cn,
-                    tx))
+            await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@NumeroEconomico",
-                    SqlDbType.NVarChar,
-                    50).Value =
-                    model.NumeroEconomico;
-
-                cmd.Parameters.Add(
-                    "@Placas",
-                    SqlDbType.NVarChar,
-                    30).Value =
-                    Db(
-                        string.IsNullOrWhiteSpace(
-                            model.Placas)
-                            ? null
-                            : model.Placas);
-
-                cmd.Parameters.Add(
-                    "@Marca",
-                    SqlDbType.NVarChar,
-                    80).Value =
-                    Db(
-                        string.IsNullOrWhiteSpace(
-                            model.Marca)
-                            ? null
-                            : model.Marca);
-
-                cmd.Parameters.Add(
-                    "@Modelo",
-                    SqlDbType.NVarChar,
-                    80).Value =
-                    Db(
-                        string.IsNullOrWhiteSpace(
-                            model.Modelo)
-                            ? null
-                            : model.Modelo);
-
-                cmd.Parameters.Add(
-                    "@CapacidadPiezas",
-                    SqlDbType.Int).Value =
-                    Db(model.CapacidadPiezas);
-
-                cmd.Parameters.Add(
-                    "@UnidadID",
-                    SqlDbType.Int).Value =
-                    model.UnidadID;
-
-                var afectados =
-                    Convert.ToInt32(
-                        await cmd.ExecuteScalarAsync(
-                            cancellationToken));
-
-                if (afectados == 0)
-                {
-                    throw new InvalidOperationException(
-                        "No fue posible actualizar la unidad.");
-                }
+                cmd.Parameters.Add("@NumeroEconomico", SqlDbType.NVarChar, 50).Value = model.NumeroEconomico;
+                cmd.Parameters.Add("@Placas", SqlDbType.NVarChar, 30).Value = Db(string.IsNullOrWhiteSpace(model.Placas) ? null : model.Placas);
+                cmd.Parameters.Add("@Marca", SqlDbType.NVarChar, 80).Value = Db(string.IsNullOrWhiteSpace(model.Marca) ? null : model.Marca);
+                cmd.Parameters.Add("@Modelo", SqlDbType.NVarChar, 80).Value = Db(string.IsNullOrWhiteSpace(model.Modelo) ? null : model.Modelo);
+                var pCapacidad = cmd.Parameters.Add("@CapacidadPesoKg", SqlDbType.Decimal);
+                pCapacidad.Precision = 18;
+                pCapacidad.Scale = 2;
+                pCapacidad.Value = Db(model.CapacidadPesoKg);
+                cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = model.UnidadID;
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("No fue posible actualizar la unidad.");
             }
-
             await tx.CommitAsync(cancellationToken);
-
-            TempData["LogisticaOk"] =
-                $"Unidad {model.NumeroEconomico} actualizada correctamente.";
+            TempData["LogisticaOk"] = $"Unidad {model.NumeroEconomico} actualizada correctamente.";
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(cancellationToken);
-
-            TempData["LogisticaError"] =
-                $"No fue posible guardar la unidad: {ex.Message}";
+            TempData["LogisticaError"] = $"No fue posible guardar la unidad: {ex.Message}";
         }
-
         return RedirectToAction(nameof(Index));
     }
 
@@ -1166,6 +941,12 @@ SELECT @@ROWCOUNT;";
             ? null
             : Convert.ToInt32(
                 rd.GetValue(i));
+    }
+
+    private static decimal? DecimalNullable(SqlDataReader rd, string columna)
+    {
+        var i = rd.GetOrdinal(columna);
+        return rd.IsDBNull(i) ? null : Convert.ToDecimal(rd.GetValue(i));
     }
 
     private static bool Booleano(

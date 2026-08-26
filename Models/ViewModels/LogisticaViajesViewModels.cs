@@ -89,8 +89,10 @@ public sealed class LogisticaViajeCrearVm
 
     public int? UnidadID { get; set; }
 
-    [StringLength(200)]
     [Display(Name = "Operador / chofer")]
+    public int? OperadorUsuarioID { get; set; }
+
+    [StringLength(200)]
     public string? OperadorTexto { get; set; }
 
     [StringLength(200)]
@@ -114,6 +116,7 @@ public sealed class LogisticaViajeCrearVm
 
     public List<LogisticaViajeSelectVm> Rutas { get; set; } = new();
     public List<LogisticaViajeSelectVm> Unidades { get; set; } = new();
+    public List<LogisticaViajeSelectVm> Operadores { get; set; } = new();
 }
 
 public sealed class LogisticaViajeEditarVm
@@ -151,6 +154,8 @@ public sealed class LogisticaViajeEditarVm
     public int? RutaID { get; set; }
     public int? UnidadID { get; set; }
 
+    public int? OperadorUsuarioID { get; set; }
+
     [StringLength(200)]
     public string? OperadorTexto { get; set; }
 
@@ -171,6 +176,7 @@ public sealed class LogisticaViajeEditarVm
 
     public List<LogisticaViajeSelectVm> Rutas { get; set; } = new();
     public List<LogisticaViajeSelectVm> Unidades { get; set; } = new();
+    public List<LogisticaViajeSelectVm> Operadores { get; set; } = new();
 }
 
 public sealed class LogisticaViajeDetalleVm
@@ -197,6 +203,7 @@ public sealed class LogisticaViajeDetalleVm
     public int? UnidadID { get; set; }
     public string Unidad { get; set; } = string.Empty;
 
+    public int? OperadorUsuarioID { get; set; }
     public string Operador { get; set; } = string.Empty;
 
     public string TransportistaExterno { get; set; } = string.Empty;
@@ -217,6 +224,10 @@ public sealed class LogisticaViajeDetalleVm
 
     public DateTime FechaCreacion { get; set; }
     public string CreadoPor { get; set; } = string.Empty;
+
+    public decimal? PagoGasolina { get; set; }
+    public int? KilometrosUtilizados => KilometrajeSalida.HasValue && KilometrajeRegreso.HasValue && KilometrajeRegreso.Value >= KilometrajeSalida.Value ? KilometrajeRegreso.Value - KilometrajeSalida.Value : null;
+    public List<LogisticaViajeEvidenciaVm> Evidencias { get; set; } = new();
 
     public List<LogisticaViajeHistorialVm> Historial { get; set; } = new();
     public List<LogisticaViajeIncidenciaVm> Incidencias { get; set; } = new();
@@ -286,6 +297,22 @@ public sealed class LogisticaViajeDetalleVm
     }
 }
 
+public sealed class LogisticaViajeEvidenciaVm
+{
+    public int ViajeEvidenciaID { get; set; }
+    public int ViajeID { get; set; }
+    public string TipoEvidencia { get; set; } = string.Empty;
+    public string NombreOriginal { get; set; } = string.Empty;
+    public string NombreFisico { get; set; } = string.Empty;
+    public string RutaRelativa { get; set; } = string.Empty;
+    public string TipoContenido { get; set; } = string.Empty;
+    public long TamanoBytes { get; set; }
+    public string Observaciones { get; set; } = string.Empty;
+    public int? UsuarioCargaID { get; set; }
+    public string UsuarioCargaNombre { get; set; } = string.Empty;
+    public DateTime FechaCarga { get; set; }
+}
+
 public sealed class LogisticaViajeSalidaVm
 {
     [Required]
@@ -318,6 +345,10 @@ public sealed class LogisticaViajeRetornoVm
 
     [StringLength(1000)]
     public string? Observaciones { get; set; }
+
+    [Range(0, 999999999.99)]
+    [Display(Name = "Pago de gasolina")]
+    public decimal? PagoGasolina { get; set; }
 }
 
 public sealed class LogisticaViajeCancelarVm

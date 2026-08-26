@@ -1,1282 +1,690 @@
 ﻿@using ERP.NSQuell.Models.ViewModels.Logistica
 @model LogisticaCrearVm
-
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Nuevo embarque";
-
-    var demanda = Model.Demanda;
-
-    var totalSeleccionado = Model.CajasDisponibles
-        .Where(x => Model.CajaIDs.Contains(x.CajaID))
-        .Sum(x => x.Disponible);
-
-    var cajasSeleccionadas = Model.CajasDisponibles
-        .Count(x => Model.CajaIDs.Contains(x.CajaID));
-
-    var faltanteSeleccion =
-        Math.Max(0, Model.CantidadSolicitada - totalSeleccionado);
+    var clienteNombre = Model.Clientes.FirstOrDefault(x => Model.ClienteID.HasValue && x.Id == Model.ClienteID.Value)?.Texto ?? string.Empty;
 }
-
 @section Styles {
-    <link rel="stylesheet"
-          href="~/css/logistica.css"
-          asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
 }
-
-
-
 <style>
-    .crear-embarque-page {
-        padding: 18px 20px 30px;
+    .page {
+        padding: 18px 20px 30px
     }
 
-    .crear-header {
+    .head {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
         gap: 12px;
+        align-items: flex-start;
         flex-wrap: wrap;
-        margin-bottom: 14px;
+        margin-bottom: 14px
     }
 
-    .crear-title {
+    .title {
         margin: 0;
         font-size: 1.35rem;
-        font-weight: 700;
+        font-weight: 700
     }
 
-    .crear-subtitle {
+    .subtitle {
         margin: 3px 0 0;
         color: #6c757d;
-        font-size: .88rem;
+        font-size: .86rem
     }
 
     .section {
         padding: 14px 0;
-        border-top: 1px solid #e9ecef;
+        border-top: 1px solid #e9ecef
     }
 
         .section:first-of-type {
-            border-top: 0;
-            padding-top: 0;
+            border-top: 0
         }
 
     .section-title {
-        margin-bottom: 10px;
-        font-size: .88rem;
+        font-size: .9rem;
         font-weight: 700;
-        color: #343a40;
+        margin: 0 0 9px
     }
 
-    .release-strip {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(100px, 1fr));
-        gap: 10px 16px;
-        padding: 10px 0 12px;
-        margin-bottom: 4px;
-    }
-
-    .release-item label {
-        display: block;
-        margin-bottom: 2px;
-        font-size: .68rem;
-        text-transform: uppercase;
+    .section-sub {
+        font-size: .73rem;
         color: #6c757d;
-        letter-spacing: .02em;
+        margin: -5px 0 10px
     }
 
-    .release-item strong {
-        display: block;
-        font-size: .82rem;
-        font-weight: 600;
-        word-break: break-word;
-    }
-
-    .form-grid {
+    .grid {
         display: grid;
-        grid-template-columns: repeat(12, 1fr);
-        gap: 10px 12px;
+        grid-template-columns: repeat(12,1fr);
+        gap: 10px 12px
     }
 
-    .col-12g {
-        grid-column: span 12;
+    .g2 {
+        grid-column: span 2
     }
 
-    .col-8g {
-        grid-column: span 8;
+    .g3 {
+        grid-column: span 3
     }
 
-    .col-6g {
-        grid-column: span 6;
+    .g4 {
+        grid-column: span 4
     }
 
-    .col-4g {
-        grid-column: span 4;
+    .g6 {
+        grid-column: span 6
     }
 
-    .col-3g {
-        grid-column: span 3;
+    .g8 {
+        grid-column: span 8
     }
 
-    .col-2g {
-        grid-column: span 2;
+    .g12 {
+        grid-column: span 12
     }
 
     .form-label {
-        display: block;
-        margin-bottom: 3px;
-        color: #495057;
-        font-size: .75rem;
-        font-weight: 600;
-    }
-
-    .form-control,
-    .form-select {
-        min-height: 37px;
-        font-size: .84rem;
-    }
-
-    textarea.form-control {
-        min-height: 82px;
-        resize: vertical;
-    }
-
-    .field-validation-error {
-        display: block;
-        margin-top: 3px;
-        color: #dc3545;
         font-size: .74rem;
+        font-weight: 600;
+        margin-bottom: 3px
     }
 
-    .validation-summary-errors {
-        color: #dc3545;
-        font-size: .8rem;
+    .form-control, .form-select {
+        min-height: 36px;
+        font-size: .82rem
     }
 
-        .validation-summary-errors ul {
-            margin-bottom: 0;
-        }
-
-    .help-text {
-        margin-top: 3px;
-        color: #6c757d;
-        font-size: .72rem;
-    }
-
-    .pt-summary {
+    .client-strip {
         display: flex;
         gap: 18px;
         flex-wrap: wrap;
-        padding: 9px 0;
-        margin-bottom: 8px;
-        border-top: 1px solid #f0f0f0;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 9px 12px;
+        border: 1px solid #dce5ef;
+        border-radius: 8px;
+        background: #fbfcfd;
+        margin-bottom: 10px
     }
 
-    .pt-summary-item {
-        display: flex;
-        align-items: baseline;
-        gap: 5px;
-    }
-
-        .pt-summary-item strong {
-            font-size: .9rem;
+        .client-strip strong {
+            font-size: .88rem
         }
 
-        .pt-summary-item span {
+        .client-strip span {
+            font-size: .7rem;
             color: #6c757d;
-            font-size: .72rem;
+            display: block
         }
 
-        .pt-summary-item.ok strong {
-            color: #198754;
-        }
-
-        .pt-summary-item.warn strong {
-            color: #dc3545;
-        }
-
-    .table-wrap {
-        width: 100%;
-        overflow-x: auto;
+    .parts {
+        display: grid;
+        gap: 10px
     }
 
-    .pt-table {
-        margin-bottom: 0;
-        font-size: .78rem;
-        vertical-align: middle;
+    .part {
+        border: 1px solid #dfe5ec;
+        border-radius: 9px;
+        background: #fff;
+        overflow: hidden
     }
 
-        .pt-table thead th {
-            background: #f8f9fa;
-            color: #495057;
-            font-size: .68rem;
-            text-transform: uppercase;
-            letter-spacing: .02em;
-            white-space: nowrap;
+        .part.selected {
+            border-color: #7aa2df;
+            box-shadow: 0 0 0 2px rgba(23,58,122,.07)
         }
 
-        .pt-table td {
-            vertical-align: middle;
-        }
-
-        .pt-table .check-col {
-            width: 42px;
-            text-align: center;
-        }
-
-        .pt-table .cantidad {
-            font-weight: 700;
-            text-align: right;
-        }
-
-        .pt-table input[type="checkbox"] {
-            width: 17px;
-            height: 17px;
-            cursor: pointer;
-        }
-
-    .selected-row {
-        background: #f0fff6 !important;
+    .part-head {
+        display: grid;
+        grid-template-columns: 34px minmax(140px,1.2fr) minmax(120px,1fr) 110px 110px 120px;
+        gap: 9px;
+        align-items: center;
+        padding: 9px 10px;
+        background: #f8fafc
     }
 
-    .empty {
-        padding: 28px 10px;
-        text-align: center;
-        color: #6c757d;
-        font-size: .8rem;
+    .part-main {
+        font-size: .82rem;
+        font-weight: 700
     }
 
-    .form-actions {
+    .muted {
+        font-size: .7rem;
+        color: #6c757d
+    }
+
+    .qty {
+        max-width: 110px
+    }
+
+    .boxes {
+        padding: 9px 10px;
+        border-top: 1px solid #edf0f4;
+        display: none
+    }
+
+    .part.selected .boxes {
+        display: block
+    }
+
+    .box-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill,minmax(220px,1fr));
+        gap: 7px
+    }
+
+    .box {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 7px 8px;
+        border: 1px solid #e5e9ee;
+        border-radius: 7px;
+        background: #fbfcfd;
+        font-size: .74rem
+    }
+
+        .box strong {
+            display: block
+        }
+
+    .status-line {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+        font-size: .74rem
+    }
+
+        .status-line strong {
+            font-size: .82rem
+        }
+
+    .transport-panel {
+        padding: 10px;
+        border: 1px solid #e5e9ee;
+        border-radius: 8px;
+        background: #fbfcfd
+    }
+
+    .hidden {
+        display: none !important
+    }
+
+    .footer-actions {
         display: flex;
         justify-content: flex-end;
         gap: 7px;
         padding-top: 14px;
-        border-top: 1px solid #e9ecef;
-        margin-top: 5px;
+        border-top: 1px solid #e9ecef
     }
 
-    @@media (max-width: 1000px) {
-        .release-strip {
-            grid-template-columns: repeat(3, 1fr);
-        }
-
-        .col-8g,
-        .col-6g,
-        .col-4g,
-        .col-3g,
-        .col-2g {
-            grid-column: span 6;
-        }
+    .exp {
+        color: #dc3545;
+        font-weight: 700
     }
 
-    @@media (max-width: 600px) {
-        .crear-embarque-page {
-            padding: 14px 10px 24px;
+    .validation-summary-errors {
+        color: #dc3545;
+        font-size: .78rem
+    }
+
+    .field-validation-error {
+        color: #dc3545;
+        font-size: .72rem
+    }
+
+    @@media (max-width:900px) {
+        .part-head {
+            grid-template-columns: 34px 1fr 1fr
         }
 
-        .release-strip {
-            grid-template-columns: 1fr 1fr;
-        }
-
-        .col-12g,
-        .col-8g,
-        .col-6g,
-        .col-4g,
-        .col-3g,
-        .col-2g {
-            grid-column: span 12;
-        }
-
-        .form-actions {
-            flex-direction: column-reverse;
-        }
-
-            .form-actions .btn {
-                width: 100%;
+            .part-head > *:nth-child(n+4) {
+                grid-column: span 1
             }
+
+        .g2, .g3, .g4, .g6, .g8 {
+            grid-column: span 6
+        }
     }
+
+    @@media (max-width:600px) {
+        .page {
+            padding: 14px 10px 24px
+        }
+
+        .g2, .g3, .g4, .g6, .g8 {
+            grid-column: span 12
+        }
+
+        .part-head {
+            grid-template-columns: 34px 1fr
+        }
+
+            .part-head > *:nth-child(n+3) {
+                grid-column: 2
+            }
+
+        .footer-actions > * {
+            flex: 1
+        }
+    }
+
 
     /* =========================================================
-       AJUSTE VISUAL - MÁS PRESENCIA SIN CAMBIAR LA ESTRUCTURA
-       ========================================================= */
-
-    .crear-embarque-page {
-        position: relative;
+           LOGISTICA ERP - CAPA VISUAL
+           Conserva formularios, nombres y comportamiento original.
+           ========================================================= */
+    :root {
+        --lg-blue: #173a7a;
+        --lg-blue-2: #2f63ad;
+        --lg-text: #172033;
+        --lg-muted: #6d7888;
+        --lg-border: #dce4ee;
+        --lg-soft: #f6f8fb;
+        --lg-shadow: 0 8px 24px rgba(22,42,75,.055);
     }
 
-    .crear-header {
-        padding: 4px 0 10px;
-        border-bottom: 1px solid #dbe4ee;
+    .page {
+        max-width: 1680px;
+        margin: 0 auto;
+        color: var(--lg-text);
     }
 
-    .crear-title {
-        color: #172033;
+    .head {
+        align-items: center;
+        padding: 15px 17px;
+        margin-bottom: 14px;
+        border: 1px solid var(--lg-border);
+        border-left: 4px solid var(--lg-blue);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lg-shadow);
+    }
+
+    .title {
+        color: var(--lg-text);
+        font-size: 1.48rem;
+        font-weight: 800;
         letter-spacing: -.02em;
     }
 
-    .crear-title i {
-        color: #173a7a;
+        .title i {
+            color: var(--lg-blue);
+        }
+
+    .subtitle {
+        color: var(--lg-muted);
+        font-weight: 500;
     }
 
-    .crear-header > .btn {
-        border-radius: 8px;
-        min-height: 34px;
+    .head .btn,
+    .footer-actions .btn {
+        min-height: 35px;
         display: inline-flex;
         align-items: center;
-        font-weight: 600;
+        justify-content: center;
+        border-radius: 8px;
+        font-weight: 650;
     }
 
     .section {
-        margin-bottom: 14px;
-        padding: 14px 14px 12px;
-        border: 1px solid #dce5ef;
+        margin-bottom: 12px;
+        padding: 14px 15px;
+        border: 1px solid var(--lg-border);
         border-radius: 12px;
-        background: rgba(255,255,255,.76);
-        box-shadow: 0 6px 18px rgba(25,47,80,.04);
+        background: #fff;
+        box-shadow: var(--lg-shadow);
     }
 
-    .section:first-of-type {
-        border-top: 1px solid #dce5ef;
-        padding-top: 14px;
-    }
+        .section:first-of-type {
+            border-top: 1px solid var(--lg-border);
+        }
 
     .section-title {
         position: relative;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e8edf3;
-        color: #172033;
-        font-size: .95rem;
-        letter-spacing: -.01em;
+        padding-left: 11px;
+        margin-bottom: 10px;
+        color: var(--lg-text);
+        font-size: .98rem;
+        font-weight: 800;
     }
 
-    .section-title::before {
-        content: "";
-        width: 4px;
-        height: 18px;
-        border-radius: 8px;
-        background: #173a7a;
-        flex: 0 0 auto;
-    }
+        .section-title::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 2px;
+            width: 3px;
+            height: 16px;
+            border-radius: 5px;
+            background: var(--lg-blue);
+        }
 
-    .release-strip {
-        padding: 0;
-        margin-bottom: 8px;
-        gap: 10px;
-    }
-
-    .release-item {
-        min-height: 66px;
-        padding: 9px 10px;
-        border: 1px solid #e4eaf1;
-        border-radius: 9px;
-        background: #fbfcfd;
-    }
-
-    .release-item label {
-        color: #798394;
-        font-weight: 700;
-    }
-
-    .release-item strong {
-        color: #172033;
-        font-size: .84rem;
+    .section-sub {
+        color: var(--lg-muted);
     }
 
     .form-label {
-        color: #445063;
+        color: #4d596a;
+        font-weight: 700;
     }
 
     .form-control,
     .form-select {
+        min-height: 38px;
+        border-color: #d3dde8;
         border-radius: 8px;
-        border-color: #d5dde7;
         background: #fff;
         box-shadow: none;
-        transition: border-color .15s ease, box-shadow .15s ease;
+        transition: border-color .15s ease,box-shadow .15s ease;
     }
 
-    .form-control:focus,
-    .form-select:focus {
-        border-color: #8ba5d4;
-        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #8ba5d4;
+            box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+        }
+
+    .client-strip {
+        min-height: 62px;
+        align-items: center;
+        padding: 9px 12px;
+        border-color: #d6e0eb;
+        border-radius: 9px;
+        background: linear-gradient(180deg,#f8fafc,#f3f6f9);
     }
 
-    .help-text {
-        color: #7a8492;
+        .client-strip > div {
+            min-width: 130px;
+            padding-right: 14px;
+            border-right: 1px solid #dfe6ee;
+        }
+
+            .client-strip > div:last-child {
+                border-right: 0;
+            }
+
+        .client-strip strong {
+            color: var(--lg-blue);
+            font-weight: 800;
+        }
+
+    .parts {
+        gap: 9px;
     }
 
-    .pt-summary {
-        gap: 8px;
-        padding: 10px;
-        border: 1px solid #dfe6ee;
+    .part {
+        border-color: #dce4ec;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(22,42,75,.025);
+        transition: border-color .15s ease,box-shadow .15s ease,transform .15s ease;
+    }
+
+        .part:hover {
+            border-color: #c9d6e5;
+            box-shadow: 0 6px 16px rgba(22,42,75,.05);
+        }
+
+        .part.selected {
+            border-color: #88a6d2;
+            border-left: 4px solid var(--lg-blue);
+            box-shadow: 0 6px 16px rgba(23,58,122,.07);
+        }
+
+    .part-head {
+        padding: 10px 11px;
+        background: linear-gradient(180deg,#f8fafc,#f4f7fa);
+    }
+
+    .part-main {
+        color: #273447;
+        font-weight: 800;
+    }
+
+    .muted {
+        color: var(--lg-muted);
+    }
+
+    .boxes {
+        padding: 11px;
+        background: #fff;
+        border-top-color: #e5ebf1;
+    }
+
+    .box {
+        min-height: 58px;
+        padding: 8px 9px;
+        border-color: #dfe6ee;
+        border-radius: 8px;
+        background: #fafbfd;
+        transition: background .15s ease,border-color .15s ease;
+    }
+
+        .box:hover {
+            background: #f3f7fb;
+            border-color: #cfdbea;
+        }
+
+    .status-line {
+        padding-top: 9px;
+        border-top: 1px dashed #e0e6ed;
+        color: #566273;
+    }
+
+    .transport-panel {
+        padding: 12px;
+        border-color: #d8e2ec;
         border-radius: 10px;
         background: #f8fafc;
     }
 
-    .pt-summary-item {
-        min-height: 38px;
-        padding: 6px 10px;
-        border-right: 1px solid #e1e7ee;
+    .footer-actions {
+        margin-top: 12px;
+        padding: 12px 0 0;
+        border-top: 1px solid #dfe6ee;
     }
 
-    .pt-summary-item:last-child {
-        border-right: 0;
-    }
-
-    .pt-summary-item.ok {
-        background: #f2fbf5;
+    .validation-summary-errors {
+        padding: 9px 11px;
+        border: 1px solid #f0c6ca;
         border-radius: 8px;
-        border-right: 0;
+        background: #fff7f8;
     }
 
-    .pt-summary-item.warn {
-        background: #fff4f3;
-        border-radius: 8px;
-        border-right: 0;
+    html[data-nsq-theme="dark"] .page {
+        color: #e7edf6;
     }
 
-    .pt-summary-item strong {
-        font-size: 1rem;
-        color: #172033;
+    html[data-nsq-theme="dark"] .head,
+    html[data-nsq-theme="dark"] .section,
+    html[data-nsq-theme="dark"] .part,
+    html[data-nsq-theme="dark"] .boxes {
+        background: #111b2d;
+        border-color: #2a3a50;
+        box-shadow: none;
     }
 
-    .table-wrap {
-        border: 1px solid #e2e8ef;
-        border-radius: 9px;
-        background: #fff;
+    html[data-nsq-theme="dark"] .title,
+    html[data-nsq-theme="dark"] .section-title,
+    html[data-nsq-theme="dark"] .part-main {
+        color: #eef4fb;
     }
 
-    .pt-table {
-        background: #fff;
+    html[data-nsq-theme="dark"] .client-strip,
+    html[data-nsq-theme="dark"] .part-head,
+    html[data-nsq-theme="dark"] .transport-panel,
+    html[data-nsq-theme="dark"] .box {
+        background: #162237;
+        border-color: #2a3a50;
     }
 
-    .pt-table thead th {
-        background: #f3f6f9;
-        color: #4c5868;
-        padding-top: .52rem;
-        padding-bottom: .52rem;
-        border-bottom: 1px solid #d9e1ea;
+    html[data-nsq-theme="dark"] .form-control,
+    html[data-nsq-theme="dark"] .form-select {
+        background: #0e1828;
+        border-color: #31445c;
+        color: #eef4fb;
     }
 
-    .pt-table tbody td {
-        padding-top: .5rem;
-        padding-bottom: .5rem;
-        border-color: #edf0f4;
+    html[data-nsq-theme="dark"] .subtitle,
+    html[data-nsq-theme="dark"] .section-sub,
+    html[data-nsq-theme="dark"] .muted {
+        color: #9eacbf;
     }
 
-    .pt-table tbody tr:nth-child(even) td {
-        background: #fbfcfd;
-    }
-
-    .pt-table tbody tr:hover td {
-        background: #f4f8fc;
-    }
-
-    .selected-row td {
-        background: #f0fff6 !important;
-    }
-
-    .empty {
-        border: 1px dashed #d9e1ea;
-        border-radius: 10px;
-        background: #fbfcfd;
-    }
-
-    .form-actions {
-        position: sticky;
-        bottom: 0;
-        z-index: 5;
-        margin-top: 14px;
-        padding: 12px 14px;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.96);
-        box-shadow: 0 -4px 16px rgba(25,47,80,.05);
-        backdrop-filter: blur(4px);
-    }
-
-    .form-actions .btn {
-        min-height: 38px;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-
-    .form-actions .btn-primary {
-        min-width: 170px;
-        background: #233f80;
-        border-color: #233f80;
-    }
-
-    @@media (max-width: 900px) {
-        .release-item {
-            min-height: auto;
-        }
-
-        .pt-summary-item {
+    @@media (max-width:1050px) {
+        .client-strip > div {
             border-right: 0;
-            min-width: calc(50% - 4px);
-        }
-    }
-
-    @@media (max-width: 600px) {
-        .section {
-            padding: 11px 9px 9px;
-            border-radius: 10px;
-        }
-
-        .pt-summary-item {
-            min-width: 100%;
-        }
-
-        .form-actions {
-            position: static;
-            padding: 10px;
         }
     }
 
 </style>
-
-<div class="crear-embarque-page">
-
-    <div class="crear-header">
-
-        <div>
-            <h1 class="crear-title">
-                <i class="fa-solid fa-truck-ramp-box me-1"></i>
-                Nuevo embarque
-            </h1>
-
-            <p class="crear-subtitle">
-                Programa la salida seleccionada desde el Release.
-            </p>
-        </div>
-
-        <a asp-controller="LogisticaEmbarques"
-           asp-action="Index"
-           class="btn btn-outline-secondary btn-sm">
-
-            <i class="fa-solid fa-arrow-left me-1"></i>
-            Regresar
-
-        </a>
-
+<div class="page">
+    <div class="head">
+        <div><h1 class="title"><i class="fa-solid fa-truck-ramp-box me-1"></i>Nuevo embarque</h1><p class="subtitle">Programa por cliente y combina varias entregas/partes del mismo cliente en un solo embarque.</p></div>
+        <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Regresar</a>
     </div>
-
     @if (TempData["LogisticaError"] != null)
     {
-        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3">
-            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-            @TempData["LogisticaError"]
-
-            <button type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"></button>
-        </div>
+        <div class="alert alert-danger py-2 px-3">@TempData["LogisticaError"]</div>
     }
-
-    <form asp-controller="LogisticaEmbarques"
-          asp-action="Crear"
-          method="post"
-          id="formCrearEmbarque"
-          autocomplete="off">
-
+    <form asp-controller="LogisticaEmbarques" asp-action="Crear" method="post" id="formCrear" autocomplete="off">
         @Html.AntiForgeryToken()
-
-        <input asp-for="ReleaseDetalleID"
-               type="hidden" />
-
-        <div asp-validation-summary="ModelOnly"
-             class="validation-summary-errors mb-3">
+        <div asp-validation-summary="ModelOnly" class="validation-summary-errors mb-2"></div>
+        <div class="section">
+            <h2 class="section-title">1. Cliente</h2>
+            <p class="section-sub">Selecciona primero el cliente. La pantalla mostrará únicamente sus entregas pendientes.</p>
+            <div class="grid">
+                <div class="g6">
+                    <label asp-for="ClienteID" class="form-label">Cliente</label>
+                    <select asp-for="ClienteID" class="form-select" id="ClienteID" required>
+                        <option value="">Selecciona un cliente...</option>
+                        @foreach (var c in Model.Clientes)
+                        {
+                            <option value="@c.Id">@c.Texto</option>
+                        }
+                    </select>
+                    <span asp-validation-for="ClienteID"></span>
+                </div>
+                @if (Model.ClienteID.HasValue)
+                {
+                    <div class="g6 d-flex align-items-end"><div class="client-strip w-100"><div><span>Cliente seleccionado</span><strong>@clienteNombre</strong></div><div><span>Entregas pendientes</span><strong>@Model.Partidas.Count</strong></div><div><span>Partidas seleccionadas</span><strong id="resPartidas">0</strong></div></div></div>
+                }
+            </div>
         </div>
-
-        @if (demanda != null)
+        @if (Model.ClienteID.HasValue)
         {
             <div class="section">
-
-                <div class="section-title">
-                    Salida seleccionada
-                </div>
-
-                <div class="release-strip">
-
-                    <div class="release-item">
-                        <label>Release</label>
-                        <strong>@demanda.FolioRelease</strong>
-                    </div>
-
-                    <div class="release-item">
-                        <label>Cliente</label>
-                        <strong>@demanda.Cliente</strong>
-                    </div>
-
-                    <div class="release-item">
-                        <label>Parte</label>
-                        <strong>@demanda.NumeroParte</strong>
-                    </div>
-
-                    <div class="release-item">
-                        <label>OF</label>
-
-                        <strong>
-                            @(string.IsNullOrWhiteSpace(demanda.NumeroOF)
-                                                    ? "Sin OF"
-                                                    : demanda.NumeroOF)
-                    </strong>
-                </div>
-
-                    <div class="release-item">
-                        <label>Entrega Release</label>
-
-                        <strong>
-                            @demanda.FechaEntrega.ToString("dd/MM/yyyy")
-                        </strong>
-                    </div>
-
-                    <div class="release-item">
-                        <label>Pendiente</label>
-
-                        <strong>
-                            @demanda.PendienteProgramar.ToString("N0") pzas
-                        </strong>
-                    </div>
-
-                </div>
-
-            @if (!string.IsNullOrWhiteSpace(demanda.Descripcion))
+                <h2 class="section-title">2. Entregas y cajas</h2>
+                <p class="section-sub">Selecciona una o varias entregas. Las cajas se eligen por cada parte/OF y el servidor vuelve a validar que todas sean del mismo cliente.</p>
+                @if (Model.Partidas.Count == 0)
                 {
-                    <div class="small text-muted">
-                        @demanda.Descripcion
-                    </div>
+                    <div class="alert alert-light border mb-0">Este cliente no tiene entregas pendientes disponibles.</div>
                 }
-
-            </div>
-        }
-
-        <div class="section">
-
-            <div class="section-title">
-                Programación
-            </div>
-
-            <div class="form-grid">
-
-                <div class="col-3g">
-
-                    <label asp-for="TipoOperacion"
-                           class="form-label">
-                        Tipo de operación
-                    </label>
-
-                    <select asp-for="TipoOperacion"
-                            class="form-select"
-                            required>
-
-                        <option value="Nacional">
-                            Nacional
-                        </option>
-
-                        <option value="Exportacion">
-                            Exportación
-                        </option>
-
-                    </select>
-
-                    <span asp-validation-for="TipoOperacion"></span>
-
-                </div>
-
-                <div class="col-3g">
-
-                    <label asp-for="CantidadSolicitada"
-                           class="form-label">
-                        Cantidad a programar
-                    </label>
-
-                    <input asp-for="CantidadSolicitada"
-                           type="number"
-                           min="1"
-                           max="@(demanda?.PendienteProgramar ?? int.MaxValue)"
-                           class="form-control"
-                           id="CantidadSolicitada" />
-
-                    <span asp-validation-for="CantidadSolicitada"></span>
-
-                </div>
-
-                <div class="col-3g">
-
-                    <label asp-for="FechaCargaProgramada"
-                           class="form-label">
-                        Fecha de carga
-                    </label>
-
-                    <input asp-for="FechaCargaProgramada"
-                           type="date"
-                           class="form-control" />
-
-                    <span asp-validation-for="FechaCargaProgramada"></span>
-
-                </div>
-
-                <div class="col-3g">
-
-                    <label asp-for="HoraCargaProgramada"
-                           class="form-label">
-                        Hora de carga
-                    </label>
-
-                    <input asp-for="HoraCargaProgramada"
-                           type="time"
-                           class="form-control" />
-
-                    <span asp-validation-for="HoraCargaProgramada"></span>
-
-                </div>
-
-                <div class="col-3g">
-
-                    <label asp-for="FechaEntregaProgramada"
-                           class="form-label">
-                        Fecha de entrega
-                    </label>
-
-                    <input asp-for="FechaEntregaProgramada"
-                           type="date"
-                           class="form-control" />
-
-                    <span asp-validation-for="FechaEntregaProgramada"></span>
-
-                </div>
-
-                <div class="col-3g">
-
-                    <label asp-for="HoraEntregaProgramada"
-                           class="form-label">
-                        Hora de entrega
-                    </label>
-
-                    <input asp-for="HoraEntregaProgramada"
-                           type="time"
-                           class="form-control" />
-
-                    <span asp-validation-for="HoraEntregaProgramada"></span>
-
-                </div>
-
-                <div class="col-6g">
-
-                    <label asp-for="Destino"
-                           class="form-label">
-                        Destino
-                    </label>
-
-                    <input asp-for="Destino"
-                           maxlength="300"
-                           class="form-control"
-                           placeholder="Destino del embarque" />
-
-                    <span asp-validation-for="Destino"></span>
-
-                </div>
-
-                <div class="col-12g">
-
-                    <label asp-for="DireccionEntrega"
-                           class="form-label">
-                        Dirección de entrega
-                    </label>
-
-                    <input asp-for="DireccionEntrega"
-                           maxlength="600"
-                           class="form-control"
-                           placeholder="Dirección, referencia, puerta, andén o punto de entrega" />
-
-                    <span asp-validation-for="DireccionEntrega"></span>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="section">
-
-            <div class="section-title">
-                Transporte
-            </div>
-
-            <div class="form-grid">
-
-                <div class="col-4g">
-
-                    <label asp-for="RutaID"
-                           class="form-label">
-                        Ruta
-                    </label>
-
-                    <select asp-for="RutaID"
-                            class="form-select">
-
-                        <option value="">
-                            Selecciona...
-                        </option>
-
-                        @foreach (var ruta in Model.Rutas)
+                else
+                {
+                    <div class="parts">
+                        @for (var i = 0; i < Model.Partidas.Count; i++)
                         {
-                            <option value="@ruta.Id">
-                                @ruta.Texto
-                            </option>
-                        }
-
-                    </select>
-
-                    <span asp-validation-for="RutaID"></span>
-
-                </div>
-
-                <div class="col-4g">
-
-                    <label asp-for="UnidadID"
-                           class="form-label">
-                        Unidad
-                    </label>
-
-                    <select asp-for="UnidadID"
-                            class="form-select">
-
-                        <option value="">
-                            Selecciona...
-                        </option>
-
-                        @foreach (var unidad in Model.Unidades)
-                        {
-                            <option value="@unidad.Id">
-                                @unidad.Texto
-                            </option>
-                        }
-
-                    </select>
-
-                    <span asp-validation-for="UnidadID"></span>
-
-                </div>
-
-                <div class="col-4g">
-
-                    <label asp-for="OperadorTexto"
-                           class="form-label">
-                        Operador
-                    </label>
-
-                    <input asp-for="OperadorTexto"
-                           maxlength="200"
-                           class="form-control"
-                           placeholder="Nombre del operador" />
-
-                    <span asp-validation-for="OperadorTexto"></span>
-
-                </div>
-
-            </div>
-
-            <div class="help-text">
-                Ruta, unidad y operador pueden quedar pendientes al programar, pero serán obligatorios antes de confirmar la salida.
-            </div>
-
-        </div>
-
-        <div class="section">
-
-            <div class="section-title">
-                Cajas PT disponibles
-            </div>
-
-            <div class="pt-summary">
-
-                <div class="pt-summary-item">
-                    <strong id="resumenCantidadProgramada">
-                        @Model.CantidadSolicitada.ToString("N0")
-                    </strong>
-                    <span>pzas. programadas</span>
-                </div>
-
-                <div class="pt-summary-item">
-                    <strong id="resumenCajasSeleccionadas">
-                        @cajasSeleccionadas
-                    </strong>
-                    <span>cajas seleccionadas</span>
-                </div>
-
-                <div class="pt-summary-item ok">
-                    <strong id="resumenPiezasSeleccionadas">
-                        @totalSeleccionado.ToString("N0")
-                    </strong>
-                    <span>pzas. seleccionadas</span>
-                </div>
-
-                <div class="pt-summary-item @(faltanteSeleccion > 0 ? "warn" : "ok")"
-                     id="contenedorFaltante">
-
-                    <strong id="resumenFaltante">
-                        @faltanteSeleccion.ToString("N0")
-                    </strong>
-
-                    <span>pzas. faltantes</span>
-
-                </div>
-
-            </div>
-
-            @if (Model.CajasDisponibles == null ||
-                        Model.CajasDisponibles.Count == 0)
-            {
-                <div class="empty">
-
-                    <i class="fa-solid fa-box-open me-1"></i>
-
-                    No existen cajas PT disponibles para esta parte y OF.
-
-                    <div class="mt-1">
-                        El embarque puede programarse y las cajas podrán asignarse posteriormente.
-                    </div>
-
+                            var p = Model.Partidas[i]; var exp = p.FechaEntrega.Date < DateTime.Today;
+                            <div class="part @(p.Seleccionada ? "selected" : "")" data-part="@i">
+                                <div class="part-head">
+                                    <div><input asp-for="Partidas[i].Seleccionada" class="form-check-input js-partida" data-i="@i" /></div>
+                                    <div><div class="part-main">@p.NumeroParte</div><div class="muted">@(string.IsNullOrWhiteSpace(p.Descripcion) ? "Sin descripción" : p.Descripcion)</div></div>
+                                    <div>
+                                        <div class="part-main">OF @(string.IsNullOrWhiteSpace(p.NumeroOF) ? "-" : p.NumeroOF)</div><div class="muted">
+                                            Entrega @p.FechaEntrega.ToString("dd/MM/yyyy") @if(exp){
+                                            <span class="exp"> · EXPEDITADO</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div><div class="muted">Pendiente</div><strong>@p.PendienteProgramar.ToString("N0")</strong></div>
+                                <div><div class="muted">PT disponible</div><strong>@p.PiezasPTDisponibles.ToString("N0")</strong></div>
+                                <div><label class="muted">Cantidad</label><input asp-for="Partidas[i].CantidadSolicitada" type="number" min="1" max="@p.PendienteProgramar" class="form-control form-control-sm qty js-cantidad" /></div>
+                            </div>
+                            <input asp-for="Partidas[i].ReleaseDetalleID" type="hidden" />
+                            <div class="boxes">
+                                <div class="muted mb-2"><strong>Cajas PT disponibles para esta parte/OF</strong></div>
+                                @if (p.CajasDisponibles.Count == 0)
+                                {
+                                    <div class="text-muted small">No hay cajas PT disponibles. La partida puede programarse y las cajas asignarse posteriormente.</div>
+                                }
+                                else
+                                {
+                                    <div class="box-grid">
+                                        @foreach (var caja in p.CajasDisponibles)
+                                        {
+                                            var marcada = p.CajaIDs.Contains(caja.CajaID);
+                                            <label class="box">
+                                                <input type="checkbox" name="Partidas[@i].CajaIDs" value="@caja.CajaID" class="form-check-input js-caja" data-i="@i" data-piezas="@caja.Disponible" checked="@(marcada ? "checked" : null)" />
+                                                <span><strong>Caja @caja.NumeroCaja · @caja.Disponible.ToString("N0") pzas</strong><span class="muted">@caja.Etiqueta · Lote @(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote) · @(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicación" : caja.Ubicacion)</span></span>
+                                            </label>
+                                        }
+                                    </div>
+                                }
+                                <div class="status-line"><span>Cajas seleccionadas: <strong class="js-total-cajas" data-i="@i">0</strong></span><span>Piezas seleccionadas: <strong class="js-total-piezas" data-i="@i">0</strong></span></div>
+                            </div>
+                        </div>
+                    }
                 </div>
             }
-            else
-            {
-                <div class="table-wrap">
-
-                    <table class="table table-sm table-hover pt-table">
-
-                        <thead>
-                            <tr>
-                                <th class="check-col"></th>
-                                <th>Caja</th>
-                                <th>Etiqueta</th>
-                                <th>Parte</th>
-                                <th>OF</th>
-                                <th>Lote</th>
-                                <th>Ubicación</th>
-                                <th class="text-end">Disponible</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-
-                            @foreach (var caja in Model.CajasDisponibles)
-                            {
-                                var seleccionada =
-                                Model.CajaIDs.Contains(caja.CajaID);
-
-                                <tr class="@(seleccionada ? "selected-row" : "")"
-                                    data-caja-row="@caja.CajaID">
-
-                                    <td class="check-col">
-
-                                        <input type="checkbox"
-                                               name="CajaIDs"
-                                               value="@caja.CajaID"
-                                               data-cantidad="@caja.Disponible"
-                                               class="caja-check"
-                                               checked="@seleccionada" />
-
-                                    </td>
-
-                                    <td>
-                                        #@caja.NumeroCaja
-                                    </td>
-
-                                    <td class="fw-semibold">
-                                        @(string.IsNullOrWhiteSpace(caja.Etiqueta)
-                                                                        ? "-"
-                                                                        : caja.Etiqueta)
-                                                                                    </td>
-
-                                    <td>
-                                        @caja.NumeroParte
-                                    </td>
-
-                                    <td>
-                                        @(string.IsNullOrWhiteSpace(caja.NumeroOF)
-                                                                        ? "-"
-                                                                        : caja.NumeroOF)
-                                                                                    </td>
-
-                                    <td>
-                                        @(string.IsNullOrWhiteSpace(caja.Lote)
-                                                                        ? "-"
-                                                                        : caja.Lote)
-                                                                                </td>
-
-                                    <td>
-                                        @(string.IsNullOrWhiteSpace(caja.Ubicacion)
-                                                                        ? "-"
-                                                                        : caja.Ubicacion)
-                            </td>
-
-                                    <td class="cantidad">
-                                        @caja.Disponible.ToString("N0")
-                                    </td>
-
-                                </tr>
-                                                }
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-                <div class="help-text mt-2">
-                    El sistema trabaja con cajas completas. No selecciones una caja cuya cantidad haga que el total supere la cantidad programada.
-                </div>
-            }
-
         </div>
-
         <div class="section">
-
-            <div class="section-title">
-                Observaciones
+            <h2 class="section-title">3. Programación de entrega</h2>
+            <div class="grid">
+                <div class="g3"><label asp-for="TipoOperacion" class="form-label">Operación</label><select asp-for="TipoOperacion" id="TipoOperacion" class="form-select"><option value="Nacional">Nacional</option><option value="Exportacion">Exportación</option></select></div>
+                <div class="g3"><label asp-for="FechaCargaProgramada" class="form-label">Fecha carga</label><input asp-for="FechaCargaProgramada" type="date" class="form-control" /></div>
+                <div class="g3"><label asp-for="HoraCargaProgramada" class="form-label">Hora carga</label><input asp-for="HoraCargaProgramada" type="time" class="form-control" /></div>
+                <div class="g3"><label asp-for="FechaEntregaProgramada" class="form-label">Fecha entrega</label><input asp-for="FechaEntregaProgramada" type="date" class="form-control" /></div>
+                <div class="g3"><label asp-for="HoraEntregaProgramada" class="form-label">Hora entrega</label><input asp-for="HoraEntregaProgramada" type="time" class="form-control" /></div>
+                <div class="g4"><label asp-for="Destino" class="form-label">Destino</label><input asp-for="Destino" maxlength="300" class="form-control" /></div>
+                <div class="g8"><label asp-for="DireccionEntrega" class="form-label">Dirección de entrega</label><input asp-for="DireccionEntrega" maxlength="600" class="form-control" /></div>
+                <div class="g3 hidden" id="aduanaWrap"><label asp-for="PasaAduana" class="form-label">¿Pasa por aduana?</label><select asp-for="PasaAduana" class="form-select"><option value="">Selecciona...</option><option value="true">Sí</option><option value="false">No</option></select></div>
             </div>
-
-            <textarea asp-for="Observaciones"
-                      maxlength="1200"
-                      class="form-control"
-                      placeholder="Información adicional del embarque"></textarea>
-
-            <span asp-validation-for="Observaciones"></span>
-
         </div>
-
-        <div class="form-actions">
-
-            <a asp-controller="LogisticaEmbarques"
-               asp-action="Index"
-               class="btn btn-outline-secondary">
-                Cancelar
-            </a>
-
-            <button type="submit"
-                    class="btn btn-primary"
-                    id="btnGuardarEmbarque">
-
-                <i class="fa-solid fa-floppy-disk me-1"></i>
-                Programar embarque
-
-            </button>
-
+        <div class="section">
+            <h2 class="section-title">4. Forma de envío</h2>
+            <div class="grid">
+                <div class="g4"><label asp-for="FormaEnvio" class="form-label">Forma de envío</label><select asp-for="FormaEnvio" id="FormaEnvio" class="form-select"><option value="Interno">Entrega interna / local</option><option value="Paqueteria">Paquetería / transportista</option></select></div>
+            </div>
+            <div class="transport-panel mt-2" id="internoPanel">
+                <div class="grid">
+                    <div class="g4">
+                        <label asp-for="RutaID" class="form-label">Ruta</label><select asp-for="RutaID" class="form-select js-interno">
+                            <option value="">Selecciona...</option>@foreach(var r in Model.Rutas){
+                            <option value="@r.Id">@r.Texto</option>
+                                                        }
+                        </select>
+                    </div><div class="g4">
+                        <label asp-for="UnidadID" class="form-label">Unidad</label><select asp-for="UnidadID" class="form-select js-interno">
+                            <option value="">Selecciona...</option>@foreach(var u in Model.Unidades){
+                            <option value="@u.Id">@u.Texto</option>
+                                                        }
+                        </select>
+                    </div><div class="g4"><label asp-for="OperadorTexto" class="form-label">Operador</label><input asp-for="OperadorTexto" maxlength="200" class="form-control js-interno" /></div>
+                </div>
+            </div>
+            <div class="transport-panel mt-2 hidden" id="paqueteriaPanel">
+                <div class="grid"><div class="g3"><label asp-for="ModalidadEnvio" class="form-label">Modalidad</label><select asp-for="ModalidadEnvio" class="form-select js-paq"><option value="">Selecciona...</option><option value="Terrestre">Terrestre</option><option value="Aereo">Aérea</option><option value="Maritimo">Marítima</option></select></div><div class="g4"><label asp-for="Transportista" class="form-label">Compañía / transportista</label><input asp-for="Transportista" maxlength="200" class="form-control js-paq" /></div><div class="g5"><label asp-for="GuiaReferencia" class="form-label">Guía / referencia</label><input asp-for="GuiaReferencia" maxlength="150" class="form-control" /></div></div>
+            </div>
         </div>
-
+        <div class="section"><h2 class="section-title">5. Observaciones</h2><textarea asp-for="Observaciones" maxlength="1200" rows="3" class="form-control"></textarea></div>
+        <div class="footer-actions"><a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a><button type="submit" class="btn btn-primary" id="btnGuardar"><i class="fa-solid fa-floppy-disk me-1"></i>Crear embarque</button></div>
+                }
     </form>
-
 </div>
-
 @section Scripts {
-
-    <partial name="_ValidationScriptsPartial" />
-
     <script>
-        (() => {
-
-            const cantidadInput =
-                document.getElementById('CantidadSolicitada');
-
-            const checks =
-                [...document.querySelectorAll('.caja-check')];
-
-            const piezasSeleccionadas =
-                document.getElementById('resumenPiezasSeleccionadas');
-
-            const cajasSeleccionadas =
-                document.getElementById('resumenCajasSeleccionadas');
-
-            const cantidadProgramada =
-                document.getElementById('resumenCantidadProgramada');
-
-            const faltante =
-                document.getElementById('resumenFaltante');
-
-            const contenedorFaltante =
-                document.getElementById('contenedorFaltante');
-
-            const form =
-                document.getElementById('formCrearEmbarque');
-
-            const btnGuardar =
-                document.getElementById('btnGuardarEmbarque');
-
-            function numero(valor) {
-
-                const n =
-                    Number(valor);
-
-                return Number.isFinite(n)
-                    ? n
-                    : 0;
-            }
-
-            function formato(valor) {
-
-                return numero(valor)
-                    .toLocaleString('es-MX');
-            }
-
-            function recalcular() {
-
-                const objetivo =
-                    numero(cantidadInput?.value);
-
-                let total = 0;
-                let cajas = 0;
-
-                checks.forEach(check => {
-
-                    const fila =
-                        document.querySelector(
-                            `[data-caja-row="${check.value}"]`
-                        );
-
-                    if (check.checked) {
-
-                        total +=
-                            numero(check.dataset.cantidad);
-
-                        cajas++;
-
-                        fila?.classList.add(
-                            'selected-row'
-                        );
-                    }
-                    else {
-
-                        fila?.classList.remove(
-                            'selected-row'
-                        );
-                    }
-                });
-
-                const pendiente =
-                    Math.max(
-                        0,
-                        objetivo - total
-                    );
-
-                if (cantidadProgramada) {
-                    cantidadProgramada.textContent =
-                        formato(objetivo);
-                }
-
-                if (piezasSeleccionadas) {
-                    piezasSeleccionadas.textContent =
-                        formato(total);
-                }
-
-                if (cajasSeleccionadas) {
-                    cajasSeleccionadas.textContent =
-                        cajas.toString();
-                }
-
-                if (faltante) {
-                    faltante.textContent =
-                        formato(pendiente);
-                }
-
-                if (contenedorFaltante) {
-
-                    contenedorFaltante
-                        .classList
-                        .toggle(
-                            'warn',
-                            pendiente > 0
-                        );
-
-                    contenedorFaltante
-                        .classList
-                        .toggle(
-                            'ok',
-                            pendiente === 0
-                        );
-                }
-            }
-
-            checks.forEach(check => {
-
-                check.addEventListener(
-                    'change',
-                    () => {
-
-                        if (!check.checked) {
-                            recalcular();
-                            return;
-                        }
-
-                        const objetivo =
-                            numero(cantidadInput?.value);
-
-                        const totalSinActual =
-                            checks
-                                .filter(x =>
-                                    x !== check &&
-                                    x.checked)
-                                .reduce(
-                                    (suma, x) =>
-                                        suma +
-                                        numero(
-                                            x.dataset.cantidad
-                                        ),
-                                    0
-                                );
-
-                        const cantidadCaja =
-                            numero(
-                                check.dataset.cantidad
-                            );
-
-                        if (
-                            objetivo > 0 &&
-                            totalSinActual +
-                                cantidadCaja >
-                                objetivo
-                        ) {
-
-                            check.checked = false;
-
-                            alert(
-                                'Esta caja hace que las piezas seleccionadas superen la cantidad programada.'
-                            );
-                        }
-
-                        recalcular();
-                    });
-            });
-
-            cantidadInput?.addEventListener(
-                'input',
-                recalcular
-            );
-
-            form?.addEventListener(
-                'submit',
-                () => {
-
-                    if (!btnGuardar)
-                        return;
-
-                    btnGuardar.disabled = true;
-
-                    btnGuardar.innerHTML =
-                        '<i class="fa-solid fa-spinner fa-spin me-1"></i>Programando...';
-                });
-
-            recalcular();
-
+        (()=>{
+         const cliente=document.getElementById('ClienteID');
+         cliente?.addEventListener('change',()=>{const id=cliente.value;if(!id)return;window.location.href='@Url.Action("Crear", "LogisticaEmbarques")?clienteId='+encodeURIComponent(id);});
+         const actualizarPartida=i=>{const row=document.querySelector(`[data-part="${i}"]`);const chk=document.querySelector(`.js-partida[data-i="${i}"]`);if(!row||!chk)return;row.classList.toggle('selected',chk.checked);let cajas=0,piezas=0;document.querySelectorAll(`.js-caja[data-i="${i}"]:checked`).forEach(x=>{cajas++;piezas+=Number(x.dataset.piezas||0)});const tc=document.querySelector(`.js-total-cajas[data-i="${i}"]`),tp=document.querySelector(`.js-total-piezas[data-i="${i}"]`);if(tc)tc.textContent=cajas;if(tp)tp.textContent=piezas.toLocaleString('es-MX');actualizarResumen();};
+         const actualizarResumen=()=>{const e=document.getElementById('resPartidas');if(e)e.textContent=document.querySelectorAll('.js-partida:checked').length;};
+         document.querySelectorAll('.js-partida').forEach(x=>{x.addEventListener('change',()=>actualizarPartida(x.dataset.i));actualizarPartida(x.dataset.i)});document.querySelectorAll('.js-caja').forEach(x=>x.addEventListener('change',()=>actualizarPartida(x.dataset.i)));
+         const forma=document.getElementById('FormaEnvio'),tipo=document.getElementById('TipoOperacion'),interno=document.getElementById('internoPanel'),paq=document.getElementById('paqueteriaPanel'),aduana=document.getElementById('aduanaWrap');
+         const transporte=()=>{const esP=forma?.value==='Paqueteria';interno?.classList.toggle('hidden',esP);paq?.classList.toggle('hidden',!esP);document.querySelectorAll('.js-interno').forEach(x=>x.required=!esP);document.querySelectorAll('.js-paq').forEach(x=>x.required=esP)};
+         const operacion=()=>aduana?.classList.toggle('hidden',tipo?.value!=='Exportacion');forma?.addEventListener('change',transporte);tipo?.addEventListener('change',operacion);transporte();operacion();
+         document.getElementById('formCrear')?.addEventListener('submit',e=>{if(document.querySelectorAll('.js-partida:checked').length===0){e.preventDefault();alert('Selecciona al menos una entrega del cliente.')}});
         })();
     </script>
 }
