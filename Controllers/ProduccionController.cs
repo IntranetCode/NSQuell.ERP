@@ -66,6 +66,10 @@ namespace ERP.NSQuell.Controllers
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
+            // NSQ_PREPARACION_MOLDE_INDEX_V1
+            ViewBag.EstadosCambioMolde =
+                await ObtenerEstadosCambioMoldeBandejaAsync(cn);
+
             vm.Maquinas = await CargarMaquinasAsync(cn);
             vm.Estatus = await CargarEstatusProduccionAsync(cn);
             ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
@@ -1409,6 +1413,30 @@ VALUES
                     await tx.RollbackAsync();
 
                     TempData["Error"] = "El programa no tiene una cantidad válida para iniciar Producción.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                // NSQ_PREPARACION_MOLDE_BLOQUEO_V1
+                // Cambio de molde SI bloquea.
+                // MP/secado y embalaje NO bloquean.
+                var estadoCambioMoldeInicio =
+                    await ObtenerEstadoCambioMoldeProgramaAsync(
+                        programaProduccionId,
+                        cn,
+                        tx);
+
+                if (estadoCambioMoldeInicio.RequiereCambioMolde &&
+                    !string.Equals(
+                        estadoCambioMoldeInicio.Estado,
+                        EstadoMoldeConfirmada,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        MensajeBloqueoCambioMolde(
+                            estadoCambioMoldeInicio.Estado);
+
                     return RedirectToAction(nameof(Index));
                 }
 
@@ -9811,6 +9839,10 @@ ORDER BY e.FechaCreacion DESC,e.EjecucionProduccionID DESC;";
                     .ThenBy(x =>
                         x.ProgramaProduccionID)
                     .ToList();
+
+            // NSQ_PREPARACION_MOLDE_PANEL_V1
+            ViewBag.EstadosCambioMolde =
+                await ObtenerEstadosCambioMoldeBandejaAsync(cn);
 
             return PartialView(
                 "_Proximos",
