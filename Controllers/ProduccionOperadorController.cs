@@ -3661,7 +3661,6 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
         {
             if (vm.EsTiempoExtra && (!vm.TiempoExtraID.HasValue || vm.TiempoExtraID.Value <= 0 || !vm.NumeroCorteTiempoExtra.HasValue || vm.NumeroCorteTiempoExtra.Value <= 0))
                 throw new InvalidOperationException("El registro de tiempo extra no contiene una sesión y número de corte válidos.");
-
             if (!vm.EsTiempoExtra)
             {
                 vm.TiempoExtraID = null;
@@ -3693,6 +3692,10 @@ INSERT INTO dbo.Produccion_RegistroHora
     CantidadOK,
     CantidadSospechosa,
     CantidadScrap,
+    CantidadOKOriginal,
+    CantidadSospechosaOriginal,
+    CantidadScrapOriginal,
+    AjustadoPorCalidad,
     ObjetivoHora,
     ObjetivoBloque,
     CumplioObjetivo,
@@ -3725,6 +3728,10 @@ VALUES
     @CantidadOK,
     @CantidadSospechosa,
     @CantidadScrap,
+    @CantidadOK,
+    @CantidadSospechosa,
+    @CantidadScrap,
+    0,
     @ObjetivoHora,
     @ObjetivoBloque,
     @CumplioObjetivo,
@@ -3783,13 +3790,11 @@ VALUES
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
 
             var resultado = await cmd.ExecuteScalarAsync();
-
             if (resultado == null || resultado == DBNull.Value)
                 throw new InvalidOperationException("No fue posible obtener el identificador del registro horario.");
 
             return Convert.ToInt32(resultado);
         }
-
         private static string ConstruirMensajeCumplimientoHora(int numeroHora, int cantidadOK, int cantidadSospechosa, int cantidadScrap, long contadorActual, CalculoProduccionContadorHora calculo, bool okModificadoManual)
         {
             var textoOk = okModificadoManual
