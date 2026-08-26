@@ -1448,21 +1448,17 @@ VALUES
                     cn,
                     tx);
 
-                if (personalProgramado != null)
+                // NSQ_PERSONAL_INICIO_V8_FUENTE_VERDAD
+                if (personalProgramado?.OperadorID.HasValue == true)
                 {
-                    if (!operadorId.HasValue &&
-                        string.IsNullOrWhiteSpace(operadorNombre) &&
-                        personalProgramado.OperadorID.HasValue)
-                    {
-                        operadorId = personalProgramado.OperadorID;
-                    }
+                    operadorId = personalProgramado.OperadorID;
+                    operadorNombre = null;
+                }
 
-                    if (!operadorAuxiliarId.HasValue &&
-                        string.IsNullOrWhiteSpace(operadorAuxiliarNombre) &&
-                        personalProgramado.AuxiliarID.HasValue)
-                    {
-                        operadorAuxiliarId = personalProgramado.AuxiliarID;
-                    }
+                if (personalProgramado?.AuxiliarID.HasValue == true)
+                {
+                    operadorAuxiliarId = personalProgramado.AuxiliarID;
+                    operadorAuxiliarNombre = null;
                 }
 
                 const string sqlMaquinaOcupada = @"
@@ -1748,107 +1744,128 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 }
                 // NSQ_ESCALA_OPERADORES_V5_END
 
-                // NSQ_TECNICO_PRODUCCION_PREP_V2
+                // NSQ_PERSONAL_INICIO_V8_TECNICO_SMED
                 int? tecnicoProduccionFinalId = personalProgramado?.TecnicoID;
+                string? tecnicoProduccionFinalNombre = personalProgramado?.TecnicoNombre;
+                int? smedFinalId = personalProgramado?.SmedID;
+                string? smedFinalNombre = personalProgramado?.SmedNombre;
 
-                var tecnicoProduccionIdTexto =
-                    Request.Form["tecnicoProduccionId"]
-                        .ToString()
-                        .Trim();
+                var apoyoYaProgramado =
+                    tecnicoProduccionFinalId.HasValue || smedFinalId.HasValue;
 
-                if (int.TryParse(
-                        tecnicoProduccionIdTexto,
-                        out var tecnicoProduccionIdParseado) &&
-                    tecnicoProduccionIdParseado > 0)
+                if (!apoyoYaProgramado)
                 {
-                    tecnicoProduccionFinalId = tecnicoProduccionIdParseado;
+                    var responsableApoyo =
+                        Request.Form["responsableApoyo"].ToString().Trim();
+
+                    if (!string.IsNullOrWhiteSpace(responsableApoyo))
+                    {
+                        var partesApoyo = responsableApoyo.Split(
+                            ':',2,StringSplitOptions.TrimEntries);
+
+                        if (partesApoyo.Length != 2 ||
+                            !int.TryParse(partesApoyo[1],out var apoyoId) ||
+                            apoyoId <= 0)
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] =
+                                "El responsable Técnico/SMED seleccionado no es válido.";
+                            return RedirectToAction(nameof(Index));
+                        }
+
+                        var tipoApoyo=partesApoyo[0].Trim().ToUpperInvariant();
+                        var validacionApoyo=
+                            await ValidarResponsableApoyoInicioV8Async(
+                                apoyoId,tipoApoyo,cn,tx);
+
+                        if (!validacionApoyo.Valido ||
+                            string.IsNullOrWhiteSpace(validacionApoyo.Nombre))
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] =
+                                "El responsable seleccionado ya no pertenece al catálogo activo de Técnico/SMED.";
+                            return RedirectToAction(nameof(Index));
+                        }
+
+                        if (tipoApoyo == "SMED")
+                        {
+                            smedFinalId=apoyoId;
+                            smedFinalNombre=validacionApoyo.Nombre;
+                        }
+                        else
+                        {
+                            tecnicoProduccionFinalId=apoyoId;
+                            tecnicoProduccionFinalNombre=validacionApoyo.Nombre;
+                        }
+                    }
                 }
-
-                string? tecnicoProduccionFinalNombre =
-                    Request.Form["tecnicoProduccionNombre"]
-                        .ToString()
-                        .Trim();
-
-                if (string.IsNullOrWhiteSpace(tecnicoProduccionFinalNombre))
-                    tecnicoProduccionFinalNombre = null;
 
                 if (tecnicoProduccionFinalId.HasValue)
                 {
-                    if (!await PersonaEsTecnicoProduccionActivoAsync(
-                            tecnicoProduccionFinalId.Value,
-                            cn,
-                            tx))
+                    var validoTec=await ValidarResponsableApoyoInicioV8Async(
+                        tecnicoProduccionFinalId.Value,"TECNICO",cn,tx);
+                    if (!validoTec.Valido)
                     {
                         await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "El Técnico en Producción seleccionado no pertenece al catálogo activo de Técnicos de Producción.";
-
+                        TempData["Error"]="El Técnico programado ya no está activo o ya no corresponde al rol.";
                         return RedirectToAction(nameof(Index));
                     }
-
-                    tecnicoProduccionFinalNombre =
-                        await ObtenerNombreTecnicoProduccionAsync(
-                            tecnicoProduccionFinalId.Value,
-                            cn,
-                            tx);
-
-                    if (string.IsNullOrWhiteSpace(tecnicoProduccionFinalNombre))
-                    {
-                        await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "No fue posible resolver el nombre del Técnico en Producción seleccionado.";
-
-                        return RedirectToAction(nameof(Index));
-                    }
+                    tecnicoProduccionFinalNombre=validoTec.Nombre;
                 }
 
-                if (tecnicoProduccionFinalId.HasValue &&
-                    (
-                        tecnicoProduccionFinalId.Value == operadorPrincipalFinalId ||
-                        tecnicoProduccionFinalId.Value == operadorAuxiliarFinalId
-                    ))
+                if (smedFinalId.HasValue)
+                {
+                    var validoSmed=await ValidarResponsableApoyoInicioV8Async(
+                        smedFinalId.Value,"SMED",cn,tx);
+                    if (!validoSmed.Valido)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"]="El SMED programado ya no está activo o ya no corresponde al rol.";
+                        return RedirectToAction(nameof(Index));
+                    }
+                    smedFinalNombre=validoSmed.Nombre;
+                }
+
+                if (!tecnicoProduccionFinalId.HasValue && !smedFinalId.HasValue)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "El Técnico en Producción debe ser una persona distinta del operador principal y del auxiliar de producción.";
-
+                    TempData["Error"]=
+                        "Para iniciar la preparación debe existir al menos un Técnico en Producción o un SMED.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (!string.IsNullOrWhiteSpace(tecnicoProduccionFinalNombre))
+                bool CoincideConOperadorOAuxiliar(int personaId)
                 {
-                    var tecnicoNombreComparar = tecnicoProduccionFinalNombre.Trim();
-
-                    if (
-                        (
-                            !string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) &&
-                            string.Equals(
-                                tecnicoNombreComparar,
-                                operadorPrincipalFinalNombre.Trim(),
-                                StringComparison.OrdinalIgnoreCase)
-                        )
+                    return
+                        (operadorPrincipalFinalId.HasValue &&
+                         operadorPrincipalFinalId.Value==personaId)
                         ||
-                        (
-                            !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) &&
-                            string.Equals(
-                                tecnicoNombreComparar,
-                                operadorAuxiliarFinalNombre.Trim(),
-                                StringComparison.OrdinalIgnoreCase)
-                        )
-                    )
-                    {
-                        await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "El Técnico en Producción debe ser una persona distinta del operador principal y del auxiliar de producción.";
-
-                        return RedirectToAction(nameof(Index));
-                    }
+                        (operadorAuxiliarFinalId.HasValue &&
+                         operadorAuxiliarFinalId.Value==personaId);
                 }
 
+                if (tecnicoProduccionFinalId.HasValue &&
+                    CoincideConOperadorOAuxiliar(tecnicoProduccionFinalId.Value))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"]=
+                        "El Técnico en Producción debe ser distinto del operador principal y del auxiliar.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (smedFinalId.HasValue &&
+                    CoincideConOperadorOAuxiliar(smedFinalId.Value))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"]=
+                        "El SMED debe ser distinto del operador principal y del auxiliar.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                await SincronizarCoberturaFaltanteInicioV8Async(
+                    programaProduccionId,DateTime.Now,programa.FechaInicioProgramada,
+                    tecnicoProduccionFinalId,smedFinalId,operadorAuxiliarFinalId,
+                    usuarioId,cn,tx);
                 // ============================================================
                 // PRODUCTO INCOMPLETO / ETIQUETAS BLANCAS
                 // Producción es quien decide y reserva al iniciar.
@@ -1905,6 +1922,10 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     textoOperadores +=
                         " Técnico en Producción: sin asignar.";
                 }
+
+                textoOperadores += !string.IsNullOrWhiteSpace(smedFinalNombre)
+                    ? " SMED: " + smedFinalNombre.Trim() + "."
+                    : " SMED: sin asignar.";
 
                 observacionesFinales =
                     string.IsNullOrWhiteSpace(observacionesFinales)

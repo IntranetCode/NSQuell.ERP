@@ -527,6 +527,43 @@ WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
             var omitidosProduccion=0;
             var uid=UsuarioID();
 
+            // NSQ_SUGERENCIA_UN_TURNO_POR_PERSONA_V8
+            var turnosAsignadosPorPersona=new Dictionary<int,HashSet<int>>();
+
+            void RegistrarTurnoPersona(int personaId,int turnoId)
+            {
+                if(!turnosAsignadosPorPersona.TryGetValue(personaId,out var set))
+                {
+                    set=new HashSet<int>();
+                    turnosAsignadosPorPersona[personaId]=set;
+                }
+                set.Add(turnoId);
+            }
+
+            foreach(var programaExistente in programas)
+            {
+                foreach(var segmentoExistente in ConstruirSegmentosV7(
+                    programaExistente,turnos,dia,dia.AddDays(1)))
+                {
+                    var asignacionExistente=asignaciones
+                        .Where(x=>x.ProgramaID==programaExistente.ProgramaID &&
+                                  x.TurnoID==segmentoExistente.TurnoID &&
+                                  x.FechaTrabajo.Date==segmentoExistente.FechaTrabajo.Date)
+                        .OrderByDescending(x=>x.AsignacionID)
+                        .FirstOrDefault();
+
+                    if(asignacionExistente!=null)
+                    {
+                        segmentoExistente.TieneAsignacionEspecifica=true;
+                        segmentoExistente.OperadorAsignadoID=asignacionExistente.OperadorID;
+                        segmentoExistente.OperadorAsignadoNombre=asignacionExistente.OperadorNombre;
+                    }
+
+                    if(segmentoExistente.OperadorEfectivoID.HasValue)
+                        RegistrarTurnoPersona(segmentoExistente.OperadorEfectivoID.Value,segmentoExistente.TurnoID);
+                }
+            }
+
             foreach(var programa in programas.OrderBy(x=>x.Inicio).ThenBy(x=>x.MaquinaCodigo))
             {
                 foreach(var seg in ConstruirSegmentosV7(programa,turnos,dia,dia.AddDays(1)).OrderBy(x=>x.Inicio))
@@ -553,6 +590,10 @@ WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
                     var candidatos=new List<(OperadorOficialV2 Op,int? Nivel,bool EnEscala,bool MismaMaquina,decimal Horas)>();
                     foreach(var op in oficiales)
                     {
+                        if(turnosAsignadosPorPersona.TryGetValue(op.PersonaID,out var turnosPersona) &&
+                           turnosPersona.Any(x=>x!=seg.TurnoID))
+                            continue;
+
                         int? nivel=null;
                         if(programa.ParteID.HasValue && niveles.TryGetValue((programa.ParteID.Value,op.PersonaID),out var n)) nivel=n;
                         if(tieneMatriz && !nivel.HasValue) continue;
@@ -607,6 +648,7 @@ WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
                         cmd.Parameters.Add("@Usuario",SqlDbType.Int).Value=uid;
                         await cmd.ExecuteNonQueryAsync();
                     }
+                    RegistrarTurnoPersona(elegido.Op.PersonaID,seg.TurnoID);
                     sugeridos++;
                 }
             }
@@ -628,7 +670,7 @@ WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
     {
         if(!UsuarioEnSesion())return RedirectToAction("Login","Login"); var semana=InicioSemanaV2(vm.SemanaInicio);
         await using var cn=new SqlConnection(ConnectionString);await cn.OpenAsync();await using var tx=(SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-        try{var turnos=await CargarTurnosV2Async(cn,tx);foreach(var c in vm.Coberturas??new()){if(!turnos.Any(x=>x.TurnoID==c.TurnoID))continue;await ValidarPersonaApoyoV2Async(c.TecnicoProduccionID,"TECNICO",cn,tx);await ValidarPersonaApoyoV2Async(c.SmedID,"SMED_O_TECNICO",cn,tx);await ValidarPersonaApoyoV2Async(c.AuxiliarID,"AUXILIAR",cn,tx);await UpsertCoberturaV2Async(semana,c,UsuarioID(),cn,tx);}await tx.CommitAsync();TempData["Success"]="Cobertura semanal por turno guardada.";}catch(Exception ex){try{await tx.RollbackAsync();}catch{}TempData["Error"]="No fue posible guardar cobertura: "+ex.Message;}
+        try{var turnos=await CargarTurnosV2Async(cn,tx);foreach(var c in vm.Coberturas??new()){if(!turnos.Any(x=>x.TurnoID==c.TurnoID))continue;if(!c.TecnicoProduccionID.HasValue&&!c.SmedID.HasValue)throw new InvalidOperationException($"Turno {turnos.First(x=>x.TurnoID==c.TurnoID).Nombre}: debe existir al menos un Técnico o un SMED.");await ValidarPersonaApoyoV2Async(c.TecnicoProduccionID,"TECNICO",cn,tx);await ValidarPersonaApoyoV2Async(c.SmedID,"SMED_O_TECNICO",cn,tx);await ValidarPersonaApoyoV2Async(c.AuxiliarID,"AUXILIAR",cn,tx);await UpsertCoberturaV2Async(semana,c,UsuarioID(),cn,tx);}await tx.CommitAsync();TempData["Success"]="Cobertura semanal guardada. Se validó Técnico/SMED por turno.";}catch(Exception ex){try{await tx.RollbackAsync();}catch{}TempData["Error"]="No fue posible guardar cobertura: "+ex.Message;}
         var panelCobertura=Request.Form["Panel"].ToString();
         return RedirectToAction(nameof(Index),new{vista=vm.Vista,fechaDesde=(vm.FechaDesde??semana).ToString("yyyy-MM-dd"),fechaHasta=vm.FechaHasta?.ToString("yyyy-MM-dd"),panel=string.IsNullOrWhiteSpace(panelCobertura)?"support":panelCobertura});
     }
