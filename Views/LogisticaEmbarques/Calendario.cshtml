@@ -2,161 +2,36 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Calendario de entregas";
 }
+
 @section Styles {
     <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" />
 }
+
 <style>
-    .page {
-        padding: 18px 20px 30px
-    }
-
-    .head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 12px
-    }
-
-    .title {
-        margin: 0;
-        font-size: 1.35rem;
-        font-weight: 700
-    }
-
-    .sub {
-        margin: 3px 0 0;
-        color: #6c757d;
-        font-size: .85rem
-    }
-
-    .toolbar {
-        display: grid;
-        grid-template-columns: minmax(220px,1fr) minmax(220px,1fr) 170px auto;
-        gap: 8px;
-        align-items: end;
-        padding: 10px 0 12px;
-        border-top: 1px solid #e9ecef;
-        border-bottom: 1px solid #e9ecef;
-        margin-bottom: 12px
-    }
-
-        .toolbar label {
-            display: block;
-            font-size: .69rem;
-            font-weight: 600;
-            color: #6c757d;
-            margin-bottom: 3px
-        }
-
-        .toolbar .form-control, .toolbar .form-select {
-            min-height: 34px;
-            font-size: .8rem
-        }
-
-    .summary {
-        display: flex;
-        gap: 18px;
-        flex-wrap: wrap;
-        margin-bottom: 10px
-    }
-
-        .summary div {
-            display: flex;
-            gap: 5px;
-            align-items: baseline
-        }
-
-        .summary strong {
-            font-size: .95rem
-        }
-
-        .summary span {
-            font-size: .71rem;
-            color: #6c757d
-        }
-
-    .fc {
-        font-size: .8rem
-    }
-
-        .fc .fc-toolbar-title {
-            font-size: 1rem;
-            font-weight: 700
-        }
-
-        .fc .fc-button {
-            font-size: .74rem;
-            padding: .35rem .55rem
-        }
-
-        .fc .fc-daygrid-event {
-            border: 0;
-            border-radius: 5px;
-            padding: 2px 4px;
-            cursor: pointer
-        }
-
-        .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number {
-            color: #343a40;
-            text-decoration: none
-        }
-
-    .modal-data {
-        display: grid;
-        grid-template-columns: repeat(2,minmax(0,1fr));
-        gap: 9px 14px
-    }
-
-        .modal-data label {
-            display: block;
-            font-size: .66rem;
-            text-transform: uppercase;
-            color: #6c757d
-        }
-
-        .modal-data div div {
-            font-size: .82rem;
-            font-weight: 500
-        }
-
-    @@media (max-width:800px) {
-        .toolbar {
-            grid-template-columns: 1fr
-        }
-
-        .page {
-            padding: 14px 10px 24px
-        }
-
-        .modal-data {
-            grid-template-columns: 1fr
-        }
-    }
-
-
-    /* =========================================================
-           LOGISTICA ERP - CAPA VISUAL
-           Calendario operativo con apariencia ERP sobria.
-           ========================================================= */
     :root {
         --lg-blue: #173a7a;
         --lg-blue-2: #2f63ad;
         --lg-text: #172033;
         --lg-muted: #6d7888;
         --lg-border: #dce4ee;
+        --lg-soft: #f6f8fb;
         --lg-shadow: 0 8px 24px rgba(22,42,75,.055);
     }
 
     .page {
         max-width: 1720px;
         margin: 0 auto;
+        padding: 18px 20px 30px;
         color: var(--lg-text);
     }
 
     .head {
+        display: flex;
+        justify-content: space-between;
         align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
         padding: 15px 17px;
         margin-bottom: 12px;
         border: 1px solid var(--lg-border);
@@ -167,6 +42,7 @@
     }
 
     .title {
+        margin: 0;
         color: var(--lg-text);
         font-size: 1.46rem;
         font-weight: 800;
@@ -178,7 +54,9 @@
         }
 
     .sub {
+        margin: 3px 0 0;
         color: var(--lg-muted);
+        font-size: .84rem;
         font-weight: 500;
     }
 
@@ -191,6 +69,10 @@
     }
 
     .toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px,1fr) minmax(260px,1.3fr) 180px auto;
+        gap: 8px;
+        align-items: end;
         padding: 11px 12px;
         margin-bottom: 10px;
         border: 1px solid var(--lg-border);
@@ -200,7 +82,10 @@
     }
 
         .toolbar label {
+            display: block;
+            margin-bottom: 3px;
             color: #566273;
+            font-size: .69rem;
             font-weight: 750;
             letter-spacing: .02em;
         }
@@ -211,6 +96,7 @@
             border-color: #d4dee9;
             border-radius: 8px;
             box-shadow: none;
+            font-size: .8rem;
         }
 
             .toolbar .form-control:focus,
@@ -219,15 +105,25 @@
                 box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
             }
 
+    .toolbar-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+        .toolbar-actions .btn {
+            white-space: nowrap;
+            min-height: 36px;
+        }
+
     .summary {
         display: grid;
-        grid-template-columns: repeat(4,minmax(130px,1fr));
+        grid-template-columns: repeat(5,minmax(120px,1fr));
         gap: 8px;
         margin-bottom: 10px;
     }
 
         .summary > div {
-            display: block;
             min-height: 68px;
             padding: 10px 12px;
             border: 1px solid var(--lg-border);
@@ -251,6 +147,19 @@
             font-weight: 700;
         }
 
+    .calendar-help {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 8px;
+        color: #687487;
+        font-size: .74rem;
+    }
+
+        .calendar-help i {
+            color: var(--lg-blue-2);
+        }
+
     #calendar {
         padding: 13px;
         border: 1px solid var(--lg-border);
@@ -261,6 +170,7 @@
 
     .fc {
         color: #2b3748;
+        font-size: .8rem;
     }
 
         .fc .fc-toolbar {
@@ -272,6 +182,11 @@
             color: #1e2b3d;
             font-size: 1.08rem;
             font-weight: 800;
+        }
+
+        .fc .fc-button {
+            font-size: .74rem;
+            padding: .35rem .55rem;
         }
 
         .fc .fc-button-primary {
@@ -302,12 +217,14 @@
             padding: 7px 4px;
             color: #536072;
             font-weight: 750;
+            text-decoration: none;
         }
 
         .fc .fc-daygrid-day-number {
             padding: 6px;
             color: #4c5868;
             font-weight: 650;
+            text-decoration: none;
         }
 
         .fc .fc-day-today {
@@ -315,9 +232,42 @@
         }
 
         .fc .fc-daygrid-event {
+            overflow: hidden;
+            border: 0;
+            border-radius: 6px;
+            padding: 3px 5px;
+            cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,.08);
-            font-weight: 650;
         }
+
+    .evento-cliente {
+        min-width: 0;
+        line-height: 1.15;
+        padding: 1px 0;
+    }
+
+    .evento-cliente-nombre {
+        overflow: hidden;
+        color: #fff;
+        font-size: .73rem;
+        font-weight: 750;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .evento-cliente-meta {
+        overflow: hidden;
+        margin-top: 2px;
+        color: rgba(255,255,255,.92);
+        font-size: .64rem;
+        font-weight: 550;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #eventoModal .modal-dialog {
+        max-width: 1180px;
+    }
 
     #eventoModal .modal-content {
         border: 1px solid var(--lg-border);
@@ -326,25 +276,251 @@
     }
 
     #eventoModal .modal-header {
-        background: #f7f9fb;
+        padding: 12px 16px;
         border-bottom-color: #e5ebf1;
+        background: #f7f9fb;
     }
 
-    .modal-data > div {
+    .modal-title-wrap {
+        min-width: 0;
+    }
+
+        .modal-title-wrap h5 {
+            margin: 0;
+            color: #1c2b40;
+            font-size: 1rem;
+            font-weight: 800;
+        }
+
+        .modal-title-wrap p {
+            margin: 2px 0 0;
+            color: #748093;
+            font-size: .72rem;
+        }
+
+    .modal-summary {
+        display: grid;
+        grid-template-columns: repeat(5,minmax(100px,1fr));
+        gap: 7px;
+        margin-bottom: 12px;
+    }
+
+    .modal-summary-item {
         padding: 8px 9px;
-        border: 1px solid #e7ecf2;
+        border: 1px solid #e2e8ef;
         border-radius: 8px;
-        background: #fbfcfd;
+        background: #fafbfd;
     }
 
-    .modal-data label {
-        color: #798495;
+        .modal-summary-item label {
+            display: block;
+            margin-bottom: 2px;
+            color: #7a8595;
+            font-size: .62rem;
+            font-weight: 750;
+            text-transform: uppercase;
+        }
+
+        .modal-summary-item strong {
+            display: block;
+            color: #263448;
+            font-size: .82rem;
+            font-weight: 750;
+        }
+
+    .modal-alerta {
+        margin-bottom: 12px;
+    }
+
+    .of-panel {
+        border: 1px solid #dfe6ee;
+        border-radius: 9px;
+        overflow: hidden;
+    }
+
+    .of-panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 11px;
+        border-bottom: 1px solid #e4e9ef;
+        background: #f7f9fb;
+    }
+
+        .of-panel-head strong {
+            color: #263448;
+            font-size: .78rem;
+        }
+
+        .of-panel-head span {
+            color: #7a8595;
+            font-size: .68rem;
+        }
+
+    .of-table-wrap {
+        overflow-x: auto;
+    }
+
+    .of-table {
+        width: 100%;
+        margin: 0;
+        border-collapse: collapse;
+        font-size: .74rem;
+    }
+
+        .of-table th {
+            padding: 7px 8px;
+            border-bottom: 1px solid #dfe6ee;
+            background: #fbfcfd;
+            color: #687487;
+            font-size: .62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .of-table td {
+            padding: 8px;
+            border-bottom: 1px solid #edf1f5;
+            color: #344255;
+            vertical-align: middle;
+        }
+
+        .of-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .of-table tbody tr:hover td {
+            background: #f8faff;
+        }
+
+    .of-code {
+        color: #193b76;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .of-part {
         font-weight: 700;
+        white-space: nowrap;
     }
 
-    .modal-data div div {
-        color: #263448;
-        font-weight: 650;
+    .of-description {
+        min-width: 180px;
+        max-width: 280px;
+        color: #687487;
+    }
+
+    .of-number {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .embarque-cell {
+        white-space: nowrap;
+    }
+
+        .embarque-cell strong {
+            display: block;
+            color: #334155;
+            font-size: .72rem;
+        }
+
+        .embarque-cell small {
+            color: #8791a0;
+            font-size: .63rem;
+        }
+
+    .badge-status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 21px;
+        padding: 2px 7px;
+        border-radius: 20px;
+        font-size: .61rem;
+        font-weight: 750;
+        white-space: nowrap;
+    }
+
+    .st-programado {
+        border: 1px solid #cbd7e7;
+        background: #f4f7fb;
+        color: #34517c;
+    }
+
+    .st-preparando {
+        border: 1px solid #ecdca9;
+        background: #fff8df;
+        color: #846514;
+    }
+
+    .st-preparado {
+        border: 1px solid #bcd6e2;
+        background: #eef8fb;
+        color: #2c687e;
+    }
+
+    .st-cargado {
+        border: 1px solid #b9d0ef;
+        background: #edf5ff;
+        color: #235e9d;
+    }
+
+    .st-ruta {
+        border: 1px solid #aebfe9;
+        background: #eef2ff;
+        color: #304e9f;
+    }
+
+    .st-entregado {
+        border: 1px solid #acd9bb;
+        background: #effaf2;
+        color: #26713d;
+    }
+
+    .st-cancelado {
+        border: 1px solid #ced3d9;
+        background: #f3f4f5;
+        color: #666f79;
+    }
+
+    .st-mixto {
+        border: 1px solid #d7c9aa;
+        background: #faf6eb;
+        color: #725f31;
+    }
+
+    .btn-ver {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 29px;
+        height: 28px;
+        border: 1px solid #cbd6e3;
+        border-radius: 6px;
+        background: #fff;
+        color: #355a8c;
+        text-decoration: none;
+    }
+
+        .btn-ver:hover {
+            border-color: #91a9c8;
+            background: #f2f6fb;
+            color: #173a7a;
+        }
+
+    .empty-of {
+        padding: 24px 15px;
+        color: #7b8796;
+        text-align: center;
+        font-size: .78rem;
+    }
+
+    .loading-calendar {
+        opacity: .65;
+        pointer-events: none;
     }
 
     html[data-nsq-theme="dark"] .page {
@@ -362,8 +538,15 @@
     }
 
     html[data-nsq-theme="dark"] .title,
-    html[data-nsq-theme="dark"] .fc .fc-toolbar-title {
+    html[data-nsq-theme="dark"] .fc .fc-toolbar-title,
+    html[data-nsq-theme="dark"] .modal-title-wrap h5 {
         color: #eef4fb;
+    }
+
+    html[data-nsq-theme="dark"] .sub,
+    html[data-nsq-theme="dark"] .calendar-help,
+    html[data-nsq-theme="dark"] .modal-title-wrap p {
+        color: #a8b4c3;
     }
 
     html[data-nsq-theme="dark"] .toolbar .form-control,
@@ -379,7 +562,9 @@
 
         html[data-nsq-theme="dark"] .fc .fc-col-header-cell,
         html[data-nsq-theme="dark"] #eventoModal .modal-header,
-        html[data-nsq-theme="dark"] .modal-data > div {
+        html[data-nsq-theme="dark"] .of-panel-head,
+        html[data-nsq-theme="dark"] .of-table th,
+        html[data-nsq-theme="dark"] .modal-summary-item {
             background: #162237;
             border-color: #2a3a50;
         }
@@ -392,12 +577,70 @@
 
         html[data-nsq-theme="dark"] .fc .fc-daygrid-day-number,
         html[data-nsq-theme="dark"] .fc .fc-col-header-cell-cushion,
-        html[data-nsq-theme="dark"] .modal-data div div {
+        html[data-nsq-theme="dark"] .modal-summary-item strong,
+        html[data-nsq-theme="dark"] .of-panel-head strong,
+        html[data-nsq-theme="dark"] .of-table td {
             color: #dce5f0;
         }
 
-    @@media (max-width:900px) {
+    html[data-nsq-theme="dark"] .modal-summary-item,
+    html[data-nsq-theme="dark"] .of-panel,
+    html[data-nsq-theme="dark"] .of-table td {
+        border-color: #2a3a50;
+    }
+
+    html[data-nsq-theme="dark"] .of-table tbody tr:hover td {
+        background: #162237;
+    }
+
+    html[data-nsq-theme="dark"] .of-code {
+        color: #9fc0f3;
+    }
+
+    html[data-nsq-theme="dark"] .of-description,
+    html[data-nsq-theme="dark"] .embarque-cell small,
+    html[data-nsq-theme="dark"] .of-panel-head span {
+        color: #a8b4c3;
+    }
+
+    html[data-nsq-theme="dark"] .btn-ver {
+        background: #162237;
+        border-color: #34485f;
+        color: #c9dcf5;
+    }
+
+    @@media (max-width:1100px) {
         .summary {
+            grid-template-columns: repeat(3,minmax(0,1fr));
+        }
+
+        .modal-summary {
+            grid-template-columns: repeat(3,minmax(0,1fr));
+        }
+    }
+
+    @@media (max-width:800px) {
+        .toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .toolbar-actions {
+            width: 100%;
+        }
+
+            .toolbar-actions .btn {
+                flex: 1;
+            }
+
+        .page {
+            padding: 14px 10px 24px;
+        }
+
+        .summary {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .modal-summary {
             grid-template-columns: repeat(2,minmax(0,1fr));
         }
     }
@@ -416,33 +659,845 @@
             display: flex;
             justify-content: center;
         }
-    }
 
+        .summary {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .modal-summary {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
 </style>
+
 <div class="page">
-    <div class="head"><div><h1 class="title"><i class="fa-solid fa-calendar-days me-1"></i>Calendario de entregas por cliente</h1><p class="sub">Solo muestra entregas de embarques a clientes. No muestra releases pendientes ni eventos internos de carga.</p></div><div><a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Embarques</a></div></div>
-    <div class="toolbar">
-        <div><label>Cliente</label><select id="cliente" class="form-select"><option value="">Todos los clientes</option></select></div>
-        <div><label>Buscar</label><input id="q" class="form-control" placeholder="Folio, cliente o destino" /></div>
-        <div><label>Estatus</label><select id="estatus" class="form-select"><option value="">Todos</option><option>Programado</option><option>Preparando</option><option>Preparado</option><option>Cargado</option><option>En ruta</option><option>Entregado</option><option>Cancelado</option></select></div>
-        <div><button id="btnAplicar" class="btn btn-primary btn-sm" type="button"><i class="fa-solid fa-filter me-1"></i>Aplicar</button> <button id="btnLimpiar" class="btn btn-outline-secondary btn-sm" type="button">Limpiar</button></div>
+    <div class="head">
+        <div>
+            <h1 class="title">
+                <i class="fa-solid fa-calendar-days me-1"></i>
+                Calendario de entregas por cliente
+            </h1>
+            <p class="sub">
+                Cada cliente aparece una sola vez por fecha de entrega. Selecciónalo para consultar las OF, partes y embarques programados.
+            </p>
+        </div>
+
+        <div>
+            <a asp-controller="LogisticaEmbarques"
+               asp-action="Index"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i>
+                Embarques
+            </a>
+        </div>
     </div>
-    <div class="summary"><div><strong id="total">0</strong><span>entregas visibles</span></div><div><strong id="expeditadas">0</strong><span>expeditadas</span></div><div><strong id="enRuta">0</strong><span>en ruta</span></div><div><strong id="entregadas">0</strong><span>entregadas</span></div></div>
+
+    <div class="toolbar">
+        <div>
+            <label>Cliente</label>
+            <select id="cliente" class="form-select">
+                <option value="">Todos los clientes</option>
+            </select>
+        </div>
+
+        <div>
+            <label>Buscar</label>
+            <input id="q"
+                   class="form-control"
+                   autocomplete="off"
+                   placeholder="Cliente, OF, parte, release, folio o destino" />
+        </div>
+
+        <div>
+            <label>Estatus</label>
+            <select id="estatus" class="form-select">
+                <option value="">Todos</option>
+                <option>Programado</option>
+                <option>Preparando</option>
+                <option>Preparado</option>
+                <option>Cargado</option>
+                <option>En ruta</option>
+                <option>Entregado</option>
+                <option>Cancelado</option>
+            </select>
+        </div>
+
+        <div class="toolbar-actions">
+            <button id="btnAplicar"
+                    class="btn btn-primary btn-sm"
+                    type="button">
+                <i class="fa-solid fa-filter me-1"></i>
+                Aplicar
+            </button>
+
+            <button id="btnLimpiar"
+                    class="btn btn-outline-secondary btn-sm"
+                    type="button">
+                <i class="fa-solid fa-rotate-left me-1"></i>
+                Limpiar
+            </button>
+        </div>
+    </div>
+
+    <div class="summary">
+        <div>
+            <strong id="totalClientes">0</strong>
+            <span>clientes / fecha visibles</span>
+        </div>
+
+        <div>
+            <strong id="totalOfs">0</strong>
+            <span>OF programadas</span>
+        </div>
+
+        <div>
+            <strong id="totalEmbarques">0</strong>
+            <span>embarques</span>
+        </div>
+
+        <div>
+            <strong id="totalPiezas">0</strong>
+            <span>piezas programadas</span>
+        </div>
+
+        <div>
+            <strong id="totalExpeditados">0</strong>
+            <span>clientes expeditados</span>
+        </div>
+    </div>
+
+    <div class="calendar-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>
+            El calendario muestra únicamente entregas programadas. Haz clic sobre un cliente para ver todas las OF correspondientes a ese día.
+        </span>
+    </div>
+
     <div id="calendar"></div>
 </div>
-<div class="modal fade" id="eventoModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header py-2"><h5 class="modal-title fs-6" id="mTitulo">Entrega</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="modal-data"><div><label>Cliente</label><div id="mCliente">-</div></div><div><label>Estatus</label><div id="mEstatus">-</div></div><div><label>Entrega</label><div id="mFecha">-</div></div><div><label>Hora</label><div id="mHora">-</div></div><div><label>Destino</label><div id="mDestino">-</div></div><div><label>Folio</label><div id="mFolio">-</div></div><div><label>Partidas</label><div id="mPartidas">0</div></div><div><label>Piezas</label><div id="mPiezas">0</div></div></div><div id="mAlerta" class="alert alert-danger py-2 px-3 mt-3 mb-0 d-none"></div></div><div class="modal-footer py-2"><button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button><a id="mAbrir" class="btn btn-primary btn-sm">Abrir embarque</a></div></div></div></div>
+
+<div class="modal fade"
+     id="eventoModal"
+     tabindex="-1"
+     aria-hidden="true">
+
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <h5 id="mTitulo">Entrega</h5>
+                    <p id="mSubtitulo">Detalle de entrega programada</p>
+                </div>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <div class="modal-summary">
+                    <div class="modal-summary-item">
+                        <label>Cliente</label>
+                        <strong id="mCliente">-</strong>
+                    </div>
+
+                    <div class="modal-summary-item">
+                        <label>Entrega</label>
+                        <strong id="mFecha">-</strong>
+                    </div>
+
+                    <div class="modal-summary-item">
+                        <label>OF</label>
+                        <strong id="mOfs">0</strong>
+                    </div>
+
+                    <div class="modal-summary-item">
+                        <label>Embarques</label>
+                        <strong id="mEmbarques">0</strong>
+                    </div>
+
+                    <div class="modal-summary-item">
+                        <label>Piezas</label>
+                        <strong id="mPiezas">0</strong>
+                    </div>
+                </div>
+
+                <div id="mAlerta"
+                     class="alert alert-danger modal-alerta py-2 px-3 d-none">
+                </div>
+
+                <div class="of-panel">
+                    <div class="of-panel-head">
+                        <strong>
+                            <i class="fa-solid fa-list-check me-1"></i>
+                            OF programadas para esta entrega
+                        </strong>
+
+                        <span id="mEstadoGeneral">-</span>
+                    </div>
+
+                    <div class="of-table-wrap">
+                        <table class="of-table">
+                            <thead>
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>OF</th>
+                                    <th>Parte</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th>Embarque</th>
+                                    <th>Destino</th>
+                                    <th>Estatus</th>
+                                    <th class="text-center"></th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="mEntregas"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="mSinEntregas"
+                         class="empty-of d-none">
+                        No se encontraron partidas para este cliente.
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer py-2">
+                <div class="me-auto small text-muted" id="mFooterResumen"></div>
+
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+
+                <a id="mAbrirUnico"
+                   class="btn btn-primary btn-sm d-none"
+                   href="#">
+                    <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>
+                    Abrir embarque
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
     <script>
-        (()=>{
-         const q=document.getElementById('q'),estatus=document.getElementById('estatus'),cliente=document.getElementById('cliente');let raw=[];
-         const color=x=>x.expeditado?'#dc3545':x.estatus==='Entregado'?'#198754':x.estatus==='En ruta'?'#0d6efd':x.estatus==='Cancelado'?'#6c757d':'#173a7a';
-         const cal=new FullCalendar.Calendar(document.getElementById('calendar'),{locale:'es',initialView:'dayGridMonth',firstDay:1,height:'auto',displayEventTime:false,dayMaxEvents:4,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,timeGridWeek,listWeek'},buttonText:{today:'Hoy',month:'Mes',week:'Semana',list:'Lista'},datesSet:()=>cargar(),eventClick:i=>mostrar(i.event.extendedProps),eventDidMount:i=>{const p=i.event.extendedProps;i.el.title=`${p.cliente} · ${p.destino} · ${p.estatus}`}});
-         async function cargar(){const ini=cal.view.activeStart,fin=new Date(cal.view.activeEnd);fin.setDate(fin.getDate()-1);const qs=new URLSearchParams({desde:ini.toISOString().slice(0,10),hasta:fin.toISOString().slice(0,10)});if(q.value.trim())qs.set('q',q.value.trim());if(estatus.value)qs.set('estatus',estatus.value);try{const r=await fetch('@Url.Action("EventosCalendario", "LogisticaEmbarques")?'+qs.toString());const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.mensaje||'No fue posible cargar el calendario.');raw=d.eventos||[];cargarClientes();pintar()}catch(e){raw=[];cal.removeAllEvents();alert(e.message)}}
-         function cargarClientes(){const actual=cliente.value;const items=[...new Map(raw.filter(x=>x.clienteId>0).map(x=>[x.clienteId,x.cliente])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'es'));cliente.innerHTML='<option value="">Todos los clientes</option>'+items.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');if(items.some(x=>String(x[0])===actual))cliente.value=actual}
-         function pintar(){const cid=cliente.value;const v=raw.filter(x=>!cid||String(x.clienteId)===cid);cal.removeAllEvents();cal.addEventSource(v.map(x=>({id:x.id,title:`${x.hora?x.hora+' ':''}${x.cliente}`,start:x.fecha,allDay:true,backgroundColor:color(x),borderColor:color(x),textColor:'#fff',extendedProps:x})));document.getElementById('total').textContent=v.length;document.getElementById('expeditadas').textContent=v.filter(x=>x.expeditado).length;document.getElementById('enRuta').textContent=v.filter(x=>x.estatus==='En ruta').length;document.getElementById('entregadas').textContent=v.filter(x=>x.estatus==='Entregado').length}
-         function mostrar(p){document.getElementById('mTitulo').textContent=p.cliente||'Entrega';document.getElementById('mCliente').textContent=p.cliente||'-';document.getElementById('mEstatus').textContent=p.expeditado?'Expeditado':(p.estatus||'-');document.getElementById('mFecha').textContent=p.fecha||'-';document.getElementById('mHora').textContent=p.hora||'Sin hora';document.getElementById('mDestino').textContent=p.destino||'-';document.getElementById('mFolio').textContent=p.folio||'-';document.getElementById('mPartidas').textContent=Number(p.totalPartidas||0).toLocaleString('es-MX');document.getElementById('mPiezas').textContent=Number(p.totalPiezas||0).toLocaleString('es-MX');const a=document.getElementById('mAlerta');a.classList.toggle('d-none',!p.expeditado&&!p.incidencia);a.textContent=p.expeditado?'Entrega expeditada: la fecha comprometida ya fue superada.':p.incidencia?'El embarque tiene una incidencia activa.':'';document.getElementById('mAbrir').href=p.url||'#';bootstrap.Modal.getOrCreateInstance(document.getElementById('eventoModal')).show()}
-         document.getElementById('btnAplicar').addEventListener('click',cargar);document.getElementById('btnLimpiar').addEventListener('click',()=>{q.value='';estatus.value='';cliente.value='';cargar()});cliente.addEventListener('change',pintar);q.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();cargar()}});cal.render();
+        (() => {
+            const q = document.getElementById('q');
+            const estatus = document.getElementById('estatus');
+            const cliente = document.getElementById('cliente');
+            const calendarEl = document.getElementById('calendar');
+
+            let raw = [];
+
+            const numero = valor =>
+                Number(valor || 0).toLocaleString('es-MX');
+
+            const fechaMostrar = valor => {
+                if (!valor) return '-';
+
+                const partes = String(valor).split('-');
+
+                if (partes.length !== 3)
+                    return valor;
+
+                return `${partes[2]}/${partes[1]}/${partes[0]}`;
+            };
+
+            const fechaIsoLocal = fecha => {
+                const y = fecha.getFullYear();
+                const m = String(fecha.getMonth() + 1).padStart(2, '0');
+                const d = String(fecha.getDate()).padStart(2, '0');
+
+                return `${y}-${m}-${d}`;
+            };
+
+            const claveCliente = x => {
+                const id = Number(x.clienteId || 0);
+
+                if (id > 0)
+                    return `id:${id}`;
+
+                return `nombre:${String(x.cliente || '').trim().toUpperCase()}`;
+            };
+
+            const color = x => {
+                if (x.expeditado)
+                    return '#c83e4d';
+
+                if (x.estatus === 'Entregado')
+                    return '#2f7d4a';
+
+                if (x.estatus === 'En ruta')
+                    return '#2f63ad';
+
+                if (x.estatus === 'Cargado')
+                    return '#3878a8';
+
+                if (x.estatus === 'Cancelado')
+                    return '#727b86';
+
+                if (x.estatus === 'Mixto')
+                    return '#92752e';
+
+                return '#173a7a';
+            };
+
+            const claseEstado = valor => {
+                switch (valor) {
+                    case 'Programado':
+                        return 'st-programado';
+
+                    case 'Preparando':
+                        return 'st-preparando';
+
+                    case 'Preparado':
+                        return 'st-preparado';
+
+                    case 'Cargado':
+                        return 'st-cargado';
+
+                    case 'En ruta':
+                        return 'st-ruta';
+
+                    case 'Entregado':
+                        return 'st-entregado';
+
+                    case 'Cancelado':
+                        return 'st-cancelado';
+
+                    default:
+                        return 'st-mixto';
+                }
+            };
+
+            const crearCeldaTexto = (tr, texto, clase) => {
+                const td = document.createElement('td');
+
+                if (clase)
+                    td.className = clase;
+
+                td.textContent = texto ?? '-';
+                tr.appendChild(td);
+
+                return td;
+            };
+
+            const cal = new FullCalendar.Calendar(calendarEl, {
+                locale: 'es',
+                initialView: 'dayGridMonth',
+                firstDay: 1,
+                height: 'auto',
+                displayEventTime: false,
+                dayMaxEvents: 4,
+
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,listWeek'
+                },
+
+                buttonText: {
+                    today: 'Hoy',
+                    month: 'Mes',
+                    week: 'Semana',
+                    list: 'Lista'
+                },
+
+                datesSet: () => cargar(),
+
+                eventClick: info => {
+                    info.jsEvent.preventDefault();
+                    mostrar(info.event.extendedProps);
+                },
+
+                eventContent: info => {
+                    const p = info.event.extendedProps;
+
+                    const contenedor = document.createElement('div');
+                    contenedor.className = 'evento-cliente';
+
+                    const nombre = document.createElement('div');
+                    nombre.className = 'evento-cliente-nombre';
+                    nombre.textContent =
+                        `${p.hora ? p.hora + ' · ' : ''}${p.cliente || 'Sin cliente'}`;
+
+                    const meta = document.createElement('div');
+                    meta.className = 'evento-cliente-meta';
+                    meta.textContent =
+                        `${numero(p.totalOfs)} OF · ${numero(p.totalEmbarques)} emb. · ${numero(p.totalPiezas)} pz`;
+
+                    contenedor.appendChild(nombre);
+                    contenedor.appendChild(meta);
+
+                    return {
+                        domNodes: [contenedor]
+                    };
+                },
+
+                eventDidMount: info => {
+                    const p = info.event.extendedProps;
+
+                    info.el.title =
+                        `${p.cliente || 'Sin cliente'}\n` +
+                        `${numero(p.totalOfs)} OF\n` +
+                        `${numero(p.totalEmbarques)} embarque(s)\n` +
+                        `${numero(p.totalPiezas)} pieza(s)\n` +
+                        `${p.expeditado ? 'EXPEDITADO' : p.estatus || ''}`;
+                }
+            });
+
+            async function cargar() {
+                const ini = cal.view.activeStart;
+                const fin = new Date(cal.view.activeEnd);
+
+                fin.setDate(fin.getDate() - 1);
+
+                const qs = new URLSearchParams({
+                    desde: fechaIsoLocal(ini),
+                    hasta: fechaIsoLocal(fin)
+                });
+
+                if (q.value.trim())
+                    qs.set('q', q.value.trim());
+
+                if (estatus.value)
+                    qs.set('estatus', estatus.value);
+
+                calendarEl.classList.add('loading-calendar');
+
+                try {
+                    const response = await fetch(
+                        '@Url.Action("EventosCalendario", "LogisticaEmbarques")?' +
+                        qs.toString(),
+                        {
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        }
+                    );
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.ok)
+                        throw new Error(
+                            data.mensaje ||
+                            'No fue posible cargar el calendario.'
+                        );
+
+                    raw = Array.isArray(data.eventos)
+                        ? data.eventos
+                        : [];
+
+                    cargarClientes();
+                    pintar();
+                }
+                catch (error) {
+                    raw = [];
+                    cal.removeAllEvents();
+                    cargarClientes();
+                    actualizarResumen([]);
+
+                    alert(
+                        error.message ||
+                        'No fue posible cargar el calendario.'
+                    );
+                }
+                finally {
+                    calendarEl.classList.remove('loading-calendar');
+                }
+            }
+
+            function cargarClientes() {
+                const actual = cliente.value;
+
+                const mapa = new Map();
+
+                raw.forEach(x => {
+                    const nombre =
+                        String(x.cliente || 'Sin cliente').trim();
+
+                    mapa.set(
+                        claveCliente(x),
+                        nombre || 'Sin cliente'
+                    );
+                });
+
+                const items = [...mapa.entries()]
+                    .sort((a, b) =>
+                        a[1].localeCompare(
+                            b[1],
+                            'es',
+                            { sensitivity: 'base' }
+                        )
+                    );
+
+                cliente.replaceChildren();
+
+                const todos = new Option(
+                    'Todos los clientes',
+                    ''
+                );
+
+                cliente.appendChild(todos);
+
+                items.forEach(([valor, texto]) => {
+                    cliente.appendChild(
+                        new Option(texto, valor)
+                    );
+                });
+
+                if (
+                    actual &&
+                    items.some(x => x[0] === actual)
+                ) {
+                    cliente.value = actual;
+                }
+            }
+
+            function pintar() {
+                const filtroCliente = cliente.value;
+
+                const visibles = raw.filter(x =>
+                    !filtroCliente ||
+                    claveCliente(x) === filtroCliente
+                );
+
+                cal.removeAllEvents();
+
+                cal.addEventSource(
+                    visibles.map(x => ({
+                        id: x.id,
+                        title: x.cliente || 'Sin cliente',
+                        start: x.fecha,
+                        allDay: true,
+                        backgroundColor: color(x),
+                        borderColor: color(x),
+                        textColor: '#fff',
+                        extendedProps: x
+                    }))
+                );
+
+                actualizarResumen(visibles);
+            }
+
+            function actualizarResumen(visibles) {
+                document.getElementById('totalClientes')
+                    .textContent =
+                    numero(visibles.length);
+
+                document.getElementById('totalOfs')
+                    .textContent =
+                    numero(
+                        visibles.reduce(
+                            (s, x) =>
+                                s + Number(x.totalOfs || 0),
+                            0
+                        )
+                    );
+
+                document.getElementById('totalEmbarques')
+                    .textContent =
+                    numero(
+                        visibles.reduce(
+                            (s, x) =>
+                                s + Number(x.totalEmbarques || 0),
+                            0
+                        )
+                    );
+
+                document.getElementById('totalPiezas')
+                    .textContent =
+                    numero(
+                        visibles.reduce(
+                            (s, x) =>
+                                s + Number(x.totalPiezas || 0),
+                            0
+                        )
+                    );
+
+                document.getElementById('totalExpeditados')
+                    .textContent =
+                    numero(
+                        visibles.filter(x => x.expeditado).length
+                    );
+            }
+
+            function mostrar(p) {
+                document.getElementById('mTitulo')
+                    .textContent =
+                    p.cliente || 'Entrega';
+
+                document.getElementById('mSubtitulo')
+                    .textContent =
+                    `Entrega programada · ${fechaMostrar(p.fecha)}${p.hora ? ' · ' + p.hora : ''}`;
+
+                document.getElementById('mCliente')
+                    .textContent =
+                    p.cliente || '-';
+
+                document.getElementById('mFecha')
+                    .textContent =
+                    fechaMostrar(p.fecha);
+
+                document.getElementById('mOfs')
+                    .textContent =
+                    numero(p.totalOfs);
+
+                document.getElementById('mEmbarques')
+                    .textContent =
+                    numero(p.totalEmbarques);
+
+                document.getElementById('mPiezas')
+                    .textContent =
+                    numero(p.totalPiezas);
+
+                document.getElementById('mEstadoGeneral')
+                    .textContent =
+                    p.expeditado
+                        ? `EXPEDITADO · ${p.estatus || ''}`
+                        : p.estatus || '-';
+
+                const alerta =
+                    document.getElementById('mAlerta');
+
+                const mensajes = [];
+
+                if (p.expeditado) {
+                    mensajes.push(
+                        'La fecha comprometida de entrega ya fue superada y existen embarques pendientes.'
+                    );
+                }
+
+                if (p.incidencia) {
+                    mensajes.push(
+                        'Uno o más embarques tienen una incidencia activa.'
+                    );
+                }
+
+                alerta.classList.toggle(
+                    'd-none',
+                    mensajes.length === 0
+                );
+
+                alerta.textContent =
+                    mensajes.join(' ');
+
+                const tbody =
+                    document.getElementById('mEntregas');
+
+                const sinEntregas =
+                    document.getElementById('mSinEntregas');
+
+                tbody.replaceChildren();
+
+                const entregas =
+                    Array.isArray(p.entregas)
+                        ? p.entregas
+                        : [];
+
+                sinEntregas.classList.toggle(
+                    'd-none',
+                    entregas.length > 0
+                );
+
+                entregas.forEach(item => {
+                    const tr =
+                        document.createElement('tr');
+
+                    crearCeldaTexto(
+                        tr,
+                        item.hora || '-'
+                    );
+
+                    const tdOf =
+                        crearCeldaTexto(
+                            tr,
+                            item.numeroOF || '-',
+                            'of-code'
+                        );
+
+                    if (item.folioRelease) {
+                        tdOf.title =
+                            `Release: ${item.folioRelease}`;
+                    }
+
+                    crearCeldaTexto(
+                        tr,
+                        item.numeroParte || '-',
+                        'of-part'
+                    );
+
+                    crearCeldaTexto(
+                        tr,
+                        item.descripcion || '-',
+                        'of-description'
+                    );
+
+                    crearCeldaTexto(
+                        tr,
+                        numero(item.cantidad),
+                        'of-number'
+                    );
+
+                    const tdEmbarque =
+                        document.createElement('td');
+
+                    tdEmbarque.className =
+                        'embarque-cell';
+
+                    const embStrong =
+                        document.createElement('strong');
+
+                    embStrong.textContent =
+                        item.folio ||
+                        `Embarque ${item.embarqueId || ''}`;
+
+                    tdEmbarque.appendChild(
+                        embStrong
+                    );
+
+                    if (item.folioRelease) {
+                        const release =
+                            document.createElement('small');
+
+                        release.textContent =
+                            item.folioRelease;
+
+                        tdEmbarque.appendChild(
+                            release
+                        );
+                    }
+
+                    tr.appendChild(tdEmbarque);
+
+                    crearCeldaTexto(
+                        tr,
+                        item.destino || '-'
+                    );
+
+                    const tdEstado =
+                        document.createElement('td');
+
+                    const badge =
+                        document.createElement('span');
+
+                    badge.className =
+                        `badge-status ${claseEstado(item.estatus)}`;
+
+                    badge.textContent =
+                        item.estatus || '-';
+
+                    tdEstado.appendChild(badge);
+                    tr.appendChild(tdEstado);
+
+                    const tdAccion =
+                        document.createElement('td');
+
+                    tdAccion.className =
+                        'text-center';
+
+                    if (item.url) {
+                        const abrir =
+                            document.createElement('a');
+
+                        abrir.href = item.url;
+                        abrir.className = 'btn-ver';
+                        abrir.title = 'Abrir embarque';
+
+                        const icono =
+                            document.createElement('i');
+
+                        icono.className =
+                            'fa-solid fa-arrow-up-right-from-square';
+
+                        abrir.appendChild(icono);
+                        tdAccion.appendChild(abrir);
+                    }
+
+                    tr.appendChild(tdAccion);
+                    tbody.appendChild(tr);
+                });
+
+                document.getElementById('mFooterResumen')
+                    .textContent =
+                    `${numero(p.totalOfs)} OF · ` +
+                    `${numero(p.totalEmbarques)} embarque(s) · ` +
+                    `${numero(p.totalPiezas)} pieza(s)`;
+
+                const abrirUnico =
+                    document.getElementById('mAbrirUnico');
+
+                if (
+                    Number(p.totalEmbarques || 0) === 1 &&
+                    p.url
+                ) {
+                    abrirUnico.href = p.url;
+
+                    abrirUnico.classList.remove(
+                        'd-none'
+                    );
+                }
+                else {
+                    abrirUnico.href = '#';
+
+                    abrirUnico.classList.add(
+                        'd-none'
+                    );
+                }
+
+                bootstrap.Modal
+                    .getOrCreateInstance(
+                        document.getElementById(
+                            'eventoModal'
+                        )
+                    )
+                    .show();
+            }
+
+            document.getElementById('btnAplicar')
+                .addEventListener(
+                    'click',
+                    cargar
+                );
+
+            document.getElementById('btnLimpiar')
+                .addEventListener(
+                    'click',
+                    () => {
+                        q.value = '';
+                        estatus.value = '';
+                        cliente.value = '';
+
+                        cargar();
+                    }
+                );
+
+            cliente.addEventListener(
+                'change',
+                pintar
+            );
+
+            q.addEventListener(
+                'keydown',
+                e => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        cargar();
+                    }
+                }
+            );
+
+            cal.render();
         })();
     </script>
 }

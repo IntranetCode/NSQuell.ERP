@@ -3838,50 +3838,69 @@ WHERE EmbarqueID=@EmbarqueID AND Activo=1;",
     {
         var acceso = await ValidarAccesoAsync("Tablero de Logística");
         if (acceso != null) return acceso;
+
         desde = desde.Date;
         hasta = hasta.Date;
-        if (hasta < desde) return BadRequest(new { ok = false, mensaje = "El rango de fechas del calendario no es válido." });
-        if ((hasta - desde).TotalDays > 120) return BadRequest(new { ok = false, mensaje = "El calendario solo puede consultar hasta 120 días por solicitud." });
+
+        if (hasta < desde)
+            return BadRequest(new { ok = false, mensaje = "El rango de fechas del calendario no es válido." });
+
+        if ((hasta - desde).TotalDays > 120)
+            return BadRequest(new { ok = false, mensaje = "El calendario solo puede consultar hasta 120 días por solicitud." });
+
         q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
         estatus = string.IsNullOrWhiteSpace(estatus) ? null : estatus.Trim();
+
         await using var cn = await AbrirAsync(cancellationToken);
+
         if (!await TieneFase1Async(cn, cancellationToken))
             return BadRequest(new { ok = false, mensaje = "Falta la estructura de Logística Fase 1." });
-        var eventos = new List<object>();
-        const string sqlEmbarques = @"
+
+        var filas = new List<(
+            int EmbarqueID,
+            int ClienteID,
+            string Cliente,
+            string Folio,
+            string Destino,
+            DateTime FechaEntrega,
+            TimeSpan? HoraEntrega,
+            string Estatus,
+            bool Incidencia,
+            int EmbarqueDetalleID,
+            string FolioRelease,
+            string NumeroOF,
+            string NumeroParte,
+            string Descripcion,
+            int CantidadSolicitada,
+            int CantidadDespachada)>();
+
+        const string sql = @"
 SELECT
     e.EmbarqueID,
+    ISNULL(e.ClienteID,0) AS ClienteID,
+    ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente') AS Cliente,
     ISNULL(e.Folio,N'') AS Folio,
-    ISNULL(e.ClienteNombreSnapshot,N'') AS Cliente,
     ISNULL(e.Destino,N'') AS Destino,
-    e.FechaCargaProgramada,
-    e.HoraCargaProgramada,
     e.FechaEntregaProgramada,
     e.HoraEntregaProgramada,
     ISNULL(e.Estatus,N'') AS Estatus,
     ISNULL(e.TieneIncidencia,0) AS TieneIncidencia,
-    ISNULL
-    (
-        (
-            SELECT COUNT(*)
-            FROM dbo.Logistica_EmbarqueCajas ec
-            WHERE ec.EmbarqueID=e.EmbarqueID
-              AND ec.Activo=1
-        ),
-        0
-    ) AS TotalCajas,
-    ISNULL
-    (
-        (
-            SELECT SUM(d.CantidadSolicitada)
-            FROM dbo.Logistica_EmbarqueDetalle d
-            WHERE d.EmbarqueID=e.EmbarqueID
-              AND d.Activo=1
-        ),
-        0
-    ) AS TotalPiezas
+
+    d.EmbarqueDetalleID,
+    ISNULL(d.FolioReleaseSnapshot,N'') AS FolioRelease,
+    ISNULL(d.NumeroOFSnapshot,N'') AS NumeroOF,
+    ISNULL(d.NumeroParteSnapshot,N'') AS NumeroParte,
+    ISNULL(d.DescripcionParteSnapshot,N'') AS Descripcion,
+    ISNULL(d.CantidadSolicitada,0) AS CantidadSolicitada,
+    ISNULL(d.CantidadDespachada,0) AS CantidadDespachada
 FROM dbo.Logistica_Embarques e
+INNER JOIN dbo.Logistica_EmbarqueDetalle d
+    ON d.EmbarqueID=e.EmbarqueID
+   AND d.Activo=1
 WHERE e.Activo=1
+  AND e.FechaEntregaProgramada IS NOT NULL
+  AND e.FechaEntregaProgramada>=@Desde
+  AND e.FechaEntregaProgramada<DATEADD(DAY,1,@Hasta)
   AND (@Estatus IS NULL OR e.Estatus=@Estatus)
   AND
   (
@@ -3889,112 +3908,328 @@ WHERE e.Activo=1
       OR e.Folio LIKE N'%'+@Q+N'%'
       OR e.ClienteNombreSnapshot LIKE N'%'+@Q+N'%'
       OR e.Destino LIKE N'%'+@Q+N'%'
-  )
-  AND
-  (
-      (e.FechaCargaProgramada>=@Desde AND e.FechaCargaProgramada<DATEADD(DAY,1,@Hasta))
-      OR
-      (e.FechaEntregaProgramada>=@Desde AND e.FechaEntregaProgramada<DATEADD(DAY,1,@Hasta))
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.Logistica_EmbarqueDetalle dq
+          WHERE dq.EmbarqueID=e.EmbarqueID
+            AND dq.Activo=1
+            AND
+            (
+                dq.NumeroOFSnapshot LIKE N'%'+@Q+N'%'
+                OR dq.NumeroParteSnapshot LIKE N'%'+@Q+N'%'
+                OR dq.FolioReleaseSnapshot LIKE N'%'+@Q+N'%'
+                OR dq.DescripcionParteSnapshot LIKE N'%'+@Q+N'%'
+            )
+      )
   )
 ORDER BY
-    COALESCE(e.FechaCargaProgramada,e.FechaEntregaProgramada),
-    e.HoraCargaProgramada,
-    e.EmbarqueID;";
-        await using (var cmd = new SqlCommand(sqlEmbarques, cn))
+    e.FechaEntregaProgramada,
+    e.ClienteNombreSnapshot,
+    e.HoraEntregaProgramada,
+    e.EmbarqueID,
+    d.EmbarqueDetalleID;";
+
+        await using (var cmd = new SqlCommand(sql, cn))
         {
             cmd.Parameters.Add("@Desde", SqlDbType.Date).Value = desde;
             cmd.Parameters.Add("@Hasta", SqlDbType.Date).Value = hasta;
-            cmd.Parameters.Add("@Estatus", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(estatus) ? DBNull.Value : estatus;
-            cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = string.IsNullOrWhiteSpace(q) ? DBNull.Value : q;
+            cmd.Parameters.Add("@Estatus", SqlDbType.NVarChar, 20).Value =
+                string.IsNullOrWhiteSpace(estatus)
+                    ? DBNull.Value
+                    : estatus;
+
+            cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value =
+                string.IsNullOrWhiteSpace(q)
+                    ? DBNull.Value
+                    : q;
+
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
             while (await rd.ReadAsync(cancellationToken))
             {
-                var embarqueId = Entero(rd, "EmbarqueID");
-                var folio = Texto(rd, "Folio");
-                var cliente = Texto(rd, "Cliente");
-                var destino = Texto(rd, "Destino");
-                var fechaCarga = Fecha(rd, "FechaCargaProgramada");
-                var horaCarga = Hora(rd, "HoraCargaProgramada");
                 var fechaEntrega = Fecha(rd, "FechaEntregaProgramada");
-                var horaEntrega = Hora(rd, "HoraEntregaProgramada");
-                var estado = Texto(rd, "Estatus");
-                var incidencia = Booleano(rd, "TieneIncidencia");
-                var totalCajas = Entero(rd, "TotalCajas");
-                var totalPiezas = Entero(rd, "TotalPiezas");
-                if (fechaCarga.HasValue && fechaCarga.Value.Date >= desde && fechaCarga.Value.Date <= hasta)
-                {
-                    eventos.Add(new
-                    {
-                        id = $"CARGA-{embarqueId}",
-                        embarqueId,
-                        tipo = "CARGA",
-                        fecha = fechaCarga.Value.ToString("yyyy-MM-dd"),
-                        hora = horaCarga?.ToString(@"hh\:mm") ?? "",
-                        titulo = string.IsNullOrWhiteSpace(folio) ? $"Embarque {embarqueId}" : folio,
-                        cliente,
-                        destino,
-                        estatus = estado,
-                        totalCajas,
-                        totalPiezas,
-                        incidencia,
-                        url = Url.Action(nameof(Detalle), "LogisticaEmbarques", new { id = embarqueId })
-                    });
-                }
-                if (fechaEntrega.HasValue && fechaEntrega.Value.Date >= desde && fechaEntrega.Value.Date <= hasta)
-                {
-                    eventos.Add(new
-                    {
-                        id = $"ENTREGA-{embarqueId}",
-                        embarqueId,
-                        tipo = "ENTREGA",
-                        fecha = fechaEntrega.Value.ToString("yyyy-MM-dd"),
-                        hora = horaEntrega?.ToString(@"hh\:mm") ?? "",
-                        titulo = string.IsNullOrWhiteSpace(folio) ? $"Embarque {embarqueId}" : folio,
-                        cliente,
-                        destino,
-                        estatus = estado,
-                        totalCajas,
-                        totalPiezas,
-                        incidencia,
-                        url = Url.Action(nameof(Detalle), "LogisticaEmbarques", new { id = embarqueId })
-                    });
-                }
+                if (!fechaEntrega.HasValue) continue;
+
+                filas.Add((
+                    EmbarqueID: Entero(rd, "EmbarqueID"),
+                    ClienteID: Entero(rd, "ClienteID"),
+                    Cliente: Texto(rd, "Cliente"),
+                    Folio: Texto(rd, "Folio"),
+                    Destino: Texto(rd, "Destino"),
+                    FechaEntrega: fechaEntrega.Value.Date,
+                    HoraEntrega: Hora(rd, "HoraEntregaProgramada"),
+                    Estatus: Texto(rd, "Estatus"),
+                    Incidencia: Booleano(rd, "TieneIncidencia"),
+                    EmbarqueDetalleID: Entero(rd, "EmbarqueDetalleID"),
+                    FolioRelease: Texto(rd, "FolioRelease"),
+                    NumeroOF: Texto(rd, "NumeroOF"),
+                    NumeroParte: Texto(rd, "NumeroParte"),
+                    Descripcion: Texto(rd, "Descripcion"),
+                    CantidadSolicitada: Entero(rd, "CantidadSolicitada"),
+                    CantidadDespachada: Entero(rd, "CantidadDespachada")
+                ));
             }
         }
-        var demandas = await CargarDemandasAsync(cn, q, desde, hasta, true, null, cancellationToken);
-        foreach (var demanda in demandas.Where(x => x.PendienteProgramar > 0))
-        {
-            var fechaCarga = (demanda.FechaCarga ?? demanda.FechaEntrega.AddDays(-1)).Date;
-            if (fechaCarga < desde || fechaCarga > hasta) continue;
-            eventos.Add(new
+
+        /*
+         * El calendario ya NO genera:
+         * - eventos de carga;
+         * - releases pendientes;
+         * - un evento por embarque.
+         *
+         * Ahora genera:
+         * CLIENTE + FECHA DE ENTREGA = UN SOLO EVENTO.
+         *
+         * Dentro del evento viajan todas las OF/partidas que corresponden
+         * a ese cliente para ese día.
+         */
+        var grupos = filas
+            .GroupBy(x => new
             {
-                id = $"PENDIENTE-{demanda.ReleaseDetalleID}",
-                releaseDetalleId = demanda.ReleaseDetalleID,
-                tipo = "PENDIENTE",
-                fecha = fechaCarga.ToString("yyyy-MM-dd"),
-                hora = "",
-                titulo = string.IsNullOrWhiteSpace(demanda.FolioRelease) ? "Release pendiente" : demanda.FolioRelease,
-                cliente = demanda.Cliente,
-                destino = "",
-                estatus = "Pendiente programar",
-                numeroParte = demanda.NumeroParte,
-                numeroOF = demanda.NumeroOF,
-                totalCajas = demanda.CajasPTDisponibles,
-                totalPiezas = demanda.PendienteProgramar,
-                incidencia = demanda.PiezasPTDisponibles < demanda.PendienteProgramar,
-                url = Url.Action(nameof(Crear), "LogisticaEmbarques", new { releaseDetalleId = demanda.ReleaseDetalleID })
-            });
-        }
+                ClaveCliente = x.ClienteID > 0
+                    ? $"ID:{x.ClienteID}"
+                    : $"NOMBRE:{x.Cliente.Trim().ToUpperInvariant()}",
+                Fecha = x.FechaEntrega.Date
+            })
+            .OrderBy(x => x.Key.Fecha)
+            .ThenBy(x => x.Select(y => y.Cliente).FirstOrDefault());
+
+        var eventos = grupos.Select((grupo, indice) =>
+        {
+            var registros = grupo.ToList();
+
+            var clienteId = registros
+                .Where(x => x.ClienteID > 0)
+                .Select(x => x.ClienteID)
+                .FirstOrDefault();
+
+            var cliente = registros
+                .Select(x => x.Cliente?.Trim())
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                ?? "Sin cliente";
+
+            var embarquesIds = registros
+                .Select(x => x.EmbarqueID)
+                .Distinct()
+                .ToList();
+
+            var folios = registros
+                .Select(x => x.Folio?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var destinos = registros
+                .Select(x => x.Destino?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var ofs = registros
+                .Select(x => x.NumeroOF?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var estados = registros
+                .Select(x => x.Estatus?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var horas = registros
+                .Where(x => x.HoraEntrega.HasValue)
+                .Select(x => x.HoraEntrega!.Value)
+                .ToList();
+
+            var todosEntregados = registros.All(x =>
+                string.Equals(x.Estatus, "Entregado", StringComparison.OrdinalIgnoreCase));
+
+            var todosCancelados = registros.All(x =>
+                string.Equals(x.Estatus, "Cancelado", StringComparison.OrdinalIgnoreCase));
+
+            var tieneEnRuta = registros.Any(x =>
+                string.Equals(x.Estatus, "En ruta", StringComparison.OrdinalIgnoreCase));
+
+            var tieneCargado = registros.Any(x =>
+                string.Equals(x.Estatus, "Cargado", StringComparison.OrdinalIgnoreCase));
+
+            var tienePreparado = registros.Any(x =>
+                string.Equals(x.Estatus, "Preparado", StringComparison.OrdinalIgnoreCase));
+
+            var tienePreparando = registros.Any(x =>
+                string.Equals(x.Estatus, "Preparando", StringComparison.OrdinalIgnoreCase));
+
+            var tieneProgramado = registros.Any(x =>
+                string.Equals(x.Estatus, "Programado", StringComparison.OrdinalIgnoreCase));
+
+            var expeditado =
+                grupo.Key.Fecha < DateTime.Today &&
+                registros.Any(x =>
+                    !string.Equals(x.Estatus, "Entregado", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(x.Estatus, "Cancelado", StringComparison.OrdinalIgnoreCase));
+
+            string estatusGrupo;
+
+            if (todosEntregados)
+                estatusGrupo = "Entregado";
+            else if (todosCancelados)
+                estatusGrupo = "Cancelado";
+            else if (tieneEnRuta)
+                estatusGrupo = "En ruta";
+            else if (estados.Count == 1)
+                estatusGrupo = estados[0];
+            else
+                estatusGrupo = "Mixto";
+
+            var destinoResumen = destinos.Count switch
+            {
+                0 => string.Empty,
+                1 => destinos[0]!,
+                _ => $"{destinos.Count:N0} destinos"
+            };
+
+            var folioResumen = folios.Count switch
+            {
+                0 => string.Empty,
+                1 => folios[0]!,
+                _ => $"{folios.Count:N0} embarques"
+            };
+
+            var horaResumen = horas.Count > 0
+                ? horas.Min().ToString(@"hh\:mm")
+                : string.Empty;
+
+            var urlGrupo = embarquesIds.Count == 1
+                ? Url.Action(
+                    nameof(Detalle),
+                    "LogisticaEmbarques",
+                    new { id = embarquesIds[0] }) ?? string.Empty
+                : string.Empty;
+
+            var entregas = registros
+                .OrderBy(x => x.HoraEntrega ?? TimeSpan.MaxValue)
+                .ThenBy(x => x.NumeroOF)
+                .ThenBy(x => x.NumeroParte)
+                .ThenBy(x => x.EmbarqueID)
+                .Select(x => new
+                {
+                    embarqueId = x.EmbarqueID,
+                    embarqueDetalleId = x.EmbarqueDetalleID,
+
+                    folio = x.Folio,
+                    folioRelease = x.FolioRelease,
+
+                    numeroOF = x.NumeroOF,
+                    numeroParte = x.NumeroParte,
+                    descripcion = x.Descripcion,
+
+                    cantidad = x.CantidadSolicitada,
+                    cantidadDespachada = x.CantidadDespachada,
+
+                    destino = x.Destino,
+                    estatus = x.Estatus,
+
+                    hora = x.HoraEntrega?.ToString(@"hh\:mm") ?? string.Empty,
+
+                    incidencia = x.Incidencia,
+
+                    url = Url.Action(
+                        nameof(Detalle),
+                        "LogisticaEmbarques",
+                        new { id = x.EmbarqueID })
+                })
+                .ToList();
+
+            return new
+            {
+                id = $"CLIENTE-{indice + 1}-{grupo.Key.Fecha:yyyyMMdd}",
+
+                tipo = "CLIENTE_ENTREGA",
+
+                clienteId,
+                cliente,
+
+                titulo = cliente,
+
+                fecha = grupo.Key.Fecha.ToString("yyyy-MM-dd"),
+                hora = horaResumen,
+
+                estatus = estatusGrupo,
+
+                expeditado,
+                incidencia = registros.Any(x => x.Incidencia),
+
+                destino = destinoResumen,
+                folio = folioResumen,
+
+                totalOfs = ofs.Count,
+                totalEmbarques = embarquesIds.Count,
+                totalPartidas = registros.Count,
+                totalPiezas = registros.Sum(x => (long)x.CantidadSolicitada),
+
+                programados = registros.Count(x =>
+                    string.Equals(x.Estatus, "Programado", StringComparison.OrdinalIgnoreCase)),
+
+                preparando = registros.Count(x =>
+                    string.Equals(x.Estatus, "Preparando", StringComparison.OrdinalIgnoreCase)),
+
+                preparados = registros.Count(x =>
+                    string.Equals(x.Estatus, "Preparado", StringComparison.OrdinalIgnoreCase)),
+
+                cargados = registros.Count(x =>
+                    string.Equals(x.Estatus, "Cargado", StringComparison.OrdinalIgnoreCase)),
+
+                enRuta = registros.Count(x =>
+                    string.Equals(x.Estatus, "En ruta", StringComparison.OrdinalIgnoreCase)),
+
+                entregados = registros.Count(x =>
+                    string.Equals(x.Estatus, "Entregado", StringComparison.OrdinalIgnoreCase)),
+
+                cancelados = registros.Count(x =>
+                    string.Equals(x.Estatus, "Cancelado", StringComparison.OrdinalIgnoreCase)),
+
+                tieneProgramado,
+                tienePreparando,
+                tienePreparado,
+                tieneCargado,
+                tieneEnRuta,
+                todosEntregados,
+                todosCancelados,
+
+                url = urlGrupo,
+
+                entregas
+            };
+        }).ToList();
+
         return Json(new
         {
             ok = true,
             desde = desde.ToString("yyyy-MM-dd"),
             hasta = hasta.ToString("yyyy-MM-dd"),
+
+            /*
+             * total = bloques visibles en calendario,
+             * no número de embarques.
+             */
             total = eventos.Count,
+
+            totalEmbarques = filas
+                .Select(x => x.EmbarqueID)
+                .Distinct()
+                .Count(),
+
+            totalOfs = filas
+                .Select(x => x.NumeroOF?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count(),
+
             eventos
         });
     }
-
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RegistrarRetorno(LogisticaRetornoVm model, CancellationToken cancellationToken)
