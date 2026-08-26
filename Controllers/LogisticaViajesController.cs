@@ -11,11 +11,12 @@ public sealed class LogisticaViajesController : Controller
 {
     private readonly IConfiguration _configuration;
     private readonly IServicioAcceso _acceso;
-
-    public LogisticaViajesController(IConfiguration configuration, IServicioAcceso acceso)
+    private readonly IWebHostEnvironment _environment;
+    public LogisticaViajesController(IConfiguration configuration, IServicioAcceso acceso, IWebHostEnvironment environment)
     {
         _configuration = configuration;
         _acceso = acceso;
+        _environment = environment;
     }
 
     private string ConnectionString =>
@@ -30,7 +31,16 @@ public sealed class LogisticaViajesController : Controller
         ?? User?.Identity?.Name
         ?? "Usuario";
 
- 
+    private async Task<IActionResult?> ValidarAccesoAsync()
+    {
+        if (!UsuarioID.HasValue || UsuarioID.Value <= 0)
+            return RedirectToAction("Login", "Login");
+
+        if (!await _acceso.TienePermisoAsync(UsuarioID.Value, "Viajes"))
+            return Forbid();
+
+        return null;
+    }
     private async Task<SqlConnection> AbrirAsync(CancellationToken cancellationToken)
     {
         var cn = new SqlConnection(ConnectionString);
@@ -49,7 +59,7 @@ public sealed class LogisticaViajesController : Controller
         int pagina = 1,
         CancellationToken cancellationToken = default)
     {
-      
+
 
         q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
         estatus = NormalizarEstatusFiltro(estatus);
@@ -213,7 +223,7 @@ OFFSET @Offset ROWS FETCH NEXT @TamanoPagina ROWS ONLY;";
     [HttpGet]
     public async Task<IActionResult> Crear(CancellationToken cancellationToken)
     {
-        
+
         await using var cn = await AbrirAsync(cancellationToken);
 
         var vm = new LogisticaViajeCrearVm
@@ -230,31 +240,28 @@ OFFSET @Offset ROWS FETCH NEXT @TamanoPagina ROWS ONLY;";
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Crear(LogisticaViajeCrearVm model, CancellationToken cancellationToken)
     {
-        
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
         Normalizar(model);
         ValidarModelo(model);
-
         await using var cn = await AbrirAsync(cancellationToken);
-
         if (!ModelState.IsValid)
         {
             await CargarCatalogosAsync(model, cn, cancellationToken);
             return View(model);
         }
-
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
         try
         {
+            string? operadorNombre = null;
             if (model.TipoTransporte == "Interno")
-                await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorTexto, cancellationToken);
-
+                operadorNombre = await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorUsuarioID, cancellationToken);
             const string sql = @"
 INSERT dbo.Logistica_Viajes
 (
     Folio,TipoViaje,TipoTransporte,Origen,Destino,Motivo,
     FechaProgramada,HoraSalidaProgramada,HoraRegresoProgramada,
-    RutaID,UnidadID,OperadorTexto,
+    RutaID,UnidadID,OperadorUsuarioID,OperadorNombreSnapshot,OperadorTexto,
     TransportistaExterno,UnidadExterna,PlacasExternas,ChoferExterno,
     Estatus,TieneIncidencia,Observaciones,
     ResponsableUsuarioID,ResponsableNombreSnapshot,
@@ -264,16 +271,14 @@ VALUES
 (
     NULL,@TipoViaje,@TipoTransporte,@Origen,@Destino,@Motivo,
     @FechaProgramada,@HoraSalidaProgramada,@HoraRegresoProgramada,
-    @RutaID,@UnidadID,@OperadorTexto,
+    @RutaID,@UnidadID,@OperadorUsuarioID,@OperadorNombreSnapshot,@OperadorTexto,
     @TransportistaExterno,@UnidadExterna,@PlacasExternas,@ChoferExterno,
     N'Programado',0,@Observaciones,
     @UsuarioID,@UsuarioNombre,
     SYSDATETIME(),@UsuarioNombre,1
 );
 SELECT CONVERT(int,SCOPE_IDENTITY());";
-
             int viajeId;
-
             await using (var cmd = new SqlCommand(sql, cn, tx))
             {
                 cmd.Parameters.Add("@TipoViaje", SqlDbType.NVarChar, 50).Value = model.TipoViaje;
@@ -286,7 +291,9 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 cmd.Parameters.Add("@HoraRegresoProgramada", SqlDbType.Time).Value = Db(model.HoraRegresoProgramada);
                 cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = Db(model.RutaID);
                 cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = model.TipoTransporte == "Interno" ? Db(model.UnidadID) : DBNull.Value;
-                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Interno" ? Db(model.OperadorTexto) : DBNull.Value;
+                cmd.Parameters.Add("@OperadorUsuarioID", SqlDbType.Int).Value = model.TipoTransporte == "Interno" ? Db(model.OperadorUsuarioID) : DBNull.Value;
+                cmd.Parameters.Add("@OperadorNombreSnapshot", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Interno" ? Db(operadorNombre) : DBNull.Value;
+                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Interno" ? Db(operadorNombre) : DBNull.Value;
                 cmd.Parameters.Add("@TransportistaExterno", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Externo" ? Db(model.TransportistaExterno) : DBNull.Value;
                 cmd.Parameters.Add("@UnidadExterna", SqlDbType.NVarChar, 100).Value = model.TipoTransporte == "Externo" ? Db(model.UnidadExterna) : DBNull.Value;
                 cmd.Parameters.Add("@PlacasExternas", SqlDbType.NVarChar, 100).Value = model.TipoTransporte == "Externo" ? Db(model.PlacasExternas) : DBNull.Value;
@@ -294,32 +301,12 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = Db(model.Observaciones);
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                 cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-
                 viajeId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
             }
-
             var folio = $"VIA-{DateTime.Today:yyyy}-{viajeId:000000}";
-
-            await EjecutarAsync(
-                cn,
-                tx,
-                "UPDATE dbo.Logistica_Viajes SET Folio=@Folio WHERE ViajeID=@ViajeID;",
-                cancellationToken,
-                ("@Folio", folio),
-                ("@ViajeID", viajeId));
-
-            await InsertarHistorialAsync(
-                cn,
-                tx,
-                viajeId,
-                "VIAJE_CREADO",
-                null,
-                "Programado",
-                $"Viaje creado. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.",
-                cancellationToken);
-
+            await EjecutarAsync(cn, tx, "UPDATE dbo.Logistica_Viajes SET Folio=@Folio WHERE ViajeID=@ViajeID;", cancellationToken, ("@Folio", folio), ("@ViajeID", viajeId));
+            await InsertarHistorialAsync(cn, tx, viajeId, "VIAJE_CREADO", null, "Programado", $"Viaje creado. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.", cancellationToken);
             await tx.CommitAsync(cancellationToken);
-
             TempData["LogisticaOk"] = $"{folio} creado correctamente.";
             return RedirectToAction(nameof(Detalle), new { id = viajeId });
         }
@@ -335,7 +322,7 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
     [HttpGet]
     public async Task<IActionResult> Detalle(int id, CancellationToken cancellationToken)
     {
-       
+
 
         if (id <= 0) return NotFound();
 
@@ -348,34 +335,26 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
     [HttpGet]
     public async Task<IActionResult> Editar(int id, CancellationToken cancellationToken)
     {
-        
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
         if (id <= 0) return NotFound();
-
         await using var cn = await AbrirAsync(cancellationToken);
-
         const string sql = @"
-SELECT
-    ViajeID,TipoViaje,TipoTransporte,Origen,Destino,Motivo,
-    FechaProgramada,HoraSalidaProgramada,HoraRegresoProgramada,
-    RutaID,UnidadID,OperadorTexto,
-    TransportistaExterno,UnidadExterna,PlacasExternas,ChoferExterno,
-    Observaciones,Estatus
+SELECT ViajeID,TipoViaje,TipoTransporte,Origen,Destino,Motivo,
+       FechaProgramada,HoraSalidaProgramada,HoraRegresoProgramada,
+       RutaID,UnidadID,OperadorUsuarioID,OperadorTexto,
+       TransportistaExterno,UnidadExterna,PlacasExternas,ChoferExterno,
+       Observaciones,Estatus
 FROM dbo.Logistica_Viajes
 WHERE ViajeID=@ViajeID AND Activo=1;";
-
         LogisticaViajeEditarVm? vm = null;
         string estatus;
-
         await using (var cmd = new SqlCommand(sql, cn))
         {
             cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = id;
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
-            if (!await rd.ReadAsync(cancellationToken))
-                return NotFound();
-
+            if (!await rd.ReadAsync(cancellationToken)) return NotFound();
             estatus = Texto(rd, "Estatus");
-
             vm = new LogisticaViajeEditarVm
             {
                 ViajeID = Entero(rd, "ViajeID"),
@@ -389,6 +368,7 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
                 HoraRegresoProgramada = Hora(rd, "HoraRegresoProgramada"),
                 RutaID = EnteroNullable(rd, "RutaID"),
                 UnidadID = EnteroNullable(rd, "UnidadID"),
+                OperadorUsuarioID = EnteroNullable(rd, "OperadorUsuarioID"),
                 OperadorTexto = TextoNullable(rd, "OperadorTexto"),
                 TransportistaExterno = TextoNullable(rd, "TransportistaExterno"),
                 UnidadExterna = TextoNullable(rd, "UnidadExterna"),
@@ -397,13 +377,11 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
                 Observaciones = TextoNullable(rd, "Observaciones")
             };
         }
-
         if (estatus != "Programado")
         {
             TempData["LogisticaError"] = "Solo los viajes Programados pueden editarse.";
             return RedirectToAction(nameof(Detalle), new { id });
         }
-
         await CargarCatalogosAsync(vm, cn, cancellationToken);
         return View(vm);
     }
@@ -412,57 +390,35 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Editar(LogisticaViajeEditarVm model, CancellationToken cancellationToken)
     {
-       
-
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
         Normalizar(model);
         ValidarModelo(model);
-
         await using var cn = await AbrirAsync(cancellationToken);
-
         if (!ModelState.IsValid)
         {
             await CargarCatalogosAsync(model, cn, cancellationToken);
             return View(model);
         }
-
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
         try
         {
-            var actual = await ObtenerViajeParaActualizarAsync(cn, tx, model.ViajeID, cancellationToken)
-                ?? throw new InvalidOperationException("El viaje no existe.");
-
-            if (actual.Estatus != "Programado")
-                throw new InvalidOperationException("Solo los viajes Programados pueden editarse.");
-
+            var actual = await ObtenerViajeParaActualizarAsync(cn, tx, model.ViajeID, cancellationToken) ?? throw new InvalidOperationException("El viaje no existe.");
+            if (actual.Estatus != "Programado") throw new InvalidOperationException("Solo los viajes Programados pueden editarse.");
+            string? operadorNombre = null;
             if (model.TipoTransporte == "Interno")
-                await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorTexto, cancellationToken);
-
+                operadorNombre = await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorUsuarioID, cancellationToken);
             const string sql = @"
 UPDATE dbo.Logistica_Viajes
-SET TipoViaje=@TipoViaje,
-    TipoTransporte=@TipoTransporte,
-    Origen=@Origen,
-    Destino=@Destino,
-    Motivo=@Motivo,
-    FechaProgramada=@FechaProgramada,
-    HoraSalidaProgramada=@HoraSalidaProgramada,
-    HoraRegresoProgramada=@HoraRegresoProgramada,
-    RutaID=@RutaID,
-    UnidadID=@UnidadID,
-    OperadorTexto=@OperadorTexto,
-    TransportistaExterno=@TransportistaExterno,
-    UnidadExterna=@UnidadExterna,
-    PlacasExternas=@PlacasExternas,
-    ChoferExterno=@ChoferExterno,
-    Observaciones=@Observaciones,
-    FechaModificacion=SYSDATETIME(),
-    ActualizadoPor=@Usuario
-WHERE ViajeID=@ViajeID
-  AND Activo=1
-  AND Estatus=N'Programado';
+SET TipoViaje=@TipoViaje,TipoTransporte=@TipoTransporte,Origen=@Origen,Destino=@Destino,Motivo=@Motivo,
+    FechaProgramada=@FechaProgramada,HoraSalidaProgramada=@HoraSalidaProgramada,HoraRegresoProgramada=@HoraRegresoProgramada,
+    RutaID=@RutaID,UnidadID=@UnidadID,OperadorUsuarioID=@OperadorUsuarioID,
+    OperadorNombreSnapshot=@OperadorNombreSnapshot,OperadorTexto=@OperadorTexto,
+    TransportistaExterno=@TransportistaExterno,UnidadExterna=@UnidadExterna,
+    PlacasExternas=@PlacasExternas,ChoferExterno=@ChoferExterno,
+    Observaciones=@Observaciones,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'Programado';
 SELECT @@ROWCOUNT;";
-
             await using (var cmd = new SqlCommand(sql, cn, tx))
             {
                 cmd.Parameters.Add("@TipoViaje", SqlDbType.NVarChar, 50).Value = model.TipoViaje;
@@ -475,7 +431,9 @@ SELECT @@ROWCOUNT;";
                 cmd.Parameters.Add("@HoraRegresoProgramada", SqlDbType.Time).Value = Db(model.HoraRegresoProgramada);
                 cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = Db(model.RutaID);
                 cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = model.TipoTransporte == "Interno" ? Db(model.UnidadID) : DBNull.Value;
-                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Interno" ? Db(model.OperadorTexto) : DBNull.Value;
+                cmd.Parameters.Add("@OperadorUsuarioID", SqlDbType.Int).Value = model.TipoTransporte == "Interno" ? Db(model.OperadorUsuarioID) : DBNull.Value;
+                cmd.Parameters.Add("@OperadorNombreSnapshot", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Interno" ? Db(operadorNombre) : DBNull.Value;
+                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Interno" ? Db(operadorNombre) : DBNull.Value;
                 cmd.Parameters.Add("@TransportistaExterno", SqlDbType.NVarChar, 200).Value = model.TipoTransporte == "Externo" ? Db(model.TransportistaExterno) : DBNull.Value;
                 cmd.Parameters.Add("@UnidadExterna", SqlDbType.NVarChar, 100).Value = model.TipoTransporte == "Externo" ? Db(model.UnidadExterna) : DBNull.Value;
                 cmd.Parameters.Add("@PlacasExternas", SqlDbType.NVarChar, 100).Value = model.TipoTransporte == "Externo" ? Db(model.PlacasExternas) : DBNull.Value;
@@ -483,24 +441,12 @@ SELECT @@ROWCOUNT;";
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = Db(model.Observaciones);
                 cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
-
                 if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
                     throw new InvalidOperationException("El viaje cambió mientras se intentaba actualizar.");
             }
-
-            await InsertarHistorialAsync(
-                cn,
-                tx,
-                model.ViajeID,
-                "VIAJE_EDITADO",
-                "Programado",
-                "Programado",
-                $"Programación actualizada. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.",
-                cancellationToken);
-
+            await InsertarHistorialAsync(cn, tx, model.ViajeID, "VIAJE_EDITADO", "Programado", "Programado", $"Programación actualizada. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.", cancellationToken);
             await tx.CommitAsync(cancellationToken);
             TempData["LogisticaOk"] = "Viaje actualizado correctamente.";
-
             return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
         }
         catch (Exception ex)
@@ -516,58 +462,43 @@ SELECT @@ROWCOUNT;";
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RegistrarSalida(LogisticaViajeSalidaVm model, CancellationToken cancellationToken)
     {
-        
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
         if (model.ViajeID <= 0)
         {
             TempData["LogisticaError"] = "El viaje indicado no es válido.";
             return RedirectToAction(nameof(Index));
         }
-
         model.Observaciones = model.Observaciones?.Trim();
-
-        if (model.FechaSalida == default)
-            ModelState.AddModelError(nameof(model.FechaSalida), "La fecha de salida es obligatoria.");
-
-        if (model.FechaSalida > DateTime.Now.AddMinutes(5))
-            ModelState.AddModelError(nameof(model.FechaSalida), "La fecha de salida no puede estar en el futuro.");
-
-        if (model.KilometrajeSalida.HasValue && model.KilometrajeSalida.Value < 0)
-            ModelState.AddModelError(nameof(model.KilometrajeSalida), "El kilometraje no puede ser negativo.");
-
+        if (model.FechaSalida == default) ModelState.AddModelError(nameof(model.FechaSalida), "La fecha de salida es obligatoria.");
+        if (model.FechaSalida > DateTime.Now.AddMinutes(5)) ModelState.AddModelError(nameof(model.FechaSalida), "La fecha de salida no puede estar en el futuro.");
+        if (model.KilometrajeSalida.HasValue && model.KilometrajeSalida.Value < 0) ModelState.AddModelError(nameof(model.KilometrajeSalida), "El kilometraje no puede ser negativo.");
         if (!ModelState.IsValid)
         {
             TempData["LogisticaError"] = ObtenerErroresModelState();
             return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
         }
-
         await using var cn = await AbrirAsync(cancellationToken);
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
         try
         {
-            var viaje = await ObtenerViajeParaActualizarAsync(cn, tx, model.ViajeID, cancellationToken)
-                ?? throw new InvalidOperationException("El viaje no existe.");
-
-            if (viaje.Estatus != "Programado")
-                throw new InvalidOperationException("Solo un viaje Programado puede registrar salida.");
-
+            await ValidarViajeListoParaIniciarAsync(cn, tx, model.ViajeID, cancellationToken);
+            const string sqlIncidencias = @"
+SELECT COUNT_BIG(*)
+FROM dbo.Logistica_ViajeIncidencias WITH(UPDLOCK,HOLDLOCK)
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus IN(N'Abierta',N'En seguimiento') AND Severidad=N'Crítica';";
+            await using (var cmd = new SqlCommand(sqlIncidencias, cn, tx))
+            {
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
+                if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) > 0) throw new InvalidOperationException("El viaje tiene una incidencia crítica abierta. Ciérrala antes de iniciar.");
+            }
             const string sql = @"
 UPDATE dbo.Logistica_Viajes
-SET Estatus=N'En curso',
-    FechaSalidaReal=@FechaSalida,
-    KilometrajeSalida=@KilometrajeSalida,
-    Observaciones=CASE
-        WHEN @Observaciones IS NULL THEN Observaciones
-        WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN @Observaciones
-        ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),@Observaciones)
-    END,
-    FechaModificacion=SYSDATETIME(),
-    ActualizadoPor=@Usuario
-WHERE ViajeID=@ViajeID
-  AND Activo=1
-  AND Estatus=N'Programado';
+SET Estatus=N'En curso',FechaSalidaReal=@FechaSalida,KilometrajeSalida=@KilometrajeSalida,
+Observaciones=CASE WHEN @Observaciones IS NULL THEN Observaciones WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN @Observaciones ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),@Observaciones) END,
+FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'Programado';
 SELECT @@ROWCOUNT;";
-
             await using (var cmd = new SqlCommand(sql, cn, tx))
             {
                 cmd.Parameters.Add("@FechaSalida", SqlDbType.DateTime2).Value = model.FechaSalida;
@@ -575,36 +506,20 @@ SELECT @@ROWCOUNT;";
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = Db(model.Observaciones);
                 cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
-
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
-                    throw new InvalidOperationException("El viaje cambió mientras se registraba la salida.");
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("El viaje cambió mientras se registraba la salida.");
             }
-
-            var historial = $"Salida registrada el {model.FechaSalida:dd/MM/yyyy HH:mm}.";
-            if (model.KilometrajeSalida.HasValue)
-                historial += $" Kilometraje: {model.KilometrajeSalida.Value:N0} km.";
-            if (!string.IsNullOrWhiteSpace(model.Observaciones))
-                historial += $" Observaciones: {model.Observaciones}";
-
-            await InsertarHistorialAsync(
-                cn,
-                tx,
-                model.ViajeID,
-                "SALIDA_REGISTRADA",
-                "Programado",
-                "En curso",
-                historial,
-                cancellationToken);
-
+            var historial = $"Viaje iniciado el {model.FechaSalida:dd/MM/yyyy HH:mm}.";
+            if (model.KilometrajeSalida.HasValue) historial += $" Kilometraje inicial: {model.KilometrajeSalida.Value:N0} km.";
+            if (!string.IsNullOrWhiteSpace(model.Observaciones)) historial += $" Observaciones: {model.Observaciones}";
+            await InsertarHistorialAsync(cn, tx, model.ViajeID, "VIAJE_INICIADO", "Programado", "En curso", historial, cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Salida del viaje registrada correctamente.";
+            TempData["LogisticaOk"] = "Viaje iniciado correctamente.";
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(cancellationToken);
             TempData["LogisticaError"] = ex.Message;
         }
-
         return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
     }
 
@@ -612,139 +527,84 @@ SELECT @@ROWCOUNT;";
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RegistrarRetorno(LogisticaViajeRetornoVm model, CancellationToken cancellationToken)
     {
-        
-
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
         if (model.ViajeID <= 0)
         {
             TempData["LogisticaError"] = "El viaje indicado no es válido.";
             return RedirectToAction(nameof(Index));
         }
-
         model.Observaciones = model.Observaciones?.Trim();
-
-        if (model.FechaRegreso == default)
-            ModelState.AddModelError(nameof(model.FechaRegreso), "La fecha de regreso es obligatoria.");
-
-        if (model.FechaRegreso > DateTime.Now.AddMinutes(5))
-            ModelState.AddModelError(nameof(model.FechaRegreso), "La fecha de regreso no puede estar en el futuro.");
-
-        if (model.KilometrajeRegreso.HasValue && model.KilometrajeRegreso.Value < 0)
-            ModelState.AddModelError(nameof(model.KilometrajeRegreso), "El kilometraje no puede ser negativo.");
-
+        if (model.FechaRegreso == default) ModelState.AddModelError(nameof(model.FechaRegreso), "La fecha de regreso es obligatoria.");
+        if (model.FechaRegreso > DateTime.Now.AddMinutes(5)) ModelState.AddModelError(nameof(model.FechaRegreso), "La fecha de regreso no puede estar en el futuro.");
+        if (model.KilometrajeRegreso.HasValue && model.KilometrajeRegreso.Value < 0) ModelState.AddModelError(nameof(model.KilometrajeRegreso), "El kilometraje no puede ser negativo.");
+        if (model.PagoGasolina.HasValue && model.PagoGasolina.Value < 0) ModelState.AddModelError(nameof(model.PagoGasolina), "El pago de gasolina no puede ser negativo.");
         if (!ModelState.IsValid)
         {
             TempData["LogisticaError"] = ObtenerErroresModelState();
             return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
         }
-
         await using var cn = await AbrirAsync(cancellationToken);
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-
         try
         {
             const string sqlActual = @"
-SELECT
-    Estatus,
-    FechaSalidaReal,
-    FechaRegresoReal,
-    KilometrajeSalida
-FROM dbo.Logistica_Viajes WITH (UPDLOCK,HOLDLOCK)
+SELECT Estatus,FechaSalidaReal,FechaRegresoReal,KilometrajeSalida
+FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
 WHERE ViajeID=@ViajeID AND Activo=1;";
-
             string estatus;
             DateTime? fechaSalida;
             DateTime? fechaRegresoActual;
             int? kilometrajeSalida;
-
             await using (var cmd = new SqlCommand(sqlActual, cn, tx))
             {
                 cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
-                if (!await rd.ReadAsync(cancellationToken))
-                    throw new InvalidOperationException("El viaje no existe.");
-
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
                 estatus = Texto(rd, "Estatus");
                 fechaSalida = Fecha(rd, "FechaSalidaReal");
                 fechaRegresoActual = Fecha(rd, "FechaRegresoReal");
                 kilometrajeSalida = EnteroNullable(rd, "KilometrajeSalida");
             }
-
-            if (estatus != "En curso")
-                throw new InvalidOperationException("Solo un viaje En curso puede registrar regreso.");
-
-            if (!fechaSalida.HasValue)
-                throw new InvalidOperationException("El viaje no tiene una salida registrada.");
-
-            if (fechaRegresoActual.HasValue)
-                throw new InvalidOperationException("El regreso ya fue registrado.");
-
-            if (model.FechaRegreso < fechaSalida.Value)
-                throw new InvalidOperationException("La fecha de regreso no puede ser anterior a la salida.");
-
-            if (kilometrajeSalida.HasValue &&
-                model.KilometrajeRegreso.HasValue &&
-                model.KilometrajeRegreso.Value < kilometrajeSalida.Value)
-            {
-                throw new InvalidOperationException(
-                    $"El kilometraje de regreso no puede ser menor al de salida ({kilometrajeSalida.Value:N0} km).");
-            }
-
+            if (estatus != "En curso") throw new InvalidOperationException("Solo un viaje En curso puede registrar regreso.");
+            if (!fechaSalida.HasValue) throw new InvalidOperationException("El viaje no tiene una salida registrada.");
+            if (fechaRegresoActual.HasValue) throw new InvalidOperationException("El regreso ya fue registrado.");
+            if (model.FechaRegreso < fechaSalida.Value) throw new InvalidOperationException("La fecha de regreso no puede ser anterior a la salida.");
+            if (kilometrajeSalida.HasValue && model.KilometrajeRegreso.HasValue && model.KilometrajeRegreso.Value < kilometrajeSalida.Value) throw new InvalidOperationException($"El kilometraje de regreso no puede ser menor al de salida ({kilometrajeSalida.Value:N0} km).");
             const string sql = @"
 UPDATE dbo.Logistica_Viajes
-SET Estatus=N'Completado',
-    FechaRegresoReal=@FechaRegreso,
-    KilometrajeRegreso=@KilometrajeRegreso,
-    Observaciones=CASE
-        WHEN @Observaciones IS NULL THEN Observaciones
-        WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN @Observaciones
-        ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),@Observaciones)
-    END,
-    FechaModificacion=SYSDATETIME(),
-    ActualizadoPor=@Usuario
-WHERE ViajeID=@ViajeID
-  AND Activo=1
-  AND Estatus=N'En curso'
-  AND FechaRegresoReal IS NULL;
+SET Estatus=N'Completado',FechaRegresoReal=@FechaRegreso,KilometrajeRegreso=@KilometrajeRegreso,PagoGasolina=@PagoGasolina,
+Observaciones=CASE WHEN @Observaciones IS NULL THEN Observaciones WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN @Observaciones ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),@Observaciones) END,
+FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'En curso' AND FechaRegresoReal IS NULL;
 SELECT @@ROWCOUNT;";
-
             await using (var cmd = new SqlCommand(sql, cn, tx))
             {
                 cmd.Parameters.Add("@FechaRegreso", SqlDbType.DateTime2).Value = model.FechaRegreso;
                 cmd.Parameters.Add("@KilometrajeRegreso", SqlDbType.Int).Value = Db(model.KilometrajeRegreso);
+                var pGasolina = cmd.Parameters.Add("@PagoGasolina", SqlDbType.Decimal);
+                pGasolina.Precision = 18;
+                pGasolina.Scale = 2;
+                pGasolina.Value = Db(model.PagoGasolina);
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = Db(model.Observaciones);
                 cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
-
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
-                    throw new InvalidOperationException("El viaje cambió mientras se registraba el regreso.");
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("El viaje cambió mientras se registraba el regreso.");
             }
-
             var historial = $"Regreso registrado el {model.FechaRegreso:dd/MM/yyyy HH:mm}.";
-            if (model.KilometrajeRegreso.HasValue)
-                historial += $" Kilometraje: {model.KilometrajeRegreso.Value:N0} km.";
-            if (!string.IsNullOrWhiteSpace(model.Observaciones))
-                historial += $" Observaciones: {model.Observaciones}";
-
-            await InsertarHistorialAsync(
-                cn,
-                tx,
-                model.ViajeID,
-                "RETORNO_REGISTRADO",
-                "En curso",
-                "Completado",
-                historial,
-                cancellationToken);
-
+            if (model.KilometrajeRegreso.HasValue) historial += $" Kilometraje final: {model.KilometrajeRegreso.Value:N0} km.";
+            if (kilometrajeSalida.HasValue && model.KilometrajeRegreso.HasValue) historial += $" KM utilizados: {(model.KilometrajeRegreso.Value - kilometrajeSalida.Value):N0} km.";
+            if (model.PagoGasolina.HasValue) historial += $" Pago de gasolina: ${model.PagoGasolina.Value:N2}.";
+            if (!string.IsNullOrWhiteSpace(model.Observaciones)) historial += $" Observaciones: {model.Observaciones}";
+            await InsertarHistorialAsync(cn, tx, model.ViajeID, "RETORNO_REGISTRADO", "En curso", "Completado", historial, cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Regreso registrado y viaje completado.";
+            TempData["LogisticaOk"] = "Regreso registrado y viaje completado correctamente.";
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(cancellationToken);
             TempData["LogisticaError"] = ex.Message;
         }
-
         return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
     }
 
@@ -752,7 +612,7 @@ SELECT @@ROWCOUNT;";
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Cancelar(LogisticaViajeCancelarVm model, CancellationToken cancellationToken)
     {
-       
+
 
         model.Motivo = model.Motivo?.Trim() ?? string.Empty;
 
@@ -824,7 +684,7 @@ SELECT @@ROWCOUNT;";
         LogisticaViajeIncidenciaCrearVm model,
         CancellationToken cancellationToken)
     {
-        
+
 
         model.Tipo = model.Tipo?.Trim() ?? string.Empty;
         model.Severidad = model.Severidad?.Trim() ?? string.Empty;
@@ -966,7 +826,7 @@ WHERE ViajeID=@ViajeID AND Activo=1;",
         LogisticaViajeIncidenciaCerrarVm model,
         CancellationToken cancellationToken)
     {
-        
+
 
         model.Solucion = model.Solucion?.Trim() ?? string.Empty;
 
@@ -1064,60 +924,186 @@ WHERE ViajeID=@ViajeID AND Activo=1;",
         return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
     }
 
-    private async Task<LogisticaViajeDetalleVm?> CargarDetalleAsync(
-        SqlConnection cn,
-        int viajeId,
-        CancellationToken cancellationToken)
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [RequestSizeLimit(10_485_760)]
+    public async Task<IActionResult> SubirEvidencia(int viajeId, string? tipoEvidencia, IFormFile? archivo, string? observaciones, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+        if (viajeId <= 0)
+        {
+            TempData["LogisticaError"] = "El viaje indicado no es válido.";
+            return RedirectToAction(nameof(Index));
+        }
+        tipoEvidencia = tipoEvidencia?.Trim() ?? "General";
+        observaciones = observaciones?.Trim();
+        var tiposPermitidos = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Salida", "Unidad", "Ruta", "Gasolina", "Regreso", "Incidencia", "General" };
+        if (!tiposPermitidos.Contains(tipoEvidencia))
+        {
+            TempData["LogisticaError"] = "Selecciona un tipo de evidencia válido.";
+            return RedirectToAction(nameof(Detalle), new { id = viajeId });
+        }
+        if (archivo == null || archivo.Length <= 0)
+        {
+            TempData["LogisticaError"] = "Selecciona una fotografía o archivo.";
+            return RedirectToAction(nameof(Detalle), new { id = viajeId });
+        }
+        const long maximo = 10 * 1024 * 1024;
+        if (archivo.Length > maximo)
+        {
+            TempData["LogisticaError"] = "El archivo excede el máximo permitido de 10 MB.";
+            return RedirectToAction(nameof(Detalle), new { id = viajeId });
+        }
+        var nombreOriginal = Path.GetFileName(archivo.FileName);
+        var extension = Path.GetExtension(nombreOriginal).ToLowerInvariant();
+        var permitidas = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".pdf" };
+        if (!permitidas.Contains(extension))
+        {
+            TempData["LogisticaError"] = "Solo se permiten archivos JPG, JPEG, PNG o PDF.";
+            return RedirectToAction(nameof(Detalle), new { id = viajeId });
+        }
+        string? rutaFisicaCreada = null;
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var viaje = await ObtenerViajeParaActualizarAsync(cn, tx, viajeId, cancellationToken) ?? throw new InvalidOperationException("El viaje no existe.");
+            if (viaje.Estatus == "Cancelado") throw new InvalidOperationException("No se pueden agregar evidencias a un viaje cancelado.");
+            var carpetaRelativa = Path.Combine("Logistica", "Viajes", viajeId.ToString(), "Evidencias");
+            var carpetaFisica = Path.Combine(_environment.ContentRootPath, "App_Data", carpetaRelativa);
+            Directory.CreateDirectory(carpetaFisica);
+            var nombreFisico = $"{Guid.NewGuid():N}{extension}";
+            rutaFisicaCreada = Path.Combine(carpetaFisica, nombreFisico);
+            await using (var stream = new FileStream(rutaFisicaCreada, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+                await archivo.CopyToAsync(stream, cancellationToken);
+            var rutaRelativa = Path.Combine("App_Data", carpetaRelativa, nombreFisico).Replace('\\', '/');
+            const string sql = @"
+INSERT dbo.Logistica_ViajeEvidencias
+(ViajeID,TipoEvidencia,NombreOriginal,NombreFisico,RutaRelativa,TipoContenido,TamanoBytes,Observaciones,UsuarioCargaID,UsuarioCargaNombre,FechaCarga,Activo,FechaCreacion,CreadoPor)
+VALUES
+(@ViajeID,@TipoEvidencia,@NombreOriginal,@NombreFisico,@RutaRelativa,@TipoContenido,@TamanoBytes,@Observaciones,@UsuarioID,@UsuarioNombre,SYSDATETIME(),1,SYSDATETIME(),@UsuarioNombre);
+SELECT CONVERT(int,SCOPE_IDENTITY());";
+            int evidenciaId;
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+                cmd.Parameters.Add("@TipoEvidencia", SqlDbType.NVarChar, 50).Value = tipoEvidencia;
+                cmd.Parameters.Add("@NombreOriginal", SqlDbType.NVarChar, 260).Value = nombreOriginal;
+                cmd.Parameters.Add("@NombreFisico", SqlDbType.NVarChar, 260).Value = nombreFisico;
+                cmd.Parameters.Add("@RutaRelativa", SqlDbType.NVarChar, 600).Value = rutaRelativa;
+                cmd.Parameters.Add("@TipoContenido", SqlDbType.NVarChar, 150).Value = archivo.ContentType ?? "application/octet-stream";
+                cmd.Parameters.Add("@TamanoBytes", SqlDbType.BigInt).Value = archivo.Length;
+                cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = Db(observaciones);
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+                cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                evidenciaId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
+            }
+            await InsertarHistorialAsync(cn, tx, viajeId, "EVIDENCIA_AGREGADA", viaje.Estatus, viaje.Estatus, $"Evidencia VEVI-{evidenciaId:000000} agregada. Tipo: {tipoEvidencia}. Archivo: {nombreOriginal}.", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = "Evidencia cargada correctamente.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(rutaFisicaCreada) && System.IO.File.Exists(rutaFisicaCreada))
+            {
+                try { System.IO.File.Delete(rutaFisicaCreada); } catch { }
+            }
+            TempData["LogisticaError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Detalle), new { id = viajeId });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> VerEvidencia(int id, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+        if (id <= 0) return NotFound();
+        await using var cn = await AbrirAsync(cancellationToken);
+        const string sql = @"
+SELECT TOP(1) NombreOriginal,RutaRelativa,TipoContenido
+FROM dbo.Logistica_ViajeEvidencias
+WHERE ViajeEvidenciaID=@Id AND Activo=1;";
+        string nombreOriginal;
+        string rutaRelativa;
+        string tipoContenido;
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.Add("@Id", SqlDbType.Int).Value = id;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken)) return NotFound();
+            nombreOriginal = Texto(rd, "NombreOriginal");
+            rutaRelativa = Texto(rd, "RutaRelativa");
+            tipoContenido = Texto(rd, "TipoContenido");
+        }
+        var rutaFisica = Path.Combine(_environment.ContentRootPath, rutaRelativa.Replace('/', Path.DirectorySeparatorChar));
+        if (!System.IO.File.Exists(rutaFisica)) return NotFound();
+        return PhysicalFile(rutaFisica, string.IsNullOrWhiteSpace(tipoContenido) ? "application/octet-stream" : tipoContenido, string.IsNullOrWhiteSpace(nombreOriginal) ? Path.GetFileName(rutaFisica) : nombreOriginal);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EliminarEvidencia(int viajeId, int evidenciaId, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+        if (viajeId <= 0 || evidenciaId <= 0)
+        {
+            TempData["LogisticaError"] = "La evidencia indicada no es válida.";
+            return viajeId > 0 ? RedirectToAction(nameof(Detalle), new { id = viajeId }) : RedirectToAction(nameof(Index));
+        }
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var viaje = await ObtenerViajeParaActualizarAsync(cn, tx, viajeId, cancellationToken) ?? throw new InvalidOperationException("El viaje no existe.");
+            const string sql = @"
+UPDATE dbo.Logistica_ViajeEvidencias
+SET Activo=0,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeEvidenciaID=@EvidenciaID AND ViajeID=@ViajeID AND Activo=1;
+SELECT @@ROWCOUNT;";
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@EvidenciaID", SqlDbType.Int).Value = evidenciaId;
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("La evidencia no existe o ya fue retirada.");
+            }
+            await InsertarHistorialAsync(cn, tx, viajeId, "EVIDENCIA_RETIRADA", viaje.Estatus, viaje.Estatus, $"Se retiró la evidencia VEVI-{evidenciaId:000000}.", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = "Evidencia retirada.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            TempData["LogisticaError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Detalle), new { id = viajeId });
+    }
+    private async Task<LogisticaViajeDetalleVm?> CargarDetalleAsync(SqlConnection cn, int viajeId, CancellationToken cancellationToken)
     {
         const string sql = @"
-SELECT
-    v.ViajeID,
-    ISNULL(v.Folio,N'') AS Folio,
-    ISNULL(v.TipoViaje,N'') AS TipoViaje,
-    ISNULL(v.TipoTransporte,N'') AS TipoTransporte,
-    ISNULL(v.Origen,N'') AS Origen,
-    ISNULL(v.Destino,N'') AS Destino,
-    ISNULL(v.Motivo,N'') AS Motivo,
-    v.FechaProgramada,
-    v.HoraSalidaProgramada,
-    v.HoraRegresoProgramada,
-    v.FechaSalidaReal,
-    v.FechaRegresoReal,
-    v.RutaID,
-    ISNULL(r.Codigo + N' - ' + r.Nombre,N'') AS Ruta,
-    v.UnidadID,
-    ISNULL(u.NumeroEconomico + CASE WHEN NULLIF(u.Placas,N'') IS NULL THEN N'' ELSE N' - '+u.Placas END,N'') AS Unidad,
-    ISNULL(v.OperadorTexto,N'') AS Operador,
-    ISNULL(v.TransportistaExterno,N'') AS TransportistaExterno,
-    ISNULL(v.UnidadExterna,N'') AS UnidadExterna,
-    ISNULL(v.PlacasExternas,N'') AS PlacasExternas,
-    ISNULL(v.ChoferExterno,N'') AS ChoferExterno,
-    ISNULL(v.Estatus,N'') AS Estatus,
-    ISNULL(v.Observaciones,N'') AS Observaciones,
-    ISNULL(v.TieneIncidencia,0) AS TieneIncidencia,
-    v.KilometrajeSalida,
-    v.KilometrajeRegreso,
-    v.ResponsableUsuarioID,
-    ISNULL(v.ResponsableNombreSnapshot,N'') AS UsuarioResponsable,
-    v.FechaCreacion,
-    ISNULL(v.CreadoPor,N'') AS CreadoPor
+SELECT v.ViajeID,ISNULL(v.Folio,N'') AS Folio,ISNULL(v.TipoViaje,N'') AS TipoViaje,ISNULL(v.TipoTransporte,N'') AS TipoTransporte,
+ISNULL(v.Origen,N'') AS Origen,ISNULL(v.Destino,N'') AS Destino,ISNULL(v.Motivo,N'') AS Motivo,v.FechaProgramada,v.HoraSalidaProgramada,v.HoraRegresoProgramada,
+v.FechaSalidaReal,v.FechaRegresoReal,v.RutaID,ISNULL(r.Codigo+N' - '+r.Nombre,N'') AS Ruta,v.UnidadID,
+ISNULL(u.NumeroEconomico+CASE WHEN NULLIF(u.Placas,N'') IS NULL THEN N'' ELSE N' - '+u.Placas END,N'') AS Unidad,
+v.OperadorUsuarioID,ISNULL(NULLIF(v.OperadorNombreSnapshot,N''),ISNULL(v.OperadorTexto,N'')) AS Operador,
+ISNULL(v.TransportistaExterno,N'') AS TransportistaExterno,ISNULL(v.UnidadExterna,N'') AS UnidadExterna,ISNULL(v.PlacasExternas,N'') AS PlacasExternas,
+ISNULL(v.ChoferExterno,N'') AS ChoferExterno,ISNULL(v.Estatus,N'') AS Estatus,ISNULL(v.Observaciones,N'') AS Observaciones,
+ISNULL(v.TieneIncidencia,0) AS TieneIncidencia,v.KilometrajeSalida,v.KilometrajeRegreso,v.PagoGasolina,v.ResponsableUsuarioID,
+ISNULL(v.ResponsableNombreSnapshot,N'') AS UsuarioResponsable,v.FechaCreacion,ISNULL(v.CreadoPor,N'') AS CreadoPor
 FROM dbo.Logistica_Viajes v
 LEFT JOIN dbo.Logistica_Rutas r ON r.RutaID=v.RutaID
 LEFT JOIN dbo.Logistica_Unidades u ON u.UnidadID=v.UnidadID
-WHERE v.ViajeID=@ViajeID
-  AND v.Activo=1;";
-
+WHERE v.ViajeID=@ViajeID AND v.Activo=1;";
         LogisticaViajeDetalleVm? vm = null;
-
         await using (var cmd = new SqlCommand(sql, cn))
         {
             cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
-
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
-            if (!await rd.ReadAsync(cancellationToken))
-                return null;
-
+            if (!await rd.ReadAsync(cancellationToken)) return null;
             vm = new LogisticaViajeDetalleVm
             {
                 ViajeID = Entero(rd, "ViajeID"),
@@ -1136,6 +1122,7 @@ WHERE v.ViajeID=@ViajeID
                 Ruta = Texto(rd, "Ruta"),
                 UnidadID = EnteroNullable(rd, "UnidadID"),
                 Unidad = Texto(rd, "Unidad"),
+                OperadorUsuarioID = EnteroNullable(rd, "OperadorUsuarioID"),
                 Operador = Texto(rd, "Operador"),
                 TransportistaExterno = Texto(rd, "TransportistaExterno"),
                 UnidadExterna = Texto(rd, "UnidadExterna"),
@@ -1146,26 +1133,21 @@ WHERE v.ViajeID=@ViajeID
                 TieneIncidencia = Booleano(rd, "TieneIncidencia"),
                 KilometrajeSalida = EnteroNullable(rd, "KilometrajeSalida"),
                 KilometrajeRegreso = EnteroNullable(rd, "KilometrajeRegreso"),
+                PagoGasolina = DecimalNullable(rd, "PagoGasolina"),
                 UsuarioResponsableID = EnteroNullable(rd, "ResponsableUsuarioID"),
                 UsuarioResponsable = Texto(rd, "UsuarioResponsable"),
                 FechaCreacion = Fecha(rd, "FechaCreacion") ?? DateTime.MinValue,
                 CreadoPor = Texto(rd, "CreadoPor")
             };
         }
-
         const string sqlHistorial = @"
-SELECT HistorialID,ViajeID,Evento,ISNULL(EstadoAnterior,N'') AS EstadoAnterior,
-       ISNULL(EstadoNuevo,N'') AS EstadoNuevo,ISNULL(Observaciones,N'') AS Observaciones,
-       UsuarioID,ISNULL(UsuarioNombre,N'') AS Usuario,FechaEvento
-FROM dbo.Logistica_ViajeHistorial
-WHERE ViajeID=@ViajeID
-ORDER BY FechaEvento DESC,HistorialID DESC;";
-
+SELECT HistorialID,ViajeID,Evento,ISNULL(EstadoAnterior,N'') AS EstadoAnterior,ISNULL(EstadoNuevo,N'') AS EstadoNuevo,
+ISNULL(Observaciones,N'') AS Observaciones,UsuarioID,ISNULL(UsuarioNombre,N'') AS Usuario,FechaEvento
+FROM dbo.Logistica_ViajeHistorial WHERE ViajeID=@ViajeID ORDER BY FechaEvento DESC,HistorialID DESC;";
         await using (var cmd = new SqlCommand(sqlHistorial, cn))
         {
             cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
             while (await rd.ReadAsync(cancellationToken))
             {
                 vm.Historial.Add(new LogisticaViajeHistorialVm
@@ -1182,31 +1164,16 @@ ORDER BY FechaEvento DESC,HistorialID DESC;";
                 });
             }
         }
-
         const string sqlIncidencias = @"
-SELECT
-    ViajeIncidenciaID,ViajeID,Tipo,Severidad,Descripcion,Estatus,
-    ISNULL(Responsable,N'') AS Responsable,FechaRegistro,FechaCierre
+SELECT ViajeIncidenciaID,ViajeID,Tipo,Severidad,Descripcion,Estatus,ISNULL(Responsable,N'') AS Responsable,FechaRegistro,FechaCierre
 FROM dbo.Logistica_ViajeIncidencias
-WHERE ViajeID=@ViajeID
-  AND Activo=1
-ORDER BY
-    CASE WHEN Estatus IN(N'Abierta',N'En seguimiento') THEN 0 ELSE 1 END,
-    CASE Severidad
-        WHEN N'Crítica' THEN 1
-        WHEN N'Alta' THEN 2
-        WHEN N'Media' THEN 3
-        WHEN N'Baja' THEN 4
-        ELSE 5
-    END,
-    FechaRegistro DESC,
-    ViajeIncidenciaID DESC;";
-
+WHERE ViajeID=@ViajeID AND Activo=1
+ORDER BY CASE WHEN Estatus IN(N'Abierta',N'En seguimiento') THEN 0 ELSE 1 END,
+CASE Severidad WHEN N'Crítica' THEN 1 WHEN N'Alta' THEN 2 WHEN N'Media' THEN 3 WHEN N'Baja' THEN 4 ELSE 5 END,FechaRegistro DESC,ViajeIncidenciaID DESC;";
         await using (var cmd = new SqlCommand(sqlIncidencias, cn))
         {
             cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
             while (await rd.ReadAsync(cancellationToken))
             {
                 vm.Incidencias.Add(new LogisticaViajeIncidenciaVm
@@ -1223,100 +1190,151 @@ ORDER BY
                 });
             }
         }
-
+        await CargarEvidenciasViajeAsync(cn, vm, cancellationToken);
         vm.TieneIncidencia = vm.Incidencias.Any(x => x.EstaAbierta);
         return vm;
     }
 
-    private async Task CargarCatalogosAsync(
-        LogisticaViajeCrearVm vm,
-        SqlConnection cn,
-        CancellationToken cancellationToken)
+    private static decimal? DecimalNullable(SqlDataReader rd, string columna)
+    {
+        var i = rd.GetOrdinal(columna);
+        return rd.IsDBNull(i) ? null : Convert.ToDecimal(rd.GetValue(i));
+    }
+
+    private static async Task CargarEvidenciasViajeAsync(SqlConnection cn, LogisticaViajeDetalleVm vm, CancellationToken cancellationToken)
+    {
+        vm.Evidencias.Clear();
+        const string sql = @"
+SELECT ViajeEvidenciaID,ViajeID,ISNULL(TipoEvidencia,N'') AS TipoEvidencia,ISNULL(NombreOriginal,N'') AS NombreOriginal,
+ISNULL(NombreFisico,N'') AS NombreFisico,ISNULL(RutaRelativa,N'') AS RutaRelativa,ISNULL(TipoContenido,N'') AS TipoContenido,
+ISNULL(TamanoBytes,0) AS TamanoBytes,ISNULL(Observaciones,N'') AS Observaciones,UsuarioCargaID,
+ISNULL(UsuarioCargaNombre,N'') AS UsuarioCargaNombre,FechaCarga
+FROM dbo.Logistica_ViajeEvidencias
+WHERE ViajeID=@ViajeID AND Activo=1
+ORDER BY FechaCarga DESC,ViajeEvidenciaID DESC;";
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = vm.ViajeID;
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await rd.ReadAsync(cancellationToken))
+        {
+            vm.Evidencias.Add(new LogisticaViajeEvidenciaVm
+            {
+                ViajeEvidenciaID = Entero(rd, "ViajeEvidenciaID"),
+                ViajeID = Entero(rd, "ViajeID"),
+                TipoEvidencia = Texto(rd, "TipoEvidencia"),
+                NombreOriginal = Texto(rd, "NombreOriginal"),
+                NombreFisico = Texto(rd, "NombreFisico"),
+                RutaRelativa = Texto(rd, "RutaRelativa"),
+                TipoContenido = Texto(rd, "TipoContenido"),
+                TamanoBytes = EnteroLargo(rd, "TamanoBytes"),
+                Observaciones = Texto(rd, "Observaciones"),
+                UsuarioCargaID = EnteroNullable(rd, "UsuarioCargaID"),
+                UsuarioCargaNombre = Texto(rd, "UsuarioCargaNombre"),
+                FechaCarga = Fecha(rd, "FechaCarga") ?? DateTime.MinValue
+            });
+        }
+    }
+    private async Task CargarCatalogosAsync(LogisticaViajeCrearVm vm, SqlConnection cn, CancellationToken cancellationToken)
     {
         vm.Rutas.Clear();
         vm.Unidades.Clear();
-
+        vm.Operadores.Clear();
         const string sql = @"
-SELECT RutaID,Codigo + N' - ' + Nombre AS Texto
+SELECT RutaID,Codigo+N' - '+Nombre AS Texto
 FROM dbo.Logistica_Rutas
 WHERE Activo=1
 ORDER BY Codigo;
-
-SELECT UnidadID,NumeroEconomico + CASE WHEN NULLIF(Placas,N'') IS NULL THEN N'' ELSE N' - '+Placas END AS Texto
+SELECT UnidadID,NumeroEconomico+CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Placas,N''))),N'') IS NULL THEN N'' ELSE N' - '+LTRIM(RTRIM(Placas)) END AS Texto
 FROM dbo.Logistica_Unidades
 WHERE Activo=1
-ORDER BY NumeroEconomico;";
-
+ORDER BY NumeroEconomico;
+SELECT DISTINCT U.UsuarioID AS Id,
+LTRIM(RTRIM(CONCAT(ISNULL(P.Nombre,N''),N' ',ISNULL(P.ApellidoPaterno,N''),N' ',ISNULL(P.ApellidoMaterno,N''))))+
+CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(P.Puesto,N''))),N'') IS NULL THEN N'' ELSE N' - '+LTRIM(RTRIM(P.Puesto)) END AS Texto
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%'
+ORDER BY Texto;";
         await using var cmd = new SqlCommand(sql, cn);
         await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
         while (await rd.ReadAsync(cancellationToken))
             vm.Rutas.Add(new LogisticaViajeSelectVm { Id = Entero(rd, "RutaID"), Texto = Texto(rd, "Texto") });
-
         if (await rd.NextResultAsync(cancellationToken))
-        {
             while (await rd.ReadAsync(cancellationToken))
                 vm.Unidades.Add(new LogisticaViajeSelectVm { Id = Entero(rd, "UnidadID"), Texto = Texto(rd, "Texto") });
-        }
+        if (await rd.NextResultAsync(cancellationToken))
+            while (await rd.ReadAsync(cancellationToken))
+                vm.Operadores.Add(new LogisticaViajeSelectVm { Id = Entero(rd, "Id"), Texto = Texto(rd, "Texto") });
     }
-
-    private async Task CargarCatalogosAsync(
-        LogisticaViajeEditarVm vm,
-        SqlConnection cn,
-        CancellationToken cancellationToken)
+    private async Task CargarCatalogosAsync(LogisticaViajeEditarVm vm, SqlConnection cn, CancellationToken cancellationToken)
     {
         vm.Rutas.Clear();
         vm.Unidades.Clear();
-
+        vm.Operadores.Clear();
         const string sql = @"
-SELECT RutaID,Codigo + N' - ' + Nombre AS Texto
+SELECT RutaID,Codigo+N' - '+Nombre AS Texto
 FROM dbo.Logistica_Rutas
 WHERE Activo=1
 ORDER BY Codigo;
-
-SELECT UnidadID,NumeroEconomico + CASE WHEN NULLIF(Placas,N'') IS NULL THEN N'' ELSE N' - '+Placas END AS Texto
+SELECT UnidadID,NumeroEconomico+CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Placas,N''))),N'') IS NULL THEN N'' ELSE N' - '+LTRIM(RTRIM(Placas)) END AS Texto
 FROM dbo.Logistica_Unidades
 WHERE Activo=1
-ORDER BY NumeroEconomico;";
-
+ORDER BY NumeroEconomico;
+SELECT DISTINCT U.UsuarioID AS Id,
+LTRIM(RTRIM(CONCAT(ISNULL(P.Nombre,N''),N' ',ISNULL(P.ApellidoPaterno,N''),N' ',ISNULL(P.ApellidoMaterno,N''))))+
+CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(P.Puesto,N''))),N'') IS NULL THEN N'' ELSE N' - '+LTRIM(RTRIM(P.Puesto)) END AS Texto
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%'
+ORDER BY Texto;";
         await using var cmd = new SqlCommand(sql, cn);
         await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
         while (await rd.ReadAsync(cancellationToken))
             vm.Rutas.Add(new LogisticaViajeSelectVm { Id = Entero(rd, "RutaID"), Texto = Texto(rd, "Texto") });
-
         if (await rd.NextResultAsync(cancellationToken))
-        {
             while (await rd.ReadAsync(cancellationToken))
                 vm.Unidades.Add(new LogisticaViajeSelectVm { Id = Entero(rd, "UnidadID"), Texto = Texto(rd, "Texto") });
-        }
+        if (await rd.NextResultAsync(cancellationToken))
+            while (await rd.ReadAsync(cancellationToken))
+                vm.Operadores.Add(new LogisticaViajeSelectVm { Id = Entero(rd, "Id"), Texto = Texto(rd, "Texto") });
     }
 
-    private static async Task ValidarRecursosInternosAsync(
-        SqlConnection cn,
-        SqlTransaction tx,
-        int? unidadId,
-        string? operador,
-        CancellationToken cancellationToken)
+    private static async Task<string> ValidarRecursosInternosAsync(SqlConnection cn, SqlTransaction tx, int? unidadId, int? operadorUsuarioId, CancellationToken cancellationToken)
     {
-        if (!unidadId.HasValue || unidadId.Value <= 0)
-            throw new InvalidOperationException("Selecciona una unidad interna válida.");
-
-        if (string.IsNullOrWhiteSpace(operador))
-            throw new InvalidOperationException("Captura el operador/chofer del viaje.");
-
-        const string sqlUnidad = @"
-SELECT COUNT_BIG(*)
-FROM dbo.Logistica_Unidades WITH (UPDLOCK,HOLDLOCK)
-WHERE UnidadID=@UnidadID AND Activo=1;";
-
-        await using var cmd = new SqlCommand(sqlUnidad, cn, tx);
-        cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId.Value;
-
-        if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0)
-            throw new InvalidOperationException("La unidad seleccionada no existe o se encuentra inactiva.");
+        if (!unidadId.HasValue || unidadId.Value <= 0) throw new InvalidOperationException("Selecciona una unidad interna válida.");
+        if (!operadorUsuarioId.HasValue || operadorUsuarioId.Value <= 0) throw new InvalidOperationException("Selecciona un operador/chofer válido.");
+        const string sqlUnidad = @"SELECT COUNT_BIG(*) FROM dbo.Logistica_Unidades WITH(UPDLOCK,HOLDLOCK) WHERE UnidadID=@UnidadID AND Activo=1;";
+        await using (var cmd = new SqlCommand(sqlUnidad, cn, tx))
+        {
+            cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId.Value;
+            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) throw new InvalidOperationException("La unidad seleccionada no existe o se encuentra inactiva.");
+        }
+        const string sqlOperador = @"
+SELECT TOP(1)
+LTRIM(RTRIM(CONCAT(ISNULL(P.Nombre,N''),N' ',ISNULL(P.ApellidoPaterno,N''),N' ',ISNULL(P.ApellidoMaterno,N'')))) AS NombreCompleto
+FROM dbo.Usuarios U WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.UsuarioID=@UsuarioID
+AND U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
+        await using var cmdOperador = new SqlCommand(sqlOperador, cn, tx);
+        cmdOperador.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = operadorUsuarioId.Value;
+        var valor = await cmdOperador.ExecuteScalarAsync(cancellationToken);
+        var nombre = valor == null || valor == DBNull.Value ? string.Empty : valor.ToString()?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(nombre)) throw new InvalidOperationException("El operador seleccionado debe ser un usuario activo del departamento de Logística y tener un puesto de Chofer.");
+        return nombre;
     }
-
     private static async Task<(string Estatus, string Folio)?> ObtenerViajeParaActualizarAsync(
         SqlConnection cn,
         SqlTransaction tx,
@@ -1410,7 +1428,7 @@ VALUES
     [HttpGet]
     public async Task<IActionResult> Calendario(CancellationToken cancellationToken)
     {
-       
+
         await using var cn = await AbrirAsync(cancellationToken);
 
         const string sql = @"
@@ -1437,7 +1455,7 @@ THEN 1 ELSE 0 END;";
         string? tipoTransporte = null,
         CancellationToken cancellationToken = default)
     {
-        
+
         desde = desde.Date;
         hasta = hasta.Date;
 
@@ -1553,7 +1571,6 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         model.PlacasExternas = model.PlacasExternas?.Trim();
         model.ChoferExterno = model.ChoferExterno?.Trim();
         model.Observaciones = model.Observaciones?.Trim();
-
         if (model.TipoTransporte == "Interno")
         {
             model.TransportistaExterno = null;
@@ -1564,6 +1581,7 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         else if (model.TipoTransporte == "Externo")
         {
             model.UnidadID = null;
+            model.OperadorUsuarioID = null;
             model.OperadorTexto = null;
         }
     }
@@ -1581,7 +1599,6 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         model.PlacasExternas = model.PlacasExternas?.Trim();
         model.ChoferExterno = model.ChoferExterno?.Trim();
         model.Observaciones = model.Observaciones?.Trim();
-
         if (model.TipoTransporte == "Interno")
         {
             model.TransportistaExterno = null;
@@ -1592,73 +1609,106 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         else if (model.TipoTransporte == "Externo")
         {
             model.UnidadID = null;
+            model.OperadorUsuarioID = null;
             model.OperadorTexto = null;
         }
     }
 
     private void ValidarModelo(LogisticaViajeCrearVm model)
     {
-        if (string.IsNullOrWhiteSpace(model.TipoViaje))
-            ModelState.AddModelError(nameof(model.TipoViaje), "Selecciona un tipo de viaje válido.");
-
-        if (string.IsNullOrWhiteSpace(model.TipoTransporte))
-            ModelState.AddModelError(nameof(model.TipoTransporte), "Selecciona un tipo de transporte válido.");
-
-        if (string.IsNullOrWhiteSpace(model.Origen))
-            ModelState.AddModelError(nameof(model.Origen), "El origen es obligatorio.");
-
-        if (string.IsNullOrWhiteSpace(model.Destino))
-            ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
-
-        if (string.IsNullOrWhiteSpace(model.Motivo))
-            ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
-
-        if (model.FechaProgramada == default)
-            ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
-
+        if (string.IsNullOrWhiteSpace(model.TipoViaje)) ModelState.AddModelError(nameof(model.TipoViaje), "Selecciona un tipo de viaje válido.");
+        if (string.IsNullOrWhiteSpace(model.TipoTransporte)) ModelState.AddModelError(nameof(model.TipoTransporte), "Selecciona un tipo de transporte válido.");
+        if (string.IsNullOrWhiteSpace(model.Origen)) ModelState.AddModelError(nameof(model.Origen), "El origen es obligatorio.");
+        if (string.IsNullOrWhiteSpace(model.Destino)) ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
+        if (string.IsNullOrWhiteSpace(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
+        if (model.FechaProgramada == default) ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
         if (model.TipoTransporte == "Interno")
         {
-            if (!model.UnidadID.HasValue || model.UnidadID.Value <= 0)
-                ModelState.AddModelError(nameof(model.UnidadID), "Selecciona una unidad interna.");
-
-            if (string.IsNullOrWhiteSpace(model.OperadorTexto))
-                ModelState.AddModelError(nameof(model.OperadorTexto), "Captura el operador/chofer.");
+            if (!model.RutaID.HasValue || model.RutaID.Value <= 0) ModelState.AddModelError(nameof(model.RutaID), "Selecciona una ruta.");
+            if (!model.UnidadID.HasValue || model.UnidadID.Value <= 0) ModelState.AddModelError(nameof(model.UnidadID), "Selecciona una unidad interna.");
+            if (!model.OperadorUsuarioID.HasValue || model.OperadorUsuarioID.Value <= 0) ModelState.AddModelError(nameof(model.OperadorUsuarioID), "Selecciona un operador/chofer.");
+        }
+        else if (model.TipoTransporte == "Externo")
+        {
+            if (string.IsNullOrWhiteSpace(model.TransportistaExterno)) ModelState.AddModelError(nameof(model.TransportistaExterno), "Captura el transportista externo.");
+            if (string.IsNullOrWhiteSpace(model.UnidadExterna)) ModelState.AddModelError(nameof(model.UnidadExterna), "Captura la unidad externa.");
+            if (string.IsNullOrWhiteSpace(model.PlacasExternas)) ModelState.AddModelError(nameof(model.PlacasExternas), "Captura las placas de la unidad externa.");
+            if (string.IsNullOrWhiteSpace(model.ChoferExterno)) ModelState.AddModelError(nameof(model.ChoferExterno), "Captura el chofer externo.");
         }
     }
 
     private void ValidarModelo(LogisticaViajeEditarVm model)
     {
-        if (model.ViajeID <= 0)
-            ModelState.AddModelError(nameof(model.ViajeID), "El viaje no es válido.");
-
-        if (string.IsNullOrWhiteSpace(model.TipoViaje))
-            ModelState.AddModelError(nameof(model.TipoViaje), "Selecciona un tipo de viaje válido.");
-
-        if (string.IsNullOrWhiteSpace(model.TipoTransporte))
-            ModelState.AddModelError(nameof(model.TipoTransporte), "Selecciona un tipo de transporte válido.");
-
-        if (string.IsNullOrWhiteSpace(model.Origen))
-            ModelState.AddModelError(nameof(model.Origen), "El origen es obligatorio.");
-
-        if (string.IsNullOrWhiteSpace(model.Destino))
-            ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
-
-        if (string.IsNullOrWhiteSpace(model.Motivo))
-            ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
-
-        if (model.FechaProgramada == default)
-            ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
-
+        if (model.ViajeID <= 0) ModelState.AddModelError(nameof(model.ViajeID), "El viaje no es válido.");
+        if (string.IsNullOrWhiteSpace(model.TipoViaje)) ModelState.AddModelError(nameof(model.TipoViaje), "Selecciona un tipo de viaje válido.");
+        if (string.IsNullOrWhiteSpace(model.TipoTransporte)) ModelState.AddModelError(nameof(model.TipoTransporte), "Selecciona un tipo de transporte válido.");
+        if (string.IsNullOrWhiteSpace(model.Origen)) ModelState.AddModelError(nameof(model.Origen), "El origen es obligatorio.");
+        if (string.IsNullOrWhiteSpace(model.Destino)) ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
+        if (string.IsNullOrWhiteSpace(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
+        if (model.FechaProgramada == default) ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
         if (model.TipoTransporte == "Interno")
         {
-            if (!model.UnidadID.HasValue || model.UnidadID.Value <= 0)
-                ModelState.AddModelError(nameof(model.UnidadID), "Selecciona una unidad interna.");
-
-            if (string.IsNullOrWhiteSpace(model.OperadorTexto))
-                ModelState.AddModelError(nameof(model.OperadorTexto), "Captura el operador/chofer.");
+            if (!model.RutaID.HasValue || model.RutaID.Value <= 0) ModelState.AddModelError(nameof(model.RutaID), "Selecciona una ruta.");
+            if (!model.UnidadID.HasValue || model.UnidadID.Value <= 0) ModelState.AddModelError(nameof(model.UnidadID), "Selecciona una unidad interna.");
+            if (!model.OperadorUsuarioID.HasValue || model.OperadorUsuarioID.Value <= 0) ModelState.AddModelError(nameof(model.OperadorUsuarioID), "Selecciona un operador/chofer.");
+        }
+        else if (model.TipoTransporte == "Externo")
+        {
+            if (string.IsNullOrWhiteSpace(model.TransportistaExterno)) ModelState.AddModelError(nameof(model.TransportistaExterno), "Captura el transportista externo.");
+            if (string.IsNullOrWhiteSpace(model.UnidadExterna)) ModelState.AddModelError(nameof(model.UnidadExterna), "Captura la unidad externa.");
+            if (string.IsNullOrWhiteSpace(model.PlacasExternas)) ModelState.AddModelError(nameof(model.PlacasExternas), "Captura las placas de la unidad externa.");
+            if (string.IsNullOrWhiteSpace(model.ChoferExterno)) ModelState.AddModelError(nameof(model.ChoferExterno), "Captura el chofer externo.");
         }
     }
 
+    private static async Task ValidarViajeListoParaIniciarAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TipoViaje,TipoTransporte,Origen,Destino,Motivo,FechaProgramada,HoraSalidaProgramada,RutaID,UnidadID,OperadorUsuarioID,
+TransportistaExterno,UnidadExterna,PlacasExternas,ChoferExterno,Estatus
+FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
+WHERE ViajeID=@ViajeID AND Activo=1;";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
+        var estatus = Texto(rd, "Estatus");
+        var tipoViaje = Texto(rd, "TipoViaje");
+        var tipoTransporte = Texto(rd, "TipoTransporte");
+        var origen = Texto(rd, "Origen");
+        var destino = Texto(rd, "Destino");
+        var motivo = Texto(rd, "Motivo");
+        var fechaProgramada = Fecha(rd, "FechaProgramada");
+        var rutaId = EnteroNullable(rd, "RutaID");
+        var unidadId = EnteroNullable(rd, "UnidadID");
+        var operadorUsuarioId = EnteroNullable(rd, "OperadorUsuarioID");
+        var transportista = Texto(rd, "TransportistaExterno");
+        var unidadExterna = Texto(rd, "UnidadExterna");
+        var placasExternas = Texto(rd, "PlacasExternas");
+        var choferExterno = Texto(rd, "ChoferExterno");
+        if (estatus != "Programado") throw new InvalidOperationException("Solo un viaje Programado puede iniciar.");
+        var faltantes = new List<string>();
+        if (string.IsNullOrWhiteSpace(tipoViaje)) faltantes.Add("tipo de viaje");
+        if (string.IsNullOrWhiteSpace(origen)) faltantes.Add("origen");
+        if (string.IsNullOrWhiteSpace(destino)) faltantes.Add("destino");
+        if (string.IsNullOrWhiteSpace(motivo)) faltantes.Add("motivo");
+        if (!fechaProgramada.HasValue) faltantes.Add("fecha programada");
+        if (tipoTransporte == "Interno")
+        {
+            if (!rutaId.HasValue || rutaId.Value <= 0) faltantes.Add("ruta");
+            if (!unidadId.HasValue || unidadId.Value <= 0) faltantes.Add("unidad");
+            if (!operadorUsuarioId.HasValue || operadorUsuarioId.Value <= 0) faltantes.Add("operador");
+        }
+        else if (tipoTransporte == "Externo")
+        {
+            if (string.IsNullOrWhiteSpace(transportista)) faltantes.Add("transportista");
+            if (string.IsNullOrWhiteSpace(unidadExterna)) faltantes.Add("unidad externa");
+            if (string.IsNullOrWhiteSpace(placasExternas)) faltantes.Add("placas");
+            if (string.IsNullOrWhiteSpace(choferExterno)) faltantes.Add("chofer");
+        }
+        else faltantes.Add("tipo de transporte");
+        if (faltantes.Count > 0) throw new InvalidOperationException($"El viaje todavía no está listo para iniciar. Completa: {string.Join(", ", faltantes)}.");
+    }
     private static string NormalizarTipoViaje(string? valor, bool permitirVacio)
     {
         valor = valor?.Trim() ?? string.Empty;

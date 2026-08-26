@@ -83,7 +83,7 @@ public sealed class LogisticaResumenClienteVm
     public int EntregasAtrasadas { get; set; }
     public decimal PorcentajeCumplimiento => Entregados <= 0 ? 0 : Math.Round((decimal)EntregasATiempo / Entregados * 100m, 1);
 }
-
+ 
 public sealed class LogisticaCrearVm
 {
     [Required]
@@ -118,6 +118,25 @@ public sealed class LogisticaCrearVm
     [Display(Name = "Tipo de operación")]
     public string TipoOperacion { get; set; } = "Nacional";
 
+    [Required, StringLength(30)]
+    [Display(Name = "Forma de envío")]
+    public string FormaEnvio { get; set; } = "Interno";
+
+    [StringLength(30)]
+    [Display(Name = "Modalidad de envío")]
+    public string? ModalidadEnvio { get; set; }
+
+    [StringLength(200)]
+    [Display(Name = "Compañía / transportista")]
+    public string? Transportista { get; set; }
+
+    [StringLength(150)]
+    [Display(Name = "Guía / referencia")]
+    public string? GuiaReferencia { get; set; }
+
+    [Display(Name = "¿Pasa por aduana?")]
+    public bool? PasaAduana { get; set; }
+
     public int? RutaID { get; set; }
     public int? UnidadID { get; set; }
 
@@ -126,6 +145,9 @@ public sealed class LogisticaCrearVm
 
     [StringLength(1200)]
     public string? Observaciones { get; set; }
+    public int? ClienteID { get; set; }
+    public List<LogisticaSelectVm> Clientes { get; set; } = new();
+    public List<LogisticaCrearPartidaVm> Partidas { get; set; } = new();
 
     public LogisticaDemandaVm? Demanda { get; set; }
     public List<LogisticaDemandaVm> Demandas { get; set; } = new();
@@ -135,6 +157,22 @@ public sealed class LogisticaCrearVm
     public List<LogisticaSelectVm> Unidades { get; set; } = new();
 }
 
+public sealed class LogisticaCrearPartidaVm
+{
+    public bool Seleccionada { get; set; }
+    public int ReleaseDetalleID { get; set; }
+    public int CantidadSolicitada { get; set; }
+    public List<int> CajaIDs { get; set; } = new();
+    public string FolioRelease { get; set; } = string.Empty;
+    public string NumeroParte { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public string NumeroOF { get; set; } = string.Empty;
+    public DateTime? FechaCarga { get; set; }
+    public DateTime FechaEntrega { get; set; }
+    public int PendienteProgramar { get; set; }
+    public long PiezasPTDisponibles { get; set; }
+    public List<LogisticaCajaDisponibleVm> CajasDisponibles { get; set; } = new();
+}
 public sealed class LogisticaDetalleVm
 {
     public int EmbarqueID { get; set; }
@@ -159,7 +197,11 @@ public sealed class LogisticaDetalleVm
     public DateTime? FechaSalida { get; set; }
     public DateTime? FechaEntrega { get; set; }
     public bool TieneIncidencia { get; set; }
-
+    public string FormaEnvio { get; set; } = string.Empty;
+    public string ModalidadEnvio { get; set; } = string.Empty;
+    public string Transportista { get; set; } = string.Empty;
+    public string GuiaReferencia { get; set; } = string.Empty;
+    public bool? PasaAduana { get; set; }
     public List<LogisticaDetallePartidaVm> Partidas { get; set; } = new();
     public List<LogisticaCajaAsignadaVm> CajasAsignadas { get; set; } = new();
     public List<LogisticaCajaDisponibleVm> CajasDisponibles { get; set; } = new();
@@ -206,8 +248,11 @@ public sealed class LogisticaDetalleVm
     public bool DocumentacionCompleta => DocumentosObligatorios > 0 && DocumentosFaltantes == 0;
     public decimal PorcentajeDocumentacion => DocumentosObligatorios <= 0 ? 0 : Math.Round((decimal)DocumentosObligatoriosCompletos / DocumentosObligatorios * 100m, 1);
 
-    public bool PuedeSalir => TieneRuta && TieneUnidad && TieneOperador && PreparacionCompleta && CargaCompleta && DocumentacionCompleta && IncidenciasCriticas <= 0;
+    public bool DatosTransporteCompletos => FormaEnvio == "Paqueteria"
+    ? !string.IsNullOrWhiteSpace(ModalidadEnvio) && !string.IsNullOrWhiteSpace(Transportista)
+    : TieneRuta && TieneUnidad && TieneOperador;
 
+    public bool PuedeSalir => DatosTransporteCompletos && PreparacionCompleta && CargaCompleta && DocumentacionCompleta && IncidenciasCriticas <= 0;
     public int IncidenciasAbiertas { get; set; }
     public int IncidenciasCriticas { get; set; }
     public List<LogisticaChecklistVm> Checklist { get; set; } = new();

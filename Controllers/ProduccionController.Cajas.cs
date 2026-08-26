@@ -43,10 +43,6 @@ namespace ERP.NSQuell.Controllers
         public async Task<IActionResult> FormarCaja(int ejecucionProduccionId, int cantidadPiezas, string tipoCaja, string? observaciones)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-            var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioPuedeGestionarCajasAsync(usuarioId, cn)) return AccesoDenegadoCajas();
             if (ejecucionProduccionId <= 0)
             {
                 TempData["Error"] = "No se recibió la ejecución de producción.";
@@ -57,14 +53,16 @@ namespace ERP.NSQuell.Controllers
                 TempData["Error"] = "La cantidad de piezas debe ser mayor a cero.";
                 return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
             }
-
             var tipoNormalizado = NormalizarTipoCajaProduccion(tipoCaja);
-            if (string.IsNullOrWhiteSpace(tipoNormalizado))
+            if (tipoNormalizado != ProduccionCajaTipo.Incompleta)
             {
-                TempData["Error"] = "El tipo de caja no es válido.";
+                TempData["Error"] = "Producción ya no registra la formación de cajas normales en ERP. Las cajas normales se registran automáticamente cuando Calidad realiza el primer escaneo físico. Este proceso solo se conserva para producto incompleto con etiqueta blanca.";
                 return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
             }
-
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var usuarioId = ObtenerUsuarioID();
+            if (!await UsuarioPuedeGestionarCajasAsync(usuarioId, cn)) return AccesoDenegadoCajas();
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
@@ -74,165 +72,76 @@ namespace ERP.NSQuell.Controllers
                     await tx.RollbackAsync();
                     return NotFound();
                 }
-
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Solo puedes formar cajas cuando la producción está en serie.";
+                    TempData["Error"] = "Solo puedes registrar producto incompleto cuando la producción está en serie.";
                     return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
                 }
-
                 if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "No puedes formar cajas mientras exista un paro abierto.";
+                    TempData["Error"] = "No puedes registrar producto incompleto mientras exista un paro abierto.";
                     return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
                 }
-
                 decimal? piezasPorEmbalaje = null;
-                decimal? cantidadEmbalajes = null;
-
                 if (ejecucion.SolicitudProduccionDetalleID.HasValue && ejecucion.SolicitudProduccionDetalleID.Value > 0)
                 {
-                    const string sqlEmbalaje = @"
-SELECT TOP(1) PiezasPorEmbalaje,CantidadEmbalajes
-FROM dbo.SolicitudesProduccionDetalle WITH(UPDLOCK,HOLDLOCK)
-WHERE SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID
-  AND Activo=1;";
-
+                    const string sqlEmbalaje = @"SELECT TOP(1) PiezasPorEmbalaje FROM dbo.SolicitudesProduccionDetalle WITH(UPDLOCK,HOLDLOCK) WHERE SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID AND Activo=1;";
                     await using var cmdEmbalaje = new SqlCommand(sqlEmbalaje, cn, tx);
                     cmdEmbalaje.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = ejecucion.SolicitudProduccionDetalleID.Value;
-
-                    await using var rd = await cmdEmbalaje.ExecuteReaderAsync();
-                    if (await rd.ReadAsync())
-                    {
-                        piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
-                        cantidadEmbalajes = rd["CantidadEmbalajes"] == DBNull.Value ? null : Convert.ToDecimal(rd["CantidadEmbalajes"]);
-                    }
+                    var valor = await cmdEmbalaje.ExecuteScalarAsync();
+                    piezasPorEmbalaje = valor == null || valor == DBNull.Value ? null : Convert.ToDecimal(valor);
                 }
-
-                var esIncompleta = tipoNormalizado == ProduccionCajaTipo.Incompleta;
-
-                if ((tipoNormalizado == ProduccionCajaTipo.Ok || esIncompleta) && (!piezasPorEmbalaje.HasValue || piezasPorEmbalaje.Value <= 0))
+                if (!piezasPorEmbalaje.HasValue || piezasPorEmbalaje.Value <= 0)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La pieza no tiene configurada la capacidad de piezas por embalaje.";
                     return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
                 }
-
-                var capacidadCaja = piezasPorEmbalaje.HasValue ? Convert.ToInt32(Math.Floor(piezasPorEmbalaje.Value)) : 0;
-
-                if (tipoNormalizado == ProduccionCajaTipo.Ok && capacidadCaja > 0 && cantidadPiezas > capacidadCaja)
+                var capacidadCaja = Convert.ToInt32(Math.Floor(piezasPorEmbalaje.Value));
+                if (capacidadCaja <= 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La caja excede la capacidad del embalaje. Máximo permitido: {capacidadCaja:N0} pieza(s).";
+                    TempData["Error"] = "La capacidad del embalaje no es válida.";
                     return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
                 }
-
-                if (esIncompleta)
-                {
-                    if (cantidadPiezas >= capacidadCaja)
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = $"Una caja incompleta debe contener menos de {capacidadCaja:N0} pieza(s). Si alcanza la capacidad debe formarse como caja OK.";
-                        return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                    }
-
-                    if (!ejecucion.CantidadPlaneada.HasValue || ejecucion.CantidadPlaneada.Value <= 0)
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = "La ejecución no tiene una cantidad planeada válida.";
-                        return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                    }
-
-                    var consumo = await ObtenerConsumoCajasEjecucionAsync(ejecucionProduccionId, cn, tx);
-                    if (consumo.Ok < ejecucion.CantidadPlaneada.Value)
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = $"Todavía faltan piezas planeadas por empacar. Planeado: {ejecucion.CantidadPlaneada.Value:N0}; aplicado a cajas: {consumo.Ok:N0}. La etiqueta blanca solo se usa para sobreproducción.";
-                        return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                    }
-
-                    var excedenteProducido = Math.Max(0, ejecucion.CantidadOKTotal - ejecucion.CantidadPlaneada.Value);
-                    if (excedenteProducido <= 0)
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = "No existe sobreproducción OK disponible para formar una caja incompleta.";
-                        return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                    }
-                }
-
-                var tipoDisponibilidad = esIncompleta ? ProduccionCajaTipo.Ok : tipoNormalizado;
-                var capturadoDisponible = await ObtenerCantidadDisponibleParaCajaAsync(ejecucionProduccionId, tipoDisponibilidad, cn, tx);
-
-                if (cantidadPiezas > capturadoDisponible)
+                if (cantidadPiezas >= capacidadCaja)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"No puedes formar la caja porque la cantidad excede lo capturado disponible. Disponible: {capturadoDisponible:N0} pieza(s).";
+                    TempData["Error"] = $"El producto incompleto debe contener menos de {capacidadCaja:N0} pieza(s). Una caja completa continúa por el flujo normal y será registrada por Calidad al escanearla.";
                     return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
                 }
-
-                if (tipoNormalizado == ProduccionCajaTipo.Ok)
+                if (!ejecucion.CantidadPlaneada.HasValue || ejecucion.CantidadPlaneada.Value <= 0)
                 {
-                    const string sqlTotales = @"
-SELECT COUNT(1) AS CajasFormadas,
-       ISNULL(SUM(ISNULL(CantidadPiezas,ISNULL(Cantidad,0))),0) AS PiezasEnCajas
-FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
-WHERE c.EjecucionProduccionID=@EjecucionProduccionID
-  AND c.Activo=1
-  AND UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK'
-  AND NOT EXISTS
-  (
-      SELECT 1
-      FROM dbo.Produccion_CajaOrigenDetalle od
-      WHERE od.CajaProduccionID=c.CajaProduccionID
-        AND od.Activo=1
-  );";
-
-                    int cajasFormadas;
-                    int piezasEnCajas;
-
-                    await using (var cmdTotales = new SqlCommand(sqlTotales, cn, tx))
-                    {
-                        cmdTotales.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-
-                        await using var rd = await cmdTotales.ExecuteReaderAsync();
-                        await rd.ReadAsync();
-                        cajasFormadas = Convert.ToInt32(rd["CajasFormadas"]);
-                        piezasEnCajas = Convert.ToInt32(rd["PiezasEnCajas"]);
-                    }
-
-                    var detalleAplicado = await ObtenerCantidadDetalleCajaPorEjecucionAsync(ejecucionProduccionId, cn, tx);
-                    var totalAplicado = piezasEnCajas + detalleAplicado;
-
-                    if (ejecucion.CantidadPlaneada.HasValue && ejecucion.CantidadPlaneada.Value > 0 && totalAplicado + cantidadPiezas > ejecucion.CantidadPlaneada.Value)
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = $"La caja excedería la cantidad planeada. Planeado: {ejecucion.CantidadPlaneada.Value:N0}; actualmente aplicado a cajas: {totalAplicado:N0}.";
-                        return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                    }
-
-                    if (cantidadEmbalajes.HasValue && cantidadEmbalajes.Value > 0)
-                    {
-                        var cajasEsperadas = Convert.ToInt32(Math.Ceiling(cantidadEmbalajes.Value));
-
-                        if (cajasFormadas >= cajasEsperadas)
-                        {
-                            await tx.RollbackAsync();
-                            TempData["Error"] = $"Ya se formaron las {cajasEsperadas:N0} caja(s)/embalaje(s) normales esperadas para esta orden.";
-                            return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                        }
-                    }
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La ejecución no tiene una cantidad planeada válida.";
+                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
                 }
-
+                var consumo = await ObtenerConsumoCajasEjecucionAsync(ejecucionProduccionId, cn, tx);
+                if (consumo.Ok < ejecucion.CantidadPlaneada.Value)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Todavía faltan piezas planeadas por aplicar a cajas reales. Planeado: {ejecucion.CantidadPlaneada.Value:N0}; aplicado: {consumo.Ok:N0}. La etiqueta blanca solamente se usa para sobreproducción.";
+                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
+                }
+                var excedenteProducido = Math.Max(0, ejecucion.CantidadOKTotal - ejecucion.CantidadPlaneada.Value);
+                if (excedenteProducido <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No existe sobreproducción OK disponible para registrar como producto incompleto.";
+                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
+                }
+                var disponible = await ObtenerCantidadDisponibleParaCajaAsync(ejecucionProduccionId, ProduccionCajaTipo.Ok, cn, tx);
+                if (cantidadPiezas > disponible)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La cantidad supera la sobreproducción OK disponible. Disponible: {disponible:N0} pieza(s).";
+                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
+                }
                 var siguienteNumero = await ObtenerSiguienteNumeroCajaAsync(ejecucionProduccionId, cn, tx);
                 var folioCaja = CrearFolioCajaProduccion(ejecucion, siguienteNumero);
                 var ahora = DateTime.Now;
-                var pasaDirectoACalidad = tipoNormalizado == ProduccionCajaTipo.Ok && !esIncompleta;
-                var estadoCajaId = pasaDirectoACalidad ? ProduccionCajaEstatus.PendienteCalidad : ProduccionCajaEstatus.FormadaProduccion;
-                var estadoCajaNombre = pasaDirectoACalidad ? "Pendiente escaneo Calidad" : ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.FormadaProduccion);
-                var estatusCalidad = pasaDirectoACalidad ? "PENDIENTE" : "FORMADA";
-
                 const string sqlInsert = @"
 INSERT INTO dbo.Produccion_Cajas
 (
@@ -246,14 +155,12 @@ OUTPUT INSERTED.CajaProduccionID
 VALUES
 (
     @EjecucionProduccionID,@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,@ReleaseID,@ReleaseDetalleID,
-    @NumeroCaja,@FolioCaja,@CantidadPiezas,@TipoCaja,NULL,NULL,@EstadoCajaID,@EstadoCajaNombre,0,
-    @Ahora,@UsuarioID,@FechaSolicitudCalidad,@UsuarioSolicitudCalidadID,@Observaciones,1,@UsuarioID,@Ahora,
-    @EtiquetaCompatibilidad,@CantidadPiezas,@EstatusCalidad,@UsuarioID,@EsProductoIncompleto,@EstadoProductoIncompleto,
+    @NumeroCaja,@FolioCaja,@CantidadPiezas,N'INCOMPLETA',NULL,NULL,@EstadoCajaID,@EstadoCajaNombre,0,
+    @Ahora,@UsuarioID,NULL,NULL,@Observaciones,1,@UsuarioID,@Ahora,
+    @FolioCaja,@CantidadPiezas,N'FORMADA',@UsuarioID,1,@EstadoProductoIncompleto,
     @CapacidadObjetivoCaja,@CantidadPendienteCompletar,NULL
 );";
-
                 long cajaProduccionId;
-
                 await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
                 {
                     cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
@@ -265,35 +172,24 @@ VALUES
                     cmd.Parameters.Add("@NumeroCaja", SqlDbType.Int).Value = siguienteNumero;
                     cmd.Parameters.Add("@FolioCaja", SqlDbType.NVarChar, 100).Value = folioCaja;
                     cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = cantidadPiezas;
-                    cmd.Parameters.Add("@TipoCaja", SqlDbType.NVarChar, 30).Value = tipoNormalizado;
-                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = estadoCajaId;
-                    cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value = estadoCajaNombre;
+                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
+                    cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value = "Producto incompleto - etiqueta blanca";
                     cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
-                    cmd.Parameters.Add("@FechaSolicitudCalidad", SqlDbType.DateTime2).Value = pasaDirectoACalidad ? ahora : DBNull.Value;
-                    cmd.Parameters.Add("@UsuarioSolicitudCalidadID", SqlDbType.Int).Value = pasaDirectoACalidad ? usuarioId : DBNull.Value;
                     cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones.Trim();
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    cmd.Parameters.Add("@EtiquetaCompatibilidad", SqlDbType.NVarChar, 100).Value = folioCaja;
-                    cmd.Parameters.Add("@EstatusCalidad", SqlDbType.NVarChar, 50).Value = estatusCalidad;
-                    cmd.Parameters.Add("@EsProductoIncompleto", SqlDbType.Bit).Value = esIncompleta;
-                    cmd.Parameters.Add("@EstadoProductoIncompleto", SqlDbType.NVarChar, 30).Value = esIncompleta ? ProduccionProductoIncompletoEstado.Disponible : DBNull.Value;
-                    cmd.Parameters.Add("@CapacidadObjetivoCaja", SqlDbType.Int).Value = esIncompleta ? capacidadCaja : DBNull.Value;
-                    cmd.Parameters.Add("@CantidadPendienteCompletar", SqlDbType.Int).Value = esIncompleta ? capacidadCaja - cantidadPiezas : DBNull.Value;
-
+                    cmd.Parameters.Add("@EstadoProductoIncompleto", SqlDbType.NVarChar, 30).Value = ProduccionProductoIncompletoEstado.Disponible;
+                    cmd.Parameters.Add("@CapacidadObjetivoCaja", SqlDbType.Int).Value = capacidadCaja;
+                    cmd.Parameters.Add("@CantidadPendienteCompletar", SqlDbType.Int).Value = capacidadCaja - cantidadPiezas;
                     cajaProduccionId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
                 }
-
-                if (esIncompleta)
-                {
-                    var etiquetaBlanca = $"BLA-{cajaProduccionId:000000}";
-
-                    const string sqlBlanca = @"
+                var etiquetaBlanca = $"BLA-{cajaProduccionId:000000}";
+                const string sqlBlanca = @"
 UPDATE dbo.Produccion_Cajas
 SET EtiquetaBlanca=@EtiquetaBlanca,
     EtiquetaFolio=@EtiquetaBlanca,
     Etiqueta=@EtiquetaBlanca,
     UsuarioModificacionID=@UsuarioID,
-    FechaModificacion=GETDATE()
+    FechaModificacion=SYSDATETIME()
 WHERE CajaProduccionID=@CajaProduccionID
   AND Activo=1;
 
@@ -308,53 +204,31 @@ VALUES
     @ReleaseID,@ReleaseDetalleID,@CantidadPiezas,N'ORIGEN',N'Sobreproducción resguardada como producto incompleto con etiqueta blanca.',
     @UsuarioID,SYSDATETIME(),1
 );";
-
-                    await using var cmdBlanca = new SqlCommand(sqlBlanca, cn, tx);
-                    cmdBlanca.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
-                    cmdBlanca.Parameters.Add("@EtiquetaBlanca", SqlDbType.NVarChar, 100).Value = etiquetaBlanca;
-                    cmdBlanca.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
-                    cmdBlanca.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
-                    cmdBlanca.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
-                    cmdBlanca.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = (object?)ejecucion.SolicitudProduccionDetalleID ?? DBNull.Value;
-                    cmdBlanca.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = (object?)ejecucion.ReleaseID ?? DBNull.Value;
-                    cmdBlanca.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = (object?)ejecucion.ReleaseDetalleID ?? DBNull.Value;
-                    cmdBlanca.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = cantidadPiezas;
-                    cmdBlanca.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    await cmdBlanca.ExecuteNonQueryAsync();
-
-                    await tx.CommitAsync();
-                    TempData["Success"] = $"Producto incompleto {etiquetaBlanca} registrado con {cantidadPiezas:N0} pieza(s). Faltan {capacidadCaja - cantidadPiezas:N0} para completar la caja.";
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
+                await using (var cmd = new SqlCommand(sqlBlanca, cn, tx))
+                {
+                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                    cmd.Parameters.Add("@EtiquetaBlanca", SqlDbType.NVarChar, 100).Value = etiquetaBlanca;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
+                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
+                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
+                    cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int).Value = (object?)ejecucion.SolicitudProduccionDetalleID ?? DBNull.Value;
+                    cmd.Parameters.Add("@ReleaseID", SqlDbType.Int).Value = (object?)ejecucion.ReleaseID ?? DBNull.Value;
+                    cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = (object?)ejecucion.ReleaseDetalleID ?? DBNull.Value;
+                    cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = cantidadPiezas;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmd.ExecuteNonQueryAsync();
                 }
-
                 await tx.CommitAsync();
-
-                TempData["Success"] = pasaDirectoACalidad
-                    ? $"Caja {siguienteNumero:N0} formada con {cantidadPiezas:N0} pieza(s). Estado: Pendiente escaneo Calidad. Calidad debe escanear la etiqueta física colocada por Planeación."
-                    : $"Caja {siguienteNumero:N0} formada correctamente con {cantidadPiezas:N0} pieza(s).";
+                TempData["Success"] = $"Producto incompleto {etiquetaBlanca} registrado con {cantidadPiezas:N0} pieza(s). Faltan {capacidadCaja - cantidadPiezas:N0} para completar el embalaje.";
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync();
-                TempData["Error"] = "No fue posible formar la caja: " + ex.Message;
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "No fue posible registrar el producto incompleto: " + ex.Message;
             }
-
             return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult EscanearCaja(ProduccionEscanearCajaPostVm vm)
-        {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
-            if (vm.EjecucionProduccionID <= 0)
-                return RedirectToAction(nameof(Index));
-
-            TempData["Info"] = "El primer escaneo de la etiqueta física corresponde a Calidad. Producción no necesita escanear la caja hasta el momento de entregarla a Almacén PT.";
-            return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
-        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -542,290 +416,7 @@ VALUES
             return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SolicitarLiberacionCaja(int cajaProduccionId)
-        {
-            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            if (cajaProduccionId <= 0)
-            {
-                TempData["Error"] = "No se recibió una caja válida.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-
-            var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioPuedeGestionarCajasAsync(usuarioId, cn)) return AccesoDenegadoCajas();
-
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-            var ejecucionProduccionId = 0;
-
-            try
-            {
-                var caja = await ObtenerCajaProduccionAsync(cajaProduccionId, cn, tx);
-                if (caja == null)
-                {
-                    await tx.RollbackAsync();
-                    return NotFound();
-                }
-
-                ejecucionProduccionId = caja.EjecucionProduccionID;
-
-                if (caja.EstadoCajaID == ProduccionCajaEstatus.PendienteCalidad)
-                {
-                    await tx.CommitAsync();
-                    TempData["Info"] = "La caja ya se encuentra pendiente de revisión de Calidad.";
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                }
-
-                if (caja.EstadoCajaID != ProduccionCajaEstatus.FormadaProduccion)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "Solo puedes solicitar liberación de una caja formada en Producción.";
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                }
-
-                const string sqlEstadoCaja = @"
-SELECT TOP (1)
-    UPPER(LTRIM(RTRIM(ISNULL(EstatusCalidad,N'')))) AS EstatusCalidad,
-    ISNULL(MotivoCalidad,N'') AS MotivoCalidad
-FROM dbo.Produccion_Cajas WITH (UPDLOCK,HOLDLOCK)
-WHERE CajaProduccionID=@CajaProduccionID
-  AND EjecucionProduccionID=@EjecucionProduccionID
-  AND Activo=1;";
-
-                string estatusCalidad;
-                string motivoCalidad;
-
-                await using (var cmd = new SqlCommand(sqlEstadoCaja, cn, tx))
-                {
-                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
-                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                    await using var rd = await cmd.ExecuteReaderAsync();
-
-                    if (!await rd.ReadAsync())
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = "No fue posible consultar el estado de Calidad de la caja.";
-                        return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                    }
-
-                    estatusCalidad = rd["EstatusCalidad"]?.ToString()?.Trim() ?? string.Empty;
-                    motivoCalidad = rd["MotivoCalidad"]?.ToString()?.Trim() ?? string.Empty;
-                }
-
-                if (estatusCalidad == "DEVUELTA")
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = string.IsNullOrWhiteSpace(motivoCalidad)
-                        ? "La caja fue devuelta por Calidad. Registra la corrección realizada antes de reenviarla."
-                        : $"La caja fue devuelta por Calidad: {motivoCalidad}. Registra la corrección realizada antes de reenviarla.";
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                }
-
-                if (!string.IsNullOrWhiteSpace(estatusCalidad) && estatusCalidad != "CORREGIDA" && estatusCalidad != "FORMADA")
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = $"La caja no puede enviarse a Calidad porque actualmente tiene el estatus {estatusCalidad}.";
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                }
-
-                var validacion = await ValidarEnvioCajaCalidadAsync(ejecucionProduccionId, cn, tx);
-                if (!validacion.Permitido || !validacion.InspeccionID.HasValue)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = validacion.Mensaje;
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                }
-
-                var esReenvio = estatusCalidad == "CORREGIDA";
-                var movimiento = esReenvio ? "CAJA_REENVIADA_DESDE_PRODUCCION" : "CAJA_RECIBIDA_DESDE_PRODUCCION";
-                var comentario = esReenvio
-                    ? $"Producción reenvió la caja {caja.FolioCaja} después de registrar su corrección. Cantidad: {caja.CantidadPiezas} pieza(s). Tipo: {caja.TipoCaja}."
-                    : $"Producción envió la caja {caja.FolioCaja} a Calidad. Cantidad: {caja.CantidadPiezas} pieza(s). Tipo: {caja.TipoCaja}.";
-
-                const string sql = @"
-UPDATE dbo.Produccion_Cajas
-SET EstadoCajaID=@EstadoCajaID,
-    EstadoCajaNombre=@EstadoCajaNombre,
-    FechaSolicitudCalidad=GETDATE(),
-    UsuarioSolicitudCalidadID=@UsuarioID,
-    EstatusCalidad=N'PENDIENTE',
-    EtiquetaVerde=0,
-    FechaLiberacionCalidad=NULL,
-    AuditorCalidadUsuarioID=NULL,
-    UsuarioCalidadID=NULL,
-    ResultadoCalidad=NULL,
-    MotivoCalidad=NULL,
-    FechaZonaVerde=NULL,
-    UsuarioZonaVerdeID=NULL,
-    FechaSalidaProduccion=NULL,
-    UsuarioSalidaProduccionID=NULL,
-    UsuarioModificacionID=@UsuarioID,
-    FechaModificacion=GETDATE()
-WHERE CajaProduccionID=@CajaProduccionID
-  AND EjecucionProduccionID=@EjecucionProduccionID
-  AND Activo=1
-  AND EstadoCajaID=@EstadoActual
-  AND
-  (
-      UPPER(LTRIM(RTRIM(ISNULL(EstatusCalidad,N'')))) IN (N'',N'FORMADA',N'CORREGIDA')
-  );
-
-IF @@ROWCOUNT<>1
-    THROW 51060,'La caja cambió de estado mientras se enviaba a Calidad.',1;
-
-INSERT INTO dbo.Calidad_InspeccionHistorial
-(
-    InspeccionID,
-    Movimiento,
-    EstadoAnterior,
-    EstadoNuevo,
-    ResultadoCalidad,
-    Etiqueta,
-    Comentario,
-    UsuarioID,
-    FechaMovimiento
-)
-SELECT
-    @InspeccionID,
-    @Movimiento,
-    N'MONITOREO_ACTIVO',
-    N'MONITOREO_ACTIVO',
-    NULL,
-    NULL,
-    @Comentario,
-    @UsuarioID,
-    GETDATE()
-WHERE NOT EXISTS
-(
-    SELECT 1
-    FROM dbo.Calidad_InspeccionHistorial h
-    WHERE h.InspeccionID=@InspeccionID
-      AND h.Movimiento=@Movimiento
-      AND h.Comentario LIKE N'%'+@FolioCaja+N'%'
-      AND h.FechaMovimiento>=DATEADD(SECOND,-5,GETDATE())
-);";
-
-                await using (var cmd = new SqlCommand(sql, cn, tx))
-                {
-                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
-                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = validacion.InspeccionID.Value;
-                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
-                    cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value = ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.PendienteCalidad);
-                    cmd.Parameters.Add("@EstadoActual", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
-                    cmd.Parameters.Add("@Movimiento", SqlDbType.NVarChar, 100).Value = movimiento;
-                    cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = comentario.Length > 1000 ? comentario[..1000] : comentario;
-                    cmd.Parameters.Add("@FolioCaja", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(caja.FolioCaja) ? cajaProduccionId.ToString() : caja.FolioCaja;
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-                await tx.CommitAsync();
-                TempData["Success"] = esReenvio
-                    ? "Caja corregida y reenviada a Calidad para una nueva revisión."
-                    : "Caja enviada a Calidad para revisión.";
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-                TempData["Error"] = "No fue posible solicitar liberación de la caja: " + ex.Message;
-            }
-
-            return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-        }
-
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MoverCajaZonaVerde(
-     int cajaProduccionId)
-        {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-
-            var usuarioId = ObtenerUsuarioID();
-
-            var puedeGestionarCajas = await UsuarioPuedeGestionarCajasAsync(usuarioId, cn);
-
-            if (!puedeGestionarCajas)
-                return AccesoDenegadoCajas();
-
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
-
-            int ejecucionProduccionId = 0;
-
-            try
-            {
-                var caja = await ObtenerCajaProduccionAsync(cajaProduccionId, cn, tx);
-
-                if (caja == null)
-                {
-                    await tx.RollbackAsync();
-                    return NotFound();
-                }
-
-                ejecucionProduccionId = caja.EjecucionProduccionID;
-
-                if (caja.EstadoCajaID != ProduccionCajaEstatus.LiberadaCalidad || !caja.EtiquetaVerde)
-                {
-                    await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "No puedes mover esta caja a zona verde. Primero debe estar liberada por Calidad con etiqueta verde.";
-
-                    return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-                }
-
-                const string sql = @"
-UPDATE dbo.Produccion_Cajas
-SET
-    EstadoCajaID = @EstadoCajaID,
-    EstadoCajaNombre = @EstadoCajaNombre,
-    FechaZonaVerde = GETDATE(),
-    UsuarioZonaVerdeID = @UsuarioID,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = GETDATE()
-WHERE CajaProduccionID = @CajaProduccionID
-  AND Activo = 1;";
-
-                await using var cmd = new SqlCommand(sql, cn, tx);
-
-                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
-                    cajaProduccionId;
-
-                cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value =
-                    ProduccionCajaEstatus.ZonaVerde;
-
-                cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value =
-                    ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.ZonaVerde);
-
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                    usuarioId;
-
-                await cmd.ExecuteNonQueryAsync();
-
-                await tx.CommitAsync();
-
-                TempData["Success"] =
-                    "Caja movida a zona verde.";
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No fue posible mover la caja a zona verde: " + ex.Message;
-            }
-
-            return RedirectToAction(nameof(Cajas), new { id = ejecucionProduccionId });
-        }
+     
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1507,13 +1098,16 @@ IF @@ROWCOUNT<>1 THROW 51110,'La etiqueta blanca cambió de asignación mientras
             return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
         }
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CompletarCajaIncompleta(ProduccionCompletarCajaIncompletaPostVm vm)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            if (vm.CajaProduccionID <= 0 || vm.EjecucionProduccionID <= 0 || vm.CantidadPiezas <= 0) { TempData["Error"] = "Los datos para completar la caja no son válidos."; return RedirectToAction(nameof(Index)); }
+            if (vm.CajaProduccionID <= 0 || vm.EjecucionProduccionID <= 0 || vm.CantidadPiezas <= 0)
+            {
+                TempData["Error"] = "Los datos para completar la caja no son válidos.";
+                return RedirectToAction(nameof(Index));
+            }
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             var usuarioId = ObtenerUsuarioID();
@@ -1522,14 +1116,28 @@ IF @@ROWCOUNT<>1 THROW 51110,'La etiqueta blanca cambió de asignación mientras
             try
             {
                 var ejecucion = await ObtenerEjecucionAsync(vm.EjecucionProduccionID, cn, tx);
-                if (ejecucion == null) { await tx.RollbackAsync(); return NotFound(); }
-                if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion) { await tx.RollbackAsync(); TempData["Error"] = "Solo puedes completar producto incompleto cuando la OF está en producción."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
-                if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx)) { await tx.RollbackAsync(); TempData["Error"] = "No puedes completar cajas mientras exista un paro abierto."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
+                if (ejecucion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+                if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Solo puedes completar producto incompleto cuando la OF está en producción.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
+                if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No puedes completar producto incompleto mientras exista un paro abierto.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
                 const string sqlCaja = @"
 SELECT c.CajaProduccionID,c.EjecucionProduccionID,ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) AS CantidadPiezas,
-ISNULL(c.CapacidadObjetivoCaja,0) AS CapacidadObjetivoCaja,ISNULL(c.CantidadPendienteCompletar,0) AS CantidadPendienteCompletar,
-ISNULL(c.EstadoProductoIncompleto,N'') AS EstadoProductoIncompleto,c.EjecucionReservaID,c.EtiquetaBlanca,eOrigen.ParteID,
-a.ProductoIncompletoApartadoID
+       ISNULL(c.CapacidadObjetivoCaja,0) AS CapacidadObjetivoCaja,ISNULL(c.CantidadPendienteCompletar,0) AS CantidadPendienteCompletar,
+       ISNULL(c.EstadoProductoIncompleto,N'') AS EstadoProductoIncompleto,c.EjecucionReservaID,c.EtiquetaBlanca,eOrigen.ParteID,
+       a.ProductoIncompletoApartadoID
 FROM dbo.Planeacion_ProductoIncompletoApartado a WITH(UPDLOCK,HOLDLOCK)
 INNER JOIN dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK) ON c.CajaProduccionID=a.CajaProduccionID
 INNER JOIN dbo.Produccion_Ejecucion eOrigen ON eOrigen.EjecucionProduccionID=c.EjecucionProduccionID
@@ -1549,29 +1157,70 @@ WHERE a.CajaProduccionID=@CajaProduccionID
                     cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = vm.EjecucionProduccionID;
                     cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
                     await using var rd = await cmd.ExecuteReaderAsync();
-                    if (!await rd.ReadAsync()) { await tx.RollbackAsync(); TempData["Error"] = "La etiqueta blanca no fue asignada por Planeación a esta ejecución o ya fue aplicada."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La etiqueta blanca no fue asignada por Planeación a esta ejecución o ya fue aplicada.";
+                        return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                    }
                     cantidadActual = Convert.ToInt32(rd["CantidadPiezas"]);
                     capacidad = Convert.ToInt32(rd["CapacidadObjetivoCaja"]);
                     pendiente = Convert.ToInt32(rd["CantidadPendienteCompletar"]);
                     parteOrigen = rd["ParteID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ParteID"]);
                     reservaId = rd["EjecucionReservaID"] == DBNull.Value ? null : Convert.ToInt32(rd["EjecucionReservaID"]);
                     estado = rd["EstadoProductoIncompleto"]?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
-                    etiquetaBlanca = rd["EtiquetaBlanca"]?.ToString() ?? vm.CajaProduccionID.ToString();
+                    etiquetaBlanca = rd["EtiquetaBlanca"]?.ToString()?.Trim() ?? vm.CajaProduccionID.ToString();
                 }
-                if (!reservaId.HasValue || reservaId.Value != vm.EjecucionProduccionID) { await tx.RollbackAsync(); TempData["Error"] = $"La etiqueta blanca {etiquetaBlanca} no está relacionada con esta ejecución."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
-                if (estado != ProduccionProductoIncompletoEstado.Reservada && estado != ProduccionProductoIncompletoEstado.EnCompletado) { await tx.RollbackAsync(); TempData["Error"] = "La etiqueta blanca no se encuentra en estado válido para completarse."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
-                if (!ejecucion.ParteID.HasValue || ejecucion.ParteID.Value != parteOrigen) { await tx.RollbackAsync(); TempData["Error"] = "La pieza de la OF actual no coincide con la etiqueta blanca asignada."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
-                if (capacidad <= 0 || pendiente <= 0) { await tx.RollbackAsync(); TempData["Error"] = "La etiqueta blanca no tiene una capacidad pendiente válida."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
-                if (vm.CantidadPiezas > pendiente) { await tx.RollbackAsync(); TempData["Error"] = $"Solo faltan {pendiente:N0} pieza(s) para completar {etiquetaBlanca}."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
+                if (!reservaId.HasValue || reservaId.Value != vm.EjecucionProduccionID)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La etiqueta blanca {etiquetaBlanca} no está relacionada con esta ejecución.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
+                if (estado != ProduccionProductoIncompletoEstado.Reservada && estado != ProduccionProductoIncompletoEstado.EnCompletado)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La etiqueta blanca no se encuentra en estado válido para completarse.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
+                if (!ejecucion.ParteID.HasValue || ejecucion.ParteID.Value != parteOrigen)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La pieza de la OF actual no coincide con la etiqueta blanca asignada.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
+                if (capacidad <= 0 || pendiente <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La etiqueta blanca no tiene una capacidad pendiente válida.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
+                if (vm.CantidadPiezas > pendiente)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Solo faltan {pendiente:N0} pieza(s) para completar {etiquetaBlanca}.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
                 var disponible = await ObtenerCantidadDisponibleParaCajaAsync(vm.EjecucionProduccionID, ProduccionCajaTipo.Ok, cn, tx);
-                if (vm.CantidadPiezas > disponible) { await tx.RollbackAsync(); TempData["Error"] = $"La OF solamente tiene {disponible:N0} pieza(s) OK disponibles para agregar a la caja."; return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID }); }
+                if (vm.CantidadPiezas > disponible)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"La OF solamente tiene {disponible:N0} pieza(s) OK disponibles para agregar a la caja.";
+                    return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
+                }
                 var nuevaCantidad = cantidadActual + vm.CantidadPiezas;
                 var nuevoPendiente = Math.Max(0, capacidad - nuevaCantidad);
                 const string sqlDetalle = @"
 INSERT INTO dbo.Produccion_CajaOrigenDetalle
-(CajaProduccionID,EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,CantidadPiezas,TipoMovimiento,Observaciones,UsuarioCreacionID,FechaCreacion,Activo)
+(
+    CajaProduccionID,EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,
+    ReleaseID,ReleaseDetalleID,CantidadPiezas,TipoMovimiento,Observaciones,UsuarioCreacionID,FechaCreacion,Activo
+)
 VALUES
-(@CajaProduccionID,@EjecucionProduccionID,@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,@ReleaseID,@ReleaseDetalleID,@CantidadPiezas,N'COMPLETADO',@Observaciones,@UsuarioID,SYSDATETIME(),1);";
+(
+    @CajaProduccionID,@EjecucionProduccionID,@ProgramaProduccionID,@SolicitudProduccionID,@SolicitudProduccionDetalleID,
+    @ReleaseID,@ReleaseDetalleID,@CantidadPiezas,N'COMPLETADO',@Observaciones,@UsuarioID,SYSDATETIME(),1
+);";
                 await using (var cmd = new SqlCommand(sqlDetalle, cn, tx))
                 {
                     cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = vm.CajaProduccionID;
@@ -1590,9 +1239,16 @@ VALUES
                 {
                     const string sqlParcial = @"
 UPDATE dbo.Produccion_Cajas
-SET CantidadPiezas=@Cantidad,Cantidad=@Cantidad,CantidadPendienteCompletar=@Pendiente,EstadoProductoIncompleto=N'EN_COMPLETADO',
-UsuarioModificacionID=@UsuarioID,FechaModificacion=SYSDATETIME()
-WHERE CajaProduccionID=@CajaProduccionID AND Activo=1 AND EsProductoIncompleto=1 AND EjecucionReservaID=@EjecucionProduccionID;
+SET CantidadPiezas=@Cantidad,
+    Cantidad=@Cantidad,
+    CantidadPendienteCompletar=@Pendiente,
+    EstadoProductoIncompleto=N'EN_COMPLETADO',
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1
+  AND EsProductoIncompleto=1
+  AND EjecucionReservaID=@EjecucionProduccionID;
 IF @@ROWCOUNT<>1 THROW 51121,'La etiqueta blanca cambió de estado mientras se agregaban las piezas.',1;";
                     await using var cmd = new SqlCommand(sqlParcial, cn, tx);
                     cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = vm.CajaProduccionID;
@@ -1609,20 +1265,62 @@ IF @@ROWCOUNT<>1 THROW 51121,'La etiqueta blanca cambió de estado mientras se a
                 var nuevoFolio = CrearFolioCajaProduccion(ejecucion, siguienteNumero);
                 const string sqlCompleta = @"
 UPDATE dbo.Produccion_Cajas
-SET EjecucionProduccionID=@EjecucionProduccionID,ProgramaProduccionID=@ProgramaProduccionID,
-SolicitudProduccionID=@SolicitudProduccionID,SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID,
-ReleaseID=@ReleaseID,ReleaseDetalleID=@ReleaseDetalleID,NumeroCaja=@NumeroCaja,FolioCaja=@FolioCaja,
-CantidadPiezas=@Cantidad,Cantidad=@Cantidad,TipoCaja=N'OK',EsProductoIncompleto=0,
-EstadoProductoIncompleto=N'COMPLETA',CantidadPendienteCompletar=0,FechaCompletadoIncompleto=SYSDATETIME(),
-EstadoCajaID=@EstadoCajaID,EstadoCajaNombre=@EstadoCajaNombre,EstatusCalidad=N'FORMADA',
-EtiquetaFolio=@FolioCaja,Etiqueta=@FolioCaja,EtiquetaVerde=0,
-UsuarioModificacionID=@UsuarioID,FechaModificacion=SYSDATETIME()
-WHERE CajaProduccionID=@CajaProduccionID AND Activo=1 AND EsProductoIncompleto=1 AND EjecucionReservaID=@EjecucionProduccionID;
+SET EjecucionProduccionID=@EjecucionProduccionID,
+    ProgramaProduccionID=@ProgramaProduccionID,
+    SolicitudProduccionID=@SolicitudProduccionID,
+    SolicitudProduccionDetalleID=@SolicitudProduccionDetalleID,
+    ReleaseID=@ReleaseID,
+    ReleaseDetalleID=@ReleaseDetalleID,
+    NumeroCaja=@NumeroCaja,
+    FolioCaja=@FolioCaja,
+    CantidadPiezas=@Cantidad,
+    Cantidad=@Cantidad,
+    TipoCaja=N'OK',
+    EsProductoIncompleto=0,
+    EstadoProductoIncompleto=N'COMPLETA',
+    CantidadPendienteCompletar=0,
+    FechaCompletadoIncompleto=SYSDATETIME(),
+    EstadoCajaID=@EstadoCajaID,
+    EstadoCajaNombre=N'Pendiente escaneo Calidad',
+    EstatusCalidad=N'PENDIENTE',
+    EtiquetaFolio=@FolioCaja,
+    Etiqueta=@FolioCaja,
+    EtiquetaVerde=0,
+    FechaSolicitudCalidad=SYSDATETIME(),
+    UsuarioSolicitudCalidadID=@UsuarioID,
+    FechaLiberacionCalidad=NULL,
+    AuditorCalidadUsuarioID=NULL,
+    UsuarioCalidadID=NULL,
+    ResultadoCalidad=NULL,
+    MotivoCalidad=NULL,
+    CodigoBarrasOrigen=NULL,
+    NumeroOFEtiqueta=NULL,
+    NumeroParteEtiqueta=NULL,
+    DesignacionEtiqueta=NULL,
+    CantidadEtiqueta=NULL,
+    LoteEtiqueta=NULL,
+    FechaEscaneoCalidad=NULL,
+    UsuarioEscaneoCalidadID=NULL,
+    FechaZonaVerde=NULL,
+    UsuarioZonaVerdeID=NULL,
+    FechaSalidaProduccion=NULL,
+    UsuarioSalidaProduccionID=NULL,
+    FechaRecepcionAlmacen=NULL,
+    UsuarioAlmacenID=NULL,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1
+  AND EsProductoIncompleto=1
+  AND EjecucionReservaID=@EjecucionProduccionID;
 IF @@ROWCOUNT<>1 THROW 51120,'La etiqueta blanca cambió de estado mientras se completaba.',1;
 
 UPDATE dbo.Planeacion_ProductoIncompletoApartado
-SET EstatusID=5,UsuarioAplicacionID=@UsuarioID,FechaAplicacion=SYSDATETIME(),Activo=0,
-Observaciones=LEFT(COALESCE(NULLIF(Observaciones,N'')+N' | ',N'')+N'Producto incompleto aplicado y caja completada por ejecución '+CONVERT(NVARCHAR(20),@EjecucionProduccionID)+N'.',500)
+SET EstatusID=5,
+    UsuarioAplicacionID=@UsuarioID,
+    FechaAplicacion=SYSDATETIME(),
+    Activo=0,
+    Observaciones=LEFT(COALESCE(NULLIF(Observaciones,N'')+N' | ',N'')+N'Producto incompleto aplicado y caja completada por ejecución '+CONVERT(NVARCHAR(20),@EjecucionProduccionID)+N'. Pendiente de primer escaneo físico de Calidad.',500)
 WHERE CajaProduccionID=@CajaProduccionID
   AND EjecucionProduccionID=@EjecucionProduccionID
   AND ProgramaProduccionID=@ProgramaProduccionID
@@ -1641,17 +1339,16 @@ IF @@ROWCOUNT<>1 THROW 51122,'No fue posible cerrar el apartado de producto inco
                     cmd.Parameters.Add("@NumeroCaja", SqlDbType.Int).Value = siguienteNumero;
                     cmd.Parameters.Add("@FolioCaja", SqlDbType.NVarChar, 100).Value = nuevoFolio;
                     cmd.Parameters.Add("@Cantidad", SqlDbType.Int).Value = capacidad;
-                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
-                    cmd.Parameters.Add("@EstadoCajaNombre", SqlDbType.NVarChar, 100).Value = ProduccionCajaEstatus.Nombre(ProduccionCajaEstatus.FormadaProduccion);
+                    cmd.Parameters.Add("@EstadoCajaID", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
                     await cmd.ExecuteNonQueryAsync();
                 }
                 await tx.CommitAsync();
-                TempData["Success"] = $"Etiqueta blanca {etiquetaBlanca} completada con {capacidad:N0} pieza(s). Ahora es la caja {nuevoFolio} y puede continuar al flujo de Calidad.";
+                TempData["Success"] = $"Etiqueta blanca {etiquetaBlanca} completada con {capacidad:N0} pieza(s). Ahora es la caja {nuevoFolio} y quedó pendiente del primer escaneo físico de Calidad.";
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync();
+                try { await tx.RollbackAsync(); } catch { }
                 TempData["Error"] = "No fue posible completar la etiqueta blanca: " + ex.Message;
             }
             return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
@@ -1809,135 +1506,6 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
             };
         }
 
-        private sealed class ValidacionEnvioCajaCalidad
-        {
-            public bool Permitido { get; set; }
-            public int? InspeccionID { get; set; }
-            public string Mensaje { get; set; } = string.Empty;
-        }
-        private static async Task<ValidacionEnvioCajaCalidad> ValidarEnvioCajaCalidadAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
-        {
-            const string sql = @"
-DECLARE @InspeccionID INT;
-DECLARE @Estado NVARCHAR(50);
-DECLARE @ConfiguracionInvalidada BIT;
-DECLARE @RequiereReliberacion BIT;
-DECLARE @Liberado BIT;
-DECLARE @DisposicionesPendientes INT;
-SELECT TOP (1)
-    @InspeccionID=ci.InspeccionID,
-    @Estado=UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N'')))),
-    @ConfiguracionInvalidada=ISNULL(ci.ConfiguracionInvalidada,0),
-    @RequiereReliberacion=ISNULL(ci.RequiereReliberacion,0),
-    @Liberado=ISNULL(ci.Liberado,0)
-FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK)
-WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
-  AND ci.Estado<>N'CERRADA'
-ORDER BY ci.InspeccionID DESC;
-IF @InspeccionID IS NULL
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,CAST(NULL AS INT) InspeccionID,N'No existe una inspección activa de Calidad relacionada con la ejecución.' Mensaje;
-    RETURN;
-END;
-IF @ConfiguracionInvalidada=1
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,@InspeccionID InspeccionID,N'La configuración de la corrida fue invalidada. Debe completarse la revisión de Calidad antes de enviar cajas.' Mensaje;
-    RETURN;
-END;
-IF @RequiereReliberacion=1 OR @Estado=N'PENDIENTE_RELIBERACION'
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,@InspeccionID InspeccionID,N'La corrida requiere reliberación de Calidad después de un paro. No se pueden enviar cajas mientras esté pendiente.' Mensaje;
-    RETURN;
-END;
-IF @Liberado=0
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,@InspeccionID InspeccionID,N'Calidad no tiene liberada actualmente la producción.' Mensaje;
-    RETURN;
-END;
-IF @Estado<>N'MONITOREO_ACTIVO'
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,@InspeccionID InspeccionID,N'La inspección debe encontrarse en monitoreo activo para recibir cajas de Producción.' Mensaje;
-    RETURN;
-END;
-SELECT @DisposicionesPendientes=COUNT(1)
-FROM dbo.Calidad_DisposicionesMaterial d WITH (UPDLOCK,HOLDLOCK)
-WHERE d.InspeccionID=@InspeccionID
-  AND d.Activo=1
-  AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N''))))=N'PENDIENTE';
-IF ISNULL(@DisposicionesPendientes,0)>0
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,@InspeccionID InspeccionID,CONCAT(N'Existen ',@DisposicionesPendientes,N' disposición(es) de material pendientes. Calidad debe resolverlas antes de recibir o liberar nuevas cajas.') Mensaje;
-    RETURN;
-END;
-IF EXISTS
-(
-    SELECT 1
-    FROM dbo.Calidad_MonitoreosProceso m
-    WHERE m.InspeccionID=@InspeccionID
-      AND m.Activo=1
-      AND m.RegistroHoraID IS NOT NULL
-      AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=N'PENDIENTE'
-      AND (ISNULL(m.CantidadSospechosa,0)>0 OR ISNULL(m.CantidadNoRecuperable,0)>0)
-)
-BEGIN
-    SELECT CAST(0 AS BIT) Permitido,@InspeccionID InspeccionID,N'Existen capturas con material sospechoso o scrap reportado que todavía no han sido evaluadas por Calidad.' Mensaje;
-    RETURN;
-END;
-SELECT CAST(1 AS BIT) Permitido,@InspeccionID InspeccionID,N'La caja puede enviarse a Calidad.' Mensaje;";
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-            await using var rd = await cmd.ExecuteReaderAsync();
-            if (!await rd.ReadAsync()) return new ValidacionEnvioCajaCalidad { Permitido = false, Mensaje = "No fue posible validar el estado de Calidad." };
-            return new ValidacionEnvioCajaCalidad
-            {
-                Permitido = rd["Permitido"] != DBNull.Value && Convert.ToBoolean(rd["Permitido"]),
-                InspeccionID = rd["InspeccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["InspeccionID"]),
-                Mensaje = rd["Mensaje"]?.ToString() ?? "La caja no puede enviarse a Calidad."
-            };
-        }
-
-
-        private static async Task<int> ObtenerCantidadCajasNormalesAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
-        {
-            const string sql = @"
-SELECT COUNT(1)
-FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
-WHERE c.EjecucionProduccionID=@EjecucionProduccionID
-  AND c.Activo=1
-  AND UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK'
-  AND NOT EXISTS
-  (
-      SELECT 1
-      FROM dbo.Produccion_CajaOrigenDetalle od
-      WHERE od.CajaProduccionID=c.CajaProduccionID
-        AND od.Activo=1
-  );";
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        }
-
-
-        private static async Task<bool> ExisteCodigoBarrasCajaAsync(string codigoBarras, SqlConnection cn, SqlTransaction tx)
-        {
-            const string sql = @"
-SELECT CAST(CASE WHEN EXISTS
-(
-    SELECT 1
-    FROM dbo.Produccion_Cajas WITH(UPDLOCK,HOLDLOCK)
-    WHERE Activo=1
-      AND CodigoBarrasOrigen=@CodigoBarrasOrigen
-) THEN 1 ELSE 0 END AS BIT);";
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@CodigoBarrasOrigen", SqlDbType.NVarChar, 500).Value = codigoBarras.Trim();
-            return Convert.ToBoolean(await cmd.ExecuteScalarAsync());
-        }
-
-        private static string NormalizarValorEscaneo(string? valor)
-        {
-            if (string.IsNullOrWhiteSpace(valor)) return string.Empty;
-            return new string(valor.Trim().ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
-        }
 
         private static long EnteroLargoCaja(SqlDataReader rd, string columna)
         {

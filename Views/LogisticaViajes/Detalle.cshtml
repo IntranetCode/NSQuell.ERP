@@ -30,6 +30,27 @@
         _ => "bg-secondary"
     };
 
+    var faltantesPreparacion = new List<string>();
+    if (string.IsNullOrWhiteSpace(Model.TipoViaje)) faltantesPreparacion.Add("tipo de viaje");
+    if (string.IsNullOrWhiteSpace(Model.Origen)) faltantesPreparacion.Add("origen");
+    if (string.IsNullOrWhiteSpace(Model.Destino)) faltantesPreparacion.Add("destino");
+    if (string.IsNullOrWhiteSpace(Model.Motivo)) faltantesPreparacion.Add("motivo");
+    if (Model.FechaProgramada == default) faltantesPreparacion.Add("fecha programada");
+    if (Model.EsTransporteInterno)
+    {
+        if (!Model.RutaID.HasValue) faltantesPreparacion.Add("ruta");
+        if (!Model.UnidadID.HasValue) faltantesPreparacion.Add("unidad");
+        if (!Model.OperadorUsuarioID.HasValue) faltantesPreparacion.Add("operador");
+    }
+    else if (Model.EsTransporteExterno)
+    {
+        if (string.IsNullOrWhiteSpace(Model.TransportistaExterno)) faltantesPreparacion.Add("transportista");
+        if (string.IsNullOrWhiteSpace(Model.UnidadExterna)) faltantesPreparacion.Add("unidad externa");
+        if (string.IsNullOrWhiteSpace(Model.PlacasExternas)) faltantesPreparacion.Add("placas");
+        if (string.IsNullOrWhiteSpace(Model.ChoferExterno)) faltantesPreparacion.Add("chofer");
+    }
+    var preparacionCompleta = faltantesPreparacion.Count == 0;
+
     var ahora = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
 }
 
@@ -345,9 +366,9 @@
     }
 
     /* =========================================================
-       DETALLE VIAJE - MEJORA VISUAL SIN CARDS
-       Más presencia, jerarquía y legibilidad manteniendo lógica.
-       ========================================================= */
+           DETALLE VIAJE - MEJORA VISUAL SIN CARDS
+           Más presencia, jerarquía y legibilidad manteniendo lógica.
+           ========================================================= */
 
     .viaje-detalle-page {
         position: relative;
@@ -364,9 +385,9 @@
         font-size: 1.5rem;
     }
 
-    .detalle-title i {
-        color: #173a7a;
-    }
+        .detalle-title i {
+            color: #173a7a;
+        }
 
     .detalle-subtitle {
         color: #6f7b8d;
@@ -398,19 +419,19 @@
         border-right: 1px solid #e5eaf0;
     }
 
-    .estado-item:last-child {
-        border-right: 0;
-    }
+        .estado-item:last-child {
+            border-right: 0;
+        }
 
-    .estado-item strong {
-        color: #172033;
-        font-size: .95rem;
-    }
+        .estado-item strong {
+            color: #172033;
+            font-size: .95rem;
+        }
 
-    .estado-item span {
-        color: #6f7988;
-        font-size: .73rem;
-    }
+        .estado-item span {
+            color: #6f7988;
+            font-size: .73rem;
+        }
 
     .section,
     .action-block {
@@ -440,31 +461,31 @@
         letter-spacing: -.01em;
     }
 
-    .section-title::before,
-    .action-title::before {
-        content: "";
-        width: 4px;
-        height: 18px;
-        border-radius: 8px;
-        background: #173a7a;
-        flex: 0 0 auto;
-    }
+        .section-title::before,
+        .action-title::before {
+            content: "";
+            width: 4px;
+            height: 18px;
+            border-radius: 8px;
+            background: #173a7a;
+            flex: 0 0 auto;
+        }
 
-    .action-title i,
-    .section-title i {
-        color: #173a7a;
-    }
+        .action-title i,
+        .section-title i {
+            color: #173a7a;
+        }
 
     .info-grid {
         gap: 10px;
     }
 
-    .info-grid > div {
-        min-height: 58px;
-        padding: 8px 10px;
-        border-bottom: 1px solid #edf1f5;
-        background: transparent;
-    }
+        .info-grid > div {
+            min-height: 58px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #edf1f5;
+            background: transparent;
+        }
 
     .info-label {
         color: #7a8492;
@@ -482,26 +503,26 @@
         gap: 10px;
     }
 
-    .compact-form label {
-        color: #465164;
-        font-weight: 700;
-    }
+        .compact-form label {
+            color: #465164;
+            font-weight: 700;
+        }
 
-    .compact-form .form-control,
-    .compact-form .form-select {
-        min-height: 38px;
-        border-radius: 8px;
-        border-color: #d4dde7;
-        background: #fff;
-        box-shadow: none;
-        transition: border-color .15s ease, box-shadow .15s ease;
-    }
+        .compact-form .form-control,
+        .compact-form .form-select {
+            min-height: 38px;
+            border-radius: 8px;
+            border-color: #d4dde7;
+            background: #fff;
+            box-shadow: none;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
 
-    .compact-form .form-control:focus,
-    .compact-form .form-select:focus {
-        border-color: #8ba5d4;
-        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-    }
+            .compact-form .form-control:focus,
+            .compact-form .form-select:focus {
+                border-color: #8ba5d4;
+                box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+            }
 
     .table-wrap {
         border: 1px solid #e1e7ee;
@@ -514,27 +535,27 @@
         background: #fff;
     }
 
-    .compact-table thead th {
-        background: #f3f6f9;
-        color: #4c5868;
-        padding-top: .54rem;
-        padding-bottom: .54rem;
-        border-bottom: 1px solid #d8e1ea;
-    }
+        .compact-table thead th {
+            background: #f3f6f9;
+            color: #4c5868;
+            padding-top: .54rem;
+            padding-bottom: .54rem;
+            border-bottom: 1px solid #d8e1ea;
+        }
 
-    .compact-table tbody td {
-        padding-top: .52rem;
-        padding-bottom: .52rem;
-        border-color: #edf0f4;
-    }
+        .compact-table tbody td {
+            padding-top: .52rem;
+            padding-bottom: .52rem;
+            border-color: #edf0f4;
+        }
 
-    .compact-table tbody tr:nth-child(even) td {
-        background: #fbfcfd;
-    }
+        .compact-table tbody tr:nth-child(even) td {
+            background: #fbfcfd;
+        }
 
-    .compact-table tbody tr:hover td {
-        background: #f4f8fc;
-    }
+        .compact-table tbody tr:hover td {
+            background: #f4f8fc;
+        }
 
     .badge-mini {
         border-radius: 6px;
@@ -547,9 +568,9 @@
         border-bottom: 1px solid #e9edf2;
     }
 
-    .history-row:nth-child(even) {
-        background: #fbfcfd;
-    }
+        .history-row:nth-child(even) {
+            background: #fbfcfd;
+        }
 
     .history-date,
     .history-user {
@@ -575,9 +596,9 @@
         background: #fff8f8;
     }
 
-    .danger-zone .section-title {
-        border-bottom: 1px solid #f3d7da;
-    }
+        .danger-zone .section-title {
+            border-bottom: 1px solid #f3d7da;
+        }
 
     .action-block .btn-success,
     .section .btn-success {
@@ -598,9 +619,9 @@
             border-bottom: 1px solid #e5eaf0;
         }
 
-        .estado-item:nth-child(3n) {
-            border-right: 0;
-        }
+            .estado-item:nth-child(3n) {
+                border-right: 0;
+            }
 
         .info-grid > div {
             min-height: auto;
@@ -632,9 +653,9 @@
             border-right: 1px solid #e5eaf0;
         }
 
-        .estado-item:nth-child(even) {
-            border-right: 0;
-        }
+            .estado-item:nth-child(even) {
+                border-right: 0;
+            }
 
         .form-1,
         .form-2,
@@ -649,6 +670,74 @@
         }
     }
 
+
+    .prep-alert {
+        border: 1px solid #ffc107;
+        background: #fff8e1;
+        padding: 10px 12px;
+        border-radius: 7px;
+        margin-bottom: 12px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start
+    }
+
+        .prep-alert.pulse {
+            animation: prepPulse 1.6s ease-in-out infinite
+        }
+
+        .prep-alert strong {
+            display: block;
+            font-size: .84rem
+        }
+
+        .prep-alert small {
+            display: block;
+            color: #6c757d;
+            font-size: .74rem;
+            margin-top: 2px
+        }
+
+    .evidence-grid {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .evidence-item {
+        border: 1px solid #e9ecef;
+        border-radius: 7px;
+        padding: 9px;
+        background: #fff
+    }
+
+    .evidence-name {
+        font-size: .78rem;
+        font-weight: 600;
+        word-break: break-word
+    }
+
+    .evidence-meta {
+        font-size: .7rem;
+        color: #6c757d;
+        margin-top: 3px
+    }
+
+    @@keyframes prepPulse {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(255,193,7,.18)
+        }
+
+        50% {
+            box-shadow: 0 0 0 6px rgba(255,193,7,.06)
+        }
+    }
+
+    @@media(max-width:800px) {
+        .evidence-grid {
+            grid-template-columns: 1fr
+        }
+    }
 </style>
 
 <div class="viaje-detalle-page">
@@ -681,8 +770,8 @@
                    asp-action="Editar"
                    asp-route-id="@Model.ViajeID"
                    class="btn btn-outline-primary btn-sm">
-                    <i class="fa-solid fa-pen me-1"></i>
-                    Editar
+                    <i class="fa-solid fa-screwdriver-wrench me-1"></i>
+                    Completar preparación
                 </a>
             }
 
@@ -763,6 +852,33 @@
         }
 
     </div>
+
+    @if (Model.Estatus == "Programado")
+    {
+        if (!preparacionCompleta)
+        {
+            <div class="prep-alert pulse">
+                <i class="fa-solid fa-triangle-exclamation text-warning mt-1"></i>
+                <div>
+                    <strong>Faltan datos antes de iniciar el viaje</strong>
+                    <small>Completa: @string.Join(", ", faltantesPreparacion).</small>
+                    <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm mt-2">
+                        <i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación
+                    </a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="prep-alert">
+                <i class="fa-solid fa-circle-check text-success mt-1"></i>
+                <div>
+                    <strong>Viaje listo para iniciar</strong>
+                    <small>La preparación cuenta con los datos requeridos de transporte.</small>
+                </div>
+            </div>
+        }
+    }
 
     <div class="section">
 
@@ -986,19 +1102,14 @@
                 </div>
             </div>
 
-            @if (Model.KilometrajeSalida.HasValue &&
-                        Model.KilometrajeRegreso.HasValue &&
-                        Model.KilometrajeRegreso >= Model.KilometrajeSalida)
-            {
-                <div class="info-3">
-                    <div class="info-label">Recorrido</div>
-
-                    <div class="info-value">
-                        @((Model.KilometrajeRegreso.Value -
-                                            Model.KilometrajeSalida.Value).ToString("N0")) km
-                </div>
+            <div class="info-3">
+                <div class="info-label">KM utilizados</div>
+                <div class="info-value">@(Model.KilometrosUtilizados.HasValue ? $"{Model.KilometrosUtilizados.Value:N0} km" : "-")</div>
             </div>
-                        }
+            <div class="info-3">
+                <div class="info-label">Pago de gasolina</div>
+                <div class="info-value">@(Model.PagoGasolina.HasValue ? $"${Model.PagoGasolina.Value:N2}" : "-")</div>
+            </div>
 
         </div>
 
@@ -1020,13 +1131,13 @@
         </div>
     }
 
-    @if (Model.PuedeRegistrarSalida)
+    @if (Model.PuedeRegistrarSalida && preparacionCompleta)
     {
         <div class="action-block">
 
             <div class="action-title">
                 <i class="fa-solid fa-play me-1"></i>
-                Registrar salida
+                Iniciar viaje
             </div>
 
             <form asp-controller="LogisticaViajes"
@@ -1060,14 +1171,13 @@
                            placeholder="Opcional" />
                 </div>
 
+                <div class="form-3">
+                    <label>Pago de gasolina</label>
+                    <input type="number" name="PagoGasolina" min="0" step="0.01" class="form-control" placeholder="Opcional" />
+                </div>
                 <div class="form-4">
                     <label>Observaciones</label>
-
-                    <input type="text"
-                           name="Observaciones"
-                           maxlength="1000"
-                           class="form-control"
-                           placeholder="Opcional" />
+                    <input type="text" name="Observaciones" maxlength="1000" class="form-control" placeholder="Opcional" />
                 </div>
 
                 <div class="form-1">
@@ -1234,6 +1344,78 @@
 
         </div>
     }
+
+    <div class="section">
+        <div class="section-title">Evidencias del viaje</div>
+        @if (Model.Estatus != "Cancelado")
+        {
+            <form asp-controller="LogisticaViajes" asp-action="SubirEvidencia" method="post" enctype="multipart/form-data" class="compact-form mb-3">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                <div class="form-3">
+                    <label>Tipo</label>
+                    <select name="tipoEvidencia" class="form-select">
+                        <option value="General">General</option>
+                        <option value="Salida">Salida</option>
+                        <option value="Unidad">Unidad</option>
+                        <option value="Ruta">Ruta</option>
+                        <option value="Gasolina">Gasolina</option>
+                        <option value="Regreso">Regreso</option>
+                        <option value="Incidencia">Incidencia</option>
+                    </select>
+                </div>
+                <div class="form-4">
+                    <label>Fotografía / archivo</label>
+                    <input type="file" name="archivo" class="form-control" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required />
+                </div>
+                <div class="form-4">
+                    <label>Observaciones</label>
+                    <input type="text" name="observaciones" maxlength="1000" class="form-control" placeholder="Opcional" />
+                </div>
+                <div class="form-1">
+                    <button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="fa-solid fa-camera me-1"></i>Agregar</button>
+                </div>
+            </form>
+        }
+        @if (Model.Evidencias == null || Model.Evidencias.Count == 0)
+        {
+            <div class="empty">Sin evidencias registradas.</div>
+        }
+        else
+        {
+            <div class="evidence-grid">
+                @foreach (var evidencia in Model.Evidencias)
+                {
+                    <div class="evidence-item">
+                        <div class="d-flex justify-content-between gap-2">
+                            <div>
+                                <div class="evidence-name">@evidencia.NombreOriginal</div>
+                                <div class="evidence-meta">@evidencia.TipoEvidencia · @evidencia.FechaCarga.ToString("dd/MM/yyyy HH:mm")</div>
+                                @if (!string.IsNullOrWhiteSpace(evidencia.Observaciones))
+                                {
+                                    <div class="evidence-meta">@evidencia.Observaciones</div>
+                                }
+                            </div>
+                            <div class="d-flex gap-1">
+                                <a asp-controller="LogisticaViajes" asp-action="VerEvidencia" asp-route-id="@evidencia.ViajeEvidenciaID" class="btn btn-outline-primary btn-sm" title="Ver evidencia">
+                                    <i class="fa-solid fa-eye"></i>
+                                </a>
+                                @if (Model.Estatus != "Cancelado")
+                                {
+                                    <form asp-controller="LogisticaViajes" asp-action="EliminarEvidencia" method="post" onsubmit="return confirm('¿Retirar esta evidencia?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                        <input type="hidden" name="evidenciaId" value="@evidencia.ViajeEvidenciaID" />
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
+                                    </form>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
 
     <div class="section">
 

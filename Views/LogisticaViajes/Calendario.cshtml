@@ -204,6 +204,345 @@
             grid-template-columns: 1fr
         }
     }
+
+
+    :root {
+        --lv-blue: #173a7a;
+        --lv-blue-2: #2f63ad;
+        --lv-text: #172033;
+        --lv-muted: #6d7888;
+        --lv-border: #dce4ee;
+        --lv-soft: #f6f8fb;
+        --lv-shadow: 0 8px 24px rgba(22,42,75,.06);
+    }
+
+    /* =========================================================
+           LOGISTICA VIAJES ERP - CALENDARIO
+           Mejora jerarquia sin alterar FullCalendar ni sus eventos.
+           ========================================================= */
+    .cal-page {
+        max-width: 1720px;
+        margin: 0 auto;
+        color: var(--lv-text);
+    }
+
+    .cal-head {
+        align-items: center;
+        padding: 15px 17px;
+        margin-bottom: 14px;
+        border: 1px solid var(--lv-border);
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow);
+    }
+
+    .cal-title {
+        color: var(--lv-text);
+        font-size: 1.48rem;
+        font-weight: 800;
+        letter-spacing: -.02em;
+    }
+
+        .cal-title i {
+            color: var(--lv-blue);
+        }
+
+    .cal-subtitle {
+        color: var(--lv-muted);
+        font-weight: 500;
+    }
+
+    .cal-actions .btn {
+        min-height: 34px;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .cal-toolbar {
+        position: relative;
+        padding: 14px 12px 12px;
+        margin-bottom: 12px;
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 5px 16px rgba(25,47,80,.035);
+    }
+
+        .cal-toolbar::before {
+            content: "Filtros del calendario";
+            position: absolute;
+            top: -9px;
+            left: 12px;
+            padding: 0 7px;
+            background: #f6f8fb;
+            color: #6d7889;
+            font-size: .67rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+    .cal-field label {
+        color: #465164;
+        font-weight: 700;
+    }
+
+    .cal-field .form-control,
+    .cal-field .form-select {
+        min-height: 38px;
+        border-radius: 8px;
+        border-color: #d4dde7;
+        background: #fff;
+        box-shadow: none;
+    }
+
+        .cal-field .form-control:focus,
+        .cal-field .form-select:focus {
+            border-color: #8ba5d4;
+            box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+        }
+
+    .cal-toolbar .btn {
+        min-height: 38px;
+        border-radius: 8px;
+        font-weight: 700;
+    }
+
+    .cal-summary {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(130px,1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+        .cal-summary > div {
+            display: block;
+            min-height: 70px;
+            padding: 10px 12px;
+            border: 1px solid var(--lv-border);
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 4px 13px rgba(22,42,75,.035);
+        }
+
+        .cal-summary strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--lv-blue);
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+
+        .cal-summary span {
+            display: block;
+            color: var(--lv-muted);
+            font-size: .7rem;
+            font-weight: 700;
+        }
+
+        .cal-summary > div:nth-child(2) strong {
+            color: #345cc4;
+        }
+
+        .cal-summary > div:nth-child(3) strong {
+            color: #b66b00;
+        }
+
+        .cal-summary > div:nth-child(4) strong {
+            color: #c0392b;
+        }
+
+    .cal-shell {
+        padding: 12px;
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow);
+    }
+
+    .fc {
+        font-size: .8rem;
+    }
+
+        .fc .fc-toolbar {
+            gap: 8px;
+        }
+
+        .fc .fc-toolbar-title {
+            color: var(--lv-text);
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+
+        .fc .fc-button-primary {
+            background: #233f80;
+            border-color: #233f80;
+            border-radius: 7px;
+            font-weight: 700;
+            box-shadow: none;
+        }
+
+            .fc .fc-button-primary:not(:disabled):hover,
+            .fc .fc-button-primary:not(:disabled).fc-button-active {
+                background: #173a7a;
+                border-color: #173a7a;
+            }
+
+        .fc .fc-scrollgrid {
+            border-color: #e0e7ef;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+    .fc-theme-standard td,
+    .fc-theme-standard th {
+        border-color: #e7ecf2;
+    }
+
+    .fc .fc-col-header-cell {
+        background: #f5f7fa;
+    }
+
+    .fc .fc-col-header-cell-cushion {
+        padding: 7px 4px;
+        color: #536072;
+        font-weight: 800;
+    }
+
+    .fc .fc-daygrid-day-number {
+        color: #485568;
+        font-weight: 600;
+    }
+
+    .fc .fc-day-today {
+        background: #f2f6fb !important;
+    }
+
+    .fc .fc-daygrid-event {
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,.08);
+    }
+
+    .legend {
+        padding: 9px 11px;
+        border: 1px solid var(--lv-border);
+        border-radius: 9px;
+        background: #fff;
+    }
+
+    .legend-item {
+        color: var(--lv-muted);
+        font-weight: 600;
+    }
+
+    #viajeModal .modal-content {
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        box-shadow: 0 18px 40px rgba(18,33,57,.16);
+    }
+
+    #viajeModal .modal-header {
+        background: #f6f8fb;
+        border-bottom-color: #e4eaf1;
+    }
+
+    .modal-data > div {
+        padding: 7px 8px;
+        border-bottom: 1px solid #edf1f5;
+    }
+
+    .modal-data label {
+        color: #7a8492;
+        font-weight: 700;
+    }
+
+    html[data-nsq-theme="dark"] .cal-page {
+        color: #e7edf6;
+    }
+
+    html[data-nsq-theme="dark"] .cal-head,
+    html[data-nsq-theme="dark"] .cal-toolbar,
+    html[data-nsq-theme="dark"] .cal-summary > div,
+    html[data-nsq-theme="dark"] .cal-shell,
+    html[data-nsq-theme="dark"] .legend,
+    html[data-nsq-theme="dark"] #viajeModal .modal-content {
+        background: #111b2d;
+        border-color: #2a3a50;
+        box-shadow: none;
+    }
+
+    html[data-nsq-theme="dark"] .cal-title,
+    html[data-nsq-theme="dark"] .fc .fc-toolbar-title {
+        color: #eef4fb;
+    }
+
+    html[data-nsq-theme="dark"] .cal-subtitle,
+    html[data-nsq-theme="dark"] .cal-summary span,
+    html[data-nsq-theme="dark"] .legend-item {
+        color: #9eacbf;
+    }
+
+    html[data-nsq-theme="dark"] .cal-toolbar::before {
+        background: #0b1220;
+        color: #9eacbf;
+    }
+
+    html[data-nsq-theme="dark"] .cal-field label {
+        color: #c7d3e2;
+    }
+
+    html[data-nsq-theme="dark"] .cal-field .form-control,
+    html[data-nsq-theme="dark"] .cal-field .form-select {
+        background: #0d1727;
+        color: #eef4fb;
+        border-color: #314158;
+    }
+
+    html[data-nsq-theme="dark"] .fc .fc-scrollgrid,
+    html[data-nsq-theme="dark"] .fc-theme-standard td,
+    html[data-nsq-theme="dark"] .fc-theme-standard th {
+        border-color: #2a3a50;
+    }
+
+    html[data-nsq-theme="dark"] .fc .fc-col-header-cell {
+        background: #162237;
+    }
+
+    html[data-nsq-theme="dark"] .fc .fc-col-header-cell-cushion,
+    html[data-nsq-theme="dark"] .fc .fc-daygrid-day-number {
+        color: #cbd7e6;
+    }
+
+    html[data-nsq-theme="dark"] .fc .fc-day-today {
+        background: #17253a !important;
+    }
+
+    html[data-nsq-theme="dark"] #viajeModal .modal-header {
+        background: #162237;
+        border-color: #2a3a50;
+    }
+
+    html[data-nsq-theme="dark"] .modal-data > div {
+        border-color: #243349;
+    }
+
+    @@media (max-width:800px) {
+        .cal-summary {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .cal-head {
+            padding: 12px;
+        }
+
+        .cal-shell {
+            padding: 8px;
+        }
+    }
+
 </style>
 
 

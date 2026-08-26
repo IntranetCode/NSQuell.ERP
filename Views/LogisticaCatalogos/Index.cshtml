@@ -277,9 +277,9 @@
     }
 
     /* =========================================================
-       CATÁLOGOS LOGÍSTICA - MEJORA VISUAL SIN CARDS
-       Mantiene formularios, tablas, edición inline y funcionalidad.
-       ========================================================= */
+           CATÁLOGOS LOGÍSTICA - MEJORA VISUAL SIN CARDS
+           Mantiene formularios, tablas, edición inline y funcionalidad.
+           ========================================================= */
 
     .catalogos-page {
         position: relative;
@@ -296,9 +296,9 @@
         font-size: 1.48rem;
     }
 
-    .catalogos-title i {
-        color: #173a7a;
-    }
+        .catalogos-title i {
+            color: #173a7a;
+        }
 
     .catalogos-subtitle {
         color: #6f7b8d;
@@ -323,10 +323,10 @@
         box-shadow: 0 6px 18px rgba(25,47,80,.04);
     }
 
-    .catalogos-section:first-of-type {
-        border-top: 1px solid #dce5ef;
-        padding-top: 14px;
-    }
+        .catalogos-section:first-of-type {
+            border-top: 1px solid #dce5ef;
+            padding-top: 14px;
+        }
 
     .section-head {
         margin-bottom: 12px;
@@ -343,14 +343,14 @@
         letter-spacing: -.01em;
     }
 
-    .section-title::before {
-        content: "";
-        width: 4px;
-        height: 18px;
-        border-radius: 8px;
-        background: #173a7a;
-        flex: 0 0 auto;
-    }
+        .section-title::before {
+            content: "";
+            width: 4px;
+            height: 18px;
+            border-radius: 8px;
+            background: #173a7a;
+            flex: 0 0 auto;
+        }
 
     .section-subtitle {
         margin-left: 12px;
@@ -372,35 +372,35 @@
         background: #fbfcfd;
     }
 
-    .catalogo-form label,
-    .edit-form label {
-        color: #465164;
-        font-weight: 700;
-    }
+        .catalogo-form label,
+        .edit-form label {
+            color: #465164;
+            font-weight: 700;
+        }
 
-    .catalogo-form .form-control,
-    .catalogo-form .form-select,
-    .edit-form .form-control {
-        border-radius: 8px;
-        border-color: #d4dde7;
-        background: #fff;
-        box-shadow: none;
-        transition: border-color .15s ease, box-shadow .15s ease;
-    }
+        .catalogo-form .form-control,
+        .catalogo-form .form-select,
+        .edit-form .form-control {
+            border-radius: 8px;
+            border-color: #d4dde7;
+            background: #fff;
+            box-shadow: none;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
 
-    .catalogo-form .form-control:focus,
-    .catalogo-form .form-select:focus,
-    .edit-form .form-control:focus {
-        border-color: #8ba5d4;
-        box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-    }
+            .catalogo-form .form-control:focus,
+            .catalogo-form .form-select:focus,
+            .edit-form .form-control:focus {
+                border-color: #8ba5d4;
+                box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+            }
 
-    .catalogo-form .btn {
-        border-radius: 8px;
-        font-weight: 700;
-        background: #233f80;
-        border-color: #233f80;
-    }
+        .catalogo-form .btn {
+            border-radius: 8px;
+            font-weight: 700;
+            background: #233f80;
+            border-color: #233f80;
+        }
 
     .table-wrap {
         border: 1px solid #e1e7ee;
@@ -413,33 +413,33 @@
         background: #fff;
     }
 
-    .catalogos-table thead th {
-        background: #f3f6f9;
-        color: #4c5868;
-        padding-top: .55rem;
-        padding-bottom: .55rem;
-        border-bottom: 1px solid #d8e1ea;
-        letter-spacing: .025em;
-    }
+        .catalogos-table thead th {
+            background: #f3f6f9;
+            color: #4c5868;
+            padding-top: .55rem;
+            padding-bottom: .55rem;
+            border-bottom: 1px solid #d8e1ea;
+            letter-spacing: .025em;
+        }
 
-    .catalogos-table tbody td {
-        padding-top: .52rem;
-        padding-bottom: .52rem;
-        border-color: #edf0f4;
-    }
+        .catalogos-table tbody td {
+            padding-top: .52rem;
+            padding-bottom: .52rem;
+            border-color: #edf0f4;
+        }
 
-    .catalogos-table tbody tr:nth-child(even):not(.edit-row) td {
-        background: #fbfcfd;
-    }
+        .catalogos-table tbody tr:nth-child(even):not(.edit-row) td {
+            background: #fbfcfd;
+        }
 
-    .catalogos-table tbody tr:hover:not(.edit-row) td {
-        background: #f4f8fc;
-    }
+        .catalogos-table tbody tr:hover:not(.edit-row) td {
+            background: #f4f8fc;
+        }
 
-    .catalogos-table .principal {
-        color: #173a7a;
-        font-weight: 800;
-    }
+        .catalogos-table .principal {
+            color: #173a7a;
+            font-weight: 800;
+        }
 
     .acciones .btn {
         min-width: 31px;
@@ -655,7 +655,7 @@
                         <th>Código</th>
                         <th>Nombre</th>
                         <th>Descripción</th>
-                       
+
                         <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
@@ -665,7 +665,7 @@
                     @if (!Model.Rutas.Any())
                     {
                         <tr>
-                            <td colspan="5">
+                            <td colspan="4">
                                 <div class="empty">
                                     <i class="fa-solid fa-route me-1"></i>
                                     No hay rutas registradas.
@@ -696,7 +696,7 @@
                             </span>
                         </td>
 
-                               
+
 
                                 <td class="acciones">
 
@@ -740,7 +740,7 @@
                             <tr id="ruta-edit-@ruta.RutaID"
                                 class="edit-row d-none">
 
-                                <td colspan="5">
+                                <td colspan="4">
 
                                     <form asp-controller="LogisticaCatalogos"
                                           asp-action="GuardarRuta"
@@ -805,7 +805,7 @@
                                 </td>
 
                             </tr>
-                        }
+                                        }
                     }
 
                 </tbody>
@@ -826,7 +826,7 @@
                 </h2>
 
                 <p class="section-subtitle">
-                    Vehículos disponibles para embarques y viajes internos.
+                    Vehículos disponibles para embarques y viajes internos. La capacidad corresponde al peso máximo de carga.
                 </p>
             </div>
 
@@ -894,13 +894,14 @@
             </div>
 
             <div class="form-2">
-                <label>Capacidad pzas.</label>
+                <label>Capacidad de carga (kg)</label>
 
                 <input type="number"
-                       name="CapacidadPiezas"
-                       min="0"
+                       name="CapacidadPesoKg"
+                       min="0.01"
+                       step="0.01"
                        class="form-control"
-                       placeholder="Opcional" />
+                       placeholder="Ej. 3500.00" />
             </div>
 
             <div class="form-2">
@@ -924,8 +925,8 @@
                         <th>Placas</th>
                         <th>Marca</th>
                         <th>Modelo</th>
-                        <th>Capacidad</th>
-                        
+                        <th>Capacidad de carga</th>
+
                         <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
@@ -935,7 +936,7 @@
                     @if (!Model.Unidades.Any())
                     {
                         <tr>
-                            <td colspan="7">
+                            <td colspan="6">
                                 <div class="empty">
                                     <i class="fa-solid fa-truck me-1"></i>
                                     No hay unidades registradas.
@@ -972,8 +973,8 @@
                                                                             </td>
 
                                 <td class="text-nowrap">
-                                    @(unidad.CapacidadPiezas.HasValue
-                                                                ? $"{unidad.CapacidadPiezas.Value:N0} pzas"
+                                    @(unidad.CapacidadPesoKg.HasValue
+                                                                ? $"{unidad.CapacidadPesoKg.Value:N2} kg"
                                                                 : "-")
                         </td>
 
@@ -1019,7 +1020,7 @@
                             <tr id="unidad-edit-@unidad.UnidadID"
                                 class="edit-row d-none">
 
-                                <td colspan="7">
+                                <td colspan="6">
 
                                     <form asp-controller="LogisticaCatalogos"
                                           asp-action="GuardarUnidad"
@@ -1074,13 +1075,15 @@
                                         </div>
 
                                         <div class="form-2">
-                                            <label>Capacidad</label>
+                                            <label>Capacidad de carga (kg)</label>
 
                                             <input type="number"
-                                                   name="CapacidadPiezas"
-                                                   min="0"
-                                                   value="@unidad.CapacidadPiezas"
-                                                   class="form-control" />
+                                                   name="CapacidadPesoKg"
+                                                   min="0.01"
+                                                   step="0.01"
+                                                   value="@unidad.CapacidadPesoKg"
+                                                   class="form-control"
+                                                   placeholder="Ej. 3500.00" />
                                         </div>
 
                                         <div class="form-2 edit-actions">
@@ -1103,7 +1106,7 @@
                                 </td>
 
                             </tr>
-                        }
+                                        }
                     }
 
                 </tbody>

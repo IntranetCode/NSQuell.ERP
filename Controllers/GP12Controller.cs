@@ -1127,26 +1127,33 @@ SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
         public async Task<IActionResult> RecibirCajaEscaneada(GP12RecepcionEscaneoViewModel model)
         {
             var codigo = model.CodigoBarras?.Trim() ?? string.Empty;
+
             if (model.SolicitudGP12ID <= 0)
             {
                 TempData["Error"] = "La solicitud GP12 no es válida.";
                 return RedirectToAction(nameof(Index));
             }
+
             if (string.IsNullOrWhiteSpace(codigo))
             {
                 TempData["Error"] = "Escanea la etiqueta física de la caja.";
                 return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
             }
+
             if (codigo.Length > 500)
             {
                 TempData["Error"] = "El código escaneado excede la longitud permitida.";
                 return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
             }
+
             var usuarioID = ObtenerUsuarioIdActual();
-            if (!usuarioID.HasValue || usuarioID.Value <= 0) return Unauthorized();
+            if (!usuarioID.HasValue || usuarioID.Value <= 0)
+                return Unauthorized();
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
             try
             {
                 const string sqlSolicitud = @"
@@ -1167,16 +1174,20 @@ SELECT TOP(1)
     pc.NumeroParteEtiqueta,
     pc.CantidadEtiqueta,
     ISNULL(pc.CantidadPiezas,ISNULL(pc.Cantidad,0)) AS CantidadCaja,
-    pc.FechaEscaneoProduccion,
     pc.FechaEscaneoCalidad,
     ISNULL(pc.EstadoCajaID,1) AS EstadoCajaID,
-    COALESCE(NULLIF(pc.FolioCaja,N''),NULLIF(pc.Etiqueta,N''),CONVERT(NVARCHAR(100),pc.CajaProduccionID)) AS FolioCaja
+    COALESCE(
+        NULLIF(pc.FolioCaja,N''),
+        NULLIF(pc.Etiqueta,N''),
+        CONVERT(NVARCHAR(100),pc.CajaProduccionID)
+    ) AS FolioCaja
 FROM dbo.GP12_Solicitudes s WITH(UPDLOCK,HOLDLOCK)
 LEFT JOIN dbo.Produccion_Cajas pc WITH(UPDLOCK,HOLDLOCK)
     ON pc.CajaProduccionID=s.CajaProduccionID
    AND pc.Activo=1
 WHERE s.SolicitudGP12ID=@SolicitudGP12ID
   AND s.Activo=1;";
+
                 long? cajaProduccionID;
                 int estatusAnterior;
                 decimal cantidadSolicitada;
@@ -1190,55 +1201,114 @@ WHERE s.SolicitudGP12ID=@SolicitudGP12ID
                 string? numeroParteEtiqueta;
                 decimal cantidadCaja;
                 int? cantidadEtiqueta;
-                DateTime? fechaEscaneoProduccion;
                 DateTime? fechaEscaneoCalidad;
                 int estadoCajaID;
                 string folioCaja;
+
                 await using (var cmd = new SqlCommand(sqlSolicitud, cn, tx))
                 {
-                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
+                        model.SolicitudGP12ID;
+
                     await using var rd = await cmd.ExecuteReaderAsync();
+
                     if (!await rd.ReadAsync())
                     {
                         await tx.RollbackAsync();
                         return NotFound();
                     }
-                    cajaProduccionID = rd["CajaProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["CajaProduccionID"]);
-                    estatusAnterior = Convert.ToInt32(rd["EstatusID"]);
-                    cantidadSolicitada = Convert.ToDecimal(rd["CantidadSolicitada"]);
-                    cantidadRecibida = Convert.ToDecimal(rd["CantidadRecibida"]);
-                    cantidadProcesada = Convert.ToDecimal(rd["CantidadProcesada"]);
-                    fechaRecepcion = rd["FechaRecepcion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaRecepcion"]);
-                    codigoEsperado = rd["CodigoBarrasOrigen"] == DBNull.Value ? null : rd["CodigoBarrasOrigen"]?.ToString()?.Trim();
-                    ordenFabricacion = rd["OrdenFabricacion"] == DBNull.Value ? null : rd["OrdenFabricacion"]?.ToString()?.Trim();
-                    numeroParte = rd["NumeroParte"] == DBNull.Value ? null : rd["NumeroParte"]?.ToString()?.Trim();
-                    numeroOFEtiqueta = rd["NumeroOFEtiqueta"] == DBNull.Value ? null : rd["NumeroOFEtiqueta"]?.ToString()?.Trim();
-                    numeroParteEtiqueta = rd["NumeroParteEtiqueta"] == DBNull.Value ? null : rd["NumeroParteEtiqueta"]?.ToString()?.Trim();
-                    cantidadCaja = Convert.ToDecimal(rd["CantidadCaja"]);
-                    cantidadEtiqueta = rd["CantidadEtiqueta"] == DBNull.Value ? null : Convert.ToInt32(rd["CantidadEtiqueta"]);
-                    fechaEscaneoProduccion = rd["FechaEscaneoProduccion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaEscaneoProduccion"]);
-                    fechaEscaneoCalidad = rd["FechaEscaneoCalidad"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaEscaneoCalidad"]);
-                    estadoCajaID = Convert.ToInt32(rd["EstadoCajaID"]);
-                    folioCaja = rd["FolioCaja"]?.ToString()?.Trim() ?? string.Empty;
+
+                    cajaProduccionID =
+                        rd["CajaProduccionID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt64(rd["CajaProduccionID"]);
+
+                    estatusAnterior =
+                        Convert.ToInt32(rd["EstatusID"]);
+
+                    cantidadSolicitada =
+                        Convert.ToDecimal(rd["CantidadSolicitada"]);
+
+                    cantidadRecibida =
+                        Convert.ToDecimal(rd["CantidadRecibida"]);
+
+                    cantidadProcesada =
+                        Convert.ToDecimal(rd["CantidadProcesada"]);
+
+                    fechaRecepcion =
+                        rd["FechaRecepcion"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaRecepcion"]);
+
+                    codigoEsperado =
+                        rd["CodigoBarrasOrigen"] == DBNull.Value
+                            ? null
+                            : rd["CodigoBarrasOrigen"]?.ToString()?.Trim();
+
+                    ordenFabricacion =
+                        rd["OrdenFabricacion"] == DBNull.Value
+                            ? null
+                            : rd["OrdenFabricacion"]?.ToString()?.Trim();
+
+                    numeroParte =
+                        rd["NumeroParte"] == DBNull.Value
+                            ? null
+                            : rd["NumeroParte"]?.ToString()?.Trim();
+
+                    numeroOFEtiqueta =
+                        rd["NumeroOFEtiqueta"] == DBNull.Value
+                            ? null
+                            : rd["NumeroOFEtiqueta"]?.ToString()?.Trim();
+
+                    numeroParteEtiqueta =
+                        rd["NumeroParteEtiqueta"] == DBNull.Value
+                            ? null
+                            : rd["NumeroParteEtiqueta"]?.ToString()?.Trim();
+
+                    cantidadCaja =
+                        Convert.ToDecimal(rd["CantidadCaja"]);
+
+                    cantidadEtiqueta =
+                        rd["CantidadEtiqueta"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["CantidadEtiqueta"]);
+
+                    fechaEscaneoCalidad =
+                        rd["FechaEscaneoCalidad"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaEscaneoCalidad"]);
+
+                    estadoCajaID =
+                        Convert.ToInt32(rd["EstadoCajaID"]);
+
+                    folioCaja =
+                        rd["FolioCaja"]?.ToString()?.Trim() ?? string.Empty;
                 }
+
                 if (!cajaProduccionID.HasValue || cajaProduccionID.Value <= 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Esta solicitud GP12 no proviene de una caja física de Producción. Utiliza la recepción manual.";
+                    TempData["Error"] =
+                        "Esta solicitud GP12 no proviene de una caja física. Utiliza la recepción manual.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (GP12Estatus.EsFinal(estatusAnterior))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La solicitud GP12 está cerrada o cancelada y ya no puede recibir material.";
+                    TempData["Error"] =
+                        "La solicitud GP12 está cerrada o cancelada y ya no puede recibir material.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (string.IsNullOrWhiteSpace(codigoEsperado))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La caja relacionada no tiene un código de barras físico registrado desde Producción.";
+                    TempData["Error"] =
+                        "La caja relacionada no tiene un código de barras físico registrado.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (!string.Equals(codigoEsperado, codigo, StringComparison.Ordinal))
                 {
                     const string sqlOtraCaja = @"
@@ -1246,7 +1316,11 @@ SELECT TOP(1)
     s.SolicitudGP12ID,
     s.OrdenFabricacion,
     s.NumeroParte,
-    COALESCE(NULLIF(pc.FolioCaja,N''),NULLIF(pc.Etiqueta,N''),CONVERT(NVARCHAR(100),pc.CajaProduccionID)) AS FolioCaja
+    COALESCE(
+        NULLIF(pc.FolioCaja,N''),
+        NULLIF(pc.Etiqueta,N''),
+        CONVERT(NVARCHAR(100),pc.CajaProduccionID)
+    ) AS FolioCaja
 FROM dbo.Produccion_Cajas pc
 INNER JOIN dbo.GP12_Solicitudes s
     ON s.CajaProduccionID=pc.CajaProduccionID
@@ -1254,96 +1328,165 @@ INNER JOIN dbo.GP12_Solicitudes s
 WHERE pc.Activo=1
   AND pc.CodigoBarrasOrigen=@CodigoBarras
 ORDER BY s.SolicitudGP12ID DESC;";
+
                     int? solicitudCorrectaID = null;
                     string? ofCorrecta = null;
                     string? parteCorrecta = null;
                     string? folioCorrecto = null;
+
                     await using (var cmd = new SqlCommand(sqlOtraCaja, cn, tx))
                     {
-                        cmd.Parameters.Add("@CodigoBarras", SqlDbType.NVarChar, 500).Value = codigo;
+                        cmd.Parameters.Add("@CodigoBarras", SqlDbType.NVarChar, 500).Value =
+                            codigo;
+
                         await using var rd = await cmd.ExecuteReaderAsync();
+
                         if (await rd.ReadAsync())
                         {
-                            solicitudCorrectaID = Convert.ToInt32(rd["SolicitudGP12ID"]);
-                            ofCorrecta = rd["OrdenFabricacion"] == DBNull.Value ? null : rd["OrdenFabricacion"]?.ToString()?.Trim();
-                            parteCorrecta = rd["NumeroParte"] == DBNull.Value ? null : rd["NumeroParte"]?.ToString()?.Trim();
-                            folioCorrecto = rd["FolioCaja"] == DBNull.Value ? null : rd["FolioCaja"]?.ToString()?.Trim();
+                            solicitudCorrectaID =
+                                Convert.ToInt32(rd["SolicitudGP12ID"]);
+
+                            ofCorrecta =
+                                rd["OrdenFabricacion"] == DBNull.Value
+                                    ? null
+                                    : rd["OrdenFabricacion"]?.ToString()?.Trim();
+
+                            parteCorrecta =
+                                rd["NumeroParte"] == DBNull.Value
+                                    ? null
+                                    : rd["NumeroParte"]?.ToString()?.Trim();
+
+                            folioCorrecto =
+                                rd["FolioCaja"] == DBNull.Value
+                                    ? null
+                                    : rd["FolioCaja"]?.ToString()?.Trim();
                         }
                     }
+
                     await tx.RollbackAsync();
+
                     if (solicitudCorrectaID.HasValue)
                     {
-                        TempData["Error"] = $"La etiqueta pertenece a otra solicitud GP12. Caja: {folioCorrecto ?? "Sin folio"} · OF: {ofCorrecta ?? "Sin OF"} · Parte: {parteCorrecta ?? "Sin parte"}. No se registró la recepción.";
-                        TempData["SolicitudGP12EscaneadaID"] = solicitudCorrectaID.Value;
+                        TempData["Error"] =
+                            $"La etiqueta pertenece a otra solicitud GP12. " +
+                            $"Caja: {folioCorrecto ?? "Sin folio"} · " +
+                            $"OF: {ofCorrecta ?? "Sin OF"} · " +
+                            $"Parte: {parteCorrecta ?? "Sin parte"}. " +
+                            "No se registró la recepción.";
+
+                        TempData["SolicitudGP12EscaneadaID"] =
+                            solicitudCorrectaID.Value;
                     }
                     else
                     {
-                        TempData["Error"] = "La etiqueta escaneada no corresponde a la caja enviada a esta solicitud GP12.";
+                        TempData["Error"] =
+                            "La etiqueta escaneada no corresponde a la caja enviada a esta solicitud GP12.";
                     }
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
-                if (!fechaEscaneoProduccion.HasValue)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "La caja no tiene registrado el escaneo de Producción.";
-                    return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
-                }
+
+                /*
+                 * IMPORTANTE:
+                 * Calidad es el primer departamento que realiza el escaneo físico.
+                 * GP12 NO debe exigir un escaneo previo de Producción.
+                 */
                 if (!fechaEscaneoCalidad.HasValue)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La caja todavía no fue recibida físicamente por Calidad. GP12 no puede recibirla.";
+                    TempData["Error"] =
+                        "La caja todavía no fue escaneada físicamente por Calidad. GP12 no puede recibirla.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (estadoCajaID != ProduccionCajaEstatus.RetenidaGp12Scrap)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La caja {folioCaja} ya no se encuentra en estado de envío a GP12.";
+                    TempData["Error"] =
+                        $"La caja {folioCaja} ya no se encuentra en estado de envío a GP12.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (fechaRecepcion.HasValue || cantidadRecibida > 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Mensaje"] = fechaRecepcion.HasValue
-                        ? $"La caja {folioCaja} ya había sido recibida físicamente por GP12 el {fechaRecepcion.Value:dd/MM/yyyy HH:mm}."
-                        : $"La caja {folioCaja} ya tiene material recibido en GP12.";
+
+                    TempData["Mensaje"] =
+                        fechaRecepcion.HasValue
+                            ? $"La caja {folioCaja} ya había sido recibida físicamente por GP12 el {fechaRecepcion.Value:dd/MM/yyyy HH:mm}."
+                            : $"La caja {folioCaja} ya tiene material recibido en GP12.";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (cantidadSolicitada <= 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La solicitud GP12 no tiene una cantidad solicitada válida.";
+                    TempData["Error"] =
+                        "La solicitud GP12 no tiene una cantidad solicitada válida.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (cantidadCaja <= 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "La caja de Producción no tiene una cantidad válida.";
+                    TempData["Error"] =
+                        "La caja no tiene una cantidad válida.";
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
-                if (cantidadEtiqueta.HasValue && cantidadEtiqueta.Value > 0 && Convert.ToDecimal(cantidadEtiqueta.Value) != cantidadCaja)
+
+                if (cantidadEtiqueta.HasValue &&
+                    cantidadEtiqueta.Value > 0 &&
+                    Convert.ToDecimal(cantidadEtiqueta.Value) != cantidadCaja)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La cantidad física de la etiqueta ({cantidadEtiqueta.Value:N0}) no coincide con la cantidad registrada de la caja ({cantidadCaja:N0}).";
+
+                    TempData["Error"] =
+                        $"La cantidad física de la etiqueta ({cantidadEtiqueta.Value:N0}) " +
+                        $"no coincide con la cantidad registrada de la caja ({cantidadCaja:N0}).";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (cantidadCaja != cantidadSolicitada)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La cantidad de la caja ({cantidadCaja:N0}) no coincide con la cantidad solicitada a GP12 ({cantidadSolicitada:N0}).";
+
+                    TempData["Error"] =
+                        $"La cantidad de la caja ({cantidadCaja:N0}) no coincide con " +
+                        $"la cantidad solicitada a GP12 ({cantidadSolicitada:N0}).";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
-                if (!string.IsNullOrWhiteSpace(numeroOFEtiqueta) && !string.IsNullOrWhiteSpace(ordenFabricacion) && NormalizarCodigoComparacion(numeroOFEtiqueta) != NormalizarCodigoComparacion(ordenFabricacion))
+
+                if (!string.IsNullOrWhiteSpace(numeroOFEtiqueta) &&
+                    !string.IsNullOrWhiteSpace(ordenFabricacion) &&
+                    NormalizarCodigoComparacion(numeroOFEtiqueta) !=
+                    NormalizarCodigoComparacion(ordenFabricacion))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La OF de la etiqueta ({numeroOFEtiqueta}) no coincide con la solicitud GP12 ({ordenFabricacion}).";
+
+                    TempData["Error"] =
+                        $"La OF de la etiqueta ({numeroOFEtiqueta}) no coincide con " +
+                        $"la solicitud GP12 ({ordenFabricacion}).";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
-                if (!string.IsNullOrWhiteSpace(numeroParteEtiqueta) && !string.IsNullOrWhiteSpace(numeroParte) && NormalizarCodigoComparacion(numeroParteEtiqueta) != NormalizarCodigoComparacion(numeroParte))
+
+                if (!string.IsNullOrWhiteSpace(numeroParteEtiqueta) &&
+                    !string.IsNullOrWhiteSpace(numeroParte) &&
+                    NormalizarCodigoComparacion(numeroParteEtiqueta) !=
+                    NormalizarCodigoComparacion(numeroParte))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"El número de parte de la etiqueta ({numeroParteEtiqueta}) no coincide con la solicitud GP12 ({numeroParte}).";
+
+                    TempData["Error"] =
+                        $"El número de parte de la etiqueta ({numeroParteEtiqueta}) " +
+                        $"no coincide con la solicitud GP12 ({numeroParte}).";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 const string sqlEtiqueta = @"
 SELECT TOP(1)
     SolicitudEtiquetaID,
@@ -1357,39 +1500,68 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
 ORDER BY
     CASE WHEN TipoEtiqueta=@Amarilla THEN 0 ELSE 1 END,
     SolicitudEtiquetaID;";
+
                 int solicitudEtiquetaID;
                 string tipoEtiqueta;
                 decimal cantidadSolicitadaEtiqueta;
                 decimal cantidadRecibidaEtiqueta;
+
                 await using (var cmd = new SqlCommand(sqlEtiqueta, cn, tx))
                 {
-                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
-                    cmd.Parameters.Add("@Amarilla", SqlDbType.VarChar, 20).Value = GP12TipoEtiqueta.Amarilla;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
+                        model.SolicitudGP12ID;
+
+                    cmd.Parameters.Add("@Amarilla", SqlDbType.VarChar, 20).Value =
+                        GP12TipoEtiqueta.Amarilla;
+
                     await using var rd = await cmd.ExecuteReaderAsync();
+
                     if (!await rd.ReadAsync())
                     {
                         await tx.RollbackAsync();
-                        TempData["Error"] = "La solicitud GP12 no tiene una clasificación de recepción configurada.";
+                        TempData["Error"] =
+                            "La solicitud GP12 no tiene una clasificación de recepción configurada.";
                         return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                     }
-                    solicitudEtiquetaID = Convert.ToInt32(rd["SolicitudEtiquetaID"]);
-                    tipoEtiqueta = rd["TipoEtiqueta"]?.ToString()?.Trim() ?? GP12TipoEtiqueta.SinClasificar;
-                    cantidadSolicitadaEtiqueta = Convert.ToDecimal(rd["CantidadSolicitada"]);
-                    cantidadRecibidaEtiqueta = Convert.ToDecimal(rd["CantidadRecibida"]);
+
+                    solicitudEtiquetaID =
+                        Convert.ToInt32(rd["SolicitudEtiquetaID"]);
+
+                    tipoEtiqueta =
+                        rd["TipoEtiqueta"]?.ToString()?.Trim()
+                        ?? GP12TipoEtiqueta.SinClasificar;
+
+                    cantidadSolicitadaEtiqueta =
+                        Convert.ToDecimal(rd["CantidadSolicitada"]);
+
+                    cantidadRecibidaEtiqueta =
+                        Convert.ToDecimal(rd["CantidadRecibida"]);
                 }
+
                 if (cantidadRecibidaEtiqueta > 0)
                 {
                     await tx.RollbackAsync();
-                    TempData["Mensaje"] = $"La caja {folioCaja} ya fue recibida anteriormente en la clasificación {GP12TipoEtiqueta.Nombre(tipoEtiqueta)}.";
+
+                    TempData["Mensaje"] =
+                        $"La caja {folioCaja} ya fue recibida anteriormente en la clasificación " +
+                        $"{GP12TipoEtiqueta.Nombre(tipoEtiqueta)}.";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 if (cantidadSolicitadaEtiqueta != cantidadCaja)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"La clasificación GP12 espera {cantidadSolicitadaEtiqueta:N0} pieza(s), pero la caja contiene {cantidadCaja:N0}.";
+
+                    TempData["Error"] =
+                        $"La clasificación GP12 espera {cantidadSolicitadaEtiqueta:N0} pieza(s), " +
+                        $"pero la caja contiene {cantidadCaja:N0}.";
+
                     return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
                 }
+
                 var ahora = DateTime.Now;
+
                 const string sqlUpdateEtiqueta = @"
 UPDATE dbo.GP12_SolicitudEtiquetas
 SET CantidadRecibida=@Cantidad,
@@ -1399,17 +1571,29 @@ WHERE SolicitudEtiquetaID=@SolicitudEtiquetaID
   AND SolicitudGP12ID=@SolicitudGP12ID
   AND Activo=1
   AND ISNULL(CantidadRecibida,0)=0;
+
 IF @@ROWCOUNT<>1
     THROW 51501,'La clasificación GP12 cambió o ya fue recibida.',1;";
+
                 await using (var cmd = new SqlCommand(sqlUpdateEtiqueta, cn, tx))
                 {
                     AgregarDecimal(cmd, "@Cantidad", cantidadCaja);
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
-                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
-                    cmd.Parameters.Add("@SolicitudEtiquetaID", SqlDbType.Int).Value = solicitudEtiquetaID;
-                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
+
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                        usuarioID.Value;
+
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value =
+                        ahora;
+
+                    cmd.Parameters.Add("@SolicitudEtiquetaID", SqlDbType.Int).Value =
+                        solicitudEtiquetaID;
+
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
+                        model.SolicitudGP12ID;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
+
                 const string sqlMovimiento = @"
 INSERT INTO dbo.GP12_InventarioMovimientos
 (
@@ -1439,20 +1623,43 @@ VALUES
     @UsuarioID,
     1
 );";
+
                 await using (var cmd = new SqlCommand(sqlMovimiento, cn, tx))
                 {
-                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
-                    cmd.Parameters.Add("@SolicitudEtiquetaID", SqlDbType.Int).Value = solicitudEtiquetaID;
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
+                        model.SolicitudGP12ID;
+
+                    cmd.Parameters.Add("@SolicitudEtiquetaID", SqlDbType.Int).Value =
+                        solicitudEtiquetaID;
+
                     AgregarDecimal(cmd, "@Cantidad", cantidadCaja);
-                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionID.Value;
-                    cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 500).Value = codigo;
-                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 2000).Value = $"Caja {folioCaja} recibida físicamente en GP12 mediante escaneo.";
-                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
+
+                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
+                        cajaProduccionID.Value;
+
+                    cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 500).Value =
+                        codigo;
+
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 2000).Value =
+                        $"Caja {folioCaja} recibida físicamente en GP12 mediante escaneo.";
+
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value =
+                        ahora;
+
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                        usuarioID.Value;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
-                var nuevaCantidadPendiente = Math.Max(0, cantidadCaja - cantidadProcesada);
-                var nuevoEstatus = estatusAnterior < GP12Estatus.PendienteProgramar ? GP12Estatus.PendienteProgramar : estatusAnterior;
+
+                var nuevaCantidadPendiente =
+                    Math.Max(0, cantidadCaja - cantidadProcesada);
+
+                var nuevoEstatus =
+                    estatusAnterior < GP12Estatus.PendienteProgramar
+                        ? GP12Estatus.PendienteProgramar
+                        : estatusAnterior;
+
                 const string sqlUpdateSolicitud = @"
 UPDATE dbo.GP12_Solicitudes
 SET CantidadRecibida=@CantidadRecibida,
@@ -1467,29 +1674,72 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
   AND CajaProduccionID=@CajaProduccionID
   AND FechaRecepcion IS NULL
   AND ISNULL(CantidadRecibida,0)=0;
+
 IF @@ROWCOUNT<>1
     THROW 51502,'La solicitud GP12 cambió o la caja ya fue recibida.',1;";
+
                 await using (var cmd = new SqlCommand(sqlUpdateSolicitud, cn, tx))
                 {
                     AgregarDecimal(cmd, "@CantidadRecibida", cantidadCaja);
                     AgregarDecimal(cmd, "@CantidadPendiente", nuevaCantidadPendiente);
-                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID.Value;
-                    cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = nuevoEstatus;
-                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = model.SolicitudGP12ID;
-                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionID.Value;
+
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value =
+                        ahora;
+
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
+                        usuarioID.Value;
+
+                    cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
+                        nuevoEstatus;
+
+                    cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
+                        model.SolicitudGP12ID;
+
+                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
+                        cajaProduccionID.Value;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
-                await AgregarHistorialAsync(cn, tx, model.SolicitudGP12ID, GP12Movimientos.MaterialRecibido, estatusAnterior, nuevoEstatus, GP12EntidadHistorial.Solicitud, model.SolicitudGP12ID, $"Caja {folioCaja} recibida físicamente mediante escaneo. Cantidad: {cantidadCaja:N0}. Clasificación: {GP12TipoEtiqueta.Nombre(tipoEtiqueta)}. OF: {ordenFabricacion ?? "Sin OF"}. Parte: {numeroParte ?? "Sin parte"}.", usuarioID.Value);
+
+                await AgregarHistorialAsync(
+                    cn,
+                    tx,
+                    model.SolicitudGP12ID,
+                    GP12Movimientos.MaterialRecibido,
+                    estatusAnterior,
+                    nuevoEstatus,
+                    GP12EntidadHistorial.Solicitud,
+                    model.SolicitudGP12ID,
+                    $"Caja {folioCaja} recibida físicamente por GP12 mediante escaneo. " +
+                    $"Cantidad: {cantidadCaja:N0}. " +
+                    $"Clasificación: {GP12TipoEtiqueta.Nombre(tipoEtiqueta)}. " +
+                    $"OF: {ordenFabricacion ?? "Sin OF"}. " +
+                    $"Parte: {numeroParte ?? "Sin parte"}.",
+                    usuarioID.Value);
+
                 await tx.CommitAsync();
-                TempData["Mensaje"] = $"Caja {folioCaja} recibida físicamente en GP12 con {cantidadCaja:N0} pieza(s). Ya está disponible para programación.";
+
+                TempData["Mensaje"] =
+                    $"Caja {folioCaja} recibida físicamente en GP12 con {cantidadCaja:N0} pieza(s). " +
+                    "Ya está disponible para programación.";
             }
             catch (Exception ex)
             {
-                try { await tx.RollbackAsync(); } catch { }
-                TempData["Error"] = "No fue posible recibir la caja en GP12: " + ex.Message;
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] =
+                    "No fue posible recibir la caja en GP12: " + ex.Message;
             }
-            return RedirectToAction(nameof(Detalle), new { id = model.SolicitudGP12ID });
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.SolicitudGP12ID });
         }
 
         [HttpPost]
@@ -1672,11 +1922,13 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RegistrarSalidaParaAlmacen(
-            GP12SalidaAlmacenViewModel model)
+        GP12SalidaAlmacenViewModel model)
         {
-            model.ReferenciaAlmacen = Limpiar(model.ReferenciaAlmacen)
-                ?? string.Empty;
-            model.Observaciones = Limpiar(model.Observaciones);
+            model.ReferenciaAlmacen =
+                Limpiar(model.ReferenciaAlmacen) ?? string.Empty;
+
+            model.Observaciones =
+                Limpiar(model.Observaciones);
 
             if (!ModelState.IsValid)
             {
@@ -1687,12 +1939,23 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
                 });
             }
 
+            if (model.Cantidad <= 0)
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    mensaje = "La cantidad de salida debe ser mayor que cero."
+                });
+            }
+
             var usuarioID = ObtenerUsuarioIdActual();
 
             if (!usuarioID.HasValue || usuarioID.Value <= 0)
                 return Unauthorized();
 
-            await using var cn = new SqlConnection(ConnectionString);
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
             await cn.OpenAsync();
 
             await using var tx =
@@ -1705,66 +1968,76 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
 SELECT
     s.EstatusID,
     s.Origen,
-    ISNULL(s.CantidadRecibida, 0) AS CantidadRecibida,
-    ISNULL(s.CantidadProcesada, 0) AS CantidadProcesada,
+    s.CajaProduccionID,
+    s.CajaLiberadaID,
+    s.CalidadInspeccionID,
+    ISNULL(s.CantidadRecibida,0) AS CantidadRecibida,
+    ISNULL(s.CantidadProcesada,0) AS CantidadProcesada,
     ISNULL
     (
         (
             SELECT SUM
             (
                 CASE
-                    WHEN m.TipoMovimiento IN (N'ENTRADA', N'AJUSTE_ENTRADA')
-                        THEN ISNULL(m.Cantidad, 0)
-                    WHEN m.TipoMovimiento IN (N'SALIDA', N'AJUSTE_SALIDA')
-                        THEN -ISNULL(m.Cantidad, 0)
+                    WHEN m.TipoMovimiento IN(N'ENTRADA',N'AJUSTE_ENTRADA')
+                        THEN ISNULL(m.Cantidad,0)
+                    WHEN m.TipoMovimiento IN(N'SALIDA',N'AJUSTE_SALIDA')
+                        THEN -ISNULL(m.Cantidad,0)
                     ELSE 0
                 END
             )
-            FROM dbo.GP12_InventarioMovimientos m WITH (UPDLOCK, HOLDLOCK)
-            WHERE m.SolicitudGP12ID = s.SolicitudGP12ID
-              AND m.Activo = 1
+            FROM dbo.GP12_InventarioMovimientos m WITH(UPDLOCK,HOLDLOCK)
+            WHERE m.SolicitudGP12ID=s.SolicitudGP12ID
+              AND m.Activo=1
         ),
         0
     ) AS SaldoInventario,
     (
         SELECT COUNT(1)
-        FROM dbo.GP12_Inspecciones ia WITH (UPDLOCK, HOLDLOCK)
-        WHERE ia.SolicitudGP12ID = s.SolicitudGP12ID
-          AND ia.Activo = 1
+        FROM dbo.GP12_Inspecciones ia WITH(UPDLOCK,HOLDLOCK)
+        WHERE ia.SolicitudGP12ID=s.SolicitudGP12ID
+          AND ia.Activo=1
           AND ia.FechaFin IS NULL
     ) AS InspeccionesAbiertas,
     ultima.CantidadNOK AS UltimaCantidadNOK,
     ultima.CantidadScrap AS UltimaCantidadScrap,
     ultima.InspeccionGP12ID AS UltimaInspeccionGP12ID,
     etiqueta.SolicitudEtiquetaID
-FROM dbo.GP12_Solicitudes s WITH (UPDLOCK, HOLDLOCK)
+FROM dbo.GP12_Solicitudes s WITH(UPDLOCK,HOLDLOCK)
 OUTER APPLY
 (
-    SELECT TOP (1)
+    SELECT TOP(1)
         i.InspeccionGP12ID,
-        ISNULL(i.CantidadNOK, 0) AS CantidadNOK,
-        ISNULL(i.CantidadScrap, 0) AS CantidadScrap
-    FROM dbo.GP12_Inspecciones i WITH (UPDLOCK, HOLDLOCK)
-    WHERE i.SolicitudGP12ID = s.SolicitudGP12ID
-      AND i.Activo = 1
+        ISNULL(i.CantidadNOK,0) AS CantidadNOK,
+        ISNULL(i.CantidadScrap,0) AS CantidadScrap
+    FROM dbo.GP12_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+    WHERE i.SolicitudGP12ID=s.SolicitudGP12ID
+      AND i.Activo=1
       AND i.FechaFin IS NOT NULL
-    ORDER BY i.FechaFin DESC, i.InspeccionGP12ID DESC
+    ORDER BY
+        i.FechaFin DESC,
+        i.InspeccionGP12ID DESC
 ) ultima
 OUTER APPLY
 (
     SELECT
-        CASE WHEN COUNT(1) = 1
-             THEN MAX(se.SolicitudEtiquetaID)
-             ELSE NULL
+        CASE
+            WHEN COUNT(1)=1
+                THEN MAX(se.SolicitudEtiquetaID)
+            ELSE NULL
         END AS SolicitudEtiquetaID
-    FROM dbo.GP12_SolicitudEtiquetas se WITH (UPDLOCK, HOLDLOCK)
-    WHERE se.SolicitudGP12ID = s.SolicitudGP12ID
-      AND se.Activo = 1
+    FROM dbo.GP12_SolicitudEtiquetas se WITH(UPDLOCK,HOLDLOCK)
+    WHERE se.SolicitudGP12ID=s.SolicitudGP12ID
+      AND se.Activo=1
 ) etiqueta
-WHERE s.SolicitudGP12ID = @SolicitudGP12ID
-  AND s.Activo = 1;";
+WHERE s.SolicitudGP12ID=@SolicitudGP12ID
+  AND s.Activo=1;";
 
                 int estatusAnterior;
+                string origen;
+                long? cajaProduccionID;
+                int? cajaLiberadaID;
+                int? calidadInspeccionID;
                 decimal cantidadRecibida;
                 decimal cantidadProcesada;
                 decimal saldoInventario;
@@ -1792,19 +2065,47 @@ WHERE s.SolicitudGP12ID = @SolicitudGP12ID
                         });
                     }
 
-                    estatusAnterior = Convert.ToInt32(rd["EstatusID"]);
-                    cantidadRecibida = Convert.ToDecimal(rd["CantidadRecibida"]);
-                    cantidadProcesada = Convert.ToDecimal(rd["CantidadProcesada"]);
-                    saldoInventario = Convert.ToDecimal(rd["SaldoInventario"]);
-                    inspeccionesAbiertas = Convert.ToInt32(rd["InspeccionesAbiertas"]);
+                    estatusAnterior =
+                        Convert.ToInt32(rd["EstatusID"]);
 
-                    ultimaCantidadNOK = rd["UltimaCantidadNOK"] == DBNull.Value
-                        ? null
-                        : Convert.ToDecimal(rd["UltimaCantidadNOK"]);
+                    origen =
+                        rd["Origen"] == DBNull.Value
+                            ? string.Empty
+                            : rd["Origen"]?.ToString()?.Trim().ToUpperInvariant()
+                              ?? string.Empty;
 
-                    ultimaCantidadScrap = rd["UltimaCantidadScrap"] == DBNull.Value
-                        ? null
-                        : Convert.ToDecimal(rd["UltimaCantidadScrap"]);
+                    cajaProduccionID =
+                        rd["CajaProduccionID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt64(rd["CajaProduccionID"]);
+
+                    cajaLiberadaID =
+                        LeerIntNullable(rd["CajaLiberadaID"]);
+
+                    calidadInspeccionID =
+                        LeerIntNullable(rd["CalidadInspeccionID"]);
+
+                    cantidadRecibida =
+                        Convert.ToDecimal(rd["CantidadRecibida"]);
+
+                    cantidadProcesada =
+                        Convert.ToDecimal(rd["CantidadProcesada"]);
+
+                    saldoInventario =
+                        Convert.ToDecimal(rd["SaldoInventario"]);
+
+                    inspeccionesAbiertas =
+                        Convert.ToInt32(rd["InspeccionesAbiertas"]);
+
+                    ultimaCantidadNOK =
+                        rd["UltimaCantidadNOK"] == DBNull.Value
+                            ? null
+                            : Convert.ToDecimal(rd["UltimaCantidadNOK"]);
+
+                    ultimaCantidadScrap =
+                        rd["UltimaCantidadScrap"] == DBNull.Value
+                            ? null
+                            : Convert.ToDecimal(rd["UltimaCantidadScrap"]);
 
                     ultimaInspeccionGP12ID =
                         LeerIntNullable(rd["UltimaInspeccionGP12ID"]);
@@ -1857,14 +2158,28 @@ WHERE s.SolicitudGP12ID = @SolicitudGP12ID
                 if (saldoInventario <= 0)
                 {
                     throw new InvalidOperationException(
-                        "La solicitud ya no tiene existencia disponible en el almacén GP12.");
+                        "La solicitud ya no tiene existencia disponible en GP12.");
                 }
 
                 if (model.Cantidad > saldoInventario)
                 {
                     throw new InvalidOperationException(
-                        $"La salida solicitada excede el inventario GP12 disponible. Disponible: {saldoInventario:N4}.");
+                        $"La salida solicitada excede el inventario GP12 disponible. " +
+                        $"Disponible: {saldoInventario:N4}.");
                 }
+
+                var ahora = DateTime.Now;
+                var saldoRestante = saldoInventario - model.Cantidad;
+                var salidaCompleta = saldoRestante <= 0;
+
+                /*
+                 * Mientras todavía exista saldo, GP12 permanece en SalidaRegistrada.
+                 * Cuando sale todo el material, la solicitud GP12 queda Cerrada.
+                 */
+                var nuevoEstatus =
+                    salidaCompleta
+                        ? GP12Estatus.Cerrado
+                        : GP12Estatus.SalidaRegistrada;
 
                 const string sqlMovimiento = @"
 INSERT INTO dbo.GP12_InventarioMovimientos
@@ -1887,14 +2202,15 @@ VALUES
     @SolicitudEtiquetaID,
     @TipoMovimiento,
     @Cantidad,
-    NULL,
+    @CajaProduccionID,
     NULL,
     @Referencia,
     @Observaciones,
-    SYSDATETIME(),
+    @Ahora,
     @UsuarioID,
     1
 );
+
 SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
                 int movimientoID;
@@ -1910,39 +2226,55 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     cmd.Parameters.Add("@TipoMovimiento", SqlDbType.NVarChar, 20).Value =
                         GP12TipoMovimiento.Salida;
 
-                    AgregarDecimal(cmd, "@Cantidad", model.Cantidad);
+                    AgregarDecimal(
+                        cmd,
+                        "@Cantidad",
+                        model.Cantidad);
+
+                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value =
+                        (object?)cajaProduccionID ?? DBNull.Value;
 
                     cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 250).Value =
                         model.ReferenciaAlmacen;
 
                     cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value =
                         string.IsNullOrWhiteSpace(model.Observaciones)
-                            ? "Salida de inventario GP12 preparada para recepción del módulo Almacén."
+                            ? "Salida de inventario GP12 con destino final Almacén PT."
                             : model.Observaciones;
 
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value =
+                        ahora;
+
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
                         usuarioID.Value;
 
-                    movimientoID = Convert.ToInt32(
-                        await cmd.ExecuteScalarAsync());
+                    movimientoID =
+                        Convert.ToInt32(
+                            await cmd.ExecuteScalarAsync());
                 }
 
-                const string sqlUpdate = @"
+                const string sqlUpdateSolicitud = @"
 UPDATE dbo.GP12_Solicitudes
 SET
-    EstatusID = @EstatusID,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = SYSDATETIME()
-WHERE SolicitudGP12ID = @SolicitudGP12ID
-  AND Activo = 1;";
+    EstatusID=@EstatusID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE SolicitudGP12ID=@SolicitudGP12ID
+  AND Activo=1;
 
-                await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
+IF @@ROWCOUNT<>1
+    THROW 51520,'La solicitud GP12 cambió mientras se registraba la salida.',1;";
+
+                await using (var cmd = new SqlCommand(sqlUpdateSolicitud, cn, tx))
                 {
                     cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value =
-                        GP12Estatus.SalidaRegistrada;
+                        nuevoEstatus;
 
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
                         usuarioID.Value;
+
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value =
+                        ahora;
 
                     cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
                         model.SolicitudGP12ID;
@@ -1950,7 +2282,293 @@ WHERE SolicitudGP12ID = @SolicitudGP12ID
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                var saldoRestante = saldoInventario - model.Cantidad;
+                /*
+                 * Si esta solicitud nació desde Calidad y está ligada a una caja
+                 * física, únicamente cuando GP12 ya no conserva saldo se devuelve
+                 * la caja al flujo normal de Producción.
+                 *
+                 * NO marcamos SalidaProduccion aquí.
+                 * Ese estado lo generará Producción mediante su escaneo físico.
+                 */
+                var cajaDevueltaAProduccion = false;
+
+                if (salidaCompleta &&
+                    cajaProduccionID.HasValue &&
+                    cajaProduccionID.Value > 0 &&
+                    string.Equals(
+                        origen,
+                        GP12Origen.Calidad,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!cajaLiberadaID.HasValue ||
+                        cajaLiberadaID.Value <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            "La solicitud GP12 proviene de Calidad, pero no conserva la relación con Calidad_CajasLiberadas.");
+                    }
+
+                    if (!calidadInspeccionID.HasValue ||
+                        calidadInspeccionID.Value <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            "La solicitud GP12 proviene de Calidad, pero no conserva la inspección de Calidad relacionada.");
+                    }
+
+                    const string sqlLiberarCajaProduccion = @"
+UPDATE dbo.Produccion_Cajas
+SET
+    EstadoCajaID=@LiberadaCalidad,
+    EstadoCajaNombre=N'Liberada por GP12 - pendiente entrega a Almacén PT',
+    EstatusCalidad=N'LIBERADA',
+    EtiquetaVerde=1,
+    FechaLiberacionCalidad=@Ahora,
+    ResultadoCalidad=N'LIBERADA',
+    MotivoCalidad=
+        LEFT
+        (
+            CONCAT
+            (
+                CASE
+                    WHEN NULLIF(LTRIM(RTRIM(ISNULL(MotivoCalidad,N''))),N'') IS NULL
+                        THEN N''
+                    ELSE MotivoCalidad+N' | '
+                END,
+                N'GP12 liberó la caja. Solicitud GP12 ',
+                CONVERT(NVARCHAR(20),@SolicitudGP12ID),
+                N'.'
+            ),
+            500
+        ),
+    FechaZonaVerde=NULL,
+    UsuarioZonaVerdeID=NULL,
+    FechaSalidaProduccion=NULL,
+    UsuarioSalidaProduccionID=NULL,
+    FechaRecepcionAlmacen=NULL,
+    UsuarioAlmacenID=NULL,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1
+  AND EstadoCajaID=@RetenidaGP12
+  AND UPPER(LTRIM(RTRIM(ISNULL(ResultadoCalidad,N''))))=N'GP12';
+
+IF @@ROWCOUNT<>1
+    THROW 51521,'La caja cambió de estado o ya no se encuentra retenida en GP12.',1;";
+
+                    await using (var cmd =
+                        new SqlCommand(
+                            sqlLiberarCajaProduccion,
+                            cn,
+                            tx))
+                    {
+                        cmd.Parameters.Add(
+                            "@CajaProduccionID",
+                            SqlDbType.BigInt).Value =
+                            cajaProduccionID.Value;
+
+                        cmd.Parameters.Add(
+                            "@LiberadaCalidad",
+                            SqlDbType.Int).Value =
+                            ProduccionCajaEstatus.LiberadaCalidad;
+
+                        cmd.Parameters.Add(
+                            "@RetenidaGP12",
+                            SqlDbType.Int).Value =
+                            ProduccionCajaEstatus.RetenidaGp12Scrap;
+
+                        cmd.Parameters.Add(
+                            "@SolicitudGP12ID",
+                            SqlDbType.Int).Value =
+                            model.SolicitudGP12ID;
+
+                        cmd.Parameters.Add(
+                            "@UsuarioID",
+                            SqlDbType.Int).Value =
+                            usuarioID.Value;
+
+                        cmd.Parameters.Add(
+                            "@Ahora",
+                            SqlDbType.DateTime2).Value =
+                            ahora;
+
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+
+                    /*
+                     * La misma caja deja de aparecer como EN_GP12 dentro de Calidad
+                     * y vuelve a ser una caja liberada con destino a Almacén.
+                     *
+                     * No modificamos FechaValidacionCalidad ni
+                     * UsuarioValidacionCalidadID: preservamos quién tomó la
+                     * decisión original.
+                     */
+                    const string sqlLiberarCajaCalidad = @"
+UPDATE dbo.Calidad_CajasLiberadas
+SET
+    EtiquetaLiberacion=N'VERDE',
+    Destino=N'ALMACEN',
+    Estado=N'LIBERADA',
+    Observaciones=
+        LEFT
+        (
+            CONCAT
+            (
+                CASE
+                    WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL
+                        THEN N''
+                    ELSE Observaciones+N' | '
+                END,
+                N'GP12 concluyó satisfactoriamente la solicitud ',
+                CONVERT(NVARCHAR(20),@SolicitudGP12ID),
+                N'. Caja liberada y pendiente de escaneo físico de salida por Producción.'
+            ),
+            2000
+        ),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE CajaLiberadaID=@CajaLiberadaID
+  AND CajaProduccionID=@CajaProduccionID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51522,'No fue posible sincronizar la liberación de GP12 con la caja de Calidad.',1;";
+
+                    await using (var cmd =
+                        new SqlCommand(
+                            sqlLiberarCajaCalidad,
+                            cn,
+                            tx))
+                    {
+                        cmd.Parameters.Add(
+                            "@CajaLiberadaID",
+                            SqlDbType.Int).Value =
+                            cajaLiberadaID.Value;
+
+                        cmd.Parameters.Add(
+                            "@CajaProduccionID",
+                            SqlDbType.BigInt).Value =
+                            cajaProduccionID.Value;
+
+                        cmd.Parameters.Add(
+                            "@InspeccionID",
+                            SqlDbType.Int).Value =
+                            calidadInspeccionID.Value;
+
+                        cmd.Parameters.Add(
+                            "@SolicitudGP12ID",
+                            SqlDbType.Int).Value =
+                            model.SolicitudGP12ID;
+
+                        cmd.Parameters.Add(
+                            "@UsuarioID",
+                            SqlDbType.Int).Value =
+                            usuarioID.Value;
+
+                        cmd.Parameters.Add(
+                            "@Ahora",
+                            SqlDbType.DateTime2).Value =
+                            ahora;
+
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+
+                    const string sqlHistorialCalidad = @"
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+SELECT
+    @InspeccionID,
+    N'GP12_LIBERADA_PARA_SALIDA',
+    ci.Estado,
+    ci.Estado,
+    N'LIBERADA',
+    N'VERDE',
+    @Comentario,
+    @UsuarioID,
+    @Ahora
+FROM dbo.Calidad_Inspecciones ci
+WHERE ci.InspeccionID=@InspeccionID
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_InspeccionHistorial h
+      WHERE h.InspeccionID=@InspeccionID
+        AND h.Movimiento=N'GP12_LIBERADA_PARA_SALIDA'
+        AND h.Comentario LIKE
+            N'%Solicitud GP12 '+CONVERT(NVARCHAR(20),@SolicitudGP12ID)+N'%'
+  );";
+
+                    await using (var cmd =
+                        new SqlCommand(
+                            sqlHistorialCalidad,
+                            cn,
+                            tx))
+                    {
+                        var comentario =
+                            $"Solicitud GP12 {model.SolicitudGP12ID} concluida. " +
+                            $"La caja {cajaProduccionID.Value} fue liberada con etiqueta verde " +
+                            $"y quedó pendiente del escaneo físico de entrega por Producción hacia Almacén PT.";
+
+                        if (comentario.Length > 1000)
+                            comentario = comentario[..1000];
+
+                        cmd.Parameters.Add(
+                            "@InspeccionID",
+                            SqlDbType.Int).Value =
+                            calidadInspeccionID.Value;
+
+                        cmd.Parameters.Add(
+                            "@SolicitudGP12ID",
+                            SqlDbType.Int).Value =
+                            model.SolicitudGP12ID;
+
+                        cmd.Parameters.Add(
+                            "@Comentario",
+                            SqlDbType.NVarChar,
+                            1000).Value =
+                            comentario;
+
+                        cmd.Parameters.Add(
+                            "@UsuarioID",
+                            SqlDbType.Int).Value =
+                            usuarioID.Value;
+
+                        cmd.Parameters.Add(
+                            "@Ahora",
+                            SqlDbType.DateTime2).Value =
+                            ahora;
+
+                        await cmd.ExecuteNonQueryAsync();
+                    }
+
+                    cajaDevueltaAProduccion = true;
+                }
+
+                var comentarioHistorial =
+                    salidaCompleta
+                        ? $"Salida completa de GP12 registrada. Cantidad: {model.Cantidad:N4}. " +
+                          $"Referencia Almacén: {model.ReferenciaAlmacen}. " +
+                          "Saldo GP12: 0. La solicitud quedó cerrada."
+                        : $"Salida parcial de GP12 registrada. Cantidad: {model.Cantidad:N4}. " +
+                          $"Referencia Almacén: {model.ReferenciaAlmacen}. " +
+                          $"Saldo GP12 restante: {saldoRestante:N4}.";
+
+                if (cajaDevueltaAProduccion)
+                {
+                    comentarioHistorial +=
+                        " La caja fue liberada por GP12 y regresó al flujo de Producción " +
+                        "para registrar el escaneo físico de entrega a Almacén PT.";
+                }
 
                 await AgregarHistorialAsync(
                     cn,
@@ -1958,15 +2576,49 @@ WHERE SolicitudGP12ID = @SolicitudGP12ID
                     model.SolicitudGP12ID,
                     GP12Movimientos.SalidaRegistrada,
                     estatusAnterior,
-                    GP12Estatus.SalidaRegistrada,
+                    nuevoEstatus,
                     GP12EntidadHistorial.Solicitud,
                     model.SolicitudGP12ID,
-                    $"Salida preparada para Almacén. Cantidad: {model.Cantidad:N4}. " +
-                    $"Referencia Almacén: {model.ReferenciaAlmacen}. " +
-                    $"Saldo GP12 restante: {saldoRestante:N4}.",
+                    comentarioHistorial,
                     usuarioID.Value);
 
                 await tx.CommitAsync();
+
+                if (cajaDevueltaAProduccion)
+                {
+                    return Json(new
+                    {
+                        ok = true,
+                        solicitudGP12ID = model.SolicitudGP12ID,
+                        movimientoID,
+                        cantidad = model.Cantidad,
+                        saldoAnterior = saldoInventario,
+                        saldoRestante,
+                        referenciaAlmacen = model.ReferenciaAlmacen,
+                        gp12Cerrado = true,
+                        cajaProduccionID,
+                        mensaje =
+                            "GP12 concluido. La caja fue liberada con etiqueta verde y regresó al flujo de Producción. " +
+                            "Ahora Producción debe realizar el escaneo físico de entrega a Almacén PT."
+                    });
+                }
+
+                if (salidaCompleta)
+                {
+                    return Json(new
+                    {
+                        ok = true,
+                        solicitudGP12ID = model.SolicitudGP12ID,
+                        movimientoID,
+                        cantidad = model.Cantidad,
+                        saldoAnterior = saldoInventario,
+                        saldoRestante,
+                        referenciaAlmacen = model.ReferenciaAlmacen,
+                        gp12Cerrado = true,
+                        mensaje =
+                            "Salida completa registrada. La solicitud GP12 quedó cerrada."
+                    });
+                }
 
                 return Json(new
                 {
@@ -1977,14 +2629,20 @@ WHERE SolicitudGP12ID = @SolicitudGP12ID
                     saldoAnterior = saldoInventario,
                     saldoRestante,
                     referenciaAlmacen = model.ReferenciaAlmacen,
+                    gp12Cerrado = false,
                     mensaje =
-                        "Salida registrada únicamente en GP12. " +
-                        "El módulo Almacén deberá registrar su propia entrada."
+                        $"Salida parcial registrada. GP12 conserva {saldoRestante:N4} pieza(s) pendientes."
                 });
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync();
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
 
                 return BadRequest(new
                 {
@@ -1993,10 +2651,6 @@ WHERE SolicitudGP12ID = @SolicitudGP12ID
                 });
             }
         }
-
-        // =========================================================
-        // PROGRAMACIÓN POR CLASIFICACIÓN
-        // =========================================================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> GuardarProgramacion(
@@ -2299,8 +2953,6 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                 nameof(Detalle),
                 new { id = model.SolicitudGP12ID });
         }
-        // La salida de material hacia Almacén ya no actualiza Calidad ni Producción.
-        // El único contrato de salida es RegistrarSalidaParaAlmacen, que trabaja solo con tablas GP12.
 
         [HttpPost]
         [ValidateAntiForgeryToken]

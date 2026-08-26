@@ -1,69 +1,48 @@
 ﻿@{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Calendario de embarques";
+    ViewData["Title"] = "Calendario de entregas";
 }
-
 @section Styles {
     <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" />
 }
-
-
-
-
 <style>
-    .cal-page {
+    .page {
         padding: 18px 20px 30px
     }
 
-    .cal-head {
+    .head {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
         gap: 12px;
         flex-wrap: wrap;
         margin-bottom: 12px
     }
 
-    .cal-title {
+    .title {
         margin: 0;
         font-size: 1.35rem;
         font-weight: 700
     }
 
-    .cal-subtitle {
+    .sub {
         margin: 3px 0 0;
         color: #6c757d;
-        font-size: .86rem
+        font-size: .85rem
     }
 
-    .cal-actions {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap
-    }
-
-    .cal-toolbar {
-        display: flex;
+    .toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px,1fr) minmax(220px,1fr) 170px auto;
         gap: 8px;
         align-items: end;
-        flex-wrap: wrap;
         padding: 10px 0 12px;
         border-top: 1px solid #e9ecef;
         border-bottom: 1px solid #e9ecef;
         margin-bottom: 12px
     }
 
-    .cal-field {
-        min-width: 150px
-    }
-
-        .cal-field.search {
-            min-width: 240px;
-            flex: 1
-        }
-
-        .cal-field label {
+        .toolbar label {
             display: block;
             font-size: .69rem;
             font-weight: 600;
@@ -71,41 +50,32 @@
             margin-bottom: 3px
         }
 
-        .cal-field .form-control, .cal-field .form-select {
+        .toolbar .form-control, .toolbar .form-select {
             min-height: 34px;
             font-size: .8rem
         }
 
-    .cal-summary {
+    .summary {
         display: flex;
         gap: 18px;
         flex-wrap: wrap;
-        margin: 0 0 10px
+        margin-bottom: 10px
     }
 
-        .cal-summary div {
+        .summary div {
             display: flex;
             gap: 5px;
             align-items: baseline
         }
 
-        .cal-summary strong {
-            font-size: .93rem
+        .summary strong {
+            font-size: .95rem
         }
 
-        .cal-summary span {
+        .summary span {
             font-size: .71rem;
             color: #6c757d
         }
-
-    .cal-shell {
-        width: 100%;
-        overflow-x: auto
-    }
-
-    #calendar {
-        min-width: 720px
-    }
 
     .fc {
         font-size: .8rem
@@ -121,47 +91,17 @@
             padding: .35rem .55rem
         }
 
-        .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number {
-            color: #343a40;
-            text-decoration: none
-        }
-
         .fc .fc-daygrid-event {
             border: 0;
-            border-radius: 4px;
+            border-radius: 5px;
             padding: 2px 4px;
             cursor: pointer
         }
 
-        .fc .fc-event-title {
-            font-weight: 600
+        .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number {
+            color: #343a40;
+            text-decoration: none
         }
-
-        .fc .fc-day-today {
-            background: rgba(13,110,253,.04) !important
-        }
-
-    .legend {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-top: 10px;
-        font-size: .72rem;
-        color: #6c757d
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 5px
-    }
-
-    .legend-dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        display: inline-block
-    }
 
     .modal-data {
         display: grid;
@@ -173,8 +113,7 @@
             display: block;
             font-size: .66rem;
             text-transform: uppercase;
-            color: #6c757d;
-            margin-bottom: 1px
+            color: #6c757d
         }
 
         .modal-data div div {
@@ -182,219 +121,328 @@
             font-weight: 500
         }
 
-    @@media(max-width:700px) {
-        .cal-page {
+    @@media (max-width:800px) {
+        .toolbar {
+            grid-template-columns: 1fr
+        }
+
+        .page {
             padding: 14px 10px 24px
-        }
-
-        .cal-actions {
-            width: 100%
-        }
-
-            .cal-actions .btn {
-                flex: 1
-            }
-
-        .cal-field, .cal-field.search {
-            min-width: 100%;
-            width: 100%
         }
 
         .modal-data {
             grid-template-columns: 1fr
         }
     }
+
+
+    /* =========================================================
+           LOGISTICA ERP - CAPA VISUAL
+           Calendario operativo con apariencia ERP sobria.
+           ========================================================= */
+    :root {
+        --lg-blue: #173a7a;
+        --lg-blue-2: #2f63ad;
+        --lg-text: #172033;
+        --lg-muted: #6d7888;
+        --lg-border: #dce4ee;
+        --lg-shadow: 0 8px 24px rgba(22,42,75,.055);
+    }
+
+    .page {
+        max-width: 1720px;
+        margin: 0 auto;
+        color: var(--lg-text);
+    }
+
+    .head {
+        align-items: center;
+        padding: 15px 17px;
+        margin-bottom: 12px;
+        border: 1px solid var(--lg-border);
+        border-left: 4px solid var(--lg-blue);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lg-shadow);
+    }
+
+    .title {
+        color: var(--lg-text);
+        font-size: 1.46rem;
+        font-weight: 800;
+        letter-spacing: -.02em;
+    }
+
+        .title i {
+            color: var(--lg-blue);
+        }
+
+    .sub {
+        color: var(--lg-muted);
+        font-weight: 500;
+    }
+
+    .head .btn {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .toolbar {
+        padding: 11px 12px;
+        margin-bottom: 10px;
+        border: 1px solid var(--lg-border);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(22,42,75,.035);
+    }
+
+        .toolbar label {
+            color: #566273;
+            font-weight: 750;
+            letter-spacing: .02em;
+        }
+
+        .toolbar .form-control,
+        .toolbar .form-select {
+            min-height: 36px;
+            border-color: #d4dee9;
+            border-radius: 8px;
+            box-shadow: none;
+        }
+
+            .toolbar .form-control:focus,
+            .toolbar .form-select:focus {
+                border-color: #8ba5d4;
+                box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
+            }
+
+    .summary {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(130px,1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+        .summary > div {
+            display: block;
+            min-height: 68px;
+            padding: 10px 12px;
+            border: 1px solid var(--lg-border);
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 4px 13px rgba(22,42,75,.03);
+        }
+
+        .summary strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--lg-blue);
+            font-size: 1.2rem;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .summary span {
+            color: var(--lg-muted);
+            font-size: .7rem;
+            font-weight: 700;
+        }
+
+    #calendar {
+        padding: 13px;
+        border: 1px solid var(--lg-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lg-shadow);
+    }
+
+    .fc {
+        color: #2b3748;
+    }
+
+        .fc .fc-toolbar {
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .fc .fc-toolbar-title {
+            color: #1e2b3d;
+            font-size: 1.08rem;
+            font-weight: 800;
+        }
+
+        .fc .fc-button-primary {
+            border-color: #d1dbe6;
+            background: #fff;
+            color: #334155;
+            box-shadow: none;
+        }
+
+            .fc .fc-button-primary:hover,
+            .fc .fc-button-primary:not(:disabled).fc-button-active {
+                border-color: var(--lg-blue);
+                background: var(--lg-blue);
+                color: #fff;
+            }
+
+        .fc .fc-scrollgrid,
+        .fc-theme-standard td,
+        .fc-theme-standard th {
+            border-color: #e6ebf1;
+        }
+
+        .fc .fc-col-header-cell {
+            background: #f7f9fb;
+        }
+
+        .fc .fc-col-header-cell-cushion {
+            padding: 7px 4px;
+            color: #536072;
+            font-weight: 750;
+        }
+
+        .fc .fc-daygrid-day-number {
+            padding: 6px;
+            color: #4c5868;
+            font-weight: 650;
+        }
+
+        .fc .fc-day-today {
+            background: #f1f6fd !important;
+        }
+
+        .fc .fc-daygrid-event {
+            box-shadow: 0 2px 4px rgba(0,0,0,.08);
+            font-weight: 650;
+        }
+
+    #eventoModal .modal-content {
+        border: 1px solid var(--lg-border);
+        border-radius: 12px;
+        box-shadow: 0 18px 46px rgba(17,31,52,.16);
+    }
+
+    #eventoModal .modal-header {
+        background: #f7f9fb;
+        border-bottom-color: #e5ebf1;
+    }
+
+    .modal-data > div {
+        padding: 8px 9px;
+        border: 1px solid #e7ecf2;
+        border-radius: 8px;
+        background: #fbfcfd;
+    }
+
+    .modal-data label {
+        color: #798495;
+        font-weight: 700;
+    }
+
+    .modal-data div div {
+        color: #263448;
+        font-weight: 650;
+    }
+
+    html[data-nsq-theme="dark"] .page {
+        color: #e7edf6;
+    }
+
+    html[data-nsq-theme="dark"] .head,
+    html[data-nsq-theme="dark"] .toolbar,
+    html[data-nsq-theme="dark"] .summary > div,
+    html[data-nsq-theme="dark"] #calendar,
+    html[data-nsq-theme="dark"] #eventoModal .modal-content {
+        background: #111b2d;
+        border-color: #2a3a50;
+        box-shadow: none;
+    }
+
+    html[data-nsq-theme="dark"] .title,
+    html[data-nsq-theme="dark"] .fc .fc-toolbar-title {
+        color: #eef4fb;
+    }
+
+    html[data-nsq-theme="dark"] .toolbar .form-control,
+    html[data-nsq-theme="dark"] .toolbar .form-select {
+        background: #0e1828;
+        border-color: #31445c;
+        color: #eef4fb;
+    }
+
+    html[data-nsq-theme="dark"] .fc {
+        color: #dfe7f1;
+    }
+
+        html[data-nsq-theme="dark"] .fc .fc-col-header-cell,
+        html[data-nsq-theme="dark"] #eventoModal .modal-header,
+        html[data-nsq-theme="dark"] .modal-data > div {
+            background: #162237;
+            border-color: #2a3a50;
+        }
+
+        html[data-nsq-theme="dark"] .fc .fc-button-primary {
+            background: #162237;
+            border-color: #34485f;
+            color: #dce5f0;
+        }
+
+        html[data-nsq-theme="dark"] .fc .fc-daygrid-day-number,
+        html[data-nsq-theme="dark"] .fc .fc-col-header-cell-cushion,
+        html[data-nsq-theme="dark"] .modal-data div div {
+            color: #dce5f0;
+        }
+
+    @@media (max-width:900px) {
+        .summary {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+    }
+
+    @@media (max-width:600px) {
+        #calendar {
+            padding: 8px;
+        }
+
+        .fc .fc-toolbar {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .fc .fc-toolbar-chunk {
+            display: flex;
+            justify-content: center;
+        }
+    }
+
 </style>
-
-
-<div class="cal-page">
-    <div class="cal-head">
-        <div>
-            <h1 class="cal-title"><i class="fa-solid fa-calendar-days me-1"></i>Calendario de embarques</h1>
-            <p class="cal-subtitle">Cargas, entregas y releases pendientes por programar.</p>
-        </div>
-        <div class="cal-actions">
-            <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Embarques</a>
-            <a asp-controller="LogisticaViajes" asp-action="Calendario" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-route me-1"></i>Viajes</a>
-        </div>
+<div class="page">
+    <div class="head"><div><h1 class="title"><i class="fa-solid fa-calendar-days me-1"></i>Calendario de entregas por cliente</h1><p class="sub">Solo muestra entregas de embarques a clientes. No muestra releases pendientes ni eventos internos de carga.</p></div><div><a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Embarques</a></div></div>
+    <div class="toolbar">
+        <div><label>Cliente</label><select id="cliente" class="form-select"><option value="">Todos los clientes</option></select></div>
+        <div><label>Buscar</label><input id="q" class="form-control" placeholder="Folio, cliente o destino" /></div>
+        <div><label>Estatus</label><select id="estatus" class="form-select"><option value="">Todos</option><option>Programado</option><option>Preparando</option><option>Preparado</option><option>Cargado</option><option>En ruta</option><option>Entregado</option><option>Cancelado</option></select></div>
+        <div><button id="btnAplicar" class="btn btn-primary btn-sm" type="button"><i class="fa-solid fa-filter me-1"></i>Aplicar</button> <button id="btnLimpiar" class="btn btn-outline-secondary btn-sm" type="button">Limpiar</button></div>
     </div>
-
-    <div class="cal-toolbar">
-        <div class="cal-field search">
-            <label>Buscar</label>
-            <input id="q" class="form-control" placeholder="Folio, cliente o destino" />
-        </div>
-        <div class="cal-field">
-            <label>Estatus</label>
-            <select id="estatus" class="form-select">
-                <option value="">Todos</option>
-                <option>Programado</option>
-                <option>Preparando</option>
-                <option>Preparado</option>
-                <option>Cargado</option>
-                <option>En ruta</option>
-                <option>Entregado</option>
-                <option>Cancelado</option>
-            </select>
-        </div>
-        <div class="cal-field">
-            <label>Tipo</label>
-            <select id="tipo" class="form-select">
-                <option value="">Todos</option>
-                <option value="PENDIENTE">Pendiente programar</option>
-                <option value="CARGA">Carga</option>
-                <option value="ENTREGA">Entrega</option>
-            </select>
-        </div>
-        <div>
-            <button id="btnAplicar" type="button" class="btn btn-primary btn-sm"><i class="fa-solid fa-filter me-1"></i>Aplicar</button>
-            <button id="btnLimpiar" type="button" class="btn btn-outline-secondary btn-sm">Limpiar</button>
-        </div>
-    </div>
-
-    <div class="cal-summary">
-        <div><strong id="totalEventos">0</strong><span>eventos visibles</span></div>
-        <div><strong id="totalPendientes">0</strong><span>pendientes</span></div>
-        <div><strong id="totalCargas">0</strong><span>cargas</span></div>
-        <div><strong id="totalEntregas">0</strong><span>entregas</span></div>
-    </div>
-
-    <div class="cal-shell"><div id="calendar"></div></div>
-
-    <div class="legend">
-        <span class="legend-item"><span class="legend-dot" style="background:#6c757d"></span>Pendiente</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#0d6efd"></span>Carga</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#198754"></span>Entrega</span>
-        <span class="legend-item"><i class="fa-solid fa-triangle-exclamation text-danger"></i>Riesgo / incidencia</span>
-    </div>
+    <div class="summary"><div><strong id="total">0</strong><span>entregas visibles</span></div><div><strong id="expeditadas">0</strong><span>expeditadas</span></div><div><strong id="enRuta">0</strong><span>en ruta</span></div><div><strong id="entregadas">0</strong><span>entregadas</span></div></div>
+    <div id="calendar"></div>
 </div>
-
-<div class="modal fade" id="eventoModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header py-2">
-                <h5 class="modal-title fs-6" id="eventoTitulo">Detalle</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="modal-data">
-                    <div><label>Tipo</label><div id="mTipo">-</div></div>
-                    <div><label>Estatus</label><div id="mEstatus">-</div></div>
-                    <div><label>Fecha</label><div id="mFecha">-</div></div>
-                    <div><label>Hora</label><div id="mHora">-</div></div>
-                    <div><label>Cliente</label><div id="mCliente">-</div></div>
-                    <div><label>Destino</label><div id="mDestino">-</div></div>
-                    <div><label>Parte</label><div id="mParte">-</div></div>
-                    <div><label>OF</label><div id="mOF">-</div></div>
-                    <div><label>Cajas</label><div id="mCajas">0</div></div>
-                    <div><label>Piezas</label><div id="mPiezas">0</div></div>
-                </div>
-                <div id="mAlerta" class="alert alert-warning py-2 px-3 mt-3 mb-0 d-none"></div>
-            </div>
-            <div class="modal-footer py-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-                <a id="mAbrir" class="btn btn-primary btn-sm">Abrir</a>
-            </div>
-        </div>
-    </div>
-</div>
-
+<div class="modal fade" id="eventoModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header py-2"><h5 class="modal-title fs-6" id="mTitulo">Entrega</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="modal-data"><div><label>Cliente</label><div id="mCliente">-</div></div><div><label>Estatus</label><div id="mEstatus">-</div></div><div><label>Entrega</label><div id="mFecha">-</div></div><div><label>Hora</label><div id="mHora">-</div></div><div><label>Destino</label><div id="mDestino">-</div></div><div><label>Folio</label><div id="mFolio">-</div></div><div><label>Partidas</label><div id="mPartidas">0</div></div><div><label>Piezas</label><div id="mPiezas">0</div></div></div><div id="mAlerta" class="alert alert-danger py-2 px-3 mt-3 mb-0 d-none"></div></div><div class="modal-footer py-2"><button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button><a id="mAbrir" class="btn btn-primary btn-sm">Abrir embarque</a></div></div></div></div>
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
     <script>
-        (() => {
-            const el=document.getElementById('calendar');
-            const q=document.getElementById('q');
-            const estatus=document.getElementById('estatus');
-            const tipo=document.getElementById('tipo');
-            let eventosRaw=[];
-
-            const colorTipo=t => t==='CARGA' ? '#0d6efd' : t==='ENTREGA' ? '#198754' : '#6c757d';
-
-            const calendar=new FullCalendar.Calendar(el,{
-                locale:'es',
-                initialView:'dayGridMonth',
-                firstDay:1,
-                height:'auto',
-                displayEventTime:false,
-                dayMaxEvents:4,
-                headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,timeGridWeek,listWeek'},
-                buttonText:{today:'Hoy',month:'Mes',week:'Semana',list:'Lista'},
-                datesSet:() => cargar(),
-                eventClick:info => mostrar(info.event.extendedProps),
-                eventDidMount:info => {
-                    const p=info.event.extendedProps;
-                    info.el.title=`${p.tipo} · ${p.cliente||''} · ${p.destino||''}`;
-                }
-            });
-
-            async function cargar(){
-                const inicio=calendar.view.activeStart;
-                const fin=new Date(calendar.view.activeEnd);
-                fin.setDate(fin.getDate()-1);
-                const qs=new URLSearchParams({
-                    desde:inicio.toISOString().slice(0,10),
-                    hasta:fin.toISOString().slice(0,10)
-                });
-                if(q.value.trim()) qs.set('q',q.value.trim());
-                if(estatus.value) qs.set('estatus',estatus.value);
-
-                try{
-                    const r=await fetch('@Url.Action("EventosCalendario", "LogisticaEmbarques")?'+qs.toString(),{headers:{'X-Requested-With':'XMLHttpRequest'}});
-                    const data=await r.json();
-                    if(!r.ok || !data.ok) throw new Error(data.mensaje||'No fue posible cargar el calendario.');
-                    eventosRaw=data.eventos||[];
-                    pintar();
-                }catch(e){
-                    calendar.removeAllEvents();
-                    alert(e.message);
-                }
-            }
-
-            function pintar(){
-                const filtro=tipo.value;
-                const visibles=eventosRaw.filter(x=>!filtro || x.tipo===filtro);
-                calendar.removeAllEvents();
-                calendar.addEventSource(visibles.map(x=>({
-                    id:x.id,
-                    title:`${x.hora?x.hora+' ':''}${x.titulo}`,
-                    start:x.fecha,
-                    allDay:true,
-                    backgroundColor:colorTipo(x.tipo),
-                    borderColor:colorTipo(x.tipo),
-                    textColor:'#fff',
-                    extendedProps:x
-                })));
-                document.getElementById('totalEventos').textContent=visibles.length;
-                document.getElementById('totalPendientes').textContent=visibles.filter(x=>x.tipo==='PENDIENTE').length;
-                document.getElementById('totalCargas').textContent=visibles.filter(x=>x.tipo==='CARGA').length;
-                document.getElementById('totalEntregas').textContent=visibles.filter(x=>x.tipo==='ENTREGA').length;
-            }
-
-            function mostrar(p){
-                document.getElementById('eventoTitulo').textContent=p.titulo||'Detalle';
-                document.getElementById('mTipo').textContent=p.tipo==='PENDIENTE'?'Pendiente programar':p.tipo==='CARGA'?'Carga':'Entrega';
-                document.getElementById('mEstatus').textContent=p.estatus||'-';
-                document.getElementById('mFecha').textContent=p.fecha||'-';
-                document.getElementById('mHora').textContent=p.hora||'Sin hora';
-                document.getElementById('mCliente').textContent=p.cliente||'-';
-                document.getElementById('mDestino').textContent=p.destino||'-';
-                document.getElementById('mParte').textContent=p.numeroParte||'-';
-                document.getElementById('mOF').textContent=p.numeroOF||'-';
-                document.getElementById('mCajas').textContent=Number(p.totalCajas||0).toLocaleString('es-MX');
-                document.getElementById('mPiezas').textContent=Number(p.totalPiezas||0).toLocaleString('es-MX');
-                const alerta=document.getElementById('mAlerta');
-                alerta.classList.toggle('d-none',!p.incidencia);
-                alerta.textContent=p.incidencia?'Este evento tiene incidencia o disponibilidad PT insuficiente.':'';
-                document.getElementById('mAbrir').href=p.url||'#';
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('eventoModal')).show();
-            }
-
-            document.getElementById('btnAplicar').addEventListener('click',cargar);
-            document.getElementById('btnLimpiar').addEventListener('click',()=>{q.value='';estatus.value='';tipo.value='';cargar();});
-            tipo.addEventListener('change',pintar);
-            q.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();cargar();}});
-            calendar.render();
+        (()=>{
+         const q=document.getElementById('q'),estatus=document.getElementById('estatus'),cliente=document.getElementById('cliente');let raw=[];
+         const color=x=>x.expeditado?'#dc3545':x.estatus==='Entregado'?'#198754':x.estatus==='En ruta'?'#0d6efd':x.estatus==='Cancelado'?'#6c757d':'#173a7a';
+         const cal=new FullCalendar.Calendar(document.getElementById('calendar'),{locale:'es',initialView:'dayGridMonth',firstDay:1,height:'auto',displayEventTime:false,dayMaxEvents:4,headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,timeGridWeek,listWeek'},buttonText:{today:'Hoy',month:'Mes',week:'Semana',list:'Lista'},datesSet:()=>cargar(),eventClick:i=>mostrar(i.event.extendedProps),eventDidMount:i=>{const p=i.event.extendedProps;i.el.title=`${p.cliente} · ${p.destino} · ${p.estatus}`}});
+         async function cargar(){const ini=cal.view.activeStart,fin=new Date(cal.view.activeEnd);fin.setDate(fin.getDate()-1);const qs=new URLSearchParams({desde:ini.toISOString().slice(0,10),hasta:fin.toISOString().slice(0,10)});if(q.value.trim())qs.set('q',q.value.trim());if(estatus.value)qs.set('estatus',estatus.value);try{const r=await fetch('@Url.Action("EventosCalendario", "LogisticaEmbarques")?'+qs.toString());const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.mensaje||'No fue posible cargar el calendario.');raw=d.eventos||[];cargarClientes();pintar()}catch(e){raw=[];cal.removeAllEvents();alert(e.message)}}
+         function cargarClientes(){const actual=cliente.value;const items=[...new Map(raw.filter(x=>x.clienteId>0).map(x=>[x.clienteId,x.cliente])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'es'));cliente.innerHTML='<option value="">Todos los clientes</option>'+items.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');if(items.some(x=>String(x[0])===actual))cliente.value=actual}
+         function pintar(){const cid=cliente.value;const v=raw.filter(x=>!cid||String(x.clienteId)===cid);cal.removeAllEvents();cal.addEventSource(v.map(x=>({id:x.id,title:`${x.hora?x.hora+' ':''}${x.cliente}`,start:x.fecha,allDay:true,backgroundColor:color(x),borderColor:color(x),textColor:'#fff',extendedProps:x})));document.getElementById('total').textContent=v.length;document.getElementById('expeditadas').textContent=v.filter(x=>x.expeditado).length;document.getElementById('enRuta').textContent=v.filter(x=>x.estatus==='En ruta').length;document.getElementById('entregadas').textContent=v.filter(x=>x.estatus==='Entregado').length}
+         function mostrar(p){document.getElementById('mTitulo').textContent=p.cliente||'Entrega';document.getElementById('mCliente').textContent=p.cliente||'-';document.getElementById('mEstatus').textContent=p.expeditado?'Expeditado':(p.estatus||'-');document.getElementById('mFecha').textContent=p.fecha||'-';document.getElementById('mHora').textContent=p.hora||'Sin hora';document.getElementById('mDestino').textContent=p.destino||'-';document.getElementById('mFolio').textContent=p.folio||'-';document.getElementById('mPartidas').textContent=Number(p.totalPartidas||0).toLocaleString('es-MX');document.getElementById('mPiezas').textContent=Number(p.totalPiezas||0).toLocaleString('es-MX');const a=document.getElementById('mAlerta');a.classList.toggle('d-none',!p.expeditado&&!p.incidencia);a.textContent=p.expeditado?'Entrega expeditada: la fecha comprometida ya fue superada.':p.incidencia?'El embarque tiene una incidencia activa.':'';document.getElementById('mAbrir').href=p.url||'#';bootstrap.Modal.getOrCreateInstance(document.getElementById('eventoModal')).show()}
+         document.getElementById('btnAplicar').addEventListener('click',cargar);document.getElementById('btnLimpiar').addEventListener('click',()=>{q.value='';estatus.value='';cliente.value='';cargar()});cliente.addEventListener('change',pintar);q.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();cargar()}});cal.render();
         })();
     </script>
 }

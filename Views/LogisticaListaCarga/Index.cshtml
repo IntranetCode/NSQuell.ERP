@@ -1,0 +1,1064 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaListaCargaIndexVm
+@using System.Globalization
+@{
+    Layout = null;
+    ViewData["Title"] = "Lista de carga semanal";
+    var semanaAnteriorFecha = Model.FechaInicio.AddDays(-7);
+    var semanaSiguienteFecha = Model.FechaInicio.AddDays(7);
+    var anioAnterior = ISOWeek.GetYear(semanaAnteriorFecha);
+    var numeroSemanaAnterior = ISOWeek.GetWeekOfYear(semanaAnteriorFecha);
+    var anioSiguiente = ISOWeek.GetYear(semanaSiguienteFecha);
+    var numeroSemanaSiguiente = ISOWeek.GetWeekOfYear(semanaSiguienteFecha);
+    var totalGeneral = Model.TotalSemana + Model.TotalAtraso;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        :root {
+            --navy: #172033;
+            --blue: #173a7a;
+            --blue2: #233f80;
+            --line: #dce5ef;
+            --bg: #f3f6f9;
+            --soft: #fbfcfd;
+            --text: #1f2b3d;
+            --muted: #6c7889;
+            --danger: #b42318;
+            --danger-bg: #fff1f0;
+            --warn: #9a6700;
+            --warn-bg: #fff8e6;
+            --ok: #137a4b;
+            --ok-bg: #ecfdf3;
+            --shadow: 0 8px 24px rgba(23,32,51,.08)
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html, body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Segoe UI,Arial,sans-serif;
+            font-size: 14px
+        }
+
+        button, input, select, textarea {
+            font: inherit
+        }
+
+        .page {
+            max-width: 1780px;
+            margin: 0 auto;
+            padding: 16px
+        }
+
+        .topbar {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 12px
+        }
+
+        .title-wrap h1 {
+            margin: 0;
+            color: var(--navy);
+            font-size: 24px;
+            line-height: 1.15
+        }
+
+        .title-wrap p {
+            margin: 5px 0 0;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        .week-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end
+        }
+
+        .btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--navy);
+            padding: 7px 11px;
+            border-radius: 7px;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 34px
+        }
+
+            .btn:hover {
+                border-color: #aabbd0;
+                background: #f8fafc
+            }
+
+        .btn-primary {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: #fff
+        }
+
+        .btn-danger {
+            background: #fff;
+            border-color: #e9b3ad;
+            color: var(--danger)
+        }
+
+        .btn-sm {
+            padding: 5px 8px;
+            min-height: 29px;
+            font-size: 12px
+        }
+
+        .week-box {
+            background: #fff;
+            border: 1px solid var(--line);
+            padding: 7px 12px;
+            border-radius: 7px;
+            text-align: center;
+            min-width: 132px
+        }
+
+            .week-box strong {
+                display: block;
+                color: var(--blue);
+                font-size: 15px
+            }
+
+            .week-box span {
+                font-size: 11px;
+                color: var(--muted)
+            }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 11px;
+            white-space: nowrap
+        }
+
+        .status-open {
+            background: var(--ok-bg);
+            color: var(--ok)
+        }
+
+        .status-closed {
+            background: #eef1f4;
+            color: #576271
+        }
+
+        .status-exp {
+            background: var(--danger-bg);
+            color: var(--danger)
+        }
+
+        .status-prog {
+            background: #edf3ff;
+            color: var(--blue)
+        }
+
+        .notice {
+            padding: 10px 12px;
+            border-radius: 7px;
+            margin: 0 0 10px;
+            border: 1px solid
+        }
+
+        .notice-ok {
+            background: var(--ok-bg);
+            border-color: #b7ebd0;
+            color: #12633f
+        }
+
+        .notice-error {
+            background: var(--danger-bg);
+            border-color: #f3c3be;
+            color: #8f1d14
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(7,minmax(105px,1fr));
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 9px;
+            overflow: hidden;
+            margin-bottom: 10px
+        }
+
+        .summary-item {
+            padding: 9px 12px;
+            border-right: 1px solid var(--line);
+            min-width: 0
+        }
+
+            .summary-item:last-child {
+                border-right: 0
+            }
+
+            .summary-item span {
+                display: block;
+                color: var(--muted);
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: .05em
+            }
+
+            .summary-item strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--navy);
+                font-size: 18px;
+                white-space: nowrap
+            }
+
+            .summary-item.danger strong {
+                color: var(--danger)
+            }
+
+        .toolbar {
+            display: flex;
+            align-items: end;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            padding: 9px 10px;
+            margin-bottom: 10px
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 3px
+        }
+
+            .field label {
+                font-size: 10px;
+                text-transform: uppercase;
+                color: var(--muted);
+                font-weight: 700
+            }
+
+            .field input, .field select, .field textarea {
+                border: 1px solid #cfd9e5;
+                border-radius: 6px;
+                background: #fff;
+                padding: 7px 8px;
+                outline: none;
+                color: var(--text)
+            }
+
+                .field input:focus, .field select:focus, .field textarea:focus {
+                    border-color: #7694c4;
+                    box-shadow: 0 0 0 2px rgba(35,63,128,.08)
+                }
+
+        .field-search {
+            flex: 1;
+            min-width: 220px
+        }
+
+        .field-client {
+            min-width: 220px
+        }
+
+        .field-critical {
+            min-width: 145px
+        }
+
+        .week-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 6px;
+            align-items: center
+        }
+
+        .section {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            overflow: hidden;
+            margin-bottom: 12px
+        }
+
+        .section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 9px 11px;
+            border-bottom: 1px solid var(--line);
+            background: var(--soft)
+        }
+
+            .section-head h2 {
+                font-size: 14px;
+                color: var(--navy);
+                margin: 0
+            }
+
+            .section-head small {
+                color: var(--muted)
+            }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto
+        }
+
+        .matrix {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            min-width: 1280px
+        }
+
+            .matrix th {
+                background: #eef3f8;
+                color: #314158;
+                border-right: 1px solid var(--line);
+                border-bottom: 1px solid var(--line);
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: .02em;
+                padding: 6px 5px;
+                text-align: center;
+                vertical-align: middle
+            }
+
+            .matrix td {
+                border-right: 1px solid #edf1f5;
+                border-bottom: 1px solid #e8edf3;
+                padding: 5px 5px;
+                vertical-align: middle;
+                text-align: center;
+                font-size: 12px
+            }
+
+                .matrix th:last-child, .matrix td:last-child {
+                    border-right: 0
+                }
+
+            .matrix tbody tr:hover {
+                background: #f8fbff
+            }
+
+            .matrix tbody tr.row-exp {
+                background: #fff8f7
+            }
+
+                .matrix tbody tr.row-exp:hover {
+                    background: #fff1ef
+                }
+
+            .matrix .left {
+                text-align: left
+            }
+
+            .matrix .num {
+                font-variant-numeric: tabular-nums
+            }
+
+            .matrix .strong {
+                font-weight: 700;
+                color: var(--navy)
+            }
+
+            .matrix .late {
+                color: var(--danger);
+                font-weight: 800;
+                background: #fff0ee
+            }
+
+            .matrix .sent {
+                color: var(--ok);
+                font-weight: 800
+            }
+
+            .matrix .muted {
+                color: #a2acb9
+            }
+
+        .c-cliente {
+            width: 150px
+        }
+
+        .c-ref {
+            width: 110px
+        }
+
+        .c-desc {
+            width: 210px
+        }
+
+        .c-total {
+            width: 72px
+        }
+
+        .c-atraso {
+            width: 68px
+        }
+
+        .c-dia {
+            width: 58px
+        }
+
+        .c-ubi {
+            width: 180px
+        }
+
+        .c-enviado {
+            width: 72px
+        }
+
+        .c-action {
+            width: 58px
+        }
+
+        .client {
+            font-weight: 700;
+            color: #24334a
+        }
+
+        .reference {
+            font-family: Consolas,monospace;
+            font-size: 11px
+        }
+
+        .designation {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block
+        }
+
+        .location {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            align-items: flex-start
+        }
+
+            .location strong {
+                font-size: 10px;
+                color: #33445d;
+                white-space: normal;
+                text-align: left
+            }
+
+            .location small {
+                font-size: 9px;
+                color: var(--muted);
+                line-height: 1.2;
+                text-align: left
+            }
+
+        .progress {
+            height: 3px;
+            background: #e9eef4;
+            border-radius: 999px;
+            overflow: hidden;
+            margin-top: 3px
+        }
+
+            .progress > span {
+                display: block;
+                height: 100%;
+                background: #3d6db4
+            }
+
+        .empty {
+            padding: 28px;
+            text-align: center;
+            color: var(--muted)
+        }
+
+        .agenda {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px
+        }
+
+            .agenda th {
+                background: #eef3f8;
+                color: #314158;
+                font-size: 10px;
+                text-transform: uppercase;
+                padding: 7px 8px;
+                border-bottom: 1px solid var(--line);
+                text-align: left
+            }
+
+            .agenda td {
+                padding: 7px 8px;
+                border-bottom: 1px solid #edf1f5;
+                font-size: 12px
+            }
+
+            .agenda tbody tr:hover {
+                background: #f8fbff
+            }
+
+            .agenda a {
+                color: var(--blue);
+                text-decoration: none;
+                font-weight: 700
+            }
+
+                .agenda a:hover {
+                    text-decoration: underline
+                }
+
+        .obs-bar {
+            display: flex;
+            gap: 8px;
+            align-items: end
+        }
+
+            .obs-bar .field {
+                flex: 1
+            }
+
+            .obs-bar textarea {
+                resize: vertical;
+                min-height: 34px;
+                max-height: 100px
+            }
+
+        .dialog-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(12,19,31,.48);
+            z-index: 1000;
+            padding: 20px;
+            align-items: center;
+            justify-content: center
+        }
+
+            .dialog-backdrop.open {
+                display: flex
+            }
+
+        .dialog {
+            width: min(560px,100%);
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 18px 50px rgba(0,0,0,.22);
+            overflow: hidden
+        }
+
+        .dialog-head {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between
+        }
+
+            .dialog-head h3 {
+                margin: 0;
+                color: var(--navy);
+                font-size: 16px
+            }
+
+        .dialog-body {
+            padding: 14px
+        }
+
+        .dialog-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px
+        }
+
+            .dialog-grid .full {
+                grid-column: 1/-1
+            }
+
+        .dialog-foot {
+            padding: 10px 14px;
+            border-top: 1px solid var(--line);
+            display: flex;
+            justify-content: flex-end;
+            gap: 7px
+        }
+
+        .x {
+            border: 0;
+            background: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #6c7889
+        }
+
+        .legend {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 10px;
+            color: var(--muted)
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 3px
+        }
+
+        .dot-exp {
+            background: #d92d20
+        }
+
+        .dot-prog {
+            background: #2f65b0
+        }
+
+        .state-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap
+        }
+
+        @@media(max-width:1150px) {
+            .summary {
+                grid-template-columns: repeat(4,1fr)
+            }
+
+            .summary-item:nth-child(4) {
+                border-right: 0
+            }
+
+            .week-actions {
+                margin-left: 0
+            }
+
+            .topbar {
+                flex-direction: column
+            }
+
+            .week-nav {
+                justify-content: flex-start
+            }
+        }
+
+        @@media(max-width:700px) {
+            .page {
+                padding: 10px
+            }
+
+            .summary {
+                grid-template-columns: repeat(2,1fr)
+            }
+
+            .summary-item:nth-child(even) {
+                border-right: 0
+            }
+
+            .toolbar {
+                align-items: stretch
+            }
+
+            .field, .field-client, .field-critical, .field-search {
+                width: 100%;
+                min-width: 0
+            }
+
+            .week-actions {
+                width: 100%
+            }
+
+            .obs-bar {
+                flex-direction: column;
+                align-items: stretch
+            }
+
+            .dialog-grid {
+                grid-template-columns: 1fr
+            }
+
+                .dialog-grid .full {
+                    grid-column: auto
+                }
+
+            .title-wrap h1 {
+                font-size: 21px
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="topbar">
+            <div class="title-wrap">
+                <h1>Lista de carga semanal</h1>
+                <p>Matriz operativa de entregas por cliente, ubicación de material y salidas de Logística.</p>
+            </div>
+            <div class="week-nav">
+                <a class="btn" asp-controller="LogisticaListaCarga" asp-action="Index" asp-route-anio="@anioAnterior" asp-route-semana="@numeroSemanaAnterior">‹ Semana anterior</a>
+                <div class="week-box"><strong>@Model.SemanaTexto</strong><span>@Model.RangoTexto</span></div>
+                <a class="btn" asp-controller="LogisticaListaCarga" asp-action="Index" asp-route-anio="@anioSiguiente" asp-route-semana="@numeroSemanaSiguiente">Semana siguiente ›</a>
+            </div>
+        </div>
+
+        @if (TempData["LogisticaOk"] is string ok && !string.IsNullOrWhiteSpace(ok))
+        {
+            <div class="notice notice-ok">@ok</div>
+        }
+        @if (TempData["LogisticaError"] is string error && !string.IsNullOrWhiteSpace(error))
+        {
+            <div class="notice notice-error">@error</div>
+        }
+        @if (ViewBag.ErrorConfiguracion is string errorConfiguracion && !string.IsNullOrWhiteSpace(errorConfiguracion))
+        {
+            <div class="notice notice-error">@errorConfiguracion</div>
+        }
+
+        <div class="summary">
+            <div class="summary-item"><span>Clientes</span><strong>@Model.TotalClientes</strong></div>
+            <div class="summary-item"><span>Partidas</span><strong>@Model.TotalPartidas</strong></div>
+            <div class="summary-item"><span>Total @Model.SemanaTexto</span><strong>@Model.TotalSemana.ToString("N0")</strong></div>
+            <div class="summary-item danger"><span>Atraso</span><strong>@Model.TotalAtraso.ToString("N0")</strong></div>
+            <div class="summary-item"><span>Total requerido</span><strong>@totalGeneral.ToString("N0")</strong></div>
+            <div class="summary-item"><span>Enviado</span><strong>@Model.TotalEnviado.ToString("N0")</strong></div>
+            <div class="summary-item danger"><span>Pendiente</span><strong>@Model.TotalPendiente.ToString("N0")</strong></div>
+        </div>
+
+        <form method="get" asp-controller="LogisticaListaCarga" asp-action="Index" class="toolbar">
+            <input type="hidden" name="anio" value="@Model.Anio" />
+            <input type="hidden" name="semana" value="@Model.NumeroSemana" />
+            <div class="field field-search">
+                <label>Buscar</label>
+                <input type="text" name="q" value="@Model.Busqueda" placeholder="Cliente, referencia, designación u OF" />
+            </div>
+            <div class="field field-client">
+                <label>Cliente</label>
+                <select name="clienteId">
+                    <option value="">Todos los clientes</option>
+                    @foreach (var cliente in Model.Clientes)
+                    {
+                        if (Model.ClienteID == cliente.ClienteID)
+                        {
+                            <option value="@cliente.ClienteID" selected>@cliente.Cliente</option>
+                        }
+                        else
+                        {
+                            <option value="@cliente.ClienteID">@cliente.Cliente</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="field field-critical">
+                <label>Criticidad</label>
+                <select name="criticidad">
+                    <option value="">Todos</option>
+                    @if (Model.Criticidad == "Programado")
+                    {
+                        <option value="Programado" selected>Programado</option>
+                    }
+                    else
+                    {
+                        <option value="Programado">Programado</option>
+                    }
+                    @if (Model.Criticidad == "Expeditado")
+                    {
+                        <option value="Expeditado" selected>Expeditado</option>
+                    }
+                    else
+                    {
+                        <option value="Expeditado">Expeditado</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-primary" type="submit">Aplicar</button>
+            <a class="btn" asp-controller="LogisticaListaCarga" asp-action="Index" asp-route-anio="@Model.Anio" asp-route-semana="@Model.NumeroSemana">Limpiar</a>
+            <div class="week-actions">
+                <span class="status @(Model.SemanaAbierta ? "status-open" : "status-closed")">@Model.EstatusSemana</span>
+            </div>
+        </form>
+
+        @if (Model.ListaCargaSemanaID.HasValue)
+        {
+            <div class="section">
+                <div class="section-head">
+                    <div>
+                        <h2>Control de semana</h2>
+                        <small>Observaciones generales y apertura/cierre operativo.</small>
+                    </div>
+                    <div class="state-actions">
+                        <span class="status @(Model.SemanaAbierta ? "status-open" : "status-closed")">@Model.EstatusSemana</span>
+                        <form method="post" asp-controller="LogisticaListaCarga" asp-action="CambiarEstadoSemana" style="margin:0">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="listaCargaSemanaId" value="@Model.ListaCargaSemanaID" />
+                            <input type="hidden" name="estatus" value="@(Model.SemanaAbierta ? "Cerrada" : "Abierta")" />
+                            <button type="submit" class="btn btn-sm @(Model.SemanaAbierta ? "btn-danger" : "btn-primary")">@(Model.SemanaAbierta ? "Cerrar semana" : "Reabrir semana")</button>
+                        </form>
+                    </div>
+                </div>
+                <div style="padding:9px 10px">
+                    <form method="post" asp-controller="LogisticaListaCarga" asp-action="GuardarObservacionesSemana" class="obs-bar">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="listaCargaSemanaId" value="@Model.ListaCargaSemanaID" />
+                        <div class="field">
+                            <label>Observaciones de la semana</label>
+                            <textarea name="observaciones" maxlength="1000" placeholder="Comentarios operativos generales...">@Model.ObservacionesSemana</textarea>
+                        </div>
+                        <button type="submit" class="btn">Guardar observación</button>
+                    </form>
+                </div>
+            </div>
+        }
+
+        <div class="section">
+            <div class="section-head">
+                <div>
+                    <h2>Matriz de carga · @Model.SemanaTexto</h2>
+                    <small>Programación semanal basada en las entregas pendientes de Planeación.</small>
+                </div>
+                <div class="legend">
+                    <span><i class="dot dot-exp"></i>Expeditado</span>
+                    <span><i class="dot dot-prog"></i>Programado</span>
+                </div>
+            </div>
+            @if (Model.Filas.Count == 0)
+            {
+                <div class="empty">No hay entregas pendientes para los criterios seleccionados en esta semana.</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="matrix">
+                        <thead>
+                            <tr>
+                                <th class="c-cliente">Cliente</th>
+                                <th class="c-ref">Referencia</th>
+                                <th class="c-desc">Designación</th>
+                                <th class="c-total">Total @Model.SemanaTexto</th>
+                                <th class="c-atraso">Atraso</th>
+                                <th class="c-dia">Lun<br /><small>@Model.FechaInicio.ToString("dd/MM")</small></th>
+                                <th class="c-dia">Mar<br /><small>@Model.FechaInicio.AddDays(1).ToString("dd/MM")</small></th>
+                                <th class="c-dia">Mié<br /><small>@Model.FechaInicio.AddDays(2).ToString("dd/MM")</small></th>
+                                <th class="c-dia">Jue<br /><small>@Model.FechaInicio.AddDays(3).ToString("dd/MM")</small></th>
+                                <th class="c-dia">Vie<br /><small>@Model.FechaInicio.AddDays(4).ToString("dd/MM")</small></th>
+                                <th class="c-dia">Sáb<br /><small>@Model.FechaInicio.AddDays(5).ToString("dd/MM")</small></th>
+                                <th class="c-ubi">Ubicación</th>
+                                <th class="c-total">Total</th>
+                                <th class="c-enviado">Enviado</th>
+                                <th class="c-action"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var fila in Model.Filas)
+                            {
+                                var totalRequerido = fila.TotalSemana + fila.Atraso;
+                                var porcentajeCss = fila.PorcentajeEnviado.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+                                <tr class="@(fila.EsExpeditado ? "row-exp" : "")">
+                                    <td class="left"><div class="client">@fila.Cliente</div><span class="status @(fila.EsExpeditado ? "status-exp" : "status-prog")">@fila.Criticidad</span></td>
+                                    <td class="left"><span class="reference">@fila.Referencia</span></td>
+                                    <td class="left"><span class="designation" title="@fila.Designacion">@fila.Designacion</span></td>
+                                    <td class="num strong">@fila.TotalSemana.ToString("N0")</td>
+                                    <td class="num @(fila.Atraso > 0 ? "late" : "muted")">@(fila.Atraso > 0 ? fila.Atraso.ToString("N0") : "-")</td>
+                                    <td class="num">@(fila.Lunes > 0 ? fila.Lunes.ToString("N0") : "-")</td>
+                                    <td class="num">@(fila.Martes > 0 ? fila.Martes.ToString("N0") : "-")</td>
+                                    <td class="num">@(fila.Miercoles > 0 ? fila.Miercoles.ToString("N0") : "-")</td>
+                                    <td class="num">@(fila.Jueves > 0 ? fila.Jueves.ToString("N0") : "-")</td>
+                                    <td class="num">@(fila.Viernes > 0 ? fila.Viernes.ToString("N0") : "-")</td>
+                                    <td class="num">@(fila.Sabado > 0 ? fila.Sabado.ToString("N0") : "-")</td>
+                                    <td class="left">
+                                        <div class="location">
+                                            <strong>@fila.UbicacionTexto</strong>
+                                            @if (fila.TieneMaterialLocalizado)
+                                            {
+                                                <small>
+                                                    @if (fila.PiezasAlmacen > 0)
+                                                    {
+                                                        <span>ALM @fila.PiezasAlmacen.ToString("N0")</span>
+                                                    }
+                                                    @if (fila.PiezasProduccion > 0)
+                                                    {
+                                                        <span> · PROD @fila.PiezasProduccion.ToString("N0")</span>
+                                                    }
+                                                    @if (fila.PiezasGP12 > 0)
+                                                    {
+                                                        <span> · GP12 @fila.PiezasGP12.ToString("N0")</span>
+                                                    }
+                                                </small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="num strong">@totalRequerido.ToString("N0")</td>
+                                    <td class="num sent">
+                                        @fila.Enviado.ToString("N0")
+                                        <div class="progress" title="@fila.PorcentajeEnviado.ToString("N2")% enviado"><span style="width:@porcentajeCss"></span></div>
+                                    </td>
+                                    <td>
+                                        @if (Model.SemanaAbierta && Model.ListaCargaSemanaID.HasValue && fila.ClienteID.HasValue && fila.ParteID.HasValue)
+                                        {
+                                            <button type="button" class="btn btn-sm js-ajuste"
+                                                    data-cliente-id="@fila.ClienteID"
+                                                    data-parte-id="@fila.ParteID"
+                                                    data-cliente="@fila.Cliente"
+                                                    data-referencia="@fila.Referencia"
+                                                    data-ubicacion="@fila.Ubicacion"
+                                                    data-atraso="@fila.Atraso"
+                                                    data-observaciones="@fila.Observaciones">
+                                                Ajustar
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="section">
+            <div class="section-head">
+                <div>
+                    <h2>Salidas de la semana</h2>
+                    <small>Equivalente operativo de INPUTDATOS: viajes programados y realizados.</small>
+                </div>
+                <span class="status status-prog">@Model.TotalSalidas salida(s)</span>
+            </div>
+            @if (Model.Salidas.Count == 0)
+            {
+                <div class="empty">No hay viajes registrados para esta semana con los criterios seleccionados.</div>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="agenda">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Lugar de envío</th>
+                                <th>Chofer</th>
+                                <th>Hora salida</th>
+                                <th>Hora regreso</th>
+                                <th>Tipo de salida</th>
+                                <th>Criticidad</th>
+                                <th>Unidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var salida in Model.Salidas)
+                            {
+                                <tr>
+                                    <td>@salida.Fecha.ToString("dd/MM/yyyy")</td>
+                                    <td><a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@salida.ViajeID" title="Abrir viaje @salida.Folio">@salida.LugarEnvio</a></td>
+                                    <td>@(string.IsNullOrWhiteSpace(salida.Chofer) ? "-" : salida.Chofer)</td>
+                                    <td>@salida.HoraSalidaTexto</td>
+                                    <td>@salida.HoraRegresoTexto</td>
+                                    <td>@(string.IsNullOrWhiteSpace(salida.TipoSalida) ? "-" : salida.TipoSalida)</td>
+                                    <td><span class="status @(salida.EsExpeditada ? "status-exp" : "status-prog")">@salida.Criticidad</span></td>
+                                    <td>@(string.IsNullOrWhiteSpace(salida.Unidad) ? "-" : salida.Unidad)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (Model.ListaCargaSemanaID.HasValue)
+    {
+        <div id="ajusteBackdrop" class="dialog-backdrop" aria-hidden="true">
+            <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ajusteTitulo">
+                <form method="post" asp-controller="LogisticaListaCarga" asp-action="GuardarAjuste">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
+                    <input type="hidden" name="ClienteID" id="ajClienteID" />
+                    <input type="hidden" name="ParteID" id="ajParteID" />
+                    <input type="hidden" name="anio" value="@Model.Anio" />
+                    <input type="hidden" name="semana" value="@Model.NumeroSemana" />
+                    <div class="dialog-head">
+                        <div><h3 id="ajusteTitulo">Ajuste operativo</h3><small id="ajusteSubtitulo"></small></div>
+                        <button type="button" class="x js-cerrar" aria-label="Cerrar">×</button>
+                    </div>
+                    <div class="dialog-body">
+                        <div class="dialog-grid">
+                            <div class="field">
+                                <label>Ubicación manual</label>
+                                <input type="text" name="UbicacionManual" id="ajUbicacion" maxlength="100" placeholder="Ej. PRODUCCION Y GP12" />
+                            </div>
+                            <div class="field">
+                                <label>Atraso manual</label>
+                                <input type="number" name="CantidadAtrasoManual" id="ajAtraso" min="0" step="1" />
+                            </div>
+                            <div class="field full">
+                                <label>Observaciones</label>
+                                <textarea name="Observaciones" id="ajObservaciones" maxlength="1000" rows="4" placeholder="Motivo o comentario del ajuste..."></textarea>
+                            </div>
+                        </div>
+                        <p style="margin:10px 0 0;color:var(--muted);font-size:11px">La ubicación manual tiene prioridad sobre la ubicación detectada automáticamente para esta semana.</p>
+                    </div>
+                    <div class="dialog-foot">
+                        <button type="button" class="btn js-cerrar">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar ajuste</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+
+    <script>
+        (function(){
+            const backdrop=document.getElementById('ajusteBackdrop');
+            if(!backdrop)return;
+            const clienteId=document.getElementById('ajClienteID');
+            const parteId=document.getElementById('ajParteID');
+            const ubicacion=document.getElementById('ajUbicacion');
+            const atraso=document.getElementById('ajAtraso');
+            const observaciones=document.getElementById('ajObservaciones');
+            const subtitulo=document.getElementById('ajusteSubtitulo');
+            function abrir(btn){
+                clienteId.value=btn.dataset.clienteId||'';
+                parteId.value=btn.dataset.parteId||'';
+                ubicacion.value=btn.dataset.ubicacion||'';
+                atraso.value=btn.dataset.atraso||'0';
+                observaciones.value=btn.dataset.observaciones||'';
+                subtitulo.textContent=(btn.dataset.cliente||'')+' · '+(btn.dataset.referencia||'');
+                backdrop.classList.add('open');
+                backdrop.setAttribute('aria-hidden','false');
+                setTimeout(()=>ubicacion.focus(),50);
+            }
+            function cerrar(){
+                backdrop.classList.remove('open');
+                backdrop.setAttribute('aria-hidden','true');
+            }
+            document.querySelectorAll('.js-ajuste').forEach(btn=>btn.addEventListener('click',()=>abrir(btn)));
+            document.querySelectorAll('.js-cerrar').forEach(btn=>btn.addEventListener('click',cerrar));
+            backdrop.addEventListener('click',e=>{if(e.target===backdrop)cerrar();});
+            document.addEventListener('keydown',e=>{if(e.key==='Escape')cerrar();});
+        })();
+    </script>
+</body>
+</html>
