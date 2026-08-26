@@ -292,7 +292,7 @@
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="fecha" value="@Model.FechaReferencia.ToString("yyyy-MM-dd")" />
                         <input type="hidden" name="panel" value="planner" />
-                        <button class="btn btn-sm btn-outline-primary fw-bold"
+                        <button class="btn btn-sm btn-primary fw-bold ppv8-suggest-btn"
                                 @(Model.Configurado ? null : "disabled")
                                 title="Completa únicamente horarios sin operador del día seleccionado">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Sugerir operadores del día

@@ -304,3 +304,24 @@ html[data-nsq-theme="dark"] .ppv75-time-ruler{background:#111c2d}
     .ppv7-period-tab{min-width:0}
     .ppv75-job-grid{grid-template-columns:1fr}
 }
+
+/* NSQ_PERSONAL_V8_SUGERIR_COLOR */
+.ppv8-suggest-btn{
+    border-color:#075b9f!important;
+    background:#075b9f!important;
+    color:#fff!important;
+    box-shadow:0 4px 11px rgba(7,91,159,.22)!important;
+}
+.ppv8-suggest-btn i,.ppv8-suggest-btn:hover,.ppv8-suggest-btn:focus{color:#fff!important}
+.ppv8-suggest-btn:hover,.ppv8-suggest-btn:focus{
+    border-color:#064b84!important;
+    background:#064b84!important;
+}
+.ppv8-suggest-btn:disabled{
+    border-color:#cbd8e6!important;
+    background:#e6edf5!important;
+    color:#718096!important;
+    box-shadow:none!important;
+    opacity:1!important;
+}
+.ppv8-suggest-btn:disabled i{color:#718096!important}
