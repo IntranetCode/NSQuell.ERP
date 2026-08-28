@@ -1323,3 +1323,575 @@ html[data-nsq-theme="dark"] .ppv10-scale-explanation{
 }
 
 /* NSQ_PRODUCCION_PERSONAL_V10_COBERTURA_PERIODOS_HEADER_PEOPLE_END */
+/* NSQ_PRODUCCION_PERSONAL_V11_HOY_NAVEGACION_START */
+
+/* El antiguo row superior se elimina de la View. El título ahora comparte
+   la misma franja con Periodo, navegación y selector de fecha. */
+.ppv7-period-shell.ppv11-period-shell{
+    grid-template-columns:minmax(220px,.8fr) auto minmax(330px,1.15fr) auto!important;
+    gap:10px!important;
+    align-items:center!important;
+    padding:9px 11px!important;
+}
+
+.ppv11-module-brand{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+
+.ppv11-module-back{
+    width:32px;
+    height:32px;
+    flex:0 0 32px;
+    display:grid;
+    place-items:center;
+    border:1px solid #c9d9ea;
+    border-radius:9px;
+    background:#f5f9fd;
+    color:#0b5ea8;
+    text-decoration:none;
+    transition:.15s ease;
+}
+.ppv11-module-back:hover{
+    border-color:#83b5df;
+    background:#eaf4fc;
+    color:#084b87;
+}
+.ppv11-module-brand>div{min-width:0}
+.ppv11-module-brand span,
+.ppv11-module-brand strong{display:block}
+.ppv11-module-brand span{
+    margin-bottom:1px;
+    color:#0b5ea8;
+    font-size:.48rem;
+    font-weight:950;
+    letter-spacing:.09em;
+}
+.ppv11-module-brand strong{
+    overflow:hidden;
+    color:#10233d;
+    font-size:.72rem;
+    font-weight:950;
+    line-height:1.08;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+}
+
+.ppv11-period-nav{
+    min-width:0;
+    display:grid;
+    grid-template-columns:34px minmax(245px,1fr) 34px;
+    align-items:center;
+    gap:6px;
+    padding:3px;
+    border:1px solid #d7e2ee;
+    border-radius:12px;
+    background:#f8fbfe;
+}
+.ppv11-period-nav.is-current{
+    border-color:#b4d3ee;
+    background:#f2f8fe;
+}
+.ppv11-period-arrow{
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    border:1px solid #bcd2e8;
+    border-radius:9px;
+    background:#fff;
+    color:#0b5ea8;
+    text-decoration:none;
+    transition:.15s ease;
+}
+.ppv11-period-arrow:hover{
+    border-color:#0b5ea8;
+    background:#eaf4fc;
+    color:#084b87;
+}
+.ppv11-period-display{
+    min-width:0;
+    text-align:center;
+    line-height:1.08;
+}
+.ppv11-period-display>span,
+.ppv11-period-display>strong,
+.ppv11-period-display>small{display:block}
+.ppv11-period-display>span{
+    color:#7b8da3;
+    font-size:.43rem;
+    font-weight:950;
+    letter-spacing:.1em;
+}
+.ppv11-period-display>strong{
+    margin-top:1px;
+    color:#0a3762;
+    font-size:.67rem;
+    font-weight:950;
+    text-transform:capitalize;
+}
+.ppv11-period-display>small{
+    margin-top:1px;
+    color:#7b8da3;
+    font-size:.46rem;
+    font-weight:800;
+}
+.ppv11-current-label{
+    display:inline-flex;
+    align-items:center;
+    margin-right:5px;
+    padding:2px 5px;
+    border-radius:999px;
+    background:#0b5ea8;
+    color:#fff;
+    font-size:.43rem;
+    font-weight:950;
+    line-height:1;
+    vertical-align:1px;
+}
+
+/* ---------------------------------------------------------------
+   HOY EN VISTA POR PERSONA: encabezado y TODA la columna.
+   --------------------------------------------------------------- */
+.ppv7-calendar-day-head.today{
+    position:sticky;
+    background:linear-gradient(180deg,#d9ecff 0%,#edf6ff 100%)!important;
+    color:#084b87!important;
+    box-shadow:inset 0 4px 0 #0b5ea8,inset 1px 0 0 #b9d7f0,inset -1px 0 0 #b9d7f0;
+}
+.ppv7-calendar-day-head.today::after{
+    content:"HOY";
+    display:inline-flex;
+    margin-top:3px;
+    padding:1px 5px;
+    border-radius:999px;
+    background:#0b5ea8;
+    color:#fff;
+    font-size:.42rem;
+    font-weight:950;
+    letter-spacing:.04em;
+}
+.ppv7-calendar-cell.today{
+    background:linear-gradient(180deg,rgba(226,241,255,.62),rgba(245,250,255,.52))!important;
+    box-shadow:inset 1px 0 0 #c6dff4,inset -1px 0 0 #c6dff4;
+}
+
+/* ---------------------------------------------------------------
+   HOY EN PROGRAMACION: Día -> Turno -> OF.
+   --------------------------------------------------------------- */
+.ppv87-day-row.ppv11-today-day .ppv87-day-banner{
+    border-color:#83b8e3!important;
+    background:linear-gradient(90deg,#dcedff 0%,#edf6ff 70%,#f8fbff 100%)!important;
+    box-shadow:0 5px 15px rgba(11,94,168,.12),inset 4px 0 0 #0b5ea8!important;
+}
+.ppv87-day-row.ppv11-today-day .ppv87-day-copy>span,
+.ppv87-day-row.ppv11-today-day .ppv87-day-copy>strong{
+    color:#084b87!important;
+}
+.ppv87-turn-row.ppv11-today-turn .ppv87-turn-card{
+    border-color:#bbd9f1;
+    background:linear-gradient(90deg,#fbfdff,#f3f9ff);
+}
+.ppv3-program-row.ppv11-today-row:not(.ppv931-segment-finished)>td{
+    background:#fbfdff;
+}
+.ppv3-program-row.ppv11-today-row:not(.ppv931-segment-finished)>td:first-child{
+    box-shadow:inset 3px 0 0 #78afe0;
+}
+
+/* ---------------------------------------------------------------
+   HOY EN COBERTURA.
+   --------------------------------------------------------------- */
+.ppv10-support-day-card.ppv11-current-day{
+    border-color:#88bce6!important;
+    box-shadow:0 6px 18px rgba(11,94,168,.11),inset 4px 0 0 #0b5ea8!important;
+}
+.ppv10-support-day-card.ppv11-current-day .ppv10-support-period-head{
+    background:linear-gradient(90deg,#e4f2ff,#f6fbff)!important;
+}
+.ppv10-support-week-card.ppv11-current-week{
+    border-color:#8bbce5!important;
+    box-shadow:0 5px 14px rgba(11,94,168,.10)!important;
+}
+.ppv10-support-week-card.ppv11-current-week>summary{
+    background:linear-gradient(90deg,#e5f2ff,#f7fbff)!important;
+}
+.ppv11-current-week-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:4px 7px;
+    border:1px solid #8dbce4;
+    border-radius:999px;
+    background:#dceeff;
+    color:#07518f;
+    font-size:.48rem;
+    font-weight:950;
+    white-space:nowrap;
+}
+
+html[data-nsq-theme="dark"] .ppv11-module-brand strong{color:#e7f0fa}
+html[data-nsq-theme="dark"] .ppv11-module-back,
+html[data-nsq-theme="dark"] .ppv11-period-arrow{
+    border-color:#365778;
+    background:#13243a;
+    color:#acd2f3;
+}
+html[data-nsq-theme="dark"] .ppv11-period-nav{
+    border-color:#304b68;
+    background:#111e31;
+}
+html[data-nsq-theme="dark"] .ppv11-period-display>strong{color:#dbeaf8}
+html[data-nsq-theme="dark"] .ppv7-calendar-day-head.today{
+    background:linear-gradient(180deg,#173a59,#142b43)!important;
+    color:#dceeff!important;
+}
+html[data-nsq-theme="dark"] .ppv7-calendar-cell.today{
+    background:#101f31!important;
+}
+html[data-nsq-theme="dark"] .ppv87-day-row.ppv11-today-day .ppv87-day-banner,
+html[data-nsq-theme="dark"] .ppv10-support-day-card.ppv11-current-day .ppv10-support-period-head,
+html[data-nsq-theme="dark"] .ppv10-support-week-card.ppv11-current-week>summary{
+    background:linear-gradient(90deg,#16334e,#13243a)!important;
+}
+html[data-nsq-theme="dark"] .ppv87-day-row.ppv11-today-day .ppv87-day-copy>span,
+html[data-nsq-theme="dark"] .ppv87-day-row.ppv11-today-day .ppv87-day-copy>strong{
+    color:#dceeff!important;
+}
+
+@media(max-width:1250px){
+    .ppv7-period-shell.ppv11-period-shell{
+        grid-template-columns:minmax(205px,.75fr) minmax(390px,auto) minmax(300px,1fr)!important;
+    }
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+    .ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+        grid-column:1 / -1;
+        justify-self:end;
+    }
+}
+@media(max-width:900px){
+    .ppv7-period-shell.ppv11-period-shell{
+        grid-template-columns:1fr!important;
+    }
+    .ppv11-module-brand,
+    .ppv7-period-tabs,
+    .ppv11-period-nav,
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+    .ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+        width:100%;
+        justify-self:stretch;
+    }
+    .ppv7-period-tabs{overflow:auto}
+}
+
+/* NSQ_PRODUCCION_PERSONAL_V11_HOY_NAVEGACION_END */
+/* NSQ_PRODUCCION_PERSONAL_V11_2_PERIODO_CENTRADO_START */
+
+/*
+   V11.2
+   La lectura visual queda jerarquizada así:
+
+                   [ <   PERIODO MOSTRADO   > ]
+                   [ Día Semana Mes Rango ]
+
+   El nombre del módulo permanece a la izquierda.
+   El selector/acción de fecha permanece a la derecha.
+   La fecha/semana/mes queda visualmente centrada.
+*/
+
+.ppv7-period-shell.ppv11-period-shell{
+    display:grid!important;
+    grid-template-columns:minmax(230px,285px) minmax(520px,1fr) minmax(205px,270px)!important;
+    grid-template-rows:auto auto!important;
+    grid-template-areas:
+        "brand period action"
+        "brand tabs   action"!important;
+    column-gap:14px!important;
+    row-gap:5px!important;
+    align-items:center!important;
+}
+
+/* Título del módulo a la izquierda, centrado verticalmente en ambas filas. */
+.ppv7-period-shell.ppv11-period-shell>.ppv11-module-brand{
+    grid-area:brand!important;
+    align-self:center!important;
+}
+
+/* Fecha / semana / mes / rango centrado en la primera fila. */
+.ppv7-period-shell.ppv11-period-shell>.ppv11-period-nav{
+    grid-area:period!important;
+    width:min(100%,720px)!important;
+    min-width:0!important;
+    justify-self:center!important;
+    align-self:end!important;
+    grid-template-columns:38px minmax(280px,1fr) 38px!important;
+    padding:3px 4px!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell .ppv11-period-arrow{
+    width:38px!important;
+    height:34px!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell .ppv11-period-display{
+    text-align:center!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell .ppv11-period-display>strong{
+    font-size:.76rem!important;
+    line-height:1.12!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell .ppv11-period-display>span{
+    font-size:.44rem!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell .ppv11-period-display>small{
+    font-size:.47rem!important;
+}
+
+/* Día / Semana / Mes / Rango inmediatamente debajo del periodo. */
+.ppv7-period-shell.ppv11-period-shell>.ppv7-period-tabs{
+    grid-area:tabs!important;
+    justify-self:center!important;
+    align-self:start!important;
+    width:max-content!important;
+    max-width:100%!important;
+    margin:0!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell>.ppv7-period-tabs .ppv7-period-tab{
+    min-width:88px!important;
+    justify-content:center!important;
+}
+
+/* Selector Ir o rango permanecen a la derecha ocupando ambas filas. */
+.ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+.ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+    grid-area:action!important;
+    align-self:center!important;
+    justify-self:end!important;
+    margin:0!important;
+}
+
+/* En pantallas medianas damos prioridad al periodo central. */
+@media(max-width:1350px){
+    .ppv7-period-shell.ppv11-period-shell{
+        grid-template-columns:minmax(205px,250px) minmax(440px,1fr)!important;
+        grid-template-areas:
+            "brand period"
+            "brand tabs"
+            "action action"!important;
+    }
+
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+    .ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+        justify-self:end!important;
+        margin-top:2px!important;
+    }
+
+    .ppv7-period-shell.ppv11-period-shell>.ppv11-period-nav{
+        width:min(100%,680px)!important;
+    }
+}
+
+/* Tablet/móvil: orden vertical sin perder la jerarquía. */
+@media(max-width:900px){
+    .ppv7-period-shell.ppv11-period-shell{
+        grid-template-columns:1fr!important;
+        grid-template-areas:
+            "brand"
+            "period"
+            "tabs"
+            "action"!important;
+        row-gap:7px!important;
+    }
+
+    .ppv7-period-shell.ppv11-period-shell>.ppv11-module-brand,
+    .ppv7-period-shell.ppv11-period-shell>.ppv11-period-nav,
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-period-tabs,
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+    .ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+        width:100%!important;
+        max-width:100%!important;
+        justify-self:stretch!important;
+    }
+
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-period-tabs{
+        overflow:auto!important;
+    }
+
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-period-tabs .ppv7-period-tab{
+        min-width:96px!important;
+    }
+}
+
+/* NSQ_PRODUCCION_PERSONAL_V11_2_PERIODO_CENTRADO_END */
+
+/* NSQ_PRODUCCION_PERSONAL_V11_3_PERIODOS_JUNTO_PENDIENTES_CSS_START */
+
+/* ---------------------------------------------------------------
+   V11.3 - la cabecera de periodo vuelve a ser una sola fila.
+   Dia/Semana/Mes/Rango deja de ocupar espacio en esta cabecera.
+   --------------------------------------------------------------- */
+.ppv7-period-shell.ppv11-period-shell{
+    display:grid!important;
+    grid-template-columns:minmax(230px,300px) minmax(420px,1fr) minmax(205px,270px)!important;
+    grid-template-rows:auto!important;
+    grid-template-areas:"brand period action"!important;
+    column-gap:14px!important;
+    row-gap:0!important;
+    align-items:center!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell>.ppv11-module-brand{
+    grid-area:brand!important;
+    align-self:center!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell>.ppv11-period-nav{
+    grid-area:period!important;
+    width:min(100%,720px)!important;
+    justify-self:center!important;
+    align-self:center!important;
+    margin:0!important;
+}
+
+/*
+   Antes de que el JS mueva el selector, no dejamos que genere la segunda
+   linea visual de V11.2. Al moverlo al nuevo host deja de coincidir con
+   este selector y recupera display:flex del estilo normal.
+*/
+.ppv7-period-shell.ppv11-period-shell>.ppv7-period-tabs{
+    display:none!important;
+}
+
+.ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+.ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+    grid-area:action!important;
+    align-self:center!important;
+    justify-self:end!important;
+    margin:0!important;
+}
+
+/* ---------------------------------------------------------------
+   ROW DE NAVEGACION DEL MODULO
+   Izquierda: Programacion / Cobertura / Vista por persona / Pendientes
+   Centro:    Dia / Semana / Mes / Rango
+   --------------------------------------------------------------- */
+.ppv113-tabs-row{
+    position:relative;
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    align-items:center;
+    width:100%;
+    min-width:0;
+    margin:0 0 10px 0;
+    gap:12px;
+}
+
+.ppv113-tabs-row>.ppv3-tabs{
+    grid-column:1;
+    justify-self:start;
+    margin:0!important;
+    min-width:0;
+}
+
+.ppv113-tabs-row>.ppv7-period-tabs{
+    grid-column:2;
+    justify-self:center;
+    display:flex!important;
+    margin:0!important;
+    width:max-content!important;
+    max-width:100%;
+    box-shadow:0 3px 10px rgba(15,59,117,.05);
+}
+
+/* Un poco mas compactos aqui para que realmente se sientan como navegacion. */
+.ppv113-tabs-row>.ppv7-period-tabs .ppv7-period-tab{
+    min-width:86px!important;
+    min-height:32px!important;
+    padding:5px 9px!important;
+}
+
+/* No agregamos un bloque fantasma a la derecha: la tercera columna
+   existe solo para mantener el selector de periodo geometricamente centrado. */
+.ppv113-tabs-row::after{
+    content:"";
+    grid-column:3;
+}
+
+/* ---------------------------------------------------------------
+   RESPONSIVE
+   --------------------------------------------------------------- */
+@media(max-width:1400px){
+    .ppv7-period-shell.ppv11-period-shell{
+        grid-template-columns:minmax(210px,260px) minmax(360px,1fr) minmax(190px,245px)!important;
+    }
+
+    .ppv113-tabs-row{
+        grid-template-columns:auto 1fr;
+    }
+
+    .ppv113-tabs-row>.ppv3-tabs{
+        grid-column:1;
+    }
+
+    .ppv113-tabs-row>.ppv7-period-tabs{
+        grid-column:2;
+        justify-self:center;
+    }
+
+    .ppv113-tabs-row::after{
+        display:none;
+    }
+}
+
+@media(max-width:1050px){
+    .ppv7-period-shell.ppv11-period-shell{
+        grid-template-columns:1fr!important;
+        grid-template-areas:
+            "brand"
+            "period"
+            "action"!important;
+        row-gap:7px!important;
+    }
+
+    .ppv7-period-shell.ppv11-period-shell>.ppv11-module-brand,
+    .ppv7-period-shell.ppv11-period-shell>.ppv11-period-nav,
+    .ppv7-period-shell.ppv11-period-shell>.ppv7-date-go,
+    .ppv7-period-shell.ppv11-period-shell>.ppv10-range-inline{
+        width:100%!important;
+        max-width:100%!important;
+        justify-self:stretch!important;
+    }
+
+    .ppv113-tabs-row{
+        display:flex;
+        align-items:center;
+        flex-wrap:wrap;
+        gap:7px;
+    }
+
+    .ppv113-tabs-row>.ppv3-tabs,
+    .ppv113-tabs-row>.ppv7-period-tabs{
+        width:max-content!important;
+        max-width:100%;
+    }
+}
+
+@media(max-width:700px){
+    .ppv113-tabs-row>.ppv3-tabs,
+    .ppv113-tabs-row>.ppv7-period-tabs{
+        width:100%!important;
+        overflow:auto;
+    }
+
+    .ppv113-tabs-row>.ppv7-period-tabs{
+        justify-content:flex-start;
+    }
+}
+
+/* NSQ_PRODUCCION_PERSONAL_V11_3_PERIODOS_JUNTO_PENDIENTES_CSS_END */

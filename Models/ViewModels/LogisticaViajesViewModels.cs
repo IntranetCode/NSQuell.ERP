@@ -297,6 +297,30 @@ public sealed class LogisticaViajeDetalleVm
     }
 }
 
+// LOGISTICA_VIAJES_CHOFERES_V5
+public sealed class LogisticaChoferesVm
+{
+    public List<LogisticaChoferEstadoVm> Choferes { get; set; } = new();
+    public int Disponibles => Choferes.Count(x => x.Estado == "Disponible");
+    public int EnViaje => Choferes.Count(x => x.Estado == "En viaje");
+    public int Programados => Choferes.Count(x => x.Estado == "Programado");
+}
+
+public sealed class LogisticaChoferEstadoVm
+{
+    public int UsuarioID { get; set; }
+    public string Chofer { get; set; } = string.Empty;
+    public string Estado { get; set; } = "Disponible";
+    public string FuenteActual { get; set; } = string.Empty;
+    public string FolioActual { get; set; } = string.Empty;
+    public string DestinoActual { get; set; } = string.Empty;
+    public DateTime? SalidaActual { get; set; }
+    public string FuenteProxima { get; set; } = string.Empty;
+    public string FolioProximo { get; set; } = string.Empty;
+    public string DestinoProximo { get; set; } = string.Empty;
+    public DateTime? ProximaSalida { get; set; }
+}
+
 public sealed class LogisticaViajeEvidenciaVm
 {
     public int ViajeEvidenciaID { get; set; }

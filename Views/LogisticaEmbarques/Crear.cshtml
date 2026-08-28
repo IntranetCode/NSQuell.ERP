@@ -538,6 +538,351 @@
         }
     }
 
+
+    /* LOGISTICA_PT_SCAN_UI_V2_1 */
+    .lg-pt-scan {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 15px;
+        margin: 0 0 14px;
+        border: 1px solid #cfdced;
+        border-left: 4px solid var(--lg-blue);
+        border-radius: 11px;
+        background: linear-gradient(180deg,#f8fbff,#f3f7fc);
+    }
+
+    .lg-pt-scan__label {
+        display: block;
+        margin-bottom: 5px;
+        color: #40516a;
+        font-size: .75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .lg-pt-scan__input-wrap {
+        position: relative;
+    }
+
+    .lg-pt-scan__input-wrap > i {
+        position: absolute;
+        left: 13px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--lg-blue);
+        font-size: 1rem;
+        pointer-events: none;
+    }
+
+    .lg-pt-scan__input {
+        width: 100%;
+        min-height: 48px;
+        padding: 8px 12px 8px 40px;
+        border: 2px solid #9fb7d9;
+        border-radius: 9px;
+        background: #fff;
+        font-size: 1rem;
+        font-weight: 700;
+        outline: none;
+    }
+
+    .lg-pt-scan__input:focus {
+        border-color: var(--lg-blue);
+        box-shadow: 0 0 0 .2rem rgba(23,58,122,.09);
+    }
+
+    .lg-pt-scan__message {
+        margin-top: 6px;
+        min-height: 20px;
+        color: #53647b;
+        font-size: .77rem;
+        font-weight: 600;
+    }
+
+    .lg-pt-scan__message.ok {
+        color: #17633a;
+    }
+
+    .lg-pt-scan__message.error {
+        color: #b42318;
+    }
+
+    .lg-pt-scan__actions {
+        display: flex;
+        gap: 7px;
+    }
+
+    details.part {
+        border: 1px solid #d6e0eb;
+        border-radius: 11px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(22,42,75,.035);
+    }
+
+    details.part + details.part {
+        margin-top: 10px;
+    }
+
+    details.part > summary.part-head {
+        grid-template-columns: minmax(260px,1.65fr) 95px 120px 130px 145px !important;
+        min-height: 70px;
+        padding: 11px 13px;
+        list-style: none;
+        background: linear-gradient(180deg,#f8fafc,#f3f6fa);
+        cursor: pointer;
+    }
+
+    details.part > summary.part-head::-webkit-details-marker {
+        display: none;
+    }
+
+    details.part > summary.part-head::after {
+        content: "\f078";
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        color: #63758c;
+        justify-self: end;
+    }
+
+    details.part[open] > summary.part-head::after {
+        content: "\f077";
+    }
+
+    details.part > .boxes {
+        padding: 12px 13px 13px;
+    }
+
+    details.part .box-grid {
+        display: flex !important;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    details.part .box {
+        display: grid !important;
+        grid-template-columns: 30px minmax(320px,1.7fr) 125px 155px;
+        gap: 11px;
+        align-items: center !important;
+        min-height: 74px;
+        padding: 9px 11px;
+        border: 1px solid #dce4ed;
+        border-radius: 9px;
+        background: #fbfcfe;
+    }
+
+    details.part .box:hover {
+        border-color: #b8c9dc;
+        background: #f7faff;
+    }
+
+    details.part .box.border-primary {
+        border-color: #7999c7 !important;
+        background: #f1f6fd;
+        box-shadow: inset 3px 0 0 var(--lg-blue);
+    }
+
+    details.part .box.scan-hit {
+        animation: lgScanHit 1.1s ease;
+    }
+
+    @@keyframes lgScanHit {
+        0%,100% { box-shadow: inset 3px 0 0 var(--lg-blue); }
+        45% { box-shadow: inset 3px 0 0 var(--lg-blue), 0 0 0 .28rem rgba(23,58,122,.13); }
+    }
+
+    .lg-release-panel {
+        margin-top: 11px;
+        padding: 10px 11px;
+        border: 1px solid #dce5ef;
+        border-radius: 9px;
+        background: #f8fafc;
+    }
+
+    .lg-release-panel__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .lg-release-panel__head strong {
+        font-size: .82rem;
+    }
+
+    .lg-release-panel__head span {
+        color: #637187;
+        font-size: .72rem;
+    }
+
+    .lg-release-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: .74rem;
+    }
+
+    .lg-release-table th {
+        padding: 5px 7px;
+        border-bottom: 1px solid #d8e1eb;
+        color: #647184;
+        text-align: left;
+        font-size: .66rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .lg-release-table td {
+        padding: 7px;
+        border-bottom: 1px solid #e6ebf1;
+        vertical-align: middle;
+    }
+
+    .lg-release-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .lg-release-table .num {
+        text-align: right;
+        font-weight: 800;
+    }
+
+    .lg-pt-footer-info {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(130px,1fr));
+        gap: 8px;
+        margin-top: 13px;
+    }
+
+    .lg-pt-footer-info > div {
+        padding: 9px 10px;
+        border: 1px solid #dce4ed;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .lg-pt-footer-info span {
+        display: block;
+        color: #68768a;
+        font-size: .68rem;
+    }
+
+    .lg-pt-footer-info strong {
+        color: #26354a;
+        font-size: .88rem;
+    }
+
+    html[data-nsq-theme="dark"] .lg-pt-scan,
+    html[data-nsq-theme="dark"] .lg-release-panel,
+    html[data-nsq-theme="dark"] details.part .box,
+    html[data-nsq-theme="dark"] .lg-pt-footer-info > div {
+        background: #162237;
+        border-color: #2a3a50;
+    }
+
+    html[data-nsq-theme="dark"] .lg-pt-scan__input {
+        background: #0e1828;
+        color: #eef4fb;
+        border-color: #425a78;
+    }
+
+    @@media (max-width: 1050px) {
+        details.part > summary.part-head {
+            grid-template-columns: minmax(220px,1fr) repeat(2,110px) !important;
+        }
+
+        details.part > summary.part-head > *:nth-child(n+4) {
+            display: none;
+        }
+
+        details.part .box {
+            grid-template-columns: 30px minmax(250px,1fr) 110px 145px;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .lg-pt-scan {
+            grid-template-columns: 1fr;
+        }
+
+        .lg-pt-scan__actions {
+            justify-content: stretch;
+        }
+
+        .lg-pt-scan__actions .btn {
+            flex: 1;
+        }
+
+        details.part > summary.part-head {
+            grid-template-columns: 1fr 90px !important;
+        }
+
+        details.part > summary.part-head > *:nth-child(n+3) {
+            display: none;
+        }
+
+        details.part .box {
+            grid-template-columns: 30px 1fr;
+        }
+
+        details.part .box > span:nth-of-type(n+2) {
+            grid-column: 2;
+        }
+
+        .lg-release-table {
+            min-width: 680px;
+        }
+
+        .lg-release-panel {
+            overflow-x: auto;
+        }
+
+        .lg-pt-footer-info {
+            grid-template-columns: repeat(2,1fr);
+        }
+    }
+
+    /* LOGISTICA_PT_DOS_PASOS_CAJAS_COMPLETAS_V3 */
+    details.part .box {
+        grid-template-columns: 34px minmax(280px,1.45fr) minmax(150px,.75fr) minmax(180px,.9fr) 130px !important;
+    }
+    .lg-box-main,.lg-box-meta,.lg-box-qty { min-width:0; }
+    .lg-box-main strong,.lg-box-main span,.lg-box-main small,
+    .lg-box-meta span,.lg-box-meta strong,.lg-box-meta small,
+    .lg-box-qty span,.lg-box-qty strong,.lg-box-qty small { display:block; }
+    .lg-box-main strong { font-size:.84rem; color:#23334a; }
+    .lg-box-main span { margin-top:2px; font-size:.75rem; font-weight:700; }
+    .lg-box-main small,.lg-box-meta small,.lg-box-qty small { margin-top:2px; color:#7a8798; font-size:.67rem; }
+    .lg-box-meta span,.lg-box-qty span { color:#748195; font-size:.66rem; text-transform:uppercase; letter-spacing:.03em; }
+    .lg-box-meta strong { margin-top:2px; font-size:.75rem; color:#34445a; white-space:normal; }
+    .lg-box-qty { text-align:right; }
+    .lg-box-qty strong { margin-top:2px; color:var(--lg-blue); font-size:.92rem; }
+    .lg-step-next {
+        position:sticky; bottom:10px; z-index:20;
+        display:flex; align-items:center; justify-content:space-between; gap:14px;
+        margin-top:14px; padding:12px 14px;
+        border:1px solid #cdd9e8; border-radius:11px;
+        background:rgba(255,255,255,.96); box-shadow:0 10px 28px rgba(20,42,75,.13);
+        backdrop-filter:blur(6px);
+    }
+    .lg-step-next__summary span { display:block; color:#718096; font-size:.68rem; }
+    .lg-step-next__summary strong { display:block; margin-top:2px; color:#1f3555; font-size:.9rem; }
+    .lg-step-next__actions { display:flex; gap:8px; }
+    html[data-nsq-theme="dark"] .lg-step-next { background:rgba(17,27,45,.96); border-color:#30435d; }
+    html[data-nsq-theme="dark"] .lg-box-main strong,
+    html[data-nsq-theme="dark"] .lg-box-meta strong { color:#e7edf6; }
+    @@media(max-width:950px){
+        details.part .box { grid-template-columns:34px 1fr 120px !important; }
+        .lg-box-meta { grid-column:2; }
+        .lg-box-qty { grid-column:3; grid-row:1 / span 3; align-self:center; }
+        .lg-step-next { align-items:stretch; flex-direction:column; }
+        .lg-step-next__actions { width:100%; }
+        .lg-step-next__actions .btn { flex:1; }
+    }
+
 </style>
 <div class="page">
     <div class="head">
@@ -548,7 +893,7 @@
     {
         <div class="alert alert-danger py-2 px-3">@TempData["LogisticaError"]</div>
     }
-    <form asp-controller="LogisticaEmbarques" asp-action="Crear" method="post" id="formCrear" autocomplete="off">
+    <form asp-controller="LogisticaEmbarques" asp-action="PrepararDesdePT" method="post" id="formCrear" autocomplete="off">
         @Html.AntiForgeryToken()
         <div asp-validation-summary="ModelOnly" class="validation-summary-errors mb-2"></div>
         <div class="section">
@@ -568,15 +913,206 @@
                 </div>
                 @if (Model.ClienteID.HasValue)
                 {
-                    <div class="g6 d-flex align-items-end"><div class="client-strip w-100"><div><span>Cliente seleccionado</span><strong>@clienteNombre</strong></div><div><span>Entregas pendientes</span><strong>@Model.Partidas.Count</strong></div><div><span>Partidas seleccionadas</span><strong id="resPartidas">0</strong></div></div></div>
+                    <div class="g6 d-flex align-items-end"><div class="client-strip w-100"><div><span>Cliente seleccionado</span><strong>@clienteNombre</strong></div><div><span>Cajas PT disponibles</span><strong>@Model.CajasPT.Count.ToString("N0")</strong></div><div><span>Piezas PT residuales</span><strong>@Model.CajasPT.Sum(x => (long)x.Disponible).ToString("N0")</strong></div><div><span>Cajas seleccionadas</span><strong id="resCajasPt">0</strong></div></div></div>
                 }
             </div>
         </div>
         @if (Model.ClienteID.HasValue)
         {
+            var cajasIndexadas = Model.CajasPT.Select((caja, index) => new { Caja = caja, Index = index }).ToList();
+            var gruposPt = cajasIndexadas
+                .GroupBy(x => new { x.Caja.ParteID, x.Caja.NumeroParte, x.Caja.Descripcion })
+                .OrderBy(g => g.Min(x => x.Caja.FechaEntrada))
+                .ThenBy(g => g.Key.NumeroParte)
+                .ToList();
+
             <div class="section">
-                <h2 class="section-title">2. Entregas y cajas</h2>
-                <p class="section-sub">Selecciona una o varias entregas. Las cajas se eligen por cada parte/OF y el servidor vuelve a validar que todas sean del mismo cliente.</p>
+                <h2 class="section-title">2. Preparacion de carga desde Producto Terminado</h2>
+                <p class="section-sub">Escanea o selecciona las cajas fisicas de PT del cliente. El ERP conserva la trazabilidad por caja y distribuye automaticamente las piezas entre los Releases pendientes de la misma parte.</p>
+
+                <div class="lg-pt-scan">
+                    <div>
+                        <label class="lg-pt-scan__label" for="logisticaScanInput"><i class="fa-solid fa-barcode me-1"></i> Escaner de cajas PT</label>
+                        <div class="lg-pt-scan__input-wrap">
+                            <i class="fa-solid fa-barcode"></i>
+                            <input id="logisticaScanInput"
+                                   class="lg-pt-scan__input"
+                                   type="text"
+                                   autocomplete="off"
+                                   inputmode="none"
+                                   autofocus
+                                   placeholder="Escanea la etiqueta de la caja y presiona Enter/Tab..." />
+                        </div>
+                        <div id="logisticaScanMessage" class="lg-pt-scan__message">Cursor listo. La lectura seleccionara automaticamente la caja que ya existe en PT.</div>
+                    </div>
+                    <div class="lg-pt-scan__actions">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFocusScan"><i class="fa-solid fa-crosshairs me-1"></i>Enfocar escaner</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="btnClearPtSelection"><i class="fa-solid fa-eraser me-1"></i>Limpiar seleccion</button>
+                    </div>
+                </div>
+
+                @if (Model.CajasPT.Count == 0)
+                {
+                    <div class="alert alert-warning mb-0"><strong>SIN PT DISPONIBLE PARA ESTE CLIENTE</strong><br /><span class="small">No existen cajas liberadas con saldo residual para programar el embarque.</span></div>
+                }
+                else
+                {
+                    <div class="client-strip mb-3">
+                        <div><span>Partes con PT</span><strong>@gruposPt.Count.ToString("N0")</strong></div>
+                        <div><span>Cajas disponibles</span><strong>@Model.CajasPT.Count.ToString("N0")</strong></div>
+                        <div><span>PT residual</span><strong>@Model.CajasPT.Sum(x => (long)x.Disponible).ToString("N0") PZA</strong></div>
+                        <div><span>Seleccionado</span><strong id="resPiezasPt">0 PZA</strong></div>
+                    </div>
+
+                    <div class="parts">
+                        @foreach (var grupo in gruposPt)
+                        {
+                            var piezasDisponibles = grupo.Sum(x => (long)x.Caja.Disponible);
+                            var releasesPendientes = grupo.Max(x => x.Caja.ReleasesPendientes);
+                            var piezasPendientesRelease = grupo.Max(x => x.Caja.PiezasPendientesRelease);
+                            var primeraEntrada = grupo.Min(x => x.Caja.FechaEntrada);
+                            var releasesParte = Model.Partidas
+                                .Where(x => string.Equals(x.NumeroParte, grupo.Key.NumeroParte, StringComparison.OrdinalIgnoreCase) && x.PendienteProgramar > 0)
+                                .OrderBy(x => x.FechaCarga ?? x.FechaEntrega)
+                                .ThenBy(x => x.FechaEntrega)
+                                .ThenBy(x => x.ReleaseDetalleID)
+                                .ToList();
+
+                            <details class="part">
+                                <summary class="part-head" style="grid-template-columns:minmax(230px,1.5fr) 120px 130px 140px 160px;cursor:pointer;">
+                                    <div>
+                                        <div class="muted">PARTE</div>
+                                        <div class="part-main">@grupo.Key.NumeroParte</div>
+                                        <div class="muted">@(string.IsNullOrWhiteSpace(grupo.Key.Descripcion) ? "Sin descripcion" : grupo.Key.Descripcion)</div>
+                                    </div>
+                                    <div><div class="muted">Cajas PT</div><strong>@grupo.Count().ToString("N0")</strong></div>
+                                    <div><div class="muted">PT residual</div><strong>@piezasDisponibles.ToString("N0")</strong></div>
+                                    <div><div class="muted">Releases pendientes</div><strong>@releasesPendientes.ToString("N0")</strong></div>
+                                    <div><div class="muted">Entrada mas antigua</div><strong>@primeraEntrada.ToString("dd/MM/yyyy")</strong></div>
+                                </summary>
+
+                                <div class="boxes" style="display:block;">
+                                    @if (releasesPendientes <= 0 || piezasPendientesRelease <= 0)
+                                    {
+                                        <div class="alert alert-warning py-2 px-3"><strong>SIN RELEASE PENDIENTE</strong> · Estas cajas existen fisicamente en PT, pero no se pueden seleccionar hasta que exista demanda pendiente para esta parte.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="muted mb-2">Pendiente total de Releases: <strong>@piezasPendientesRelease.ToString("N0") PZA</strong>. Cajas ordenadas por entrada, de la mas antigua a la mas reciente.</div>
+                                    }
+
+                                    <div class="box-grid">
+                                        @foreach (var item in grupo.OrderBy(x => x.Caja.FechaEntrada).ThenBy(x => x.Caja.CajaID))
+                                        {
+                                            var i = item.Index;
+                                            var caja = item.Caja;
+                                            <div class="box js-box-pt-row"
+                                                 data-i="@i"
+                                                 data-parte="@caja.ParteID"
+                                                 data-etiqueta="@caja.Etiqueta"
+                                                 data-lote="@caja.Lote"
+                                                 data-caja-id="@caja.CajaID"
+                                                 data-numero-caja="@caja.NumeroCaja"
+                                                 data-numero-parte="@caja.NumeroParte"
+                                                 data-disponible="@caja.Disponible"
+                                                 data-pendiente-parte="@piezasPendientesRelease"
+                                                 style="align-items:center;">
+                                                @if (caja.TieneReleasePendiente)
+                                                {
+                                                    <input asp-for="CajasPT[i].Seleccionada" class="form-check-input js-caja-pt" data-i="@i" data-parte="@caja.ParteID" />
+                                                }
+                                                else
+                                                {
+                                                    <input type="checkbox" class="form-check-input" disabled />
+                                                    <input type="hidden" name="CajasPT[@i].Seleccionada" value="false" />
+                                                }
+                                                <input asp-for="CajasPT[i].CajaID" type="hidden" />
+
+                                                <div class="lg-box-main">
+                                                    <strong>Caja #@caja.NumeroCaja</strong>
+                                                    <span>@(string.IsNullOrWhiteSpace(caja.Lote) ? "Sin lote" : caja.Lote)</span>
+                                                    <small>Etiqueta: @caja.Etiqueta</small>
+                                                </div>
+                                                <div class="lg-box-meta">
+                                                    <span>OF origen</span>
+                                                    <strong>@(string.IsNullOrWhiteSpace(caja.NumeroOF) ? "-" : caja.NumeroOF)</strong>
+                                                    <small>@caja.FechaEntrada.ToString("dd/MM/yyyy HH:mm")</small>
+                                                </div>
+                                                <div class="lg-box-meta">
+                                                    <span>Ubicacion</span>
+                                                    <strong>@(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicar" : caja.Ubicacion)</strong>
+                                                    <small>Calidad @caja.EstadoCalidad</small>
+                                                </div>
+                                                <div class="lg-box-qty">
+                                                    <span>Caja completa</span>
+                                                    <strong>@caja.Disponible.ToString("N0") PZA</strong>
+                                                    <small>Original @caja.CantidadInicial.ToString("N0")</small>
+                                                </div>
+                                                <!-- LOGISTICA_V3_1_SIN_CANTIDAD_MANUAL -->
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="lg-release-panel">
+                                        <div class="lg-release-panel__head">
+                                            <strong><i class="fa-solid fa-calendar-check me-1"></i> Demanda / Releases de esta parte</strong>
+                                            <span>La asignacion de las cajas seleccionadas se realiza en este orden.</span>
+                                        </div>
+
+                                        @if (releasesParte.Count == 0)
+                                        {
+                                            <div class="text-muted small">No existe un Release pendiente para esta parte. Las cajas permanecen visibles para consulta, pero no pueden programarse.</div>
+                                        }
+                                        else
+                                        {
+                                            <table class="lg-release-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Release</th>
+                                                        <th>OF relacionada</th>
+                                                        <th>Fecha carga</th>
+                                                        <th>Fecha requerida</th>
+                                                        <th class="num">Pendiente</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var rel in releasesParte)
+                                                    {
+                                                        <tr>
+                                                            <td><strong>@rel.FolioRelease</strong></td>
+                                                            <td>@(string.IsNullOrWhiteSpace(rel.NumeroOF) ? "-" : rel.NumeroOF)</td>
+                                                            <td>@(rel.FechaCarga?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                                            <td>@rel.FechaEntrega.ToString("dd/MM/yyyy")</td>
+                                                            <td class="num">@rel.PendienteProgramar.ToString("N0") PZA</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </div>
+                                </div>
+                            </details>
+                        }
+                    </div>
+
+                    <div class="lg-pt-footer-info">
+                        <div><span>Demanda pendiente del cliente</span><strong>@Model.Partidas.Sum(x => (long)x.PendienteProgramar).ToString("N0") PZA</strong></div>
+                        <div><span>Cajas fisicas disponibles</span><strong>@Model.CajasPT.Count.ToString("N0")</strong></div>
+                        <div><span>PT residual disponible</span><strong>@Model.CajasPT.Sum(x => (long)x.Disponible).ToString("N0") PZA</strong></div>
+                        <div><span>Salida de Almacen</span><strong>Se confirma en el paso 2</strong></div>
+                    </div>
+                    <div class="alert alert-light border mt-2 mb-0 small">
+                        <strong>Paso 1 de 2:</strong> escanea o selecciona cajas completas. Presiona <strong>Siguiente</strong> para revisar las cajas y capturar los datos del embarque. En el paso 2 puedes guardar solamente la programacion o guardar y confirmar la salida fisica de PT.
+                    </div>
+                }
+            </div>
+        }
+
+        @if (ViewData["MostrarUiReleaseLegacy"] is true && Model.ClienteID.HasValue)
+        {
+            <div class="section">
+                <h2 class="section-title">2. Releases y disponibilidad PT</h2>
+                <p class="section-sub">Selecciona uno o varios Releases. Aquí se muestra el PT residual disponible; la cantidad exacta por caja se reserva después de crear el embarque.</p>
                 @if (Model.Partidas.Count == 0)
                 {
                     <div class="alert alert-light border mb-0">Este cliente no tiene entregas pendientes disponibles.</div>
@@ -590,7 +1126,7 @@
                             <div class="part @(p.Seleccionada ? "selected" : "")" data-part="@i">
                                 <div class="part-head">
                                     <div><input asp-for="Partidas[i].Seleccionada" class="form-check-input js-partida" data-i="@i" /></div>
-                                    <div><div class="part-main">@p.NumeroParte</div><div class="muted">@(string.IsNullOrWhiteSpace(p.Descripcion) ? "Sin descripción" : p.Descripcion)</div></div>
+                                    <div><div class="muted">RELEASE</div><div class="part-main">@(string.IsNullOrWhiteSpace(p.FolioRelease) ? "-" : p.FolioRelease)</div><div class="muted mt-1">Parte</div><div class="part-main">@p.NumeroParte</div><div class="muted">@(string.IsNullOrWhiteSpace(p.Descripcion) ? "Sin descripción" : p.Descripcion)</div></div>
                                     <div>
                                         <div class="part-main">OF @(string.IsNullOrWhiteSpace(p.NumeroOF) ? "-" : p.NumeroOF)</div><div class="muted">
                                             Entrega @p.FechaEntrega.ToString("dd/MM/yyyy") @if(exp){
@@ -607,29 +1143,28 @@
                                 <div class="muted mb-2"><strong>Cajas PT disponibles para esta parte/OF</strong></div>
                                 @if (p.CajasDisponibles.Count == 0)
                                 {
-                                    <div class="text-muted small">No hay cajas PT disponibles. La partida puede programarse y las cajas asignarse posteriormente.</div>
+                                    <div class="alert alert-warning py-2 px-3 mb-0"><strong>SIN CAJAS PT DISPONIBLES</strong><br /><span class="small">El Release puede programarse, pero no podrá completarse la preparación hasta contar con PT liberado.</span></div>
                                 }
                                 else
                                 {
                                     <div class="box-grid">
                                         @foreach (var caja in p.CajasDisponibles)
                                         {
-                                            var marcada = p.CajaIDs.Contains(caja.CajaID);
-                                            <label class="box">
-                                                <input type="checkbox" name="Partidas[@i].CajaIDs" value="@caja.CajaID" class="form-check-input js-caja" data-i="@i" data-piezas="@caja.Disponible" checked="@(marcada ? "checked" : null)" />
-                                                <span><strong>Caja @caja.NumeroCaja · @caja.Disponible.ToString("N0") pzas</strong><span class="muted">@caja.Etiqueta · Lote @(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote) · @(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicación" : caja.Ubicacion)</span></span>
-                                            </label>
+                                            <div class="box">
+                                                <span class="badge bg-light text-dark">PT</span>
+                                                <span><strong>Caja @caja.NumeroCaja · @caja.Disponible.ToString("N0") pzas residuales</strong><span class="muted">@caja.Etiqueta · Lote @(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote) · @(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicación" : caja.Ubicacion)</span></span>
+                                            </div>
                                         }
                                     </div>
                                 }
-                                <div class="status-line"><span>Cajas seleccionadas: <strong class="js-total-cajas" data-i="@i">0</strong></span><span>Piezas seleccionadas: <strong class="js-total-piezas" data-i="@i">0</strong></span></div>
+                                <div class="status-line"><span><strong>Asignación posterior:</strong> en el detalle del embarque indicarás cuántas piezas tomar de cada caja para este Release.</span></div>
                             </div>
                         </div>
                     }
                 </div>
             }
         </div>
-        <div class="section">
+        <div class="section d-none" data-v3-step1-hidden="programacion">
             <h2 class="section-title">3. Programación de entrega</h2>
             <div class="grid">
                 <div class="g3"><label asp-for="TipoOperacion" class="form-label">Operación</label><select asp-for="TipoOperacion" id="TipoOperacion" class="form-select"><option value="Nacional">Nacional</option><option value="Exportacion">Exportación</option></select></div>
@@ -642,7 +1177,7 @@
                 <div class="g3 hidden" id="aduanaWrap"><label asp-for="PasaAduana" class="form-label">¿Pasa por aduana?</label><select asp-for="PasaAduana" class="form-select"><option value="">Selecciona...</option><option value="true">Sí</option><option value="false">No</option></select></div>
             </div>
         </div>
-        <div class="section">
+        <div class="section d-none" data-v3-step1-hidden="transporte">
             <h2 class="section-title">4. Forma de envío</h2>
             <div class="grid">
                 <div class="g4"><label asp-for="FormaEnvio" class="form-label">Forma de envío</label><select asp-for="FormaEnvio" id="FormaEnvio" class="form-select"><option value="Interno">Entrega interna / local</option><option value="Paqueteria">Paquetería / transportista</option></select></div>
@@ -668,8 +1203,19 @@
                 <div class="grid"><div class="g3"><label asp-for="ModalidadEnvio" class="form-label">Modalidad</label><select asp-for="ModalidadEnvio" class="form-select js-paq"><option value="">Selecciona...</option><option value="Terrestre">Terrestre</option><option value="Aereo">Aérea</option><option value="Maritimo">Marítima</option></select></div><div class="g4"><label asp-for="Transportista" class="form-label">Compañía / transportista</label><input asp-for="Transportista" maxlength="200" class="form-control js-paq" /></div><div class="g5"><label asp-for="GuiaReferencia" class="form-label">Guía / referencia</label><input asp-for="GuiaReferencia" maxlength="150" class="form-control" /></div></div>
             </div>
         </div>
-        <div class="section"><h2 class="section-title">5. Observaciones</h2><textarea asp-for="Observaciones" maxlength="1200" rows="3" class="form-control"></textarea></div>
-        <div class="footer-actions"><a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a><button type="submit" class="btn btn-primary" id="btnGuardar"><i class="fa-solid fa-floppy-disk me-1"></i>Crear embarque</button></div>
+        <div class="section d-none" data-v3-step1-hidden="observaciones"><h2 class="section-title">5. Observaciones</h2><textarea asp-for="Observaciones" maxlength="1200" rows="3" class="form-control"></textarea></div>
+        <div class="lg-step-next">
+            <div class="lg-step-next__summary">
+                <span>Paso 1 de 2</span>
+                <strong><span id="v3CajasSeleccionadas">0</span> caja(s) · <span id="v3PiezasSeleccionadas">0</span> PZA</strong>
+            </div>
+            <div class="lg-step-next__actions">
+                <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary" id="btnGuardar" disabled>
+                    Siguiente: datos del embarque <i class="fa-solid fa-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </div>
                 }
     </form>
 </div>
@@ -684,7 +1230,604 @@
          const forma=document.getElementById('FormaEnvio'),tipo=document.getElementById('TipoOperacion'),interno=document.getElementById('internoPanel'),paq=document.getElementById('paqueteriaPanel'),aduana=document.getElementById('aduanaWrap');
          const transporte=()=>{const esP=forma?.value==='Paqueteria';interno?.classList.toggle('hidden',esP);paq?.classList.toggle('hidden',!esP);document.querySelectorAll('.js-interno').forEach(x=>x.required=!esP);document.querySelectorAll('.js-paq').forEach(x=>x.required=esP)};
          const operacion=()=>aduana?.classList.toggle('hidden',tipo?.value!=='Exportacion');forma?.addEventListener('change',transporte);tipo?.addEventListener('change',operacion);transporte();operacion();
-         document.getElementById('formCrear')?.addEventListener('submit',e=>{if(document.querySelectorAll('.js-partida:checked').length===0){e.preventDefault();alert('Selecciona al menos una entrega del cliente.')}});
+         const scanInput=document.getElementById('logisticaScanInput');
+         const scanMessage=document.getElementById('logisticaScanMessage');
+         const btnFocusScan=document.getElementById('btnFocusScan');
+         const btnClearPtSelection=document.getElementById('btnClearPtSelection');
+
+         const normalizarScan=value=>(value||'').trim().toUpperCase();
+
+         const setScanMessage=(text,type='')=>{
+             if(!scanMessage)return;
+             scanMessage.textContent=text;
+             scanMessage.classList.remove('ok','error');
+             if(type)scanMessage.classList.add(type);
+         };
+
+         const actualizarPt=()=>{
+             let cajas=0,piezas=0;
+             const porParte=new Map();
+             document.querySelectorAll('.js-caja-pt').forEach(chk=>{
+                 const i=chk.dataset.i;
+                 const row=document.querySelector(`.js-box-pt-row[data-i="${i}"]`);
+                 if(row)row.classList.toggle('border-primary',chk.checked);
+                 if(chk.checked && row){
+                     cajas++;
+                     const piezasCaja=Number(row.dataset.disponible||0);
+                     piezas+=piezasCaja;
+                     const parte=row.dataset.parte||'';
+                     porParte.set(parte,(porParte.get(parte)||0)+piezasCaja);
+                 }
+             });
+
+             let excede=false;
+             document.querySelectorAll('.js-box-pt-row').forEach(row=>{
+                 const parte=row.dataset.parte||'';
+                 const pendiente=Number(row.dataset.pendienteParte||0);
+                 if((porParte.get(parte)||0)>pendiente)excede=true;
+             });
+
+             const rc=document.getElementById('resCajasPt'),rp=document.getElementById('resPiezasPt');
+             const vc=document.getElementById('v3CajasSeleccionadas'),vp=document.getElementById('v3PiezasSeleccionadas');
+             const btn=document.getElementById('btnGuardar');
+             if(rc)rc.textContent=cajas.toLocaleString('es-MX');
+             if(rp)rp.textContent=piezas.toLocaleString('es-MX')+' PZA';
+             if(vc)vc.textContent=cajas.toLocaleString('es-MX');
+             if(vp)vp.textContent=piezas.toLocaleString('es-MX');
+             if(btn)btn.disabled=(cajas===0||excede);
+             if(excede)setScanMessage('La seleccion completa supera el pendiente de Release de una parte. Deselecciona una caja.','error');
+         };
+
+         const seleccionarPorEscaneo=()=>{
+             if(!scanInput)return;
+
+             const code=normalizarScan(scanInput.value);
+             if(!code){
+                 setScanMessage('El lector no envio contenido.','error');
+                 scanInput.focus();
+                 return;
+             }
+
+             const rows=Array.from(document.querySelectorAll('.js-box-pt-row'));
+             const porEtiqueta=rows.filter(row=>normalizarScan(row.dataset.etiqueta)===code);
+             let candidatos=porEtiqueta;
+
+             if(candidatos.length===0){
+                 candidatos=rows.filter(row=>normalizarScan(row.dataset.lote)===code);
+                 if(candidatos.length>1){
+                     setScanMessage(`El lote coincide con ${candidatos.length} cajas. Escanea la etiqueta completa de la caja.`, 'error');
+                     scanInput.select();
+                     return;
+                 }
+             }
+
+             if(candidatos.length===0){
+                 setScanMessage('La etiqueta no corresponde a una caja PT disponible del cliente seleccionado.', 'error');
+                 scanInput.select();
+                 return;
+             }
+
+             if(candidatos.length>1){
+                 setScanMessage('La etiqueta coincide con mas de una caja. No se selecciono ninguna por seguridad.', 'error');
+                 scanInput.select();
+                 return;
+             }
+
+             const row=candidatos[0];
+             const i=row.dataset.i;
+             const chk=document.querySelector(`.js-caja-pt[data-i="${i}"]`);
+
+             if(!chk){
+                 const parte=row.dataset.numeroParte||'';
+                 setScanMessage(`Caja encontrada (${parte}), pero no tiene Release pendiente y no puede programarse.`, 'error');
+                 row.closest('details')?.setAttribute('open','open');
+                 row.scrollIntoView({behavior:'smooth',block:'center'});
+                 scanInput.value='';
+                 window.setTimeout(()=>scanInput.focus(),150);
+                 return;
+             }
+
+             if(chk.checked){
+                 setScanMessage(`La caja #${row.dataset.numeroCaja||row.dataset.cajaId||''} ya estaba seleccionada.`, 'error');
+                 scanInput.value='';
+                 window.setTimeout(()=>scanInput.focus(),120);
+                 return;
+             }
+
+             chk.checked=true;
+
+             const details=row.closest('details');
+             if(details)details.open=true;
+
+             row.classList.remove('scan-hit');
+             void row.offsetWidth;
+             row.classList.add('scan-hit');
+
+             actualizarPt();
+
+             const parte=row.dataset.numeroParte||'';
+             const piezas=Number(row.dataset.disponible||0);
+             setScanMessage(`Caja #${row.dataset.numeroCaja||row.dataset.cajaId||''} seleccionada completa - ${parte} - ${piezas.toLocaleString('es-MX')} PZA. Escanea la siguiente.`, 'ok');
+
+             scanInput.value='';
+             row.scrollIntoView({behavior:'smooth',block:'center'});
+             window.setTimeout(()=>scanInput.focus(),180);
+         };
+
+         document.querySelectorAll('.js-caja-pt').forEach(x=>x.addEventListener('change',actualizarPt));
+
+         scanInput?.addEventListener('keydown',event=>{
+             if(event.key==='Enter'||event.key==='Tab'){
+                 event.preventDefault();
+                 seleccionarPorEscaneo();
+             }
+         });
+
+         btnFocusScan?.addEventListener('click',()=>{
+             scanInput?.focus();
+             scanInput?.select();
+         });
+
+         btnClearPtSelection?.addEventListener('click',()=>{
+             document.querySelectorAll('.js-caja-pt:checked').forEach(chk=>{chk.checked=false;});
+             actualizarPt();
+             setScanMessage('Seleccion de cajas limpia. Cursor listo para escanear.');
+             scanInput?.focus();
+         });
+
+         actualizarPt();
+
+         window.setTimeout(()=>scanInput?.focus(),120);
+
+         document.getElementById('formCrear')?.addEventListener('submit',e=>{
+             if(document.querySelectorAll('.js-caja-pt:checked').length===0){
+                 e.preventDefault();
+                 alert('Selecciona o escanea al menos una caja de Producto Terminado.');
+                 scanInput?.focus();
+             }
+         });
+        })();
+    </script>
+
+    <script>
+        /* LOGISTICA_V3_2_FLOATING_NEXT */
+        (() => {
+            const form = document.getElementById('formCrear');
+            if (!form || document.getElementById('v32FloatingNext')) return;
+
+            const style = document.createElement('style');
+            style.id = 'v32LogisticaStyles';
+            style.textContent = `
+                .page { padding-bottom: 118px !important; }
+                .lg-step-next { display: none !important; }
+
+                .lg-pt-scan {
+                    position: sticky;
+                    top: 10px;
+                    z-index: 35;
+                    box-shadow: 0 8px 22px rgba(23,58,122,.08);
+                }
+
+                .parts {
+                    gap: 8px !important;
+                }
+
+                details.part {
+                    border: 1px solid #dbe4ee !important;
+                    border-radius: 10px !important;
+                    background: #fff !important;
+                    box-shadow: 0 3px 12px rgba(23,42,72,.035) !important;
+                    overflow: hidden;
+                }
+
+                details.part > summary.part-head {
+                    min-height: 58px !important;
+                    padding: 9px 12px !important;
+                    background: #f8fafc !important;
+                }
+
+                details.part.v32-has-selection {
+                    border-color: #7599cf !important;
+                    box-shadow: inset 4px 0 0 #173a7a, 0 5px 16px rgba(23,58,122,.07) !important;
+                }
+
+                details.part.v32-has-selection > summary.part-head {
+                    background: #f2f7fd !important;
+                }
+
+                details.part .boxes {
+                    padding: 10px 11px 11px !important;
+                    background: #fff !important;
+                }
+
+                details.part .box {
+                    min-height: 64px !important;
+                    padding: 8px 10px !important;
+                    border-radius: 8px !important;
+                    background: #fbfcfe !important;
+                }
+
+                details.part .box.border-primary {
+                    background: #eef5ff !important;
+                    border-color: #6f96ce !important;
+                }
+
+                .lg-release-panel {
+                    margin-top: 8px !important;
+                    padding: 0 !important;
+                    overflow: hidden;
+                    background: #fafbfd !important;
+                }
+
+                .lg-release-panel__head {
+                    min-height: 42px;
+                    margin: 0 !important;
+                    padding: 8px 10px;
+                }
+
+                .lg-release-panel.v32-collapsed > :not(.lg-release-panel__head) {
+                    display: none !important;
+                }
+
+                .v32-release-toggle {
+                    margin-left: auto;
+                    border: 1px solid #d5dfeb;
+                    border-radius: 7px;
+                    padding: 4px 8px;
+                    background: #fff;
+                    color: #40526a;
+                    font-size: .68rem;
+                    font-weight: 700;
+                    cursor: pointer;
+                }
+
+                .v32-release-toggle:hover {
+                    border-color: #9fb5d2;
+                    color: #173a7a;
+                }
+
+                .lg-pt-footer-info {
+                    margin-top: 10px !important;
+                }
+
+                #v32FloatingNext {
+                    position: fixed;
+                    left: 50%;
+                    bottom: 14px;
+                    transform: translateX(-50%);
+                    z-index: 1060;
+                    width: min(1180px, calc(100vw - 36px));
+                    display: grid;
+                    grid-template-columns: minmax(0,1fr) auto;
+                    gap: 16px;
+                    align-items: center;
+                    padding: 11px 13px;
+                    border: 1px solid #c9d7e8;
+                    border-radius: 12px;
+                    background: rgba(255,255,255,.97);
+                    box-shadow: 0 16px 40px rgba(20,42,75,.2);
+                    backdrop-filter: blur(10px);
+                }
+
+                .v32-next-info {
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 18px;
+                }
+
+                .v32-next-step {
+                    flex: 0 0 auto;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 7px;
+                    padding: 6px 9px;
+                    border-radius: 8px;
+                    background: #eef4fc;
+                    color: #173a7a;
+                    font-size: .72rem;
+                    font-weight: 800;
+                }
+
+                .v32-next-summary {
+                    min-width: 0;
+                }
+
+                .v32-next-summary small {
+                    display: block;
+                    color: #6f7e92;
+                    font-size: .68rem;
+                }
+
+                .v32-next-summary strong {
+                    display: block;
+                    margin-top: 1px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    color: #22354f;
+                    font-size: .9rem;
+                }
+
+                .v32-next-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                #v32NextButton {
+                    min-width: 245px;
+                    min-height: 42px;
+                    font-weight: 800;
+                    border-radius: 9px;
+                }
+
+                #v32NextButton:disabled {
+                    opacity: .48;
+                    cursor: not-allowed;
+                }
+
+                /* LOGISTICA_BUTTON_SYSTEM_V3_4 */
+                #v32NextButton,
+                #v32TopButton,
+                #btnFocusScan,
+                #btnClearPtSelection {
+                    min-height: 42px !important;
+                    padding: 0 16px !important;
+                    border-radius: 9px !important;
+                    font-size: .78rem !important;
+                    font-weight: 800 !important;
+                    line-height: 1 !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 6px !important;
+                    box-shadow: none !important;
+                    text-decoration: none !important;
+                    transition: transform .14s ease, background .14s ease, border-color .14s ease, box-shadow .14s ease !important;
+                }
+
+                #v32NextButton {
+                    min-width: 245px;
+                    background: #0b4f8a !important;
+                    border: 1px solid #0b4f8a !important;
+                    color: #fff !important;
+                    box-shadow: 0 7px 16px rgba(11,79,138,.18) !important;
+                }
+
+                #v32NextButton:hover:not(:disabled) {
+                    background: #083f70 !important;
+                    border-color: #083f70 !important;
+                    transform: translateY(-1px);
+                    box-shadow: 0 9px 19px rgba(11,79,138,.22) !important;
+                }
+
+                #v32TopButton,
+                #btnFocusScan {
+                    background: #fff !important;
+                    border: 1px solid #b8c9dc !important;
+                    color: #173a7a !important;
+                }
+
+                #v32TopButton:hover,
+                #btnFocusScan:hover {
+                    background: #eef4fb !important;
+                    border-color: #8fa9c8 !important;
+                    color: #0b4f8a !important;
+                    transform: translateY(-1px);
+                }
+
+                #btnClearPtSelection {
+                    background: #fff !important;
+                    border: 1px solid #d9aeb3 !important;
+                    color: #a12631 !important;
+                }
+
+                #btnClearPtSelection:hover {
+                    background: #fff4f5 !important;
+                    border-color: #c77d86 !important;
+                    color: #821d27 !important;
+                    transform: translateY(-1px);
+                }
+
+                .v32-release-toggle {
+                    border-radius: 8px !important;
+                    font-weight: 800 !important;
+                    box-shadow: none !important;
+                }
+
+                html[data-nsq-theme="dark"] #v32TopButton,
+                html[data-nsq-theme="dark"] #btnFocusScan,
+                html[data-nsq-theme="dark"] #btnClearPtSelection {
+                    background: #162237 !important;
+                }
+
+                .v32-next-error {
+                    color: #b42318 !important;
+                }
+
+                html[data-nsq-theme="dark"] #v32FloatingNext {
+                    background: rgba(17,27,45,.97);
+                    border-color: #334963;
+                }
+
+                html[data-nsq-theme="dark"] .v32-next-summary strong {
+                    color: #eef4fb;
+                }
+
+                html[data-nsq-theme="dark"] .v32-next-step {
+                    background: #1a2b45;
+                    color: #cfe0f7;
+                }
+
+                html[data-nsq-theme="dark"] details.part,
+                html[data-nsq-theme="dark"] details.part .boxes {
+                    background: #111b2d !important;
+                    border-color: #2b3d55 !important;
+                }
+
+                html[data-nsq-theme="dark"] details.part > summary.part-head,
+                html[data-nsq-theme="dark"] details.part.v32-has-selection > summary.part-head,
+                html[data-nsq-theme="dark"] details.part .box,
+                html[data-nsq-theme="dark"] .lg-release-panel {
+                    background: #162237 !important;
+                }
+
+                @@media (max-width: 760px) {
+                    .page { padding-bottom: 160px !important; }
+                    #v32FloatingNext {
+                        grid-template-columns: 1fr;
+                        width: calc(100vw - 20px);
+                        bottom: 8px;
+                        gap: 9px;
+                    }
+                    .v32-next-info { gap: 9px; }
+                    .v32-next-actions { width: 100%; }
+                    #v32NextButton { min-width: 0; flex: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+
+            const bar = document.createElement('div');
+            bar.id = 'v32FloatingNext';
+            bar.innerHTML = `
+                <div class="v32-next-info">
+                    <div class="v32-next-step"><i class="fa-solid fa-boxes-packing"></i> Paso 1 de 2</div>
+                    <div class="v32-next-summary">
+                        <small>Seleccion de Producto Terminado</small>
+                        <strong id="v32NextSummaryText">Selecciona o escanea al menos una caja completa</strong>
+                    </div>
+                </div>
+                <div class="v32-next-actions">
+                    <button type="button" class="btn btn-outline-secondary" id="v32TopButton">
+                        <i class="fa-solid fa-arrow-up me-1"></i> Escaner
+                    </button>
+                    <button type="submit" form="formCrear" class="btn btn-primary" id="v32NextButton" disabled>
+                        Siguiente: datos del embarque <i class="fa-solid fa-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(bar);
+
+            const nextButton = document.getElementById('v32NextButton');
+            const summaryText = document.getElementById('v32NextSummaryText');
+            const topButton = document.getElementById('v32TopButton');
+            const scanInputV32 = document.getElementById('logisticaScanInput');
+            const clearButtonV32 = document.getElementById('btnClearPtSelection');
+
+            const collapseReleasePanels = () => {
+                document.querySelectorAll('.lg-release-panel').forEach(panel => {
+                    const head = panel.querySelector('.lg-release-panel__head');
+                    if (!head || head.querySelector('.v32-release-toggle')) return;
+
+                    const rows = panel.querySelectorAll('tbody tr').length;
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'v32-release-toggle';
+                    button.innerHTML = `<i class="fa-solid fa-list me-1"></i> Ver Releases${rows ? ` (${rows})` : ''}`;
+                    head.appendChild(button);
+                    panel.classList.add('v32-collapsed');
+
+                    button.addEventListener('click', () => {
+                        const collapsed = panel.classList.toggle('v32-collapsed');
+                        button.innerHTML = collapsed
+                            ? `<i class="fa-solid fa-list me-1"></i> Ver Releases${rows ? ` (${rows})` : ''}`
+                            : '<i class="fa-solid fa-chevron-up me-1"></i> Ocultar Releases';
+                    });
+                });
+            };
+
+            const syncV32 = () => {
+                let cajas = 0;
+                let piezas = 0;
+                const porParte = new Map();
+                const pendientes = new Map();
+
+                document.querySelectorAll('.js-box-pt-row').forEach(row => {
+                    const parte = row.dataset.parte || '';
+                    const pendiente = Number(row.dataset.pendienteParte || 0);
+                    if (parte && pendiente > 0) pendientes.set(parte, pendiente);
+                });
+
+                document.querySelectorAll('.js-caja-pt').forEach(chk => {
+                    const i = chk.dataset.i;
+                    const row = document.querySelector(`.js-box-pt-row[data-i="${i}"]`);
+                    if (!row) return;
+
+                    if (chk.checked) {
+                        cajas++;
+                        const disponibles = Number(row.dataset.disponible || 0);
+                        piezas += disponibles;
+                        const parte = row.dataset.parte || '';
+                        porParte.set(parte, (porParte.get(parte) || 0) + disponibles);
+                    }
+                });
+
+                let excede = false;
+                porParte.forEach((cantidad, parte) => {
+                    const pendiente = pendientes.get(parte) || 0;
+                    if (pendiente > 0 && cantidad > pendiente) excede = true;
+                });
+
+                document.querySelectorAll('details.part').forEach(part => {
+                    const hasSelection = !!part.querySelector('.js-caja-pt:checked');
+                    part.classList.toggle('v32-has-selection', hasSelection);
+                    if (hasSelection) part.open = true;
+                });
+
+                if (nextButton) nextButton.disabled = cajas === 0 || excede;
+
+                if (summaryText) {
+                    summaryText.classList.toggle('v32-next-error', excede);
+                    if (excede) {
+                        summaryText.textContent = 'La seleccion completa excede el pendiente de un Release. Deselecciona una caja.';
+                    }
+                    else if (cajas === 0) {
+                        summaryText.textContent = 'Selecciona o escanea al menos una caja completa';
+                    }
+                    else {
+                        summaryText.textContent = `${cajas.toLocaleString('es-MX')} caja(s) completa(s) Â· ${piezas.toLocaleString('es-MX')} PZA seleccionadas`;
+                    }
+                }
+            };
+
+            collapseReleasePanels();
+
+            document.querySelectorAll('details.part').forEach(part => {
+                if (!part.querySelector('.js-caja-pt:checked')) part.open = false;
+            });
+
+            document.querySelectorAll('.js-caja-pt').forEach(chk => {
+                chk.addEventListener('change', syncV32);
+            });
+
+            scanInputV32?.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                    window.setTimeout(syncV32, 0);
+                }
+            });
+
+            clearButtonV32?.addEventListener('click', () => {
+                window.setTimeout(syncV32, 0);
+            });
+
+            topButton?.addEventListener('click', () => {
+                document.querySelector('.lg-pt-scan')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                window.setTimeout(() => {
+                    scanInputV32?.focus();
+                    scanInputV32?.select();
+                }, 250);
+            });
+
+            form.addEventListener('submit', event => {
+                syncV32();
+                if (nextButton?.disabled) {
+                    event.preventDefault();
+                    scanInputV32?.focus();
+                }
+            });
+
+            syncV32();
         })();
     </script>
 }

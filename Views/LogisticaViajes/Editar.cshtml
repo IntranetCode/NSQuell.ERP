@@ -581,6 +581,8 @@
         }
     }
 
+    /* LOGISTICA_VIAJES_CHOFERES_V5 */
+    label[for="TipoViaje"]::after,label[for="FechaProgramada"]::after,label[for="Origen"]::after,label[for="Destino"]::after,label[for="Motivo"]::after{content:" *";color:#b42318;font-weight:900}.external-fields{display:none!important}
 </style>
 
 <div class="viaje-form-page">
@@ -662,29 +664,7 @@
 
                 </div>
 
-                <div class="col-4g">
-
-                    <label asp-for="TipoTransporte"
-                           class="form-label">
-                        Transporte
-                    </label>
-
-                    <select asp-for="TipoTransporte"
-                            id="TipoTransporte"
-                            class="form-select">
-
-                        <option value="Interno">Interno</option>
-                        <option value="Externo">Externo</option>
-
-                    </select>
-
-                    <span asp-validation-for="TipoTransporte"></span>
-
-                    <div class="transport-info">
-                        Interno utiliza ruta, unidad y un chofer autorizado de Logística. Externo permite captura manual.
-                    </div>
-
-                </div>
+                <input asp-for="TipoTransporte" id="TipoTransporte" type="hidden" value="Interno" />
 
                 <div class="col-4g">
 
@@ -813,20 +793,7 @@
 
                 </div>
 
-                <div class="col-4g">
-
-                    <label asp-for="HoraRegresoProgramada"
-                           class="form-label">
-                        Regreso estimado
-                    </label>
-
-                    <input asp-for="HoraRegresoProgramada"
-                           type="time"
-                           class="form-control" />
-
-                    <span asp-validation-for="HoraRegresoProgramada"></span>
-
-                </div>
+                <input asp-for="HoraRegresoProgramada" type="hidden" value="" />
 
             </div>
 
@@ -835,8 +802,9 @@
         <div class="form-section internal-fields">
 
             <div class="form-section-title">
-                Transporte interno
+                Unidad y chofer
             </div>
+            <div class="alert alert-info py-2 px-3 mb-2"><strong>Campos por etapa:</strong> puedes guardar sin recursos; ruta, unidad y chofer son obligatorios al iniciar.</div>
 
             <div class="form-grid">
 
@@ -1056,6 +1024,7 @@
             }
 
             if (tipoTransporte) {
+                tipoTransporte.value = 'Interno';
 
                 tipoTransporte.addEventListener(
                     'change',

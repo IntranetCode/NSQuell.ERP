@@ -1,0 +1,226 @@
+﻿@using ERP.NSQuell.Models.ViewModels.Logistica
+@model LogisticaCrearVm
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Confirmar embarque PT";
+    var seleccionadas = (Model.CajasPT ?? new List<LogisticaCajaPtCrearVm>())
+        .Where(x => x.Seleccionada)
+        .OrderBy(x => x.FechaEntrada)
+        .ThenBy(x => x.CajaID)
+        .ToList();
+    var puedeSalidaPt = ViewBag.PuedeSalidaPtV3 is bool salida && salida;
+    var cliente = seleccionadas.FirstOrDefault()?.Cliente ?? Model.Clientes.FirstOrDefault(x => Model.ClienteID.HasValue && x.Id == Model.ClienteID.Value)?.Texto ?? string.Empty;
+    var totalPiezas = seleccionadas.Sum(x => (long)x.Disponible);
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
+}
+<style>
+    /* LOGISTICA_PT_CONFIRMAR_V3 */
+    /* LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4 */
+    .footer-actions [name="confirmarSalidaPT"][value="true"] { display:none !important; }
+    /* LOGISTICA_BUTTON_SYSTEM_V3_4 */
+    .lg-btn {
+        min-height:42px !important;
+        padding:0 16px !important;
+        border-radius:9px !important;
+        font-size:.78rem !important;
+        font-weight:800 !important;
+        line-height:1 !important;
+        display:inline-flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        gap:6px !important;
+        text-decoration:none !important;
+        box-shadow:none !important;
+        transition:transform .14s ease,background .14s ease,border-color .14s ease,box-shadow .14s ease !important;
+    }
+    .lg-btn-primary {
+        background:#0b4f8a !important;
+        border:1px solid #0b4f8a !important;
+        color:#fff !important;
+        box-shadow:0 7px 16px rgba(11,79,138,.18) !important;
+    }
+    .lg-btn-primary:hover {
+        background:#083f70 !important;
+        border-color:#083f70 !important;
+        color:#fff !important;
+        transform:translateY(-1px);
+        box-shadow:0 9px 19px rgba(11,79,138,.22) !important;
+    }
+    .lg-btn-emphasis {
+        background:#073b69 !important;
+        border-color:#073b69 !important;
+    }
+    .lg-btn-emphasis:hover {
+        background:#052f55 !important;
+        border-color:#052f55 !important;
+    }
+    .lg-btn-secondary {
+        background:#fff !important;
+        border:1px solid #b8c9dc !important;
+        color:#173a7a !important;
+    }
+    .lg-btn-secondary:hover {
+        background:#eef4fb !important;
+        border-color:#8fa9c8 !important;
+        color:#0b4f8a !important;
+        transform:translateY(-1px);
+    }
+    html[data-nsq-theme="dark"] .lg-btn-secondary {
+        background:#162237 !important;
+        border-color:#405773 !important;
+        color:#d8e6f6 !important;
+    }
+    .page{max-width:1500px;margin:0 auto;padding:18px 20px 32px;color:#172033}
+    .head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 17px;margin-bottom:14px;border:1px solid #dce4ee;border-left:4px solid #173a7a;border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(22,42,75,.055)}
+    .title{margin:0;font-size:1.4rem;font-weight:800}.subtitle{margin:3px 0 0;color:#6d7888;font-size:.82rem}
+    .step{font-size:.7rem;color:#173a7a;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+    .card{margin-bottom:12px;padding:14px 15px;border:1px solid #dce4ee;border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(22,42,75,.045)}
+    .card-title{margin:0 0 10px;padding-left:10px;border-left:3px solid #173a7a;font-size:.96rem;font-weight:800}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px}
+    .summary>div{padding:10px;border:1px solid #dce4ee;border-radius:9px;background:#f8fafc}.summary span{display:block;color:#6d7888;font-size:.68rem}.summary strong{display:block;margin-top:2px;color:#173a7a;font-size:.92rem}
+    .box-table{width:100%;border-collapse:collapse;font-size:.76rem}.box-table th{padding:7px 8px;border-bottom:1px solid #d8e1eb;color:#66768b;font-size:.66rem;text-align:left;text-transform:uppercase}.box-table td{padding:8px;border-bottom:1px solid #e7ecf2;vertical-align:top}.box-table tr:last-child td{border-bottom:0}.box-table .num{text-align:right;font-weight:800;color:#173a7a}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px 12px}.g3{grid-column:span 3}.g4{grid-column:span 4}.g5{grid-column:span 5}.g6{grid-column:span 6}.g8{grid-column:span 8}.g12{grid-column:span 12}
+    .form-label{font-size:.73rem;font-weight:700;color:#4d596a;margin-bottom:3px}.form-control,.form-select{min-height:38px;border-color:#d3dde8;border-radius:8px;font-size:.82rem}.transport-panel{margin-top:9px;padding:11px;border:1px solid #dce4ee;border-radius:9px;background:#f8fafc}.hidden{display:none!important}
+    .selected-strip{padding:10px 12px;border:1px solid #cfdced;border-radius:9px;background:#f6f9fd;color:#43536a;font-size:.77rem}.selected-strip strong{color:#173a7a}
+    .footer{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px;padding:13px 14px;border:1px solid #d2ddea;border-radius:11px;background:#fff;box-shadow:0 8px 24px rgba(22,42,75,.07)}.footer-actions{display:flex;gap:8px}.footer small{display:block;color:#6f7d90;max-width:650px}
+    html[data-nsq-theme="dark"] .page{color:#e7edf6}html[data-nsq-theme="dark"] .head,html[data-nsq-theme="dark"] .card,html[data-nsq-theme="dark"] .footer{background:#111b2d;border-color:#2a3a50;box-shadow:none}html[data-nsq-theme="dark"] .summary>div,html[data-nsq-theme="dark"] .transport-panel,html[data-nsq-theme="dark"] .selected-strip{background:#162237;border-color:#2a3a50}html[data-nsq-theme="dark"] .form-control,html[data-nsq-theme="dark"] .form-select{background:#0e1828;border-color:#31445c;color:#eef4fb}
+    @@media(max-width:900px){.g3,.g4,.g5,.g6,.g8{grid-column:span 6}.summary{grid-template-columns:repeat(2,1fr)}.footer{align-items:stretch;flex-direction:column}.footer-actions{width:100%}.footer-actions .btn{flex:1}}
+    @@media(max-width:600px){.page{padding:12px 8px 24px}.g3,.g4,.g5,.g6,.g8{grid-column:span 12}.summary{grid-template-columns:1fr}.box-table-wrap{overflow-x:auto}.box-table{min-width:850px}}
+</style>
+<div class="page">
+    <div class="head">
+        <div>
+            <div class="step">Paso 2 de 2</div>
+            <h1 class="title"><i class="fa-solid fa-clipboard-check me-1"></i>Confirmar embarque desde PT</h1>
+            <p class="subtitle">Revisa las cajas completas seleccionadas y captura los datos finales del embarque.</p>
+        </div>
+        <button type="button" class="btn lg-btn lg-btn-secondary" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i>Volver a cajas</button>
+    </div>
+
+    <form asp-controller="LogisticaEmbarques" asp-action="CrearDesdePT" method="post" id="formConfirmarPT" autocomplete="off">
+        @Html.AntiForgeryToken()
+        <input asp-for="ClienteID" type="hidden" />
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 px-3"></div>
+
+        @for (var i = 0; i < seleccionadas.Count; i++)
+        {
+            <input type="hidden" name="CajasPT[@i].Seleccionada" value="true" />
+            <input type="hidden" name="CajasPT[@i].CajaID" value="@seleccionadas[i].CajaID" />
+        }
+
+        <section class="card">
+            <h2 class="card-title">Cajas seleccionadas</h2>
+            <div class="summary mb-3">
+                <div><span>Cliente</span><strong>@cliente</strong></div>
+                <div><span>Cajas completas</span><strong>@seleccionadas.Count.ToString("N0")</strong></div>
+                <div><span>Piezas totales</span><strong>@totalPiezas.ToString("N0") PZA</strong></div>
+                <div><span>Partes</span><strong>@seleccionadas.Select(x => x.ParteID).Distinct().Count().ToString("N0")</strong></div>
+            </div>
+
+            <div class="box-table-wrap">
+                <table class="box-table">
+                    <thead><tr><th>Caja</th><th>Parte</th><th>OF origen</th><th>Lote / etiqueta</th><th>Entrada</th><th>Ubicacion</th><th class="num">Piezas</th></tr></thead>
+                    <tbody>
+                    @foreach (var caja in seleccionadas)
+                    {
+                        <tr>
+                            <td><strong>#@caja.NumeroCaja</strong><br /><small>ID @caja.CajaID</small></td>
+                            <td><strong>@caja.NumeroParte</strong><br /><small>@caja.Descripcion</small></td>
+                            <td>@(string.IsNullOrWhiteSpace(caja.NumeroOF) ? "-" : caja.NumeroOF)</td>
+                            <td>@(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote)<br /><small>@caja.Etiqueta</small></td>
+                            <td>@caja.FechaEntrada.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicar" : caja.Ubicacion)</td>
+                            <td class="num">@caja.Disponible.ToString("N0")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            <div class="selected-strip mt-3"><strong>Cajas completas:</strong> la cantidad no se captura manualmente. El servidor vuelve a leer el saldo de cada caja antes de guardar y usa todo su disponible actual.</div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-title">Programacion del embarque</h2>
+            <div class="grid">
+                <div class="g3"><label asp-for="TipoOperacion" class="form-label">Operacion</label><select asp-for="TipoOperacion" id="TipoOperacion" class="form-select"><option value="Nacional">Nacional</option><option value="Exportacion">Exportacion</option></select></div>
+                <div class="g3"><label asp-for="FechaCargaProgramada" class="form-label">Fecha carga</label><input asp-for="FechaCargaProgramada" type="date" class="form-control" /></div>
+                <div class="g3"><label asp-for="HoraCargaProgramada" class="form-label">Hora carga</label><input asp-for="HoraCargaProgramada" type="time" class="form-control" /></div>
+                <div class="g3"><label asp-for="FechaEntregaProgramada" class="form-label">Fecha entrega</label><input asp-for="FechaEntregaProgramada" type="date" class="form-control" /></div>
+                <div class="g3"><label asp-for="HoraEntregaProgramada" class="form-label">Hora entrega</label><input asp-for="HoraEntregaProgramada" type="time" class="form-control" /></div>
+                <div class="g4"><label asp-for="Destino" class="form-label">Destino</label><input asp-for="Destino" maxlength="300" class="form-control" /></div>
+                <div class="g8"><label asp-for="DireccionEntrega" class="form-label">Direccion de entrega</label><input asp-for="DireccionEntrega" maxlength="600" class="form-control" /></div>
+                <div class="g3 hidden" id="aduanaWrap"><label asp-for="PasaAduana" class="form-label">Pasa por aduana?</label><select asp-for="PasaAduana" class="form-select"><option value="">Selecciona...</option><option value="true">Si</option><option value="false">No</option></select></div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-title">Transporte</h2>
+            <div class="grid">
+                <div class="g4"><label asp-for="FormaEnvio" class="form-label">Forma de envio</label><select asp-for="FormaEnvio" id="FormaEnvio" class="form-select"><option value="Interno">Entrega interna / local</option><option value="Paqueteria">Paqueteria / transportista</option></select></div>
+            </div>
+            <div class="transport-panel" id="internoPanel">
+                <div class="grid">
+                    <div class="g4"><label asp-for="RutaID" class="form-label">Ruta</label><select asp-for="RutaID" class="form-select js-interno"><option value="">Selecciona...</option>@foreach(var r in Model.Rutas){<option value="@r.Id">@r.Texto</option>}</select></div>
+                    <div class="g4"><label asp-for="UnidadID" class="form-label">Unidad</label><select asp-for="UnidadID" class="form-select js-interno"><option value="">Selecciona...</option>@foreach(var u in Model.Unidades){<option value="@u.Id">@u.Texto</option>}</select></div>
+                    <div class="g4"><label asp-for="OperadorTexto" class="form-label">Operador</label><input asp-for="OperadorTexto" maxlength="200" class="form-control js-interno" /></div>
+                </div>
+            </div>
+            <div class="transport-panel hidden" id="paqueteriaPanel">
+                <div class="grid">
+                    <div class="g3"><label asp-for="ModalidadEnvio" class="form-label">Modalidad</label><select asp-for="ModalidadEnvio" class="form-select js-paq"><option value="">Selecciona...</option><option value="Terrestre">Terrestre</option><option value="Aereo">Aerea</option><option value="Maritimo">Maritima</option></select></div>
+                    <div class="g4"><label asp-for="Transportista" class="form-label">Compania / transportista</label><input asp-for="Transportista" maxlength="200" class="form-control js-paq" /></div>
+                    <div class="g5"><label asp-for="GuiaReferencia" class="form-label">Guia / referencia</label><input asp-for="GuiaReferencia" maxlength="150" class="form-control" /></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-title">Informacion adicional</h2>
+            <label asp-for="Observaciones" class="form-label">Observaciones</label>
+            <textarea asp-for="Observaciones" maxlength="1200" rows="3" class="form-control"></textarea>
+        </section>
+
+        @if (!puedeSalidaPt)
+        {
+            <div class="alert alert-warning py-2 px-3"><strong>Salida PT directa aun no habilitada.</strong> Puedes guardar el embarque normalmente. Para habilitar el segundo boton, aplica el SQL <code>44_LOGISTICA_SALIDA_PT_DESDE_EMBARQUE_V3.sql</code>.</div>
+        }
+
+        <div class="footer">
+            <small><strong>Guardar embarque</strong> reserva las cajas en Logistica. <strong>Guardar + dar salida PT</strong> registra inmediatamente movimientos tipo Embarque en el historial de PT y deja el embarque en estado Cargado, sin iniciar la ruta.</small>
+            <div class="footer-actions">
+                <button type="button" class="btn lg-btn lg-btn-secondary" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i>Volver</button>
+                <button type="submit" name="confirmarSalidaPT" value="false" class="btn lg-btn lg-btn-primary"><i class="fa-solid fa-floppy-disk"></i>Guardar embarque</button>
+                @if (puedeSalidaPt)
+                {
+                    <button type="submit" name="confirmarSalidaPT" value="true" class="btn lg-btn lg-btn-primary lg-btn-emphasis"><i class="fa-solid fa-box-open"></i>Guardar + dar salida PT</button>
+                }
+            </div>
+        </div>
+    </form>
+</div>
+<script>
+    (() => {
+        // LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4
+        const salida = document.querySelector('[name="confirmarSalidaPT"][value="true"]');
+        salida?.remove();
+        const guardar = document.querySelector('[name="confirmarSalidaPT"][value="false"]');
+        if (guardar) {
+            guardar.innerHTML = '<i class="fa-solid fa-calendar-check"></i> Guardar programacion';
+        }
+        const nota = document.querySelector('.footer small');
+        if (nota) nota.innerHTML = '<strong>Guardar programacion</strong> reserva las cajas para Logistica. La salida fisica de PT se confirma posteriormente desde el detalle del embarque, al momento de salir de planta.';
+    })();
+</script>
+@section Scripts {
+<script>
+(()=>{
+ const forma=document.getElementById('FormaEnvio'),tipo=document.getElementById('TipoOperacion');
+ const interno=document.getElementById('internoPanel'),paq=document.getElementById('paqueteriaPanel'),aduana=document.getElementById('aduanaWrap');
+ const transporte=()=>{const esP=forma?.value==='Paqueteria';interno?.classList.toggle('hidden',esP);paq?.classList.toggle('hidden',!esP);document.querySelectorAll('.js-interno').forEach(x=>x.required=!esP);document.querySelectorAll('.js-paq').forEach(x=>x.required=esP);};
+ const operacion=()=>aduana?.classList.toggle('hidden',tipo?.value!=='Exportacion');
+ forma?.addEventListener('change',transporte);tipo?.addEventListener('change',operacion);transporte();operacion();
+})();
+</script>
+}

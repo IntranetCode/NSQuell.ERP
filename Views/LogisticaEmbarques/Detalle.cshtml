@@ -977,6 +977,16 @@
         }
     }
 
+    /* LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4 */
+    .lg-ops{margin:0 0 14px;padding:16px;border:1px solid #cfdbea;border-radius:14px;background:linear-gradient(135deg,#f8fbff,#fff);box-shadow:0 10px 30px rgba(23,58,122,.07)}
+    .lg-ops-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}.lg-ops-kicker{font-size:.68rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#5d6d83}.lg-ops-title{margin:2px 0 0;font-size:1.08rem;font-weight:850;color:#173a7a}.lg-ops-sub{margin:3px 0 0;font-size:.76rem;color:#68778a}
+    .lg-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:13px}.lg-step{padding:9px 10px;border:1px solid #dce5ef;border-radius:9px;background:#fff}.lg-step span{display:block;font-size:.63rem;color:#7b8797;text-transform:uppercase}.lg-step strong{display:block;margin-top:2px;font-size:.76rem;color:#3b485a}.lg-step.done{border-color:#b9d7ca;background:#f5fbf8}.lg-step.done strong{color:#17633a}.lg-step.current{border-color:#7fa0cf;background:#f1f6fd;box-shadow:inset 3px 0 0 #173a7a}.lg-step.current strong{color:#173a7a}
+    .lg-primary-action{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;border:1px solid #d9e3ef;border-radius:11px;background:#fff}.lg-primary-copy strong{display:block;font-size:.9rem;color:#24354d}.lg-primary-copy small{display:block;margin-top:3px;color:#6d7a8d;font-size:.72rem}.lg-op-btn{min-height:43px;padding:0 18px;border:0;border-radius:9px;background:#0f4f91;color:#fff;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 7px 16px rgba(15,79,145,.18)}.lg-op-btn:hover{background:#0b4279;color:#fff}.lg-op-btn:disabled{opacity:.45;box-shadow:none}.lg-op-btn.secondary{background:#fff;color:#173a7a;border:1px solid #9fb5d0;box-shadow:none}
+    .lg-scan{margin-top:12px;padding:12px;border:1px solid #cfdaea;border-radius:10px;background:#f8fbff}.lg-scan-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}.lg-scan-input{min-height:45px;border:2px solid #8faad0;border-radius:9px;padding:8px 12px;font-weight:750;outline:none}.lg-scan-input:focus{border-color:#173a7a;box-shadow:0 0 0 .18rem rgba(23,58,122,.08)}.lg-scan-msg{margin-top:6px;font-size:.72rem;color:#66778c}.lg-scan-msg.ok{color:#17633a}.lg-scan-msg.error{color:#b42318}
+    .lg-box-confirm-list{display:grid;gap:7px;margin-top:10px}.lg-salida-box{display:grid;grid-template-columns:34px minmax(220px,1fr) minmax(120px,.55fr) 100px;align-items:center;gap:10px;padding:9px 10px;border:1px solid #dce4ee;border-radius:9px;background:#fff}.lg-salida-box.checked{border-color:#72a08a;background:#f5fbf8}.lg-salida-box strong,.lg-salida-box small{display:block}.lg-salida-box small{color:#7a8798;font-size:.67rem}.lg-salida-box .qty{text-align:right;color:#173a7a;font-weight:850}.lg-scan-check{width:20px;height:20px}
+    .lg-collapse-toggle{margin-left:auto;min-height:30px;padding:0 10px;border:1px solid #ccd7e4;border-radius:7px;background:#fff;color:#43546a;font-size:.7rem;font-weight:750}.lg-collapsed > :not(.section-head){display:none!important}.lg-generated-head{display:flex!important}.lg-hidden-operational{display:none!important}
+    html[data-nsq-theme="dark"] .lg-ops,html[data-nsq-theme="dark"] .lg-primary-action,html[data-nsq-theme="dark"] .lg-step,html[data-nsq-theme="dark"] .lg-salida-box,html[data-nsq-theme="dark"] .lg-scan{background:#111b2d;border-color:#30435d}.lg-step.current{}
+    @@media(max-width:850px){.lg-steps{grid-template-columns:1fr 1fr}.lg-primary-action{align-items:stretch;flex-direction:column}.lg-op-btn{width:100%}.lg-salida-box{grid-template-columns:30px 1fr 85px}.lg-salida-box>div:nth-child(3){grid-column:2}.lg-scan-row{grid-template-columns:1fr}}
 </style>
 
 <div class="detalle-page">
@@ -1027,6 +1037,86 @@
     </div>
 
     <div class="progress-line"><div style="width:@Math.Clamp(Model.PorcentajeAvance, 0, 100)%"></div></div>
+
+    <!-- LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4 -->
+    <section class="lg-ops">
+        <div class="lg-ops-head">
+            <div>
+                <div class="lg-ops-kicker">Control operativo del embarque</div>
+                <h2 class="lg-ops-title">@Model.ProximaAccion</h2>
+                <p class="lg-ops-sub">@Model.ProximaAccionDetalle</p>
+            </div>
+            <span class="badge @BadgeEstatus(Model.Estatus)">@Model.Estatus</span>
+        </div>
+        <div class="lg-steps">
+            <div class="lg-step @(Model.Estatus is "Preparando" or "Preparado" or "Cargado" or "En ruta" or "Entregado" ? "done" : "current")"><span>1</span><strong>Programado</strong></div>
+            <div class="lg-step @(Model.Estatus is "Preparado" or "Cargado" or "En ruta" or "Entregado" ? "done" : Model.Estatus=="Preparando" ? "current" : "")"><span>2</span><strong>Preparacion</strong></div>
+            <div class="lg-step @(Model.Estatus is "Cargado" or "En ruta" or "Entregado" ? "done" : Model.Estatus=="Preparado" ? "current" : "")"><span>3</span><strong>Verificar cajas</strong></div>
+            <div class="lg-step @(Model.Estatus is "En ruta" or "Entregado" ? "done" : Model.Estatus=="Cargado" ? "current" : "")"><span>4</span><strong>Salida de planta</strong></div>
+            <div class="lg-step @(Model.Estatus=="Entregado" ? "done" : Model.Estatus=="En ruta" ? "current" : "")"><span>5</span><strong>Entrega</strong></div>
+        </div>
+
+        @if (Model.Estatus is "Programado" or "Preparando")
+        {
+            <div class="lg-primary-action">
+                <div class="lg-primary-copy"><strong>Confirmar que la preparacion esta completa</strong><small>@Model.TotalPiezasPreparadas.ToString("N0") de @Model.TotalPiezasSolicitadas.ToString("N0") PZA asignadas.</small></div>
+                <form asp-controller="LogisticaEmbarques" asp-action="MarcarPreparado" method="post">
+                    @Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <button class="lg-op-btn" type="submit" onclick="return confirm('Â¿Confirmar preparacion completa?');"><i class="fa-solid fa-boxes-packing"></i> Confirmar preparacion</button>
+                </form>
+            </div>
+        }
+        else if (Model.Estatus == "Preparado")
+        {
+            <form asp-controller="LogisticaEmbarques" asp-action="ConfirmarSalidaViajeDesdePT" method="post" id="lgSalidaForm">
+                @Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                <div class="lg-primary-action">
+                    <div class="lg-primary-copy"><strong>Escanea las cajas que realmente van a salir</strong><small>Deben coincidir exactamente con las cajas programadas. Al confirmar se registra la salida PT y el viaje pasa a En ruta en una sola operacion.</small></div>
+                    <button class="lg-op-btn" id="lgConfirmarSalida" type="submit" disabled><i class="fa-solid fa-truck-fast"></i> Confirmar salida de planta</button>
+                </div>
+                <div class="lg-scan">
+                    <div class="lg-scan-row">
+                        <input id="lgSalidaScan" class="lg-scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea etiqueta de caja y presiona Enter/Tab..." autofocus />
+                        <button type="button" class="lg-op-btn secondary" id="lgLimpiarSalida"><i class="fa-solid fa-eraser"></i> Limpiar</button>
+                    </div>
+                    <div class="lg-scan-msg" id="lgSalidaMsg">0 de @Model.CajasAsignadas.Count caja(s) confirmadas.</div>
+                    <div class="lg-box-confirm-list">
+                        @foreach (var c in Model.CajasAsignadas)
+                        {
+                            <label class="lg-salida-box" data-caja-id="@c.CajaID" data-numero-caja="@c.NumeroCaja" data-etiqueta="@c.Etiqueta" data-lote="@c.Lote">
+                                <input class="lg-scan-check" type="checkbox" name="cajaIdsConfirmadas" value="@c.CajaID" />
+                                <div><strong>Caja #@c.NumeroCaja Â· @c.NumeroParte</strong><small>@c.Etiqueta</small></div>
+                                <div><strong>@(string.IsNullOrWhiteSpace(c.Lote) ? "Sin lote" : c.Lote)</strong><small>OF @c.NumeroOF</small></div>
+                                <div class="qty">@c.CantidadAsignada.ToString("N0") PZA</div>
+                            </label>
+                        }
+                    </div>
+                </div>
+            </form>
+        }
+        else if (Model.Estatus == "Cargado")
+        {
+            <div class="lg-primary-action">
+                <div class="lg-primary-copy"><strong>PT ya fue descontado</strong><small>Solo falta iniciar la ruta. El despacho no volvera a descontar las cajas.</small></div>
+                @if (Model.PuedeSalir)
+                {
+                    <form asp-controller="LogisticaEmbarques" asp-action="Despachar" method="post">@Html.AntiForgeryToken()<input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="lg-op-btn" type="submit"><i class="fa-solid fa-truck-fast"></i> Iniciar viaje</button></form>
+                }
+                else
+                {
+                    <span class="text-warning fw-semibold">Salida bloqueada por checklist/documentacion.</span>
+                }
+            </div>
+        }
+        else if (Model.Estatus == "En ruta")
+        {
+            <div class="lg-primary-action"><div class="lg-primary-copy"><strong>Viaje en curso</strong><small>La salida PT ya quedo registrada. El siguiente paso es confirmar la entrega.</small></div><a href="#lgEntrega" class="lg-op-btn"><i class="fa-solid fa-location-dot"></i> Ir a entrega</a></div>
+        }
+        else if (Model.Estatus == "Entregado")
+        {
+            <div class="lg-primary-action"><div class="lg-primary-copy"><strong>Embarque completado</strong><small>La operacion ya fue entregada y conserva toda su trazabilidad.</small></div></div>
+        }
+    </section>
 
     <div class="section">
         <div class="section-head">
@@ -1190,15 +1280,18 @@
     {
         <div class="section">
             <div class="section-head">
-                <div><h2 class="section-title">Cajas PT disponibles</h2><p class="section-subtitle">Reserva cajas completas para las partidas pendientes.</p></div>
+                <div><h2 class="section-title">Cajas PT disponibles por Release</h2><p class="section-subtitle">Reserva la cantidad exacta a tomar de cada caja. Una misma caja puede alimentar varios Releases mientras conserve residual.</p></div>
             </div>
             <div class="table-wrap">
                 <table class="table table-sm table-hover compact-table">
-                    <thead><tr><th>Caja</th><th>Etiqueta</th><th>Parte</th><th>OF</th><th>Lote</th><th>Ubicación</th><th class="text-end">Disponible</th><th></th></tr></thead>
+                    <thead><tr><th>Release</th><th>Caja</th><th>Etiqueta</th><th>Parte</th><th>OF</th><th>Lote</th><th>Ubicación</th><th class="text-end">Residual</th><th>Reservar</th></tr></thead>
                     <tbody>
                         @foreach (var c in Model.CajasDisponibles)
                         {
+                            var partidaCaja = Model.Partidas.FirstOrDefault(x => x.EmbarqueDetalleID == c.EmbarqueDetalleID);
+                            var maxReserva = Math.Min(c.Disponible, partidaCaja?.PendienteAsignar ?? 0);
                             <tr>
+                                <td class="fw-semibold">@(string.IsNullOrWhiteSpace(partidaCaja?.FolioRelease) ? "-" : partidaCaja!.FolioRelease)</td>
                                 <td>#@c.NumeroCaja</td>
                                 <td class="fw-semibold">@c.Etiqueta</td>
                                 <td>@c.NumeroParte</td>
@@ -1206,20 +1299,28 @@
                                 <td>@c.Lote</td>
                                 <td>@c.Ubicacion</td>
                                 <td class="text-end fw-semibold">@c.Disponible.ToString("N0")</td>
-                                <td class="text-end">
-                                    <form asp-controller="LogisticaEmbarques" asp-action="ReservarCaja" method="post" class="d-inline">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                                        <input type="hidden" name="embarqueDetalleId" value="@c.EmbarqueDetalleID" />
-                                        <input type="hidden" name="cajaId" value="@c.CajaID" />
-                                        <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-box me-1"></i>Reservar</button>
-                                    </form>
+                                <td>
+                                    @if (maxReserva > 0)
+                                    {
+                                        <form asp-controller="LogisticaEmbarques" asp-action="ReservarCaja" method="post" class="d-flex gap-1 align-items-center justify-content-end">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                                            <input type="hidden" name="embarqueDetalleId" value="@c.EmbarqueDetalleID" />
+                                            <input type="hidden" name="cajaId" value="@c.CajaID" />
+                                            <input type="number" name="cantidad" min="1" max="@maxReserva" value="@maxReserva" class="form-control form-control-sm" style="max-width:115px" required />
+                                            <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap"><i class="fa-solid fa-box me-1"></i>Reservar</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Release cubierto</span>
+                                    }
                                 </td>
                             </tr>
                         }
                         @if (!Model.CajasDisponibles.Any())
                         {
-                            <tr><td colspan="8"><div class="empty">No hay cajas PT disponibles para reservar.</div></td></tr>
+                            <tr><td colspan="9"><div class="empty"><strong>SIN CAJAS PT DISPONIBLES</strong></div></td></tr>
                         }
                     </tbody>
                 </table>
@@ -1492,7 +1593,7 @@
 
     @if (puedeEntregar)
     {
-        <div class="section">
+        <div class="section" id="lgEntrega">
             <div class="section-title mb-2">Registrar entrega</div>
             <form asp-controller="LogisticaEmbarques" asp-action="Entregar" method="post" class="form-grid">
                 @Html.AntiForgeryToken()
@@ -1604,5 +1705,59 @@
             const form = document.getElementById(`retirar-evidencia-${id}`);
             if (input && form) { input.value = motivo.trim(); form.submit(); }
         };
+        // LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4
+        const scan = document.getElementById('lgSalidaScan');
+        const scanMsg = document.getElementById('lgSalidaMsg');
+        const salidaBtn = document.getElementById('lgConfirmarSalida');
+        const limpiarBtn = document.getElementById('lgLimpiarSalida');
+        const checks = Array.from(document.querySelectorAll('.lg-scan-check'));
+        const rows = Array.from(document.querySelectorAll('.lg-salida-box'));
+        const norm = v => (v || '').trim().toUpperCase();
+        const updateSalida = (message, type='') => {
+            const marked = checks.filter(x => x.checked).length;
+            rows.forEach(r => r.classList.toggle('checked', r.querySelector('.lg-scan-check')?.checked === true));
+            if (salidaBtn) salidaBtn.disabled = checks.length === 0 || marked !== checks.length;
+            if (scanMsg) {
+                scanMsg.textContent = message || `${marked} de ${checks.length} caja(s) confirmadas.`;
+                scanMsg.classList.remove('ok','error'); if(type) scanMsg.classList.add(type);
+            }
+        };
+        const scanCaja = () => {
+            if (!scan) return;
+            const code = norm(scan.value);
+            if (!code) { updateSalida('El lector no envio contenido.','error'); scan.focus(); return; }
+            let candidates = rows.filter(r => norm(r.dataset.etiqueta) === code);
+            if (candidates.length === 0) {
+                candidates = rows.filter(r => norm(r.dataset.lote) === code || norm(r.dataset.cajaId) === code || norm(r.dataset.numeroCaja) === code);
+            }
+            if (candidates.length !== 1) {
+                updateSalida(candidates.length === 0 ? 'La caja escaneada no pertenece a este embarque.' : 'La lectura es ambigua; escanea la etiqueta completa.','error');
+                scan.select(); return;
+            }
+            const chk = candidates[0].querySelector('.lg-scan-check');
+            if (chk.checked) { updateSalida(`La caja #${candidates[0].dataset.numeroCaja} ya estaba confirmada.`,'error'); scan.value=''; scan.focus(); return; }
+            chk.checked = true; scan.value=''; updateSalida(`Caja #${candidates[0].dataset.numeroCaja} confirmada. Escanea la siguiente.`,'ok'); scan.focus();
+        };
+        scan?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); scanCaja(); } });
+        checks.forEach(x => x.addEventListener('change', () => updateSalida()));
+        limpiarBtn?.addEventListener('click', () => { checks.forEach(x => x.checked=false); updateSalida('Confirmacion de cajas limpiada.'); scan?.focus(); });
+        document.getElementById('lgSalidaForm')?.addEventListener('submit', e => { if (checks.length === 0 || checks.some(x => !x.checked)) { e.preventDefault(); updateSalida('Debes confirmar todas las cajas antes de salir de planta.','error'); scan?.focus(); return; } if(!confirm('Â¿Confirmar salida fisica de PT e iniciar el viaje?')) e.preventDefault(); });
+        updateSalida();
+
+        const collapseTitles = new Set(['Reprogramar','Partidas','Cajas asignadas','Cajas PT disponibles por Release','DocumentaciÃ³n','Evidencias','Registrar incidencia','Incidencias','Historial']);
+        document.querySelectorAll('.section').forEach(section => {
+            let head = section.querySelector(':scope > .section-head');
+            let title = section.querySelector(':scope > .section-title') || head?.querySelector('.section-title');
+            const text = (title?.textContent || '').trim();
+            if (text === 'Acciones operativas') { section.classList.add('lg-hidden-operational'); return; }
+            if (!collapseTitles.has(text)) return;
+            if (!head && title) {
+                head = document.createElement('div'); head.className='section-head lg-generated-head'; section.insertBefore(head,title); head.appendChild(title);
+            }
+            if (!head) return;
+            const btn=document.createElement('button'); btn.type='button'; btn.className='lg-collapse-toggle'; btn.innerHTML='<i class="fa-solid fa-chevron-down me-1"></i> Ver'; head.appendChild(btn);
+            section.classList.add('lg-collapsed');
+            btn.addEventListener('click',()=>{ const closed=section.classList.toggle('lg-collapsed'); btn.innerHTML=closed?'<i class="fa-solid fa-chevron-down me-1"></i> Ver':'<i class="fa-solid fa-chevron-up me-1"></i> Ocultar'; });
+        });
     })();
 </script>
