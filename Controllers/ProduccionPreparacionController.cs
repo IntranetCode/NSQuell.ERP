@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace ERP.NSQuell.Controllers
 {
-    public sealed class ProduccionPreparacionController : Controller
+    public sealed partial class ProduccionPreparacionController : Controller
     {
         private readonly IConfiguration _configuration;
 
@@ -29,9 +29,7 @@ namespace ERP.NSQuell.Controllers
             _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
 
-        // ============================================================
-        // PANTALLAS
-        // ============================================================
+        
 
         [HttpGet]
         public async Task<IActionResult> Index(string? filtro = null, int? maquinaId = null)
@@ -54,7 +52,7 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> Secado(string? filtro = null, int? maquinaId = null)
         {
-            return await ConstruirVistaAsync("Secado", ProduccionPreparacionTipo.SecadoMaterial, filtro, maquinaId, false);
+            return await ConstruirSecadoOperativoAsync(filtro, maquinaId);
         }
 
         [HttpGet]
@@ -543,6 +541,14 @@ WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID
                     return RedirectToAction(nameof(CambioMolde));
                 }
 
+                if (string.Equals(tipoTarea, ProduccionPreparacionTipo.SecadoMaterial, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El secado debe atenderse desde la pantalla de Secado, seleccionando tolva e iniciando la carga.";
+                    return RedirectToAction(nameof(Secado));
+                }
+
+
                 if (string.Equals(tipoTarea, ProduccionPreparacionTipo.PrepararEmbalaje, StringComparison.OrdinalIgnoreCase) &&
                     !permisos.PuedeGestionarEmbalaje)
                 {
@@ -632,10 +638,6 @@ WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID
             return RedirectToAction(nameof(Index));
         }
 
-        // ============================================================
-        // ENDPOINT PARA CRONOMETRO / ALERTAS DE LA VISTA
-        // La vista puede consultarlo cada 30-60 segundos.
-        // ============================================================
 
         [HttpGet]
         public async Task<IActionResult> EstadoCambioMolde(int id)
@@ -1473,6 +1475,244 @@ ORDER BY
 
             return lista;
         }
+
+        private static async Task SincronizarRecepcionesFaltantesAsync(int usuarioId, SqlConnection cn)
+        {
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                const string sql = @"
+DECLARE @Nuevas TABLE
+(
+    RecepcionMaterialID BIGINT NOT NULL,
+    TipoOrigen NVARCHAR(20) NOT NULL,
+    MovimientoAlmacenID BIGINT NOT NULL
+);
+
+
+INSERT dbo.Produccion_RecepcionMateriales
+(
+    TipoOrigen,MovimientoAlmacenID,SolicitudProduccionID,SolicitudProduccionDetalleID,
+    ProgramaProduccionID,EjecucionProduccionID,NumeroOFSnapshot,
+    MaterialSolicitadoID,MaterialEntregadoID,EmbalajeSolicitadoID,EmbalajeEntregadoID,
+    CodigoSolicitadoSnapshot,DescripcionSolicitadaSnapshot,
+    CodigoEntregadoSnapshot,DescripcionEntregadaSnapshot,
+    TipoMP,Lote,Unidad,CantidadEntregadaAlmacen,FechaEntregaAlmacen,
+    UsuarioEntregaAlmacenID,UsuarioEntregaAlmacenNombre,ReferenciaOperacion,
+    ObservacionesAlmacen,EstadoRecepcion,CantidadRecibidaProduccion,
+    EstadoAclaracion,Activo,UsuarioCreacionID,FechaCreacion
+)
+OUTPUT INSERTED.RecepcionMaterialID,INSERTED.TipoOrigen,INSERTED.MovimientoAlmacenID
+INTO @Nuevas(RecepcionMaterialID,TipoOrigen,MovimientoAlmacenID)
+SELECT
+    N'MP',
+    m.MovimientoID,
+    m.SolicitudProduccionID,
+    NULL,
+    NULL,
+    NULL,
+    COALESCE(NULLIF(LTRIM(RTRIM(m.NumeroOF)),N''),NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),N''),
+    COALESCE(m.MaterialSolicitadoID,m.MaterialID),
+    m.MaterialID,
+    NULL,
+    NULL,
+    solicitado.Codigo,
+    solicitado.Nombre,
+    entregado.Codigo,
+    entregado.Nombre,
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(m.TipoMP,N'')))) IN(N'M',N'MOLIDO') THEN N'M' ELSE N'V' END,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.Lote,N''))),N''),
+    ISNULL(NULLIF(LTRIM(RTRIM(m.Unidad)),N''),N'KG'),
+    CONVERT(DECIMAL(18,4),m.Cantidad),
+    m.FechaMovimiento,
+    m.ResponsableUsuarioID,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.EntregadoPorNombre,m.CreadoPor))),N''),
+    m.ReferenciaOperacion,
+    m.Seguimiento,
+    N'PENDIENTE',
+    NULL,
+    N'NO_APLICA',
+    1,
+    COALESCE(m.ResponsableUsuarioID,@UsuarioID),
+    SYSDATETIME()
+FROM dbo.AlmacenMP_Movimientos m WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=m.SolicitudProduccionID
+   AND s.Activo=1
+INNER JOIN dbo.ERP_Materiales entregado
+    ON entregado.MaterialID=m.MaterialID
+   AND entregado.Activo=1
+INNER JOIN dbo.ERP_Materiales solicitado
+    ON solicitado.MaterialID=COALESCE(m.MaterialSolicitadoID,m.MaterialID)
+   AND solicitado.Activo=1
+WHERE m.Activo=1
+  AND m.TipoMovimiento=N'Salida'
+  AND m.SolicitudProduccionID IS NOT NULL
+  AND ISNULL(m.Cantidad,0)>0.0005
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_RecepcionMateriales r
+      WHERE r.Activo=1
+        AND r.TipoOrigen=N'MP'
+        AND r.MovimientoAlmacenID=m.MovimientoID
+  )
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.SolicitudesProduccionDetalle d
+      WHERE d.Activo=1
+        AND d.SolicitudProduccionID=m.SolicitudProduccionID
+        AND ISNULL(d.CantidadMpKg,0)>0
+        AND
+        (
+            d.MaterialID=COALESCE(m.MaterialSolicitadoID,m.MaterialID)
+            OR
+            (
+                d.MaterialID IS NULL
+                AND UPPER(LTRIM(RTRIM(ISNULL(d.MaterialCodigo,N''))))=UPPER(LTRIM(RTRIM(solicitado.Codigo)))
+            )
+        )
+  );
+
+-- ============================================================
+-- EMBALAJES
+-- Solo recupera entregas dirigidas a una OF.
+-- EmbalajeSolicitadoID se guarda únicamente en ese flujo.
+-- ============================================================
+INSERT dbo.Produccion_RecepcionMateriales
+(
+    TipoOrigen,MovimientoAlmacenID,SolicitudProduccionID,SolicitudProduccionDetalleID,
+    ProgramaProduccionID,EjecucionProduccionID,NumeroOFSnapshot,
+    MaterialSolicitadoID,MaterialEntregadoID,EmbalajeSolicitadoID,EmbalajeEntregadoID,
+    CodigoSolicitadoSnapshot,DescripcionSolicitadaSnapshot,
+    CodigoEntregadoSnapshot,DescripcionEntregadaSnapshot,
+    TipoMP,Lote,Unidad,CantidadEntregadaAlmacen,FechaEntregaAlmacen,
+    UsuarioEntregaAlmacenID,UsuarioEntregaAlmacenNombre,ReferenciaOperacion,
+    ObservacionesAlmacen,EstadoRecepcion,CantidadRecibidaProduccion,
+    EstadoAclaracion,Activo,UsuarioCreacionID,FechaCreacion
+)
+OUTPUT INSERTED.RecepcionMaterialID,INSERTED.TipoOrigen,INSERTED.MovimientoAlmacenID
+INTO @Nuevas(RecepcionMaterialID,TipoOrigen,MovimientoAlmacenID)
+SELECT
+    N'EMBALAJE',
+    m.MovimientoID,
+    m.SolicitudProduccionID,
+    NULL,
+    NULL,
+    NULL,
+    COALESCE(NULLIF(LTRIM(RTRIM(m.NumeroOF)),N''),NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),N''),
+    NULL,
+    NULL,
+    m.EmbalajeSolicitadoID,
+    m.EmbalajeID,
+    solicitado.Codigo,
+    solicitado.Nombre,
+    entregado.Codigo,
+    entregado.Nombre,
+    NULL,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.Lote,N''))),N''),
+    COALESCE(NULLIF(LTRIM(RTRIM(m.Unidad)),N''),NULLIF(LTRIM(RTRIM(entregado.UnidadDefault)),N''),N'PZS'),
+    CONVERT(DECIMAL(18,4),m.Cantidad),
+    m.FechaMovimiento,
+    m.ResponsableUsuarioID,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.EntregadoPorNombre,m.CreadoPor))),N''),
+    m.ReferenciaOperacion,
+    m.Seguimiento,
+    N'PENDIENTE',
+    NULL,
+    N'NO_APLICA',
+    1,
+    COALESCE(m.ResponsableUsuarioID,@UsuarioID),
+    SYSDATETIME()
+FROM dbo.AlmacenEmbalajes_Movimientos m WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=m.SolicitudProduccionID
+   AND s.Activo=1
+INNER JOIN dbo.ERP_Embalajes entregado
+    ON entregado.EmbalajeID=m.EmbalajeID
+   AND entregado.Activo=1
+INNER JOIN dbo.ERP_Embalajes solicitado
+    ON solicitado.EmbalajeID=m.EmbalajeSolicitadoID
+   AND solicitado.Activo=1
+WHERE m.Activo=1
+  AND m.TipoMovimiento=N'Salida'
+  AND m.SolicitudProduccionID IS NOT NULL
+  AND m.EmbalajeSolicitadoID IS NOT NULL
+  AND ISNULL(m.Cantidad,0)>0.0005
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_RecepcionMateriales r
+      WHERE r.Activo=1
+        AND r.TipoOrigen=N'EMBALAJE'
+        AND r.MovimientoAlmacenID=m.MovimientoID
+  )
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.SolicitudesProduccionDetalle d
+      WHERE d.Activo=1
+        AND d.SolicitudProduccionID=m.SolicitudProduccionID
+        AND ISNULL(d.CantidadEmbalajes,0)>0
+        AND UPPER(LTRIM(RTRIM(ISNULL(d.EmbalajeCodigo,N''))))=UPPER(LTRIM(RTRIM(solicitado.Codigo)))
+  );
+
+-- ============================================================
+-- MARCAR MOVIMIENTOS COMO PENDIENTES DE VALIDACIÓN
+-- ============================================================
+UPDATE m
+SET m.RequiereValidacionProduccion=1,
+    m.ValidadoProduccion=0
+FROM dbo.AlmacenMP_Movimientos m
+INNER JOIN @Nuevas n
+    ON n.TipoOrigen=N'MP'
+   AND n.MovimientoAlmacenID=m.MovimientoID;
+
+UPDATE m
+SET m.RequiereValidacionProduccion=1,
+    m.ValidadoProduccion=0
+FROM dbo.AlmacenEmbalajes_Movimientos m
+INNER JOIN @Nuevas n
+    ON n.TipoOrigen=N'EMBALAJE'
+   AND n.MovimientoAlmacenID=m.MovimientoID;
+
+INSERT dbo.Produccion_RecepcionMaterialesHistorial
+(
+    RecepcionMaterialID,Evento,EstadoRecepcionAnterior,EstadoRecepcionNuevo,
+    CantidadRecibidaAnterior,CantidadRecibidaNueva,
+    EstadoAclaracionAnterior,EstadoAclaracionNuevo,
+    Comentario,UsuarioID,FechaEvento
+)
+SELECT
+    n.RecepcionMaterialID,
+    N'ENTREGA_ALMACEN_RECUPERADA',
+    NULL,
+    N'PENDIENTE',
+    NULL,
+    NULL,
+    NULL,
+    N'NO_APLICA',
+    CASE
+        WHEN n.TipoOrigen=N'EMBALAJE' THEN N'Se recuperó automáticamente una entrega de embalaje de Almacén pendiente de confirmación física por Producción.'
+        ELSE N'Se recuperó automáticamente una entrega de materia prima de Almacén pendiente de confirmación física por Producción.'
+    END,
+    @UsuarioID,
+    SYSDATETIME()
+FROM @Nuevas n;";
+
+                await using var cmd = new SqlCommand(sql, cn, tx);
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                throw;
+            }
+        }
+
 
         private static async Task<List<ProduccionPreparacionMaquinaVm>> CargarMaquinasPreparacionAsync(SqlConnection cn)
         {

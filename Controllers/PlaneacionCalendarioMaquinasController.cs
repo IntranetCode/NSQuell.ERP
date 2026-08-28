@@ -585,6 +585,8 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     horasProduccion,
                     cn,
                     tx);
+
+                await SincronizarSecadoDesdeReprogramacionAsync(programa.ProgramaProduccionID, usuarioId, cn, tx);
                 // NSQ_LHRH_CALENDARIO_HOOK_V1
                 var programaParejaMovidoId =
                     await SincronizarParejaLhRhCalendarioAsync(
@@ -2419,11 +2421,217 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                     programa.ProgramaProduccionID;
 
                 await cmd.ExecuteNonQueryAsync();
+
+                await SincronizarSecadoDesdeReprogramacionAsync(programa.ProgramaProduccionID, usuarioId, cn, tx);
             }
 
             // NSQ_DDP_PRODUCCION_V1 - calendario no reasigna operadores.
         }
 
+        private static async Task SincronizarSecadoDesdeReprogramacionAsync(int programaProduccionId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (programaProduccionId <= 0) return;
+
+            const string sql = @"
+DECLARE @MaquinaID INT,
+        @FechaInicioProgramada DATETIME2,
+        @Arranque TIME,
+        @TipoSecado NVARCHAR(100),
+        @HorasSecado DECIMAL(18,4),
+        @MaterialCodigo NVARCHAR(100),
+        @MaterialDescripcion NVARCHAR(250),
+        @EstatusID INT,
+        @ProgramaActivo BIT,
+        @FechaArranque DATETIME2,
+        @FechaInicioSecado DATETIME2,
+        @MinutosSecado INT,
+        @TipoProceso NVARCHAR(30),
+        @RequiereSecado BIT;
+
+SELECT TOP(1)
+    @MaquinaID=pp.MaquinaID,
+    @FechaInicioProgramada=pp.FechaInicioProgramada,
+    @Arranque=pp.Arranque,
+    @TipoSecado=COALESCE(NULLIF(LTRIM(RTRIM(d.TipoSecado)),N''),NULLIF(LTRIM(RTRIM(dt.TipoSecado)),N'')),
+    @HorasSecado=COALESCE(d.HorasSecado,dt.HorasSecado),
+    @MaterialCodigo=COALESCE(NULLIF(LTRIM(RTRIM(d.MaterialCodigo)),N''),NULLIF(LTRIM(RTRIM(dt.MaterialCodigo)),N'')),
+    @MaterialDescripcion=COALESCE(NULLIF(LTRIM(RTRIM(d.MaterialDescripcion)),N''),NULLIF(LTRIM(RTRIM(dt.MaterialDescripcion)),N'')),
+    @EstatusID=ISNULL(pp.EstatusID,1),
+    @ProgramaActivo=pp.Activo
+FROM dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+   AND d.Activo=1
+LEFT JOIN dbo.ERP_ParteDatosTecnicos dt
+    ON dt.ParteID=pp.ParteID
+   AND dt.Activo=1
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID;
+
+IF @ProgramaActivo IS NULL RETURN;
+
+SET @RequiereSecado=
+    CASE
+        WHEN @ProgramaActivo=1
+         AND @EstatusID NOT IN(5,6,9,99)
+         AND @FechaInicioProgramada IS NOT NULL
+         AND ISNULL(@HorasSecado,0)>0
+         AND (NULLIF(LTRIM(RTRIM(ISNULL(@MaterialCodigo,N''))),N'') IS NOT NULL
+              OR NULLIF(LTRIM(RTRIM(ISNULL(@MaterialDescripcion,N''))),N'') IS NOT NULL)
+        THEN 1
+        ELSE 0
+    END;
+
+IF @RequiereSecado=1
+BEGIN
+    SET @MinutosSecado=CONVERT(INT,CEILING(@HorasSecado*60));
+    SET @TipoProceso=
+        CASE
+            WHEN UPPER(ISNULL(@TipoSecado,N'')) LIKE N'%DESHUM%'
+              OR UPPER(ISNULL(@TipoSecado,N'')) LIKE N'%DESUM%'
+            THEN N'DESHUMIDIFICADO'
+            ELSE N'SECADO'
+        END;
+
+    IF @Arranque IS NULL
+        SET @FechaArranque=@FechaInicioProgramada;
+    ELSE
+    BEGIN
+        SET @FechaArranque=DATEADD(SECOND,DATEDIFF(SECOND,CAST('00:00:00' AS TIME),@Arranque),CAST(CAST(@FechaInicioProgramada AS DATE) AS DATETIME2));
+        IF @FechaArranque<@FechaInicioProgramada SET @FechaArranque=DATEADD(DAY,1,@FechaArranque);
+    END;
+
+    SET @FechaInicioSecado=DATEADD(MINUTE,-@MinutosSecado,@FechaArranque);
+
+    UPDATE sm
+    SET
+        sm.MaquinaProgramadaID=@MaquinaID,
+        sm.TipoSecadoOrigen=NULLIF(LTRIM(RTRIM(@TipoSecado)),N''),
+        sm.TipoProceso=@TipoProceso,
+        sm.HorasSecadoRequeridas=@HorasSecado,
+        sm.MinutosSecadoRequeridos=@MinutosSecado,
+        sm.FechaArranqueProduccion=@FechaArranque,
+        sm.FechaInicioSecadoObjetivo=@FechaInicioSecado,
+        sm.FechaLimiteEntregaMaterial=DATEADD(MINUTE,-ISNULL(sm.MargenEntregaAntesSecadoMinutos,0),@FechaInicioSecado),
+        sm.FechaObjetivoFinSecado=@FechaArranque,
+        sm.Estado=
+            CASE
+                WHEN sm.Estado=N'CANCELADO' THEN
+                    CASE
+                        WHEN EXISTS
+                        (
+                            SELECT 1
+                            FROM dbo.Produccion_SecadoCargas c
+                            WHERE c.SecadoMaterialID=sm.SecadoMaterialID
+                              AND c.Activo=1
+                              AND c.Estado=N'EN_PROCESO'
+                        ) THEN N'EN_PROCESO'
+                        WHEN ISNULL(sm.CantidadFinalizadaKg,0)>0.0005 THEN N'PARCIAL'
+                        ELSE N'PENDIENTE'
+                    END
+                ELSE sm.Estado
+            END,
+        sm.Activo=1,
+        sm.UsuarioModificacionID=@UsuarioID,
+        sm.FechaModificacion=SYSDATETIME()
+    FROM dbo.Produccion_SecadoMaterial sm
+    WHERE sm.ProgramaProduccionID=@ProgramaProduccionID
+      AND sm.Estado<>N'FINALIZADO';
+
+    DECLARE @PreparacionAnticipadaID INT,
+            @EstadoPreparacion NVARCHAR(30);
+
+    SELECT TOP(1)
+        @PreparacionAnticipadaID=PreparacionAnticipadaID,
+        @EstadoPreparacion=Estado
+    FROM dbo.Produccion_PreparacionAnticipada WITH(UPDLOCK,HOLDLOCK)
+    WHERE ProgramaProduccionID=@ProgramaProduccionID
+      AND TipoTarea=N'SECADO_MATERIAL'
+    ORDER BY PreparacionAnticipadaID DESC;
+
+    IF @PreparacionAnticipadaID IS NULL
+    BEGIN
+        INSERT INTO dbo.Produccion_PreparacionAnticipada
+        (
+            ProgramaProduccionID,TipoTarea,FechaObjetivo,FechaAviso,Estado,
+            UsuarioConfirmacionID,FechaConfirmacion,Observaciones,Activo,
+            UsuarioCreacionID,FechaCreacion,UsuarioInicioID,FechaInicioReal,
+            FechaFinReal,DuracionRealMinutos,LimiteMinutosAplicado,
+            ExcedioLimite,MotivoExceso
+        )
+        VALUES
+        (
+            @ProgramaProduccionID,N'SECADO_MATERIAL',@FechaArranque,@FechaInicioSecado,N'PENDIENTE',
+            NULL,NULL,NULL,1,@UsuarioID,SYSDATETIME(),NULL,NULL,NULL,NULL,NULL,0,NULL
+        );
+    END
+    ELSE IF @EstadoPreparacion=N'EN_PROCESO'
+    BEGIN
+        UPDATE dbo.Produccion_PreparacionAnticipada
+        SET FechaObjetivo=@FechaArranque,
+            FechaAviso=@FechaInicioSecado,
+            Activo=1,
+            UsuarioModificacionID=@UsuarioID,
+            FechaModificacion=SYSDATETIME()
+        WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+    END
+    ELSE IF @EstadoPreparacion<>N'CONFIRMADA'
+    BEGIN
+        UPDATE dbo.Produccion_PreparacionAnticipada
+        SET FechaObjetivo=@FechaArranque,
+            FechaAviso=@FechaInicioSecado,
+            Estado=N'PENDIENTE',
+            UsuarioInicioID=NULL,
+            FechaInicioReal=NULL,
+            FechaFinReal=NULL,
+            DuracionRealMinutos=NULL,
+            LimiteMinutosAplicado=NULL,
+            ExcedioLimite=0,
+            MotivoExceso=NULL,
+            UsuarioConfirmacionID=NULL,
+            FechaConfirmacion=NULL,
+            Activo=1,
+            UsuarioModificacionID=@UsuarioID,
+            FechaModificacion=SYSDATETIME()
+        WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+    END
+END
+ELSE
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET Estado=N'CANCELADA',
+        Activo=0,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE ProgramaProduccionID=@ProgramaProduccionID
+      AND TipoTarea=N'SECADO_MATERIAL'
+      AND Estado=N'PENDIENTE'
+      AND Activo=1;
+
+    UPDATE sm
+    SET sm.Estado=N'CANCELADO',
+        sm.UsuarioModificacionID=@UsuarioID,
+        sm.FechaModificacion=SYSDATETIME()
+    FROM dbo.Produccion_SecadoMaterial sm
+    WHERE sm.ProgramaProduccionID=@ProgramaProduccionID
+      AND sm.Activo=1
+      AND sm.Estado IN(N'PENDIENTE',N'PARCIAL')
+      AND ISNULL(sm.CantidadAsignadaKg,0)<=0.0005
+      AND ISNULL(sm.CantidadFinalizadaKg,0)<=0.0005
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_SecadoCargas c
+          WHERE c.SecadoMaterialID=sm.SecadoMaterialID
+            AND c.Activo=1
+            AND c.Estado=N'EN_PROCESO'
+      );
+END;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
+        }
         private static ProgramaCola MapearProgramaCola(SqlDataReader rd)
         {
             return new ProgramaCola

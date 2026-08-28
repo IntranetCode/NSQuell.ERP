@@ -1155,6 +1155,7 @@ WHERE MaterialID=@Id AND Activo=1;";
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
 
+        model.EsEntregaOF = model.EsEntregaOF || (model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 && materialSolicitadoId.GetValueOrDefault() > 0);
         model.TipoMP = NormalizarTipoMP(model.TipoMP);
 
         // SCRAP_V15_MP_LOTE
@@ -1670,6 +1671,7 @@ INSERT dbo.AlmacenMP_Movimientos
     RequiereValidacionProduccion, ValidadoProduccion,
     ReferenciaOperacion, SolicitudProduccionID
 )
+OUTPUT INSERTED.MovimientoID
 VALUES
 (
     SYSDATETIME(), @MaterialID, @MaterialSolicitadoID,
@@ -1678,7 +1680,8 @@ VALUES
     @FolioCompra,
     @UsuarioID, @Responsable, @Observaciones,
     SYSUTCDATETIME(), @Responsable, 1,
-    0, 1, @Referencia, @SolicitudProduccionID
+    @RequiereValidacionProduccion, @ValidadoProduccion,
+    @Referencia, @SolicitudProduccionID
 );";
 
             foreach (var movimiento in movimientos)
@@ -1757,12 +1760,15 @@ VALUES
                         ? DBNull.Value
                         : observacionesGuardar;
                 insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = movimiento.Referencia;
-                insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
-                    model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0
-                        ? model.SolicitudProduccionID.Value
-                        : DBNull.Value;
+                insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 ? model.SolicitudProduccionID.Value : DBNull.Value;
+                insert.Parameters.Add("@RequiereValidacionProduccion", SqlDbType.Bit).Value = model.EsEntregaOF;
+                insert.Parameters.Add("@ValidadoProduccion", SqlDbType.Bit).Value = !model.EsEntregaOF;
+                var movimientoAlmacenID = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken) ?? 0L);
+                if (movimientoAlmacenID <= 0)
+                    throw new InvalidOperationException("No fue posible obtener el movimiento de materia prima registrado.");
 
-                await insert.ExecuteNonQueryAsync(cancellationToken);
+                if (model.EsEntregaOF)
+                    await RegistrarRecepcionProduccionMPAsync(connection, transaction, movimientoAlmacenID, cancellationToken);
             }
 
             if (model.EsEntregaOF)
@@ -1844,6 +1850,108 @@ END;";
         return model.EsEntregaOF
             ? RedirectToAction("Index", "AlmacenOF")
             : RedirectToAction(nameof(Index));
+    }
+
+    private async Task RegistrarRecepcionProduccionMPAsync(SqlConnection connection, SqlTransaction transaction, long movimientoAlmacenID, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+DECLARE @RecepcionMaterialID BIGINT;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.Produccion_RecepcionMateriales WITH(UPDLOCK,HOLDLOCK)
+    WHERE TipoOrigen=N'MP'
+      AND MovimientoAlmacenID=@MovimientoAlmacenID
+      AND Activo=1
+)
+    RETURN;
+
+INSERT dbo.Produccion_RecepcionMateriales
+(
+    TipoOrigen,MovimientoAlmacenID,SolicitudProduccionID,SolicitudProduccionDetalleID,
+    ProgramaProduccionID,EjecucionProduccionID,NumeroOFSnapshot,
+    MaterialSolicitadoID,MaterialEntregadoID,EmbalajeSolicitadoID,EmbalajeEntregadoID,
+    CodigoSolicitadoSnapshot,DescripcionSolicitadaSnapshot,
+    CodigoEntregadoSnapshot,DescripcionEntregadaSnapshot,
+    TipoMP,Lote,Unidad,CantidadEntregadaAlmacen,FechaEntregaAlmacen,
+    UsuarioEntregaAlmacenID,UsuarioEntregaAlmacenNombre,ReferenciaOperacion,
+    ObservacionesAlmacen,EstadoRecepcion,CantidadRecibidaProduccion,
+    EstadoAclaracion,Activo,UsuarioCreacionID,FechaCreacion
+)
+SELECT
+    N'MP',
+    m.MovimientoID,
+    m.SolicitudProduccionID,
+    NULL,
+    NULL,
+    NULL,
+    LTRIM(RTRIM(ISNULL(m.NumeroOF,N''))),
+    m.MaterialSolicitadoID,
+    m.MaterialID,
+    NULL,
+    NULL,
+    solicitado.Codigo,
+    solicitado.Nombre,
+    entregado.Codigo,
+    entregado.Nombre,
+    CASE
+        WHEN UPPER(LTRIM(RTRIM(ISNULL(m.TipoMP,N'')))) IN(N'M',N'MOLIDO') THEN N'M'
+        ELSE N'V'
+    END,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.Lote,N''))),N''),
+    ISNULL(NULLIF(LTRIM(RTRIM(m.Unidad)),N''),N'KG'),
+    CONVERT(DECIMAL(18,4),m.Cantidad),
+    m.FechaMovimiento,
+    m.ResponsableUsuarioID,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.EntregadoPorNombre,m.CreadoPor))),N''),
+    m.ReferenciaOperacion,
+    m.Seguimiento,
+    N'PENDIENTE',
+    NULL,
+    N'NO_APLICA',
+    1,
+    m.ResponsableUsuarioID,
+    SYSDATETIME()
+FROM dbo.AlmacenMP_Movimientos m
+INNER JOIN dbo.ERP_Materiales solicitado ON solicitado.MaterialID=m.MaterialSolicitadoID
+INNER JOIN dbo.ERP_Materiales entregado ON entregado.MaterialID=m.MaterialID
+WHERE m.MovimientoID=@MovimientoAlmacenID
+  AND m.Activo=1
+  AND m.SolicitudProduccionID IS NOT NULL
+  AND m.MaterialSolicitadoID IS NOT NULL;
+
+SET @RecepcionMaterialID=CONVERT(BIGINT,SCOPE_IDENTITY());
+
+IF @RecepcionMaterialID IS NULL
+    THROW 51220,N'No fue posible generar la recepción pendiente de materia prima para Producción.',1;
+
+INSERT dbo.Produccion_RecepcionMaterialesHistorial
+(
+    RecepcionMaterialID,Evento,EstadoRecepcionAnterior,EstadoRecepcionNuevo,
+    CantidadRecibidaAnterior,CantidadRecibidaNueva,
+    EstadoAclaracionAnterior,EstadoAclaracionNuevo,
+    Comentario,UsuarioID,FechaEvento
+)
+VALUES
+(
+    @RecepcionMaterialID,
+    N'ENTREGA_ALMACEN',
+    NULL,
+    N'PENDIENTE',
+    NULL,
+    NULL,
+    NULL,
+    N'NO_APLICA',
+    N'Almacén registró la entrega de materia prima. Pendiente de confirmación física por Producción.',
+    @UsuarioID,
+    SYSDATETIME()
+);";
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@MovimientoAlmacenID", SqlDbType.BigInt).Value = movimientoAlmacenID;
+        command.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task CargarMovimientoAsync(

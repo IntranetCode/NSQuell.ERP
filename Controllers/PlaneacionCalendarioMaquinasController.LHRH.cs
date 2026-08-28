@@ -8,99 +8,34 @@ namespace ERP.NSQuell.Controllers;
 // NSQ_LHRH_CALENDARIO_V1
 public sealed partial class PlaneacionCalendarioMaquinasController
 {
-    private async Task<int?> SincronizarParejaLhRhCalendarioAsync(
-        ProgramaBase programa,
-        MaquinaCompatible maquinaDestino,
-        DateTime fechaCambio,
-        DateTime fechaArranque,
-        DateTime fechaFin,
-        decimal horasProduccion,
-        int secuencia,
-        int usuarioId,
-        SqlConnection cn,
-        SqlTransaction tx)
+    private async Task<int?> SincronizarParejaLhRhCalendarioAsync(ProgramaBase programa, MaquinaCompatible maquinaDestino, DateTime fechaCambio, DateTime fechaArranque, DateTime fechaFin, decimal horasProduccion, int secuencia, int usuarioId, SqlConnection cn, SqlTransaction tx)
     {
-        var parejaId = await ObtenerProgramaParejaLhRhIdAsync(
-            programa.ProgramaProduccionID,
-            cn,
-            tx);
-
+        var parejaId = await ObtenerProgramaParejaLhRhIdAsync(programa.ProgramaProduccionID, cn, tx);
         if (!parejaId.HasValue)
             return null;
 
-        var bloqueo = await ObtenerMotivoBloqueoMovimientoAsync(
-            parejaId.Value,
-            cn,
-            tx,
-            bloquear: true);
-
+        var bloqueo = await ObtenerMotivoBloqueoMovimientoAsync(parejaId.Value, cn, tx, bloquear: true);
         if (!string.IsNullOrWhiteSpace(bloqueo))
-        {
-            throw new InvalidOperationException(
-                "La pareja LH/RH no puede moverse junto con este programa: " +
-                bloqueo);
-        }
+            throw new InvalidOperationException("La pareja LH/RH no puede moverse junto con este programa: " + bloqueo);
 
-        var pareja = await ObtenerProgramaBaseAsync(
-            parejaId.Value,
-            cn,
-            tx,
-            bloquear: true);
-
+        var pareja = await ObtenerProgramaBaseAsync(parejaId.Value, cn, tx, bloquear: true);
         if (pareja == null)
             return null;
 
-        var compatiblesPareja = await ObtenerMaquinasCompatiblesAsync(
-            pareja,
-            cn,
-            tx);
+        var compatiblesPareja = await ObtenerMaquinasCompatiblesAsync(pareja, cn, tx);
+        if (!compatiblesPareja.Any(x => x.MaquinaID == maquinaDestino.MaquinaID))
+            throw new InvalidOperationException("La máquina destino no está configurada como compatible para la pareja LH/RH. Corrige los datos técnicos de ambas partes antes de moverlas juntas.");
 
-        if (!compatiblesPareja.Any(x =>
-                x.MaquinaID == maquinaDestino.MaquinaID))
-        {
-            throw new InvalidOperationException(
-                "La máquina destino no está configurada como compatible para la pareja LH/RH. " +
-                "Corrige los datos técnicos de ambas partes antes de moverlas juntas.");
-        }
+        await ActualizarProgramaAsync(pareja, maquinaDestino, fechaCambio, fechaArranque, fechaFin, horasProduccion, secuencia + 1, usuarioId, cn, tx);
 
-        await ActualizarProgramaAsync(
-            pareja,
-            maquinaDestino,
-            fechaCambio,
-            fechaArranque,
-            fechaFin,
-            horasProduccion,
-            secuencia + 1,
-            usuarioId,
-            cn,
-            tx);
+        await SincronizarDocumentosRelacionadosAsync(pareja, maquinaDestino, fechaCambio, fechaArranque, fechaFin, horasProduccion, cn, tx);
 
-        await SincronizarDocumentosRelacionadosAsync(
-            pareja,
-            maquinaDestino,
-            fechaCambio,
-            fechaArranque,
-            fechaFin,
-            horasProduccion,
-            cn,
-            tx);
+        await SincronizarSecadoDesdeReprogramacionAsync(pareja.ProgramaProduccionID, usuarioId, cn, tx);
 
-        await InsertarHistorialMovimientoAsync(
-            pareja,
-            maquinaDestino,
-            fechaCambio,
-            fechaArranque,
-            fechaFin,
-            horasProduccion,
-            usuarioId,
-            "Movimiento automático por pareja LH/RH. " +
-            $"Programa origen #{programa.ProgramaProduccionID}.",
-            cn,
-            tx);
+        await InsertarHistorialMovimientoAsync(pareja, maquinaDestino, fechaCambio, fechaArranque, fechaFin, horasProduccion, usuarioId, "Movimiento automático por pareja LH/RH. " + $"Programa origen #{programa.ProgramaProduccionID}.", cn, tx);
 
         return parejaId.Value;
     }
-
     private static async Task<int?> ObtenerProgramaParejaLhRhIdAsync(
         int programaProduccionId,
         SqlConnection cn,

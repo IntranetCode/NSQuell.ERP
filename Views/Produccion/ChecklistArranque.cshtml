@@ -795,92 +795,10 @@
                     </div>
                 </form>
 
-                @if (esMonitoreoPerifericos)
-                {
-                    <section class="section-card">
-                        <div class="section-head"><div><div class="section-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Problemas durante el turno</div><div class="section-meta">Registra una fila por cada falla detectada. Puedes actualizarla cuando se determine la causa o la solución.</div></div><span class="pill">@(Model.ProblemasPerifericos?.Count ?? 0) registros</span></div>
-                        <div class="panel-body">
-                            @if (puedeEditar)
-                            {
-                                <form method="post" action="@Url.Action("GuardarProblemaPerifericos", "Produccion")" class="mb-4">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
-                                    <input type="hidden" name="MonitoreoPerifericoProblemaID" value="0" />
-                                    <div class="row g-3">
-                                        <div class="col-12"><label class="form-label">Descripción de la falla</label><textarea class="form-control" name="DescripcionFalla" rows="2" maxlength="1000" required placeholder="Describe qué ocurrió y en qué periférico"></textarea></div>
-                                        <div class="col-md-6"><label class="form-label">Causa raíz</label><textarea class="form-control" name="CausaRaiz" rows="2" maxlength="1000" placeholder="Puede completarse después"></textarea></div>
-                                        <div class="col-md-6"><label class="form-label">Acciones realizadas</label><textarea class="form-control" name="Acciones" rows="2" maxlength="1000" placeholder="Ajuste, reparación o seguimiento"></textarea></div>
-                                        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2"><label class="form-check d-flex align-items-center gap-2 m-0 fw-bold"><input class="form-check-input" type="checkbox" name="Solucionado" value="true" /><input type="hidden" name="Solucionado" value="false" />Problema solucionado</label><button class="btn btn-warning btn-strong" type="submit"><i class="bi bi-plus-circle me-1"></i>Agregar problema</button></div>
-                                    </div>
-                                </form>
-                            }
-
-                            @if (Model.ProblemasPerifericos == null || Model.ProblemasPerifericos.Count == 0)
-                            {
-                                <div class="empty-state"><i class="bi bi-check-circle fs-3 d-block mb-2"></i>No se registraron problemas durante este turno.</div>
-                            }
-                            else
-                            {
-                                @foreach (var problema in Model.ProblemasPerifericos)
-                                {
-                                    <div class="problem-card @(problema.Solucionado ? "resuelto" : "")">
-                                        <form method="post" action="@Url.Action("GuardarProblemaPerifericos", "Produccion")">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
-                                            <input type="hidden" name="MonitoreoPerifericoProblemaID" value="@problema.MonitoreoPerifericoProblemaID" />
-                                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div class="problem-title"><i class="bi @(problema.Solucionado ? "bi-check-circle" : "bi-exclamation-circle") me-1"></i>Problema #@problema.MonitoreoPerifericoProblemaID</div><span class="badge @(problema.Solucionado ? "bg-success" : "bg-warning text-dark")">@(problema.Solucionado ? "Solucionado" : "Pendiente")</span></div>
-                                            <div class="row g-3">
-                                                <div class="col-12"><label class="form-label">Descripción</label><textarea class="form-control" name="DescripcionFalla" rows="2" maxlength="1000" required @(puedeEditar ? "" : "readonly")>@problema.DescripcionFalla</textarea></div>
-                                                <div class="col-md-6"><label class="form-label">Causa raíz</label><textarea class="form-control" name="CausaRaiz" rows="2" maxlength="1000" @(puedeEditar ? "" : "readonly")>@problema.CausaRaiz</textarea></div>
-                                                <div class="col-md-6"><label class="form-label">Acciones</label><textarea class="form-control" name="Acciones" rows="2" maxlength="1000" @(puedeEditar ? "" : "readonly")>@problema.Acciones</textarea></div>
-                                                <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                                    <div>
-                                                        <label class="form-check d-inline-flex align-items-center gap-2 m-0 fw-bold"><input class="form-check-input" type="checkbox" name="Solucionado" value="true" @(problema.Solucionado ? "checked" : "") @(puedeEditar ? "" : "disabled") /><input type="hidden" name="Solucionado" value="false" />Solucionado</label>@if (problema.FechaSolucion.HasValue){
-                                                        <span class="text-muted small ms-2">@problema.FechaSolucion.Value.ToString("dd/MM/yyyy HH:mm") · @Txt(problema.UsuarioSolucionNombre)</span>
-                                                    }
-                                                </div>
-                                                @if (puedeEditar)
-                                                {
-                                                    <div class="d-flex gap-2"><button class="btn btn-outline-primary btn-sm fw-bold" type="submit"><i class="bi bi-save me-1"></i>Actualizar</button><button class="btn btn-outline-danger btn-sm fw-bold" type="submit" formaction="@Url.Action("EliminarProblemaPerifericos", "Produccion")" name="monitoreoPerifericoProblemaId" value="@problema.MonitoreoPerifericoProblemaID" onclick="return confirm('¿Eliminar este problema?');"><input type="hidden" name="checklistArranqueId" value="@Model.ChecklistArranqueID" /><i class="bi bi-trash me-1"></i>Eliminar</button></div>
-                                                }
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
-                            }
-                        }
                     </div>
                 </section>
 
-                <section class="section-card">
-                    <div class="section-head">
-                        <div><div class="section-title"><i class="bi bi-arrow-left-right me-2 text-primary"></i>Entrega y recepción del turno</div><div class="section-meta">El usuario en sesión queda registrado como quien entrega. Selecciona al técnico que recibe.</div></div>@if(Model.FechaEntregaTurno.HasValue){
-                        <span class="badge bg-success">Entrega registrada</span>
-                                                }
-                    </div>
-                    <div class="panel-body">
-                        @if (Model.FechaEntregaTurno.HasValue)
-                        {
-                            <div class="turno-grid mb-3"><div class="summary"><div class="summary-k">Entrega</div><div class="data-v mt-1">@Txt(Model.TecnicoEntregaNombre)</div><div class="text-muted small">@Model.FechaEntregaTurno.Value.ToString("dd/MM/yyyy HH:mm")</div></div><div class="summary"><div class="summary-k">Recibe</div><div class="data-v mt-1">@Txt(Model.TecnicoRecibeNombre)</div><div class="text-muted small">@(Model.FechaRecepcionTurno?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div></div></div>
-                        }
-                        @if (puedeEditar)
-                        {
-                            <form method="post" action="@Url.Action("GuardarEntregaTurnoPerifericos", "Produccion")">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
-                                <div class="row g-3 align-items-end">
-                                    <div class="col-md-8">
-                                        <label class="form-label">Técnico que recibe</label><select class="form-select" name="TecnicoRecibePersonaID" required>
-                                            <option value="">Selecciona al técnico</option>@foreach(var tecnico in tecnicosProduccion){
-                                            <option value="@tecnico.Value" selected="@(tecnico.Value == Model.TecnicoRecibePersonaID?.ToString())">@tecnico.Text</option>
-                                        }
-                                    </select>
-                                </div><div class="col-md-4 d-grid"><button class="btn btn-success btn-strong" type="submit"><i class="bi bi-person-check me-1"></i>Confirmar entrega</button></div>
-                            </div>
-                        </form>
-                                                }
-                    </div>
-                </section>
+              
                                 }
 
             </main>
