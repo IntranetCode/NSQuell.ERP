@@ -25,6 +25,10 @@ public sealed partial class ProduccionPersonalController
         public string OperadorBaseNombre { get; set; } = string.Empty;
         public int? EjecucionID { get; set; }
         public int? EstatusProduccionID { get; set; }
+
+        // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
+        public int? EjecucionOperadorID { get; set; }
+        public string EjecucionOperadorNombre { get; set; } = string.Empty;
     }
 
     private sealed class AsignacionV7
@@ -102,6 +106,9 @@ public sealed partial class ProduccionPersonalController
 
         await CargarCoberturaSemanalV7Async(vm, escala?.EscalaID, cn);
 
+        // NSQ_PRODUCCION_PERSONAL_V10_COBERTURA_PERIODOS_HEADER_PEOPLE
+        await CargarCoberturaPanelV10Async(vm, cn);
+
         // NSQ_V7_4_OPERADORES_COMPLETOS
         // La vista por persona debe incluir a todos los operadores oficiales activos,
         // aunque no tengan ninguna OF asignada en el periodo consultado.
@@ -141,6 +148,23 @@ public sealed partial class ProduccionPersonalController
                     seg.TieneAsignacionEspecifica = true;
                     seg.OperadorAsignadoID = guardada.OperadorID;
                     seg.OperadorAsignadoNombre = guardada.OperadorNombre;
+                }
+
+                // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
+                // Mientras ESTE segmento esta produciendo, el operador que
+                // manda visualmente es el operador REAL de Produccion_Ejecucion.
+                // No se reescribe la asignacion historica ni el principal de OF.
+                if (seg.ProduccionActiva &&
+                    DateTime.Now >= seg.Inicio &&
+                    DateTime.Now < seg.Fin &&
+                    programa.EjecucionOperadorID.HasValue)
+                {
+                    seg.TieneAsignacionEspecifica = true;
+                    seg.OperadorAsignadoID =
+                        programa.EjecucionOperadorID;
+
+                    seg.OperadorAsignadoNombre =
+                        programa.EjecucionOperadorNombre;
                 }
 
                 vm.Segmentos.Add(seg);
@@ -203,20 +227,30 @@ public sealed partial class ProduccionPersonalController
     private static IEnumerable<ProduccionPersonalV7SegmentoVm> ConstruirSegmentosV7(
         ProgramaBaseV7 p, List<TurnoV2> turnos, DateTime inicioPeriodo, DateTime finPeriodo)
     {
-        var desde = p.Inicio.Date.AddDays(-1);
-        if (desde < inicioPeriodo.Date.AddDays(-1)) desde = inicioPeriodo.Date.AddDays(-1);
-        var hasta = p.Fin.Date;
-        if (hasta > finPeriodo.Date) hasta = finPeriodo.Date;
+        // NSQ_PRODUCCION_PERSONAL_V9_4_FECHA_TURNO_NOCTURNO
+        //
+        // inicioPeriodo/finPeriodo representan FECHAS DE TURNO.
+        // Ejemplo vista Dia = 27/08:
+        //   1er turno: 27/08 07:00 - 27/08 15:00
+        //   2do turno: 27/08 15:00 - 27/08 22:30
+        //   3er turno: 27/08 22:30 - 28/08 07:00
+        //
+        // NO se incluye el 3er turno del 26/08 aunque termine el 27/08.
+        var desde = inicioPeriodo.Date;
+        var hastaExclusivo = finPeriodo.Date;
 
-        for (var d = desde; d <= hasta; d = d.AddDays(1))
+        for (var d = desde; d < hastaExclusivo; d = d.AddDays(1))
         {
             foreach (var t in turnos)
             {
                 var ti = d.Add(t.Inicio!.Value);
                 var tf = d.Add(t.Fin!.Value);
                 if (t.Cruza || tf <= ti) tf = tf.AddDays(1);
-                var ini = new[] { ti, p.Inicio, inicioPeriodo }.Max();
-                var fin = new[] { tf, p.Fin, finPeriodo }.Min();
+                // NSQ_PRODUCCION_PERSONAL_V9_4_FECHA_TURNO_NOCTURNO
+                // El segmento solo se recorta por OF y TURNO.
+                // No se corta a medianoche por el filtro visual.
+                var ini = new[] { ti, p.Inicio }.Max();
+                var fin = new[] { tf, p.Fin }.Min();
                 if (fin <= ini) continue;
 
                 yield return new ProduccionPersonalV7SegmentoVm
@@ -227,7 +261,12 @@ public sealed partial class ProduccionPersonalController
                     InicioPrograma=p.Inicio, FinPrograma=p.Fin, FechaTrabajo=d.Date, TurnoID=t.TurnoID,
                     TurnoNombre=t.Nombre, Inicio=ini, Fin=fin, OperadorBaseID=p.OperadorBaseID,
                     OperadorBaseNombre=p.OperadorBaseNombre, EjecucionProduccionID=p.EjecucionID,
-                    EstatusProduccionID=p.EstatusProduccionID, ProduccionActiva=p.EstatusProduccionID == 3
+                    EstatusProduccionID=p.EstatusProduccionID,
+                    // NSQ_PRODUCCION_RELEVO_V9_2_ESTADO_Y_MOTIVOS
+                    ProduccionActiva=
+                        p.EstatusProduccionID == 3 &&
+                        DateTime.Now >= ini &&
+                        DateTime.Now < fin
                 };
             }
         }
@@ -245,15 +284,20 @@ SELECT pp.ProgramaProduccionID,pp.SolicitudProduccionID,
  ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CONVERT(INT,CEILING(ISNULL(pp.HorasProgramadas,1)*60)),pp.FechaInicioProgramada)) FechaFinProgramada,
  op.PersonaID OperadorBaseID,
  LTRIM(RTRIM(CONCAT(ISNULL(per.Nombre,N''),N' ',ISNULL(per.ApellidoPaterno,N''),N' ',ISNULL(per.ApellidoMaterno,N'')))) OperadorBaseNombre,
- ej.EjecucionProduccionID,ej.EstatusID EstatusProduccionID
+ ej.EjecucionProduccionID,ej.EstatusID EstatusProduccionID,
+ ej.OperadorID EjecucionOperadorID,
+ ISNULL(ej.OperadorNombre,N'') EjecucionOperadorNombre
 FROM dbo.Planeacion_ProgramaProduccion pp
 LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=pp.SolicitudProduccionID
 OUTER APPLY(SELECT TOP(1) x.PersonaID FROM dbo.Planeacion_ProgramaOperadores x WHERE x.ProgramaProduccionID=pp.ProgramaProduccionID AND x.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(x.RolOperador,N''))))=N'PRINCIPAL' ORDER BY x.ProgramaOperadorID DESC) op
 LEFT JOIN dbo.Persona per ON per.PersonaID=op.PersonaID
-OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID FROM dbo.Produccion_Ejecucion e WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID AND e.Activo=1 ORDER BY e.EjecucionProduccionID DESC) ej
+OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.OperadorID,e.OperadorNombre FROM dbo.Produccion_Ejecucion e WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID AND e.Activo=1 ORDER BY e.EjecucionProduccionID DESC) ej
 WHERE pp.Activo=1 AND pp.MaquinaID IS NOT NULL AND pp.FechaInicioProgramada IS NOT NULL
  AND ISNULL(pp.EstatusID,1)<>99
- AND pp.FechaInicioProgramada<@Hasta
+ -- V9.4: se consulta un dia adicional para capturar OF que comienzan
+ -- despues de medianoche pero siguen perteneciendo al turno nocturno
+ -- cuya FechaTrabajo es el ultimo dia seleccionado.
+ AND pp.FechaInicioProgramada<DATEADD(DAY,1,@Hasta)
  AND ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CONVERT(INT,CEILING(ISNULL(pp.HorasProgramadas,1)*60)),pp.FechaInicioProgramada))>@Desde
 ORDER BY pp.FechaInicioProgramada,pp.MaquinaCodigo,pp.ProgramaProduccionID;";
         var lista=new List<ProgramaBaseV7>();
@@ -275,7 +319,9 @@ ORDER BY pp.FechaInicioProgramada,pp.MaquinaCodigo,pp.ProgramaProduccionID;";
             OperadorBaseID=rd["OperadorBaseID"]==DBNull.Value?null:Convert.ToInt32(rd["OperadorBaseID"]),
             OperadorBaseNombre=rd["OperadorBaseNombre"]?.ToString()?.Trim()??string.Empty,
             EjecucionID=rd["EjecucionProduccionID"]==DBNull.Value?null:Convert.ToInt32(rd["EjecucionProduccionID"]),
-            EstatusProduccionID=rd["EstatusProduccionID"]==DBNull.Value?null:Convert.ToInt32(rd["EstatusProduccionID"])
+            EstatusProduccionID=rd["EstatusProduccionID"]==DBNull.Value?null:Convert.ToInt32(rd["EstatusProduccionID"]),
+            EjecucionOperadorID=rd["EjecucionOperadorID"]==DBNull.Value?null:Convert.ToInt32(rd["EjecucionOperadorID"]),
+            EjecucionOperadorNombre=rd["EjecucionOperadorNombre"]?.ToString()?.Trim()??string.Empty
         });
         return lista;
     }
@@ -288,7 +334,11 @@ SELECT a.AsignacionPersonalID,a.ProgramaProduccionID,a.FechaTrabajo,a.TurnoID,a.
  LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) OperadorNombre
 FROM dbo.Produccion_ProgramaPersonalAsignaciones a
 LEFT JOIN dbo.Persona p ON p.PersonaID=a.OperadorID
-WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
+-- V9.4: las asignaciones se relacionan por FechaTrabajo (fecha del turno),
+-- no por la fecha calendario del tramo despues de medianoche.
+WHERE a.Activo=1
+  AND a.FechaTrabajo>=CONVERT(date,@Desde)
+  AND a.FechaTrabajo<CONVERT(date,@Hasta);";
         var lista=new List<AsignacionV7>();
         await using var cmd=tx==null?new SqlCommand(sql,cn):new SqlCommand(sql,cn,tx);
         cmd.Parameters.Add("@Desde",SqlDbType.DateTime2).Value=desde; cmd.Parameters.Add("@Hasta",SqlDbType.DateTime2).Value=hasta;
@@ -418,7 +468,12 @@ WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
             if(!t.Inicio.HasValue||!t.Fin.HasValue) throw new InvalidOperationException("El turno no tiene horario definido.");
             var ti=vm.FechaTrabajo.Date.Add(t.Inicio.Value); var tf=vm.FechaTrabajo.Date.Add(t.Fin.Value); if(t.Cruza||tf<=ti)tf=tf.AddDays(1);
             var ini=ti>p.Inicio?ti:p.Inicio; var fin=tf<p.Fin?tf:p.Fin; if(fin<=ini)throw new InvalidOperationException("El turno no cruza con la OF.");
-            var produciendo=p.EstatusProduccionID==3;
+            // NSQ_PRODUCCION_RELEVO_V9_2_ESTADO_Y_MOTIVOS
+            // "produciendo" aplica al segmento actual, no a un turno ya vencido.
+            var produciendo=
+                p.EstatusProduccionID==3 &&
+                DateTime.Now>=ini &&
+                DateTime.Now<fin;
             var motivo=(vm.Motivo??string.Empty).Trim(); var just=(vm.Justificacion??string.Empty).Trim();
             if(produciendo && (!vm.OperadorID.HasValue || vm.OperadorID.Value<=0)) throw new InvalidOperationException("No se puede dejar una OF en producción sin operador.");
             if(produciendo && (motivo.Length<3 || just.Length<5)) throw new InvalidOperationException("Al modificar una OF en producción son obligatorios motivo y justificación.");
@@ -433,6 +488,20 @@ WHERE a.Activo=1 AND a.Inicio<@Hasta AND a.Fin>@Desde;";
             {cmd.Parameters.Add("@ProgramaID",SqlDbType.Int).Value=p.ProgramaID;cmd.Parameters.Add("@TurnoID",SqlDbType.Int).Value=t.TurnoID;cmd.Parameters.Add("@Fecha",SqlDbType.Date).Value=vm.FechaTrabajo.Date;await using var rd=await cmd.ExecuteReaderAsync();if(await rd.ReadAsync()){asignId=Convert.ToInt32(rd["AsignacionPersonalID"]);anterior=rd["OperadorID"]==DBNull.Value?null:Convert.ToInt32(rd["OperadorID"]);}}
             if(!asignId.HasValue) anterior=p.OperadorBaseID;
             var nuevo=vm.OperadorID.HasValue&&vm.OperadorID.Value>0?vm.OperadorID:null;
+
+            // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
+            // Una OF iniciada NO puede pasar por el reemplazo simple V7.
+            // Debe utilizar el endpoint especializado que toma contador,
+            // cierra el tramo del saliente y abre el tramo del entrante.
+            if(produciendo &&
+               DateTime.Now>=ini &&
+               DateTime.Now<fin &&
+               anterior!=nuevo)
+            {
+                throw new InvalidOperationException(
+                    "La OF ya esta produciendo. Usa el flujo de RELEVO DURANTE PRODUCCION para conservar horas, piezas y contador del operador saliente.");
+            }
+
             var uid=UsuarioID();
             if(asignId.HasValue)
             {

@@ -18,7 +18,25 @@
     }
     @if (TempData["Exito"] != null)
     {
-        <div class="alert alert-success py-2 mb-3">@TempData["Exito"]</div>
+        <div class="alert alert-success py-2 mb-3">
+            <div>@TempData["Exito"]</div>
+
+            @if (TempData["ExitoDetalleUsuarios"] is string detalleUsuarios &&
+                 !string.IsNullOrWhiteSpace(detalleUsuarios))
+            {
+                <!-- NSQ_POLIVALENCIA_V10_1_AVISO_DETALLE_USUARIOS -->
+                <hr class="my-2" />
+                <div class="small fw-bold mb-1">Cambios en cuentas ERP</div>
+                <div class="small" style="white-space: pre-line">@detalleUsuarios</div>
+                <div class="mt-2">
+                    <a asp-controller="Usuarios"
+                       asp-action="Index"
+                       class="alert-link">
+                        Abrir Administración de Usuarios
+                    </a>
+                </div>
+            }
+        </div>
     }
     <div class="mb-3">
         <a asp-action="Index" class="poly-back">← Volver a Escala de Personal</a>
@@ -50,16 +68,35 @@
                 </div>
             </div>
             <div class="poly-body">
-                <form asp-action="ImportarPolivalenciaV7" method="post" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 align-items-end">
+                <form id="polivalenciaUploadForm"
+                      asp-action="ImportarPolivalenciaV7"
+                      method="post"
+                      enctype="multipart/form-data"
+                      class="d-flex flex-wrap gap-2 align-items-end">
                     @Html.AntiForgeryToken()
+                    <input type="hidden" name="hashArchivoOriginal" id="polivalenciaHashOriginal" value="" />
                     <div class="flex-grow-1" style="min-width:280px">
                         <label class="form-label fw-bold">Archivo de matriz (.xlsx)</label>
-                        <input type="file" name="archivo" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control" required />
+                        <input id="polivalenciaArchivo"
+                               type="file"
+                               name="archivo"
+                               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                               class="form-control"
+                               required />
                     </div>
-                    <button class="btn btn-primary fw-bold" type="submit" onclick="this.disabled=true;this.innerText='Actualizando matriz...';this.form.submit();">
-                        <i class="fa-solid fa-file-arrow-up me-1"></i> Subir matriz y actualizar
+                    <button id="polivalenciaSubmit"
+                            class="btn btn-primary fw-bold"
+                            type="submit">
+                        <i class="fa-solid fa-file-arrow-up me-1"></i>
+                        <span>Subir matriz y actualizar</span>
                     </button>
                 </form>
+                <div id="polivalenciaUploadStatus"
+                     class="form-text mt-2"
+                     role="status"
+                     aria-live="polite">
+                    El archivo original se procesa únicamente en este navegador. Antes de subirlo se genera una copia temporal sin imágenes; el servidor recibe sólo esa copia ligera.
+                </div>
                 <div class="form-text mt-2">
                     No elimina historial: desactiva la matriz anterior, inserta la nueva versión y desactiva únicamente personal operativo que desapareció de la matriz vigente.
                 </div>
@@ -249,3 +286,13 @@
         }
     }
 </div>
+@section Scripts {
+    @* NSQ_POLIVALENCIA_UPLOAD_LITE_V8
+       SheetJS se usa solamente en el navegador para reconstruir el XLSX sin imágenes.
+       Versión fija + SRI para evitar una dependencia flotante. *@
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+            integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"></script>
+    <script src="~/js/EscalaPersonal/polivalencia-upload-lite.js" asp-append-version="true"></script>
+}

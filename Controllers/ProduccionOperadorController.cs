@@ -11,7 +11,7 @@ using static ERP.NSQuell.Models.ProduccionOperadorCajaVm;
 
 namespace ERP.NSQuell.Controllers
 {
-    public sealed class ProduccionOperadorController : Controller
+    public sealed partial class ProduccionOperadorController : Controller
     {
         private readonly IConfiguration _configuration;
 
@@ -7532,6 +7532,66 @@ ORDER BY
             }
 
             // ============================================================
+            // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
+            //
+            // Los relevos NO son paros. Son fronteras de tiempo.
+            // Si una hora normal era 10:00-11:00 y hubo relevo 10:37:
+            //
+            //   10:00-10:37 -> operador saliente
+            //   10:37-11:00 -> operador entrante
+            //
+            // La tabla puede no existir mientras se instala SQL 48:
+            // en ese caso este SELECT no devuelve filas y Captura sigue
+            // funcionando con su comportamiento anterior.
+            // ============================================================
+
+            var cortesRelevoV91 =
+                new List<DateTime>();
+
+            const string sqlCortesRelevoV91 = @"
+IF OBJECT_ID(N'dbo.Produccion_OperadorTramos',N'U') IS NOT NULL
+BEGIN
+    SELECT DISTINCT FechaHoraInicio
+    FROM dbo.Produccion_OperadorTramos
+    WHERE EjecucionProduccionID=@EjecucionProduccionID
+      AND Activo=1
+    ORDER BY FechaHoraInicio;
+END;";
+
+            await using (
+                var cmdCortesRelevoV91 =
+                    tx == null
+                        ? new SqlCommand(
+                            sqlCortesRelevoV91,
+                            cn)
+                        : new SqlCommand(
+                            sqlCortesRelevoV91,
+                            cn,
+                            tx))
+            {
+                cmdCortesRelevoV91.Parameters.Add(
+                    "@EjecucionProduccionID",
+                    SqlDbType.Int).Value =
+                    ejecucionProduccionId;
+
+                await using var rdCortesRelevoV91 =
+                    await cmdCortesRelevoV91.ExecuteReaderAsync();
+
+                while (await rdCortesRelevoV91.ReadAsync())
+                {
+                    cortesRelevoV91.Add(
+                        Convert.ToDateTime(
+                            rdCortesRelevoV91["FechaHoraInicio"]));
+                }
+            }
+
+            cortesRelevoV91 =
+                cortesRelevoV91
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToList();
+
+            // ============================================================
             // GENERAR FILAS ÚNICAMENTE DE TIEMPO PRODUCTIVO
             // ============================================================
 
@@ -7559,12 +7619,21 @@ ORDER BY
                 var inicioBloque =
                     segmentoInicio;
 
+                // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
+                // Cuando un relevo parte una hora, el segundo bloque debe
+                // terminar en el extremo ORIGINAL de esa hora.
+                DateTime? finBloquePendienteRelevoV91 =
+                    null;
+
                 while (inicioBloque <
                        segmentoFin)
                 {
                     var finBloque =
-                        inicioBloque
-                            .AddHours(1);
+                        finBloquePendienteRelevoV91 ??
+                        inicioBloque.AddHours(1);
+
+                    finBloquePendienteRelevoV91 =
+                        null;
 
                     /*
                      * Si el segmento productivo termina por un paro,
@@ -7599,6 +7668,25 @@ ORDER BY
                         finBloque =
                             AlMinuto(
                                 finReal.Value);
+                    }
+
+                    // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
+                    // Aplicar el corte DESPUES de limitar el bloque por OF,
+                    // turno, fin real y demás segmentos operativos.
+                    var corteRelevoDentroBloqueV91 =
+                        cortesRelevoV91
+                            .FirstOrDefault(x =>
+                                x > inicioBloque &&
+                                x < finBloque);
+
+                    if (corteRelevoDentroBloqueV91 !=
+                        DateTime.MinValue)
+                    {
+                        finBloquePendienteRelevoV91 =
+                            finBloque;
+
+                        finBloque =
+                            corteRelevoDentroBloqueV91;
                     }
 
                     if (finBloque <=

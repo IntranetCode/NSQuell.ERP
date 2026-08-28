@@ -325,3 +325,1001 @@ html[data-nsq-theme="dark"] .ppv75-time-ruler{background:#111c2d}
     opacity:1!important;
 }
 .ppv8-suggest-btn:disabled i{color:#718096!important}
+
+/* NSQ_PRODUCCION_PERSONAL_V8_PERIODO_START */
+.ppv8-planner-day td{
+    padding:0!important;
+    border-top:12px solid #eef3f9!important;
+    border-bottom:1px solid #c6d6e8!important;
+    background:#eaf3ff!important;
+}
+.ppv8-planner-day td>div{
+    display:flex;
+    align-items:baseline;
+    gap:9px;
+    padding:9px 12px;
+}
+.ppv8-planner-day span{
+    color:#175cd3;
+    font-size:.61rem;
+    font-weight:950;
+    letter-spacing:.07em;
+    text-transform:uppercase;
+}
+.ppv8-planner-day strong{
+    color:#15365f;
+    font-size:.76rem;
+    font-weight:950;
+    text-transform:capitalize;
+}
+.ppv8-planner-day small{
+    margin-left:auto;
+    color:#667085;
+    font-size:.56rem;
+    font-weight:850;
+}
+.ppv8-planner-turn td{
+    padding:0!important;
+    border-top:1px solid #dbe5f0!important;
+    border-bottom:1px solid #dbe5f0!important;
+    background:#f8fafc!important;
+}
+.ppv8-planner-turn td>div{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:6px 12px;
+    color:#475467;
+}
+.ppv8-planner-turn i{color:#667085;font-size:.62rem}
+.ppv8-planner-turn strong{font-size:.64rem;font-weight:950;color:#344054}
+.ppv8-planner-turn span{
+    margin-left:auto;
+    padding:2px 7px;
+    border-radius:999px;
+    background:#edf2f7;
+    color:#667085;
+    font-size:.52rem;
+    font-weight:850;
+}
+html[data-nsq-theme="dark"] .ppv8-planner-day td{background:#13243a!important;border-color:#294666!important}
+html[data-nsq-theme="dark"] .ppv8-planner-day strong{color:#e6f0fb}
+html[data-nsq-theme="dark"] .ppv8-planner-turn td{background:#111c2d!important;border-color:#24364c!important}
+html[data-nsq-theme="dark"] .ppv8-planner-turn strong{color:#dce8f6}
+/* NSQ_PRODUCCION_PERSONAL_V8_PERIODO_END */
+
+/* NSQ_PRODUCCION_PERSONAL_V8_7_DISENO_TURNOS_Y_DIA_START */
+
+/* ============================================================
+   V8.7 - neutraliza estilos heredados del antiguo header V8.
+   Estos selectores eran la causa de que cada SPAN se fuera
+   hacia la derecha y la card se viera deformada.
+   ============================================================ */
+.ppv8-planner-turn .ppv87-turn-card span,
+.ppv8-planner-turn .ppv87-turn-card strong,
+.ppv8-planner-turn .ppv87-turn-card small,
+.ppv8-planner-turn .ppv87-turn-card i,
+.ppv8-planner-day .ppv87-day-banner span,
+.ppv8-planner-day .ppv87-day-banner strong,
+.ppv8-planner-day .ppv87-day-banner i{
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    color:inherit;
+    font-size:inherit;
+    font-weight:inherit;
+    letter-spacing:normal;
+    text-transform:none;
+}
+
+/* ============================================================
+   DÍA
+   Se muestra también cuando vista=dia.
+   ============================================================ */
+.ppv87-day-row td{
+    padding:12px 10px 7px!important;
+    border:0!important;
+    background:#eef3f9!important;
+}
+
+.ppv87-day-banner{
+    display:grid!important;
+    grid-template-columns:42px minmax(0,1fr) auto;
+    align-items:center!important;
+    gap:12px!important;
+    padding:11px 14px!important;
+    border:1px solid #bdd2e9;
+    border-radius:12px;
+    background:linear-gradient(90deg,#edf6ff 0%,#f8fbff 55%,#ffffff 100%)!important;
+    box-shadow:0 2px 8px rgba(28,58,92,.06);
+}
+
+.ppv87-day-icon{
+    width:38px;
+    height:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:10px;
+    background:#0b5ea8;
+    color:#fff;
+    font-size:.92rem;
+    box-shadow:0 4px 10px rgba(11,94,168,.18);
+}
+
+.ppv87-day-copy{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+}
+
+.ppv87-day-copy>span{
+    color:#36709f!important;
+    font-size:.48rem!important;
+    font-weight:950!important;
+    letter-spacing:.13em!important;
+    text-transform:uppercase!important;
+}
+
+.ppv87-day-copy>strong{
+    color:#123b68!important;
+    font-size:.82rem!important;
+    line-height:1.1;
+    font-weight:950!important;
+    text-transform:uppercase!important;
+}
+
+.ppv87-day-count{
+    min-width:88px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    justify-content:center;
+    padding-left:14px;
+    border-left:1px solid #cfdeed;
+}
+
+.ppv87-day-count>b{
+    color:#123b68;
+    font-size:.92rem;
+    line-height:1;
+    font-weight:950;
+}
+
+.ppv87-day-count>span{
+    margin-top:4px!important;
+    color:#667085!important;
+    font-size:.47rem!important;
+    font-weight:900!important;
+    letter-spacing:.04em!important;
+    text-transform:uppercase!important;
+}
+
+/* ============================================================
+   TURNO
+   ============================================================ */
+.ppv87-turn-row td{
+    padding:6px 10px!important;
+    border:0!important;
+    background:#eef3f9!important;
+}
+
+.ppv87-turn-card{
+    width:100%;
+    min-height:68px;
+    display:grid;
+    grid-template-columns:minmax(220px,1fr) auto auto;
+    align-items:center;
+    column-gap:18px;
+    padding:11px 14px;
+    border:1px solid #c6d6e7;
+    border-left:4px solid #286fae;
+    border-radius:12px;
+    background:#fff;
+    box-shadow:0 2px 8px rgba(16,24,40,.055);
+    color:#344054;
+    text-align:left;
+    cursor:pointer;
+    transition:
+        border-color .15s ease,
+        box-shadow .15s ease,
+        background .15s ease,
+        transform .15s ease;
+}
+
+.ppv87-turn-card:hover{
+    border-color:#8eb5d7;
+    background:#fbfdff;
+    box-shadow:0 5px 14px rgba(16,24,40,.085);
+    transform:translateY(-1px);
+}
+
+.ppv87-turn-identity{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:11px;
+}
+
+.ppv87-turn-icon{
+    flex:0 0 38px;
+    width:38px;
+    height:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid #cfe0f0;
+    border-radius:10px;
+    background:#edf5fc;
+    color:#175f9d;
+    font-size:.84rem;
+}
+
+.ppv87-turn-copy{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:2px;
+}
+
+.ppv87-turn-label{
+    color:#6b7d90!important;
+    font-size:.46rem!important;
+    line-height:1;
+    font-weight:950!important;
+    letter-spacing:.12em!important;
+    text-transform:uppercase!important;
+}
+
+.ppv87-turn-copy>strong{
+    overflow:hidden;
+    color:#153b63!important;
+    font-size:.84rem!important;
+    line-height:1.1;
+    font-weight:950!important;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.ppv87-turn-copy>small{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    margin-top:2px!important;
+    color:#667085!important;
+    font-size:.52rem!important;
+    line-height:1;
+    font-weight:800!important;
+}
+
+.ppv87-turn-stats{
+    display:flex;
+    align-items:stretch;
+    gap:7px;
+}
+
+.ppv87-stat{
+    min-width:92px;
+    height:44px;
+    display:grid;
+    grid-template-columns:24px auto;
+    align-items:center;
+    column-gap:7px;
+    padding:5px 9px;
+    border:1px solid;
+    border-radius:9px;
+}
+
+.ppv87-stat>i{
+    width:24px;
+    height:24px;
+    display:flex!important;
+    align-items:center;
+    justify-content:center;
+    border-radius:7px!important;
+    font-size:.66rem!important;
+}
+
+.ppv87-stat>div{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:3px;
+}
+
+.ppv87-stat b{
+    font-size:.74rem!important;
+    line-height:1;
+    font-weight:950!important;
+}
+
+.ppv87-stat span{
+    font-size:.43rem!important;
+    line-height:1;
+    font-weight:900!important;
+    letter-spacing:.025em!important;
+    text-transform:uppercase!important;
+}
+
+/* TRABAJOS = VERDE */
+.ppv87-stat.jobs{
+    border-color:#a7ddbe;
+    background:#f0faf5;
+    color:#087443;
+}
+.ppv87-stat.jobs>i{
+    background:#dcf3e7!important;
+    color:#087443!important;
+}
+
+/* PRODUCIENDO = AMARILLO */
+.ppv87-stat.producing{
+    border-color:#efd189;
+    background:#fff9e9;
+    color:#956500;
+}
+.ppv87-stat.producing>i{
+    background:#fff0bd!important;
+    color:#956500!important;
+}
+
+/* PENDIENTES = ROJO */
+.ppv87-stat.pending{
+    border-color:#efb3ae;
+    background:#fff4f2;
+    color:#b42318;
+}
+.ppv87-stat.pending>i{
+    background:#ffe2df!important;
+    color:#b42318!important;
+}
+
+.ppv87-turn-action{
+    min-width:82px;
+    height:32px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    padding:0 11px;
+    border:1px solid #c7d9eb;
+    border-radius:999px;
+    background:#eef6fd;
+    color:#175f9d;
+    font-size:.52rem;
+    line-height:1;
+    font-weight:950;
+    white-space:nowrap;
+}
+
+.ppv87-turn-action i{
+    font-size:.53rem!important;
+    color:#175f9d!important;
+}
+
+/* Abierto */
+.ppv87-turn-row:not(.collapsed) .ppv87-turn-card{
+    border-left-color:#0b5ea8;
+    background:linear-gradient(90deg,#fff 0%,#f9fcff 100%);
+    box-shadow:0 4px 12px rgba(11,94,168,.09);
+}
+
+.ppv87-turn-row:not(.collapsed) .ppv87-turn-action{
+    border-color:#9fc2e1;
+    background:#e4f1fc;
+}
+
+/* Separación de las filas de detalle al abrir */
+.ppv87-turn-row + .ppv3-program-row td{
+    border-top:1px solid #e7edf4;
+}
+
+/* ============================================================
+   DARK
+   ============================================================ */
+html[data-nsq-theme="dark"] .ppv87-day-row td,
+html[data-nsq-theme="dark"] .ppv87-turn-row td{
+    background:#0d1726!important;
+}
+
+html[data-nsq-theme="dark"] .ppv87-day-banner{
+    border-color:#304b68;
+    background:linear-gradient(90deg,#142b43 0%,#132238 65%,#111e31 100%)!important;
+}
+
+html[data-nsq-theme="dark"] .ppv87-day-copy>strong{
+    color:#e6f0fb!important;
+}
+
+html[data-nsq-theme="dark"] .ppv87-day-copy>span,
+html[data-nsq-theme="dark"] .ppv87-day-count>span{
+    color:#9eb1c5!important;
+}
+
+html[data-nsq-theme="dark"] .ppv87-day-count>b{
+    color:#e6f0fb;
+}
+
+html[data-nsq-theme="dark"] .ppv87-turn-card{
+    border-color:#30475f;
+    background:#131f31;
+    color:#dbe7f4;
+}
+
+html[data-nsq-theme="dark"] .ppv87-turn-card:hover,
+html[data-nsq-theme="dark"] .ppv87-turn-row:not(.collapsed) .ppv87-turn-card{
+    border-color:#476b91;
+    background:#16283e;
+}
+
+html[data-nsq-theme="dark"] .ppv87-turn-copy>strong{
+    color:#e7f0fa!important;
+}
+
+html[data-nsq-theme="dark"] .ppv87-turn-label,
+html[data-nsq-theme="dark"] .ppv87-turn-copy>small{
+    color:#a9b8c9!important;
+}
+
+html[data-nsq-theme="dark"] .ppv87-turn-icon{
+    border-color:#34516f;
+    background:#192c43;
+    color:#9dccf4;
+}
+
+html[data-nsq-theme="dark"] .ppv87-stat.jobs{
+    border-color:#286c4d;
+    background:#102a21;
+}
+html[data-nsq-theme="dark"] .ppv87-stat.producing{
+    border-color:#77621e;
+    background:#30270f;
+}
+html[data-nsq-theme="dark"] .ppv87-stat.pending{
+    border-color:#7c3933;
+    background:#321917;
+}
+html[data-nsq-theme="dark"] .ppv87-turn-action{
+    border-color:#365778;
+    background:#172b42;
+    color:#acd2f3;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media(max-width:1050px){
+    .ppv87-turn-card{
+        grid-template-columns:minmax(190px,1fr) auto;
+        row-gap:9px;
+    }
+
+    .ppv87-turn-stats{
+        grid-column:1 / 2;
+        padding-left:49px;
+    }
+
+    .ppv87-turn-action{
+        grid-column:2;
+        grid-row:1 / 3;
+    }
+}
+
+@media(max-width:760px){
+    .ppv87-day-banner{
+        grid-template-columns:38px 1fr;
+    }
+
+    .ppv87-day-count{
+        grid-column:2;
+        align-items:flex-start;
+        padding:5px 0 0;
+        border-left:0;
+    }
+
+    .ppv87-turn-card{
+        grid-template-columns:1fr auto;
+    }
+
+    .ppv87-turn-stats{
+        grid-column:1 / 3;
+        padding-left:0;
+    }
+}
+
+@media(max-width:540px){
+    .ppv87-turn-card{
+        padding:10px;
+        column-gap:8px;
+    }
+
+    .ppv87-turn-stats{
+        gap:5px;
+    }
+
+    .ppv87-stat{
+        min-width:0;
+        flex:1 1 0;
+        grid-template-columns:1fr;
+        height:auto;
+        text-align:center;
+    }
+
+    .ppv87-stat>i{
+        display:none!important;
+    }
+}
+
+/* NSQ_PRODUCCION_PERSONAL_V8_7_DISENO_TURNOS_Y_DIA_END */
+
+/* NSQ_PRODUCCION_PERSONAL_V9_3_1_HORARIOS_FINALIZADOS_START */
+
+.ppv3-program-row.ppv931-segment-finished > td{
+    background:#f7f9fc;
+    color:#64748b;
+}
+
+.ppv3-program-row.ppv931-segment-finished:hover > td{
+    background:#f5f8fb;
+}
+
+.ppv931-finished-badge{
+    border:1px solid #cbd5e1!important;
+    background:#eef2f6!important;
+    color:#526174!important;
+}
+
+.ppv7-operator-cell.ppv931-operator-finished,
+.ppv7-operator-cell.ppv931-readonly,
+.ppv7-operator-cell.ppv931-readonly.pending{
+    border-color:#cbd5e1!important;
+    border-left-color:#64748b!important;
+    background:linear-gradient(90deg,#f1f5f9 0%,#f8fafc 100%)!important;
+    color:#475569!important;
+    box-shadow:none!important;
+}
+
+.ppv7-operator-cell.ppv931-readonly{
+    cursor:not-allowed!important;
+    opacity:1!important;
+}
+
+.ppv7-operator-cell.ppv931-readonly:hover{
+    transform:none!important;
+    box-shadow:none!important;
+    border-color:#cbd5e1!important;
+    border-left-color:#64748b!important;
+    background:linear-gradient(90deg,#f1f5f9 0%,#f8fafc 100%)!important;
+}
+
+.ppv7-operator-cell.ppv931-readonly .ppv3-assign-name{
+    color:#475569!important;
+}
+
+.ppv7-operator-cell.ppv931-readonly .ppv3-assign-meta{
+    color:#64748b!important;
+}
+
+.ppv931-lock{
+    width:16px;
+    color:#64748b;
+    font-size:.62rem;
+    text-align:center;
+}
+
+.ppv931-light-finished{
+    background:#64748b!important;
+    box-shadow:0 0 0 2px rgba(100,116,139,.12);
+}
+
+html[data-nsq-theme="dark"] .ppv3-program-row.ppv931-segment-finished > td{
+    background:#111827;
+    color:#94a3b8;
+}
+
+html[data-nsq-theme="dark"] .ppv931-finished-badge{
+    border-color:#475569!important;
+    background:#1e293b!important;
+    color:#cbd5e1!important;
+}
+
+html[data-nsq-theme="dark"] .ppv7-operator-cell.ppv931-operator-finished,
+html[data-nsq-theme="dark"] .ppv7-operator-cell.ppv931-readonly,
+html[data-nsq-theme="dark"] .ppv7-operator-cell.ppv931-readonly.pending{
+    border-color:#475569!important;
+    border-left-color:#94a3b8!important;
+    background:linear-gradient(90deg,#1e293b 0%,#172033 100%)!important;
+    color:#cbd5e1!important;
+}
+
+/* NSQ_PRODUCCION_PERSONAL_V9_3_1_HORARIOS_FINALIZADOS_END */
+
+/* NSQ_PRODUCCION_PERSONAL_V10_COBERTURA_PERIODOS_HEADER_PEOPLE_START */
+
+/* ---------------------------------------------------------------
+   CABECERA: dos filas reales, sin repetir la semana.
+   --------------------------------------------------------------- */
+.ppv3-header{
+    grid-template-columns:minmax(320px,1fr) auto!important;
+}
+
+.ppv3-header .ppv3-week-block{
+    display:none!important;
+}
+
+.ppv3-header .ppv3-week-nav{
+    justify-self:end;
+}
+
+.ppv7-period-shell{
+    grid-template-columns:minmax(430px,auto) minmax(250px,1fr) auto!important;
+}
+
+#ppv7Range{
+    display:none!important;
+}
+
+.ppv10-range-inline{
+    display:flex;
+    align-items:flex-end;
+    justify-content:flex-end;
+    gap:6px;
+}
+
+.ppv10-range-inline label{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    margin:0;
+}
+
+.ppv10-range-inline label>span{
+    color:#667085;
+    font-size:.48rem;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+}
+
+.ppv10-range-inline .form-control{
+    width:128px;
+    min-height:34px;
+}
+
+/* ---------------------------------------------------------------
+   COBERTURA MULTIPERIODO
+   --------------------------------------------------------------- */
+.ppv10-support-weeks{
+    display:grid;
+    gap:9px;
+    padding:10px;
+    background:#f4f7fb;
+}
+
+.ppv10-support-week-card,
+.ppv10-support-period-card{
+    border:1px solid #cbd9e8;
+    border-radius:13px;
+    background:#fff;
+    box-shadow:0 3px 10px rgba(16,24,40,.045);
+    overflow:hidden;
+}
+
+.ppv10-support-week-card>summary{
+    display:grid;
+    grid-template-columns:72px minmax(190px,1fr) auto;
+    align-items:center;
+    gap:12px;
+    min-height:66px;
+    padding:10px 13px;
+    cursor:pointer;
+    list-style:none;
+    background:linear-gradient(90deg,#fff 0%,#f8fbff 100%);
+    border-left:4px solid #0f5fa6;
+}
+
+.ppv10-support-week-card>summary::-webkit-details-marker{
+    display:none;
+}
+
+.ppv10-support-week-card[open]>summary{
+    border-bottom:1px solid #d9e4ef;
+    background:linear-gradient(90deg,#f3f8fe 0%,#fff 100%);
+}
+
+.ppv10-week-summary-main{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-height:42px;
+    border-right:1px solid #dce5ef;
+}
+
+.ppv10-week-summary-main span{
+    color:#667085;
+    font-size:.46rem;
+    font-weight:950;
+    letter-spacing:.11em;
+}
+
+.ppv10-week-summary-main strong{
+    margin-top:2px;
+    color:#0f3b75;
+    font-size:1.16rem;
+    line-height:1;
+    font-weight:950;
+}
+
+.ppv10-week-summary-range{
+    min-width:0;
+}
+
+.ppv10-week-summary-range strong,
+.ppv10-week-summary-range span{
+    display:block;
+}
+
+.ppv10-week-summary-range strong{
+    color:#193f68;
+    font-size:.75rem;
+    font-weight:950;
+    text-transform:capitalize;
+}
+
+.ppv10-week-summary-range span{
+    margin-top:4px;
+    color:#7b8797;
+    font-size:.53rem;
+    font-weight:750;
+}
+
+.ppv10-week-summary-badges,
+.ppv10-support-period-badges{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:6px;
+    flex-wrap:wrap;
+}
+
+.ppv10-week-chevron{
+    margin-left:5px;
+    color:#667085;
+    transition:transform .16s ease;
+}
+
+.ppv10-support-week-card[open] .ppv10-week-chevron{
+    transform:rotate(180deg);
+}
+
+.ppv10-scale-badge,
+.ppv10-source-badge{
+    display:inline-flex;
+    min-height:25px;
+    align-items:center;
+    gap:5px;
+    padding:5px 8px;
+    border:1px solid;
+    border-radius:999px;
+    font-size:.5rem;
+    line-height:1;
+    font-weight:900;
+    white-space:nowrap;
+}
+
+.ppv10-scale-badge.published{
+    border-color:#a5d7ba;
+    background:#eef9f3;
+    color:#087443;
+}
+
+.ppv10-scale-badge.draft{
+    border-color:#eed08a;
+    background:#fff8e6;
+    color:#8f6400;
+}
+
+.ppv10-scale-badge.missing{
+    border-color:#cbd5e1;
+    background:#f4f6f8;
+    color:#64748b;
+}
+
+.ppv10-source-badge.daily{
+    border-color:#a7c7ec;
+    background:#eef6ff;
+    color:#175f9d;
+}
+
+.ppv10-source-badge.inherited{
+    border-color:#d0d9e4;
+    background:#f7f9fc;
+    color:#526174;
+}
+
+.ppv10-support-period-head{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:12px;
+    padding:12px 14px;
+    border-bottom:1px solid #d9e4ef;
+    background:linear-gradient(90deg,#f4f9ff 0%,#fff 100%);
+}
+
+.ppv10-support-period-title>span,
+.ppv10-support-period-title>strong,
+.ppv10-support-period-title>small{
+    display:block;
+}
+
+.ppv10-support-period-title>span{
+    color:#3c78a8;
+    font-size:.48rem;
+    font-weight:950;
+    letter-spacing:.12em;
+}
+
+.ppv10-support-period-title>strong{
+    margin-top:3px;
+    color:#123b68;
+    font-size:.82rem;
+    font-weight:950;
+    text-transform:capitalize;
+}
+
+.ppv10-support-period-title>small{
+    margin-top:3px;
+    color:#667085;
+    font-size:.54rem;
+    font-weight:750;
+}
+
+.ppv10-support-table-wrap{
+    max-height:55vh;
+}
+
+.ppv10-support-savebar{
+    margin:9px!important;
+}
+
+.ppv10-reset-week-form{
+    display:flex;
+    justify-content:flex-end;
+    padding:0 10px 10px;
+}
+
+.ppv10-scale-explanation{
+    display:flex;
+    align-items:flex-start;
+    gap:7px;
+    margin:9px 10px 11px;
+    padding:8px 10px;
+    border:1px solid #d4e3f1;
+    border-radius:9px;
+    background:#f4f9ff;
+    color:#536579;
+    font-size:.57rem;
+    font-weight:750;
+}
+
+.ppv10-scale-explanation i{
+    margin-top:1px;
+    color:#397caf;
+}
+
+.ppv10-support-head-notes{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:7px;
+    flex-wrap:wrap;
+}
+
+/* ---------------------------------------------------------------
+   PEOPLE: cabecera de dia claramente navegable al mismo modulo.
+   --------------------------------------------------------------- */
+.ppv7-calendar-day-head{
+    cursor:pointer;
+    transition:background .15s ease,color .15s ease,box-shadow .15s ease;
+}
+
+.ppv7-calendar-day-head:hover{
+    z-index:6;
+    background:#eaf3ff;
+    color:#0f3b75;
+    box-shadow:inset 0 -2px 0 #1f67b8;
+}
+
+/* Dark */
+html[data-nsq-theme="dark"] .ppv10-support-weeks{
+    background:#0d1726;
+}
+
+html[data-nsq-theme="dark"] .ppv10-support-week-card,
+html[data-nsq-theme="dark"] .ppv10-support-period-card{
+    border-color:#30455d;
+    background:#111c2d;
+}
+
+html[data-nsq-theme="dark"] .ppv10-support-week-card>summary,
+html[data-nsq-theme="dark"] .ppv10-support-period-head{
+    border-color:#30455d;
+    background:linear-gradient(90deg,#14243a 0%,#101c2d 100%);
+}
+
+html[data-nsq-theme="dark"] .ppv10-week-summary-main{
+    border-color:#30455d;
+}
+
+html[data-nsq-theme="dark"] .ppv10-week-summary-main strong,
+html[data-nsq-theme="dark"] .ppv10-week-summary-range strong,
+html[data-nsq-theme="dark"] .ppv10-support-period-title>strong{
+    color:#e5eef8;
+}
+
+html[data-nsq-theme="dark"] .ppv10-week-summary-range span,
+html[data-nsq-theme="dark"] .ppv10-support-period-title>small{
+    color:#9aabc0;
+}
+
+html[data-nsq-theme="dark"] .ppv10-scale-explanation{
+    border-color:#30455d;
+    background:#132239;
+    color:#a9b8ca;
+}
+
+/* Responsive */
+@media(max-width:1100px){
+    .ppv7-period-shell{
+        grid-template-columns:1fr!important;
+    }
+
+    .ppv7-period-current{
+        text-align:left!important;
+    }
+
+    .ppv7-date-go,
+    .ppv10-range-inline{
+        justify-content:flex-start;
+    }
+
+    .ppv10-support-week-card>summary{
+        grid-template-columns:64px minmax(0,1fr);
+    }
+
+    .ppv10-week-summary-badges{
+        grid-column:1 / 3;
+        justify-content:flex-start;
+        padding-left:76px;
+    }
+}
+
+@media(max-width:720px){
+    .ppv3-header{
+        grid-template-columns:1fr!important;
+    }
+
+    .ppv3-header .ppv3-week-nav{
+        justify-self:start;
+    }
+
+    .ppv10-range-inline{
+        flex-wrap:wrap;
+    }
+
+    .ppv10-support-period-head{
+        grid-template-columns:1fr;
+    }
+
+    .ppv10-support-period-badges{
+        justify-content:flex-start;
+    }
+}
+
+/* NSQ_PRODUCCION_PERSONAL_V10_COBERTURA_PERIODOS_HEADER_PEOPLE_END */

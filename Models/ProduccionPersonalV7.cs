@@ -2,7 +2,7 @@
 
 namespace ERP.NSQuell.Models;
 
-public sealed class ProduccionPersonalV7IndexVm
+public sealed partial class ProduccionPersonalV7IndexVm
 {
     public string Vista { get; set; } = "dia";
     public DateTime InicioPeriodo { get; set; }
