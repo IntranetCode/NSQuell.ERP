@@ -47,6 +47,8 @@
         : Model.Filtro;
 
     var totalAlertas = Model.TotalAlertasEspera + Model.TotalCargasRetrasadas;
+    var totalKgPendientesSecado = pendientes.Sum(x => x.CantidadPendienteAsignarKg);
+    var totalKgEsperadosRecepcion = pendientesPlaneacion.Sum(x => x.CantidadMpPendienteRecepcionKg);
 
     string Fecha(DateTime? value) =>
         value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
@@ -1401,6 +1403,166 @@
             font-weight: 700;
         }
 
+    .stat-priority {
+        border-color: #e7bc68;
+        background: linear-gradient(135deg,var(--dry-card),var(--dry-orange-soft));
+    }
+
+    .stat-sub {
+        display: block;
+        margin-top: 4px;
+        color: var(--dry-muted);
+        font-size: .58rem;
+        font-weight: 750;
+    }
+
+    .section-priority {
+        margin-top: 20px;
+        padding: 14px;
+        border: 1px solid #edcf93;
+        border-radius: 20px;
+        background: linear-gradient(180deg,var(--dry-orange-soft),transparent 190px);
+    }
+
+    html[data-nsq-theme="dark"] .section-priority,
+    html[data-bs-theme="dark"] .section-priority {
+        border-color: #5a4318;
+    }
+
+    .section-kpi {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+        .section-kpi .kg-pill {
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange-dark);
+            font-size: .68rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+    .waiting-section {
+        padding: 14px;
+        border: 1px solid var(--dry-line);
+        border-radius: 20px;
+        background: linear-gradient(180deg,var(--dry-blue-soft),transparent 190px);
+    }
+
+    .waiting-machine {
+        margin-bottom: 11px;
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--dry-shadow);
+    }
+
+        .waiting-machine > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+        }
+
+            .waiting-machine > summary::-webkit-details-marker {
+                display: none;
+            }
+
+    .waiting-machine-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+        .waiting-machine-title i {
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            background: var(--dry-blue-soft);
+            color: var(--dry-blue);
+            flex: none;
+        }
+
+        .waiting-machine-title strong {
+            display: block;
+            font-size: .8rem;
+            font-weight: 950;
+            color: var(--dry-text);
+        }
+
+        .waiting-machine-title small {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-muted);
+            font-size: .61rem;
+            font-weight: 750;
+        }
+
+    .waiting-machine-kpi {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .waiting-kg {
+        margin-top: 10px;
+        padding: 11px 12px;
+        border-radius: 12px;
+        background: linear-gradient(135deg,var(--dry-blue-soft),var(--dry-card));
+        border: 1px solid #b9c9f2;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    html[data-nsq-theme="dark"] .waiting-kg,
+    html[data-bs-theme="dark"] .waiting-kg {
+        border-color: #344b72;
+    }
+
+    .waiting-kg span {
+        color: var(--dry-muted);
+        font-size: .58rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .waiting-kg strong {
+        color: var(--dry-blue);
+        font-size: 1.08rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .waiting-foot {
+        margin-top: 9px;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        padding-top: 9px;
+        border-top: 1px dashed var(--dry-line);
+        color: var(--dry-muted);
+        font-size: .61rem;
+        font-weight: 750;
+    }
+
     @@media(max-width:1200px) {
         .tolva-grid {
             grid-template-columns: repeat(2,minmax(0,1fr));
@@ -1592,53 +1754,44 @@
     }
 
     <section class="stats">
-        <div class="stat">
-            <div class="stat-icon blue">
-                <i class="bi bi-calendar2-check"></i>
-            </div>
+        <div class="stat stat-priority">
+            <div class="stat-icon orange"><i class="bi bi-box2-heart"></i></div>
             <div>
-                <span class="stat-value">@pendientesPlaneacion.Count</span>
-                <span class="stat-label">Programados sin MP</span>
+                <span class="stat-value">@Cantidad(totalKgPendientesSecado)</span>
+                <span class="stat-label">MP disponible para secar</span>
+                <span class="stat-sub">@pendientes.Count lote@(pendientes.Count == 1 ? "" : "s") pendiente@(pendientes.Count == 1 ? "" : "s")</span>
             </div>
         </div>
-
         <div class="stat">
-            <div class="stat-icon orange">
-                <i class="bi bi-hourglass-split"></i>
-            </div>
-            <div>
-                <span class="stat-value">@pendientes.Count</span>
-                <span class="stat-label">Pendientes de carga</span>
-            </div>
-        </div>
-
-        <div class="stat">
-            <div class="stat-icon blue">
-                <i class="bi bi-droplet-half"></i>
-            </div>
+            <div class="stat-icon blue"><i class="bi bi-droplet-half"></i></div>
             <div>
                 <span class="stat-value">@cargasActivas.Count</span>
                 <span class="stat-label">Cargas en proceso</span>
+                <span class="stat-sub">Secado activo en tolva</span>
             </div>
         </div>
-
         <div class="stat">
-            <div class="stat-icon green">
-                <i class="bi bi-box-arrow-in-down"></i>
+            <div class="stat-icon blue"><i class="bi bi-truck"></i></div>
+            <div>
+                <span class="stat-value">@Cantidad(totalKgEsperadosRecepcion)</span>
+                <span class="stat-label">MP esperando recepción</span>
+                <span class="stat-sub">@pendientesPlaneacion.Count OF@(pendientesPlaneacion.Count == 1 ? "" : "s") pendiente@(pendientesPlaneacion.Count == 1 ? "" : "s")</span>
             </div>
+        </div>
+        <div class="stat">
+            <div class="stat-icon green"><i class="bi bi-box-arrow-in-down"></i></div>
             <div>
                 <span class="stat-value">@Model.TotalTolvasDisponibles</span>
                 <span class="stat-label">Tolvas disponibles</span>
+                <span class="stat-sub">@Model.TotalTolvasOcupadas ocupada@(Model.TotalTolvasOcupadas == 1 ? "" : "s")</span>
             </div>
         </div>
-
         <div class="stat">
-            <div class="stat-icon red">
-                <i class="bi bi-exclamation-octagon"></i>
-            </div>
+            <div class="stat-icon red"><i class="bi bi-exclamation-octagon"></i></div>
             <div>
                 <span class="stat-value">@totalAlertas</span>
                 <span class="stat-label">Alertas operativas</span>
+                <span class="stat-sub">Espera o cargas retrasadas</span>
             </div>
         </div>
     </section>
@@ -1692,189 +1845,398 @@
         </a>
     </form>
 
-    <section class="section">
+    <section class="section section-priority">
         <div class="section-head">
             <div>
-                <h2>Programados · esperando recepción de MP</h2>
+                <h2><i class="bi bi-thermometer-sun me-1"></i> Material listo para entrar a secado</h2>
                 <p>
-                    Secados requeridos por Planeación que todavía no tienen materia prima
-                    confirmada físicamente en Producción. Son informativos y no pueden
-                    iniciar una carga hasta que se confirme la recepción.
+                    Materia prima ya confirmada físicamente. Aquí se acumulan las recepciones de la misma OF mientras no haya iniciado un lote de secado.
                 </p>
             </div>
-            <span class="section-count">@pendientesPlaneacion.Count</span>
+
+            <div class="section-kpi">
+                <span class="kg-pill">@Cantidad(totalKgPendientesSecado) disponibles</span>
+                <span class="section-count">@pendientes.Count</span>
+            </div>
         </div>
 
-        @if (pendientesPlaneacion.Any())
+        @if (pendientes.Any())
         {
-            <div class="planned-grid">
-                @foreach (var tarea in pendientesPlaneacion)
-                {
-                    var clasePlaneacion = EstadoPlaneacionClase(tarea);
-                    <article class="planned-card @(clasePlaneacion == "danger" ? "is-danger" : clasePlaneacion == "warning" ? "is-warning" : "")">
-                        <div class="planned-head">
-                            <div class="planned-title">
-                                <div class="planned-icon">
-                                    <i class="bi bi-calendar2-check"></i>
-                                </div>
-                                <div>
-                                    <div class="chips">
-                                        <span class="chip">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
-                                        <span class="chip">@tarea.TextoMaquina</span>
-                                    </div>
-                                    <h3>@tarea.TextoMaterial</h3>
-                                    <small>
-                                        @tarea.TextoParte
-                                        @if (!string.IsNullOrWhiteSpace(tarea.DescripcionParte))
-                                        {
-                                            <text> · @tarea.DescripcionParte</text>
-                                        }
-                                    </small>
-                                </div>
-                            </div>
-                            <span class="status-pill @clasePlaneacion">@EstadoPlaneacionTexto(tarea)</span>
-                        </div>
+            foreach (var grupo in pendientes
+            .GroupBy(x => new
+            {
+                x.MaquinaProgramadaID,
+                x.MaquinaProgramadaCodigo,
+                x.MaquinaProgramadaNombre
+            })
+            .OrderBy(x => x.Key.MaquinaProgramadaCodigo)
+            .ThenBy(x => x.Key.MaquinaProgramadaNombre))
+            {
+                var maquinaTexto =
+                string.IsNullOrWhiteSpace(grupo.Key.MaquinaProgramadaCodigo)
+                ? "Sin máquina"
+                : string.IsNullOrWhiteSpace(grupo.Key.MaquinaProgramadaNombre)
+                ? grupo.Key.MaquinaProgramadaCodigo
+                : $"{grupo.Key.MaquinaProgramadaCodigo} - {grupo.Key.MaquinaProgramadaNombre}";
 
-                        <div class="process-row">
-                            <div class="process-box primary">
-                                <span>Proceso requerido</span>
-                                <strong>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Secado" : tarea.TipoSecado)</strong>
+                <details class="material-group" open>
+                    <summary>
+                        <div class="group-title">
+                            <div class="group-icon">
+                                <i class="bi bi-building-gear"></i>
                             </div>
-                            <div class="process-box">
-                                <span>Tiempo requerido</span>
-                                <strong>@Horas(tarea.HorasSecado)</strong>
+
+                            <div>
+                                <strong>@maquinaTexto</strong>
+                                <small>
+                                    @grupo.Count()
+                                    material@(grupo.Count() == 1 ? "" : "es")
+                                    pendiente(s)
+                                </small>
                             </div>
                         </div>
 
-                        <div class="schedule-grid">
-                            <div class="schedule-box">
-                                <span>Debe iniciar secado</span>
-                                <strong>@Fecha(tarea.FechaAviso)</strong>
-                            </div>
-                            <div class="schedule-box">
-                                <span>Objetivo / arranque</span>
-                                <strong>@Fecha(tarea.FechaObjetivo)</strong>
-                            </div>
-                            <div class="schedule-box">
-                                <span>Arranque producción</span>
-                                <strong>@Fecha(tarea.FechaArranque)</strong>
-                            </div>
-                            <div class="schedule-box">
-                                <span>Cantidad programada</span>
-                                <strong>@tarea.CantidadProgramada.ToString("N0") PZA</strong>
-                            </div>
-                        </div>
+                        <span class="group-count">
+                            @grupo.Count()
+                        </span>
+                    </summary>
 
-                        <div class="planned-note">
-                            <i class="bi bi-box-arrow-in-down me-1"></i>
-                            Pendiente de confirmación física de materia prima. Al recibirse la MP,
-                            este programa dejará esta sección y aparecerá en “Material pendiente de secado”,
-                            donde ya se podrá seleccionar tolva e iniciar la carga.
-                        </div>
-                    </article>
-                }
-            </div>
-        }
-        else
-        {
-            <div class="empty">
-                <i class="bi bi-calendar2-check"></i>
-                <strong>No hay secados programados esperando materia prima</strong>
-                <span>Todos los programas visibles ya tienen su recepción física registrada o no requieren secado.</span>
-            </div>
-        }
-    </section>
-
-    <section class="section">
-        <details class="tolva-details" open>
-            <summary>
-                <i class="bi bi-boxes"></i>
-                Estado de tolvas
-                <span class="section-count">@tolvas.Count</span>
-            </summary>
-
-            <div style="padding:10px;background:var(--dry-bg)">
-                @if (tolvas.Any())
-                {
-                    <div class="tolva-grid">
-                        @foreach (var tolva in tolvas)
+                    <div class="material-grid">
+                        @foreach (var material in grupo)
                         {
-                            var claseTolva = tolva.DisponibleParaUsar
-                            ? "is-free"
-                            : tolva.EstaOcupada
-                            ? "is-busy"
-                            : "is-disabled";
+                            var tolvasCompatibles = tolvas
+                            .Where(x =>
+                            x.DisponibleParaUsar &&
+                            (
+                            string.Equals(
+                            x.TipoProcesoPermitido,
+                            "AMBOS",
+                            StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(
+                            x.TipoProcesoPermitido,
+                            material.TipoProceso,
+                            StringComparison.OrdinalIgnoreCase)
+                            ))
+                            .OrderByDescending(x =>
+                            material.TolvaSugeridaID.HasValue &&
+                            x.TolvaID == material.TolvaSugeridaID.Value)
+                            .ThenBy(x => x.MaquinaCodigo)
+                            .ThenBy(x => x.Codigo)
+                            .ToList();
 
-                            <article class="tolva-card @claseTolva">
-                                <div class="tolva-top">
-                                    <div class="tolva-title">
-                                        <div class="tolva-icon">
+                            ProduccionSecadoTolvaVm? tolvaPredeterminada = null;
+
+                            if (material.TolvaSugeridaID.HasValue)
+                            {
+                                tolvaPredeterminada = tolvasCompatibles
+                                .FirstOrDefault(x =>
+                                x.TolvaID == material.TolvaSugeridaID.Value);
+                            }
+
+                            if (tolvaPredeterminada == null)
+                            {
+                                tolvaPredeterminada = tolvasCompatibles.FirstOrDefault();
+                            }
+
+                            var cantidadInicial = tolvaPredeterminada != null
+                            ? Math.Min(
+                            material.CantidadPendienteAsignarKg,
+                            tolvaPredeterminada.CapacidadKg)
+                            : material.CantidadPendienteAsignarKg;
+
+                            <article class="pending-card @(material.DebeAlertarEspera ? "is-alert" : material.EstaParcial ? "is-partial" : "")">
+                                <div class="pending-head">
+                                    <div class="pending-title">
+                                        <div class="pending-icon">
                                             <i class="bi bi-box2"></i>
                                         </div>
 
                                         <div>
-                                            <strong>
-                                                @(string.IsNullOrWhiteSpace(tolva.Codigo)
-                                                                                        ? tolva.Nombre
-                                                                                        : $"{tolva.Codigo} - {tolva.Nombre}")
-                                    </strong>
+                                            <div class="chips">
+                                                @if (!string.IsNullOrWhiteSpace(material.NumeroOF))
+                                                {
+                                                    <span class="chip">
+                                                        OF @material.NumeroOF
+                                                    </span>
+                                                }
+
+                                                @if (!string.IsNullOrWhiteSpace(material.TipoMPTexto))
+                                                {
+                                                    <span class="chip">
+                                                        @material.TipoMPTexto
+                                                    </span>
+                                                }
+
+                                                @if (!string.IsNullOrWhiteSpace(material.Lote))
+                                                {
+                                                    <span class="chip">
+                                                        Lote @material.Lote
+                                                    </span>
+                                                }
+                                            </div>
+
+                                            <h3>@material.TextoMaterial</h3>
 
                                             <small>
-                                                @tolva.MaquinaCodigo
-                                        @if (!string.IsNullOrWhiteSpace(tolva.MaquinaNombre))
-                                                {
-                                                    <text> · @tolva.MaquinaNombre</text>
-                                                }
+                                                Recibido @material.FechaRecepcionProduccion.ToString("dd/MM/yyyy HH:mm")
                                             </small>
                                         </div>
                                     </div>
 
-                                    <span class="status-pill @(tolva.DisponibleParaUsar ? "success" : tolva.EstaOcupada ? "warning" : "danger")">
-                                        @tolva.EstadoTexto
+                                    <span class="status-pill @EstadoMaterialClase(material)">
+                                        @material.EstadoTexto
                                     </span>
                                 </div>
 
-                                <div class="tolva-info">
-                                    <div>
-                                        <span>Capacidad</span>
-                                        <strong>@Cantidad(tolva.CapacidadKg)</strong>
+                                <div class="process-row">
+                                    <div class="process-box primary">
+                                        <span>Proceso requerido</span>
+                                        <strong>@material.TipoProcesoTexto</strong>
                                     </div>
 
-                                    <div>
-                                        <span>Proceso</span>
-                                        <strong>@tolva.TipoProcesoPermitido</strong>
+                                    <div class="process-box">
+                                        <span>Tiempo requerido</span>
+                                        <strong>@Duracion(material.MinutosSecadoRequeridos)</strong>
                                     </div>
                                 </div>
 
-                                @if (tolva.EstaOcupada)
-                                {
-                                    <div class="busy-info">
-                                        <i class="bi bi-hourglass-split me-1"></i>
-                                        OF @(string.IsNullOrWhiteSpace(tolva.NumeroOFActiva) ? "—" : tolva.NumeroOFActiva)
-                                        · @(string.IsNullOrWhiteSpace(tolva.MaterialCodigoActivo) ? "Material" : tolva.MaterialCodigoActivo)
+                                <div class="quantity-grid">
+                                    <div class="quantity-box">
+                                        <span>Recibido</span>
+                                        <strong>@Cantidad(material.CantidadRecibidaKg)</strong>
+                                    </div>
 
-                                        @if (tolva.FechaFinEsperadaActiva.HasValue)
-                                        {
-                                            <text>
-                                                · Fin esperado @Fecha(tolva.FechaFinEsperadaActiva)
-                                            </text>
-                                        }
+                                    <div class="quantity-box">
+                                        <span>Asignado</span>
+                                        <strong>@Cantidad(material.CantidadAsignadaKg)</strong>
+                                    </div>
+
+                                    <div class="quantity-box">
+                                        <span>Finalizado</span>
+                                        <strong>@Cantidad(material.CantidadFinalizadaKg)</strong>
+                                    </div>
+
+                                    <div class="quantity-box remaining">
+                                        <span>Por asignar</span>
+                                        <strong>@Cantidad(material.CantidadPendienteAsignarKg)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="schedule-grid">
+                                    <div class="schedule-box">
+                                        <span>Inicio objetivo</span>
+                                        <strong>@Fecha(material.FechaInicioSecadoObjetivo)</strong>
+                                    </div>
+
+                                    <div class="schedule-box">
+                                        <span>Fin objetivo</span>
+                                        <strong>@Fecha(material.FechaObjetivoFinSecado)</strong>
+                                    </div>
+
+                                    <div class="schedule-box">
+                                        <span>Arranque producción</span>
+                                        <strong>@Fecha(material.FechaArranqueProduccion)</strong>
+                                    </div>
+
+                                    <div class="schedule-box">
+                                        <span>Tolva sugerida</span>
+                                        <strong>@material.TextoTolvaSugerida</strong>
+                                    </div>
+                                </div>
+
+                                @if (material.DebeAlertarEspera)
+                                {
+                                    <div class="load-alert danger">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                        El material lleva
+                                        <strong>@material.MinutosEsperaActual minuto(s)</strong>
+                                        esperando iniciar su primera carga.
+                                    </div>
+                                }
+
+                                @if (material.RecepcionTardia)
+                                {
+                                    <div class="load-alert warning">
+                                        <i class="bi bi-clock-history me-1"></i>
+                                        Producción confirmó el material
+                                        <strong>@material.MinutosRetrasoRecepcion minuto(s)</strong>
+                                        después de la hora límite estimada.
+                                    </div>
+                                }
+
+                                @if (material.Cargas.Any())
+                                {
+                                    <details class="history-details">
+                                        <summary>
+                                            <i class="bi bi-clock-history"></i>
+                                            Cargas anteriores (@material.Cargas.Count)
+                                        </summary>
+
+                                        <div class="segment-list">
+                                            @foreach (var cargaAnterior in material.Cargas
+                                                                        .OrderByDescending(x => x.NumeroCarga))
+                                            {
+                                                <div class="segment-row">
+                                                    <strong>
+                                                        #@cargaAnterior.NumeroCarga
+                                                    </strong>
+
+                                                    <div>
+                                                        <strong>@cargaAnterior.TextoTolva</strong>
+                                                        <span>@Cantidad(cargaAnterior.CantidadKg)</span>
+                                                    </div>
+
+                                                    <div>
+                                                        <span>
+                                                            @Fecha(cargaAnterior.FechaInicioReal)
+                                                        </span>
+                                                        <span>
+                                                            a @Fecha(cargaAnterior.FechaFinReal)
+                                                        </span>
+                                                    </div>
+
+                                                    <span class="status-pill @(cargaAnterior.EstaFinalizada ? "success" : cargaAnterior.EstaCancelada ? "danger" : "primary")">
+                                                        @cargaAnterior.EstadoTexto
+                                                    </span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </details>
+                                }
+
+                                @if (Model.PuedeGestionarSecado)
+                                {
+                                    if (tolvasCompatibles.Any())
+                                    {
+                                        <div class="start-panel">
+                                            <form asp-controller="ProduccionPreparacion"
+                                                  asp-action="IniciarSecado"
+                                                  method="post"
+                                                  class="action-form js-start-form js-post-form"
+                                                  data-pending="@material.CantidadPendienteAsignarKg.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                  data-confirm="¿Confirmas el inicio de esta carga de secado?">
+
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden"
+                                                       name="SecadoMaterialID"
+                                                       value="@material.SecadoMaterialID" />
+
+                                                <div class="form-row-2">
+                                                    <div class="field">
+                                                        <label>Tolva</label>
+
+                                                        <select name="TolvaID"
+                                                                class="js-tolva-select"
+                                                                required>
+                                                            <option value="">
+                                                                Selecciona una tolva...
+                                                            </option>
+
+                                                            @foreach (var tolvaDisponible in tolvasCompatibles)
+                                                            {
+                                                                if (tolvaPredeterminada != null &&
+                                                                tolvaDisponible.TolvaID == tolvaPredeterminada.TolvaID)
+                                                                {
+                                                                    <option value="@tolvaDisponible.TolvaID"
+                                                                            data-capacity="@tolvaDisponible.CapacidadKg.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                                            selected>
+                                                                        @tolvaDisponible.Texto
+                                                                    </option>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <option value="@tolvaDisponible.TolvaID"
+                                                                            data-capacity="@tolvaDisponible.CapacidadKg.ToString("0.####", CultureInfo.InvariantCulture)">
+                                                                        @tolvaDisponible.Texto
+                                                                    </option>
+                                                                }
+                                                            }
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="field">
+                                                        <label>Cantidad a cargar</label>
+
+                                                        <input type="number"
+                                                               name="CantidadKg"
+                                                               class="js-cantidad-input"
+                                                               min="0.0001"
+                                                               step="0.0001"
+                                                               value="@cantidadInicial.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                               required />
+
+                                                        <span class="field-help js-capacity-hint"></span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="field">
+                                                    <label>Observaciones</label>
+
+                                                    <textarea name="Observaciones"
+                                          maxlength="1000"
+                                          placeholder="Condición del material, temperatura inicial, lote, observaciones del arranque, etc."></textarea>
+                                                </div>
+
+                                                <div class="actions">
+                                                    <button type="submit"
+                                                            class="btnx btnx-primary">
+                                                        <i class="bi bi-play-circle"></i>
+                                                        Iniciar carga
+                                                    </button>
+
+                                                    @if (material.EjecucionProduccionID.HasValue)
+                                                    {
+                                                        <a class="btnx btnx-outline"
+                                                           asp-controller="Produccion"
+                                                           asp-action="Detalle"
+                                                           asp-route-id="@material.EjecucionProduccionID.Value">
+                                                            <i class="bi bi-box-arrow-up-right"></i>
+                                                            Ver producción
+                                                        </a>
+                                                    }
+                                                </div>
+                                            </form>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="no-tolva">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            No hay una tolva disponible compatible con
+                                            <strong>@material.TipoProcesoTexto</strong>.
+                                            Finaliza o libera otra carga antes de continuar.
+                                        </div>
+                                    }
+                                }
+                                else if (material.EjecucionProduccionID.HasValue)
+                                {
+                                    <div class="actions">
+                                        <a class="btnx btnx-outline"
+                                           asp-controller="Produccion"
+                                           asp-action="Detalle"
+                                           asp-route-id="@material.EjecucionProduccionID.Value">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                            Ver producción
+                                        </a>
                                     </div>
                                 }
                             </article>
                         }
                     </div>
-                }
-                else
-                {
-                    <div class="empty">
-                        <i class="bi bi-boxes"></i>
-                        <strong>No hay tolvas configuradas</strong>
-                        <span>No se encontraron tolvas activas para el proceso de secado.</span>
-                    </div>
-                }
+                </details>
+            }
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-check2-circle"></i>
+                <strong>No hay material pendiente por iniciar</strong>
+                <span>
+                    No se encontraron cantidades disponibles esperando una nueva carga de secado.
+                </span>
             </div>
-        </details>
+        }
     </section>
 
     <section class="section">
@@ -2305,379 +2667,216 @@
     </section>
 
     <section class="section">
-        <div class="section-head">
-            <div>
-                <h2>Material pendiente de secado</h2>
-                <p>
-                    Materia prima recibida por Producción que todavía tiene
-                    cantidad pendiente de asignar a una carga.
-                </p>
-            </div>
+        <details class="tolva-details" open>
+            <summary>
+                <i class="bi bi-boxes"></i>
+                Estado de tolvas
+                <span class="section-count">@tolvas.Count</span>
+            </summary>
 
-            <span class="section-count">@pendientes.Count</span>
-        </div>
-
-        @if (pendientes.Any())
-        {
-            foreach (var grupo in pendientes
-            .GroupBy(x => new
-            {
-                x.MaquinaProgramadaID,
-                x.MaquinaProgramadaCodigo,
-                x.MaquinaProgramadaNombre
-            })
-            .OrderBy(x => x.Key.MaquinaProgramadaCodigo)
-            .ThenBy(x => x.Key.MaquinaProgramadaNombre))
-            {
-                var maquinaTexto =
-                string.IsNullOrWhiteSpace(grupo.Key.MaquinaProgramadaCodigo)
-                ? "Sin máquina"
-                : string.IsNullOrWhiteSpace(grupo.Key.MaquinaProgramadaNombre)
-                ? grupo.Key.MaquinaProgramadaCodigo
-                : $"{grupo.Key.MaquinaProgramadaCodigo} - {grupo.Key.MaquinaProgramadaNombre}";
-
-                <details class="material-group" open>
-                    <summary>
-                        <div class="group-title">
-                            <div class="group-icon">
-                                <i class="bi bi-building-gear"></i>
-                            </div>
-
-                            <div>
-                                <strong>@maquinaTexto</strong>
-                                <small>
-                                    @grupo.Count()
-                                    material@(grupo.Count() == 1 ? "" : "es")
-                                    pendiente(s)
-                                </small>
-                            </div>
-                        </div>
-
-                        <span class="group-count">
-                            @grupo.Count()
-                        </span>
-                    </summary>
-
-                    <div class="material-grid">
-                        @foreach (var material in grupo)
+            <div style="padding:10px;background:var(--dry-bg)">
+                @if (tolvas.Any())
+                {
+                    <div class="tolva-grid">
+                        @foreach (var tolva in tolvas)
                         {
-                            var tolvasCompatibles = tolvas
-                            .Where(x =>
-                            x.DisponibleParaUsar &&
-                            (
-                            string.Equals(
-                            x.TipoProcesoPermitido,
-                            "AMBOS",
-                            StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(
-                            x.TipoProcesoPermitido,
-                            material.TipoProceso,
-                            StringComparison.OrdinalIgnoreCase)
-                            ))
-                            .OrderByDescending(x =>
-                            material.TolvaSugeridaID.HasValue &&
-                            x.TolvaID == material.TolvaSugeridaID.Value)
-                            .ThenBy(x => x.MaquinaCodigo)
-                            .ThenBy(x => x.Codigo)
-                            .ToList();
+                            var claseTolva = tolva.DisponibleParaUsar
+                            ? "is-free"
+                            : tolva.EstaOcupada
+                            ? "is-busy"
+                            : "is-disabled";
 
-                            ProduccionSecadoTolvaVm? tolvaPredeterminada = null;
-
-                            if (material.TolvaSugeridaID.HasValue)
-                            {
-                                tolvaPredeterminada = tolvasCompatibles
-                                .FirstOrDefault(x =>
-                                x.TolvaID == material.TolvaSugeridaID.Value);
-                            }
-
-                            if (tolvaPredeterminada == null)
-                            {
-                                tolvaPredeterminada = tolvasCompatibles.FirstOrDefault();
-                            }
-
-                            var cantidadInicial = tolvaPredeterminada != null
-                            ? Math.Min(
-                            material.CantidadPendienteAsignarKg,
-                            tolvaPredeterminada.CapacidadKg)
-                            : material.CantidadPendienteAsignarKg;
-
-                            <article class="pending-card @(material.DebeAlertarEspera ? "is-alert" : material.EstaParcial ? "is-partial" : "")">
-                                <div class="pending-head">
-                                    <div class="pending-title">
-                                        <div class="pending-icon">
+                            <article class="tolva-card @claseTolva">
+                                <div class="tolva-top">
+                                    <div class="tolva-title">
+                                        <div class="tolva-icon">
                                             <i class="bi bi-box2"></i>
                                         </div>
 
                                         <div>
-                                            <div class="chips">
-                                                @if (!string.IsNullOrWhiteSpace(material.NumeroOF))
-                                                {
-                                                    <span class="chip">
-                                                        OF @material.NumeroOF
-                                                    </span>
-                                                }
-
-                                                @if (!string.IsNullOrWhiteSpace(material.TipoMPTexto))
-                                                {
-                                                    <span class="chip">
-                                                        @material.TipoMPTexto
-                                                    </span>
-                                                }
-
-                                                @if (!string.IsNullOrWhiteSpace(material.Lote))
-                                                {
-                                                    <span class="chip">
-                                                        Lote @material.Lote
-                                                    </span>
-                                                }
-                                            </div>
-
-                                            <h3>@material.TextoMaterial</h3>
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(tolva.Codigo)
+                                                                                        ? tolva.Nombre
+                                                                                        : $"{tolva.Codigo} - {tolva.Nombre}")
+                                    </strong>
 
                                             <small>
-                                                Recibido @material.FechaRecepcionProduccion.ToString("dd/MM/yyyy HH:mm")
+                                                @tolva.MaquinaCodigo
+                                        @if (!string.IsNullOrWhiteSpace(tolva.MaquinaNombre))
+                                                {
+                                                    <text> · @tolva.MaquinaNombre</text>
+                                                }
                                             </small>
                                         </div>
                                     </div>
 
-                                    <span class="status-pill @EstadoMaterialClase(material)">
-                                        @material.EstadoTexto
+                                    <span class="status-pill @(tolva.DisponibleParaUsar ? "success" : tolva.EstaOcupada ? "warning" : "danger")">
+                                        @tolva.EstadoTexto
                                     </span>
                                 </div>
+
+                                <div class="tolva-info">
+                                    <div>
+                                        <span>Capacidad</span>
+                                        <strong>@Cantidad(tolva.CapacidadKg)</strong>
+                                    </div>
+
+                                    <div>
+                                        <span>Proceso</span>
+                                        <strong>@tolva.TipoProcesoPermitido</strong>
+                                    </div>
+                                </div>
+
+                                @if (tolva.EstaOcupada)
+                                {
+                                    <div class="busy-info">
+                                        <i class="bi bi-hourglass-split me-1"></i>
+                                        OF @(string.IsNullOrWhiteSpace(tolva.NumeroOFActiva) ? "—" : tolva.NumeroOFActiva)
+                                        · @(string.IsNullOrWhiteSpace(tolva.MaterialCodigoActivo) ? "Material" : tolva.MaterialCodigoActivo)
+
+                                        @if (tolva.FechaFinEsperadaActiva.HasValue)
+                                        {
+                                            <text>
+                                                · Fin esperado @Fecha(tolva.FechaFinEsperadaActiva)
+                                            </text>
+                                        }
+                                    </div>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty">
+                        <i class="bi bi-boxes"></i>
+                        <strong>No hay tolvas configuradas</strong>
+                        <span>No se encontraron tolvas activas para el proceso de secado.</span>
+                    </div>
+                }
+            </div>
+        </details>
+    </section>
+
+    <section class="section waiting-section">
+        <div class="section-head">
+            <div>
+                <h2><i class="bi bi-truck me-1"></i> Próximos materiales · esperando recepción</h2>
+                <p>
+                    Materia prima requerida para secado que Planeación ya tiene programada, pero Producción todavía no ha confirmado físicamente.
+                </p>
+            </div>
+            <div class="section-kpi">
+                <span class="kg-pill" style="background:var(--dry-blue-soft);color:var(--dry-blue)">@Cantidad(totalKgEsperadosRecepcion) por recibir</span>
+                <span class="section-count" style="background:var(--dry-blue-soft);color:var(--dry-blue)">@pendientesPlaneacion.Count</span>
+            </div>
+        </div>
+
+        @if (pendientesPlaneacion.Any())
+        {
+            foreach (var grupo in pendientesPlaneacion
+            .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre })
+            .OrderBy(x => x.Key.MaquinaCodigo)
+            .ThenBy(x => x.Key.MaquinaNombre))
+            {
+                var maquinaTexto = string.IsNullOrWhiteSpace(grupo.Key.MaquinaCodigo)
+                ? "Sin máquina"
+                : string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
+                ? grupo.Key.MaquinaCodigo
+                : $"{grupo.Key.MaquinaCodigo} - {grupo.Key.MaquinaNombre}";
+                var kgEsperadosMaquina = grupo.Sum(x => x.CantidadMpPendienteRecepcionKg);
+                <details class="waiting-machine" open>
+                    <summary>
+                        <div class="waiting-machine-title">
+                            <i class="bi bi-building-gear"></i>
+                            <div>
+                                <strong>@maquinaTexto</strong>
+                                <small>@grupo.Count() OF@(grupo.Count() == 1 ? "" : "s") esperando materia prima</small>
+                            </div>
+                        </div>
+                        <div class="waiting-machine-kpi">
+                            <span class="status-pill primary">@Cantidad(kgEsperadosMaquina) esperados</span>
+                            <span class="section-count" style="background:var(--dry-blue-soft);color:var(--dry-blue)">@grupo.Count()</span>
+                        </div>
+                    </summary>
+                    <div class="planned-grid" style="padding:10px;background:var(--dry-bg)">
+                        @foreach (var tarea in grupo.OrderBy(x => x.FechaAviso).ThenBy(x => x.FechaObjetivo))
+                        {
+                            var clasePlaneacion = EstadoPlaneacionClase(tarea);
+                            var cantidadMpEsperada = tarea.CantidadMpKg ?? 0m;
+                            var cantidadMpRecibida = tarea.CantidadMpRecibidaProduccionKg;
+                            var cantidadMpFaltante = tarea.CantidadMpPendienteRecepcionKg;
+                            <article class="planned-card @(clasePlaneacion == "danger" ? "is-danger" : clasePlaneacion == "warning" ? "is-warning" : "")">
+                                <div class="planned-head">
+                                    <div class="planned-title">
+                                        <div class="planned-icon"><i class="bi bi-truck"></i></div>
+                                        <div>
+                                            <div class="chips">
+                                                <span class="chip">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
+                                                <span class="chip">@tarea.TextoParte</span>
+                                            </div>
+                                            <h3>@tarea.TextoMaterial</h3>
+                                            @if (!string.IsNullOrWhiteSpace(tarea.DescripcionParte))
+                                            {
+                                                <small>@tarea.DescripcionParte</small>
+                                            }
+                                        </div>
+                                    </div>
+                                    <span class="status-pill @clasePlaneacion">@EstadoPlaneacionTexto(tarea)</span>
+                                </div>
+
+                                <div class="waiting-kg">
+                                    <div>
+                                        <span>Materia prima que falta recibir</span>
+                                        <div class="field-help">Lo que todavía esperamos físicamente de Almacén para esta OF</div>
+                                    </div>
+                                    <strong>@(cantidadMpEsperada > 0 ? Cantidad(cantidadMpFaltante) : "Por definir")</strong>
+                                </div>
+
+                                @if (cantidadMpEsperada > 0)
+                                {
+                                    <div class="quantity-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                                        <div class="quantity-box">
+                                            <span>Requerido por OF</span>
+                                            <strong>@Cantidad(cantidadMpEsperada)</strong>
+                                        </div>
+                                        <div class="quantity-box">
+                                            <span>Ya confirmado</span>
+                                            <strong>@Cantidad(cantidadMpRecibida)</strong>
+                                        </div>
+                                        <div class="quantity-box remaining">
+                                            <span>Falta recibir</span>
+                                            <strong>@Cantidad(cantidadMpFaltante)</strong>
+                                        </div>
+                                    </div>
+                                }
 
                                 <div class="process-row">
                                     <div class="process-box primary">
                                         <span>Proceso requerido</span>
-                                        <strong>@material.TipoProcesoTexto</strong>
+                                        <strong>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Secado" : tarea.TipoSecado)</strong>
                                     </div>
-
                                     <div class="process-box">
-                                        <span>Tiempo requerido</span>
-                                        <strong>@Duracion(material.MinutosSecadoRequeridos)</strong>
-                                    </div>
-                                </div>
-
-                                <div class="quantity-grid">
-                                    <div class="quantity-box">
-                                        <span>Recibido</span>
-                                        <strong>@Cantidad(material.CantidadRecibidaKg)</strong>
-                                    </div>
-
-                                    <div class="quantity-box">
-                                        <span>Asignado</span>
-                                        <strong>@Cantidad(material.CantidadAsignadaKg)</strong>
-                                    </div>
-
-                                    <div class="quantity-box">
-                                        <span>Finalizado</span>
-                                        <strong>@Cantidad(material.CantidadFinalizadaKg)</strong>
-                                    </div>
-
-                                    <div class="quantity-box remaining">
-                                        <span>Por asignar</span>
-                                        <strong>@Cantidad(material.CantidadPendienteAsignarKg)</strong>
+                                        <span>Tiempo de secado</span>
+                                        <strong>@Horas(tarea.HorasSecado)</strong>
                                     </div>
                                 </div>
 
                                 <div class="schedule-grid">
                                     <div class="schedule-box">
-                                        <span>Inicio objetivo</span>
-                                        <strong>@Fecha(material.FechaInicioSecadoObjetivo)</strong>
+                                        <span>Debe iniciar secado</span>
+                                        <strong>@Fecha(tarea.FechaAviso)</strong>
                                     </div>
-
-                                    <div class="schedule-box">
-                                        <span>Fin objetivo</span>
-                                        <strong>@Fecha(material.FechaObjetivoFinSecado)</strong>
-                                    </div>
-
                                     <div class="schedule-box">
                                         <span>Arranque producción</span>
-                                        <strong>@Fecha(material.FechaArranqueProduccion)</strong>
-                                    </div>
-
-                                    <div class="schedule-box">
-                                        <span>Tolva sugerida</span>
-                                        <strong>@material.TextoTolvaSugerida</strong>
+                                        <strong>@Fecha(tarea.FechaArranque ?? tarea.FechaObjetivo)</strong>
                                     </div>
                                 </div>
 
-                                @if (material.DebeAlertarEspera)
-                                {
-                                    <div class="load-alert danger">
-                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>
-                                        El material lleva
-                                        <strong>@material.MinutosEsperaActual minuto(s)</strong>
-                                        esperando iniciar su primera carga.
-                                    </div>
-                                }
-
-                                @if (material.RecepcionTardia)
-                                {
-                                    <div class="load-alert warning">
-                                        <i class="bi bi-clock-history me-1"></i>
-                                        Producción confirmó el material
-                                        <strong>@material.MinutosRetrasoRecepcion minuto(s)</strong>
-                                        después de la hora límite estimada.
-                                    </div>
-                                }
-
-                                @if (material.Cargas.Any())
-                                {
-                                    <details class="history-details">
-                                        <summary>
-                                            <i class="bi bi-clock-history"></i>
-                                            Cargas anteriores (@material.Cargas.Count)
-                                        </summary>
-
-                                        <div class="segment-list">
-                                            @foreach (var cargaAnterior in material.Cargas
-                                                                        .OrderByDescending(x => x.NumeroCarga))
-                                            {
-                                                <div class="segment-row">
-                                                    <strong>
-                                                        #@cargaAnterior.NumeroCarga
-                                                    </strong>
-
-                                                    <div>
-                                                        <strong>@cargaAnterior.TextoTolva</strong>
-                                                        <span>@Cantidad(cargaAnterior.CantidadKg)</span>
-                                                    </div>
-
-                                                    <div>
-                                                        <span>
-                                                            @Fecha(cargaAnterior.FechaInicioReal)
-                                                        </span>
-                                                        <span>
-                                                            a @Fecha(cargaAnterior.FechaFinReal)
-                                                        </span>
-                                                    </div>
-
-                                                    <span class="status-pill @(cargaAnterior.EstaFinalizada ? "success" : cargaAnterior.EstaCancelada ? "danger" : "primary")">
-                                                        @cargaAnterior.EstadoTexto
-                                                    </span>
-                                                </div>
-                                            }
-                                        </div>
-                                    </details>
-                                }
-
-                                @if (Model.PuedeGestionarSecado)
-                                {
-                                    if (tolvasCompatibles.Any())
-                                    {
-                                        <div class="start-panel">
-                                            <form asp-controller="ProduccionPreparacion"
-                                                  asp-action="IniciarSecado"
-                                                  method="post"
-                                                  class="action-form js-start-form js-post-form"
-                                                  data-pending="@material.CantidadPendienteAsignarKg.ToString("0.####", CultureInfo.InvariantCulture)"
-                                                  data-confirm="¿Confirmas el inicio de esta carga de secado?">
-
-                                                @Html.AntiForgeryToken()
-
-                                                <input type="hidden"
-                                                       name="SecadoMaterialID"
-                                                       value="@material.SecadoMaterialID" />
-
-                                                <div class="form-row-2">
-                                                    <div class="field">
-                                                        <label>Tolva</label>
-
-                                                        <select name="TolvaID"
-                                                                class="js-tolva-select"
-                                                                required>
-                                                            <option value="">
-                                                                Selecciona una tolva...
-                                                            </option>
-
-                                                            @foreach (var tolvaDisponible in tolvasCompatibles)
-                                                            {
-                                                                if (tolvaPredeterminada != null &&
-                                                                tolvaDisponible.TolvaID == tolvaPredeterminada.TolvaID)
-                                                                {
-                                                                    <option value="@tolvaDisponible.TolvaID"
-                                                                            data-capacity="@tolvaDisponible.CapacidadKg.ToString("0.####", CultureInfo.InvariantCulture)"
-                                                                            selected>
-                                                                        @tolvaDisponible.Texto
-                                                                    </option>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <option value="@tolvaDisponible.TolvaID"
-                                                                            data-capacity="@tolvaDisponible.CapacidadKg.ToString("0.####", CultureInfo.InvariantCulture)">
-                                                                        @tolvaDisponible.Texto
-                                                                    </option>
-                                                                }
-                                                            }
-                                                        </select>
-                                                    </div>
-
-                                                    <div class="field">
-                                                        <label>Cantidad a cargar</label>
-
-                                                        <input type="number"
-                                                               name="CantidadKg"
-                                                               class="js-cantidad-input"
-                                                               min="0.0001"
-                                                               step="0.0001"
-                                                               value="@cantidadInicial.ToString("0.####", CultureInfo.InvariantCulture)"
-                                                               required />
-
-                                                        <span class="field-help js-capacity-hint"></span>
-                                                    </div>
-                                                </div>
-
-                                                <div class="field">
-                                                    <label>Observaciones</label>
-
-                                                    <textarea name="Observaciones"
-                                          maxlength="1000"
-                                          placeholder="Condición del material, temperatura inicial, lote, observaciones del arranque, etc."></textarea>
-                                                </div>
-
-                                                <div class="actions">
-                                                    <button type="submit"
-                                                            class="btnx btnx-primary">
-                                                        <i class="bi bi-play-circle"></i>
-                                                        Iniciar carga
-                                                    </button>
-
-                                                    @if (material.EjecucionProduccionID.HasValue)
-                                                    {
-                                                        <a class="btnx btnx-outline"
-                                                           asp-controller="Produccion"
-                                                           asp-action="Detalle"
-                                                           asp-route-id="@material.EjecucionProduccionID.Value">
-                                                            <i class="bi bi-box-arrow-up-right"></i>
-                                                            Ver producción
-                                                        </a>
-                                                    }
-                                                </div>
-                                            </form>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="no-tolva">
-                                            <i class="bi bi-exclamation-triangle me-1"></i>
-                                            No hay una tolva disponible compatible con
-                                            <strong>@material.TipoProcesoTexto</strong>.
-                                            Finaliza o libera otra carga antes de continuar.
-                                        </div>
-                                    }
-                                }
-                                else if (material.EjecucionProduccionID.HasValue)
-                                {
-                                    <div class="actions">
-                                        <a class="btnx btnx-outline"
-                                           asp-controller="Produccion"
-                                           asp-action="Detalle"
-                                           asp-route-id="@material.EjecucionProduccionID.Value">
-                                            <i class="bi bi-box-arrow-up-right"></i>
-                                            Ver producción
-                                        </a>
-                                    </div>
-                                }
+                                <div class="waiting-foot">
+                                    <span><i class="bi bi-box-arrow-in-down me-1"></i>Pendiente de confirmación física en Producción</span>
+                                    <span>@tarea.CantidadProgramada.ToString("N0") PZA programadas</span>
+                                </div>
                             </article>
                         }
                     </div>
@@ -2687,11 +2886,9 @@
         else
         {
             <div class="empty">
-                <i class="bi bi-check2-circle"></i>
-                <strong>No hay material pendiente por iniciar</strong>
-                <span>
-                    No se encontraron cantidades disponibles esperando una nueva carga de secado.
-                </span>
+                <i class="bi bi-truck"></i>
+                <strong>No hay materia prima pendiente de recepción para secado</strong>
+                <span>Los programas visibles ya tienen material físico confirmado o no requieren secado.</span>
             </div>
         }
     </section>
@@ -3270,7 +3467,7 @@
                 updateLoadCard(card);
             }
             catch {
-                
+
             }
         }
 

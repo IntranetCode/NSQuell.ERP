@@ -62,7 +62,13 @@ namespace ERP.NSQuell.Controllers
                 .ToHashSet();
 
             var pendientesPlaneacion = tareasPlaneadas
-                .Where(x => (x.EstaPendiente || x.EstaEnProceso) && !programasConMaterial.Contains(x.ProgramaProduccionID))
+                .Where(x =>
+                    (x.EstaPendiente || x.EstaEnProceso) &&
+                    (
+                        x.CantidadMpKg.GetValueOrDefault() > ProduccionSecadoReglas.ToleranciaCantidad
+                            ? x.CantidadMpPendienteRecepcionKg > ProduccionSecadoReglas.ToleranciaCantidad
+                            : !programasConMaterial.Contains(x.ProgramaProduccionID)
+                    ))
                 .OrderBy(x => x.FechaAviso)
                 .ThenBy(x => x.FechaObjetivo)
                 .ThenBy(x => x.ProgramaProduccionID)

@@ -120,6 +120,12 @@ namespace ERP.NSQuell.Models
         public string? NumeroOF { get; set; }
         public string? TipoSecado { get; set; }
         public decimal? HorasSecado { get; set; }
+
+        public decimal? CantidadMpKg { get; set; }
+        public decimal CantidadMpRecibidaProduccionKg { get; set; }
+        public decimal CantidadMpPendienteRecepcionKg => Math.Max(0m, (CantidadMpKg ?? 0m) - CantidadMpRecibidaProduccionKg);
+
+
         public string? MaterialCodigo { get; set; }
         public string? MaterialDescripcion { get; set; }
         public string? EmbalajeCodigo { get; set; }

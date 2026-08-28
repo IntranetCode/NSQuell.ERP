@@ -1682,10 +1682,7 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         if (string.IsNullOrWhiteSpace(model.Destino)) ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
         if (string.IsNullOrWhiteSpace(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
         if (model.FechaProgramada == default) ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
-<<<<<<< HEAD
-=======
-        // Ruta, unidad y chofer pueden quedar pendientes al programar; ValidarViajeListoParaIniciarAsync los exige al salir.
->>>>>>> origin/Rama_Adrian
+
     }
 
     private void ValidarModelo(LogisticaViajeEditarVm model)
@@ -1696,7 +1693,7 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         if (string.IsNullOrWhiteSpace(model.Destino)) ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
         if (string.IsNullOrWhiteSpace(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
         if (model.FechaProgramada == default) ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
-<<<<<<< HEAD
+
     }
 
     private static async Task<string> ObtenerNombreOperadorInternoAsync(SqlConnection cn, SqlTransaction tx, int operadorUsuarioId, CancellationToken cancellationToken)
@@ -1718,9 +1715,7 @@ AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
         var nombre = valor == null || valor == DBNull.Value ? string.Empty : valor.ToString()?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(nombre)) throw new InvalidOperationException("El operador seleccionado debe ser un usuario activo del departamento de Logística y tener un puesto de Chofer.");
         return nombre;
-=======
-        // Ruta, unidad y chofer son obligatorios al iniciar, no para guardar la programacion.
->>>>>>> origin/Rama_Adrian
+
     }
 
     private static async Task ValidarViajeListoParaIniciarAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)

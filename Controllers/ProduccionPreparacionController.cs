@@ -1257,6 +1257,42 @@ SELECT
     pp.Arranque,
     d.TipoSecado,
     d.HorasSecado,
+d.CantidadMpKg,
+CONVERT(DECIMAL(18,4),ISNULL
+(
+    (
+        SELECT SUM(ISNULL(r.CantidadRecibidaProduccion,0))
+        FROM dbo.Produccion_RecepcionMateriales r
+        WHERE r.Activo=1
+          AND r.TipoOrigen=N'MP'
+          AND r.EstadoRecepcion IN(N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL')
+          AND r.SolicitudProduccionID=pp.SolicitudProduccionID
+          AND
+          (
+              r.ProgramaProduccionID=pp.ProgramaProduccionID
+              OR
+              (
+                  r.ProgramaProduccionID IS NULL
+                  AND r.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+              )
+              OR
+              (
+                  r.ProgramaProduccionID IS NULL
+                  AND r.SolicitudProduccionDetalleID IS NULL
+                  AND
+                  (
+                      r.MaterialSolicitadoID=d.MaterialID
+                      OR
+                      (
+                          d.MaterialID IS NULL
+                          AND UPPER(LTRIM(RTRIM(ISNULL(r.CodigoSolicitadoSnapshot,N''))))=
+                              UPPER(LTRIM(RTRIM(ISNULL(d.MaterialCodigo,N''))))
+                      )
+                  )
+              )
+          )
+    ),0
+)) AS CantidadMpRecibidaProduccionKg,
     d.MaterialCodigo,
     d.MaterialDescripcion,
     d.EmbalajeCodigo,
@@ -1459,6 +1495,8 @@ ORDER BY
                     FechaArranque = fechaArranque,
                     TipoSecado = PreparacionTexto(rd, "TipoSecado"),
                     HorasSecado = PreparacionNullableDecimal(rd, "HorasSecado"),
+                    CantidadMpKg = PreparacionNullableDecimal(rd, "CantidadMpKg"),
+                    CantidadMpRecibidaProduccionKg = rd["CantidadMpRecibidaProduccionKg"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadMpRecibidaProduccionKg"]),
                     MaterialCodigo = PreparacionTexto(rd, "MaterialCodigo"),
                     MaterialDescripcion = PreparacionTexto(rd, "MaterialDescripcion"),
                     EmbalajeCodigo = PreparacionTexto(rd, "EmbalajeCodigo"),
