@@ -239,6 +239,7 @@
                             <th>Piezas</th>
                             <th>No. caja / lote</th>
                             <th>Validación</th>
+                            <th class="pt-convert-action">Quitar</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -279,6 +280,16 @@
                                     <small class="of-sub">
                                         @item.Mensaje
                                     </small>
+                                </td>
+                                <td class="pt-convert-action">
+                                    @* NSQ_PT_X_RESULTADO_V1_2 *@
+                                    <button type="button"
+                                            class="pt-scan-remove js-remove-converted"
+                                            data-row-index="@(item.Renglon - 1)"
+                                            title="Quitar esta etiqueta"
+                                            aria-label="Quitar esta etiqueta">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
                                 </td>
                             </tr>
                         }
@@ -379,6 +390,37 @@
                     rows.appendChild(row);
                 });
             };
+            // NSQ_PT_X_RESULTADO_JS_V1_2
+            document.querySelectorAll(".js-remove-converted").forEach(button => {
+                button.addEventListener("click", () => {
+                    const index = Number.parseInt(
+                        button.dataset.rowIndex || "-1",
+                        10);
+
+                    if (!Number.isInteger(index)
+                        || index < 0
+                        || index >= codigos.length) {
+                        setMessage(
+                            "No fue posible identificar la etiqueta a quitar.",
+                            true);
+                        return;
+                    }
+
+                    codigos.splice(index, 1);
+                    sync();
+
+                    if (codigos.length === 0) {
+                        invalidateConversion();
+                        setMessage("Lista vacia. Escanea una nueva etiqueta.");
+                        input.focus();
+                        return;
+                    }
+
+                    actionInput.value = "convertir";
+                    form.submit();
+                });
+            });
+
 
             const addCurrentCode = () => {
                 const code = input.value.trim();

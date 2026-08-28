@@ -893,10 +893,7 @@
                 <div class="info-value">@Model.TipoViaje</div>
             </div>
 
-            <div class="info-3">
-                <div class="info-label">Tipo de transporte</div>
-                <div class="info-value">@Model.TipoTransporte</div>
-            </div>
+            <!-- LOGISTICA_VIAJES_CHOFERES_V5: tipo de transporte oculto del flujo visible -->
 
             <div class="info-3">
                 <div class="info-label">Fecha programada</div>
@@ -947,7 +944,7 @@
     <div class="section">
 
         <div class="section-title">
-            Transporte
+            Unidad y chofer
         </div>
 
         @if (Model.EsTransporteInterno)
@@ -1037,15 +1034,7 @@
                 </div>
             </div>
 
-            <div class="info-3">
-                <div class="info-label">Regreso estimado</div>
-
-                <div class="info-value">
-                    @(Model.HoraRegresoProgramada.HasValue
-                                        ? Model.HoraRegresoProgramada.Value.ToString(@"hh\:mm")
-                                        : "-")
-                </div>
-            </div>
+            <!-- Regreso estimado retirado del flujo V5 -->
 
             <div class="info-3">
                 <div class="info-label">Regreso real</div>
@@ -1082,30 +1071,7 @@
                 </div>
             </div>
 
-            <div class="info-3">
-                <div class="info-label">Kilometraje salida</div>
-
-                <div class="info-value">
-                    @(Model.KilometrajeSalida.HasValue
-                                        ? $"{Model.KilometrajeSalida.Value:N0} km"
-                                        : "-")
-                </div>
-            </div>
-
-            <div class="info-3">
-                <div class="info-label">Kilometraje regreso</div>
-
-                <div class="info-value">
-                    @(Model.KilometrajeRegreso.HasValue
-                                        ? $"{Model.KilometrajeRegreso.Value:N0} km"
-                                        : "-")
-                </div>
-            </div>
-
-            <div class="info-3">
-                <div class="info-label">KM utilizados</div>
-                <div class="info-value">@(Model.KilometrosUtilizados.HasValue ? $"{Model.KilometrosUtilizados.Value:N0} km" : "-")</div>
-            </div>
+            <!-- Kilometrajes conservados en BD solo para historicos; no forman parte del flujo visible V5. -->
             <div class="info-3">
                 <div class="info-label">Pago de gasolina</div>
                 <div class="info-value">@(Model.PagoGasolina.HasValue ? $"${Model.PagoGasolina.Value:N2}" : "-")</div>
@@ -1161,15 +1127,7 @@
                            required />
                 </div>
 
-                <div class="form-3">
-                    <label>Kilometraje salida</label>
-
-                    <input type="number"
-                           name="KilometrajeSalida"
-                           min="0"
-                           class="form-control"
-                           placeholder="Opcional" />
-                </div>
+                <input type="hidden" name="KilometrajeSalida" value="" />
 
                 <div class="form-3">
                     <label>Pago de gasolina</label>
@@ -1224,15 +1182,7 @@
                            required />
                 </div>
 
-                <div class="form-3">
-                    <label>Kilometraje regreso</label>
-
-                    <input type="number"
-                           name="KilometrajeRegreso"
-                           min="0"
-                           class="form-control"
-                           placeholder="Opcional" />
-                </div>
+                <input type="hidden" name="KilometrajeRegreso" value="" />
 
                 <div class="form-4">
                     <label>Observaciones</label>

@@ -1615,14 +1615,21 @@ VALUES
             }
             else
             {
-                var exactos =
+                                // NSQ_PT_PRIORIDAD_NUMEROPARTE_V1_2
+                // NumeroParte exacto tiene prioridad sobre ReferenciaSAP exacta.
+                var exactosNumeroParte =
                     candidatos
                         .Where(x =>
                             string.Equals(
                                 x.NumeroParte.Trim(),
                                 parseado.NumeroParte.Trim(),
-                                StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(
+                                StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                var exactosReferencia =
+                    candidatos
+                        .Where(x =>
+                            string.Equals(
                                 x.ReferenciaSAP.Trim(),
                                 parseado.NumeroParte.Trim(),
                                 StringComparison.OrdinalIgnoreCase))
@@ -1630,11 +1637,18 @@ VALUES
 
                 ParteCatalogoEscaneo? candidato = null;
 
-                if (exactos.Count == 1)
+                if (exactosNumeroParte.Count == 1)
                 {
-                    candidato = exactos[0];
+                    candidato = exactosNumeroParte[0];
                 }
-                else if (candidatos.Count == 1)
+                else if (exactosNumeroParte.Count == 0
+                    && exactosReferencia.Count == 1)
+                {
+                    candidato = exactosReferencia[0];
+                }
+                else if (exactosNumeroParte.Count == 0
+                    && exactosReferencia.Count == 0
+                    && candidatos.Count == 1)
                 {
                     candidato = candidatos[0];
                 }
@@ -2153,6 +2167,35 @@ ORDER BY ParteID;";
             x.ParteID == candidato.ParteID))
         {
             lista.Add(candidato);
+        }
+        // NSQ_PT_ALIAS_CATALOGO_V1_2
+        // Variantes controladas que se observan en las etiquetas fisicas:
+        // - algunos lectores agregan revision "00" al final;
+        // - algunos formatos historicos omiten exactamente el primer caracter.
+        // Las variantes se agregan al mismo diccionario. Si dos piezas chocan,
+        // el flujo existente las conserva como coincidencia ambigua.
+        var aliases = new List<string>();
+
+        if (clave.Length >= 6)
+        {
+            aliases.Add(clave + "00");
+
+            if (clave.Length >= 9)
+                aliases.Add(clave.Substring(1));
+        }
+
+        foreach (var alias in aliases
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!resultado.TryGetValue(alias, out var listaAlias))
+            {
+                listaAlias = new List<ParteCatalogoEscaneo>();
+                resultado[alias] = listaAlias;
+            }
+
+            if (!listaAlias.Any(x => x.ParteID == candidato.ParteID))
+                listaAlias.Add(candidato);
         }
     }
     // ALMACEN_PT_OF_CANONICA_V10_0

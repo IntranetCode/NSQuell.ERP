@@ -1744,6 +1744,35 @@ ORDER BY
                     : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
             }
 
+                        // NSQ_CALIDAD_CANONICAL_KEYS_V1_3
+            // Una misma OF/parte puede venir con formato diferente en etiqueta y ERP.
+            // Para relacionar la corrida se usa una clave alfanumerica estable.
+            static string ClaveAlfanumerica(string? valor) =>
+                new string(
+                    (valor ?? string.Empty)
+                        .Where(char.IsLetterOrDigit)
+                        .Select(char.ToUpperInvariant)
+                        .ToArray());
+
+            var numeroOFClave = ClaveAlfanumerica(numeroOF);
+
+            if (numeroOFClave.StartsWith("OF", StringComparison.Ordinal))
+                numeroOFClave = numeroOFClave[2..];
+
+            var numeroParteClave =
+                ClaveAlfanumerica(numeroParte);
+
+            if (string.IsNullOrWhiteSpace(numeroOFClave) ||
+                string.IsNullOrWhiteSpace(numeroParteClave))
+            {
+                TempData["Error"] =
+                    "La etiqueta no contiene una OF y número de parte comparables con Producción.";
+
+                return model.InspeccionID.HasValue
+                    ? RedirectToAction(nameof(Detalle), new { id = model.InspeccionID.Value })
+                    : RedirectToAction(nameof(Index), new { grupo = "CAJAS" });
+            }
+
             var codigoFisico = parseado.CodigoOriginal?.Trim();
 
             if (string.IsNullOrWhiteSpace(codigoFisico))
@@ -1953,7 +1982,7 @@ SET
     FechaEscaneoCalidad=@Ahora,
     UsuarioEscaneoCalidadID=@UsuarioID,
     EstadoCajaNombre=N'Escaneada por Calidad - pendiente validación',
-    EstatusCalidad=N'ESCANEADA',
+    EstatusCalidad=N'PENDIENTE' /* NSQ_CALIDAD_ESTATUS_V1_4_1_SQL */,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=@Ahora
 WHERE CajaProduccionID=@CajaProduccionID
@@ -2131,18 +2160,35 @@ VALUES
         ON d.SolicitudProduccionDetalleID=
            COALESCE(e.SolicitudProduccionDetalleID,i.SolicitudProduccionDetalleID)
        AND d.Activo=1
-    WHERE i.Estado<>N'CERRADA'
+        WHERE i.Estado<>N'CERRADA'
+      -- NSQ_CALIDAD_CANONICAL_MATCH_V1_3
       AND
       (
-          UPPER(LTRIM(RTRIM(ISNULL(sp.NumeroOFRecibida,N''))))=@NumeroOF
-          OR UPPER(LTRIM(RTRIM(ISNULL(sp.FolioSolicitud,N''))))=@NumeroOF
-          OR UPPER(LTRIM(RTRIM(ISNULL(i.OrdenTrabajo,N''))))=@NumeroOF
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              UPPER(LTRIM(RTRIM(ISNULL(sp.NumeroOFRecibida,N'')))),
+              N'OF',N''),N'-',N''),N'/',N''),N'''',N''),N' ',N''),N'.',N'')=@NumeroOF
+          OR
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              UPPER(LTRIM(RTRIM(ISNULL(sp.FolioSolicitud,N'')))),
+              N'OF',N''),N'-',N''),N'/',N''),N'''',N''),N' ',N''),N'.',N'')=@NumeroOF
+          OR
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              UPPER(LTRIM(RTRIM(ISNULL(i.OrdenTrabajo,N'')))),
+              N'OF',N''),N'-',N''),N'/',N''),N'''',N''),N' ',N''),N'.',N'')=@NumeroOF
       )
       AND
       (
-          UPPER(LTRIM(RTRIM(ISNULL(e.NumeroParte,N''))))=@NumeroParte
-          OR UPPER(LTRIM(RTRIM(ISNULL(e.ReferenciaSAP,N''))))=@NumeroParte
-          OR UPPER(LTRIM(RTRIM(ISNULL(i.NumeroParte,N''))))=@NumeroParte
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              UPPER(LTRIM(RTRIM(ISNULL(e.NumeroParte,N'')))),
+              N'.',N''),N'_',N''),N'?',N''),N':',N''),N' ',N''),N'-',N''),N'/',N'')=@NumeroParte
+          OR
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              UPPER(LTRIM(RTRIM(ISNULL(e.ReferenciaSAP,N'')))),
+              N'.',N''),N'_',N''),N'?',N''),N':',N''),N' ',N''),N'-',N''),N'/',N'')=@NumeroParte
+          OR
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+              UPPER(LTRIM(RTRIM(ISNULL(i.NumeroParte,N'')))),
+              N'.',N''),N'_',N''),N'?',N''),N':',N''),N' ',N''),N'-',N''),N'/',N'')=@NumeroParte
       )
 )
 SELECT TOP(1)
@@ -2192,17 +2238,18 @@ ORDER BY
 
                 await using (var cmd = new SqlCommand(sqlContexto, cn, tx))
                 {
+                                        // NSQ_CALIDAD_CANONICAL_PARAMS_V1_3
                     cmd.Parameters.Add(
                         "@NumeroOF",
                         SqlDbType.NVarChar,
                         120).Value =
-                        numeroOF.ToUpperInvariant();
+                        numeroOFClave;
 
                     cmd.Parameters.Add(
                         "@NumeroParte",
                         SqlDbType.NVarChar,
                         150).Value =
-                        numeroParte.ToUpperInvariant();
+                        numeroParteClave;
 
                     cmd.Parameters.Add(
                         "@InspeccionSolicitada",
@@ -2216,6 +2263,8 @@ ORDER BY
 
                     if (!await rd.ReadAsync())
                     {
+                                                // NSQ_CALIDAD_CLOSE_READER_V1_2
+                        await rd.DisposeAsync();
                         await tx.RollbackAsync();
 
                         TempData["Error"] =
@@ -2709,7 +2758,7 @@ VALUES
     @Ahora,
     @FolioCaja,
     @CantidadPiezas,
-    N'ESCANEADA',
+    N'PENDIENTE' /* NSQ_CALIDAD_ESTATUS_V1_4_1_SQL */,
     NULL,
     0,
     @CodigoBarras,

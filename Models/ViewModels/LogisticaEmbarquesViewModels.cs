@@ -148,6 +148,7 @@ public sealed class LogisticaCrearVm
     public int? ClienteID { get; set; }
     public List<LogisticaSelectVm> Clientes { get; set; } = new();
     public List<LogisticaCrearPartidaVm> Partidas { get; set; } = new();
+    public List<LogisticaCajaPtCrearVm> CajasPT { get; set; } = new();
 
     public LogisticaDemandaVm? Demanda { get; set; }
     public List<LogisticaDemandaVm> Demandas { get; set; } = new();
@@ -173,6 +174,31 @@ public sealed class LogisticaCrearPartidaVm
     public long PiezasPTDisponibles { get; set; }
     public List<LogisticaCajaDisponibleVm> CajasDisponibles { get; set; } = new();
 }
+
+public sealed class LogisticaCajaPtCrearVm
+{
+    public bool Seleccionada { get; set; }
+    public int CajaID { get; set; }
+    public int ParteID { get; set; }
+    public string NumeroParte { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public string Cliente { get; set; } = string.Empty;
+    public string Etiqueta { get; set; } = string.Empty;
+    public int NumeroCaja { get; set; }
+    public int CantidadInicial { get; set; }
+    public string NumeroOF { get; set; } = string.Empty;
+    public int? SolicitudProduccionID { get; set; }
+    public string Lote { get; set; } = string.Empty;
+    public string Ubicacion { get; set; } = string.Empty;
+    public string EstadoCalidad { get; set; } = string.Empty;
+    public DateTime FechaEntrada { get; set; }
+    public int Disponible { get; set; }
+    public int CantidadTomar { get; set; }
+    public int ReleasesPendientes { get; set; }
+    public long PiezasPendientesRelease { get; set; }
+    public bool TieneReleasePendiente => ReleasesPendientes > 0 && PiezasPendientesRelease > 0;
+}
+
 public sealed class LogisticaDetalleVm
 {
     public int EmbarqueID { get; set; }

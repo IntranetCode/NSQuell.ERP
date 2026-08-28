@@ -17,14 +17,30 @@ public partial class EscalaPersonalController
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [RequestSizeLimit(60_000_000)]
-    public async Task<IActionResult> ImportarPolivalenciaV7(IFormFile archivo)
+    // NSQ_POLIVALENCIA_UPLOAD_LITE_V8
+    [RequestSizeLimit(8_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 8_000_000)]
+    public async Task<IActionResult> ImportarPolivalenciaV7(IFormFile archivo, string? hashArchivoOriginal)
     {
         if(archivo==null||archivo.Length<=0){TempData["Error"]="Selecciona el archivo XLSX de la matriz.";return RedirectToAction(nameof(Polivalencia));}
         if(!Path.GetExtension(archivo.FileName).Equals(".xlsx",StringComparison.OrdinalIgnoreCase)){TempData["Error"]="La matriz debe ser un archivo .xlsx.";return RedirectToAction(nameof(Polivalencia));}
-        if(archivo.Length>55_000_000){TempData["Error"]="El archivo excede 55 MB.";return RedirectToAction(nameof(Polivalencia));}
+        if(archivo.Length>6_000_000){TempData["Error"]="El archivo procesado excede 6 MB. Recarga la página y vuelve a seleccionar la matriz para que el navegador quite las imágenes antes de enviarla.";return RedirectToAction(nameof(Polivalencia));}
 
-        await using var ms=new MemoryStream();await archivo.CopyToAsync(ms);var bytes=ms.ToArray();var hash=Convert.ToHexString(SHA256.HashData(bytes));
+                await using var ms = new MemoryStream();
+        await archivo.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+
+        // El XLSX que llega al servidor ya no contiene imágenes. Para conservar
+        // el comportamiento de "mismo archivo ya procesado", usamos el SHA-256
+        // del archivo ORIGINAL calculado en el navegador. Si no viene o es
+        // inválido, se usa de forma segura el hash del archivo recibido.
+        var hashCalculado = Convert.ToHexString(SHA256.HashData(bytes));
+        var hashOriginalNormalizado = hashArchivoOriginal?.Trim().ToUpperInvariant();
+        var hash = !string.IsNullOrWhiteSpace(hashOriginalNormalizado)
+                   && hashOriginalNormalizado.Length == 64
+                   && hashOriginalNormalizado.All(Uri.IsHexDigit)
+            ? hashOriginalNormalizado
+            : hashCalculado;
         try
         {
             using var wb=new XLWorkbook(new MemoryStream(bytes));
@@ -73,7 +89,7 @@ SELECT
                     $"Falta estructura V7 en la BD conectada por el ERP: {servidorActual} / {baseActual}. " +
                     "Ejecuta el SQL V7.3 de reparación en ESA misma instancia.");
             }
-            const string duplicado=@"SELECT COUNT(1) FROM dbo.RRHH_PolivalenciaImportaciones WHERE HashSHA256=@Hash AND Resultado IN(N'EXITO',N'SIN_CAMBIOS');";await using(var cmd=new SqlCommand(duplicado,cn)){cmd.Parameters.Add("@Hash",SqlDbType.VarChar,64).Value=hash;if(Convert.ToInt32(await cmd.ExecuteScalarAsync())>0){TempData["Exito"]="Este mismo archivo ya fue procesado correctamente. No se duplicaron registros.";return RedirectToAction(nameof(Polivalencia));}}
+            // NSQ_POLIVALENCIA_USUARIOS_AUTO_V10: un hash repetido no bloquea la resincronizacion de cuentas ERP.
             var personasDb=await CargarPersonasPoliV7Async(cn);var partes=await CargarPartesPoliV7Async(cn);
             // POLIVALENCIA_MATCHER_GENERAL_V77
             // Reutiliza primero los enlaces de la matriz activa. La matriz de polivalencia
@@ -88,7 +104,13 @@ SELECT
 
             if (await MatrizActivaCoincideV7Async(comps,cn))
             {
-                const string sinCambios = @"
+                var usuarioSinCambios=ObtenerUsuarioID();
+                await using var txSinCambios=(SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+                try
+                {
+                    var syncUsuarios=await SincronizarUsuariosPolivalenciaV10Async(personas,cn,txSinCambios);
+
+                    const string sinCambios = @"
 INSERT dbo.RRHH_PolivalenciaImportaciones
 (
     NombreArchivo,HashSHA256,FuenteDocumento,VersionDocumento,Mes,Anio,
@@ -98,27 +120,38 @@ INSERT dbo.RRHH_PolivalenciaImportaciones
 VALUES
 (
     @Archivo,@Hash,@Fuente,@Version,@Mes,@Anio,
-    @Personas,@Partes,@Competencias,0,
-    @Usuario,N'SIN_CAMBIOS',N'La matriz activa ya coincidía exactamente con el XLSX.'
+    @Personas,@Partes,@Competencias,@Bajas,
+    @Usuario,N'SIN_CAMBIOS',N'La matriz activa ya coincidia con el XLSX; se resincronizaron las cuentas ERP de operadores/auxiliares.'
 );";
 
-                await using var sinCambiosCmd = new SqlCommand(sinCambios,cn);
-                sinCambiosCmd.Parameters.Add("@Archivo",SqlDbType.NVarChar,260).Value=Path.GetFileName(archivo.FileName);
-                sinCambiosCmd.Parameters.Add("@Hash",SqlDbType.VarChar,64).Value=hash;
-                sinCambiosCmd.Parameters.Add("@Fuente",SqlDbType.NVarChar,100).Value=fuente;
-                sinCambiosCmd.Parameters.Add("@Version",SqlDbType.NVarChar,50).Value=version;
-                sinCambiosCmd.Parameters.Add("@Mes",SqlDbType.NVarChar,30).Value=mes;
-                sinCambiosCmd.Parameters.Add("@Anio",SqlDbType.Int).Value=anio;
-                sinCambiosCmd.Parameters.Add("@Personas",SqlDbType.Int).Value=personas.Count;
-                sinCambiosCmd.Parameters.Add("@Partes",SqlDbType.Int).Value=comps.Select(x=>x.ParteID).Distinct().Count();
-                sinCambiosCmd.Parameters.Add("@Competencias",SqlDbType.Int).Value=comps.Count;
-                sinCambiosCmd.Parameters.Add("@Usuario",SqlDbType.Int).Value=(object?)ObtenerUsuarioID()??DBNull.Value;
-                await sinCambiosCmd.ExecuteNonQueryAsync();
+                    await using var sinCambiosCmd = new SqlCommand(sinCambios,cn,txSinCambios);
+                    sinCambiosCmd.Parameters.Add("@Archivo",SqlDbType.NVarChar,260).Value=Path.GetFileName(archivo.FileName);
+                    sinCambiosCmd.Parameters.Add("@Hash",SqlDbType.VarChar,64).Value=hash;
+                    sinCambiosCmd.Parameters.Add("@Fuente",SqlDbType.NVarChar,100).Value=fuente;
+                    sinCambiosCmd.Parameters.Add("@Version",SqlDbType.NVarChar,50).Value=version;
+                    sinCambiosCmd.Parameters.Add("@Mes",SqlDbType.NVarChar,30).Value=mes;
+                    sinCambiosCmd.Parameters.Add("@Anio",SqlDbType.Int).Value=anio;
+                    sinCambiosCmd.Parameters.Add("@Personas",SqlDbType.Int).Value=personas.Count;
+                    sinCambiosCmd.Parameters.Add("@Partes",SqlDbType.Int).Value=comps.Select(x=>x.ParteID).Distinct().Count();
+                    sinCambiosCmd.Parameters.Add("@Competencias",SqlDbType.Int).Value=comps.Count;
+                    sinCambiosCmd.Parameters.Add("@Bajas",SqlDbType.Int).Value=syncUsuarios.PersonasDesactivadas;
+                    sinCambiosCmd.Parameters.Add("@Usuario",SqlDbType.Int).Value=(object?)usuarioSinCambios??DBNull.Value;
+                    await sinCambiosCmd.ExecuteNonQueryAsync();
 
-                TempData["Exito"] =
-                    $"La matriz ya estaba actualizada: {personas.Count} personas, " +
-                    $"{comps.Select(x=>x.ParteID).Distinct().Count()} partes y {comps.Count} competencias. " +
-                    "No se duplicaron registros.";
+                    await txSinCambios.CommitAsync();
+
+                    TempData["Exito"] =
+                        $"La matriz ya estaba actualizada: {personas.Count} personas y {comps.Count} competencias. " +
+                        $"Cuentas ERP: {syncUsuarios.CuentasCreadas} creadas, {syncUsuarios.CuentasReactivadas} reactivadas, " +
+                        $"{syncUsuarios.CuentasNormalizadas} normalizadas y {syncUsuarios.CuentasDesactivadas} dadas de baja.";
+                    TempData["ExitoDetalleUsuarios"] = ConstruirDetalleUsuariosPoliV101(syncUsuarios);
+                }
+                catch
+                {
+                    try{await txSinCambios.RollbackAsync();}catch{}
+                    throw;
+                }
+
                 return RedirectToAction(nameof(Polivalencia));
             }
 
@@ -126,15 +159,14 @@ VALUES
             await using var tx=(SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
-                var anteriores=new HashSet<int>();const string ant=@"SELECT DISTINCT PersonalID FROM dbo.RRHH_PolivalenciaCompetencias WITH(UPDLOCK,HOLDLOCK) WHERE Activo=1;";await using(var cmd=new SqlCommand(ant,cn,tx))await using(var rd=await cmd.ExecuteReaderAsync()){while(await rd.ReadAsync())anteriores.Add(Convert.ToInt32(rd[0]));}
+                var syncUsuarios=await SincronizarUsuariosPolivalenciaV10Async(personas,cn,tx);
                 const string off=@"UPDATE dbo.RRHH_PolivalenciaCompetencias SET Activo=0,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Por WHERE Activo=1;";await using(var cmd=new SqlCommand(off,cn,tx)){cmd.Parameters.Add("@Por",SqlDbType.NVarChar,120).Value=$"WEB_POLIVALENCIA_U{usuario}";await cmd.ExecuteNonQueryAsync();}
                 const string ins=@"INSERT dbo.RRHH_PolivalenciaCompetencias(PersonalID,ParteID,ClaveMatriz,EncabezadoMatriz,NumeroControl,PuestoMatriz,Nivel,FuenteDocumento,VersionDocumento,Mes,Anio,FechaVigencia,Activo,FechaRegistro,RegistradoPor) VALUES(@Personal,@Parte,@Clave,@Encabezado,@Control,@Puesto,@Nivel,@Fuente,@Version,@Mes,@Anio,@Vigencia,1,SYSDATETIME(),@Por);";
                 foreach(var c in comps){await using var cmd=new SqlCommand(ins,cn,tx);cmd.Parameters.Add("@Personal",SqlDbType.Int).Value=c.PersonaID;cmd.Parameters.Add("@Parte",SqlDbType.Int).Value=c.ParteID;cmd.Parameters.Add("@Clave",SqlDbType.NVarChar,10).Value=c.Clave;cmd.Parameters.Add("@Encabezado",SqlDbType.NVarChar,500).Value=c.Encabezado[..Math.Min(500,c.Encabezado.Length)];cmd.Parameters.Add("@Control",SqlDbType.NVarChar,30).Value=c.Control;cmd.Parameters.Add("@Puesto",SqlDbType.NVarChar,100).Value=c.Puesto[..Math.Min(100,c.Puesto.Length)];cmd.Parameters.Add("@Nivel",SqlDbType.TinyInt).Value=c.Nivel;cmd.Parameters.Add("@Fuente",SqlDbType.NVarChar,50).Value=fuente;cmd.Parameters.Add("@Version",SqlDbType.NVarChar,20).Value=version;cmd.Parameters.Add("@Mes",SqlDbType.NVarChar,20).Value=mes[..Math.Min(20,mes.Length)];cmd.Parameters.Add("@Anio",SqlDbType.SmallInt).Value=anio;cmd.Parameters.Add("@Vigencia",SqlDbType.Date).Value=new DateTime(anio,MesNumero(mes),1);cmd.Parameters.Add("@Por",SqlDbType.NVarChar,120).Value=$"WEB_POLIVALENCIA_U{usuario}";await cmd.ExecuteNonQueryAsync();}
-                var actuales=personas.Select(x=>x.PersonaID).ToHashSet();var bajas=anteriores.Except(actuales).ToList();var desactivadas=0;
-                if(bajas.Count>0){foreach(var id in bajas){const string baja=@"UPDATE dbo.Persona SET EsColaboradorActivo=0,FechaBaja=COALESCE(FechaBaja,CONVERT(date,GETDATE())) WHERE PersonaID=@ID AND ISNULL(EsColaboradorActivo,1)=1 AND (UPPER(ISNULL(Puesto,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%OPERADOR%' OR UPPER(ISNULL(Puesto,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%AUXILIAR%PRODU%');";await using var cmd=new SqlCommand(baja,cn,tx);cmd.Parameters.Add("@ID",SqlDbType.Int).Value=id;desactivadas+=await cmd.ExecuteNonQueryAsync();}}
-                foreach(var id in actuales){const string on=@"UPDATE dbo.Persona SET EsColaboradorActivo=1,FechaBaja=NULL WHERE PersonaID=@ID;";await using var cmd=new SqlCommand(on,cn,tx);cmd.Parameters.Add("@ID",SqlDbType.Int).Value=id;await cmd.ExecuteNonQueryAsync();}
-                const string audit=@"INSERT dbo.RRHH_PolivalenciaImportaciones(NombreArchivo,HashSHA256,FuenteDocumento,VersionDocumento,Mes,Anio,TotalPersonas,TotalPartes,TotalCompetencias,PersonasDesactivadas,UsuarioID,Resultado,Observaciones) VALUES(@Archivo,@Hash,@Fuente,@Version,@Mes,@Anio,@Personas,@Partes,@Competencias,@Bajas,@Usuario,N'EXITO',@Obs);";await using(var cmd=new SqlCommand(audit,cn,tx)){cmd.Parameters.Add("@Archivo",SqlDbType.NVarChar,260).Value=Path.GetFileName(archivo.FileName);cmd.Parameters.Add("@Hash",SqlDbType.VarChar,64).Value=hash;cmd.Parameters.Add("@Fuente",SqlDbType.NVarChar,100).Value=fuente;cmd.Parameters.Add("@Version",SqlDbType.NVarChar,50).Value=version;cmd.Parameters.Add("@Mes",SqlDbType.NVarChar,30).Value=mes;cmd.Parameters.Add("@Anio",SqlDbType.Int).Value=anio;cmd.Parameters.Add("@Personas",SqlDbType.Int).Value=personas.Count;cmd.Parameters.Add("@Partes",SqlDbType.Int).Value=comps.Select(x=>x.ParteID).Distinct().Count();cmd.Parameters.Add("@Competencias",SqlDbType.Int).Value=comps.Count;cmd.Parameters.Add("@Bajas",SqlDbType.Int).Value=desactivadas;cmd.Parameters.Add("@Usuario",SqlDbType.Int).Value=(object?)usuario??DBNull.Value;cmd.Parameters.Add("@Obs",SqlDbType.NVarChar,1000).Value=$"Hoja {ws.Name}. Importación transaccional desde Polivalencia.";await cmd.ExecuteNonQueryAsync();}
-                await tx.CommitAsync();TempData["Exito"]=$"Matriz actualizada: {personas.Count} personas, {comps.Select(x=>x.ParteID).Distinct().Count()} partes ERP y {comps.Count} competencias. Personal operativo desactivado: {desactivadas}.";
+                // NSQ_POLIVALENCIA_USUARIOS_AUTO_V10:
+                // las bajas de Persona/Usuario ya fueron resueltas por syncUsuarios.
+                const string audit=@"INSERT dbo.RRHH_PolivalenciaImportaciones(NombreArchivo,HashSHA256,FuenteDocumento,VersionDocumento,Mes,Anio,TotalPersonas,TotalPartes,TotalCompetencias,PersonasDesactivadas,UsuarioID,Resultado,Observaciones) VALUES(@Archivo,@Hash,@Fuente,@Version,@Mes,@Anio,@Personas,@Partes,@Competencias,@Bajas,@Usuario,N'EXITO',@Obs);";await using(var cmd=new SqlCommand(audit,cn,tx)){cmd.Parameters.Add("@Archivo",SqlDbType.NVarChar,260).Value=Path.GetFileName(archivo.FileName);cmd.Parameters.Add("@Hash",SqlDbType.VarChar,64).Value=hash;cmd.Parameters.Add("@Fuente",SqlDbType.NVarChar,100).Value=fuente;cmd.Parameters.Add("@Version",SqlDbType.NVarChar,50).Value=version;cmd.Parameters.Add("@Mes",SqlDbType.NVarChar,30).Value=mes;cmd.Parameters.Add("@Anio",SqlDbType.Int).Value=anio;cmd.Parameters.Add("@Personas",SqlDbType.Int).Value=personas.Count;cmd.Parameters.Add("@Partes",SqlDbType.Int).Value=comps.Select(x=>x.ParteID).Distinct().Count();cmd.Parameters.Add("@Competencias",SqlDbType.Int).Value=comps.Count;cmd.Parameters.Add("@Bajas",SqlDbType.Int).Value=syncUsuarios.PersonasDesactivadas;cmd.Parameters.Add("@Usuario",SqlDbType.Int).Value=(object?)usuario??DBNull.Value;cmd.Parameters.Add("@Obs",SqlDbType.NVarChar,1000).Value=$"Hoja {ws.Name}. Importación transaccional desde Polivalencia.";await cmd.ExecuteNonQueryAsync();}
+                await tx.CommitAsync();TempData["Exito"]=$"Matriz actualizada: {personas.Count} personas, {comps.Select(x=>x.ParteID).Distinct().Count()} partes ERP y {comps.Count} competencias. Cuentas ERP: {syncUsuarios.CuentasCreadas} creadas, {syncUsuarios.CuentasReactivadas} reactivadas, {syncUsuarios.CuentasNormalizadas} normalizadas y {syncUsuarios.CuentasDesactivadas} dadas de baja.";TempData["ExitoDetalleUsuarios"]=ConstruirDetalleUsuariosPoliV101(syncUsuarios);
             }catch{try{await tx.RollbackAsync();}catch{}throw;}
         }
         catch(Exception ex){TempData["Error"]="No se importó la matriz. "+ex.Message;}
