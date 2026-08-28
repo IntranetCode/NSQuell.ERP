@@ -4155,7 +4155,20 @@
                                 const auxiliarId = modalOperadorAuxiliarId?.value || '';
                                 const auxiliarManual = modalOperadorAuxiliarManual?.value.trim() || '';
 
-                                if (!principalId && !principalManual) {
+                                if (
+                                    /* NSQ_PRODUCCION_OPERADOR_PROGRAMADO_V8_3 */
+                                    !(
+                                        formIniciarPreparacion?.dataset.operadorProgramado === '1'
+                                        ||
+                                        document
+                                            .getElementById('ppInicioOperadorCard')
+                                            ?.classList.contains('d-none') === true
+                                    )
+                                    &&
+                                    !principalId
+                                    &&
+                                    !principalManual
+                                ) {
                                     mostrarValidacionOperadores(
                                         'Falta confirmar el operador principal. Selecciona un OPERADOR de la lista o captura su nombre manual antes de iniciar la preparación.',
                                         [modalOperadorId, modalOperadorManual]);
