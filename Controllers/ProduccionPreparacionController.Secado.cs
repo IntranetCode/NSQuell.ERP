@@ -38,6 +38,8 @@ namespace ERP.NSQuell.Controllers
                 {
                     await SincronizarPreparacionAnticipadaAsync(usuarioId, cn, tx);
                     await SincronizarSecadoMaterialConPlaneacionAsync(usuarioId, cn, tx);
+                    // NSQ_SECADO_OF_MATERIAL_V1_TECH_SYNC_CALL
+                    await SincronizarSecadoParametrosTecnicosV12Async(usuarioId, cn, tx);
                     await ConsolidarSecadosPendientesSinIniciarAsync(usuarioId, cn, tx);
                     await tx.CommitAsync();
                 }
@@ -1148,16 +1150,39 @@ WHERE c.SecadoCargaID=@SecadoCargaID
 
                 var ahora = await ObtenerFechaServidorSecadoAsync(cn, tx);
 
-                if (ahora < fechaFinEsperada)
+                // NSQ_SECADO_OF_MATERIAL_V1_FIN_LOGIC_START
+                var rangoSecado = await ObtenerRangoSecadoCargaV1Async(vm.SecadoCargaID, cn, tx);
+                var finalizoAntesTiempo = ahora < fechaFinEsperada;
+                var motivoFinalizacionAnticipada = string.IsNullOrWhiteSpace(vm.MotivoFinalizacionAnticipada)
+                    ? null
+                    : vm.MotivoFinalizacionAnticipada.Trim();
+
+                if (motivoFinalizacionAnticipada?.Length > 500)
                 {
-                    var minutosFaltantes = Math.Max(1, (int)Math.Ceiling((fechaFinEsperada - ahora).TotalMinutes));
                     await tx.RollbackAsync();
-                    TempData["Warning"] = $"La carga todavía no cumple el tiempo requerido. Faltan aproximadamente {minutosFaltantes} minuto(s).";
+                    TempData["Error"] = "El motivo de finalización anticipada no puede superar 500 caracteres.";
                     return RedirectToAction(nameof(Secado));
                 }
 
+                if (finalizoAntesTiempo && !vm.ConfirmarFinalizacionAnticipada)
+                {
+                    var minutosFaltantes = Math.Max(1, (int)Math.Ceiling((fechaFinEsperada - ahora).TotalMinutes));
+                    await tx.RollbackAsync();
+                    TempData["Warning"] = $"La carga aún no cumple el tiempo objetivo. Faltan aproximadamente {minutosFaltantes} minuto(s). Confirma expresamente la finalización anticipada.";
+                    return RedirectToAction(nameof(Secado));
+                }
+
+                if (finalizoAntesTiempo && string.IsNullOrWhiteSpace(motivoFinalizacionAnticipada))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Para finalizar antes del tiempo objetivo debes indicar un motivo obligatorio.";
+                    return RedirectToAction(nameof(Secado));
+                }
+
+                var fechaFinMaxima = fechaInicio.AddMinutes(rangoSecado.MinutosMaximos);
                 var duracionRealMinutos = Math.Max(0, (int)Math.Floor((ahora - fechaInicio).TotalMinutes));
-                var minutosExceso = Math.Max(0, (int)Math.Floor((ahora - fechaFinEsperada).TotalMinutes));
+                var minutosExceso = Math.Max(0, (int)Math.Floor((ahora - fechaFinMaxima).TotalMinutes));
+                // NSQ_SECADO_OF_MATERIAL_V1_FIN_LOGIC_END
 
                 const string sqlCerrarSegmento = @"
 UPDATE dbo.Produccion_SecadoCargaSegmentos
@@ -1190,8 +1215,10 @@ SET
     DuracionRealMinutos=@DuracionRealMinutos,
     MinutosExcesoSecado=@MinutosExceso,
     ExcedioTiempo=CASE WHEN @MinutosExceso>0 THEN 1 ELSE 0 END,
-    FinalizoAntesTiempo=0,
-    MotivoFinalizacionAnticipada=NULL,
+    -- NSQ_SECADO_OF_MATERIAL_V1_FIN_SQL_START
+    FinalizoAntesTiempo=@FinalizoAntesTiempo,
+    MotivoFinalizacionAnticipada=@MotivoFinalizacionAnticipada,
+    -- NSQ_SECADO_OF_MATERIAL_V1_FIN_SQL_END
     UsuarioFinID=@UsuarioID,
     Observaciones=CASE
         WHEN @Observaciones IS NULL THEN Observaciones
@@ -1212,6 +1239,10 @@ IF @@ROWCOUNT<>1
                     cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
                     cmd.Parameters.Add("@DuracionRealMinutos", SqlDbType.Int).Value = duracionRealMinutos;
                     cmd.Parameters.Add("@MinutosExceso", SqlDbType.Int).Value = minutosExceso;
+                    // NSQ_SECADO_OF_MATERIAL_V1_FIN_PARAMS_START
+                    cmd.Parameters.Add("@FinalizoAntesTiempo", SqlDbType.Bit).Value = finalizoAntesTiempo;
+                    cmd.Parameters.Add("@MotivoFinalizacionAnticipada", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(motivoFinalizacionAnticipada) ? DBNull.Value : motivoFinalizacionAnticipada;
+                    // NSQ_SECADO_OF_MATERIAL_V1_FIN_PARAMS_END
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
                     cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones;
                     cmd.Parameters.Add("@SecadoCargaID", SqlDbType.BigInt).Value = vm.SecadoCargaID;
@@ -2598,5 +2629,417 @@ END;";
             cmd.Parameters.Add("@EstadoCancelada", SqlDbType.NVarChar, 30).Value = ProduccionPreparacionEstado.Cancelada;
             await cmd.ExecuteNonQueryAsync();
         }
+        // NSQ_CONSOLIDAR_SECADO_ESTADO_EN_SECADO_V1_2_START
+        private static async Task SincronizarSecadoParametrosTecnicosV12Async(
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+;WITH Fuente AS
+(
+    SELECT
+        sm.SecadoMaterialID,
+        COALESCE
+        (
+            NULLIF(LTRIM(RTRIM(dt.TipoSecado)),N''),
+            NULLIF(LTRIM(RTRIM(d.TipoSecado)),N''),
+            NULLIF(LTRIM(RTRIM(sm.TipoSecadoOrigen)),N'')
+        ) AS TipoSecadoFuente,
+        COALESCE
+        (
+            NULLIF(dt.HorasSecado,0),
+            NULLIF(d.HorasSecado,0),
+            CAST(2.00 AS decimal(10,2))
+        ) AS HorasObjetivoFuente
+    FROM dbo.Produccion_SecadoMaterial sm
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ProgramaProduccionID=sm.ProgramaProduccionID
+    LEFT JOIN dbo.SolicitudesProduccionDetalle d
+        ON d.SolicitudProduccionDetalleID=COALESCE
+        (
+            sm.SolicitudProduccionDetalleID,
+            pp.SolicitudProduccionDetalleID
+        )
+    OUTER APPLY
+    (
+        SELECT TOP(1)
+            x.TipoSecado,
+            x.HorasSecado
+        FROM dbo.ERP_ParteDatosTecnicos x
+        WHERE x.ParteID=d.ParteID
+          AND x.Activo=1
+        ORDER BY
+            CASE WHEN x.FechaModificacion IS NULL THEN 1 ELSE 0 END,
+            x.FechaModificacion DESC,
+            x.ParteDatoTecnicoID DESC
+    ) dt
+    WHERE sm.Activo=1
+      AND sm.Estado NOT IN(N'FINALIZADO',N'CANCELADO')
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_SecadoCargas c
+          WHERE c.SecadoMaterialID=sm.SecadoMaterialID
+            AND c.Activo=1
+            AND c.Estado=N'EN_PROCESO'
+      )
+)
+UPDATE sm
+SET
+    sm.TipoSecadoOrigen=COALESCE(f.TipoSecadoFuente,sm.TipoSecadoOrigen),
+    sm.TipoProceso=
+        CASE
+            WHEN UPPER(ISNULL(f.TipoSecadoFuente,N'')) LIKE N'%DESHUM%'
+              OR UPPER(ISNULL(f.TipoSecadoFuente,N'')) LIKE N'%DESUM%'
+                THEN N'DESHUMIDIFICADO'
+            WHEN f.TipoSecadoFuente IS NOT NULL
+                THEN N'SECADO'
+            ELSE sm.TipoProceso
+        END,
+    sm.HorasSecadoRequeridas=f.HorasObjetivoFuente,
+    sm.MinutosSecadoRequeridos=CONVERT
+    (
+        int,
+        CEILING(CONVERT(decimal(18,4),f.HorasObjetivoFuente)*60)
+    ),
+    sm.FechaInicioSecadoObjetivo=
+        CASE
+            WHEN sm.FechaArranqueProduccion IS NULL THEN NULL
+            ELSE DATEADD
+            (
+                MINUTE,
+                -CONVERT(int,CEILING(CONVERT(decimal(18,4),f.HorasObjetivoFuente)*60)),
+                sm.FechaArranqueProduccion
+            )
+        END,
+    sm.FechaLimiteEntregaMaterial=
+        CASE
+            WHEN sm.FechaArranqueProduccion IS NULL THEN NULL
+            ELSE DATEADD
+            (
+                MINUTE,
+                -sm.MargenEntregaAntesSecadoMinutos,
+                DATEADD
+                (
+                    MINUTE,
+                    -CONVERT(int,CEILING(CONVERT(decimal(18,4),f.HorasObjetivoFuente)*60)),
+                    sm.FechaArranqueProduccion
+                )
+            )
+        END,
+    sm.UsuarioModificacionID=@UsuarioID,
+    sm.FechaModificacion=SYSDATETIME()
+FROM dbo.Produccion_SecadoMaterial sm
+INNER JOIN Fuente f
+    ON f.SecadoMaterialID=sm.SecadoMaterialID;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private sealed class SecadoRangoRuntimeV1
+        {
+            public int MinutosMinimos { get; init; }
+            public int MinutosObjetivo { get; init; }
+            public int MinutosMaximos { get; init; }
+        }
+
+        private static async Task<SecadoRangoRuntimeV1> ObtenerRangoSecadoCargaV1Async(
+            long secadoCargaId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    c.DuracionRequeridaMinutos,
+    dt.HorasSecadoMinimo,
+    dt.HorasSecadoMaximo
+FROM dbo.Produccion_SecadoCargas c
+INNER JOIN dbo.Produccion_SecadoMaterial sm
+    ON sm.SecadoMaterialID=c.SecadoMaterialID
+LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID=sm.ProgramaProduccionID
+LEFT JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID=COALESCE(sm.SolicitudProduccionDetalleID,pp.SolicitudProduccionDetalleID)
+OUTER APPLY
+(
+    SELECT TOP(1)
+        x.HorasSecadoMinimo,
+        x.HorasSecadoMaximo
+    FROM dbo.ERP_ParteDatosTecnicos x
+    WHERE x.ParteID=d.ParteID
+      AND x.Activo=1
+    ORDER BY
+        CASE WHEN x.FechaModificacion IS NULL THEN 1 ELSE 0 END,
+        x.FechaModificacion DESC,
+        x.ParteDatoTecnicoID DESC
+) dt
+WHERE c.SecadoCargaID=@SecadoCargaID
+  AND c.Activo=1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@SecadoCargaID", SqlDbType.BigInt).Value = secadoCargaId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                throw new InvalidOperationException("No se encontro la carga de secado para resolver sus parametros min/objetivo/max.");
+
+            var minutosObjetivo = Math.Max(1, Convert.ToInt32(rd["DuracionRequeridaMinutos"]));
+            var horasMinimo = rd["HorasSecadoMinimo"] == DBNull.Value ? 2m : Convert.ToDecimal(rd["HorasSecadoMinimo"]);
+            var horasMaximo = rd["HorasSecadoMaximo"] == DBNull.Value ? 3m : Convert.ToDecimal(rd["HorasSecadoMaximo"]);
+
+            var minutosMinimos = Math.Max(0, (int)Math.Ceiling(horasMinimo * 60m));
+            var minutosMaximos = Math.Max(minutosObjetivo, (int)Math.Ceiling(horasMaximo * 60m));
+
+            return new SecadoRangoRuntimeV1
+            {
+                MinutosMinimos = minutosMinimos,
+                MinutosObjetivo = minutosObjetivo,
+                MinutosMaximos = minutosMaximos
+            };
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EstadoSecado(int? programaProduccionId, int? ejecucionProduccionId)
+        {
+            if (!UsuarioEnSesion())
+                return Unauthorized(new { ok = false, mensaje = "La sesion termino. Vuelve a iniciar sesion." });
+
+            if ((!programaProduccionId.HasValue || programaProduccionId.Value <= 0) &&
+                (!ejecucionProduccionId.HasValue || ejecucionProduccionId.Value <= 0))
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    mensaje = "Debes indicar ProgramaProduccionID o EjecucionProduccionID."
+                });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            int? programaId = programaProduccionId.HasValue && programaProduccionId.Value > 0
+                ? programaProduccionId.Value
+                : null;
+
+            if (!programaId.HasValue && ejecucionProduccionId.HasValue)
+            {
+                const string sqlResolver = @"
+SELECT TOP(1) ProgramaProduccionID
+FROM dbo.Produccion_Ejecucion
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1;";
+
+                await using var cmdResolver = new SqlCommand(sqlResolver, cn);
+                cmdResolver.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId.Value;
+                var result = await cmdResolver.ExecuteScalarAsync();
+                if (result != null && result != DBNull.Value)
+                    programaId = Convert.ToInt32(result);
+            }
+
+            if (!programaId.HasValue)
+                return NotFound(new { ok = false, mensaje = "No se encontro el programa asociado a la ejecucion indicada." });
+
+            const string sql = @"
+SELECT TOP(1)
+    pp.ProgramaProduccionID,
+    ej.EjecucionProduccionID,
+    d.ParteID,
+    COALESCE(NULLIF(LTRIM(RTRIM(dt.TipoSecado)),N''),d.TipoSecado) AS TipoSecado,
+    d.HorasSecado,
+    dt.HorasSecadoTexto,
+    dt.HorasSecadoMinimo,
+    dt.HorasSecado AS HorasSecadoTecnico,
+    dt.HorasSecadoMaximo,
+    sm.SecadoMaterialID,
+    sm.NumeroOFSnapshot,
+    sm.MaterialCodigoSnapshot,
+    sm.Estado AS EstadoMaterial,
+    sm.HorasSecadoRequeridas,
+    sm.MinutosSecadoRequeridos,
+    c.SecadoCargaID,
+    c.Estado AS EstadoCarga,
+    c.DuracionRequeridaMinutos,
+    c.FechaInicioReal,
+    c.FechaFinEsperada,
+    c.FechaFinReal,
+    c.FinalizoAntesTiempo,
+    c.MotivoFinalizacionAnticipada,
+    c.ExcedioTiempo,
+    c.MinutosExcesoSecado,
+    c.UsuarioInicioID,
+    c.UsuarioFinID,
+    CASE WHEN dt.ParteDatoTecnicoID IS NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS UsaFallback
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+OUTER APPLY
+(
+    SELECT TOP(1)
+        x.ParteDatoTecnicoID,
+        x.TipoSecado,
+        x.HorasSecadoTexto,
+        x.HorasSecadoMinimo,
+        x.HorasSecado,
+        x.HorasSecadoMaximo
+    FROM dbo.ERP_ParteDatosTecnicos x
+    WHERE x.ParteID=d.ParteID
+      AND x.Activo=1
+    ORDER BY
+        CASE WHEN x.FechaModificacion IS NULL THEN 1 ELSE 0 END,
+        x.FechaModificacion DESC,
+        x.ParteDatoTecnicoID DESC
+) dt
+OUTER APPLY
+(
+    SELECT TOP(1)
+        x.SecadoMaterialID,
+        x.NumeroOFSnapshot,
+        x.MaterialCodigoSnapshot,
+        x.Estado,
+        x.HorasSecadoRequeridas,
+        x.MinutosSecadoRequeridos
+    FROM dbo.Produccion_SecadoMaterial x
+    WHERE x.ProgramaProduccionID=pp.ProgramaProduccionID
+      AND x.Activo=1
+    ORDER BY x.SecadoMaterialID DESC
+) sm
+OUTER APPLY
+(
+    SELECT TOP(1)
+        x.SecadoCargaID,
+        x.Estado,
+        x.DuracionRequeridaMinutos,
+        x.FechaInicioReal,
+        x.FechaFinEsperada,
+        x.FechaFinReal,
+        x.FinalizoAntesTiempo,
+        x.MotivoFinalizacionAnticipada,
+        x.ExcedioTiempo,
+        x.MinutosExcesoSecado,
+        x.UsuarioInicioID,
+        x.UsuarioFinID
+    FROM dbo.Produccion_SecadoCargas x
+    WHERE x.SecadoMaterialID=sm.SecadoMaterialID
+      AND x.Activo=1
+    ORDER BY
+        CASE WHEN x.Estado=N'EN_PROCESO' THEN 0 ELSE 1 END,
+        x.SecadoCargaID DESC
+) c
+OUTER APPLY
+(
+    SELECT TOP(1) x.EjecucionProduccionID
+    FROM dbo.Produccion_Ejecucion x
+    WHERE x.ProgramaProduccionID=pp.ProgramaProduccionID
+      AND x.Activo=1
+    ORDER BY x.EjecucionProduccionID DESC
+) ej
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaId.Value;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return NotFound(new { ok = false, mensaje = "No se encontro el programa de produccion." });
+
+            decimal horasObjetivo;
+            if (rd["DuracionRequeridaMinutos"] != DBNull.Value)
+                horasObjetivo = Convert.ToDecimal(rd["DuracionRequeridaMinutos"]) / 60m;
+            else if (rd["HorasSecadoRequeridas"] != DBNull.Value && Convert.ToDecimal(rd["HorasSecadoRequeridas"]) > 0)
+                horasObjetivo = Convert.ToDecimal(rd["HorasSecadoRequeridas"]);
+            else if (rd["HorasSecado"] != DBNull.Value && Convert.ToDecimal(rd["HorasSecado"]) > 0)
+                horasObjetivo = Convert.ToDecimal(rd["HorasSecado"]);
+            else if (rd["HorasSecadoTecnico"] != DBNull.Value && Convert.ToDecimal(rd["HorasSecadoTecnico"]) > 0)
+                horasObjetivo = Convert.ToDecimal(rd["HorasSecadoTecnico"]);
+            else
+                horasObjetivo = 2m;
+
+            var horasMinimo = rd["HorasSecadoMinimo"] == DBNull.Value ? 2m : Convert.ToDecimal(rd["HorasSecadoMinimo"]);
+            var horasMaximoFuente = rd["HorasSecadoMaximo"] == DBNull.Value ? 3m : Convert.ToDecimal(rd["HorasSecadoMaximo"]);
+            var horasMaximo = Math.Max(horasObjetivo, horasMaximoFuente);
+
+            var fechaInicio = rd["FechaInicioReal"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaInicioReal"]);
+            var fechaFinEsperada = rd["FechaFinEsperada"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaFinEsperada"]);
+            var fechaFinReal = rd["FechaFinReal"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaFinReal"]);
+            var finalizoAntes = rd["FinalizoAntesTiempo"] != DBNull.Value && Convert.ToBoolean(rd["FinalizoAntesTiempo"]);
+            var excedioRegistrado = rd["ExcedioTiempo"] != DBNull.Value && Convert.ToBoolean(rd["ExcedioTiempo"]);
+            var ahora = await ObtenerFechaServidorSecadoAsync(cn);
+
+            DateTime? fechaFinMinima = fechaInicio?.AddHours(Convert.ToDouble(horasMinimo));
+            DateTime? fechaFinMaxima = fechaInicio?.AddHours(Convert.ToDouble(horasMaximo));
+            var referenciaFin = fechaFinReal ?? ahora;
+            var fueraMaximo = excedioRegistrado || (fechaFinMaxima.HasValue && referenciaFin > fechaFinMaxima.Value);
+
+            string estado;
+            if (!fechaInicio.HasValue)
+                estado = "NO_INICIADO";
+            else if (fechaFinReal.HasValue && finalizoAntes)
+                estado = "FINALIZADO_ANTES_DE_TIEMPO";
+            else if (fueraMaximo)
+                estado = "FUERA_DE_MAXIMO";
+            else if (!fechaFinReal.HasValue && fechaFinEsperada.HasValue && ahora < fechaFinEsperada.Value)
+                estado = "EN_SECADO";
+            else
+                estado = "LISTO";
+
+            var minutosTranscurridos = fechaInicio.HasValue
+                ? Math.Max(0, (int)Math.Floor((referenciaFin - fechaInicio.Value).TotalMinutes))
+                : 0;
+
+            var minutosFaltantes = !fechaFinReal.HasValue && fechaFinEsperada.HasValue && ahora < fechaFinEsperada.Value
+                ? Math.Max(0, (int)Math.Ceiling((fechaFinEsperada.Value - ahora).TotalMinutes))
+                : 0;
+
+            var alertas = new List<string>();
+            if (estado == "NO_INICIADO")
+                alertas.Add("El secado aun no ha sido iniciado manualmente.");
+            if (estado == "LISTO" && !fechaFinReal.HasValue)
+                alertas.Add("El tiempo objetivo ya se cumplio; la finalizacion fisica sigue siendo manual.");
+            if (finalizoAntes)
+                alertas.Add("La carga fue finalizada antes del tiempo objetivo configurado.");
+            if (fueraMaximo)
+                alertas.Add("La carga rebaso el tiempo maximo configurado.");
+            if (Convert.ToBoolean(rd["UsaFallback"]))
+                alertas.Add("No se encontro parametro tecnico de secado para la parte; se aplico fallback minimo 2 h / maximo 3 h.");
+
+            return Json(new
+            {
+                ok = true,
+                programaProduccionID = programaId.Value,
+                ejecucionProduccionID = rd["EjecucionProduccionID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["EjecucionProduccionID"]),
+                secadoMaterialID = rd["SecadoMaterialID"] == DBNull.Value ? (long?)null : Convert.ToInt64(rd["SecadoMaterialID"]),
+                secadoCargaID = rd["SecadoCargaID"] == DBNull.Value ? (long?)null : Convert.ToInt64(rd["SecadoCargaID"]),
+                numeroOF = rd["NumeroOFSnapshot"] == DBNull.Value ? null : rd["NumeroOFSnapshot"]?.ToString()?.Trim(),
+                material = rd["MaterialCodigoSnapshot"] == DBNull.Value ? null : rd["MaterialCodigoSnapshot"]?.ToString()?.Trim(),
+                parteID = rd["ParteID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ParteID"]),
+                tipoSecado = rd["TipoSecado"] == DBNull.Value ? null : rd["TipoSecado"]?.ToString()?.Trim(),
+                horasSecadoTexto = rd["HorasSecadoTexto"] == DBNull.Value ? null : rd["HorasSecadoTexto"]?.ToString()?.Trim(),
+                estado,
+                horasSecadoMinimo = Math.Round(horasMinimo, 2),
+                horasSecadoObjetivo = Math.Round(horasObjetivo, 2),
+                horasSecadoMaximo = Math.Round(horasMaximo, 2),
+                fechaInicioReal = fechaInicio,
+                fechaFinMinima,
+                fechaFinEsperada,
+                fechaFinMaxima,
+                fechaFinReal,
+                ahoraServidor = ahora,
+                minutosTranscurridos,
+                minutosFaltantes,
+                finalizoAntesTiempo = finalizoAntes,
+                motivoFinalizacionAnticipada = rd["MotivoFinalizacionAnticipada"] == DBNull.Value ? null : rd["MotivoFinalizacionAnticipada"]?.ToString()?.Trim(),
+                fueraDeMaximo = fueraMaximo,
+                minutosExcesoMaximo = rd["MinutosExcesoSecado"] == DBNull.Value ? 0 : Convert.ToInt32(rd["MinutosExcesoSecado"]),
+                usuarioInicioID = rd["UsuarioInicioID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["UsuarioInicioID"]),
+                usuarioFinID = rd["UsuarioFinID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["UsuarioFinID"]),
+                alertas
+            });
+        }
+        // NSQ_CONSOLIDAR_SECADO_ESTADO_EN_SECADO_V1_2_END
+
     }
 }

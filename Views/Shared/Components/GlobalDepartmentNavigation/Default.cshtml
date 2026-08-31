@@ -14,9 +14,16 @@
     var mobileOtherGroups = departmentGroups;
 
     // NSQ_GLOBAL_NAV_V4_2_BREADCRUMB_DATA
-    var activeMenu = activeGroup?
-        .Menus
-        .FirstOrDefault(x => x.IsActive);
+    // NSQ_PRODUCCION_CALENDARIO_ACTIVE_MENU_V1_START
+    var activeMenu =
+        activeGroup?
+            .Menus
+            .FirstOrDefault(x => x.SubMenus.Any(s => s.IsActive))
+        ??
+        activeGroup?
+            .Menus
+            .FirstOrDefault(x => x.IsActive);
+    // NSQ_PRODUCCION_CALENDARIO_ACTIVE_MENU_V1_END
 
     var activeSubMenu = activeMenu?
         .SubMenus
@@ -30,10 +37,18 @@
         ViewContext.RouteData.Values["action"]?.ToString()
         ?? "Index";
 
+    // NSQ_PRODUCCION_CALENDARIO_DEPARTMENT_HOME_V1_START
+    var esCalendarioProduccion =
+        Context.Request.Path.StartsWithSegments(
+            "/Produccion/Calendario");
+
     var activeDepartmentUrl =
-        activeGroup == null
-            ? string.Empty
-            : $"/Menu/Grupo/{activeGroup.MenuGrupoID}";
+        esCalendarioProduccion
+            ? "/Produccion/Index"
+            : activeGroup == null
+                ? string.Empty
+                : $"/Menu/Grupo/{activeGroup.MenuGrupoID}";
+    // NSQ_PRODUCCION_CALENDARIO_DEPARTMENT_HOME_V1_END
 }
 
 <link rel="stylesheet"

@@ -21,6 +21,17 @@ namespace ERP.NSQuell.Models
         [Column(TypeName = "decimal(10,2)")]
         public decimal? HorasSecado { get; set; }
 
+        // NSQ_SECADO_OF_MATERIAL_V1_PARTE_MODEL_START
+        [StringLength(120)]
+        public string? HorasSecadoTexto { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? HorasSecadoMinimo { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? HorasSecadoMaximo { get; set; }
+        // NSQ_SECADO_OF_MATERIAL_V1_PARTE_MODEL_END
+
         [Column(TypeName = "decimal(18,6)")]
         public decimal? PesoBrutoPieza { get; set; }
 

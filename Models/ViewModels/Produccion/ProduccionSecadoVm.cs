@@ -521,6 +521,10 @@ namespace ERP.NSQuell.Models
     {
         public long SecadoCargaID { get; set; }
         public string? Observaciones { get; set; }
+        // NSQ_SECADO_OF_MATERIAL_V1_VM_START
+        public bool ConfirmarFinalizacionAnticipada { get; set; }
+        public string? MotivoFinalizacionAnticipada { get; set; }
+        // NSQ_SECADO_OF_MATERIAL_V1_VM_END
     }
 
     public sealed class ProduccionSecadoHistorialVm

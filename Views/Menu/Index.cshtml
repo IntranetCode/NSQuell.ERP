@@ -755,14 +755,217 @@
 </style>
 <!-- NSQ_MENU_INDEX_NAVBAR_V4_8_2_END -->
 
+<!-- NSQ_MENU_INDEX_NAVBAR_FORCE_V2_START -->
+<style id="NSQ_MENU_INDEX_NAVBAR_FORCE_V2">
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 3000 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host > .top-navbar {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: .30rem clamp(.45rem,.75vw,.85rem) !important;
+        border-radius: 0 0 18px 18px !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-content {
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 62px !important;
+        display: grid !important;
+        grid-template-columns: auto minmax(0,1fr) auto !important;
+        align-items: center !important;
+        gap: .75rem !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-global-department-slot {
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-brand > i,
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-brand .brand-icon,
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-title-mark {
+        display: none !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-brand-logo {
+        width: 62px !important;
+        height: 62px !important;
+        min-width: 62px !important;
+        flex: 0 0 62px !important;
+        object-fit: contain !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-brand-title {
+        font-size: 1rem !important;
+        font-weight: 950 !important;
+        letter-spacing: .055em !important;
+        text-transform: uppercase !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host #btnThemeToggle {
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        border-radius: 12px !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host #btnThemeToggle .theme-switcher-text,
+    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host #themeToggleText {
+        display: none !important;
+    }
+
+    html body.nsq-menu-index-global-v2 .main-content {
+        padding-top: clamp(.75rem,1.2vw,1.2rem) !important;
+    }
+
+    @@media (max-width: 960px) {
+        html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-brand-logo {
+            width: 52px !important;
+            height: 52px !important;
+            min-width: 52px !important;
+            flex-basis: 52px !important;
+        }
+    }
+</style>
+<!-- NSQ_MENU_INDEX_NAVBAR_FORCE_V2_END -->
+<!-- NSQ_MENU_INDEX_GLOBAL_V3_STYLE_START -->
+<style id="NSQ_MENU_INDEX_GLOBAL_V3_STYLE">
+    /*
+     * V3 no intenta adivinar cual de los parches historicos quedo activo.
+     * Garantiza un unico navbar VISIBLE: el host V3.
+     */
+    body .main-wrapper > .nsq-unified-navbar-host:not(.nsq-menu-index-v3-host),
+    body .main-wrapper > .global-navbar-host:not(.nsq-menu-index-v3-host),
+    body .main-wrapper > .layout-top-navbar-host:not(.nsq-menu-index-v3-host),
+    body .main-wrapper > nav.top-navbar {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    body .main-wrapper > .nsq-menu-index-v3-host {
+        display: block !important;
+        visibility: visible !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 5000 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    body .nsq-menu-index-v3-host > .top-navbar {
+        display: block !important;
+        visibility: visible !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        border-radius: 0 0 18px 18px !important;
+    }
+
+    /* Menu/Index es portal raiz: no muestra menus de un departamento concreto. */
+    body .nsq-menu-index-v3-host .nsq-global-department-slot {
+        display: none !important;
+    }
+
+    body .nsq-menu-index-v3-host .navbar-content {
+        width: 100% !important;
+        max-width: none !important;
+        grid-template-columns: auto minmax(0,1fr) auto !important;
+    }
+
+    body .nsq-menu-index-v3-host .navbar-left {
+        grid-column: 1 !important;
+    }
+
+    body .nsq-menu-index-v3-host .navbar-right {
+        grid-column: 3 !important;
+    }
+
+    body .nsq-menu-index-v3-host .navbar-brand > i,
+    body .nsq-menu-index-v3-host .brand-icon,
+    body .nsq-menu-index-v3-host .navbar-title-mark {
+        display: none !important;
+    }
+
+    body .nsq-menu-index-v3-host .nsq-brand-logo {
+        display: block !important;
+        visibility: visible !important;
+        width: 62px !important;
+        height: 62px !important;
+        min-width: 62px !important;
+        flex: 0 0 62px !important;
+        object-fit: contain !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    body .nsq-menu-index-v3-host #btnThemeToggle.theme-switcher {
+        display: inline-flex !important;
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        height: 42px !important;
+        min-height: 42px !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        border-radius: 12px !important;
+    }
+
+    body .nsq-menu-index-v3-host #btnThemeToggle .theme-switcher-text,
+    body .nsq-menu-index-v3-host #themeToggleText {
+        display: none !important;
+    }
+
+    body .main-content {
+        padding-top: clamp(.65rem, 1vw, 1rem) !important;
+    }
+
+    @@media (max-width: 960px) {
+        body .nsq-menu-index-v3-host .nsq-brand-logo {
+            width: 52px !important;
+            height: 52px !important;
+            min-width: 52px !important;
+            flex-basis: 52px !important;
+        }
+    }
+</style>
+<!-- NSQ_MENU_INDEX_GLOBAL_V3_STYLE_END -->
 </head>
 
-<body class="nsq-theme-dark" data-empresa="@empresaId">
+<body class="nsq-theme-dark nsq-menu-index-root-v1 nsq-menu-index-global-v2" data-empresa="@empresaId">
     @await Html.PartialAsync("_Overlay")
 
     <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
 
     <div class="main-wrapper">
+<!-- NSQ_MENU_INDEX_GLOBAL_V3_START -->
+        <div class="nsq-unified-navbar-host nsq-menu-index-v3-host">
+            @await Html.PartialAsync("_TopNavbar")
+        </div>
+<!-- NSQ_MENU_INDEX_GLOBAL_V3_END -->
         <!-- NSQ_MENU_INDEX_GLOBAL_NAV_V4_4_START -->
         <div class="nsq-unified-navbar-host nsq-menu-index-global-host">
             @await Html.PartialAsync("_TopNavbar")
@@ -772,92 +975,7 @@
         @* NSQ_MENU_INDEX_LEGACY_NAV_DISABLED_V4_4 *@
         @if (false)
         {
-            <nav class="top-navbar" role="navigation" aria-label="Navegación principal">
-                        <div class="navbar-content">
-                            <div class="navbar-left">
-                                <a href="/Menu/Index" class="navbar-brand">
-<!-- NSQ_MENU_INDEX_LOGO_V4_8_2_START -->
-<img src="@Url.Content("~/Imagenes/logo-quell.png")"
-     alt="Logo NS Quell"
-     class="nsq-root-logo-v48 nsq-root-logo-v48--light"
-     loading="eager" />
-<img src="@Url.Content("~/Imagenes/logo-blanco.png")"
-     alt="Logo NS Quell"
-     class="nsq-root-logo-v48 nsq-root-logo-v48--dark"
-     loading="eager" />
-<!-- NSQ_MENU_INDEX_LOGO_V4_8_2_END -->
-
-                            <img src="@Url.Content("~/Imagenes/logo-quell.png")"
-                                 alt="Logo NS Quell"
-                                 class="navbar-logo nsq-brand-logo nsq-brand-logo--light"
-                                 loading="eager" />
-                            <img src="@Url.Content("~/Imagenes/logo-blanco.png")"
-                                 alt="Logo NS Quell"
-                                 class="navbar-logo nsq-brand-logo nsq-brand-logo--dark"
-                                 loading="eager" />
-                            <span class="navbar-title nsq-brand-title">NS Quell - ERP</span>
-                        </a>
-                            </div>
-            
-                            <div class="navbar-right">
-                                <button type="button"
-                                        class="theme-switcher"
-                                        id="btnThemeToggle"
-                                        aria-label="Cambiar a modo claro"
-                                        title="Cambiar a modo claro"
-                                        style="display:inline-flex !important; visibility:visible !important; opacity:1 !important; min-width:112px !important; height:50px !important; align-items:center !important; justify-content:center !important; gap:.55rem !important; position:relative !important; z-index:999999 !important;">
-                                    <span class="theme-switcher-icon" aria-hidden="true">
-                                        <i class="fas fa-sun" id="themeToggleIcon"></i>
-                                    </span>
-                                    <span class="theme-switcher-text" id="themeToggleText">Claro</span>
-                                </button>
-            
-                                <div class="quick-actions-navbar">
-                                    <a class="quick-action-btn" id="btnNotificaciones" aria-haspopup="true" aria-expanded="false" title="Notificaciones">
-                                        <i class="fas fa-bell" aria-hidden="true"></i>
-                                        <span id="notifCount" class="badge rounded-pill" hidden="true">0</span>
-                                    </a>
-            
-                                    <div id="notifDropdown" class="notif-dropdown" aria-labelledby="btnNotificaciones">
-                                        <div class="notif-header">
-                                            <strong>Notificaciones</strong>
-                                        </div>
-                                        <ul id="notifList" class="notif-list"></ul>
-                                    </div>
-                                </div>
-            
-                                <div class="user-menu">
-                                    <button class="user-toggle" id="userToggle" aria-expanded="false" aria-haspopup="true" aria-label="Menú de usuario">
-                                        <div class="user-avatar" aria-hidden="true">@inicialUsuario</div>
-            
-                                        <div class="user-info">
-                                            <div class="user-name">@nombreUsuario</div>
-                                            <div class="user-role">@rolUsuario</div>
-                                        </div>
-            
-                                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                                    </button>
-            
-                                    <div class="user-dropdown" id="userDropdownMenu" role="menu" aria-labelledby="userToggle">
-                                        <a href="#" id="linkMiPerfil" class="dropdown-item" role="menuitem">
-                                            <i class="fas fa-user" aria-hidden="true"></i>
-                                            Mi Perfil
-                                        </a>
-            
-                                        <a href="#" class="dropdown-item" role="menuitem" data-bs-toggle="modal" data-bs-target="#modalDenunciaAnonima">
-                                            <i class="fas fa-user-secret" aria-hidden="true"></i>
-                                            Denuncia anónima
-                                        </a>
-            
-                                        <a href="/Login/Logout" class="dropdown-item">
-                                            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-                                            Cerrar Sesión
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </nav>
+            @* NSQ_MENU_INDEX_LEGACY_TOPNAV_V2_REMOVED *@
         }
 
         <main class="main-content" id="main-content" role="main">

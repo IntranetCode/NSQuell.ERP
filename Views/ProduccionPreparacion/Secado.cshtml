@@ -1629,6 +1629,41 @@
             grid-template-columns: 1fr 1fr;
         }
     }
+    /* NSQ_SECADO_OF_MATERIAL_V1_CSS_START */
+    .nsq-early-finish-v1 {
+        margin: 8px 0 10px;
+        padding: 11px 12px;
+        border: 1px solid #ef8e87;
+        border-radius: 12px;
+        background: var(--dry-red-soft);
+        color: var(--dry-red);
+        display: grid;
+        gap: 4px;
+        font-size: .7rem;
+        font-weight: 800;
+    }
+
+    .nsq-early-finish-v1 strong {
+        font-weight: 950;
+    }
+
+    .nsq-early-reason-v1 textarea {
+        border-color: #ef8e87;
+    }
+
+    .nsq-secado-parametros-v1 small {
+        display: block;
+        margin-top: 3px;
+        color: var(--dry-muted);
+        font-size: .61rem;
+        line-height: 1.25;
+    }
+
+    .nsq-secado-parametros-v1.is-max-warning strong,
+    .nsq-secado-parametros-v1.is-max-warning small {
+        color: var(--dry-red);
+    }
+    /* NSQ_SECADO_OF_MATERIAL_V1_CSS_END */
 </style>
 
 <div class="dry-page"
@@ -2360,6 +2395,16 @@
                                 </strong>
                             </div>
 
+                            @* NSQ_SECADO_OF_MATERIAL_V1_PARAMS_VIEW_START *@
+                            <div class="info nsq-secado-parametros-v1"
+                                 data-programa-id="@(material.ProgramaProduccionID?.ToString() ?? "")"
+                                 data-ejecucion-id="@(material.EjecucionProduccionID?.ToString() ?? "")">
+                                <span>Parámetros min / objetivo / máx</span>
+                                <strong class="js-secado-rango-v1">Consultando...</strong>
+                                <small class="js-secado-alerta-v1"></small>
+                            </div>
+                            @* NSQ_SECADO_OF_MATERIAL_V1_PARAMS_VIEW_END *@
+
                             <div class="info">
                                 <span>Tiempo requerido</span>
                                 <strong>@Duracion(carga.DuracionRequeridaMinutos)</strong>
@@ -2516,7 +2561,7 @@
                                     <button type="button"
                                             class="btnx btnx-success js-toggle-panel js-open-finish"
                                             data-target="finalizar-@carga.SecadoCargaID"
-                                            @(carga.TiempoRequeridoCumplido ? null : "disabled")>
+                                            @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_BUTTON *@>
                                         <i class="bi bi-check-circle"></i>
                                         Finalizar carga
                                     </button>
@@ -2629,6 +2674,28 @@
                                                name="SecadoCargaID"
                                                value="@carga.SecadoCargaID" />
 
+                                        @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_WARNING_START *@
+                                        @if (!carga.TiempoRequeridoCumplido)
+                                        {
+                                            <div class="nsq-early-finish-v1" role="alert">
+                                                <strong><i class="bi bi-exclamation-triangle-fill"></i> Finalización anticipada</strong>
+                                                <span>Esta carga todavía no cumple la hora esperada. Puedes finalizarla, pero debes confirmar y escribir el motivo.</span>
+                                            </div>
+
+                                            <input type="hidden"
+                                                   name="ConfirmarFinalizacionAnticipada"
+                                                   value="true" />
+
+                                            <div class="field nsq-early-reason-v1">
+                                                <label>Motivo obligatorio de finalización anticipada</label>
+                                                <textarea name="MotivoFinalizacionAnticipada"
+                                                          maxlength="500"
+                                                          required
+                                                          placeholder="Indica por qué se termina el secado antes del tiempo esperado."></textarea>
+                                            </div>
+                                        }
+                                        @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_WARNING_END *@
+
                                         <div class="field">
                                             <label>Observaciones</label>
 
@@ -2640,7 +2707,7 @@
                                         <div class="actions">
                                             <button class="btnx btnx-success js-finish-submit"
                                                     type="submit"
-                                                    @(carga.TiempoRequeridoCumplido ? null : "disabled")>
+                                                    @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_BUTTON *@>
                                                 <i class="bi bi-check2-circle"></i>
                                                 Confirmar finalización
                                             </button>
@@ -3495,3 +3562,81 @@
         }
     })();
 </script>
+
+<!-- NSQ_SECADO_OF_MATERIAL_V1_JS_START -->
+<script id="NSQ_SECADO_OF_MATERIAL_V1_3_JS">
+(function () {
+    const endpoint = '@Url.Action("EstadoSecado", "ProduccionPreparacion")';
+
+    function horas(value) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n.toFixed(2).replace(/\.00$/, '') + ' h' : '—';
+    }
+
+    async function cargarParametros(element) {
+        const programa = element.getAttribute('data-programa-id');
+        const ejecucion = element.getAttribute('data-ejecucion-id');
+        const rango = element.querySelector('.js-secado-rango-v1');
+        const alerta = element.querySelector('.js-secado-alerta-v1');
+
+        if (!programa && !ejecucion) {
+            if (rango) rango.textContent = 'Sin OF / ejecución';
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (programa) params.set('programaProduccionId', programa);
+        if (ejecucion) params.set('ejecucionProduccionId', ejecucion);
+
+        try {
+            const response = await fetch(endpoint + '?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const data = await response.json();
+            if (!data || !data.ok) throw new Error(data?.mensaje || 'Respuesta inválida');
+
+            if (rango) {
+                const tipo = data.tipoSecado ? String(data.tipoSecado).trim() : '';
+                rango.textContent =
+                    (tipo ? tipo + ' · ' : '') +
+                    'Min ' + horas(data.horasSecadoMinimo) +
+                    ' · Objetivo ' + horas(data.horasSecadoObjetivo) +
+                    ' · Máx ' + horas(data.horasSecadoMaximo);
+            }
+
+            if (alerta) {
+                const avisos = Array.isArray(data.alertas) ? data.alertas : [];
+                const datoPieza = data.horasSecadoTexto
+                    ? 'Dato pieza: ' + data.horasSecadoTexto + '.'
+                    : 'Sin texto técnico de secado en la pieza.';
+                alerta.textContent = [datoPieza].concat(avisos).join(' ');
+            }
+
+            if (data.fueraDeMaximo) {
+                element.classList.add('is-max-warning');
+            }
+        }
+        catch (error) {
+            if (rango) rango.textContent = 'No disponible';
+            if (alerta) alerta.textContent = 'No fue posible consultar min/objetivo/máx.';
+            console.warn('EstadoSecado:', error);
+        }
+    }
+
+    function iniciar() {
+        document
+            .querySelectorAll('.nsq-secado-parametros-v1')
+            .forEach(cargarParametros);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', iniciar, { once: true });
+    } else {
+        iniciar();
+    }
+})();
+</script>
+<!-- NSQ_SECADO_OF_MATERIAL_V1_JS_END -->

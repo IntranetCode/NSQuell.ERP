@@ -43,11 +43,41 @@ namespace ERP.NSQuell.Controllers
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
 
-            var modoProduccion =
-                Request.Path.Value?.StartsWith("/Produccion/Calendario", StringComparison.OrdinalIgnoreCase) == true ||
-                string.Equals(Request.Query["modo"].ToString(), "produccion", StringComparison.OrdinalIgnoreCase);
+            // NSQ_PRODUCCION_CALENDARIO_CANONICO_V1_START
+            var esRutaProduccion =
+                Request.Path.Value?.StartsWith(
+                    "/Produccion/Calendario",
+                    StringComparison.OrdinalIgnoreCase) == true;
 
+            var modoProduccionSolicitado =
+                string.Equals(
+                    Request.Query["modo"].ToString(),
+                    "produccion",
+                    StringComparison.OrdinalIgnoreCase);
+
+            // Compatibilidad con URLs antiguas:
+            // /PlaneacionCalendarioMaquinas/Index?modo=produccion...
+            // se convierte en la ruta canonica de Produccion.
+            if (modoProduccionSolicitado && !esRutaProduccion)
+            {
+                var urlProduccion =
+                    Url.RouteUrl(
+                        "ProduccionCalendario",
+                        new
+                        {
+                            vista,
+                            fecha = fecha?.ToString("yyyy-MM-dd"),
+                            rangoInicio = rangoInicio?.ToString("yyyy-MM-dd"),
+                            rangoFin = rangoFin?.ToString("yyyy-MM-dd")
+                        })
+                    ?? "/Produccion/Calendario";
+
+                return Redirect(urlProduccion);
+            }
+
+            var modoProduccion = esRutaProduccion;
             ViewBag.ModoProduccion = modoProduccion;
+            // NSQ_PRODUCCION_CALENDARIO_CANONICO_V1_END
 
             var periodo = ResolverPeriodo(vista, fecha, rangoInicio, rangoFin);
             var ahora = DateTime.Now;
