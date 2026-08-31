@@ -1,0 +1,2383 @@
+﻿@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using ERP.NSQuell.Models
+@using Microsoft.AspNetCore.Routing
+@model AgendaOperativaVm
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Agenda Operativa";
+
+    bool EsAccionCalidad(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null) return false;
+        if (string.Equals(accion.Controlador, "Calidad", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(accion.AreaResponsable, AgendaOperativaArea.Calidad, StringComparison.OrdinalIgnoreCase)) return true;
+        return accion.Clave == AgendaOperativaPasoClave.Calidad
+            || accion.Clave == AgendaOperativaPasoClave.PrimerasPiezas
+            || accion.Clave == AgendaOperativaPasoClave.CalidadFinal;
+    }
+
+    bool EsPasoCalidad(AgendaOperativaPasoVm paso)
+    {
+        if (string.Equals(paso.AreaResponsable, AgendaOperativaArea.Calidad, StringComparison.OrdinalIgnoreCase)) return true;
+        return paso.Clave == AgendaOperativaPasoClave.Calidad
+            || paso.Clave == AgendaOperativaPasoClave.PrimerasPiezas
+            || paso.Clave == AgendaOperativaPasoClave.CalidadFinal;
+    }
+
+    bool RequiereAtencionOperativa(AgendaOperativaItemVm item)
+    {
+        if (!item.RequiereAtencionInmediata) return false;
+        if (item.AccionActual == null) return false;
+        return !EsAccionCalidad(item.AccionActual);
+    }
+
+    bool EstaBloqueadaOperativamente(AgendaOperativaItemVm item)
+    {
+        return item.EstaBloqueada && !EsAccionCalidad(item.AccionActual);
+    }
+
+    var gruposMaquina = Model.Items
+        .Where(x => x.MaquinaID.HasValue)
+        .GroupBy(x => x.MaquinaID!.Value)
+        .OrderBy(g => g.Any(RequiereAtencionOperativa) ? 0 : 1)
+        .ThenBy(g => g.Where(RequiereAtencionOperativa).Select(x => x.OrdenPrioridad).DefaultIfEmpty(99).Min())
+        .ThenBy(g => g.Min(x => x.FechaOrden))
+        .ThenBy(g => g.First().MaquinaCodigo)
+        .ToList();
+
+    var grupoInicial = gruposMaquina.FirstOrDefault(x => x.Any(RequiereAtencionOperativa))
+        ?? gruposMaquina.FirstOrDefault();
+
+    var maquinaInicialId = grupoInicial?.Key;
+
+    var totalMaquinas = gruposMaquina.Count;
+    var maquinasAtencion = gruposMaquina.Count(g => g.Any(RequiereAtencionOperativa));
+    var maquinasBloqueadas = gruposMaquina.Count(g => g.Any(EstaBloqueadaOperativamente));
+    var maquinasProduciendo = gruposMaquina.Count(g => g.Any(x => x.EstaProduciendo));
+
+    int OrdenEstado(AgendaOperativaItemVm item)
+    {
+        return item.EstadoGeneral switch
+        {
+            AgendaOperativaEstadoGeneral.InterrumpidaUrgente => 1,
+            AgendaOperativaEstadoGeneral.Bloqueada => 2,
+            AgendaOperativaEstadoGeneral.Pausada => 3,
+            AgendaOperativaEstadoGeneral.Produciendo => 4,
+            AgendaOperativaEstadoGeneral.Preparacion => 5,
+            AgendaOperativaEstadoGeneral.ListaParaSerie => 6,
+            AgendaOperativaEstadoGeneral.EsperandoCalidad => 7,
+            AgendaOperativaEstadoGeneral.Reliberacion => 8,
+            AgendaOperativaEstadoGeneral.MaquinaLiberada => 9,
+            AgendaOperativaEstadoGeneral.Programada => 10,
+            _ => 50
+        };
+    }
+
+    AgendaOperativaItemVm ObtenerPrincipal(List<AgendaOperativaItemVm> items)
+    {
+        var activa = items
+            .Where(x =>
+                x.EjecucionProduccionID.HasValue &&
+                !string.Equals(x.EstadoGeneral, AgendaOperativaEstadoGeneral.Terminada, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(OrdenEstado)
+            .ThenBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+            .FirstOrDefault();
+
+        return activa
+            ?? items
+                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+                .ThenBy(x => x.ProgramaProduccionID)
+                .First();
+    }
+
+    AgendaOperativaItemVm ObtenerAtencionPrincipal(List<AgendaOperativaItemVm> items, AgendaOperativaItemVm principal)
+    {
+        return items
+            .Where(RequiereAtencionOperativa)
+            .OrderBy(x => x.OrdenPrioridad)
+            .ThenByDescending(EstaBloqueadaOperativamente)
+            .ThenBy(x => x.FechaOrden)
+            .FirstOrDefault()
+            ?? principal;
+    }
+
+    List<AgendaOperativaPasoVm> ObtenerPasosVisibles(AgendaOperativaItemVm item)
+    {
+        return item.Pasos
+            .Where(x => x.Aplica && !EsPasoCalidad(x))
+            .OrderBy(x => x.Orden)
+            .ToList();
+    }
+
+    string TextoEstado(AgendaOperativaItemVm item)
+    {
+        return item.EstadoGeneral switch
+        {
+            AgendaOperativaEstadoGeneral.EsperandoCalidad => "Esperando a Calidad",
+            AgendaOperativaEstadoGeneral.Reliberacion => "Esperando a Calidad",
+            _ => item.EstadoGeneralTexto
+        };
+    }
+
+    string ClaseEstado(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            AgendaOperativaEstadoGeneral.Produciendo => "state-running",
+            AgendaOperativaEstadoGeneral.ListaParaSerie => "state-ready",
+            AgendaOperativaEstadoGeneral.Preparacion => "state-preparing",
+            AgendaOperativaEstadoGeneral.EsperandoCalidad => "state-quality",
+            AgendaOperativaEstadoGeneral.Reliberacion => "state-quality",
+            AgendaOperativaEstadoGeneral.Pausada => "state-danger",
+            AgendaOperativaEstadoGeneral.InterrumpidaUrgente => "state-danger",
+            AgendaOperativaEstadoGeneral.Bloqueada => "state-danger",
+            _ => "state-muted"
+        };
+    }
+
+    string IconoEstado(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            AgendaOperativaEstadoGeneral.Produciendo => "bi-play-fill",
+            AgendaOperativaEstadoGeneral.ListaParaSerie => "bi-play-circle-fill",
+            AgendaOperativaEstadoGeneral.Preparacion => "bi-tools",
+            AgendaOperativaEstadoGeneral.EsperandoCalidad => "bi-shield-hourglass",
+            AgendaOperativaEstadoGeneral.Reliberacion => "bi-shield-hourglass",
+            AgendaOperativaEstadoGeneral.Pausada => "bi-pause-fill",
+            AgendaOperativaEstadoGeneral.InterrumpidaUrgente => "bi-lightning-charge-fill",
+            AgendaOperativaEstadoGeneral.Bloqueada => "bi-lock-fill",
+            _ => "bi-clock"
+        };
+    }
+
+    string ClasePrioridad(string? prioridad)
+    {
+        return (prioridad ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            AgendaOperativaPrioridad.Critica => "now-critical",
+            AgendaOperativaPrioridad.Alta => "now-high",
+            AgendaOperativaPrioridad.Media => "now-medium",
+            _ => "now-normal"
+        };
+    }
+
+    string ClasePaso(AgendaOperativaPasoVm paso)
+    {
+        if (paso.Completado) return "flow-done";
+        if (paso.Bloqueado || paso.EstaVencido) return "flow-danger";
+        if (paso.EnProceso) return "flow-current";
+        if (paso.Estado == AgendaOperativaEstadoPaso.Listo) return "flow-ready";
+        if (paso.Estado == AgendaOperativaEstadoPaso.Esperando) return "flow-wait";
+        return "flow-pending";
+    }
+
+    string IconoPaso(AgendaOperativaPasoVm paso)
+    {
+        if (paso.Completado) return "bi-check-lg";
+        if (paso.Bloqueado || paso.EstaVencido) return "bi-exclamation-lg";
+        if (paso.EnProceso) return "bi-arrow-right";
+        if (paso.Estado == AgendaOperativaEstadoPaso.Listo) return "bi-play-fill";
+        if (paso.Estado == AgendaOperativaEstadoPaso.Esperando) return "bi-hourglass-split";
+        return "bi-circle-fill";
+    }
+
+    string TextoFecha(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "—";
+    }
+
+    string TextoFechaCorta(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("dd/MM HH:mm") : "—";
+    }
+
+    string TextoHora(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("HH:mm") : "—";
+    }
+
+    string TextoRetraso(int minutos)
+    {
+        if (minutos <= 0) return "En tiempo";
+        if (minutos < 60) return $"{minutos} min";
+
+        var horas = minutos / 60;
+        var mins = minutos % 60;
+
+        if (horas < 24)
+            return mins == 0 ? $"{horas} h" : $"{horas} h {mins} min";
+
+        var dias = horas / 24;
+        var horasRestantes = horas % 24;
+
+        return horasRestantes == 0
+            ? $"{dias} d"
+            : $"{dias} d {horasRestantes} h";
+    }
+
+    string TextoActividadActual(AgendaOperativaItemVm item)
+    {
+        if (item.AccionActual != null && EsAccionCalidad(item.AccionActual))
+            return "Esperando a Calidad";
+
+        if (item.AccionActual != null)
+            return item.AccionActual.Titulo;
+
+        if (item.EstaProduciendo)
+            return "Producción en serie";
+
+        return TextoEstado(item);
+    }
+
+    string DescripcionActividadActual(AgendaOperativaItemVm item)
+    {
+        if (item.AccionActual != null && EsAccionCalidad(item.AccionActual))
+        {
+            if (!string.IsNullOrWhiteSpace(item.AccionActual.Descripcion))
+                return item.AccionActual.Descripcion!;
+
+            return "La producción se encuentra a la espera de la validación correspondiente de Calidad.";
+        }
+
+        if (item.AccionActual != null && !string.IsNullOrWhiteSpace(item.AccionActual.Descripcion))
+            return item.AccionActual.Descripcion!;
+
+        if (item.EstaProduciendo)
+            return "La máquina se encuentra ejecutando la OF actualmente programada.";
+
+        return "La máquina se encuentra dentro del flujo operativo de esta OF.";
+    }
+
+    string TextoActividadSiguiente(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null)
+            return "Sin siguiente actividad pendiente";
+
+        if (EsAccionCalidad(accion))
+            return "Esperando a Calidad";
+
+        return accion.Titulo;
+    }
+
+    string DescripcionActividadSiguiente(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null)
+            return "La siguiente actividad se determinará conforme avance la operación.";
+
+        if (EsAccionCalidad(accion))
+            return "Después de completar la actividad actual, la OF quedará a la espera de Calidad.";
+
+        if (!string.IsNullOrWhiteSpace(accion.Descripcion))
+            return accion.Descripcion!;
+
+        return $"Responsable: {accion.AreaResponsableTexto}.";
+    }
+
+    string UrlDetalle(AgendaOperativaItemVm item)
+    {
+        if (item.EjecucionProduccionID.HasValue)
+        {
+            return Url.Action(
+                "Detalle",
+                "Produccion",
+                new
+                {
+                    id = item.EjecucionProduccionID.Value,
+                    returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}"
+                }) ?? "#";
+        }
+
+        return Url.Action(
+            "Index",
+            "Produccion",
+            new
+            {
+                maquinaId = item.MaquinaID,
+                busqueda = item.OFTexto
+            }) ?? "#";
+    }
+
+    string UrlAccion(AgendaOperativaItemVm item, AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null || EsAccionCalidad(accion))
+            return UrlDetalle(item);
+
+        if (accion.Clave == "LHRH_INCONSISTENTE")
+        {
+            return Url.Action(
+                "Index",
+                "PlaneacionCalendarioMaquinas",
+                new
+                {
+                    programaProduccionId = item.ProgramaProduccionID,
+                    returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}"
+                }) ?? "#";
+        }
+
+        if (string.IsNullOrWhiteSpace(accion.Controlador) || string.IsNullOrWhiteSpace(accion.Accion))
+            return UrlDetalle(item);
+
+        var valores = new RouteValueDictionary();
+
+        foreach (var parametro in accion.ParametrosRuta)
+        {
+            if (!string.IsNullOrWhiteSpace(parametro.Value))
+                valores[parametro.Key] = parametro.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(accion.ParametroId) && accion.IdDestino.HasValue)
+        {
+            valores[accion.ParametroId] = accion.IdDestino.Value;
+        }
+        else if (accion.Controlador == "ProduccionPersonal" && accion.IdDestino.HasValue)
+        {
+            valores["programaProduccionId"] = accion.IdDestino.Value;
+        }
+        else if (accion.Controlador == "PlaneacionCalendarioMaquinas" && accion.IdDestino.HasValue)
+        {
+            valores["programaProduccionId"] = accion.IdDestino.Value;
+        }
+
+        valores["returnUrl"] = $"{Context.Request.Path}{Context.Request.QueryString}";
+
+        return Url.Action(accion.Accion, accion.Controlador, valores) ?? UrlDetalle(item);
+    }
+}
+
+<style>
+    .agenda-operativa {
+        --bg: #f4f7fc;
+        --surface: #ffffff;
+        --surface2: #f8fafc;
+        --line: #dfe6f0;
+        --line2: #cfd9e8;
+        --text: #14213d;
+        --muted: #667085;
+        --blue: #2563eb;
+        --blue-dark: #1d4ed8;
+        --blue-soft: #eff6ff;
+        --cyan-soft: #ecfeff;
+        --green: #067647;
+        --green-soft: #ecfdf3;
+        --red: #b42318;
+        --red-soft: #fff1f0;
+        --orange: #b54708;
+        --orange-soft: #fff7ed;
+        --purple: #6941c6;
+        --purple-soft: #f5f3ff;
+        --yellow: #b54708;
+        --yellow-soft: #fffaeb;
+        color: var(--text);
+    }
+
+    .ao-page {
+        min-height: calc(100vh - 100px);
+        padding: 18px;
+        background: radial-gradient(circle at 100% 0,rgba(37,99,235,.06),transparent 24rem), var(--bg);
+    }
+
+    .ao-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 12px;
+    }
+
+    .ao-title {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 950;
+        letter-spacing: -.035em;
+    }
+
+    .ao-subtitle {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: .75rem;
+    }
+
+    .ao-updated {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: .61rem;
+    }
+
+    .ao-refresh {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 37px;
+        padding: 7px 12px;
+        border: 1px solid #bfd0f7;
+        border-radius: 9px;
+        background: var(--blue-soft);
+        color: var(--blue-dark);
+        text-decoration: none;
+        font-size: .68rem;
+        font-weight: 850;
+    }
+
+        .ao-refresh:hover {
+            background: #dbeafe;
+            color: var(--blue-dark);
+        }
+
+    .ao-summary {
+        display: flex;
+        align-items: center;
+        overflow: auto;
+        margin-bottom: 10px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: linear-gradient(90deg,#fff,#f8fbff);
+    }
+
+    .ao-summary-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 15px;
+        color: var(--muted);
+        font-size: .64rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+        .ao-summary-item + .ao-summary-item::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 8px;
+            bottom: 8px;
+            width: 1px;
+            background: var(--line);
+        }
+
+    .ao-summary-number {
+        color: var(--text);
+        font-size: .84rem;
+        font-weight: 950;
+    }
+
+    .ao-dot {
+        width: 7px;
+        height: 7px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+    }
+
+        .ao-dot.blue {
+            background: #2e90fa;
+        }
+
+        .ao-dot.red {
+            background: #f04438;
+        }
+
+        .ao-dot.orange {
+            background: #f79009;
+        }
+
+        .ao-dot.green {
+            background: #12b76a;
+        }
+
+    .ao-filters {
+        margin-bottom: 17px;
+        padding: 11px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--surface);
+    }
+
+    .ao-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(220px,1.5fr) repeat(3,minmax(145px,1fr)) auto;
+        gap: 8px;
+        align-items: end;
+    }
+
+    .ao-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: .56rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .agenda-operativa .form-control,
+    .agenda-operativa .form-select {
+        min-height: 38px;
+        border-color: var(--line2);
+        border-radius: 8px;
+        font-size: .7rem;
+        box-shadow: none;
+    }
+
+        .agenda-operativa .form-control:focus,
+        .agenda-operativa .form-select:focus {
+            border-color: #84adff;
+            box-shadow: 0 0 0 3px rgba(37,99,235,.08);
+        }
+
+    .ao-filter-checks {
+        display: flex;
+        gap: 14px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: .63rem;
+    }
+
+    .ao-check {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .ao-list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 7px;
+    }
+
+    .ao-list-title {
+        margin: 0;
+        font-size: .75rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .ao-list-hint {
+        color: var(--muted);
+        font-size: .6rem;
+    }
+
+    .ao-machines {
+        display: grid;
+        gap: 8px;
+    }
+
+    .ao-machine {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: var(--surface);
+        transition: border-color .16s ease,box-shadow .16s ease;
+    }
+
+        .ao-machine.open {
+            border-color: #93b4ff;
+            box-shadow: 0 6px 20px rgba(37,99,235,.07);
+        }
+
+    .ao-machine-header {
+        width: 100%;
+        min-height: 65px;
+        display: grid;
+        grid-template-columns: minmax(230px,1.2fr) minmax(220px,1fr) auto 34px;
+        gap: 14px;
+        align-items: center;
+        padding: 10px 12px;
+        border: 0;
+        background: linear-gradient(90deg,rgba(239,246,255,.8),#fff 35%);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+    }
+
+        .ao-machine-header:hover {
+            background: linear-gradient(90deg,#eaf2ff,#f8fbff);
+        }
+
+    .ao-machine-id {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .ao-machine-icon {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 10px;
+        background: linear-gradient(135deg,#dbeafe,#eff6ff);
+        color: var(--blue);
+        font-size: .92rem;
+    }
+
+    .ao-machine-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: .84rem;
+        font-weight: 950;
+    }
+
+    .ao-machine-info {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .58rem;
+    }
+
+    .ao-of-label {
+        color: var(--muted);
+        font-size: .51rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .ao-of-current {
+        margin-top: 2px;
+        font-size: .72rem;
+        font-weight: 950;
+    }
+
+    .ao-of-part {
+        margin-top: 1px;
+        color: var(--muted);
+        font-size: .57rem;
+    }
+
+    .ao-badges {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+
+    .ao-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-size: .57rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .state-running, .state-ready {
+        color: var(--green);
+        background: var(--green-soft);
+    }
+
+    .state-preparing {
+        color: var(--blue);
+        background: var(--blue-soft);
+    }
+
+    .state-quality {
+        color: var(--purple);
+        background: var(--purple-soft);
+    }
+
+    .state-danger {
+        color: var(--red);
+        background: var(--red-soft);
+    }
+
+    .state-muted {
+        color: var(--muted);
+        background: #f2f4f7;
+    }
+
+    .ao-attention {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        color: var(--red);
+        background: var(--red-soft);
+        font-size: .57rem;
+        font-weight: 900;
+    }
+
+    .ao-chevron {
+        width: 29px;
+        height: 29px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        color: var(--muted);
+        background: #f8fafc;
+        transition: transform .16s ease;
+    }
+
+    .ao-machine-header[aria-expanded="true"] .ao-chevron {
+        transform: rotate(180deg);
+        color: var(--blue);
+        background: var(--blue-soft);
+    }
+
+    .ao-machine-body {
+        border-top: 1px solid #d9e4f4;
+    }
+
+        .ao-machine-body[hidden] {
+            display: none !important;
+        }
+
+    .ao-content {
+        padding: 0 15px 14px;
+    }
+
+    .ao-of-overview {
+        padding: 13px 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .ao-of-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .ao-kicker {
+        color: #64748b;
+        font-size: .52rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+    }
+
+    .ao-of-title {
+        margin-top: 3px;
+        font-size: 1rem;
+        line-height: 1.1;
+        font-weight: 950;
+        letter-spacing: -.025em;
+    }
+
+    .ao-program {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .56rem;
+    }
+
+    .ao-btn-light {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-height: 34px;
+        padding: 6px 11px;
+        border: 1px solid var(--line2);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+        font-size: .61rem;
+        font-weight: 850;
+        text-decoration: none;
+    }
+
+        .ao-btn-light:hover {
+            color: var(--blue);
+            border-color: #84adff;
+            background: var(--blue-soft);
+        }
+
+    .ao-of-data {
+        display: grid;
+        grid-template-columns: 1.45fr .65fr .85fr .85fr;
+        gap: 17px;
+        margin-top: 11px;
+    }
+
+    .ao-data-label {
+        color: var(--muted);
+        font-size: .49rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+    .ao-data-value {
+        margin-top: 3px;
+        font-size: .68rem;
+        font-weight: 900;
+    }
+
+    .ao-data-sub {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .55rem;
+    }
+
+    .ao-progress {
+        display: grid;
+        grid-template-columns: 130px 1fr 50px;
+        gap: 10px;
+        align-items: center;
+        margin-top: 11px;
+    }
+
+    .ao-progress-text {
+        font-size: .64rem;
+        font-weight: 950;
+    }
+
+        .ao-progress-text small {
+            display: block;
+            margin-top: 1px;
+            color: var(--muted);
+            font-size: .52rem;
+            font-weight: 500;
+        }
+
+    .ao-progress-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e9eef6;
+    }
+
+    .ao-progress-bar {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg,#2563eb,#38bdf8);
+    }
+
+    .ao-progress-percent {
+        text-align: right;
+        font-size: .64rem;
+        font-weight: 950;
+    }
+
+    .ao-lhrh {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        overflow: hidden;
+        margin-top: 11px;
+        border: 1px solid #cdddf8;
+        border-radius: 9px;
+        background: #dbeafe;
+    }
+
+    .ao-lhrh-side {
+        padding: 9px 11px;
+        background: #f5f9ff;
+    }
+
+        .ao-lhrh-side + .ao-lhrh-side {
+            border-left: 1px solid #cdddf8;
+        }
+
+    .ao-lhrh-label {
+        color: var(--blue);
+        font-size: .5rem;
+        font-weight: 950;
+        text-transform: uppercase;
+    }
+
+    .ao-lhrh-of {
+        margin-top: 2px;
+        font-size: .68rem;
+        font-weight: 950;
+    }
+
+    .ao-lhrh-part {
+        margin-top: 1px;
+        color: var(--muted);
+        font-size: .55rem;
+    }
+
+    .ao-lhrh-qty {
+        margin-top: 5px;
+        font-size: .59rem;
+        font-weight: 850;
+    }
+
+    .ao-now-next {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .ao-now,
+    .ao-next {
+        min-height: 150px;
+        padding: 13px 14px;
+        border-radius: 11px;
+    }
+
+    .ao-now {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #bfdbfe;
+        border-left: 4px solid var(--blue);
+        background: linear-gradient(135deg,#eff6ff 0%,#f8fbff 62%,#ecfeff 100%);
+    }
+
+        .ao-now::after {
+            content: "";
+            position: absolute;
+            right: -35px;
+            top: -42px;
+            width: 105px;
+            height: 105px;
+            border-radius: 50%;
+            background: rgba(37,99,235,.05);
+        }
+
+        .ao-now.now-critical {
+            border-color: #fecaca;
+            border-left-color: #dc2626;
+            background: linear-gradient(135deg,#fff1f2,#fff7f7);
+        }
+
+        .ao-now.now-high {
+            border-color: #fed7aa;
+            border-left-color: #f97316;
+            background: linear-gradient(135deg,#fff7ed,#fffaf5);
+        }
+
+    .ao-next {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #bbf7d0;
+        border-left: 4px solid #16a34a;
+        background: linear-gradient(135deg,#f0fdf4 0%,#f8fffb 65%,#ecfeff 100%);
+    }
+
+        .ao-next::after {
+            content: "";
+            position: absolute;
+            right: -30px;
+            bottom: -45px;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            background: rgba(22,163,74,.05);
+        }
+
+    .ao-now.quality-wait {
+        border-color: #ddd6fe;
+        border-left-color: #7c3aed;
+        background: linear-gradient(135deg,#f5f3ff,#faf9ff 65%,#eff6ff);
+    }
+
+    .ao-block-label {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+        color: var(--muted);
+        font-size: .51rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .075em;
+    }
+
+    .ao-block-title {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .88rem;
+        font-weight: 950;
+        line-height: 1.2;
+    }
+
+    .ao-block-title-icon {
+        width: 29px;
+        height: 29px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 8px;
+        background: rgba(37,99,235,.10);
+        color: var(--blue);
+    }
+
+    .quality-wait .ao-block-title-icon {
+        background: rgba(124,58,237,.10);
+        color: #7c3aed;
+    }
+
+    .ao-next .ao-block-title-icon {
+        background: rgba(22,163,74,.10);
+        color: #15803d;
+    }
+
+    .ao-block-description {
+        position: relative;
+        z-index: 2;
+        margin-top: 6px;
+        color: #536177;
+        font-size: .62rem;
+        line-height: 1.45;
+    }
+
+    .ao-block-meta {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        gap: 22px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+    }
+
+    .ao-block-meta-item {
+        min-width: 80px;
+        font-size: .59rem;
+    }
+
+    .ao-block-meta-label {
+        display: block;
+        margin-bottom: 1px;
+        color: var(--muted);
+        font-size: .47rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .ao-block-meta-value {
+        color: var(--text);
+        font-weight: 900;
+    }
+
+    .ao-action-buttons {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        gap: 7px;
+        margin-top: 11px;
+    }
+
+    .ao-btn-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 35px;
+        padding: 6px 13px;
+        border-radius: 8px;
+        background: linear-gradient(135deg,#2563eb,#1d4ed8);
+        color: #fff;
+        font-size: .62rem;
+        font-weight: 900;
+        text-decoration: none;
+        box-shadow: 0 3px 8px rgba(37,99,235,.16);
+    }
+
+        .ao-btn-action:hover {
+            color: #fff;
+            background: #1d4ed8;
+        }
+
+    .ao-quality-note {
+        position: relative;
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 10px;
+        padding: 5px 8px;
+        border-radius: 7px;
+        background: #ede9fe;
+        color: #6d28d9;
+        font-size: .57rem;
+        font-weight: 850;
+    }
+
+    .ao-flow {
+        padding: 13px 0 14px;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .ao-flow-title {
+        margin-bottom: 9px;
+        color: #64748b;
+        font-size: .52rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+    }
+
+    .ao-flow-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 0;
+        overflow-x: auto;
+        padding-bottom: 3px;
+    }
+
+    .ao-flow-step {
+        position: relative;
+        min-width: 105px;
+        flex: 1 0 105px;
+        padding-right: 8px;
+    }
+
+        .ao-flow-step:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            top: 12px;
+            left: 29px;
+            right: 0;
+            height: 2px;
+            background: #dde5ef;
+        }
+
+    .ao-flow-icon {
+        position: relative;
+        z-index: 2;
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border: 2px solid #d8e1ed;
+        border-radius: 50%;
+        background: #fff;
+        color: #98a2b3;
+        font-size: .55rem;
+    }
+
+    .flow-done .ao-flow-icon {
+        border-color: #12b76a;
+        background: #12b76a;
+        color: #fff;
+    }
+
+    .flow-done:not(:last-child)::after {
+        background: #86efac;
+    }
+
+    .flow-current .ao-flow-icon,
+    .flow-ready .ao-flow-icon {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+        box-shadow: 0 0 0 4px rgba(37,99,235,.08);
+    }
+
+    .flow-danger .ao-flow-icon {
+        border-color: #f04438;
+        background: #f04438;
+        color: #fff;
+    }
+
+    .flow-wait .ao-flow-icon {
+        border-color: #f79009;
+        background: #fff7ed;
+        color: #b54708;
+    }
+
+    .ao-flow-name {
+        max-width: 100px;
+        margin-top: 5px;
+        color: #667085;
+        font-size: .52rem;
+        line-height: 1.25;
+    }
+
+    .flow-done .ao-flow-name,
+    .flow-current .ao-flow-name,
+    .flow-ready .ao-flow-name {
+        color: var(--text);
+        font-weight: 800;
+    }
+
+    .ao-upcoming {
+        padding-top: 12px;
+    }
+
+    .ao-upcoming-title {
+        margin-bottom: 5px;
+        color: #64748b;
+        font-size: .52rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+    }
+
+    .ao-upcoming-row {
+        display: grid;
+        grid-template-columns: 60px minmax(150px,.8fr) minmax(180px,1fr) auto;
+        gap: 10px;
+        align-items: center;
+        min-height: 43px;
+        padding: 7px 8px;
+        border-top: 1px solid var(--line);
+        transition: background .12s ease;
+    }
+
+        .ao-upcoming-row:hover {
+            background: #f8fbff;
+        }
+
+        .ao-upcoming-row:first-child {
+            border-top: 0;
+        }
+
+    .ao-upcoming-time {
+        color: var(--blue-dark);
+        font-size: .65rem;
+        font-weight: 950;
+    }
+
+    .ao-upcoming-of {
+        font-size: .63rem;
+        font-weight: 950;
+    }
+
+    .ao-upcoming-part {
+        margin-top: 1px;
+        color: var(--muted);
+        font-size: .53rem;
+    }
+
+    .ao-upcoming-action {
+        color: var(--muted);
+        font-size: .56rem;
+    }
+
+    .ao-empty {
+        padding: 38px 20px;
+        border: 1px dashed var(--line2);
+        border-radius: 11px;
+        background: #fff;
+        text-align: center;
+    }
+
+    .ao-update {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 1090;
+        display: none;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 12px;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 12px 35px rgba(16,24,40,.18);
+    }
+
+        .ao-update.show {
+            display: flex;
+        }
+
+    @@media(max-width:1100px) {
+        .ao-filter-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .ao-now-next {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media(max-width:900px) {
+        .ao-machine-header {
+            grid-template-columns: minmax(0,1fr) auto;
+        }
+
+        .ao-machine-of-header {
+            display: none;
+        }
+
+        .ao-of-data {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .ao-summary {
+            overflow-x: auto;
+        }
+    }
+
+    @@media(max-width:650px) {
+        .ao-page {
+            padding: 10px;
+        }
+
+        .ao-header {
+            align-items: flex-start;
+        }
+
+        .ao-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .ao-of-data {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .ao-progress {
+            grid-template-columns: 100px 1fr 42px;
+        }
+
+        .ao-lhrh {
+            grid-template-columns: 1fr;
+        }
+
+        .ao-lhrh-side + .ao-lhrh-side {
+            border-left: 0;
+            border-top: 1px solid #cdddf8;
+        }
+
+        .ao-upcoming-row {
+            grid-template-columns: 50px 1fr auto;
+        }
+
+        .ao-upcoming-action {
+            display: none;
+        }
+
+        .ao-update {
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+        }
+    }
+</style>
+
+<div class="agenda-operativa">
+    <div class="ao-page">
+
+        <div class="ao-header">
+            <div>
+                <h1 class="ao-title">Agenda Operativa</h1>
+                <div class="ao-subtitle">
+                    Consulta qué está haciendo cada máquina, qué requiere ahora y qué sigue después.
+                </div>
+                <div class="ao-updated">
+                    <i class="bi bi-clock me-1"></i>
+                    Actualizado:
+                    <span id="agendaLastUpdate">@Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                </div>
+            </div>
+
+            <a class="ao-refresh"
+               href="@Url.Action("Index","AgendaOperativa",new
+               {
+                   maquinaId = Model.Filtros.MaquinaID,
+                   busqueda = Model.Filtros.Busqueda,
+                   area = Model.Filtros.Area,
+                   estado = Model.Filtros.Estado,
+                   soloAtencion = Model.Filtros.SoloAtencion,
+                   soloBloqueadas = Model.Filtros.SoloBloqueadas,
+                   incluirProduciendo = Model.Filtros.IncluirProduciendo,
+                   ventanaHoras = Model.Filtros.VentanaHoras
+               })">
+                <i class="bi bi-arrow-clockwise"></i>
+                Actualizar
+            </a>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger py-2 small">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                @TempData["Error"]
+            </div>
+        }
+
+        <div class="ao-summary">
+            <div class="ao-summary-item">
+                <span class="ao-dot blue"></span>
+                <span class="ao-summary-number">@totalMaquinas</span>
+                máquinas
+            </div>
+
+            <div class="ao-summary-item">
+                <span class="ao-dot red"></span>
+                <span class="ao-summary-number">@maquinasAtencion</span>
+                requieren atención
+            </div>
+
+            <div class="ao-summary-item">
+                <span class="ao-dot orange"></span>
+                <span class="ao-summary-number">@maquinasBloqueadas</span>
+                bloqueadas
+            </div>
+
+            <div class="ao-summary-item">
+                <span class="ao-dot green"></span>
+                <span class="ao-summary-number">@maquinasProduciendo</span>
+                produciendo
+            </div>
+        </div>
+
+        <div class="ao-filters">
+            <form method="get" action="@Url.Action("Index","AgendaOperativa")">
+                <div class="ao-filter-grid">
+
+                    <div>
+                        <label class="ao-label" for="busqueda">Buscar</label>
+                        <input id="busqueda"
+                               name="busqueda"
+                               class="form-control"
+                               value="@Model.Filtros.Busqueda"
+                               placeholder="OF, parte, máquina o molde..." />
+                    </div>
+
+                    <div>
+                        <label class="ao-label" for="maquinaId">Máquina</label>
+                        <select id="maquinaId" name="maquinaId" class="form-select">
+                            <option value="">Todas</option>
+
+                            @foreach (var maquina in Model.Maquinas)
+                            {
+                                if (maquina.Seleccionado)
+                                {
+                                    <option value="@maquina.Valor" selected>@maquina.Texto</option>
+                                }
+                                else
+                                {
+                                    <option value="@maquina.Valor">@maquina.Texto</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="ao-label" for="area">Área operativa</label>
+                        <select id="area" name="area" class="form-select">
+                            <option value="">Todas</option>
+
+                            @foreach (var area in Model.Areas.Where(x =>
+                                                        !string.Equals(x.Valor, AgendaOperativaArea.Calidad, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                if (area.Seleccionado)
+                                {
+                                    <option value="@area.Valor" selected>@area.Texto</option>
+                                }
+                                else
+                                {
+                                    <option value="@area.Valor">@area.Texto</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="ao-label" for="ventanaHoras">Ventana</label>
+                        <select id="ventanaHoras" name="ventanaHoras" class="form-select">
+                            @foreach (var horas in new[] { 2, 4, 8, 12, 24, 48 })
+                            {
+                                if (Model.Filtros.VentanaHoras == horas)
+                                {
+                                    <option value="@horas" selected>@horas horas</option>
+                                }
+                                else
+                                {
+                                    <option value="@horas">@horas horas</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <button type="submit"
+                                class="btn btn-primary fw-bold w-100"
+                                style="min-height:38px;border-radius:8px;font-size:.69rem;">
+                            <i class="bi bi-funnel-fill me-1"></i>
+                            Aplicar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ao-filter-checks">
+                    <label class="ao-check">
+                        <input type="checkbox"
+                               class="form-check-input m-0"
+                               name="soloAtencion"
+                               value="true"
+                               @(Model.Filtros.SoloAtencion ? "checked" : null) />
+                        Solo atención
+                    </label>
+
+                    <label class="ao-check">
+                        <input type="checkbox"
+                               class="form-check-input m-0"
+                               name="soloBloqueadas"
+                               value="true"
+                               @(Model.Filtros.SoloBloqueadas ? "checked" : null) />
+                        Solo bloqueadas
+                    </label>
+                </div>
+            </form>
+        </div>
+
+        <div class="ao-list-header">
+            <h2 class="ao-list-title">Máquinas</h2>
+
+            <div class="ao-list-hint">
+                <i class="bi bi-chevron-expand me-1"></i>
+                Solo una máquina puede permanecer abierta
+            </div>
+        </div>
+
+        @if (!gruposMaquina.Any())
+        {
+            <div class="ao-empty">
+                <i class="bi bi-check2-circle text-success fs-4"></i>
+                <div class="fw-bold mt-2">No hay máquinas para mostrar</div>
+                <div class="text-muted small mt-1">
+                    Cambia los filtros o aumenta la ventana de consulta.
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="ao-machines" id="machineAccordion">
+
+                @foreach (var grupo in gruposMaquina)
+                {
+                    var items = grupo
+                    .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+                    .ThenBy(x => x.ProgramaProduccionID)
+                    .ToList();
+
+                    var principal = ObtenerPrincipal(items);
+                    var atencion = ObtenerAtencionPrincipal(items, principal);
+
+                    var accionActual = principal.AccionActual;
+                    var accionActualEsCalidad = EsAccionCalidad(accionActual);
+
+                    if (RequiereAtencionOperativa(atencion))
+                    {
+                        accionActual = atencion.AccionActual;
+                        accionActualEsCalidad = false;
+                    }
+
+                    var accionSiguiente = principal.SiguienteAccion;
+                    var siguienteEsCalidad = EsAccionCalidad(accionSiguiente);
+
+                    var requiereAtencion = items.Any(RequiereAtencionOperativa);
+                    var bloqueada = items.Any(EstaBloqueadaOperativamente);
+
+                    var abierta = maquinaInicialId.HasValue && maquinaInicialId.Value == grupo.Key;
+
+                    var pairId = principal.ProduccionLhRh?.EsPareja == true
+                    ? principal.ProduccionLhRh.ProgramaParejaID
+                    : (int?)null;
+
+                    var idsOperacion = new HashSet<int>
+                        {
+                        principal.ProgramaProduccionID
+                        };
+
+                    if (pairId.HasValue && pairId.Value > 0)
+                        idsOperacion.Add(pairId.Value);
+
+                    var siguientes = items
+                    .Where(x => !idsOperacion.Contains(x.ProgramaProduccionID))
+                    .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+                    .ThenBy(x => x.ProgramaProduccionID)
+                    .Take(5)
+                    .ToList();
+
+                    var pasosVisibles = ObtenerPasosVisibles(principal);
+
+                    var porcentaje = Math.Clamp(principal.PorcentajeAvance, 0m, 100m);
+
+                    var urlDetalle = UrlDetalle(principal);
+
+                    var bodyId = $"machine-body-{grupo.Key}";
+                    var buttonId = $"machine-button-{grupo.Key}";
+
+                    <section class="ao-machine @(abierta ? "open" : "")"
+                             data-machine
+                             data-machine-id="@grupo.Key">
+
+                        <button type="button"
+                                id="@buttonId"
+                                class="ao-machine-header"
+                                data-machine-trigger="@grupo.Key"
+                                aria-expanded="@(abierta ? "true" : "false")"
+                                aria-controls="@bodyId">
+
+                            <div class="ao-machine-id">
+                                <div class="ao-machine-icon">
+                                    <i class="bi bi-cpu-fill"></i>
+                                </div>
+
+                                <div style="min-width:0">
+                                    <div class="ao-machine-name">
+                                        @principal.MaquinaTexto
+                                    </div>
+
+                                    <div class="ao-machine-info">
+                                        @items.Count OF dentro de la ventana
+
+                                        @if (principal.EsLhRh)
+                                        {
+                                            <span> · Producción LH/RH</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="ao-machine-of-header">
+                                <div class="ao-of-label">
+                                    @(principal.EjecucionProduccionID.HasValue ? "OF actual" : "Siguiente OF")
+                                </div>
+
+                                <div class="ao-of-current">
+                                    @principal.OFTexto
+
+                                    @if (principal.EsLhRh)
+                                    {
+                                        <span> + @principal.ProduccionLhRh?.OFPareja</span>
+                                    }
+                                </div>
+
+                                <div class="ao-of-part">
+                                    @principal.ParteTexto
+                                </div>
+                            </div>
+
+                            <div class="ao-badges">
+                                <span class="ao-state @ClaseEstado(principal.EstadoGeneral)">
+                                    <i class="bi @IconoEstado(principal.EstadoGeneral)"></i>
+                                    @TextoEstado(principal)
+                                </span>
+
+                                @if (requiereAtencion)
+                                {
+                                    <span class="ao-attention">
+                                        <i class="bi bi-exclamation-circle-fill"></i>
+                                        Atención
+                                    </span>
+                                }
+
+                                @if (bloqueada)
+                                {
+                                    <span class="ao-attention">
+                                        <i class="bi bi-lock-fill"></i>
+                                        Bloqueada
+                                    </span>
+                                }
+                        </div>
+
+                        <div class="ao-chevron">
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                    </button>
+
+                    <div id="@bodyId"
+                         class="ao-machine-body"
+                         role="region"
+                         aria-labelledby="@buttonId"
+                         @(abierta ? null : "hidden")>
+
+                        <div class="ao-content">
+
+                            <div class="ao-of-overview">
+
+                                <div class="ao-of-top">
+                                    <div>
+                                        <div class="ao-kicker">
+                                            @(principal.EjecucionProduccionID.HasValue
+                                                                                    ? "Operación actual"
+                                                                                    : "Siguiente operación")
+                                                                                                        </div>
+
+                                        <div class="ao-of-title">
+                                            @principal.OFTexto
+                                        </div>
+
+                                        <div class="ao-program">
+                                            Programa @principal.ProgramaProduccionID
+                                        </div>
+                                    </div>
+
+                                    <a href="@urlDetalle"
+                                       class="ao-btn-light">
+                                        <i class="bi bi-eye"></i>
+                                        Ver ejecución
+                                    </a>
+                                </div>
+
+                                <div class="ao-of-data">
+
+                                    <div>
+                                        <div class="ao-data-label">Parte</div>
+
+                                        <div class="ao-data-value">
+                                            @principal.ParteTexto
+                                        </div>
+
+                                        <div class="ao-data-sub">
+                                            @(principal.DescripcionParte ?? "Sin descripción")
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="ao-data-label">Molde</div>
+
+                                        <div class="ao-data-value">
+                                            @(string.IsNullOrWhiteSpace(principal.MoldeCodigo)
+                                                                                    ? "—"
+                                                                                    : principal.MoldeCodigo)
+                                    </div>
+                                </div>
+
+                                        <div>
+                                            <div class="ao-data-label">Inicio</div>
+
+                                            <div class="ao-data-value">
+                                                @TextoFechaCorta(principal.FechaInicioProgramada)
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div class="ao-data-label">Fin</div>
+
+                                            <div class="ao-data-value">
+                                                @TextoFechaCorta(principal.FechaFinProgramada)
+                                            </div>
+                                        </div>
+                                    </div>
+
+                            @if (principal.EsLhRh && principal.ProduccionLhRh != null)
+                                    {
+                                        <div class="ao-lhrh">
+
+                                            <div class="ao-lhrh-side">
+                                                <div class="ao-lhrh-label">OF LH/RH</div>
+
+                                                <div class="ao-lhrh-of">
+                                                    @principal.OFTexto
+                                                </div>
+
+                                                <div class="ao-lhrh-part">
+                                                    @principal.ParteTexto
+                                                </div>
+
+                                                <div class="ao-lhrh-qty">
+                                                    @principal.CantidadProducida.ToString("N0")
+                                                    /
+                                                    @principal.CantidadProgramada.ToString("N0")
+                                                    ·
+                                                    @principal.PorcentajeAvance.ToString("0.#")%
+                                                </div>
+                                            </div>
+
+                                            <div class="ao-lhrh-side">
+                                                <div class="ao-lhrh-label">OF pareja</div>
+
+                                                <div class="ao-lhrh-of">
+                                                    @(principal.ProduccionLhRh.OFPareja
+                                                                                            ?? $"Programa {principal.ProduccionLhRh.ProgramaParejaID}")
+                                    </div>
+
+                                                <div class="ao-lhrh-part">
+                                                    @principal.ProduccionLhRh.ParteParejaTexto
+                                                </div>
+
+                                                <div class="ao-lhrh-qty">
+                                                    @principal.ProduccionLhRh.CantidadProducidaPareja.ToString("N0")
+                                                    /
+                                                    @principal.ProduccionLhRh.CantidadProgramadaPareja.ToString("N0")
+                                                    ·
+                                                    @principal.ProduccionLhRh.PorcentajeAvancePareja.ToString("0.#")%
+                                                </div>
+                                            </div>
+                                        </div>
+                                                        }
+                                    else
+                                    {
+                                        <div class="ao-progress">
+
+                                            <div class="ao-progress-text">
+                                                @principal.CantidadProducida.ToString("N0")
+                                                /
+                                                @principal.CantidadProgramada.ToString("N0")
+
+                                                <small>piezas OK</small>
+                                            </div>
+
+                                            <div class="ao-progress-track">
+                                                <div class="ao-progress-bar"
+                                                     style="width:@porcentaje.ToString("0.##", CultureInfo.InvariantCulture)%">
+                                                </div>
+                                            </div>
+
+                                            <div class="ao-progress-percent">
+                                                @porcentaje.ToString("0.#")%
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="ao-now-next">
+
+                                    <div class="ao-now @(accionActualEsCalidad ? "quality-wait" : ClasePrioridad(atencion.Prioridad))">
+
+                                        <div class="ao-block-label">
+                                            <i class="bi bi-record-circle"></i>
+                                            Ahora
+                                        </div>
+
+                                        <div class="ao-block-title">
+                                            <div class="ao-block-title-icon">
+                                                @if (accionActualEsCalidad)
+                                                {
+                                                    <i class="bi bi-shield-hourglass"></i>
+                                                }
+                                                else if (accionActual != null)
+                                                {
+                                                    <i class="bi @accionActual.Icono"></i>
+                                                }
+                                                else if (principal.EstaProduciendo)
+                                                {
+                                                    <i class="bi bi-activity"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-gear"></i>
+                                                }
+                                            </div>
+
+                                            <span>
+                                                @TextoActividadActual(
+                                                accionActual == principal.AccionActual
+                                                ? principal
+                                                : atencion)
+                                    </span>
+                                </div>
+
+                                <div class="ao-block-description">
+                                    @DescripcionActividadActual(
+                                                                        accionActual == principal.AccionActual
+                                                                        ? principal
+                                                                        : atencion)
+                                </div>
+
+                                @if (accionActualEsCalidad)
+                                        {
+                                            <div class="ao-quality-note">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                Esperando a Calidad
+                                            </div>
+                                        }
+                                        else if (accionActual != null)
+                                        {
+                                            <div class="ao-block-meta">
+
+                                                <div class="ao-block-meta-item">
+                                                    <span class="ao-block-meta-label">
+                                                        Responsable
+                                                    </span>
+
+                                                    <span class="ao-block-meta-value">
+                                                        @accionActual.AreaResponsableTexto
+                                                    </span>
+                                                </div>
+
+                                                @if (accionActual.FechaObjetivo.HasValue)
+                                                {
+                                                    <div class="ao-block-meta-item">
+                                                        <span class="ao-block-meta-label">
+                                                            Objetivo
+                                                        </span>
+
+                                                        <span class="ao-block-meta-value">
+                                                            @TextoFecha(accionActual.FechaObjetivo)
+                                                        </span>
+                                                    </div>
+                                                }
+
+                                                @if (accionActual.MinutosDesfase > 0)
+                                                {
+                                                    <div class="ao-block-meta-item">
+                                                        <span class="ao-block-meta-label">
+                                                            Retraso
+                                                        </span>
+
+                                                        <span class="ao-block-meta-value text-danger">
+                                                            @TextoRetraso(accionActual.MinutosDesfase)
+                                                        </span>
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="ao-action-buttons">
+                                                <a href="@UrlAccion(atencion, accionActual)"
+                                                   class="ao-btn-action">
+                                                    <i class="bi bi-arrow-up-right-circle"></i>
+                                                    @accionActual.TextoBoton
+                                                </a>
+
+                                                <a href="@UrlDetalle(atencion)"
+                                                   class="ao-btn-light">
+                                                    Ver OF
+                                                </a>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="ao-block-meta">
+                                                <div class="ao-block-meta-item">
+                                                    <span class="ao-block-meta-label">Estado</span>
+                                                    <span class="ao-block-meta-value">
+                                                        @TextoEstado(principal)
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="ao-next">
+
+                                        <div class="ao-block-label">
+                                            <i class="bi bi-skip-forward-fill"></i>
+                                            Después sigue
+                                        </div>
+
+                                        <div class="ao-block-title">
+                                            <div class="ao-block-title-icon">
+                                                @if (siguienteEsCalidad)
+                                                {
+                                                    <i class="bi bi-shield-hourglass"></i>
+                                                }
+                                                else if (accionSiguiente != null)
+                                                {
+                                                    <i class="bi @accionSiguiente.Icono"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-flag"></i>
+                                                }
+                                            </div>
+
+                                            <span>
+                                                @TextoActividadSiguiente(accionSiguiente)
+                                            </span>
+                                        </div>
+
+                                        <div class="ao-block-description">
+                                            @DescripcionActividadSiguiente(accionSiguiente)
+                                        </div>
+
+                                        @if (accionSiguiente != null)
+                                        {
+                                            <div class="ao-block-meta">
+
+                                                <div class="ao-block-meta-item">
+                                                    <span class="ao-block-meta-label">
+                                                        Responsable
+                                                    </span>
+
+                                                    <span class="ao-block-meta-value">
+                                                        @(siguienteEsCalidad
+                                                                                                    ? "Calidad"
+                                                                                                    : accionSiguiente.AreaResponsableTexto)
+                                        </span>
+                                    </div>
+
+                                    @if (accionSiguiente.FechaObjetivo.HasValue)
+                                                {
+                                                    <div class="ao-block-meta-item">
+                                                        <span class="ao-block-meta-label">
+                                                            Programado
+                                                        </span>
+
+                                                        <span class="ao-block-meta-value">
+                                                            @TextoFecha(accionSiguiente.FechaObjetivo)
+                                                        </span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+
+                                        @if (siguienteEsCalidad)
+                                        {
+                                            <div class="ao-quality-note">
+                                                <i class="bi bi-info-circle"></i>
+                                                Solo informativo · sin acceso a Calidad
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                @if (pasosVisibles.Any())
+                                {
+                                    <div class="ao-flow">
+                                        <div class="ao-flow-title">
+                                            Flujo operativo
+                                        </div>
+
+                                        <div class="ao-flow-line">
+                                            @foreach (var paso in pasosVisibles)
+                                            {
+                                                <div class="ao-flow-step @ClasePaso(paso)"
+                                                     title="@($"{paso.Nombre} · {paso.EstadoTexto}")">
+
+                                                    <div class="ao-flow-icon">
+                                                        <i class="bi @IconoPaso(paso)"></i>
+                                                    </div>
+
+                                                    <div class="ao-flow-name">
+                                                        @paso.Nombre
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (siguientes.Any())
+                                {
+                                    <div class="ao-upcoming">
+
+                                        <div class="ao-upcoming-title">
+                                            Siguientes OF de esta máquina
+                                        </div>
+
+                                        @foreach (var siguiente in siguientes)
+                                        {
+                                            var accionProxima = siguiente.AccionActual;
+                                            var accionProximaCalidad = EsAccionCalidad(accionProxima);
+
+                                            <div class="ao-upcoming-row">
+
+                                                <div class="ao-upcoming-time">
+                                                    @TextoHora(siguiente.FechaInicioProgramada)
+                                                </div>
+
+                                                <div>
+                                                    <div class="ao-upcoming-of">
+                                                        @siguiente.OFTexto
+                                                    </div>
+
+                                                    <div class="ao-upcoming-part">
+                                                        @siguiente.ParteTexto
+
+                                                        @if (siguiente.EsLhRh)
+                                                        {
+                                                            <span> · LH/RH</span>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <div class="ao-upcoming-action">
+                                                    @if (accionProximaCalidad)
+                                                    {
+                                                        <span>
+                                                            <i class="bi bi-shield-hourglass me-1"></i>
+                                                            Esperando a Calidad
+                                                        </span>
+                                                    }
+                                                    else if (accionProxima != null)
+                                                    {
+                                                        <span>
+                                                            @accionProxima.Titulo
+                                                            ·
+                                                            @accionProxima.AreaResponsableTexto
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>
+                                                            Programada
+                                                        </span>
+                                                    }
+                                                </div>
+
+                                                <a href="@UrlDetalle(siguiente)"
+                                                   class="ao-btn-light"
+                                                   title="Ver OF">
+                                                    <i class="bi bi-arrow-up-right"></i>
+                                                </a>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </section>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<div class="ao-update"
+     id="agendaUpdateAlert">
+
+    <div>
+        <strong style="font-size:.68rem;">
+            La Agenda cambió
+        </strong>
+
+        <div style="font-size:.58rem;color:#667085;">
+            Hay nuevos estados o actividades.
+        </div>
+    </div>
+
+    <button type="button"
+            id="agendaUpdateButton"
+            class="btn btn-sm btn-primary fw-bold">
+        Actualizar
+    </button>
+</div>
+
+<script>
+    (() => {
+        const accordion=document.getElementById('machineAccordion');
+
+        if(accordion){
+            const maquinas=Array.from(
+                accordion.querySelectorAll('[data-machine]')
+            );
+
+            const botones=Array.from(
+                accordion.querySelectorAll('[data-machine-trigger]')
+            );
+
+            function cerrarTodas(exceptoId){
+                maquinas.forEach(maquina=>{
+                    if(maquina.dataset.machineId===exceptoId)
+                        return;
+
+                    maquina.classList.remove('open');
+
+                    const boton=
+                        maquina.querySelector('[data-machine-trigger]');
+
+                    const body=
+                        maquina.querySelector('.ao-machine-body');
+
+                    if(boton)
+                        boton.setAttribute('aria-expanded','false');
+
+                    if(body)
+                        body.hidden=true;
+                });
+            }
+
+            function abrir(machineId){
+                const maquina=
+                    accordion.querySelector(
+                        `[data-machine][data-machine-id="${machineId}"]`
+                    );
+
+                if(!maquina)
+                    return;
+
+                const boton=
+                    maquina.querySelector('[data-machine-trigger]');
+
+                const body=
+                    maquina.querySelector('.ao-machine-body');
+
+                const estabaAbierta=
+                    boton?.getAttribute('aria-expanded')==='true';
+
+                cerrarTodas(machineId);
+
+                if(estabaAbierta){
+                    maquina.classList.remove('open');
+
+                    if(boton)
+                        boton.setAttribute('aria-expanded','false');
+
+                    if(body)
+                        body.hidden=true;
+
+                    return;
+                }
+
+                maquina.classList.add('open');
+
+                if(boton)
+                    boton.setAttribute('aria-expanded','true');
+
+                if(body)
+                    body.hidden=false;
+
+                if(window.history?.replaceState){
+                    window.history.replaceState(
+                        null,
+                        '',
+                        window.location.pathname+
+                        window.location.search+
+                        '#maquina-'+machineId
+                    );
+                }
+            }
+
+            botones.forEach(boton=>{
+                boton.addEventListener('click',()=>{
+                    abrir(boton.dataset.machineTrigger);
+                });
+            });
+
+            const hash=window.location.hash||'';
+
+            if(hash.startsWith('#maquina-')){
+                const id=hash.replace('#maquina-','');
+
+                const maquina=
+                    accordion.querySelector(
+                        `[data-machine][data-machine-id="${id}"]`
+                    );
+
+                if(maquina){
+                    maquinas.forEach(x=>{
+                        x.classList.remove('open');
+
+                        const boton=
+                            x.querySelector('[data-machine-trigger]');
+
+                        const body=
+                            x.querySelector('.ao-machine-body');
+
+                        if(boton)
+                            boton.setAttribute('aria-expanded','false');
+
+                        if(body)
+                            body.hidden=true;
+                    });
+
+                    maquina.classList.add('open');
+
+                    const boton=
+                        maquina.querySelector('[data-machine-trigger]');
+
+                    const body=
+                        maquina.querySelector('.ao-machine-body');
+
+                    if(boton)
+                        boton.setAttribute('aria-expanded','true');
+
+                    if(body)
+                        body.hidden=false;
+                }
+            }
+        }
+
+        const updateAlert=
+            document.getElementById('agendaUpdateAlert');
+
+        const updateButton=
+            document.getElementById('agendaUpdateButton');
+
+        const lastUpdate=
+            document.getElementById('agendaLastUpdate');
+
+        const datosUrl=
+            '@Url.Action("Datos", "AgendaOperativa")';
+
+        const firmaInicial=@Html.Raw(
+                        System.Text.Json.JsonSerializer.Serialize(
+                                Model.Items
+                                        .Select(x => new
+                                        {
+                                                programa = x.ProgramaProduccionID,
+                                                estado = x.EstadoGeneral,
+                                                accion = x.AccionActual?.Clave,
+                                                prioridad = x.Prioridad
+                                        })
+                                        .OrderBy(x => x.programa)
+                        )
+                );
+
+        function firmaRemota(items){
+            return (items||[])
+                .map(x=>({
+                    programa:x.programaProduccionID,
+                    estado:x.estadoGeneral,
+                    accion:x.accionActual?.clave||null,
+                    prioridad:x.prioridad
+                }))
+                .sort((a,b)=>a.programa-b.programa);
+        }
+
+        async function revisarCambios(){
+            if(document.hidden)
+                return;
+
+            try{
+                const query=window.location.search||'';
+                const separador=query?'&':'?';
+
+                const response=await fetch(
+                    datosUrl+
+                    query+
+                    separador+
+                    '_='+
+                    Date.now(),
+                    {
+                        method:'GET',
+                        headers:{
+                            'X-Requested-With':'XMLHttpRequest'
+                        },
+                        cache:'no-store'
+                    }
+                );
+
+                if(response.status===401){
+                    window.location.href=
+                        '@Url.Action("Login", "Login")';
+
+                    return;
+                }
+
+                if(!response.ok)
+                    return;
+
+                const data=await response.json();
+
+                if(!data?.ok)
+                    return;
+
+                if(data.fechaConsulta&&lastUpdate){
+                    const fecha=new Date(data.fechaConsulta);
+
+                    if(!Number.isNaN(fecha.getTime()))
+                        lastUpdate.textContent=fecha.toLocaleString('es-MX');
+                }
+
+                if(
+                    JSON.stringify(firmaRemota(data.items))!==
+                    JSON.stringify(firmaInicial)
+                ){
+                    updateAlert?.classList.add('show');
+                }
+            }
+            catch{
+            }
+        }
+
+        updateButton?.addEventListener(
+            'click',
+            ()=>window.location.reload()
+        );
+
+        window.setInterval(
+            revisarCambios,
+            30000
+        );
+    })();
+</script>

@@ -8,6 +8,7 @@ using ERP.NSQuell.Models.Opciones;
 //using ProyectoMatrix.Services;
 using ERP.NSQuell.Servicios;
 using ERP.NSQuell.Servicios.Planeacion;
+using ERP.NSQuell.Servicios.Produccion;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -128,6 +129,8 @@ builder.Services.AddScoped<BitacoraService>();
 builder.Services.AddScoped<RutaNas>();
 
 builder.Services.AddScoped<IPlaneacionSecuenciaService, PlaneacionSecuenciaService>();
+
+builder.Services.AddScoped<AgendaOperativaService>();
 
 builder.Services.AddDistributedMemoryCache();
 

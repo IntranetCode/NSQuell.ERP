@@ -934,26 +934,20 @@
             }
 
             function textoFecha(value) {
-                const fecha =
-                    value instanceof Date
-                        ? value
-                        : parseFecha(value);
+    const fecha =
+        value instanceof Date
+            ? value
+            : parseFecha(value);
 
-                if (!fecha)
-                    return '-';
+    if (!fecha)
+        return '-';
 
-                const pad =
-                    value =>
-                        String(value).padStart(2, '0');
+    const pad =
+        value =>
+            String(value).padStart(2, '0');
 
-                return
-                    `${pad(fecha.getDate())}/` +
-                    `${pad(fecha.getMonth() + 1)}/` +
-                    `${fecha.getFullYear()} ` +
-                    `${pad(fecha.getHours())}:` +
-                    `${pad(fecha.getMinutes())}`;
-            }
-
+    return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
+}
             function posicionarBloque(
                 bloque,
                 inicio,
@@ -2640,7 +2634,23 @@ else
                             Ir a iniciar preparaci&oacute;n
                         </a>
                     }
-
+                    @if (!modoProduccion && bloque.PuedeMoverCalendario)
+{
+    <button type="button"
+            class="btn btn-danger fw-bold"
+            data-interrupcion-urgente
+            data-programa-id="@bloque.ProgramaProduccionID"
+            data-of="@bloque.OFTexto"
+            data-parte="@bloque.ParteTexto"
+            data-descripcion="@bloque.Descripcion"
+            data-molde="@bloque.MoldeCodigo"
+            data-maquina-id="@bloque.MaquinaID"
+            data-maquina-codigo="@bloque.MaquinaCodigo"
+            title="Primero se mostrará una simulación. No se modificarán datos todavía.">
+        <i class="fa-solid fa-bolt me-1"></i>
+        Interrumpir por urgente
+    </button>
+}
                     <button type="button"
                             class="btn btn-outline-secondary fw-bold"
                             data-bs-dismiss="modal">
@@ -2652,6 +2662,222 @@ else
     </div>
 }
 
+@if (!modoProduccion)
+{
+    <div class="modal fade" id="modalInterrupcionUrgente" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-0 bg-danger text-white rounded-top-4">
+                    <div>
+                        <div class="small text-uppercase fw-bold opacity-75">Planeación / Excepción de prioridad</div>
+                        <h5 class="modal-title fw-bold mb-0">
+                            <i class="fa-solid fa-bolt me-1"></i>
+                            Interrupción urgente de Producción
+                        </h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="hidden" id="iuProgramaID" />
+
+                   <div class="alert alert-danger border-0 rounded-4">
+    <div class="d-flex gap-3 align-items-start">
+        <i class="fa-solid fa-triangle-exclamation fs-4 mt-1"></i>
+        <div>
+            <div class="fw-bold">Primero simula el impacto antes de confirmar.</div>
+            <div class="small mt-1">Calcular impacto no modifica ningún dato. Al presionar <strong>Confirmar e interrumpir Producción</strong>, la OF actualmente producida quedará pausada y la OF seleccionada quedará priorizada para iniciar su preparación.</div>
+        </div>
+    </div>
+</div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="border rounded-4 p-3 h-100">
+                                <small class="text-muted fw-bold">OF URGENTE</small>
+                                <strong id="iuProgramaTexto" class="d-block mt-1">-</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-4 p-3 h-100">
+                                <small class="text-muted fw-bold">PARTE</small>
+                                <strong id="iuParteTexto" class="d-block mt-1">-</strong>
+                                <span id="iuDescripcionTexto" class="small text-muted"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-4 p-3 h-100">
+                                <small class="text-muted fw-bold">MOLDE PROGRAMADO</small>
+                                <strong id="iuMoldeTexto" class="d-block mt-1">-</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label for="iuMaquina" class="form-label fw-bold">
+                                Máquina donde se realizará la interrupción
+                            </label>
+                            <select id="iuMaquina" class="form-select">
+                                <option value="">-- Seleccionar máquina compatible --</option>
+                            </select>
+                            <div class="form-text">
+                                Solo se mostrarán máquinas compatibles con la OF urgente. La máquina seleccionada debe tener actualmente una OF en Producción.
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <button type="button"
+                                    id="iuCalcular"
+                                    class="btn btn-danger fw-bold w-100">
+                                <i class="fa-solid fa-calculator me-1"></i>
+                                Calcular impacto
+                            </button>
+                        </div>
+
+                        <div class="col-12">
+                            <label for="iuMotivo" class="form-label fw-bold">
+                                Motivo de la urgencia
+                            </label>
+                            <textarea id="iuMotivo"
+                                      class="form-control"
+                                      rows="2"
+                                      maxlength="500"
+                                      placeholder="Ej. Prioridad de cliente, riesgo de paro de línea, requerimiento extraordinario..."></textarea>
+                           <div class="form-text">
+    El motivo es obligatorio para confirmar la interrupción urgente y quedará registrado en el historial.
+</div>
+                        </div>
+                    </div>
+
+                    <div id="iuFeedback" class="alert d-none mt-3 mb-0"></div>
+
+                    <div id="iuPreview" class="d-none mt-4">
+                        <div class="border rounded-4 overflow-hidden">
+                            <div class="bg-danger-subtle border-bottom p-3">
+                                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                                    <div>
+                                        <div class="small text-danger-emphasis fw-bold text-uppercase">Simulación</div>
+                                        <h6 class="fw-bold mb-0">Impacto de la interrupción urgente</h6>
+                                    </div>
+                                    <span id="iuImpactoBadge" class="badge text-bg-danger fs-6">-</span>
+                                </div>
+                            </div>
+
+                            <div class="p-3">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted fw-bold">OF QUE SERÁ INTERRUMPIDA</small>
+                                            <strong id="iuInterrumpidaOF" class="d-block mt-1">-</strong>
+                                            <span id="iuInterrumpidaParte" class="small text-muted">-</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted fw-bold">OF URGENTE</small>
+                                            <strong id="iuUrgenteOFResultado" class="d-block mt-1">-</strong>
+                                            <span id="iuUrgenteParteResultado" class="small text-muted">-</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Máquina</small>
+                                            <strong id="iuMaquinaResultado" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Molde</small>
+                                            <strong id="iuMoldeResultado" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Programas posteriores afectados</small>
+                                            <strong id="iuPosterioresResultado" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Interrupción</small>
+                                            <strong id="iuFechaInterrupcion" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Arranque urgente</small>
+                                            <strong id="iuArranqueUrgente" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Fin urgente</small>
+                                            <strong id="iuFinUrgente" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Reinicio OF original</small>
+                                            <strong id="iuReinicioOriginal" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="border rounded-3 p-3 h-100">
+                                            <small class="text-muted">Fin oficial actual de la OF interrumpida</small>
+                                            <strong id="iuFinOriginalActual" class="d-block">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="border border-danger rounded-3 p-3 h-100 bg-danger-subtle">
+                                            <small class="text-danger-emphasis">Fin proyectado de la OF interrumpida</small>
+                                            <strong id="iuFinOriginalProyectado" class="d-block text-danger">-</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <div id="iuMensajeResultado" class="alert alert-warning mb-0"></div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <div class="border rounded-3 p-3">
+                                            <div class="fw-bold mb-2">
+                                                <i class="fa-solid fa-circle-exclamation text-warning me-1"></i>
+                                                Advertencias
+                                            </div>
+                                            <ul id="iuAdvertencias" class="mb-0 ps-4"></ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+               <div class="modal-footer border-0">
+    <span class="small text-muted me-auto" id="iuEstadoConfirmacion">
+        Calcula primero el impacto para habilitar la confirmación.
+    </span>
+    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+    <button type="button" id="iuConfirmar" class="btn btn-danger fw-bold" disabled>
+        <i class="fa-solid fa-bolt me-1"></i>
+        Confirmar e interrumpir Producción
+    </button>
+</div>
+            </div>
+        </div>
+    </div>
+}
 
 @if (modoProduccion)
 {
@@ -3140,7 +3366,380 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const esModoProduccion = @(modoProduccion ? "true" : "false");
+    if (esModoProduccion) return;
 
+    const modalEl = document.getElementById('modalInterrupcionUrgente');
+    if (!modalEl) return;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const programaInput = document.getElementById('iuProgramaID');
+    const programaTexto = document.getElementById('iuProgramaTexto');
+    const parteTexto = document.getElementById('iuParteTexto');
+    const descripcionTexto = document.getElementById('iuDescripcionTexto');
+    const moldeTexto = document.getElementById('iuMoldeTexto');
+    const maquinaSelect = document.getElementById('iuMaquina');
+    const motivoInput = document.getElementById('iuMotivo');
+    const btnCalcular = document.getElementById('iuCalcular');
+    const btnConfirmar = document.getElementById('iuConfirmar');
+    const estadoConfirmacion = document.getElementById('iuEstadoConfirmacion');
+    const feedback = document.getElementById('iuFeedback');
+    const preview = document.getElementById('iuPreview');
+    const endpointMaquinas = '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")';
+    const endpointPreview = '@Url.Action("PrevisualizarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+    const endpointConfirmar = '@Url.Action("ConfirmarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+    const tokenInterrupcion = document.querySelector('#antiForgeryToken input[name="__RequestVerificationToken"]')?.value || document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    let maquinaInicialID = 0;
+    let consultando = false;
+    let confirmando = false;
+    let simulacionValida = false;
+    let programaSimuladoID = 0;
+    let maquinaSimuladaID = 0;
+
+    function feedbackSet(texto, tipo) {
+        feedback.className = `alert mt-3 mb-0 ${tipo || 'alert-light'}`;
+        feedback.textContent = texto || '';
+        feedback.classList.toggle('d-none', !texto);
+    }
+
+    function actualizarEstadoConfirmacion() {
+        const motivoValido = (motivoInput?.value || '').trim().length >= 5;
+        const habilitado = simulacionValida && motivoValido && !confirmando;
+        if (btnConfirmar) btnConfirmar.disabled = !habilitado;
+        if (!estadoConfirmacion) return;
+        if (!simulacionValida) {
+            estadoConfirmacion.textContent = 'Calcula primero el impacto para habilitar la confirmación.';
+            return;
+        }
+        if (!motivoValido) {
+            estadoConfirmacion.textContent = 'La simulación es válida. Escribe un motivo de al menos 5 caracteres para confirmar.';
+            return;
+        }
+        estadoConfirmacion.textContent = 'Simulación validada. Puedes confirmar la interrupción urgente.';
+    }
+
+    function invalidarSimulacion() {
+        simulacionValida = false;
+        programaSimuladoID = 0;
+        maquinaSimuladaID = 0;
+        actualizarEstadoConfirmacion();
+    }
+
+    function limpiarPreview() {
+        preview.classList.add('d-none');
+        document.getElementById('iuAdvertencias').innerHTML = '';
+        invalidarSimulacion();
+    }
+
+    function textoOF(solicitudId, programaId) {
+        const solicitud = Number(solicitudId || 0);
+        const programa = Number(programaId || 0);
+        return solicitud > 0 ? `OF ${solicitud}` : `Programa ${programa}`;
+    }
+
+    function formatearFecha(value) {
+        if (!value) return '-';
+        const fecha = new Date(value);
+        if (Number.isNaN(fecha.getTime())) return '-';
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
+    }
+
+    async function cargarMaquinas(programaId) {
+        maquinaSelect.disabled = true;
+        maquinaSelect.innerHTML = '<option value="">Cargando máquinas compatibles...</option>';
+        try {
+            const url = `${endpointMaquinas}?programaProduccionId=${encodeURIComponent(programaId)}`;
+            const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+            const data = await response.json();
+            if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+            maquinaSelect.innerHTML = '<option value="">-- Seleccionar máquina compatible --</option>';
+            (data.maquinas || []).forEach(x => {
+                const option = document.createElement('option');
+                option.value = String(x.maquinaID || 0);
+                option.textContent = `${x.codigo || '-'}${x.nombre ? ' - ' + x.nombre : ''}`;
+                maquinaSelect.appendChild(option);
+            });
+
+            if (maquinaInicialID > 0) {
+                const existeActual = Array.from(maquinaSelect.options).some(x => Number(x.value || 0) === maquinaInicialID);
+                if (existeActual) maquinaSelect.value = String(maquinaInicialID);
+            }
+
+            if (!(data.maquinas || []).length)
+                feedbackSet('No se encontraron máquinas compatibles para esta OF.', 'alert-warning');
+            else
+                feedbackSet('Selecciona la máquina que actualmente está produciendo y calcula el impacto.', 'alert-info');
+        }
+        catch (error) {
+            maquinaSelect.innerHTML = '<option value="">No disponible</option>';
+            feedbackSet(error.message || 'No fue posible consultar las máquinas compatibles.', 'alert-danger');
+        }
+        finally {
+            maquinaSelect.disabled = false;
+        }
+    }
+
+    function abrirInterrupcionUrgente(btn) {
+        const programaId = Number(btn.dataset.programaId || 0);
+        if (!programaId) {
+            feedbackSet('No fue posible identificar el programa urgente.', 'alert-danger');
+            return;
+        }
+
+        programaInput.value = String(programaId);
+        programaTexto.textContent = btn.dataset.of || `Programa ${programaId}`;
+        parteTexto.textContent = btn.dataset.parte || '-';
+        descripcionTexto.textContent = btn.dataset.descripcion || '';
+        moldeTexto.textContent = btn.dataset.molde || 'Sin molde';
+        maquinaInicialID = Number(btn.dataset.maquinaId || 0);
+        motivoInput.value = '';
+        limpiarPreview();
+        feedbackSet('', '');
+
+        const modalOrigenEl = btn.closest('.modal');
+        if (modalOrigenEl) {
+            const modalOrigen = bootstrap.Modal.getOrCreateInstance(modalOrigenEl);
+            modalOrigenEl.addEventListener('hidden.bs.modal', function () {
+                modal.show();
+            }, { once: true });
+            modalOrigen.hide();
+        }
+        else {
+            modal.show();
+        }
+
+        cargarMaquinas(programaId);
+        actualizarEstadoConfirmacion();
+    }
+
+    function pintarResultado(data) {
+        const interrumpida = data.programaInterrumpido || {};
+        const urgente = data.programaUrgente || {};
+        const interrupcion = data.interrupcion || {};
+        const maquina = data.maquina || {};
+
+        document.getElementById('iuImpactoBadge').textContent = `+${Number(interrupcion.minutosImpactoTotal || 0).toLocaleString('es-MX')} min`;
+        document.getElementById('iuInterrumpidaOF').textContent = textoOF(interrumpida.solicitudProduccionID, interrumpida.programaProduccionID);
+        document.getElementById('iuInterrumpidaParte').textContent = `${interrumpida.parte || '-'}${interrumpida.descripcion ? ' · ' + interrumpida.descripcion : ''}`;
+        document.getElementById('iuUrgenteOFResultado').textContent = textoOF(urgente.solicitudProduccionID, urgente.programaProduccionID);
+        document.getElementById('iuUrgenteParteResultado').textContent = `${urgente.parte || '-'}${urgente.descripcion ? ' · ' + urgente.descripcion : ''}`;
+        document.getElementById('iuMaquinaResultado').textContent = `${maquina.codigo || '-'}${maquina.nombre ? ' - ' + maquina.nombre : ''}`;
+        document.getElementById('iuMoldeResultado').textContent = interrupcion.cambiaMolde ? `${interrumpida.molde || 'Sin molde'} → ${urgente.molde || 'Sin molde'}` : `Sin cambio · ${urgente.molde || 'Sin molde'}`;
+        document.getElementById('iuPosterioresResultado').textContent = Number(interrupcion.programasPosterioresImpactados || 0).toLocaleString('es-MX');
+        document.getElementById('iuFechaInterrupcion').textContent = formatearFecha(interrupcion.fechaInterrupcion);
+        document.getElementById('iuArranqueUrgente').textContent = formatearFecha(interrupcion.fechaArranqueUrgente);
+        document.getElementById('iuFinUrgente').textContent = formatearFecha(interrupcion.fechaFinUrgente);
+        document.getElementById('iuReinicioOriginal').textContent = formatearFecha(interrupcion.fechaReinicioOriginal);
+        document.getElementById('iuFinOriginalActual').textContent = formatearFecha(interrumpida.finProgramado);
+        document.getElementById('iuFinOriginalProyectado').textContent = formatearFecha(interrumpida.finProyectado);
+        document.getElementById('iuMensajeResultado').textContent = data.mensaje || data.motivoResumen || 'Simulación calculada.';
+
+        const advertencias = document.getElementById('iuAdvertencias');
+        advertencias.innerHTML = '';
+        const lista = Array.isArray(data.advertencias) ? data.advertencias : [];
+
+        if (!lista.length) {
+            const li = document.createElement('li');
+            li.textContent = 'No se detectaron advertencias adicionales.';
+            advertencias.appendChild(li);
+        }
+        else {
+            lista.forEach(texto => {
+                const li = document.createElement('li');
+                li.textContent = texto;
+                advertencias.appendChild(li);
+            });
+        }
+
+        simulacionValida = true;
+        programaSimuladoID = Number(programaInput.value || 0);
+        maquinaSimuladaID = Number(maquinaSelect.value || 0);
+        preview.classList.remove('d-none');
+        actualizarEstadoConfirmacion();
+        preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function calcularImpacto() {
+        if (consultando || confirmando) return;
+
+        const programaUrgenteId = Number(programaInput.value || 0);
+        const maquinaId = Number(maquinaSelect.value || 0);
+        limpiarPreview();
+
+        if (!programaUrgenteId) {
+            feedbackSet('No se pudo identificar la OF urgente.', 'alert-warning');
+            return;
+        }
+
+        if (!maquinaId) {
+            feedbackSet('Selecciona la máquina donde se realizará la interrupción.', 'alert-warning');
+            maquinaSelect.focus();
+            return;
+        }
+
+        consultando = true;
+        btnCalcular.disabled = true;
+        btnCalcular.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Calculando...';
+        feedbackSet('Calculando impacto sin modificar la programación...', 'alert-info');
+
+        try {
+            const parametros = new URLSearchParams({
+                programaUrgenteId: programaUrgenteId.toString(),
+                maquinaId: maquinaId.toString(),
+                trabajarDomingo: (!!document.getElementById('trabajarDomingoCalendario')?.checked).toString()
+            });
+
+            const response = await fetch(`${endpointPreview}?${parametros.toString()}`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data?.ok) {
+                feedbackSet(data?.mensaje || `No fue posible calcular el impacto. HTTP ${response.status}`, 'alert-warning');
+                return;
+            }
+
+            pintarResultado(data);
+            feedbackSet('Simulación calculada correctamente. Revisa el impacto y confirma solamente si deseas realizar la interrupción.', 'alert-success');
+        }
+        catch (error) {
+            feedbackSet(error.message || 'No fue posible calcular la interrupción urgente.', 'alert-danger');
+        }
+        finally {
+            consultando = false;
+            btnCalcular.disabled = false;
+            btnCalcular.innerHTML = '<i class="fa-solid fa-calculator me-1"></i> Calcular impacto';
+            actualizarEstadoConfirmacion();
+        }
+    }
+
+    async function confirmarInterrupcion() {
+        if (consultando || confirmando) return;
+
+        const programaUrgenteId = Number(programaInput.value || 0);
+        const maquinaId = Number(maquinaSelect.value || 0);
+        const motivo = (motivoInput.value || '').trim();
+
+        if (!simulacionValida) {
+            feedbackSet('Debes calcular nuevamente el impacto antes de confirmar.', 'alert-warning');
+            return;
+        }
+
+        if (!programaUrgenteId || programaUrgenteId !== programaSimuladoID || !maquinaId || maquinaId !== maquinaSimuladaID) {
+            invalidarSimulacion();
+            feedbackSet('La OF o la máquina cambiaron después de la simulación. Calcula nuevamente el impacto.', 'alert-warning');
+            return;
+        }
+
+        if (motivo.length < 5) {
+            feedbackSet('Escribe un motivo claro de al menos 5 caracteres para confirmar la urgencia.', 'alert-warning');
+            motivoInput.focus();
+            return;
+        }
+
+        if (motivo.length > 500) {
+            feedbackSet('El motivo no puede superar 500 caracteres.', 'alert-warning');
+            motivoInput.focus();
+            return;
+        }
+
+        confirmando = true;
+        btnConfirmar.disabled = true;
+        btnCalcular.disabled = true;
+        maquinaSelect.disabled = true;
+        motivoInput.readOnly = true;
+        btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Confirmando interrupción...';
+        if (estadoConfirmacion) estadoConfirmacion.textContent = 'Registrando interrupción urgente...';
+        feedbackSet('Confirmando la interrupción. No cierres esta ventana...', 'alert-danger');
+
+        try {
+            const payload = {
+                ProgramaUrgenteID: programaUrgenteId,
+                MaquinaID: maquinaId,
+                Motivo: motivo,
+                TrabajarDomingo: !!document.getElementById('trabajarDomingoCalendario')?.checked
+            };
+
+            const response = await fetch(endpointConfirmar, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'RequestVerificationToken': tokenInterrupcion
+                },
+                body: JSON.stringify(payload)
+            });
+
+            let data = null;
+            try {
+                data = await response.json();
+            }
+            catch {
+                data = null;
+            }
+
+            if (!response.ok || !data?.ok) {
+                throw new Error(data?.mensaje || `No fue posible confirmar la interrupción. HTTP ${response.status}`);
+            }
+
+            simulacionValida = false;
+            feedbackSet(data.mensaje || 'Interrupción urgente registrada correctamente.', 'alert-success');
+
+            if (estadoConfirmacion) {
+                estadoConfirmacion.textContent = 'Interrupción registrada. Producción puede continuar con la preparación de la OF urgente.';
+            }
+
+            btnConfirmar.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> Interrupción registrada';
+
+            window.setTimeout(function () {
+                window.location.reload();
+            }, 1200);
+        }
+        catch (error) {
+            confirmando = false;
+            btnCalcular.disabled = false;
+            maquinaSelect.disabled = false;
+            motivoInput.readOnly = false;
+            btnConfirmar.innerHTML = '<i class="fa-solid fa-bolt me-1"></i> Confirmar e interrumpir Producción';
+            feedbackSet(error.message || 'No fue posible confirmar la interrupción urgente.', 'alert-danger');
+            actualizarEstadoConfirmacion();
+        }
+    }
+
+    document.querySelectorAll('[data-interrupcion-urgente]').forEach(btn => {
+        btn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            abrirInterrupcionUrgente(btn);
+        });
+    });
+
+    maquinaSelect.addEventListener('change', function () {
+        limpiarPreview();
+        feedbackSet('Máquina seleccionada. Calcula nuevamente para obtener la simulación.', 'alert-info');
+    });
+
+    motivoInput.addEventListener('input', actualizarEstadoConfirmacion);
+    btnCalcular.addEventListener('click', calcularImpacto);
+    btnConfirmar?.addEventListener('click', confirmarInterrupcion);
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        if (confirmando) return;
+        limpiarPreview();
+        motivoInput.value = '';
+        feedbackSet('', '');
+    });
+
+    actualizarEstadoConfirmacion();
+});
+</script>
 <style>
 /* NSQ_GENERAL_MACHINE_CLICK_STYLE_V1 */
 .machine-info[data-open-machine-board] {

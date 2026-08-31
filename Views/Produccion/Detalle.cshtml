@@ -1922,62 +1922,89 @@
                         </h2>
 
                         <p class="series-text">
-                            @if (esReinicioSerie)
-                            {
-                                <text>
-                                    Calidad ya autorizó la reliberación. La configuración técnica vigente se conservará y las capturas posteriores continuarán con el contador de máquina.
-                                </text>
-                            }
-                            else
-                            {
-                                <text>
-                                    Para iniciar serie se requiere liberación de Calidad y una configuración técnica vigente de cavidades, ciclo y contador base.
-                                </text>
-                            }
+                                @if (esReinicioSerie)
+                                {
+                                    <text>
+                                        La OF está lista para regresar a producción. Confirma el contador físico actual de la máquina; ese valor será la nueva base para las capturas posteriores.
+                                    </text>
+                                }
+                                else
+                                {
+                                    <text>
+                                        Para iniciar serie se requiere liberación de Calidad y una configuración técnica vigente de cavidades, ciclo y contador base.
+                                    </text>
+                                }
                         </p>
                     </div>
                 </div>
 
                 <div class="series-status">
-                    <form method="post" action="@Url.Action("IniciarSerie", "Produccion")">
-                        @Html.AntiForgeryToken()
+                        <form method="post" action="@Url.Action("IniciarSerie","Produccion")">
+                            @Html.AntiForgeryToken()
 
-                        <input type="hidden"
-                               name="ejecucionProduccionId"
-                               value="@e.EjecucionProduccionID" />
+                            <input type="hidden"
+                                   name="ejecucionProduccionId"
+                                   value="@e.EjecucionProduccionID" />
 
-                        <button type="submit"
-                                class="btn btn-success w-100 btn-strong"
-                                disabled="@(!puedeIniciarSerieCompleto)"
-                                onclick="return confirm('@(esReinicioSerie ? "¿Confirmas reiniciar la producción en serie? La hora actual se tomará como reinicio real." : "¿Confirmas iniciar producción en serie?")');">
-                            <i class="bi bi-play-fill me-1"></i>
-                            @(esReinicioSerie ? "Reiniciar serie ahora" : "Iniciar serie")
-                        </button>
+                            @if (esReinicioSerie)
+                            {
+                                <div class="mb-3 text-start">
+                                    <label class="form-label fw-bold" for="ContadorMaquinaReinicio">
+                                        <i class="bi bi-speedometer2 me-1"></i>
+                                        Contador actual de la máquina *
+                                    </label>
 
-                        @if (!tieneConfiguracionCorrida)
-                        {
-                            <div class="text-warning-emphasis fw-bold small mt-2 text-center">
-                                <i class="bi bi-sliders me-1"></i>
-                                Pendiente de configuración técnica de la corrida.
-                            </div>
-                        }
+                                    <input type="number"
+                                           id="ContadorMaquinaReinicio"
+                                           name="contadorMaquinaActual"
+                                           min="0"
+                                           step="1"
+                                           required
+                                           autocomplete="off"
+                                           class="form-control form-control-lg fw-bold"
+                                           placeholder="Ej. 12850" />
 
-                        @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
-                        {
-                            <div class="text-warning-emphasis fw-bold small mt-2 text-center">
-                                <i class="bi bi-hourglass-split me-1"></i>
-                                Pendiente de liberación verde por Calidad.
-                            </div>
-                        }
+                                    <div class="form-text">
+                                        Captura exactamente el valor que muestra físicamente la máquina en este momento.
+                                        Será la nueva base de la OF y los ciclos realizados durante el paro, la urgencia o las primeras piezas no se sumarán a esta producción.
+                                    </div>
+                                </div>
+                            }
 
-                        @if (puedeIniciarSerieCompleto)
-                        {
-                            <div class="text-success fw-bold small mt-2 text-center">
-                                <i class="bi bi-check-circle me-1"></i>
-                                Calidad y configuración técnica listas.
-                            </div>
-                        }
-                    </form>
+                            <button type="submit"
+                                    class="btn btn-success w-100 btn-strong"
+                                    disabled="@(!puedeIniciarSerieCompleto)"
+                                    onclick="return confirm('@(esReinicioSerie ? "¿Confirmas reiniciar la producción en serie con el contador físico capturado como nueva base?" : "¿Confirmas iniciar producción en serie?")');">
+                                <i class="bi bi-play-fill me-1"></i>
+                                @(esReinicioSerie ? "Reiniciar serie ahora" : "Iniciar serie")
+                            </button>
+
+                            @if (!tieneConfiguracionCorrida)
+                            {
+                                <div class="text-warning-emphasis fw-bold small mt-2 text-center">
+                                    <i class="bi bi-sliders me-1"></i>
+                                    Pendiente de configuración técnica de la corrida.
+                                </div>
+                            }
+
+                            @if (Model.CalidadResumen?.PuedeIniciarSerie != true)
+                            {
+                                <div class="text-warning-emphasis fw-bold small mt-2 text-center">
+                                    <i class="bi bi-hourglass-split me-1"></i>
+                                    Pendiente de liberación verde por Calidad.
+                                </div>
+                            }
+
+                            @if (puedeIniciarSerieCompleto)
+                            {
+                                <div class="text-success fw-bold small mt-2 text-center">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    @(esReinicioSerie
+                                                                ? "Retorno listo. Confirma el contador físico para continuar."
+                                                                : "Calidad y configuración técnica listas.")
+                        </div>
+                                                }
+                        </form>
                 </div>
             </div>
         </section>
@@ -2726,43 +2753,109 @@
                 </div>
             </div>
 
-            @if (Model.TieneParoAbierto)
-            {
-                var paroAbierto = Model.ParoAbierto;
+           @if (Model.TieneParoAbierto)
+{
+    var paroAbierto = Model.ParoAbierto;
 
-                <div class="panel mb-4 border-danger" id="panelParo">
-                    <div class="panel-header text-danger">
-                        <i class="bi bi-pause-circle me-1"></i>
-                        Paro abierto
+    <div class="panel mb-4 @(paroAbierto?.EsInterrupcionUrgente == true ? "border-warning" : "border-danger")" id="panelParo">
+        <div class="panel-header @(paroAbierto?.EsInterrupcionUrgente == true ? "text-warning" : "text-danger")">
+            <i class="bi @(paroAbierto?.EsInterrupcionUrgente == true ? "bi-lightning-charge-fill" : "bi-pause-circle") me-1"></i>
+            @(paroAbierto?.EsInterrupcionUrgente == true ? "Interrupción urgente de Planeación" : "Paro abierto")
+        </div>
+
+        <div class="panel-body">
+            <p class="mb-1">
+                <strong>Motivo:</strong> @(paroAbierto?.MotivoParoTexto ?? "Sin motivo")
+            </p>
+
+            <p class="mb-3">
+                <strong>Duración:</strong> @(paroAbierto?.DuracionTexto ?? "-")
+            </p>
+
+            @if (paroAbierto?.EsInterrupcionUrgente == true)
+            {
+                <div class="alert alert-warning border-0 mb-0">
+                    <div class="fw-bold mb-2">
+                        <i class="bi bi-lightning-charge-fill me-1"></i>
+                        Esta OF fue pausada automáticamente por una prioridad urgente
                     </div>
 
-                    <div class="panel-body">
-                        <p class="mb-1">
-                            <strong>Motivo:</strong> @(paroAbierto?.MotivoParoTexto ?? "Sin motivo")
-                        </p>
+                    @if (paroAbierto.SolicitudUrgenteID.HasValue)
+                    {
+                        <div class="mb-2">
+                            La máquina está siendo utilizada temporalmente por la
+                            <strong>OF @paroAbierto.SolicitudUrgenteID.Value</strong>.
+                        </div>
+                    }
+                    else if (paroAbierto.ProgramaUrgenteID.HasValue)
+                    {
+                        <div class="mb-2">
+                            La máquina está siendo utilizada temporalmente por el
+                            <strong>Programa @paroAbierto.ProgramaUrgenteID.Value</strong>.
+                        </div>
+                    }
 
-                        <p class="mb-3">
-                            <strong>Duración:</strong> @(paroAbierto?.DuracionTexto ?? "-")
-                        </p>
-
-                        <form method="post" action="@Url.Action("CerrarParo", "Produccion")">
-                            @Html.AntiForgeryToken()
-
-                            <input type="hidden" name="ParoID" value="@paroAbierto?.ParoID" />
-
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Observaciones de cierre</label>
-                                <textarea name="ObservacionesCierre" rows="2" maxlength="500" class="form-control"></textarea>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary w-100 btn-strong">
-                                <i class="bi bi-play-circle me-1"></i>
-                                Cerrar paro y reanudar
-                            </button>
-                        </form>
+                    <div class="small">
+                        Este paro no puede cerrarse manualmente. Cuando finalice la producción urgente, el ERP cerrará automáticamente la interrupción y determinará si esta OF puede continuar directamente o debe regresar a preparación y Calidad.
                     </div>
                 </div>
             }
+            else
+            {
+                <form method="post" action="@Url.Action("CerrarParo", "Produccion")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ParoID" value="@paroAbierto?.ParoID" />
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Observaciones de cierre</label>
+                        <textarea name="ObservacionesCierre" rows="2" maxlength="500" class="form-control"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 btn-strong">
+                        <i class="bi bi-play-circle me-1"></i>
+                        Cerrar paro y reanudar
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+}
+else if (e.PuedePausar)
+{
+    <div class="panel mb-4" id="panelParo" data-collapsible data-default-open="false">
+        <div class="panel-header">
+            <i class="bi bi-pause-circle me-1"></i>
+            Registrar paro
+        </div>
+
+        <div class="panel-body">
+            <form method="post" action="@Url.Action("IniciarParo", "Produccion")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Motivo</label>
+                    <select name="MotivoParoID" class="form-select">
+                        @foreach (var item in Model.MotivosParo)
+                        {
+                            <option value="@item.Value">@item.Text</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Descripción</label>
+                    <textarea name="Descripcion" rows="2" maxlength="500" class="form-control"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-warning w-100 btn-strong">
+                    <i class="bi bi-pause-fill me-1"></i>
+                    Iniciar paro
+                </button>
+            </form>
+        </div>
+    </div>
+}
             else if (e.PuedePausar)
             {
                 <div class="panel mb-4" id="panelParo" data-collapsible data-default-open="false">

@@ -348,551 +348,291 @@ public sealed class PlaneacionSecuenciaService : IPlaneacionSecuenciaService
         }
     }
 
-    public async Task<PlaneacionProyeccionInterrupcionesResultado>
-    ProyectarInterrupcionesActivasAsync(
-        DateTime fechaProyeccion,
-        bool trabajarDomingo,
-        SqlConnection cn)
+    public async Task<PlaneacionProyeccionInterrupcionesResultado> ProyectarInterrupcionesActivasAsync(DateTime fechaProyeccion, bool trabajarDomingo, SqlConnection cn)
     {
-        fechaProyeccion =
-            NormalizarFechaMinuto(fechaProyeccion);
+        fechaProyeccion = NormalizarFechaMinuto(fechaProyeccion);
+        if (cn.State != ConnectionState.Open) await cn.OpenAsync();
 
-        if (cn.State != ConnectionState.Open)
-            await cn.OpenAsync();
+        var resultado = new PlaneacionProyeccionInterrupcionesResultado
+        {
+            FechaCalculo = fechaProyeccion
+        };
 
-        var resultado =
-            new PlaneacionProyeccionInterrupcionesResultado
-            {
-                FechaCalculo = fechaProyeccion
-            };
+        var interrupciones = await CargarInterrupcionesActivasProyeccionAsync(cn);
+        if (interrupciones.Count == 0) return resultado;
 
-        var interrupciones =
-            await CargarInterrupcionesActivasProyeccionAsync(cn);
+        var programas = await CargarProgramasReacomodoLecturaAsync(cn);
+        if (programas.Count == 0) return resultado;
 
-        resultado.TotalInterrupcionesActivas =
-            interrupciones.Count;
-
-        if (interrupciones.Count == 0)
-            return resultado;
-
-        var programas =
-            await CargarProgramasReacomodoLecturaAsync(cn);
-
-        if (programas.Count == 0)
-            return resultado;
-
-        var programasPorId =
-            programas.ToDictionary(
-                x => x.ProgramaProduccionID);
+        var programasPorId = programas.ToDictionary(x => x.ProgramaProduccionID);
 
         /*
-         * Normalmente una ejecución solo puede tener un paro abierto.
-         * Si por datos históricos existieran dos interrupciones activas
-         * para el mismo programa, utilizamos la más antigua para no
-         * contar dos veces periodos traslapados.
+         * Un paro LH/RH son dos registros de Produccion_Paros,
+         * pero físicamente es UNA sola interrupción de máquina.
          */
-        var interrupcionesRaiz =
-            interrupciones
-                .Where(x =>
-                    x.ProgramaProduccionID > 0 &&
-                    programasPorId.ContainsKey(
-                        x.ProgramaProduccionID))
-                .GroupBy(x =>
-                    x.ProgramaProduccionID)
-                .Select(x =>
-                    x.OrderBy(y =>
-                        y.FechaInicioParo)
-                     .ThenBy(y =>
-                        y.ParoID)
-                     .First())
-                .ToList();
+        var gruposFisicos = interrupciones
+            .GroupBy(x =>
+                x.EsParoLhRh && x.GrupoParoLhRh.HasValue
+                    ? $"LHRH:{x.GrupoParoLhRh.Value:N}"
+                    : $"PARO:{x.ParoID}")
+            .Select(g => new
+            {
+                FechaInicioFisica = g.Min(x => x.FechaInicioParo),
+                Interrupciones = g
+                    .Where(x => x.ProgramaProduccionID > 0 && programasPorId.ContainsKey(x.ProgramaProduccionID))
+                    .GroupBy(x => x.ProgramaProduccionID)
+                    .Select(x => x.OrderBy(y => y.FechaInicioParo).ThenBy(y => y.ParoID).First())
+                    .ToList()
+            })
+            .Where(x => x.Interrupciones.Count > 0)
+            .ToList();
 
-        if (interrupcionesRaiz.Count == 0)
-            return resultado;
+        resultado.TotalInterrupcionesActivas = gruposFisicos.Count;
+        if (resultado.TotalInterrupcionesActivas == 0) return resultado;
 
-        var programasRaizIds =
-            interrupcionesRaiz
-                .Select(x =>
-                    x.ProgramaProduccionID)
-                .ToHashSet();
+        var interrupcionesRaiz = new List<InterrupcionActivaProyeccion>();
 
-        var proyecciones =
-            new Dictionary<int, PlaneacionProyeccionProgramaResultado>();
+        foreach (var grupo in gruposFisicos)
+        {
+            foreach (var interrupcion in grupo.Interrupciones)
+            {
+                interrupcion.FechaInicioFisica = grupo.FechaInicioFisica;
+                interrupcionesRaiz.Add(interrupcion);
+            }
+        }
+
+        var programasRaizIds = interrupcionesRaiz
+            .Select(x => x.ProgramaProduccionID)
+            .ToHashSet();
+
+        var proyecciones = new Dictionary<int, PlaneacionProyeccionProgramaResultado>();
 
         /*
-         * PRIMER PASO:
-         * extendemos en memoria todas las OF que actualmente
-         * tienen una interrupción activa.
-         *
-         * No hacemos UPDATE.
+         * Extender en memoria las OF realmente interrumpidas.
+         * Para LH/RH las dos reciben exactamente el mismo impacto físico.
          */
         foreach (var interrupcion in interrupcionesRaiz)
         {
-            var programa =
-                programasPorId[
-                    interrupcion.ProgramaProduccionID];
-
+            var programa = programasPorId[interrupcion.ProgramaProduccionID];
             programa.EsMovible = false;
 
-            var minutosImpacto =
-                CalcularMinutosOperativosEntre(
-                    interrupcion.FechaInicioParo,
-                    fechaProyeccion,
-                    trabajarDomingo);
+            var minutosImpacto = CalcularMinutosOperativosEntre(
+                interrupcion.FechaInicioFisica,
+                fechaProyeccion,
+                trabajarDomingo);
 
-            if (minutosImpacto < 0)
-                minutosImpacto = 0;
+            if (minutosImpacto < 0) minutosImpacto = 0;
 
-            var finProyectado =
-                SumarHorasOperativas(
-                    programa.FinOriginal,
-                    minutosImpacto / 60m,
-                    trabajarDomingo);
+            var finProyectado = SumarHorasOperativas(
+                programa.FinOriginal,
+                minutosImpacto / 60m,
+                trabajarDomingo);
 
-            finProyectado =
-                NormalizarFechaMinuto(
-                    finProyectado);
+            finProyectado = NormalizarFechaMinuto(finProyectado);
 
-            programa.Inicio =
-                programa.InicioOriginal;
+            programa.Inicio = programa.InicioOriginal;
+            programa.Fin = finProyectado;
 
-            programa.Fin =
-                finProyectado;
+            var tipoInterrupcion = interrupcion.EsInterrupcionUrgente
+                ? interrupcion.FechaFinParo.HasValue
+                    ? "INTERRUPCION_URGENTE_PENDIENTE_REINICIO"
+                    : "INTERRUPCION_URGENTE"
+                : interrupcion.FechaFinParo.HasValue
+                    ? "PARO_MAYOR_15_PENDIENTE_REINICIO"
+                    : "PARO_ABIERTO";
 
-            proyecciones[
-                programa.ProgramaProduccionID] =
-                new PlaneacionProyeccionProgramaResultado
-                {
-                    ProgramaProduccionID =
-                        programa.ProgramaProduccionID,
-
-                    MaquinaID =
-                        programa.MaquinaID,
-
-                    MoldeID =
-                        programa.MoldeID,
-
-                    EjecucionProduccionID =
-                        interrupcion.EjecucionProduccionID,
-
-                    ParoID =
-                        interrupcion.ParoID,
-
-                    EsProgramaRaizInterrupcion = true,
-
-                    TipoInterrupcion =
-                        interrupcion.FechaFinParo.HasValue
-                            ? "PARO_MAYOR_15_PENDIENTE_REINICIO"
-                            : "PARO_ABIERTO",
-
-                    MotivoParo =
-                        interrupcion.MotivoParo,
-
-                    InicioOriginal =
-                        programa.InicioOriginal,
-
-                    FinOriginal =
-                        programa.FinOriginal,
-
-                    InicioProyectado =
-                        programa.InicioOriginal,
-
-                    FinProyectado =
-                        finProyectado,
-
-                    CambioOriginal =
-                        programa.Cambio,
-
-                    ArranqueOriginal =
-                        programa.Arranque,
-
-                    CambioProyectado =
-                        programa.Cambio,
-
-                    ArranqueProyectado =
-                        programa.Arranque,
-
-                    MinutosImpactoInterrupcion =
-                        minutosImpacto,
-
-                    MinutosDesplazamiento =
-                        minutosImpacto
-                };
+            proyecciones[programa.ProgramaProduccionID] = new PlaneacionProyeccionProgramaResultado
+            {
+                ProgramaProduccionID = programa.ProgramaProduccionID,
+                MaquinaID = programa.MaquinaID,
+                MoldeID = programa.MoldeID,
+                EjecucionProduccionID = interrupcion.EjecucionProduccionID,
+                ParoID = interrupcion.ParoID,
+                EsProgramaRaizInterrupcion = true,
+                TipoInterrupcion = tipoInterrupcion,
+                MotivoParo = interrupcion.MotivoParo,
+                InicioOriginal = programa.InicioOriginal,
+                FinOriginal = programa.FinOriginal,
+                InicioProyectado = programa.InicioOriginal,
+                FinProyectado = finProyectado,
+                CambioOriginal = programa.Cambio,
+                ArranqueOriginal = programa.Arranque,
+                CambioProyectado = programa.Cambio,
+                ArranqueProyectado = programa.Arranque,
+                MinutosImpactoInterrupcion = minutosImpacto,
+                MinutosDesplazamiento = minutosImpacto
+            };
         }
 
-        /*
-         * Desde aquí puede comenzar la propagación del impacto.
-         * Utilizamos el fin original más temprano de cualquiera
-         * de las OF interrumpidas.
-         */
-        var desdeImpacto =
-            interrupcionesRaiz
-                .Select(x =>
-                    programasPorId[
-                        x.ProgramaProduccionID]
-                        .FinOriginal)
-                .Min();
+        var desdeImpacto = interrupcionesRaiz
+            .Select(x => programasPorId[x.ProgramaProduccionID].FinOriginal)
+            .Min();
 
-        /*
-         * RESERVADOS:
-         *
-         * - programas ya iniciados;
-         * - programas que entraron a Calidad;
-         * - estados no movibles;
-         * - las propias OF interrumpidas;
-         * - programas anteriores al punto de impacto.
-         *
-         * Los anteriores se conservan para que sigan sirviendo
-         * como referencia de máquina/molde sin moverlos.
-         */
-        var reservados =
-            programas
-                .Where(x =>
-                    !x.EsMovible ||
-                    programasRaizIds.Contains(
-                        x.ProgramaProduccionID) ||
-                    x.FinOriginal < desdeImpacto)
-                .OrderBy(x =>
-                    x.Inicio)
-                .ThenBy(x =>
-                    x.ProgramaProduccionID)
-                .ToList();
+        var reservados = programas
+            .Where(x =>
+                !x.EsMovible ||
+                programasRaizIds.Contains(x.ProgramaProduccionID) ||
+                x.FinOriginal < desdeImpacto)
+            .OrderBy(x => x.Inicio)
+            .ThenBy(x => x.ProgramaProduccionID)
+            .ToList();
 
-        /*
-         * MOVIBLES:
-         *
-         * Solo programación futura que puede ser recorrida.
-         */
-        var movibles =
-            programas
-                .Where(x =>
-                    x.EsMovible &&
-                    !programasRaizIds.Contains(
-                        x.ProgramaProduccionID) &&
-                    x.FinOriginal >= desdeImpacto)
-                .OrderBy(x =>
-                    x.InicioOriginal)
-                .ThenBy(x =>
-                    x.SecuenciaMaquina)
-                .ThenBy(x =>
-                    x.ProgramaProduccionID)
-                .ToList();
+        var movibles = programas
+            .Where(x =>
+                x.EsMovible &&
+                !programasRaizIds.Contains(x.ProgramaProduccionID) &&
+                x.FinOriginal >= desdeImpacto)
+            .OrderBy(x => x.InicioOriginal)
+            .ThenBy(x => x.SecuenciaMaquina)
+            .ThenBy(x => x.ProgramaProduccionID)
+            .ToList();
 
-        /*
-         * SEGUNDO PASO:
-         * simulamos exactamente la misma propagación que utilizará
-         * el reacomodo definitivo.
-         *
-         * No se actualiza ninguna tabla.
-         */
         foreach (var programa in movibles)
         {
-            var posicion =
-                CalcularPosicionGlobalSinCruces(
-                    programa,
-                    reservados,
-                    trabajarDomingo);
+            var cambioOriginal = programa.Cambio;
+            var arranqueOriginal = programa.Arranque;
 
-            var cambioDiferente =
-                programa.InicioOriginal !=
-                posicion.Cambio;
+            var posicion = CalcularPosicionGlobalSinCruces(
+                programa,
+                reservados,
+                trabajarDomingo);
 
-            var arranqueDiferente =
-                programa.ArranqueFecha !=
-                posicion.Arranque;
+            var cambioDiferente = programa.InicioOriginal != posicion.Cambio;
+            var arranqueDiferente = programa.ArranqueFecha != posicion.Arranque;
+            var finDiferente = programa.FinOriginal != posicion.Fin;
 
-            var finDiferente =
-                programa.FinOriginal !=
-                posicion.Fin;
-
-            if (cambioDiferente ||
-                arranqueDiferente ||
-                finDiferente)
+            if (cambioDiferente || arranqueDiferente || finDiferente)
             {
-                var minutosDesplazamiento =
-                    (int)Math.Max(
-                        0,
-                        Math.Round(
-                            (posicion.Cambio -
-                             programa.InicioOriginal)
-                            .TotalMinutes));
+                var minutosDesplazamiento = (int)Math.Max(
+                    0,
+                    Math.Round((posicion.Cambio - programa.InicioOriginal).TotalMinutes));
 
-                programa.Inicio =
-                    posicion.Cambio;
+                programa.Inicio = posicion.Cambio;
+                programa.Fin = posicion.Fin;
+                programa.Cambio = posicion.Cambio.TimeOfDay;
+                programa.Arranque = posicion.Arranque.TimeOfDay;
+                programa.ArranqueFecha = posicion.Arranque;
 
-                programa.Fin =
-                    posicion.Fin;
-
-                programa.Cambio =
-                    posicion.Cambio.TimeOfDay;
-
-                programa.Arranque =
-                    posicion.Arranque.TimeOfDay;
-
-                programa.ArranqueFecha =
-                    posicion.Arranque;
-
-                proyecciones[
-                    programa.ProgramaProduccionID] =
-                    new PlaneacionProyeccionProgramaResultado
-                    {
-                        ProgramaProduccionID =
-                            programa.ProgramaProduccionID,
-
-                        MaquinaID =
-                            programa.MaquinaID,
-
-                        MoldeID =
-                            programa.MoldeID,
-
-                        EjecucionProduccionID = null,
-                        ParoID = null,
-
-                        EsProgramaRaizInterrupcion = false,
-
-                        TipoInterrupcion =
-                            posicion.MovidoPorMolde
-                                ? "IMPACTO_POR_MOLDE"
-                                : "IMPACTO_POR_COLA",
-
-                        InicioOriginal =
-                            programa.InicioOriginal,
-
-                        FinOriginal =
-                            programa.FinOriginal,
-
-                        InicioProyectado =
-                            posicion.Cambio,
-
-                        FinProyectado =
-                            posicion.Fin,
-
-                        CambioOriginal =
-                            programa.InicioOriginal.TimeOfDay,
-
-                        ArranqueOriginal =
-                            programa.Arranque,
-
-                        CambioProyectado =
-                            posicion.Cambio.TimeOfDay,
-
-                        ArranqueProyectado =
-                            posicion.Arranque.TimeOfDay,
-
-                        MinutosImpactoInterrupcion = 0,
-
-                        MinutosDesplazamiento =
-                            minutosDesplazamiento
-                    };
+                proyecciones[programa.ProgramaProduccionID] = new PlaneacionProyeccionProgramaResultado
+                {
+                    ProgramaProduccionID = programa.ProgramaProduccionID,
+                    MaquinaID = programa.MaquinaID,
+                    MoldeID = programa.MoldeID,
+                    EjecucionProduccionID = null,
+                    ParoID = null,
+                    EsProgramaRaizInterrupcion = false,
+                    TipoInterrupcion = posicion.MovidoPorMolde ? "IMPACTO_POR_MOLDE" : "IMPACTO_POR_COLA",
+                    InicioOriginal = programa.InicioOriginal,
+                    FinOriginal = programa.FinOriginal,
+                    InicioProyectado = posicion.Cambio,
+                    FinProyectado = posicion.Fin,
+                    CambioOriginal = cambioOriginal ?? programa.InicioOriginal.TimeOfDay,
+                    ArranqueOriginal = arranqueOriginal,
+                    CambioProyectado = posicion.Cambio.TimeOfDay,
+                    ArranqueProyectado = posicion.Arranque.TimeOfDay,
+                    MinutosImpactoInterrupcion = 0,
+                    MinutosDesplazamiento = minutosDesplazamiento
+                };
             }
 
-            /*
-             * Una vez resuelto, este programa se convierte
-             * en bloqueo para los siguientes.
-             */
             reservados.Add(programa);
         }
 
-        resultado.Programas =
-            proyecciones.Values
-                .OrderBy(x =>
-                    x.InicioProyectado)
-                .ThenBy(x =>
-                    x.MaquinaID)
-                .ThenBy(x =>
-                    x.ProgramaProduccionID)
-                .ToList();
+        resultado.Programas = proyecciones.Values
+            .OrderBy(x => x.InicioProyectado)
+            .ThenBy(x => x.MaquinaID)
+            .ThenBy(x => x.ProgramaProduccionID)
+            .ToList();
 
         return resultado;
     }
-
-    private static async Task<List<InterrupcionActivaProyeccion>>
-    CargarInterrupcionesActivasProyeccionAsync(
-        SqlConnection cn)
+    private static async Task<List<InterrupcionActivaProyeccion>> CargarInterrupcionesActivasProyeccionAsync(SqlConnection cn)
     {
-        var lista =
-            new List<InterrupcionActivaProyeccion>();
+        var lista = new List<InterrupcionActivaProyeccion>();
 
         const string sql = @"
 SELECT
     p.ParoID,
     p.EjecucionProduccionID,
-
-    COALESCE
-    (
-        p.ProgramaProduccionID,
-        e.ProgramaProduccionID
-    ) AS ProgramaProduccionID,
-
+    COALESCE(p.ProgramaProduccionID,e.ProgramaProduccionID) AS ProgramaProduccionID,
     p.FechaInicioParo,
     p.FechaFinParo,
-
-    ISNULL
-    (
-        NULLIF(
-            LTRIM(RTRIM(p.MotivoParoTexto)),
-            N''
-        ),
-        N'Paro de Producción'
-    ) AS MotivoParoTexto,
-
+    ISNULL(NULLIF(LTRIM(RTRIM(p.MotivoParoTexto)),N''),N'Paro de Producción') AS MotivoParoTexto,
+    ISNULL(p.EsParoLhRh,0) AS EsParoLhRh,
+    p.GrupoParoLhRh,
+    ISNULL(p.EsInterrupcionUrgente,0) AS EsInterrupcionUrgente,
+    p.ProgramaUrgenteID,
+    CAST(CASE WHEN p.FechaFinParo IS NULL THEN 1 ELSE 0 END AS BIT) AS EstaAbierto,
     CAST
     (
         CASE
-            WHEN p.FechaFinParo IS NULL
-                THEN 1
-            ELSE 0
-        END
-        AS BIT
-    ) AS EstaAbierto,
-
-    CAST
-    (
-        CASE
-            WHEN ISNULL(p.EsMayorA15Minutos,0)=1
-                THEN 1
-
+            WHEN ISNULL(p.EsMayorA15Minutos,0)=1 THEN 1
             WHEN p.FechaFinParo IS NOT NULL
-             AND DATEDIFF
-             (
-                 SECOND,
-                 p.FechaInicioParo,
-                 p.FechaFinParo
-             ) > 900
-                THEN 1
-
+             AND DATEDIFF(SECOND,p.FechaInicioParo,p.FechaFinParo)>900 THEN 1
             ELSE 0
         END
         AS BIT
     ) AS EsMayorA15Minutos
-
 FROM dbo.Produccion_Paros p
-
 INNER JOIN dbo.Produccion_Ejecucion e
-    ON e.EjecucionProduccionID =
-       p.EjecucionProduccionID
-
+    ON e.EjecucionProduccionID=p.EjecucionProduccionID
 WHERE p.Activo=1
   AND e.Activo=1
   AND
   (
-        /*
-         * Paro físicamente abierto.
-         */
-        p.FechaFinParo IS NULL
-
-        OR
-
-        /*
-         * Paro mayor a 15 minutos ya cerrado,
-         * pero Producción todavía no ha confirmado
-         * nuevamente el inicio de serie.
-         */
-        (
-            (
-                ISNULL(p.EsMayorA15Minutos,0)=1
-
-                OR
-
-                (
-                    p.FechaFinParo IS NOT NULL
-                    AND DATEDIFF
-                    (
-                        SECOND,
-                        p.FechaInicioParo,
-                        p.FechaFinParo
-                    ) > 900
-                )
-            )
-
-            AND NOT EXISTS
-            (
-                SELECT 1
-                FROM dbo.Calidad_InspeccionHistorial h
-
-                INNER JOIN dbo.Calidad_Inspecciones ci
-                    ON ci.InspeccionID =
-                       h.InspeccionID
-
-                WHERE ci.EjecucionProduccionID =
-                      p.EjecucionProduccionID
-
-                  AND h.Movimiento =
-                      N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
-
-                  AND h.FechaMovimiento >=
-                      p.FechaFinParo
-            )
-        )
+      p.FechaFinParo IS NULL
+      OR
+      (
+          p.FechaFinParo IS NOT NULL
+          AND
+          (
+              ISNULL(p.EsInterrupcionUrgente,0)=1
+              OR ISNULL(p.EsMayorA15Minutos,0)=1
+              OR DATEDIFF(SECOND,p.FechaInicioParo,p.FechaFinParo)>900
+          )
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.Calidad_InspeccionHistorial h
+              INNER JOIN dbo.Calidad_Inspecciones ci
+                  ON ci.InspeccionID=h.InspeccionID
+              WHERE ci.EjecucionProduccionID=p.EjecucionProduccionID
+                AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+                AND h.FechaMovimiento>=p.FechaFinParo
+          )
+      )
   )
+ORDER BY p.FechaInicioParo,p.ParoID;";
 
-ORDER BY
-    p.FechaInicioParo,
-    p.ParoID;";
-
-        await using var cmd =
-            new SqlCommand(sql, cn);
-
-        await using var rd =
-            await cmd.ExecuteReaderAsync();
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rd = await cmd.ExecuteReaderAsync();
 
         while (await rd.ReadAsync())
         {
-            lista.Add(
-                new InterrupcionActivaProyeccion
-                {
-                    ParoID =
-                        Convert.ToInt32(
-                            rd["ParoID"]),
-
-                    EjecucionProduccionID =
-                        Convert.ToInt32(
-                            rd["EjecucionProduccionID"]),
-
-                    ProgramaProduccionID =
-                        Convert.ToInt32(
-                            rd["ProgramaProduccionID"]),
-
-                    FechaInicioParo =
-                        Convert.ToDateTime(
-                            rd["FechaInicioParo"]),
-
-                    FechaFinParo =
-                        rd["FechaFinParo"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToDateTime(
-                                rd["FechaFinParo"]),
-
-                    MotivoParo =
-                        rd["MotivoParoTexto"] ==
-                        DBNull.Value
-                            ? null
-                            : rd["MotivoParoTexto"]
-                                ?.ToString(),
-
-                    EstaAbierto =
-                        rd["EstaAbierto"] !=
-                        DBNull.Value &&
-                        Convert.ToBoolean(
-                            rd["EstaAbierto"]),
-
-                    EsMayorA15Minutos =
-                        rd["EsMayorA15Minutos"] !=
-                        DBNull.Value &&
-                        Convert.ToBoolean(
-                            rd["EsMayorA15Minutos"])
-                });
+            lista.Add(new InterrupcionActivaProyeccion
+            {
+                ParoID = Convert.ToInt32(rd["ParoID"]),
+                EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                FechaInicioParo = Convert.ToDateTime(rd["FechaInicioParo"]),
+                FechaInicioFisica = Convert.ToDateTime(rd["FechaInicioParo"]),
+                FechaFinParo = rd["FechaFinParo"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinParo"]),
+                MotivoParo = rd["MotivoParoTexto"] == DBNull.Value ? null : rd["MotivoParoTexto"]?.ToString(),
+                EsParoLhRh = rd["EsParoLhRh"] != DBNull.Value && Convert.ToBoolean(rd["EsParoLhRh"]),
+                GrupoParoLhRh = rd["GrupoParoLhRh"] == DBNull.Value ? null : (Guid?)rd["GrupoParoLhRh"],
+                EsInterrupcionUrgente = rd["EsInterrupcionUrgente"] != DBNull.Value && Convert.ToBoolean(rd["EsInterrupcionUrgente"]),
+                ProgramaUrgenteID = rd["ProgramaUrgenteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaUrgenteID"]),
+                EstaAbierto = rd["EstaAbierto"] != DBNull.Value && Convert.ToBoolean(rd["EstaAbierto"]),
+                EsMayorA15Minutos = rd["EsMayorA15Minutos"] != DBNull.Value && Convert.ToBoolean(rd["EsMayorA15Minutos"])
+            });
         }
 
         return lista;
     }
-    private static async Task<List<ProgramaReacomodoGlobal>>
-    CargarProgramasReacomodoLecturaAsync(
-        SqlConnection cn)
+
+    private static async Task<List<ProgramaReacomodoGlobal>> CargarProgramasReacomodoLecturaAsync(SqlConnection cn)
     {
-        var lista =
-            new List<ProgramaReacomodoGlobal>();
+        var lista = new List<ProgramaReacomodoGlobal>();
 
         const string sql = @"
 SELECT
@@ -901,198 +641,79 @@ SELECT
     pp.ParteID,
     pp.MoldeID,
     pp.MoldeCodigo,
+    pp.Observaciones,
     pp.ReleaseDetalleID,
     pp.SolicitudProduccionID,
     pp.SolicitudProduccionDetalleID,
-
     pp.FechaInicioProgramada,
-
     ISNULL
     (
         pp.FechaFinProgramada,
-        DATEADD
-        (
-            MINUTE,
-            CAST
-            (
-                CEILING(
-                    ISNULL(pp.HorasProgramadas,1)*60
-                )
-                AS INT
-            ),
-            pp.FechaInicioProgramada
-        )
+        DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada)
     ) AS FechaFinProgramada,
-
-    ISNULL(
-        pp.HorasProgramadas,
-        0
-    ) AS HorasProgramadas,
-
+    ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
     pp.Cambio,
     pp.Arranque,
-
-    ISNULL(
-        pp.SecuenciaMaquina,
-        999999
-    ) AS SecuenciaMaquina,
-
-    ISNULL(
-        pp.EstatusID,
-        1
-    ) AS EstatusID,
-
+    ISNULL(pp.SecuenciaMaquina,999999) AS SecuenciaMaquina,
+    ISNULL(pp.EstatusID,1) AS EstatusID,
     CASE
-        WHEN ISNULL(pp.EstatusID,1)<>1
-            THEN CAST(0 AS BIT)
-
+        WHEN ISNULL(pp.EstatusID,1)<>1 THEN CAST(0 AS BIT)
         WHEN EXISTS
         (
             SELECT 1
             FROM dbo.Produccion_Ejecucion e
-            WHERE e.ProgramaProduccionID =
-                  pp.ProgramaProduccionID
+            WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
               AND e.Activo=1
-        )
-            THEN CAST(0 AS BIT)
-
+        ) THEN CAST(0 AS BIT)
         WHEN EXISTS
         (
             SELECT 1
             FROM dbo.Calidad_Inspecciones ci
-            WHERE ci.ProgramaProduccionID =
-                  pp.ProgramaProduccionID
-        )
-            THEN CAST(0 AS BIT)
-
+            WHERE ci.ProgramaProduccionID=pp.ProgramaProduccionID
+        ) THEN CAST(0 AS BIT)
         ELSE CAST(1 AS BIT)
     END AS EsMovible
-
 FROM dbo.Planeacion_ProgramaProduccion pp
-
 WHERE pp.Activo=1
   AND pp.MaquinaID IS NOT NULL
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND ISNULL(pp.EstatusID,1)
-      NOT IN(5,6,9,99)
+  AND ISNULL(pp.EstatusID,1) NOT IN(5,6,9,99)
+ORDER BY pp.FechaInicioProgramada,ISNULL(pp.SecuenciaMaquina,999999),pp.ProgramaProduccionID;";
 
-ORDER BY
-    pp.FechaInicioProgramada,
-    ISNULL(pp.SecuenciaMaquina,999999),
-    pp.ProgramaProduccionID;";
-
-        await using var cmd =
-            new SqlCommand(sql, cn);
-
-        await using var rd =
-            await cmd.ExecuteReaderAsync();
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rd = await cmd.ExecuteReaderAsync();
 
         while (await rd.ReadAsync())
         {
-            var inicio =
-                Convert.ToDateTime(
-                    rd["FechaInicioProgramada"]);
+            var inicio = Convert.ToDateTime(rd["FechaInicioProgramada"]);
+            var fin = Convert.ToDateTime(rd["FechaFinProgramada"]);
+            var cambio = rd["Cambio"] == DBNull.Value ? (TimeSpan?)null : (TimeSpan)rd["Cambio"];
+            var arranque = rd["Arranque"] == DBNull.Value ? (TimeSpan?)null : (TimeSpan)rd["Arranque"];
+            var observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString();
 
-            var fin =
-                Convert.ToDateTime(
-                    rd["FechaFinProgramada"]);
-
-            var cambio =
-                rd["Cambio"] == DBNull.Value
-                    ? (TimeSpan?)null
-                    : (TimeSpan)rd["Cambio"];
-
-            var arranque =
-                rd["Arranque"] == DBNull.Value
-                    ? (TimeSpan?)null
-                    : (TimeSpan)rd["Arranque"];
-
-            lista.Add(
-                new ProgramaReacomodoGlobal
-                {
-                    ProgramaProduccionID =
-                        Convert.ToInt32(
-                            rd["ProgramaProduccionID"]),
-
-                    MaquinaID =
-                        rd["MaquinaID"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToInt32(
-                                rd["MaquinaID"]),
-
-                    ParteID =
-                        rd["ParteID"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToInt32(
-                                rd["ParteID"]),
-
-                    MoldeID =
-                        rd["MoldeID"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToInt32(
-                                rd["MoldeID"]),
-
-                    MoldeCodigo =
-                        rd["MoldeCodigo"] ==
-                        DBNull.Value
-                            ? null
-                            : rd["MoldeCodigo"]
-                                ?.ToString(),
-
-                    ReleaseDetalleID =
-                        rd["ReleaseDetalleID"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToInt32(
-                                rd["ReleaseDetalleID"]),
-
-                    SolicitudProduccionID =
-                        rd["SolicitudProduccionID"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToInt32(
-                                rd["SolicitudProduccionID"]),
-
-                    SolicitudProduccionDetalleID =
-                        rd["SolicitudProduccionDetalleID"] ==
-                        DBNull.Value
-                            ? null
-                            : Convert.ToInt32(
-                                rd["SolicitudProduccionDetalleID"]),
-
-                    InicioOriginal = inicio,
-                    FinOriginal = fin,
-
-                    Inicio = inicio,
-                    Fin = fin,
-
-                    HorasProgramadas =
-                        Convert.ToDecimal(
-                            rd["HorasProgramadas"]),
-
-                    Cambio = cambio,
-                    Arranque = arranque,
-
-                    ArranqueFecha =
-                        ConstruirFechaHoraDesdeTimeSpan(
-                            inicio,
-                            arranque),
-
-                    SecuenciaMaquina =
-                        Convert.ToInt32(
-                            rd["SecuenciaMaquina"]),
-
-                    EstatusID =
-                        Convert.ToInt32(
-                            rd["EstatusID"]),
-
-                    EsMovible =
-                        Convert.ToBoolean(
-                            rd["EsMovible"])
-                });
+            lista.Add(new ProgramaReacomodoGlobal
+            {
+                ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                MaquinaID = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]),
+                ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
+                MoldeID = rd["MoldeID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeID"]),
+                MoldeCodigo = rd["MoldeCodigo"] == DBNull.Value ? null : rd["MoldeCodigo"]?.ToString(),
+                GrupoLhRh = ExtraerGrupoLhRh(observaciones),
+                ReleaseDetalleID = rd["ReleaseDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseDetalleID"]),
+                SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
+                InicioOriginal = inicio,
+                FinOriginal = fin,
+                Inicio = inicio,
+                Fin = fin,
+                HorasProgramadas = Convert.ToDecimal(rd["HorasProgramadas"]),
+                Cambio = cambio,
+                Arranque = arranque,
+                ArranqueFecha = ConstruirFechaHoraDesdeTimeSpan(inicio, arranque),
+                SecuenciaMaquina = Convert.ToInt32(rd["SecuenciaMaquina"]),
+                EstatusID = Convert.ToInt32(rd["EstatusID"]),
+                EsMovible = Convert.ToBoolean(rd["EsMovible"])
+            });
         }
 
         return lista;
@@ -1178,6 +799,7 @@ SELECT
     pp.ParteID,
     pp.MoldeID,
     pp.MoldeCodigo,
+    pp.Observaciones,
     pp.ReleaseDetalleID,
     pp.SolicitudProduccionID,
     pp.SolicitudProduccionDetalleID,
@@ -1185,12 +807,7 @@ SELECT
     ISNULL
     (
         pp.FechaFinProgramada,
-        DATEADD
-        (
-            MINUTE,
-            CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),
-            pp.FechaInicioProgramada
-        )
+        DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada)
     ) AS FechaFinProgramada,
     ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
     pp.Cambio,
@@ -1221,24 +838,15 @@ WHERE pp.Activo=1
   AND pp.FechaInicioProgramada IS NOT NULL
   AND ISNULL(pp.EstatusID,1) NOT IN(5,6,9,99)
   AND ISNULL
-      (
-          pp.FechaFinProgramada,
-          DATEADD
-          (
-              MINUTE,
-              CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),
-              pp.FechaInicioProgramada
-          )
-      )>=@DesdeImpacto
-ORDER BY
-    pp.FechaInicioProgramada,
-    ISNULL(pp.SecuenciaMaquina,999999),
-    pp.ProgramaProduccionID;";
+  (
+      pp.FechaFinProgramada,
+      DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada)
+  )>=@DesdeImpacto
+ORDER BY pp.FechaInicioProgramada,ISNULL(pp.SecuenciaMaquina,999999),pp.ProgramaProduccionID;";
 
         await using var cmd = new SqlCommand(sql, cn, tx);
         cmd.Parameters.Add("@ProgramaRaizID", SqlDbType.Int).Value = programaRaizId;
         cmd.Parameters.Add("@DesdeImpacto", SqlDbType.DateTime).Value = desdeImpacto;
-
         await using var rd = await cmd.ExecuteReaderAsync();
 
         while (await rd.ReadAsync())
@@ -1247,6 +855,7 @@ ORDER BY
             var fin = Convert.ToDateTime(rd["FechaFinProgramada"]);
             var cambio = rd["Cambio"] == DBNull.Value ? (TimeSpan?)null : (TimeSpan)rd["Cambio"];
             var arranque = rd["Arranque"] == DBNull.Value ? (TimeSpan?)null : (TimeSpan)rd["Arranque"];
+            var observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString();
 
             lista.Add(new ProgramaReacomodoGlobal
             {
@@ -1255,6 +864,7 @@ ORDER BY
                 ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
                 MoldeID = rd["MoldeID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeID"]),
                 MoldeCodigo = rd["MoldeCodigo"] == DBNull.Value ? null : rd["MoldeCodigo"]?.ToString(),
+                GrupoLhRh = ExtraerGrupoLhRh(observaciones),
                 ReleaseDetalleID = rd["ReleaseDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReleaseDetalleID"]),
                 SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
                 SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
@@ -1274,11 +884,17 @@ ORDER BY
 
         return lista;
     }
-
     private static PosicionReacomodoGlobal CalcularPosicionGlobalSinCruces(ProgramaReacomodoGlobal programa, List<ProgramaReacomodoGlobal> reservados, bool trabajarDomingo)
     {
         var cursor = programa.InicioOriginal;
         var movidoPorMolde = false;
+
+        bool EsMismaParejaLhRh(ProgramaReacomodoGlobal otro)
+        {
+            return !string.IsNullOrWhiteSpace(programa.GrupoLhRh) &&
+                   !string.IsNullOrWhiteSpace(otro.GrupoLhRh) &&
+                   string.Equals(programa.GrupoLhRh, otro.GrupoLhRh, StringComparison.OrdinalIgnoreCase);
+        }
 
         for (var intento = 0; intento < 2000; intento++)
         {
@@ -1288,6 +904,7 @@ ORDER BY
             var anteriorMaquina = reservados
                 .Where(x =>
                     x.ProgramaProduccionID != programa.ProgramaProduccionID &&
+                    !EsMismaParejaLhRh(x) &&
                     x.MaquinaID.HasValue &&
                     programa.MaquinaID.HasValue &&
                     x.MaquinaID.Value == programa.MaquinaID.Value &&
@@ -1315,6 +932,7 @@ ORDER BY
             var conflictos = reservados
                 .Where(x =>
                     x.ProgramaProduccionID != programa.ProgramaProduccionID &&
+                    !EsMismaParejaLhRh(x) &&
                     IntervalosSeCruzan(cambio, fin, x.Inicio, x.Fin) &&
                     (
                         (x.MaquinaID.HasValue && programa.MaquinaID.HasValue && x.MaquinaID.Value == programa.MaquinaID.Value)
@@ -1349,7 +967,6 @@ ORDER BY
 
         throw new InvalidOperationException("No fue posible reacomodar automáticamente la programación sin cruces de máquina o molde.");
     }
-
     private static async Task ActualizarFinProgramaRaizAsync(ProgramaReacomodoGlobal programa, int ejecucionProduccionId, DateTime nuevoFin, int usuarioId, SqlConnection cn, SqlTransaction tx)
     {
         const string sql = @"
@@ -2136,6 +1753,18 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
         return (diaAnterior, diaAnterior.AddDays(1));
     }
 
+    private static string? ExtraerGrupoLhRh(string? observaciones)
+    {
+        if (string.IsNullOrWhiteSpace(observaciones)) return null;
+        const string marca = "NSQ_LHRH_PAIR:";
+        var posicion = observaciones.IndexOf(marca, StringComparison.OrdinalIgnoreCase);
+        if (posicion < 0) return null;
+        var inicio = posicion + marca.Length;
+        var fin = observaciones.IndexOf(';', inicio);
+        var grupo = fin >= 0 ? observaciones[inicio..fin] : observaciones[inicio..];
+        grupo = grupo.Trim();
+        return string.IsNullOrWhiteSpace(grupo) ? null : grupo;
+    }
     private static DateTime RedondearSiguienteBloque(DateTime fecha, int minutos)
     {
         if (minutos <= 0)
@@ -2173,16 +1802,17 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
         public int ParoID { get; set; }
         public int EjecucionProduccionID { get; set; }
         public int ProgramaProduccionID { get; set; }
-
         public DateTime FechaInicioParo { get; set; }
+        public DateTime FechaInicioFisica { get; set; }
         public DateTime? FechaFinParo { get; set; }
-
         public string? MotivoParo { get; set; }
-
         public bool EstaAbierto { get; set; }
         public bool EsMayorA15Minutos { get; set; }
+        public bool EsParoLhRh { get; set; }
+        public Guid? GrupoParoLhRh { get; set; }
+        public bool EsInterrupcionUrgente { get; set; }
+        public int? ProgramaUrgenteID { get; set; }
     }
-
     private sealed class ProgramaReacomodoGlobal
     {
         public int ProgramaProduccionID { get; set; }
@@ -2190,6 +1820,7 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
         public int? ParteID { get; set; }
         public int? MoldeID { get; set; }
         public string? MoldeCodigo { get; set; }
+        public string? GrupoLhRh { get; set; }
         public int? ReleaseDetalleID { get; set; }
         public int? SolicitudProduccionID { get; set; }
         public int? SolicitudProduccionDetalleID { get; set; }
