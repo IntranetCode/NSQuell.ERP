@@ -4234,7 +4234,10 @@ WHERE MotivoParoID = @MotivoParoID
         {
             const string sql = @"
 SELECT TOP (1)
-    p.Puesto
+    CASE
+        WHEN u.RolID = 1 THEN N'OPERADOR'
+        ELSE p.Puesto
+    END AS Puesto -- NSQ_OPERADOR_ADMIN_V1_1
 FROM dbo.Usuarios u
 INNER JOIN dbo.Persona p
     ON p.PersonaID = u.PersonaID

@@ -3282,3 +3282,238 @@ body.nsq-route-canonical-v48
     padding: 0 !important;
     min-height: 0 !important;
 }
+
+/* NSQ_NAVBAR_IDENTIDAD_QUELL_V1_START */
+:root {
+    --nsq-quell-blue: #004aad;
+    --nsq-quell-blue-rgb: 0, 74, 173;
+    --nsq-quell-orange: #f47b20;
+}
+
+/*
+ * MENU/INDEX es el portal raiz. Usa el mismo _TopNavbar que el resto del ERP,
+ * pero no muestra navegacion departamental porque aun no existe un contexto
+ * de departamento activo.
+ */
+body.nsq-menu-index-root-v1 .nsq-global-department-slot {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+body.nsq-menu-index-root-v1 .top-navbar .navbar-content {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+}
+
+body.nsq-menu-index-root-v1 .top-navbar .navbar-left {
+    grid-column: 1 !important;
+}
+
+body.nsq-menu-index-root-v1 .top-navbar .navbar-right {
+    grid-column: 3 !important;
+}
+
+/* El portal raiz debe usar exactamente el logo corporativo, no iconos fallback. */
+body.nsq-menu-index-root-v1 .navbar-brand > i,
+body.nsq-menu-index-root-v1 .navbar-brand .brand-icon,
+body.nsq-menu-index-root-v1 .navbar-brand .navbar-title-mark,
+body.nsq-menu-index-root-v1 .navbar-brand [class*="brand-mark"] {
+    display: none !important;
+}
+
+body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo {
+    display: block;
+    width: 62px !important;
+    height: 62px !important;
+    min-width: 62px !important;
+    flex: 0 0 62px !important;
+    object-fit: contain !important;
+    object-position: center !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo--light {
+    display: block !important;
+}
+
+body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo--dark {
+    display: none !important;
+}
+
+html[data-nsq-theme="dark"] body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo--light {
+    display: none !important;
+}
+
+html[data-nsq-theme="dark"] body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo--dark {
+    display: block !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo--light {
+    display: block !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo--dark {
+    display: none !important;
+}
+
+body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-title {
+    color: #f8fafc !important;
+    font-size: 1rem !important;
+    font-weight: 950 !important;
+    letter-spacing: .055em !important;
+    text-transform: uppercase !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-title {
+    color: #0d1929 !important;
+}
+
+body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-title::after,
+body.nsq-menu-index-root-v1 .navbar-brand .navbar-title::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* En el portal raiz el selector de tema queda igual que en el navbar global: icono. */
+body.nsq-menu-index-root-v1 #btnThemeToggle.theme-switcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 12px !important;
+}
+
+body.nsq-menu-index-root-v1 #btnThemeToggle .theme-switcher-text,
+body.nsq-menu-index-root-v1 #themeToggleText {
+    display: none !important;
+}
+
+/*
+ * Identidad Quell en modo claro.
+ * Antes el launcher y las tarjetas usaban #7dd3fc / #60a5fa, que se ven
+ * celestes y no coinciden con el azul corporativo #004AAD.
+ */
+html[data-nsq-theme="light"] .nsq-departments-launcher {
+    color: #24496d !important;
+    border-color: rgba(var(--nsq-quell-blue-rgb), .18) !important;
+    background: linear-gradient(
+        180deg,
+        rgba(var(--nsq-quell-blue-rgb), .085),
+        rgba(var(--nsq-quell-blue-rgb), .035)
+    ) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher > i:first-child,
+html[data-nsq-theme="light"] .nsq-department-card__icon,
+html[data-nsq-theme="light"] .nsq-department-card__menus a i,
+html[data-nsq-theme="light"] .nsq-context-menu-link > i:first-child {
+    color: var(--nsq-quell-blue) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher__count {
+    color: var(--nsq-quell-blue) !important;
+    background: rgba(var(--nsq-quell-blue-rgb), .09) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__icon {
+    background: rgba(var(--nsq-quell-blue-rgb), .085) !important;
+    border: 1px solid rgba(var(--nsq-quell-blue-rgb), .08) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover,
+html[data-nsq-theme="light"] .nsq-department-card:focus-within {
+    border-color: rgba(var(--nsq-quell-blue-rgb), .30) !important;
+    box-shadow:
+        0 12px 26px rgba(41, 67, 95, .13),
+        inset 3px 0 0 rgba(var(--nsq-quell-blue-rgb), .62) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__menus a:hover,
+html[data-nsq-theme="light"] .nsq-department-card__menus a:focus-visible {
+    color: #003b86 !important;
+    background: rgba(var(--nsq-quell-blue-rgb), .09) !important;
+    box-shadow: inset 2px 0 0 rgba(var(--nsq-quell-blue-rgb), .62) !important;
+}
+
+/* En dark se conserva el azul claro actual por contraste. */
+@media (max-width: 960px) {
+    body.nsq-menu-index-root-v1 .navbar-brand .nsq-brand-logo {
+        width: 52px !important;
+        height: 52px !important;
+        min-width: 52px !important;
+        flex-basis: 52px !important;
+    }
+}
+/* NSQ_NAVBAR_IDENTIDAD_QUELL_V1_END */
+
+/* NSQ_QUELL_BLUE_GLOBAL_V2_START */
+:root {
+    --nsq-quell-blue: #004aad;
+    --nsq-quell-blue-rgb: 0,74,173;
+}
+
+/* Identidad Quell: en tema claro el navbar usa el azul corporativo. */
+html[data-nsq-theme="light"] .nsq-departments-launcher > i:first-child,
+html[data-nsq-theme="light"] .nsq-department-card__icon,
+html[data-nsq-theme="light"] .nsq-department-card__menus a i,
+html[data-nsq-theme="light"] .nsq-context-menu-link > i:first-child {
+    color: var(--nsq-quell-blue) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher {
+    border-color: rgba(var(--nsq-quell-blue-rgb),.18) !important;
+    background: linear-gradient(
+        180deg,
+        rgba(var(--nsq-quell-blue-rgb),.085),
+        rgba(var(--nsq-quell-blue-rgb),.035)
+    ) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher__count {
+    color: var(--nsq-quell-blue) !important;
+    background: rgba(var(--nsq-quell-blue-rgb),.09) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__icon {
+    background: rgba(var(--nsq-quell-blue-rgb),.085) !important;
+    border: 1px solid rgba(var(--nsq-quell-blue-rgb),.08) !important;
+}
+/* NSQ_QUELL_BLUE_GLOBAL_V2_END */
+
+/* NSQ_NAVBAR_TITULOS_NARANJA_QUELL_V1_START */
+:root {
+    --nsq-quell-orange-v1: #f47b20;
+    --nsq-quell-orange-soft-v1: #ffb86b;
+}
+
+/* Titulo del departamento ACTIVO: Planeacion, Produccion, Calidad, etc. */
+html body.nsq-unified-navbar-active
+.navbar-title.nsq-navbar-department-title-quell,
+html body.nsq-unified-navbar-active
+.nsq-brand-title.nsq-navbar-department-title-quell {
+    color: var(--nsq-quell-orange-v1) !important;
+}
+
+/* Titulos de las tarjetas del selector de departamentos. */
+.nsq-department-card__name {
+    color: var(--nsq-quell-orange-v1) !important;
+}
+
+/* En tema oscuro usamos el naranja suave para conservar contraste. */
+html[data-nsq-theme="dark"]
+body.nsq-unified-navbar-active
+.navbar-title.nsq-navbar-department-title-quell,
+html[data-nsq-theme="dark"]
+body.nsq-unified-navbar-active
+.nsq-brand-title.nsq-navbar-department-title-quell,
+html[data-nsq-theme="dark"] .nsq-department-card__name {
+    color: var(--nsq-quell-orange-soft-v1) !important;
+}
+/* NSQ_NAVBAR_TITULOS_NARANJA_QUELL_V1_END */

@@ -502,6 +502,17 @@ ORDER BY
         var currentPath = PathOnly(vm.CurrentPath);
         var currentController = vm.CurrentController.Trim();
 
+        // NSQ_PRODUCCION_CALENDARIO_NAV_STATE_V1_START
+        // Aunque el action vive en el controlador historico de Planeacion,
+        // /Produccion/Calendario pertenece visual y funcionalmente a Produccion.
+        if (currentPath.Equals(
+            "/Produccion/Calendario",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            currentController = "Produccion";
+        }
+        // NSQ_PRODUCCION_CALENDARIO_NAV_STATE_V1_END
+
         int? currentGroupId = null;
         const string groupPrefix = "/Menu/Grupo/";
         if (currentPath.StartsWith(groupPrefix, StringComparison.OrdinalIgnoreCase))
@@ -717,6 +728,22 @@ ORDER BY
             }
         }
 
+        // NSQ_PRODUCCION_CALENDARIO_MENU_GLOBAL_V1_START
+        var produccion = vm.Groups.FirstOrDefault(x =>
+            NormalizeNavigationToken(x.Nombre)
+                .Equals("PRODUCCION", StringComparison.OrdinalIgnoreCase));
+
+        if (produccion != null)
+        {
+            EnsureSyntheticMenu(
+                produccion,
+                "Calendario",
+                "fa-solid fa-calendar-days",
+                "/Produccion/Calendario",
+                "Consulta de solo lectura del calendario para Produccion.",
+                "Calendario");
+        }
+        // NSQ_PRODUCCION_CALENDARIO_MENU_GLOBAL_V1_END
         var planeacion = vm.Groups.FirstOrDefault(x => x.MenuGrupoID == 3);
         if (planeacion != null)
         {
@@ -734,7 +761,8 @@ ORDER BY
         string name,
         string icon,
         string url,
-        string description)
+        string description,
+        string subMenuName = "Abrir")
     {
         if (group.Menus.Any(x =>
             x.SubMenus.Any(s => s.Url.StartsWith(url.Split('?')[0], StringComparison.OrdinalIgnoreCase))))
@@ -755,7 +783,7 @@ ORDER BY
         menu.SubMenus.Add(new GlobalDepartmentNavigationSubMenuVm
         {
             SubMenuID = -Math.Abs(nextMenuId),
-            Nombre = "Abrir",
+            Nombre = subMenuName,
             Url = url
         });
 

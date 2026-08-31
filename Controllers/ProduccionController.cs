@@ -81,6 +81,41 @@ namespace ERP.NSQuell.Controllers
 
             vm.ProgramasDisponibles = await ObtenerProgramasDisponiblesAsync(busqueda, maquinaId, fechaDesde, fechaHasta, cn);
 
+            // NSQ_PRODUCCION_INDEX_OPERADOR_PROGRAMADO_V1_START
+            // La tarjeta de Produccion debe mostrar primero el operador realmente
+            // programado para la OF/turno. Solo usamos la sugerencia antigua de
+            // RRHH como respaldo cuando no existe programacion operativa.
+            foreach (var programa in vm.ProgramasDisponibles)
+            {
+                if (programa.ProgramaProduccionID <= 0)
+                    continue;
+
+                var personalProgramado =
+                    await ObtenerPersonalProgramadoProduccionAsync(
+                        programa.ProgramaProduccionID,
+                        DateTime.Now,
+                        programa.FechaInicioProgramada,
+                        cn,
+                        null);
+
+                if (personalProgramado?.OperadorID is int operadorProgramadoId &&
+                    operadorProgramadoId > 0)
+                {
+                    programa.OperadorSugeridoID = operadorProgramadoId;
+                    programa.OperadorSugeridoNombre =
+                        string.IsNullOrWhiteSpace(personalProgramado.OperadorNombre)
+                            ? programa.OperadorSugeridoNombre
+                            : personalProgramado.OperadorNombre.Trim();
+
+                    programa.TurnoSugeridoNombre =
+                        string.IsNullOrWhiteSpace(personalProgramado.TurnoNombre)
+                            ? programa.TurnoSugeridoNombre
+                            : personalProgramado.TurnoNombre.Trim();
+
+                }
+            }
+            // NSQ_PRODUCCION_INDEX_OPERADOR_PROGRAMADO_V1_END
+
             var ahora = DateTime.Now;
             var limiteProximos = ahora.AddMinutes(15);
             var maquinasOcupadas = await ObtenerMaquinasOcupadasAsync(cn);

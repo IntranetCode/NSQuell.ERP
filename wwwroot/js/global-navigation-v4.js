@@ -3721,3 +3721,20 @@
         start();
     }
 })();
+
+/* NSQ_NAVBAR_TITULOS_NARANJA_QUELL_V1_JS_START */
+(() => {
+    const root = document.querySelector('[data-nsq-department-nav]');
+    const brandTitle = document.querySelector(
+        '.top-navbar .nsq-brand-title, .top-navbar .navbar-title');
+
+    if (!root || !brandTitle) return;
+
+    const department = (root.dataset.activeDepartment || '').trim();
+
+    brandTitle.classList.toggle(
+        'nsq-navbar-department-title-quell',
+        department.length > 0
+    );
+})();
+/* NSQ_NAVBAR_TITULOS_NARANJA_QUELL_V1_JS_END */

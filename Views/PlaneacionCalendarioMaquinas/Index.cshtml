@@ -392,7 +392,7 @@
         }
 
         function puedeArrastrar(block) {
-            return !modoProduccion && '@Model.VistaNormalizada'.toLowerCase() !== 'mes' && block.dataset.puedeMover === 'true'; // NSQ_MES_SIN_DRAG_V40
+            return !modoProduccion && block.dataset.puedeMover === 'true'; // NSQ_MES_DRAG_V1
         }
 
 
@@ -1751,13 +1751,24 @@
 }
 else
 {
-    <div class="mb-3">
+    <div class="mb-3 nsq-production-calendar-extra-back-v1">
         <a href="@Url.Action("Index", "Produccion")" class="btn btn-outline-primary fw-bold">
             <i class="fa-solid fa-arrow-left me-1"></i>
             Regresar a Producci&oacute;n
         </a>
     </div>
 }
+<!-- NSQ_PRODUCCION_CALENDARIO_BACK_DEDUP_V1_START -->
+<style id="NSQ_PRODUCCION_CALENDARIO_BACK_DEDUP_V1">
+    /*
+     * La ruta global ya contiene un unico boton Regresar.
+     * El boton local se conserva en markup por compatibilidad, pero no se duplica.
+     */
+    .nsq-production-calendar-extra-back-v1 {
+        display: none !important;
+    }
+</style>
+<!-- NSQ_PRODUCCION_CALENDARIO_BACK_DEDUP_V1_END -->
 <div class="page @(modoProduccion ? "production-calendar-readonly" : string.Empty)" data-nsq-style="--dias-periodo:@totalDias;--horas-periodo:@(Math.Max(1, totalDias * 24));">
     <section class="hero">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -3024,7 +3035,7 @@ document.addEventListener('DOMContentLoaded', function () {
     else if (days && vista === 'mes') {
         const hint = document.createElement('div');
         hint.className = 'nsq-month-hint-v30';
-        hint.textContent = 'Vista mensual: panorama por día. Para mover una OF a una hora exacta usa Día o Semana.';
+        hint.textContent = 'Vista mensual: puedes arrastrar una OF a otra máquina y fecha; la posición horizontal define la hora y se ajusta a bloques de 60 minutos.'; // NSQ_MES_DRAG_HINT_V1
         days.appendChild(hint);
     }
 
@@ -3044,7 +3055,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.addEventListener('dragover', function (event) {
-        if (vista === 'mes') return;
+        // NSQ_MES_DRAG_BADGE_V1: en vista mensual tambien mostramos la previsualizacion de hora.
         const track = event.target?.closest?.('.track');
         if (!track) {
             badge.style.display = 'none';

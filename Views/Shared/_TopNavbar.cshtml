@@ -40,6 +40,19 @@
     var plnEsModulo =
         plnController.StartsWith("Planeacion", StringComparison.OrdinalIgnoreCase);
 
+    // NSQ_PRODUCCION_CALENDARIO_TOPNAV_V1_START
+    var esCalendarioProduccionNavbar =
+        Context.Request.Path.StartsWithSegments(
+            "/Produccion/Calendario");
+
+    // La ruta canonica de Produccion reutiliza el controlador historico,
+    // pero NO debe mostrar los accesos directos propios de Planeacion.
+    if (esCalendarioProduccionNavbar)
+    {
+        plnEsModulo = false;
+    }
+    // NSQ_PRODUCCION_CALENDARIO_TOPNAV_V1_END
+
     var plnSeccion =
         plnController.StartsWith("PlaneacionRelease", StringComparison.OrdinalIgnoreCase)
             ? "Releases"
