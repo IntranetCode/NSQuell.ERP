@@ -33,6 +33,13 @@ public sealed partial class ProduccionController
         public decimal? TiempoCicloBD { get; set; }
     }
 
+    private sealed class ProduccionRecalculoConfiguracionContexto
+    {
+        public int CantidadProgramada { get; set; }
+        public int CantidadProducida { get; set; }
+        public decimal HorasProgramadas { get; set; }
+        public DateTime FechaFinProgramada { get; set; }
+    }
     private sealed class ProduccionUltimaLecturaContador
     {
         public long LecturaContadorID { get; set; }
@@ -304,174 +311,387 @@ public sealed partial class ProduccionController
         }
     }
 
-    // ============================================================
-    // CAMBIAR CONFIGURACIÓN DURANTE LA CORRIDA
-    //
-    // Ejemplo:
-    // 10:00 -> 4 cavidades
-    // 10:25 -> técnico cambia a 3 cavidades
-    //
-    // El técnico debe indicar el contador actual para cerrar
-    // matemáticamente el tramo anterior.
-    // ============================================================
+    [HttpGet]
+    public async Task<IActionResult> PrevisualizarCambioConfiguracion(int ejecucionProduccionId, int cavidadesUsadas, string? tiempoCicloSegundos)
+    {
+        if (!UsuarioEnSesion())
+        {
+            Response.StatusCode = 401;
+            return Json(new
+            {
+                ok = false,
+                mensaje = "La sesión terminó. Vuelve a iniciar sesión."
+            });
+        }
+
+        if (ejecucionProduccionId <= 0)
+        {
+            return BadRequest(new
+            {
+                ok = false,
+                mensaje = "La ejecución de Producción no es válida."
+            });
+        }
+
+        if (cavidadesUsadas <= 0)
+        {
+            return BadRequest(new
+            {
+                ok = false,
+                mensaje = "Las cavidades utilizadas deben ser mayores a cero."
+            });
+        }
+
+        var cicloNuevo = ConvertirDecimalFlexibleConfiguracion(tiempoCicloSegundos);
+
+        if (!cicloNuevo.HasValue || cicloNuevo.Value <= 0)
+        {
+            return BadRequest(new
+            {
+                ok = false,
+                mensaje = "El tiempo de ciclo debe ser mayor a cero."
+            });
+        }
+
+        try
+        {
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            var contexto = await ObtenerContextoConfiguracionCorridaAsync(
+                ejecucionProduccionId,
+                cn);
+
+            if (contexto == null)
+            {
+                return NotFound(new
+                {
+                    ok = false,
+                    mensaje = "No se encontró la ejecución de Producción."
+                });
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(
+                usuarioId,
+                cn);
+
+            if (!PuedeModificarConfiguracionCorrida(permisos, contexto))
+            {
+                Response.StatusCode = 403;
+
+                return Json(new
+                {
+                    ok = false,
+                    mensaje = "No tienes permiso para modificar la configuración real de esta ejecución."
+                });
+            }
+
+            if (!EjecucionPermiteConfiguracionCorrida(contexto))
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    mensaje = "La configuración ya no puede modificarse porque la ejecución no está activa."
+                });
+            }
+
+            var configuracionActual = await ObtenerConfiguracionActualAsync(
+                ejecucionProduccionId,
+                cn);
+
+            if (configuracionActual == null)
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    mensaje = "La ejecución todavía no tiene una configuración inicial activa."
+                });
+            }
+
+            var planeacion = await ObtenerContextoRecalculoConfiguracionLecturaAsync(
+                contexto.ProgramaProduccionID,
+                ejecucionProduccionId,
+                cn);
+
+            if (planeacion == null)
+            {
+                return NotFound(new
+                {
+                    ok = false,
+                    mensaje = "No fue posible recuperar la programación relacionada con esta ejecución."
+                });
+            }
+
+            var objetivoAnterior = configuracionActual.ObjetivoHoraOperativo;
+            var objetivoNuevo = CalcularObjetivoHoraConfiguracion(
+                cicloNuevo.Value,
+                cavidadesUsadas);
+
+            var cantidadPendiente = Math.Max(
+                0,
+                planeacion.CantidadProgramada - planeacion.CantidadProducida);
+
+            var mismasCavidades =
+                configuracionActual.CavidadesUsadas == cavidadesUsadas;
+
+            var mismoCiclo =
+                Math.Abs(
+                    configuracionActual.TiempoCicloSegundos -
+                    cicloNuevo.Value) < 0.0001m;
+
+            if (cantidadPendiente <= 0)
+            {
+                return Json(new
+                {
+                    ok = true,
+                    hayCambioConfiguracion = !mismasCavidades || !mismoCiclo,
+                    modificaCalendario = false,
+                    extiendeProgramacion = false,
+                    reduceProgramacion = false,
+                    configuracionActual = new
+                    {
+                        cavidades = configuracionActual.CavidadesUsadas,
+                        cicloSegundos = configuracionActual.TiempoCicloSegundos,
+                        objetivoHora = objetivoAnterior
+                    },
+                    configuracionNueva = new
+                    {
+                        cavidades = cavidadesUsadas,
+                        cicloSegundos = cicloNuevo.Value,
+                        objetivoHora = objetivoNuevo
+                    },
+                    cantidadProgramada = planeacion.CantidadProgramada,
+                    cantidadProducida = planeacion.CantidadProducida,
+                    cantidadPendiente = 0,
+                    horasProgramadasActuales = planeacion.HorasProgramadas,
+                    horasRestantesActuales = 0m,
+                    horasRestantesNuevas = 0m,
+                    deltaHoras = 0m,
+                    deltaMinutos = 0,
+                    fechaFinActual = planeacion.FechaFinProgramada,
+                    fechaFinProyectada = planeacion.FechaFinProgramada,
+                    mensaje = "La OF ya no tiene piezas pendientes. El cambio técnico no modificará el calendario."
+                });
+            }
+
+            if (objetivoAnterior <= 0)
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    mensaje = "La configuración actual no tiene un objetivo por hora válido."
+                });
+            }
+
+            if (objetivoNuevo <= 0)
+            {
+                return BadRequest(new
+                {
+                    ok = false,
+                    mensaje = "La nueva configuración no genera un objetivo por hora válido."
+                });
+            }
+
+            var horasRestantesActuales =
+                cantidadPendiente /
+                (decimal)objetivoAnterior;
+
+            var horasRestantesNuevas =
+                cantidadPendiente /
+                (decimal)objetivoNuevo;
+
+            var deltaHoras =
+                horasRestantesNuevas -
+                horasRestantesActuales;
+
+            var deltaMinutos =
+                (int)Math.Round(
+                    deltaHoras * 60m,
+                    0,
+                    MidpointRounding.AwayFromZero);
+
+            var horasBase =
+                planeacion.HorasProgramadas > 0
+                    ? planeacion.HorasProgramadas
+                    : horasRestantesActuales;
+
+            var horasProgramadasNuevas =
+                Math.Max(
+                    0.0167m,
+                    Math.Round(
+                        horasBase + deltaHoras,
+                        4,
+                        MidpointRounding.AwayFromZero));
+
+            var fechaFinProyectada =
+                Math.Abs(deltaHoras) < 0.0001m
+                    ? planeacion.FechaFinProgramada
+                    : _planeacionSecuenciaService.AjustarFechaFinOperativa(
+                        planeacion.FechaFinProgramada,
+                        deltaHoras,
+                        trabajarDomingo: false);
+
+            var extiendeProgramacion =
+                deltaHoras > 0.0001m;
+
+            var reduceProgramacion =
+                deltaHoras < -0.0001m;
+
+            var modificaCalendario =
+                Math.Abs(deltaHoras) >= 0.0001m;
+
+            string mensaje;
+
+            if (!modificaCalendario)
+            {
+                mensaje =
+                    "La nueva configuración conserva prácticamente el mismo rendimiento. " +
+                    "No se proyecta un cambio en el calendario.";
+            }
+            else if (extiendeProgramacion)
+            {
+                mensaje =
+                    $"La nueva configuración agregará aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) a la OF. " +
+                    "Al confirmar el cambio, la programación posterior podrá recorrerse automáticamente.";
+            }
+            else
+            {
+                mensaje =
+                    $"La nueva configuración reduce aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) de la OF. " +
+                    "Las órdenes posteriores no se adelantarán automáticamente; el espacio quedará disponible para Planeación.";
+            }
+
+            return Json(new
+            {
+                ok = true,
+                hayCambioConfiguracion = !mismasCavidades || !mismoCiclo,
+                modificaCalendario,
+                extiendeProgramacion,
+                reduceProgramacion,
+                configuracionActual = new
+                {
+                    cavidades = configuracionActual.CavidadesUsadas,
+                    cicloSegundos = configuracionActual.TiempoCicloSegundos,
+                    objetivoHora = objetivoAnterior
+                },
+                configuracionNueva = new
+                {
+                    cavidades = cavidadesUsadas,
+                    cicloSegundos = cicloNuevo.Value,
+                    objetivoHora = objetivoNuevo
+                },
+                cantidadProgramada = planeacion.CantidadProgramada,
+                cantidadProducida = planeacion.CantidadProducida,
+                cantidadPendiente,
+                horasProgramadasActuales = planeacion.HorasProgramadas,
+                horasProgramadasNuevas,
+                horasRestantesActuales = Math.Round(horasRestantesActuales, 4, MidpointRounding.AwayFromZero),
+                horasRestantesNuevas = Math.Round(horasRestantesNuevas, 4, MidpointRounding.AwayFromZero),
+                deltaHoras = Math.Round(deltaHoras, 4, MidpointRounding.AwayFromZero),
+                deltaMinutos,
+                fechaFinActual = planeacion.FechaFinProgramada,
+                fechaFinProyectada,
+                mensaje
+            });
+        }
+        catch (Exception ex)
+        {
+            Response.StatusCode = 500;
+
+            return Json(new
+            {
+                ok = false,
+                mensaje =
+                    "No fue posible calcular la vista previa del cambio de configuración: " +
+                    ex.Message
+            });
+        }
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CambiarConfiguracionCorrida(
-        ProduccionConfiguracionTecnicoPostVm vm)
+    public async Task<IActionResult> CambiarConfiguracionCorrida(ProduccionConfiguracionTecnicoPostVm vm)
     {
         if (!UsuarioEnSesion())
             return RedirectToAction("Login", "Login");
 
         if (vm.EjecucionProduccionID <= 0)
         {
-            TempData["Error"] =
-                "No se recibió correctamente la ejecución de Producción.";
-
+            TempData["Error"] = "No se recibió correctamente la ejecución de Producción.";
             return RedirectToAction(nameof(Index));
         }
 
-        var errorValidacion =
-            ValidarDatosConfiguracionCorrida(
-                vm,
-                requiereMotivo: true);
-
+        var errorValidacion = ValidarDatosConfiguracionCorrida(vm, requiereMotivo: true);
         if (!string.IsNullOrWhiteSpace(errorValidacion))
         {
             TempData["Error"] = errorValidacion;
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = vm.EjecucionProduccionID });
+            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
 
-        await using var cn =
-            new SqlConnection(ConnectionString);
-
+        await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
-
-        await using var tx =
-            (SqlTransaction)await cn.BeginTransactionAsync(
-                IsolationLevel.Serializable);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
         try
         {
-            var contexto =
-                await ObtenerContextoConfiguracionCorridaAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
-
+            var contexto = await ObtenerContextoConfiguracionCorridaAsync(vm.EjecucionProduccionID, cn, tx);
             if (contexto == null)
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No se encontró la ejecución de Producción.";
-
+                TempData["Error"] = "No se encontró la ejecución de Producción.";
                 return RedirectToAction(nameof(Index));
             }
 
-            var usuarioId =
-                ObtenerUsuarioID();
+            var usuarioId = ObtenerUsuarioID();
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
 
-            var permisos =
-                await ObtenerPermisosProduccionUsuarioAsync(
-                    usuarioId,
-                    cn,
-                    tx);
-
-            if (!PuedeModificarConfiguracionCorrida(
-                    permisos,
-                    contexto))
+            if (!PuedeModificarConfiguracionCorrida(permisos, contexto))
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "Solo el Técnico de Producción asignado, el Encargado de Producción o un Administrador pueden cambiar las cavidades y el ciclo real.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Error"] = "Solo el Técnico de Producción asignado, el Encargado de Producción o un Administrador pueden cambiar las cavidades y el ciclo real.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
             if (!EjecucionPermiteConfiguracionCorrida(contexto))
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "La configuración de cavidades y ciclo no puede modificarse porque la ejecución ya no está activa.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Error"] = "La configuración de cavidades y ciclo no puede modificarse porque la ejecución ya no está activa.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
-            var configuracionActual =
-                await ObtenerConfiguracionActualAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
-
+            var configuracionActual = await ObtenerConfiguracionActualAsync(vm.EjecucionProduccionID, cn, tx);
             if (configuracionActual == null)
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "La ejecución todavía no tiene configuración inicial. Primero confirma las cavidades, ciclo y contador base.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Error"] = "La ejecución todavía no tiene configuración inicial. Primero confirma las cavidades, ciclo y contador base.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
-            var mismasCavidades =
-                configuracionActual.CavidadesUsadas ==
-                vm.CavidadesUsadas;
-
-            var mismoCiclo =
-                Math.Abs(
-                    configuracionActual.TiempoCicloSegundos -
-                    vm.TiempoCicloSegundos) < 0.0001m;
+            var mismasCavidades = configuracionActual.CavidadesUsadas == vm.CavidadesUsadas;
+            var mismoCiclo = Math.Abs(configuracionActual.TiempoCicloSegundos - vm.TiempoCicloSegundos) < 0.0001m;
 
             if (mismasCavidades && mismoCiclo)
             {
                 await tx.RollbackAsync();
-
-                TempData["Info"] =
-                    "Las cavidades y el tiempo de ciclo capturados son iguales a la configuración actual.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Info"] = "Las cavidades y el tiempo de ciclo capturados son iguales a la configuración actual.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
-            var ultimaLectura =
-                await ObtenerUltimaLecturaContadorAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
+            var planeacion = await ObtenerContextoRecalculoConfiguracionAsync(contexto.ProgramaProduccionID, vm.EjecucionProduccionID, cn, tx);
+            if (planeacion == null)
+            {
+                await tx.RollbackAsync();
+                TempData["Error"] = "No fue posible recuperar la programación relacionada con esta ejecución.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+            }
 
-            var contadorActual =
-                vm.ContadorMaquinaActual!.Value;
-
-            var huboReinicioContador =
-                ultimaLectura != null &&
-                contadorActual < ultimaLectura.ValorContador;
-
-            var fechaCambio =
-                DateTime.Now;
-
-            /*
-             * Si el contador bajó, significa que físicamente fue
-             * reiniciado en algún momento.
-             *
-             * No asignamos un ContadorFinVigencia menor al inicial.
-             * El reinicio queda explícitamente registrado.
-             */
-            long? contadorFinConfiguracionAnterior =
-                huboReinicioContador
-                    ? null
-                    : contadorActual;
+            var ultimaLectura = await ObtenerUltimaLecturaContadorAsync(vm.EjecucionProduccionID, cn, tx);
+            var contadorActual = vm.ContadorMaquinaActual!.Value;
+            var huboReinicioContador = ultimaLectura != null && contadorActual < ultimaLectura.ValorContador;
+            var fechaCambio = DateTime.Now;
+            long? contadorFinConfiguracionAnterior = huboReinicioContador ? null : contadorActual;
 
             await CerrarConfiguracionActualAsync(
                 configuracionActual.ConfiguracionCorridaID,
@@ -481,35 +701,28 @@ public sealed partial class ProduccionController
                 cn,
                 tx);
 
-            var tecnicoRegistroId =
-                ResolverTecnicoConfiguracion(
-                    permisos,
-                    contexto);
+            var tecnicoRegistroId = ResolverTecnicoConfiguracion(permisos, contexto);
 
-            var nuevaConfiguracionId =
-                await InsertarConfiguracionCorridaAsync(
-                    vm.EjecucionProduccionID,
-                    vm.CavidadesUsadas,
-                    vm.TiempoCicloSegundos,
-                    contadorActual,
-                    fechaCambio,
-                    esConfiguracionInicial: false,
-                    vm.MotivoCambio,
-                    tecnicoRegistroId,
-                    usuarioId,
-                    cn,
-                    tx);
+            var nuevaConfiguracionId = await InsertarConfiguracionCorridaAsync(
+                vm.EjecucionProduccionID,
+                vm.CavidadesUsadas,
+                vm.TiempoCicloSegundos,
+                contadorActual,
+                fechaCambio,
+                esConfiguracionInicial: false,
+                vm.MotivoCambio,
+                tecnicoRegistroId,
+                usuarioId,
+                cn,
+                tx);
 
-            var tipoLectura =
-                huboReinicioContador
-                    ? ProduccionTipoLecturaContador.ReinicioContador
-                    : ProduccionTipoLecturaContador.CambioConfiguracion;
+            var tipoLectura = huboReinicioContador
+                ? ProduccionTipoLecturaContador.ReinicioContador
+                : ProduccionTipoLecturaContador.CambioConfiguracion;
 
-            var motivoReinicio =
-                huboReinicioContador
-                    ? "Se detectó que el contador actual es menor a la última lectura registrada. " +
-                      (vm.MotivoCambio ?? string.Empty)
-                    : null;
+            var motivoReinicio = huboReinicioContador
+                ? "Se detectó que el contador actual es menor a la última lectura registrada. " + (vm.MotivoCambio ?? string.Empty)
+                : null;
 
             await RegistrarLecturaContadorConfiguracionAsync(
                 vm.EjecucionProduccionID,
@@ -525,15 +738,68 @@ public sealed partial class ProduccionController
                 cn,
                 tx);
 
+            var objetivoAnterior = configuracionActual.ObjetivoHoraOperativo;
+            var objetivoNuevo = CalcularObjetivoHoraConfiguracion(vm.TiempoCicloSegundos, vm.CavidadesUsadas);
+            var cantidadPendiente = Math.Max(0, planeacion.CantidadProgramada - planeacion.CantidadProducida);
+            var programasRecorridos = 0;
+            var horasRestantesAnteriores = 0m;
+            var horasRestantesNuevas = 0m;
+            var deltaHoras = 0m;
+            DateTime? nuevoFinProgramado = null;
+
+            if (cantidadPendiente > 0)
+            {
+                if (objetivoAnterior <= 0)
+                    throw new InvalidOperationException("La configuración anterior no tiene un objetivo por hora válido para recalcular el tiempo restante.");
+
+                if (objetivoNuevo <= 0)
+                    throw new InvalidOperationException("La nueva configuración no genera un objetivo por hora válido.");
+
+                horasRestantesAnteriores = cantidadPendiente / (decimal)objetivoAnterior;
+                horasRestantesNuevas = cantidadPendiente / (decimal)objetivoNuevo;
+                deltaHoras = horasRestantesNuevas - horasRestantesAnteriores;
+
+                if (Math.Abs(deltaHoras) >= 0.0001m)
+                {
+                    var horasBase = planeacion.HorasProgramadas > 0
+                        ? planeacion.HorasProgramadas
+                        : horasRestantesAnteriores;
+
+                    var horasProgramadasNuevas = Math.Max(
+                        0.0167m,
+                        Math.Round(horasBase + deltaHoras, 4, MidpointRounding.AwayFromZero));
+
+                    nuevoFinProgramado = _planeacionSecuenciaService.AjustarFechaFinOperativa(
+                        planeacion.FechaFinProgramada,
+                        deltaHoras,
+                        trabajarDomingo: false);
+
+                    var motivoRecalculo =
+                        $"Recalculo automático por cambio de configuración real. " +
+                        $"Cavidades {configuracionActual.CavidadesUsadas} → {vm.CavidadesUsadas}. " +
+                        $"Ciclo {configuracionActual.TiempoCicloSegundos:0.####} → {vm.TiempoCicloSegundos:0.####} s. " +
+                        $"Objetivo {objetivoAnterior} → {objetivoNuevo} pzas/h. " +
+                        $"Cantidad programada {planeacion.CantidadProgramada:N0}. " +
+                        $"Producida {planeacion.CantidadProducida:N0}. " +
+                        $"Pendiente {cantidadPendiente:N0}. " +
+                        $"Fin anterior {planeacion.FechaFinProgramada:dd/MM/yyyy HH:mm}. " +
+                        $"Nuevo fin {nuevoFinProgramado.Value:dd/MM/yyyy HH:mm}. " +
+                        $"Motivo técnico: {vm.MotivoCambio}";
+
+                    programasRecorridos = await _planeacionSecuenciaService.ReacomodarPorCambioDuracionAsync(
+                        contexto.ProgramaProduccionID,
+                        vm.EjecucionProduccionID,
+                        nuevoFinProgramado.Value,
+                        horasProgramadasNuevas,
+                        usuarioId,
+                        motivoRecalculo,
+                        cn,
+                        tx,
+                        trabajarDomingo: false);
+                }
+            }
+
             await tx.CommitAsync();
-
-            var objetivoAnterior =
-                configuracionActual.ObjetivoHoraOperativo;
-
-            var objetivoNuevo =
-                CalcularObjetivoHoraConfiguracion(
-                    vm.TiempoCicloSegundos,
-                    vm.CavidadesUsadas);
 
             var mensaje =
                 $"Configuración actualizada. " +
@@ -541,22 +807,36 @@ public sealed partial class ProduccionController
                 $"{configuracionActual.TiempoCicloSegundos:0.####} → {vm.TiempoCicloSegundos:0.####} s. " +
                 $"Objetivo: {objetivoAnterior:N0} → {objetivoNuevo:N0} pzas/h.";
 
-            if (huboReinicioContador)
+            if (cantidadPendiente > 0)
             {
                 mensaje +=
-                    $" Se detectó reinicio del contador; la nueva base quedó en {contadorActual:N0}.";
+                    $" Pendientes: {cantidadPendiente:N0} pzas. " +
+                    $"Tiempo restante estimado: {horasRestantesAnteriores:0.##} → {horasRestantesNuevas:0.##} h.";
+
+                if (nuevoFinProgramado.HasValue)
+                {
+                    mensaje +=
+                        $" Fin programado: {planeacion.FechaFinProgramada:dd/MM/yyyy HH:mm} → {nuevoFinProgramado.Value:dd/MM/yyyy HH:mm}. " +
+                        $"Programas posteriores recorridos: {programasRecorridos}.";
+                }
+                else
+                {
+                    mensaje += " El rendimiento por hora no cambió, por lo que el calendario permanece igual.";
+                }
             }
             else
             {
-                mensaje +=
-                    $" Contador al cambio: {contadorActual:N0}.";
+                mensaje += " La OF ya no tiene cantidad pendiente, por lo que no fue necesario modificar el calendario.";
             }
+
+            if (huboReinicioContador)
+                mensaje += $" Se detectó reinicio del contador; la nueva base quedó en {contadorActual:N0}.";
+            else
+                mensaje += $" Contador al cambio: {contadorActual:N0}.";
 
             TempData["Success"] = mensaje;
 
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = vm.EjecucionProduccionID });
+            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
         catch (Exception ex)
         {
@@ -572,17 +852,9 @@ public sealed partial class ProduccionController
                 "No fue posible cambiar la configuración real de Producción: " +
                 ex.Message;
 
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = vm.EjecucionProduccionID });
+            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
     }
-
-    // ============================================================
-    // UTILIDAD PARA CARGAR ProduccionDetalleVm
-    //
-    // En el siguiente paso la llamaremos desde Detalle().
-    // ============================================================
     private async Task CargarConfiguracionTiempoRealDetalleAsync(
         ProduccionDetalleVm vm,
         SqlConnection cn,
@@ -1500,18 +1772,47 @@ VALUES
         await cmd.ExecuteNonQueryAsync();
     }
 
-    // ============================================================
-    // PERMISOS
-    //
-    // Técnico:
-    //   puede configurar si es el técnico asignado.
-    //
-    // Encargado / Administrador:
-    //   pueden intervenir como excepción administrativa.
-    //
-    // Operador / Auxiliar / SMED:
-    //   NO pueden cambiar cavidades ni ciclo.
-    // ============================================================
+    private static async Task<ProduccionRecalculoConfiguracionContexto?> ObtenerContextoRecalculoConfiguracionAsync(int programaProduccionId, int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
+    {
+        const string sql = @"
+SELECT TOP(1)
+    ISNULL(pp.CantidadProgramada,0) AS CantidadProgramada,
+    ISNULL(e.CantidadOKTotal,ISNULL(pp.CantidadProducida,0)) AS CantidadProducida,
+    ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
+    ISNULL
+    (
+        pp.FechaFinProgramada,
+        DATEADD
+        (
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,0)*60) AS INT),
+            pp.FechaInicioProgramada
+        )
+    ) AS FechaFinProgramada
+FROM dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+    ON e.EjecucionProduccionID=@EjecucionProduccionID
+   AND e.ProgramaProduccionID=pp.ProgramaProduccionID
+   AND e.Activo=1
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+        cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+
+        await using var rd = await cmd.ExecuteReaderAsync();
+        if (!await rd.ReadAsync())
+            return null;
+
+        return new ProduccionRecalculoConfiguracionContexto
+        {
+            CantidadProgramada = Convert.ToInt32(rd["CantidadProgramada"]),
+            CantidadProducida = Convert.ToInt32(rd["CantidadProducida"]),
+            HorasProgramadas = Convert.ToDecimal(rd["HorasProgramadas"]),
+            FechaFinProgramada = Convert.ToDateTime(rd["FechaFinProgramada"])
+        };
+    }
     private static bool PuedeModificarConfiguracionCorrida(
         ProduccionPermisosUsuario permisos,
         ProduccionConfiguracionCorridaContexto contexto)
@@ -1582,10 +1883,79 @@ VALUES
             contexto.EstatusID ==
                 ProduccionEstatus.Pausado;
     }
+    private static async Task<ProduccionRecalculoConfiguracionContexto?> ObtenerContextoRecalculoConfiguracionLecturaAsync(int programaProduccionId, int ejecucionProduccionId, SqlConnection cn)
+    {
+        if (programaProduccionId <= 0 || ejecucionProduccionId <= 0)
+            return null;
 
-    // ============================================================
-    // VALIDACIONES
-    // ============================================================
+        const string sql = @"
+SELECT TOP(1)
+    ISNULL(pp.CantidadProgramada,0) AS CantidadProgramada,
+    ISNULL(e.CantidadOKTotal,ISNULL(pp.CantidadProducida,0)) AS CantidadProducida,
+    ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
+    ISNULL
+    (
+        pp.FechaFinProgramada,
+        DATEADD
+        (
+            MINUTE,
+            CAST
+            (
+                CEILING(
+                    ISNULL(pp.HorasProgramadas,0) * 60
+                )
+                AS INT
+            ),
+            pp.FechaInicioProgramada
+        )
+    ) AS FechaFinProgramada
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.Produccion_Ejecucion e
+    ON e.EjecucionProduccionID=@EjecucionProduccionID
+   AND e.ProgramaProduccionID=pp.ProgramaProduccionID
+   AND e.Activo=1
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+        await using var cmd =
+            new SqlCommand(sql, cn);
+
+        cmd.Parameters.Add(
+            "@ProgramaProduccionID",
+            SqlDbType.Int).Value =
+            programaProduccionId;
+
+        cmd.Parameters.Add(
+            "@EjecucionProduccionID",
+            SqlDbType.Int).Value =
+            ejecucionProduccionId;
+
+        await using var rd =
+            await cmd.ExecuteReaderAsync();
+
+        if (!await rd.ReadAsync())
+            return null;
+
+        return new ProduccionRecalculoConfiguracionContexto
+        {
+            CantidadProgramada =
+                Convert.ToInt32(
+                    rd["CantidadProgramada"]),
+
+            CantidadProducida =
+                Convert.ToInt32(
+                    rd["CantidadProducida"]),
+
+            HorasProgramadas =
+                Convert.ToDecimal(
+                    rd["HorasProgramadas"]),
+
+            FechaFinProgramada =
+                Convert.ToDateTime(
+                    rd["FechaFinProgramada"])
+        };
+    }
+
     private static string?
         ValidarDatosConfiguracionCorrida(
             ProduccionConfiguracionTecnicoPostVm vm,

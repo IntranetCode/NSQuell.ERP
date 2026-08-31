@@ -781,6 +781,119 @@
             font-size: .84rem;
         }
 
+        .config-preview {
+            display: none;
+            border: 1px solid #d7e2f1;
+            border-left: 5px solid #0d6efd;
+            border-radius: 14px;
+            background: #fff;
+            padding: 14px;
+        }
+
+            .config-preview.is-visible {
+                display: block;
+            }
+
+            .config-preview.is-warning {
+                border-color: #ffe69c;
+                border-left-color: #ffc107;
+                background: #fff9e8;
+            }
+
+            .config-preview.is-success {
+                border-color: #badbcc;
+                border-left-color: #198754;
+                background: #f1fff7;
+            }
+
+            .config-preview.is-neutral {
+                border-color: #c7d7f2;
+                border-left-color: #0d6efd;
+                background: #f4f8ff;
+            }
+
+        .config-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .config-preview-item {
+            border: 1px solid rgba(148,163,184,.25);
+            border-radius: 11px;
+            padding: 9px 10px;
+            background: rgba(255,255,255,.65);
+        }
+
+        .config-preview-label {
+            color: #667085;
+            font-size: .68rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .config-preview-value {
+            color: #102a56;
+            font-size: .95rem;
+            font-weight: 900;
+            margin-top: 2px;
+        }
+
+        .config-preview-impact {
+            margin-top: 10px;
+            font-size: .82rem;
+            font-weight: 800;
+        }
+
+        .config-preview-loading {
+            display: none;
+            color: #667085;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+            .config-preview-loading.is-visible {
+                display: block;
+            }
+
+        @@media (max-width: 576px) {
+            .config-preview-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        html[data-nsq-theme="dark"] .config-preview,
+        html[data-nsq-theme="dark"] .config-preview-item {
+            background: #101a2b;
+            border-color: #2d3e55;
+        }
+
+            html[data-nsq-theme="dark"] .config-preview.is-warning {
+                background: #2b2313;
+                border-color: #76571e;
+            }
+
+            html[data-nsq-theme="dark"] .config-preview.is-success {
+                background: #102a20;
+                border-color: #286446;
+            }
+
+            html[data-nsq-theme="dark"] .config-preview.is-neutral {
+                background: #102b4c;
+                border-color: #28598b;
+            }
+
+        html[data-nsq-theme="dark"] .config-preview-value {
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"] .config-preview-label,
+        html[data-nsq-theme="dark"] .config-preview-loading {
+            color: #9aa9bd;
+        }
+
         .config-history {
             max-height: 280px;
             overflow-y: auto;
@@ -2175,6 +2288,69 @@
                                             </div>
                                         </div>
 
+                                            @if (tieneConfiguracionCorrida)
+                                            {
+                                                <div class="col-12">
+                                                    <div class="config-preview-loading" data-config-preview-loading>
+                                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                                        Calculando impacto en la programación...
+                                                    </div>
+
+                                                    <div class="config-preview" data-config-preview>
+                                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                                            <div>
+                                                                <div class="data-label">Vista previa del cambio</div>
+                                                                <div class="fw-bold mt-1" data-config-preview-title>
+                                                                    Impacto estimado en la OF
+                                                                </div>
+                                                            </div>
+                                                            <span class="badge bg-secondary" data-config-preview-badge>
+                                                                Sin cambios
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="config-preview-grid">
+                                                            <div class="config-preview-item">
+                                                                <div class="config-preview-label">Objetivo</div>
+                                                                <div class="config-preview-value" data-config-preview-objetivo>
+                                                                    -
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="config-preview-item">
+                                                                <div class="config-preview-label">Piezas pendientes</div>
+                                                                <div class="config-preview-value" data-config-preview-pendiente>
+                                                                    -
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="config-preview-item">
+                                                                <div class="config-preview-label">Tiempo restante</div>
+                                                                <div class="config-preview-value" data-config-preview-tiempo>
+                                                                    -
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="config-preview-item">
+                                                                <div class="config-preview-label">Fin programado</div>
+                                                                <div class="config-preview-value" data-config-preview-fin>
+                                                                    -
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="config-preview-impact" data-config-preview-impact>
+                                                            -
+                                                        </div>
+
+                                                        <div class="muted-small mt-2">
+                                                            <i class="bi bi-info-circle me-1"></i>
+                                                            Esta es solo una simulación. El calendario no cambia hasta aplicar la nueva configuración.
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+
                                         <div class="col-12">
                                             <label class="form-label" for="MotivoCambioConfiguracion">
                                                 @(tieneConfiguracionCorrida ? "Motivo del cambio *" : "Observaciones")
@@ -3344,109 +3520,396 @@
                 });
             });
 
-            document.querySelectorAll('form[data-config-form]').forEach(function (form) {
-                const cavidades = form.querySelector('[data-config-cavidades]');
-                const ciclo = form.querySelector('[data-config-ciclo]');
-                const contador = form.querySelector('[data-config-contador]');
-                const objetivo = form.querySelector('[data-config-objetivo]');
-                const validacion = form.querySelector('[data-config-validation]');
-                const motivo = form.querySelector('textarea[name="MotivoCambio"]');
-                const esCambio = form.action && form.action.toLowerCase().includes('cambiarconfiguracioncorrida');
+                    document.querySelectorAll('form[data-config-form]').forEach(function (form) {
+            const cavidades = form.querySelector('[data-config-cavidades]');
+            const ciclo = form.querySelector('[data-config-ciclo]');
+            const contador = form.querySelector('[data-config-contador]');
+            const objetivo = form.querySelector('[data-config-objetivo]');
+            const validacion = form.querySelector('[data-config-validation]');
+            const motivo = form.querySelector('textarea[name="MotivoCambio"]');
+            const preview = form.querySelector('[data-config-preview]');
+            const previewLoading = form.querySelector('[data-config-preview-loading]');
+            const previewTitle = form.querySelector('[data-config-preview-title]');
+            const previewBadge = form.querySelector('[data-config-preview-badge]');
+            const previewObjetivo = form.querySelector('[data-config-preview-objetivo]');
+            const previewPendiente = form.querySelector('[data-config-preview-pendiente]');
+            const previewTiempo = form.querySelector('[data-config-preview-tiempo]');
+            const previewFin = form.querySelector('[data-config-preview-fin]');
+            const previewImpacto = form.querySelector('[data-config-preview-impact]');
+            const esCambio = form.action && form.action.toLowerCase().includes('cambiarconfiguracioncorrida');
+            const ejecucionProduccionId = @e.EjecucionProduccionID;
+            const previewUrl = '@Url.Action("PrevisualizarCambioConfiguracion", "Produccion")';
+            let temporizadorPreview = null;
+            let solicitudPreviewNumero = 0;
 
-                function valorConDefault(input) {
-                    if (!input) return '';
+            function valorConDefault(input) {
+                if (!input) return '';
+                const actual = (input.value || '').trim();
+                if (actual) return actual;
+                return (input.dataset.defaultValue || '').trim();
+            }
 
-                    const actual = (input.value || '').trim();
-                    if (actual) return actual;
+            function numeroFlexible(value) {
+                if (!value) return NaN;
+                return Number(String(value).replace(',', '.'));
+            }
 
-                    return (input.dataset.defaultValue || '').trim();
-                }
+            function mostrarError(mensaje) {
+                if (!validacion) return;
+                validacion.textContent = mensaje || '';
+                validacion.classList.toggle('is-visible', !!mensaje);
+            }
 
-                function numeroFlexible(value) {
-                    if (!value) return NaN;
-                    return Number(String(value).replace(',', '.'));
-                }
+            function numero(value, decimales = 0) {
+                const n = Number(value);
+                if (!Number.isFinite(n)) return '-';
 
-                function mostrarError(mensaje) {
-                    if (!validacion) return;
-                    validacion.textContent = mensaje || '';
-                    validacion.classList.toggle('is-visible', !!mensaje);
-                }
-
-                function recalcularObjetivo() {
-                    if (!objetivo) return;
-
-                    const cav = numeroFlexible(valorConDefault(cavidades));
-                    const cic = numeroFlexible(valorConDefault(ciclo));
-
-                    if (!Number.isFinite(cav) || cav <= 0 ||
-                        !Number.isFinite(cic) || cic <= 0) {
-                        objetivo.textContent = 'Objetivo estimado: pendiente de datos';
-                        return;
-                    }
-
-                    const calculado = (3600 / cic) * cav;
-                    objetivo.textContent =
-                        'Objetivo estimado: ' +
-                        Math.round(calculado).toLocaleString('es-MX') +
-                        ' pzas/h · (3600 / ' + cic.toLocaleString('es-MX') + ') × ' +
-                        cav.toLocaleString('es-MX');
-                }
-
-                [cavidades, ciclo].forEach(function (input) {
-                    if (!input) return;
-                    input.addEventListener('input', recalcularObjetivo);
-                    input.addEventListener('blur', recalcularObjetivo);
+                return n.toLocaleString('es-MX', {
+                    minimumFractionDigits: decimales,
+                    maximumFractionDigits: decimales
                 });
+            }
 
-                form.addEventListener('submit', function (event) {
-                    mostrarError('');
+            function fechaHora(value) {
+                if (!value) return '-';
 
-                    if (cavidades && !(cavidades.value || '').trim()) {
-                        cavidades.value = cavidades.dataset.defaultValue || '';
+                const fecha = new Date(value);
+
+                if (Number.isNaN(fecha.getTime()))
+                    return '-';
+
+                return fecha.toLocaleString('es-MX', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+            }
+
+            function recalcularObjetivo() {
+                if (!objetivo) return;
+
+                const cav = numeroFlexible(valorConDefault(cavidades));
+                const cic = numeroFlexible(valorConDefault(ciclo));
+
+                if (!Number.isFinite(cav) || cav <= 0 ||
+                    !Number.isFinite(cic) || cic <= 0) {
+                    objetivo.textContent = 'Objetivo estimado: pendiente de datos';
+                    return;
+                }
+
+                const calculado = (3600 / cic) * cav;
+
+                objetivo.textContent =
+                    'Objetivo estimado: ' +
+                    Math.round(calculado).toLocaleString('es-MX') +
+                    ' pzas/h · (3600 / ' +
+                    cic.toLocaleString('es-MX') +
+                    ') × ' +
+                    cav.toLocaleString('es-MX');
+            }
+
+            function limpiarPreview() {
+                if (!preview) return;
+
+                preview.classList.remove(
+                    'is-visible',
+                    'is-warning',
+                    'is-success',
+                    'is-neutral'
+                );
+
+                if (previewLoading)
+                    previewLoading.classList.remove('is-visible');
+            }
+
+            function mostrarPreviewError(mensaje) {
+                if (!preview) return;
+
+                if (previewLoading)
+                    previewLoading.classList.remove('is-visible');
+
+                preview.classList.remove(
+                    'is-warning',
+                    'is-success'
+                );
+
+                preview.classList.add(
+                    'is-visible',
+                    'is-neutral'
+                );
+
+                if (previewTitle)
+                    previewTitle.textContent = 'No fue posible calcular la vista previa';
+
+                if (previewBadge) {
+                    previewBadge.className = 'badge bg-secondary';
+                    previewBadge.textContent = 'Sin cálculo';
+                }
+
+                if (previewObjetivo)
+                    previewObjetivo.textContent = '-';
+
+                if (previewPendiente)
+                    previewPendiente.textContent = '-';
+
+                if (previewTiempo)
+                    previewTiempo.textContent = '-';
+
+                if (previewFin)
+                    previewFin.textContent = '-';
+
+                if (previewImpacto)
+                    previewImpacto.textContent = mensaje || 'No disponible.';
+            }
+
+            function pintarPreview(data) {
+                if (!preview)
+                    return;
+
+                if (previewLoading)
+                    previewLoading.classList.remove('is-visible');
+
+                preview.classList.remove(
+                    'is-warning',
+                    'is-success',
+                    'is-neutral'
+                );
+
+                preview.classList.add('is-visible');
+
+                if (data.extiendeProgramacion)
+                    preview.classList.add('is-warning');
+                else if (data.reduceProgramacion)
+                    preview.classList.add('is-success');
+                else
+                    preview.classList.add('is-neutral');
+
+                if (previewTitle) {
+                    if (data.extiendeProgramacion)
+                        previewTitle.textContent = 'La OF terminará después de lo programado';
+                    else if (data.reduceProgramacion)
+                        previewTitle.textContent = 'La OF terminará antes de lo programado';
+                    else
+                        previewTitle.textContent = 'La duración de la OF permanece prácticamente igual';
+                }
+
+                if (previewBadge) {
+                    if (data.extiendeProgramacion) {
+                        previewBadge.className = 'badge bg-warning text-dark';
+                        previewBadge.textContent = '+' + Math.abs(Number(data.deltaMinutos || 0)) + ' min';
                     }
-
-                    if (ciclo && !(ciclo.value || '').trim()) {
-                        ciclo.value = ciclo.dataset.defaultValue || '';
+                    else if (data.reduceProgramacion) {
+                        previewBadge.className = 'badge bg-success';
+                        previewBadge.textContent = '-' + Math.abs(Number(data.deltaMinutos || 0)) + ' min';
                     }
+                    else {
+                        previewBadge.className = 'badge bg-secondary';
+                        previewBadge.textContent = 'Sin impacto';
+                    }
+                }
 
-                    const cav = numeroFlexible(cavidades?.value);
-                    const cic = numeroFlexible(ciclo?.value);
-                    const cont = numeroFlexible(contador?.value);
+                if (previewObjetivo) {
+                    previewObjetivo.textContent =
+                        numero(data.configuracionActual?.objetivoHora) +
+                        ' → ' +
+                        numero(data.configuracionNueva?.objetivoHora) +
+                        ' pzas/h';
+                }
 
-                    if (!Number.isFinite(cav) || cav <= 0) {
-                        event.preventDefault();
-                        mostrarError('No existe un valor de cavidades por defecto. El técnico debe capturar cuántas cavidades se utilizarán.');
-                        cavidades?.focus();
+                if (previewPendiente) {
+                    previewPendiente.textContent =
+                        numero(data.cantidadPendiente) +
+                        ' pzas';
+                }
+
+                if (previewTiempo) {
+                    previewTiempo.textContent =
+                        numero(data.horasRestantesActuales, 2) +
+                        ' → ' +
+                        numero(data.horasRestantesNuevas, 2) +
+                        ' h';
+                }
+
+                if (previewFin) {
+                    previewFin.textContent =
+                        fechaHora(data.fechaFinActual) +
+                        ' → ' +
+                        fechaHora(data.fechaFinProyectada);
+                }
+
+                if (previewImpacto) {
+                    previewImpacto.innerHTML = '';
+
+                    const icono = document.createElement('i');
+                    icono.className =
+                        data.extiendeProgramacion
+                            ? 'bi bi-exclamation-triangle-fill me-1 text-warning'
+                            : data.reduceProgramacion
+                                ? 'bi bi-check-circle-fill me-1 text-success'
+                                : 'bi bi-info-circle-fill me-1 text-primary';
+
+                    previewImpacto.appendChild(icono);
+                    previewImpacto.appendChild(
+                        document.createTextNode(data.mensaje || '')
+                    );
+                }
+            }
+
+            async function consultarPreview() {
+                if (!esCambio || !preview)
+                    return;
+
+                const cav = numeroFlexible(valorConDefault(cavidades));
+                const cicTexto = valorConDefault(ciclo);
+                const cic = numeroFlexible(cicTexto);
+
+                if (!Number.isFinite(cav) || cav <= 0 ||
+                    !Number.isFinite(cic) || cic <= 0) {
+                    limpiarPreview();
+                    return;
+                }
+
+                const numeroSolicitud = ++solicitudPreviewNumero;
+
+                if (previewLoading)
+                    previewLoading.classList.add('is-visible');
+
+                try {
+                    const parametros = new URLSearchParams({
+                        ejecucionProduccionId: ejecucionProduccionId.toString(),
+                        cavidadesUsadas: Math.trunc(cav).toString(),
+                        tiempoCicloSegundos: cicTexto
+                    });
+
+                    const response = await fetch(
+                        previewUrl + '?' + parametros.toString(),
+                        {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json'
+                            },
+                            cache: 'no-store'
+                        });
+
+                    const data = await response.json();
+
+                    if (numeroSolicitud !== solicitudPreviewNumero)
+                        return;
+
+                    if (!data || data.ok !== true) {
+                        mostrarPreviewError(
+                            data?.mensaje ||
+                            'No fue posible calcular el impacto.'
+                        );
                         return;
                     }
 
-                    if (!Number.isFinite(cic) || cic <= 0) {
-                        event.preventDefault();
-                        mostrarError('No existe un tiempo de ciclo válido por defecto. El técnico debe capturar el ciclo real en segundos.');
-                        ciclo?.focus();
+                    pintarPreview(data);
+                }
+                catch (error) {
+                    if (numeroSolicitud !== solicitudPreviewNumero)
                         return;
-                    }
 
-                    if (!Number.isFinite(cont) || cont < 0) {
-                        event.preventDefault();
-                        mostrarError('Captura el contador actual de la máquina. Este dato no tiene un valor seguro por defecto.');
-                        contador?.focus();
-                        return;
-                    }
+                    mostrarPreviewError(
+                        'No fue posible consultar el impacto en el calendario.'
+                    );
 
-                    if (esCambio && (!motivo || !(motivo.value || '').trim())) {
-                        event.preventDefault();
-                        mostrarError('Para cambiar una configuración activa debes indicar el motivo del cambio.');
-                        motivo?.focus();
-                        return;
-                    }
+                    console.warn(
+                        'Error al previsualizar cambio de configuración:',
+                        error
+                    );
+                }
+            }
 
+            function programarPreview() {
+                if (!esCambio || !preview)
+                    return;
+
+                if (temporizadorPreview)
+                    window.clearTimeout(temporizadorPreview);
+
+                temporizadorPreview =
+                    window.setTimeout(
+                        consultarPreview,
+                        350
+                    );
+            }
+
+            [cavidades, ciclo].forEach(function (input) {
+                if (!input) return;
+
+                input.addEventListener('input', function () {
                     recalcularObjetivo();
+                    programarPreview();
                 });
+
+                input.addEventListener('blur', function () {
+                    recalcularObjetivo();
+                    programarPreview();
+                });
+            });
+
+            form.addEventListener('submit', function (event) {
+                mostrarError('');
+
+                if (cavidades && !(cavidades.value || '').trim())
+                    cavidades.value = cavidades.dataset.defaultValue || '';
+
+                if (ciclo && !(ciclo.value || '').trim())
+                    ciclo.value = ciclo.dataset.defaultValue || '';
+
+                const cav = numeroFlexible(cavidades?.value);
+                const cic = numeroFlexible(ciclo?.value);
+                const cont = numeroFlexible(contador?.value);
+
+                if (!Number.isFinite(cav) || cav <= 0) {
+                    event.preventDefault();
+                    mostrarError(
+                        'No existe un valor de cavidades por defecto. El técnico debe capturar cuántas cavidades se utilizarán.'
+                    );
+                    cavidades?.focus();
+                    return;
+                }
+
+                if (!Number.isFinite(cic) || cic <= 0) {
+                    event.preventDefault();
+                    mostrarError(
+                        'No existe un tiempo de ciclo válido por defecto. El técnico debe capturar el ciclo real en segundos.'
+                    );
+                    ciclo?.focus();
+                    return;
+                }
+
+                if (!Number.isFinite(cont) || cont < 0) {
+                    event.preventDefault();
+                    mostrarError(
+                        'Captura el contador actual de la máquina. Este dato no tiene un valor seguro por defecto.'
+                    );
+                    contador?.focus();
+                    return;
+                }
+
+                if (esCambio && (!motivo || !(motivo.value || '').trim())) {
+                    event.preventDefault();
+                    mostrarError(
+                        'Para cambiar una configuración activa debes indicar el motivo del cambio.'
+                    );
+                    motivo?.focus();
+                    return;
+                }
 
                 recalcularObjetivo();
             });
+
+            recalcularObjetivo();
+
+            if (esCambio)
+                programarPreview();
+        });
+           
         });
     </script>
     @if (Model.MostrarAvisoMonitoreoTurno && monitoreoTurno != null)

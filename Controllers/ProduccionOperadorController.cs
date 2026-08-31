@@ -1,5 +1,6 @@
 ﻿using ERP.NSQuell.Models;
 using ERP.NSQuell.Servicios.Almacen;
+using ERP.NSQuell.Servicios.Planeacion;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -14,10 +15,14 @@ namespace ERP.NSQuell.Controllers
     public sealed partial class ProduccionOperadorController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly IPlaneacionSecuenciaService _planeacionSecuenciaService;
 
-        public ProduccionOperadorController(IConfiguration configuration)
+        public ProduccionOperadorController(
+            IConfiguration configuration,
+            IPlaneacionSecuenciaService planeacionSecuenciaService)
         {
             _configuration = configuration;
+            _planeacionSecuenciaService = planeacionSecuenciaService;
         }
 
         private string ConnectionString =>
@@ -1167,16 +1172,21 @@ WHERE ParoID = @ParoID
                 }
 
                 /*
-                 * Paro corto: al cerrarlo ya conocemos toda la interrupción.
-                 * Se recorre el fin programado por esos minutos.
-                 */
-                await DesplazarFinProgramadoParoCortoAsync(
-                    ejecucion.ProgramaProduccionID,
-                    ejecucionProduccionId,
-                    duracionMinutos,
-                    usuarioId,
-                    cn,
-                    tx);
+    * Paro corto:
+    * al cerrarlo conocemos la interrupción completa.
+    * Se extiende la OF actual y se recorre toda la secuencia posterior
+    * respetando máquina, molde y calendario operativo.
+    */
+                var programasRecorridos =
+                    await _planeacionSecuenciaService.ReacomodarPorInterrupcionAsync(
+                        ejecucion.ProgramaProduccionID,
+                        ejecucionProduccionId,
+                        fechaInicioParo,
+                        ahora,
+                        usuarioId,
+                        cn,
+                        tx,
+                        trabajarDomingo: false);
 
                 await CambiarEstatusEjecucionAsync(
                     ejecucionProduccionId,
@@ -1195,7 +1205,10 @@ WHERE ParoID = @ParoID
                 await tx.CommitAsync();
 
                 TempData["Success"] =
-                    "Paro cerrado correctamente. La producción continúa en serie.";
+     "Paro cerrado correctamente. La producción continúa en serie. " +
+     "Se recalculó la OF afectada y se recorrieron " +
+     programasRecorridos +
+     " programa(s) posteriores por secuencia de máquina y/o conflicto de molde.";
 
                 return RedirectToAction(
                     nameof(Captura),
@@ -6520,68 +6533,7 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                         rd["EstatusID"])
             };
         }
-        private async Task DesplazarFinProgramadoParoCortoAsync(
-    int programaProduccionId,
-    int ejecucionProduccionId,
-    int minutosInterrupcion,
-    int usuarioId,
-    SqlConnection cn,
-    SqlTransaction tx)
-        {
-            if (minutosInterrupcion <= 0)
-                return;
-
-            const string sql = @"
-UPDATE dbo.Planeacion_ProgramaProduccion
-SET
-    FechaFinProgramada =
-        CASE
-            WHEN FechaFinProgramada IS NULL
-                THEN FechaFinProgramada
-            ELSE DATEADD(MINUTE, @MinutosInterrupcion, FechaFinProgramada)
-        END,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = GETDATE()
-WHERE ProgramaProduccionID = @ProgramaProduccionID
-  AND Activo = 1;
-
-UPDATE dbo.Calidad_Inspecciones
-SET
-    FechaFinProgramada =
-        CASE
-            WHEN FechaFinProgramada IS NULL
-                THEN FechaFinProgramada
-            ELSE DATEADD(MINUTE, @MinutosInterrupcion, FechaFinProgramada)
-        END,
-    UsuarioModificacionID = @UsuarioID,
-    FechaModificacion = GETDATE()
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND ISNULL(Estado, N'') <> N'CERRADA';";
-
-            await using var cmd = new SqlCommand(sql, cn, tx);
-
-            cmd.Parameters.Add(
-                "@ProgramaProduccionID",
-                SqlDbType.Int).Value =
-                programaProduccionId;
-
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
-            cmd.Parameters.Add(
-                "@MinutosInterrupcion",
-                SqlDbType.Int).Value =
-                minutosInterrupcion;
-
-            cmd.Parameters.Add(
-                "@UsuarioID",
-                SqlDbType.Int).Value =
-                usuarioId;
-
-            await cmd.ExecuteNonQueryAsync();
-        }
+       
 
         private static void AsignarHoraSugerida(
             ProduccionOperadorTabletVm vm)

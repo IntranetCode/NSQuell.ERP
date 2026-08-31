@@ -1,12 +1,4 @@
-﻿// Usings para nuestro mÃ³dulo
-//ConfiguraciÃ³n y conexiÃ³n a base de datos derarrollo y productivo
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Server.IIS;
-using Microsoft.EntityFrameworkCore;
-using Org.BouncyCastle.Crypto;
+﻿
 using ERP.NSQuell.Areas.AdminUsuarios.Interfaces;
 using ERP.NSQuell.Areas.AdminUsuarios.Services;
 using ERP.NSQuell.Controllers;
@@ -15,6 +7,14 @@ using ERP.NSQuell.Models;
 using ERP.NSQuell.Models.Opciones;
 //using ProyectoMatrix.Services;
 using ERP.NSQuell.Servicios;
+using ERP.NSQuell.Servicios.Planeacion;
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.IIS;
+using Microsoft.EntityFrameworkCore;
+using Org.BouncyCastle.Crypto;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -127,7 +127,7 @@ builder.Services.AddScoped<BitacoraService>();
 
 builder.Services.AddScoped<RutaNas>();
 
-
+builder.Services.AddScoped<IPlaneacionSecuenciaService, PlaneacionSecuenciaService>();
 
 builder.Services.AddDistributedMemoryCache();
 
