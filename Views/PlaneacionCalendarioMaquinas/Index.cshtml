@@ -162,6 +162,11 @@
         ?? new List<ERP.NSQuell.Controllers.SolicitudReprogramacionCalendarioVm>();
 
     var totalSolicitudesReprogramacion = solicitudesReprogramacion.Count;
+    var hayInterrupcionesActivas = ViewBag.HayInterrupcionesActivas is bool hay && hay;
+    var totalInterrupcionesActivas = ViewBag.TotalInterrupcionesActivas is int totalInterrupciones ? totalInterrupciones : 0;
+    var fechaCalculoProyeccion = ViewBag.FechaCalculoProyeccion is DateTime fechaCalculo ? fechaCalculo : Model.Ahora;
+
+
 }
 
 @section Scripts {
@@ -222,20 +227,11 @@
                 return;
             }
 
-            /*
-             * En pantalla completa mantenemos renderizado nativo.
-             * Si el contenido no cabe verticalmente,
-             * el scroll queda disponible en vez de reducir
-             * la imagen mediante transform.
-             */
+           
             timelineScroll.style.overflowX = 'auto';
             timelineScroll.style.overflowY = 'auto';
 
-            /*
-             * Automáticamente aprovechamos el modo compacto
-             * solamente para reducir espacios, alturas y textos,
-             * pero SIN escalar los píxeles.
-             */
+          
             calendarKiosk.classList.add('kiosk-compact');
 
             if (btnCompactarCalendario) {
@@ -891,6 +887,494 @@
     </script>
 
     <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const endpointProyeccion =
+                '@Url.Action("ProyeccionInterrupcionesActivas", "PlaneacionCalendarioMaquinas")';
+
+            const inicioPeriodoProyeccion =
+                new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+
+            const finPeriodoProyeccion =
+                new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+
+            const totalMinutosProyeccion =
+                Math.max(
+                    1,
+                    (finPeriodoProyeccion - inicioPeriodoProyeccion) / 60000);
+
+            const panel =
+                document.getElementById(
+                    'proyeccionInterrupcionesPanel');
+
+            const totalElement =
+                document.getElementById(
+                    'proyeccionInterrupcionesTotal');
+
+            const fechaElement =
+                document.getElementById(
+                    'proyeccionInterrupcionesFecha');
+
+            const domingo =
+                document.getElementById(
+                    'trabajarDomingoCalendario');
+
+            let consultando = false;
+
+            function parseFecha(value) {
+                if (!value)
+                    return null;
+
+                const fecha =
+                    new Date(value);
+
+                if (Number.isNaN(fecha.getTime()))
+                    return null;
+
+                return fecha;
+            }
+
+            function textoFecha(value) {
+                const fecha =
+                    value instanceof Date
+                        ? value
+                        : parseFecha(value);
+
+                if (!fecha)
+                    return '-';
+
+                const pad =
+                    value =>
+                        String(value).padStart(2, '0');
+
+                return
+                    `${pad(fecha.getDate())}/` +
+                    `${pad(fecha.getMonth() + 1)}/` +
+                    `${fecha.getFullYear()} ` +
+                    `${pad(fecha.getHours())}:` +
+                    `${pad(fecha.getMinutes())}`;
+            }
+
+            function posicionarBloque(
+                bloque,
+                inicio,
+                fin) {
+
+                if (!bloque ||
+                    !inicio ||
+                    !fin) {
+                    return;
+                }
+
+                if (fin <= inicioPeriodoProyeccion ||
+                    inicio >= finPeriodoProyeccion) {
+
+                    bloque.style.display =
+                        'none';
+
+                    return;
+                }
+
+                bloque.style.display =
+                    '';
+
+                const inicioVisible =
+                    inicio < inicioPeriodoProyeccion
+                        ? inicioPeriodoProyeccion
+                        : inicio;
+
+                const finVisible =
+                    fin > finPeriodoProyeccion
+                        ? finPeriodoProyeccion
+                        : fin;
+
+                const left =
+                    (inicioVisible -
+                     inicioPeriodoProyeccion) /
+                    60000 /
+                    totalMinutosProyeccion *
+                    100;
+
+                const width =
+                    Math.max(
+                        .35,
+                        (finVisible -
+                         inicioVisible) /
+                        60000 /
+                        totalMinutosProyeccion *
+                        100);
+
+                bloque.style.left =
+                    `${left}%`;
+
+                bloque.style.width =
+                    `${width}%`;
+            }
+
+            function limpiarProyeccion() {
+                document
+                    .querySelectorAll(
+                        '.block[data-programa-id]')
+                    .forEach(bloque => {
+
+                        const inicioOficial =
+                            parseFecha(
+                                bloque.dataset
+                                    .inicioOficial);
+
+                        const finOficial =
+                            parseFecha(
+                                bloque.dataset
+                                    .finOficial);
+
+                        posicionarBloque(
+                            bloque,
+                            inicioOficial,
+                            finOficial);
+
+                        bloque.classList.remove(
+                            'has-live-projection',
+                            'projection-root',
+                            'projection-shifted');
+
+                        bloque.dataset
+                            .inicioProyectado = '';
+
+                        bloque.dataset
+                            .finProyectado = '';
+
+                        const indicador =
+                            bloque.querySelector(
+                                '[data-projection-indicator]');
+
+                        if (indicador) {
+                            indicador
+                                .classList
+                                .add('d-none');
+                        }
+
+                        const linea =
+                            bloque.querySelector(
+                                '[data-projection-line]');
+
+                        if (linea) {
+                            linea
+                                .classList
+                                .add('d-none');
+
+                            linea.textContent =
+                                '';
+                        }
+
+                        const programaId =
+                            bloque.dataset
+                                .programaId;
+
+                        const modal =
+                            document.querySelector(
+                                `[data-projection-modal="${programaId}"]`);
+
+                        if (modal) {
+                            modal
+                                .classList
+                                .add('d-none');
+                        }
+                    });
+            }
+
+            function actualizarPanel(data) {
+                if (!panel)
+                    return;
+
+                const total =
+                    Number(
+                        data?.totalInterrupcionesActivas ||
+                        0);
+
+                panel.classList.toggle(
+                    'd-none',
+                    total <= 0);
+
+                if (totalElement) {
+                    totalElement.textContent =
+                        String(total);
+                }
+
+                if (fechaElement) {
+                    fechaElement.textContent =
+                        data?.fechaCalculo
+                            ? textoFecha(
+                                data.fechaCalculo)
+                            : '-';
+                }
+            }
+
+            function aplicarPrograma(
+                programa) {
+
+                const programaId =
+                    Number(
+                        programa
+                            ?.programaProduccionID ||
+                        0);
+
+                if (!programaId)
+                    return;
+
+                const bloque =
+                    document.querySelector(
+                        `.block[data-programa-id="${programaId}"]`);
+
+                if (!bloque)
+                    return;
+
+                const inicio =
+                    parseFecha(
+                        programa
+                            .inicioProyectado);
+
+                const fin =
+                    parseFecha(
+                        programa
+                            .finProyectado);
+
+                if (!inicio ||
+                    !fin) {
+                    return;
+                }
+
+                posicionarBloque(
+                    bloque,
+                    inicio,
+                    fin);
+
+                bloque.dataset
+                    .inicioProyectado =
+                    programa.inicioProyectado ||
+                    '';
+
+                bloque.dataset
+                    .finProyectado =
+                    programa.finProyectado ||
+                    '';
+
+                bloque.classList.add(
+                    'has-live-projection');
+
+                const esRaiz =
+                    programa
+                        .esProgramaRaizInterrupcion ===
+                    true;
+
+                bloque.classList.toggle(
+                    'projection-root',
+                    esRaiz);
+
+                bloque.classList.toggle(
+                    'projection-shifted',
+                    !esRaiz);
+
+                const minutos =
+                    Number(
+                        esRaiz
+                            ? programa
+                                .minutosImpactoInterrupcion
+                            : programa
+                                .minutosDesplazamiento ||
+                              0);
+
+                const indicador =
+                    bloque.querySelector(
+                        '[data-projection-indicator]');
+
+                if (indicador) {
+                    indicador
+                        .classList
+                        .remove('d-none');
+
+                    indicador.innerHTML =
+                        esRaiz
+                            ? `<i class="fa-solid fa-pause"></i><span>PARO +${minutos} min</span>`
+                            : `<i class="fa-solid fa-clock-rotate-left"></i><span>PROY +${minutos} min</span>`;
+                }
+
+                const linea =
+                    bloque.querySelector(
+                        '[data-projection-line]');
+
+                if (linea) {
+                    linea
+                        .classList
+                        .remove('d-none');
+
+                    linea.textContent =
+                        esRaiz
+                            ? `Fin proyectado: ${textoFecha(fin)}`
+                            : `Proyección: ${textoFecha(inicio)} - ${textoFecha(fin)}`;
+                }
+
+                const modal =
+                    document.querySelector(
+                        `[data-projection-modal="${programaId}"]`);
+
+                if (!modal)
+                    return;
+
+                modal
+                    .classList
+                    .remove('d-none');
+
+                const tipo =
+                    modal.querySelector(
+                        '[data-projection-modal-tipo]');
+
+                const motivo =
+                    modal.querySelector(
+                        '[data-projection-modal-motivo]');
+
+                const inicioModal =
+                    modal.querySelector(
+                        '[data-projection-modal-inicio]');
+
+                const finModal =
+                    modal.querySelector(
+                        '[data-projection-modal-fin]');
+
+                const impacto =
+                    modal.querySelector(
+                        '[data-projection-modal-impacto]');
+
+                if (tipo) {
+                    tipo.textContent =
+                        esRaiz
+                            ? 'Interrupción activa en esta OF'
+                            : 'Impacto de una interrupción anterior';
+                }
+
+                if (motivo) {
+                    motivo.textContent =
+                        programa.motivoParo ||
+                        (
+                            esRaiz
+                                ? 'Paro de Producción'
+                                : 'Recorrido por secuencia de máquina / molde'
+                        );
+                }
+
+                if (inicioModal) {
+                    inicioModal.textContent =
+                        textoFecha(inicio);
+                }
+
+                if (finModal) {
+                    finModal.textContent =
+                        textoFecha(fin);
+                }
+
+                if (impacto) {
+                    impacto.textContent =
+                        `+${minutos} min`;
+                }
+            }
+
+            async function actualizar() {
+                if (consultando)
+                    return;
+
+                consultando = true;
+
+                try {
+                    const parametros =
+                        new URLSearchParams(
+                            {
+                                rangoInicio:
+                                    '@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")',
+
+                                rangoFin:
+                                    '@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")',
+
+                                trabajarDomingo:
+                                    (
+                                        !!domingo?.checked
+                                    ).toString()
+                            });
+
+                    const response =
+                        await fetch(
+                            `${endpointProyeccion}?${parametros.toString()}`,
+                            {
+                                method: 'GET',
+                                headers: {
+                                    'Accept':
+                                        'application/json'
+                                },
+                                cache: 'no-store'
+                            });
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP ${response.status}`);
+                    }
+
+                    const data =
+                        await response.json();
+
+                    if (!data?.ok) {
+                        if (data?.sesionExpirada)
+                            return;
+
+                        throw new Error(
+                            data?.mensaje ||
+                            'No fue posible calcular la proyección.');
+                    }
+
+                    limpiarProyeccion();
+                    actualizarPanel(data);
+
+                    (
+                        data.programas ||
+                        []
+                    ).forEach(
+                        aplicarPrograma);
+                }
+                catch (error) {
+                    console.warn(
+                        'No fue posible actualizar la proyección de interrupciones:',
+                        error);
+                }
+                finally {
+                    consultando = false;
+                }
+            }
+
+            actualizar();
+
+            const timer =
+                window.setInterval(
+                    actualizar,
+                    30000);
+
+            domingo?.addEventListener(
+                'change',
+                actualizar);
+
+            document.addEventListener(
+                'visibilitychange',
+                function () {
+                    if (!document.hidden) {
+                        actualizar();
+                    }
+                });
+
+            window.addEventListener(
+                'beforeunload',
+                function () {
+                    window.clearInterval(
+                        timer);
+                });
+        });
+    </script>
+
+    <script>
     // NSQ_CAMBIO_OPERADOR_CALENDARIO_V1
     document.addEventListener('DOMContentLoaded', function () {
         if (!modoProduccion) return;
@@ -1171,8 +1655,93 @@
         .production-calendar-readonly .calendar-status.success {
             border-color: rgba(34, 197, 94, .35);
             background: rgba(34, 197, 94, .08);
-        }    </style>
-}
+        }
+
+
+        .projection-alert-panel {
+            border: 1px solid rgba(220,53,69,.35);
+            background: rgba(220,53,69,.07);
+            border-radius: 16px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 5px 18px rgba(120,24,35,.08);
+        }
+
+        .projection-alert-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: #dc3545;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 42px;
+        }
+
+        .block.has-live-projection {
+            outline: 2px dashed rgba(255,193,7,.95);
+            outline-offset: 2px;
+        }
+
+        .block.projection-root {
+            outline-color: rgba(220,53,69,.95);
+            box-shadow: 0 0 0 3px rgba(220,53,69,.12);
+        }
+
+        .projection-live-indicator {
+            position: absolute;
+            left: 4px;
+            top: 4px;
+            z-index: 6;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            max-width: calc(100% - 8px);
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: rgba(255,193,7,.96);
+            color: #3b2a00;
+            font-size: .58rem;
+            font-weight: 900;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-shadow: 0 1px 5px rgba(0,0,0,.18);
+        }
+
+        .projection-root .projection-live-indicator {
+            background: rgba(220,53,69,.96);
+            color: #fff;
+        }
+
+        .projection-line {
+            display: block;
+            margin-top: 2px;
+            font-size: .61rem;
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        .projection-detail {
+            border: 1px dashed rgba(255,193,7,.65);
+            background: rgba(255,193,7,.08);
+        }
+
+        html[data-bs-theme="dark"] .projection-alert-panel,
+        body.dark-mode .projection-alert-panel {
+            background: rgba(220,53,69,.12);
+            border-color: rgba(248,113,113,.45);
+        }
+
+        html[data-bs-theme="dark"] .projection-detail,
+        body.dark-mode .projection-detail {
+            background: rgba(255,193,7,.08);
+            border-color: rgba(255,193,7,.35);
+        }
+            </style>
+            }
 
 
 @* PLANEACION_NAVBAR_INJECT_V1_0 *@
@@ -1232,6 +1801,38 @@ else
         <div class="metric">
             <span>Trabajando ahora</span>
             <strong>@Model.TrabajandoAhora</strong>
+        </div>
+    </section>
+
+    <section id="proyeccionInterrupcionesPanel"
+             class="projection-alert-panel @(hayInterrupcionesActivas ? "" : "d-none")">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-3">
+                <span class="projection-alert-icon">
+                    <i class="fa-solid fa-wave-square"></i>
+                </span>
+                <div>
+                    <div class="fw-bold text-danger">
+                        Proyección por interrupción activa
+                    </div>
+                    <div class="small text-muted">
+                        El calendario muestra el impacto estimado sin modificar todavía la programación oficial.
+                        La proyección se actualiza automáticamente cada 30 segundos.
+                    </div>
+                </div>
+            </div>
+            <div class="text-end">
+                <div class="fw-bold">
+                    Interrupciones activas:
+                    <span id="proyeccionInterrupcionesTotal">@totalInterrupcionesActivas</span>
+                </div>
+                <div class="small text-muted">
+                    Último cálculo:
+                    <span id="proyeccionInterrupcionesFecha">
+                        @fechaCalculoProyeccion.ToString("dd/MM/yyyy HH:mm")
+                    </span>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -1445,6 +2046,12 @@ else
                 <span><i data-nsq-style-id="nsq-si-147df738d9"></i>Reliberación</span>
                 <span><i data-nsq-style-id="nsq-si-31d8aa2278"></i>Ya producido</span>
                 <span><i data-nsq-style-id="nsq-si-e71927bd00"></i>Cerrado / cancelado</span>
+
+                    <span>
+                        <i class="fa-solid fa-border-all text-warning"></i>
+                        Contorno punteado = proyección por interrupción
+                    </span>
+
             </div>
         </div>
 
@@ -1511,137 +2118,168 @@ else
                                 <div class="empty-row">Sin OF programada durante este periodo.</div>
                             }
 
-                            @foreach (var bloque in maquina.Bloques)
-                            {
-                                var visibleInicio = bloque.Inicio < inicioPeriodo
-                                ? inicioPeriodo
-                                : bloque.Inicio;
+                           
+                                @foreach (var bloque in maquina.Bloques)
+                                {
+                                    var inicioVisualBloque = bloque.InicioVisual;
+                                    var finVisualBloque = bloque.FinVisual;
 
-                                var visibleFin = bloque.Fin > finPeriodo
-                                ? finPeriodo
-                                : bloque.Fin;
+                                    var visibleInicio = inicioVisualBloque < inicioPeriodo
+                                    ? inicioPeriodo
+                                    : inicioVisualBloque;
 
-                                var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
+                                    var visibleFin = finVisualBloque > finPeriodo
+                                    ? finPeriodo
+                                    : finVisualBloque;
 
-                                var width = Math.Max(
-                                .35,
-                                (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
+                                    var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
 
-                                var top = 8 + bloque.Carril * 48;
+                                    var width = Math.Max(
+                                    .35,
+                                    (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
 
-                                var puedeMover = !modoProduccion && bloque.PuedeMoverCalendario;
+                                    var top = 8 + bloque.Carril * 48;
+                                    var puedeMover = !modoProduccion && bloque.PuedeMoverCalendario;
 
-                                var tituloBloqueo = modoProduccion
-                                ? "Vista de solo lectura para Produccion."
-                                : puedeMover
+                                    var tituloBloqueo = modoProduccion
+                                    ? "Vista de solo lectura para Produccion."
+                                    : puedeMover
                                     ? "Arrastra para mandar a cola de otra máquina compatible."
                                     : bloque.MotivoBloqueoMovimiento;
 
-                                var textoOperador = bloque.TextoOperadorVisible;
-                                var origenOperador = bloque.TieneOperadorReal
-                                ? "Real"
-                                : "Planeado";
+                                    var textoOperador = bloque.TextoOperadorVisible;
+                                    var origenOperador = bloque.TieneOperadorReal
+                                    ? "Real"
+                                    : "Planeado";
 
-                                var textoTurno = bloque.TextoTurnoProgramado;
-                                var textoCalidad = bloque.EstadoCalidadTexto;
+                                    var textoTurno = bloque.TextoTurnoProgramado;
+                                    var textoCalidad = bloque.EstadoCalidadTexto;
 
-                                var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
-                                ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
-                                : 0;
+                                    var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
+                                    ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
+                                    : 0;
 
-                                var mostrarAlertaNoInicio =
-                                bloque.EstatusID == 1 &&
-                                minutosAtrasoInicio >= 10 &&
-                                bloque.EstatusProduccionID != 3;
+                                    var mostrarAlertaNoInicio =
+                                    bloque.EstatusID == 1 &&
+                                    minutosAtrasoInicio >= 10 &&
+                                    bloque.EstatusProduccionID != 3;
 
-                                var textoAlertaNoInicio = mostrarAlertaNoInicio
-                                ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
-                                : string.Empty;
+                                    var textoAlertaNoInicio = mostrarAlertaNoInicio
+                                    ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
+                                    : string.Empty;
 
-                                var solicitudReprogramacionPendiente =
-                                solicitudesReprogramacion.FirstOrDefault(x =>
-                                x.ProgramaProduccionID == bloque.ProgramaProduccionID);
+                                    var solicitudReprogramacionPendiente =
+                                    solicitudesReprogramacion.FirstOrDefault(x =>
+                                    x.ProgramaProduccionID == bloque.ProgramaProduccionID);
 
-                                var tieneSolicitudReprogramacion = solicitudReprogramacionPendiente != null;
+                                    var tieneSolicitudReprogramacion =
+                                    solicitudReprogramacionPendiente != null;
 
-                                /*
-                                * PRIORIDAD VISUAL DEL CALENDARIO
-                                * 1. Paro real de Producción.
-                                * 2. Reliberación / configuración invalidada por Calidad.
-                                * 3. Proceso activo de Calidad.
-                                * 4. Producción activa.
-                                * 5. Semáforo normal que ya calcula el modelo.
-                                *
-                                * No modifica lógica ni estados; únicamente decide el color.
-                                */
-                                var claseColorBloque = bloque.ClaseSemaforoCalendario;
+                                    var claseColorBloque =
+                                    bloque.ClaseSemaforoCalendario;
 
-                                var estaEnParo =
-                                bloque.EstatusProduccionID == 4;
+                                    var estaEnParo =
+                                    bloque.EstatusProduccionID == 4;
 
-                                var estaEnReliberacion =
-                                bloque.RequiereReliberacion ||
-                                bloque.ConfiguracionCalidadInvalidada;
+                                    var estaEnReliberacion =
+                                    bloque.RequiereReliberacion ||
+                                    bloque.ConfiguracionCalidadInvalidada;
 
-                                var estadoCalidadNormalizado =
-                                (bloque.EstadoCalidad ?? string.Empty)
-                                .Trim()
-                                .ToUpperInvariant();
+                                    var estadoCalidadNormalizado =
+                                    (bloque.EstadoCalidad ?? string.Empty)
+                                    .Trim()
+                                    .ToUpperInvariant();
 
-                                var estaEnCalidad =
-                                bloque.InspeccionCalidadID.HasValue &&
-                                !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
-                                estadoCalidadNormalizado != "CERRADA";
+                                    var estaEnCalidad =
+                                    bloque.InspeccionCalidadID.HasValue &&
+                                    !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
+                                    estadoCalidadNormalizado != "CERRADA";
 
-                                if (estaEnParo)
-                                {
-                                    claseColorBloque = "bloque-paro";
-                                }
-                                else if (estaEnReliberacion)
-                                {
-                                    claseColorBloque = "bloque-reliberacion";
-                                }
-                                else if (estaEnCalidad)
-                                {
-                                    claseColorBloque = "bloque-calidad";
-                                }
-                                else if (bloque.EstatusProduccionID == 3)
-                                {
-                                    claseColorBloque = "bloque-produciendo";
-                                }
-
-                                <button type="button"
-                                        class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "") @(tieneSolicitudReprogramacion ? "has-reprogram-request" : "")"
-                                        draggable="@(puedeMover ? "true" : "false")"
-                                        data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
-                                        data-programa-id="@bloque.ProgramaProduccionID"
-                                        data-maquina-id="@bloque.MaquinaID"
-                                        data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                        data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                        data-puede-mover="@(puedeMover ? "true" : "false")"
-                                        data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                        title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
-                                    @if (mostrarAlertaNoInicio)
+                                    if (estaEnParo)
                                     {
-                                        <span class="start-delay-alert" title="@textoAlertaNoInicio">
-                                            <i class="fa-solid fa-bell"></i>
-                                        </span>
+                                        claseColorBloque = "bloque-paro";
                                     }
-                                    @if (tieneSolicitudReprogramacion)
+                                    else if (estaEnReliberacion)
                                     {
-                                        <span class="reprogram-request-indicator" title="Producción solicitó reprogramación">
-                                            <i class="fa-solid fa-calendar-arrow-down"></i>
-                                        </span>
+                                        claseColorBloque = "bloque-reliberacion";
                                     }
-                                    <strong>@bloque.OFTexto · @bloque.ParteTexto</strong>
-                                    <span>@(bloque.ClienteNombre ?? "Sin cliente") · @bloque.EstadoSemaforoTexto</span>
+                                    else if (estaEnCalidad)
+                                    {
+                                        claseColorBloque = "bloque-calidad";
+                                    }
+                                    else if (bloque.EstatusProduccionID == 3)
+                                    {
+                                        claseColorBloque = "bloque-produciendo";
+                                    }
+
+                                    <button type="button"
+                                            class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "") @(tieneSolicitudReprogramacion ? "has-reprogram-request" : "") @(bloque.TieneProyeccionInterrupcion ? "has-live-projection" : "") @(bloque.EsProgramaRaizInterrupcion ? "projection-root" : bloque.TieneProyeccionInterrupcion ? "projection-shifted" : "")"
+                                            draggable="@(puedeMover ? "true" : "false")"
+                                            data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
+                                            data-programa-id="@bloque.ProgramaProduccionID"
+                                            data-maquina-id="@bloque.MaquinaID"
+                                            data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                            data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                            data-inicio-oficial="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                            data-fin-oficial="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                            data-inicio-proyectado="@(bloque.InicioProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                            data-fin-proyectado="@(bloque.FinProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                            data-puede-mover="@(puedeMover ? "true" : "false")"
+                                            data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
+
+                                        @if (mostrarAlertaNoInicio)
+                                        {
+                                            <span class="start-delay-alert"
+                                                  title="@textoAlertaNoInicio">
+                                                <i class="fa-solid fa-bell"></i>
+                                            </span>
+                                        }
+
+                                        @if (tieneSolicitudReprogramacion)
+                                        {
+                                            <span class="reprogram-request-indicator"
+                                                  title="Producción solicitó reprogramación">
+                                                <i class="fa-solid fa-calendar-arrow-down"></i>
+                                            </span>
+                                        }
+
+                                    <span class="projection-live-indicator @(bloque.TieneProyeccionInterrupcion ? "" : "d-none")"
+                                          data-projection-indicator>
+                                        <i class="fa-solid @(bloque.EsProgramaRaizInterrupcion ? "fa-pause" : "fa-clock-rotate-left")"></i>
+                                        <span>
+                                            @(bloque.EsProgramaRaizInterrupcion
+                                                                                ? $"PARO +{bloque.MinutosImpactoInterrupcion} min"
+                                                                                : $"PROY +{bloque.MinutosDesplazamientoProyectado} min")
+                                                                                                                                    </span>
+                                                                                                                                </span>
+
+                                    <strong>
+                                        @bloque.OFTexto · @bloque.ParteTexto
+                                    </strong>
+
+                                    <span>
+                                        @(bloque.ClienteNombre ?? "Sin cliente") ·
+                                        @bloque.EstadoSemaforoTexto
+                                    </span>
+
                                     <span class="operator-line">
                                         <i class="fa-solid fa-user-gear"></i>
                                         @origenOperador: @textoOperador · @textoTurno
                                     </span>
-                                </button>
+
+                                    <span class="projection-line @(bloque.TieneProyeccionInterrupcion ? "" : "d-none")"
+                                          data-projection-line>
+                                        @(bloque.TieneProyeccionInterrupcion
+                                                                        ? bloque.EsProgramaRaizInterrupcion
+                                                                        ? $"Fin proyectado: {bloque.FinVisual:dd/MM HH:mm}"
+                                                                        : $"Proyección: {bloque.InicioVisual:dd/MM HH:mm} - {bloque.FinVisual:dd/MM HH:mm}"
+                                                                        : "")
+                            </span>
+                        </button>
+                                                }
                             }
                         </div>
                     </div>
@@ -1684,8 +2322,65 @@ else
                             class="btn-close"
                             data-bs-dismiss="modal"></button>
                 </div>
-
                 <div class="modal-body">
+                    <div class="alert projection-detail @(bloque.TieneProyeccionInterrupcion ? "" : "d-none") mb-3"
+                         data-projection-modal="@bloque.ProgramaProduccionID">
+                        <div class="d-flex gap-3 align-items-start">
+                            <i class="fa-solid fa-wave-square text-warning fs-4 mt-1"></i>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold"
+                                     data-projection-modal-tipo>
+                                    @(bloque.EsProgramaRaizInterrupcion
+                                                                    ? "Interrupción activa en esta OF"
+                                                                    : "Impacto de una interrupción anterior")
+                                                                                                         </div>
+
+                                <div class="small text-muted mt-1"
+                                     data-projection-modal-motivo>
+                                    @(string.IsNullOrWhiteSpace(bloque.MotivoInterrupcionProyectada)
+                                                                    ? "Recorrido por secuencia de máquina / molde"
+                                                                    : bloque.MotivoInterrupcionProyectada)
+                            </div>
+
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-4">
+                                        <small class="text-muted d-block">
+                                            Inicio proyectado
+                                        </small>
+                                        <strong data-projection-modal-inicio>
+                                            @bloque.InicioVisual.ToString("dd/MM/yyyy HH:mm")
+                                        </strong>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <small class="text-muted d-block">
+                                            Fin proyectado
+                                        </small>
+                                        <strong data-projection-modal-fin>
+                                            @bloque.FinVisual.ToString("dd/MM/yyyy HH:mm")
+                                        </strong>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <small class="text-muted d-block">
+                                            Impacto estimado
+                                        </small>
+                                        <strong class="text-warning-emphasis"
+                                                data-projection-modal-impacto>
+                                            +@(bloque.EsProgramaRaizInterrupcion
+                                                                                    ? bloque.MinutosImpactoInterrupcion
+                                                                                    : bloque.MinutosDesplazamientoProyectado) min
+                                    </strong>
+                                </div>
+                            </div>
+
+                                <div class="small fw-bold mt-2">
+                                    Las fechas oficiales permanecen sin cambios hasta cerrar la interrupción y aplicar el reacomodo definitivo.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="row g-3">
                         <div class="col-md-4">
                             <div class="operator-card">

@@ -254,8 +254,8 @@ OFFSET @Offset ROWS FETCH NEXT @TamanoPagina ROWS ONLY;";
         try
         {
             string? operadorNombre = null;
-            if (model.TipoTransporte == "Interno")
-                operadorNombre = await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorUsuarioID, cancellationToken);
+            if (model.TipoTransporte == "Interno" && model.OperadorUsuarioID.HasValue && model.OperadorUsuarioID.Value > 0)
+                operadorNombre = await ObtenerNombreOperadorInternoAsync(cn, tx, model.OperadorUsuarioID.Value, cancellationToken);
             const string sql = @"
 INSERT dbo.Logistica_Viajes
 (
@@ -307,7 +307,7 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
             await EjecutarAsync(cn, tx, "UPDATE dbo.Logistica_Viajes SET Folio=@Folio WHERE ViajeID=@ViajeID;", cancellationToken, ("@Folio", folio), ("@ViajeID", viajeId));
             await InsertarHistorialAsync(cn, tx, viajeId, "VIAJE_CREADO", null, "Programado", $"Viaje creado. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.", cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = $"{folio} creado correctamente.";
+            TempData["LogisticaOk"] = $"{folio} creado correctamente. Completa los recursos pendientes antes de iniciar el viaje.";
             return RedirectToAction(nameof(Detalle), new { id = viajeId });
         }
         catch (Exception ex)
@@ -318,7 +318,6 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
             return View(model);
         }
     }
-
     [HttpGet]
     public async Task<IActionResult> Detalle(int id, CancellationToken cancellationToken)
     {
@@ -404,10 +403,10 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
         try
         {
             var actual = await ObtenerViajeParaActualizarAsync(cn, tx, model.ViajeID, cancellationToken) ?? throw new InvalidOperationException("El viaje no existe.");
-            if (actual.Estatus != "Programado") throw new InvalidOperationException("Solo los viajes Programados pueden editarse.");
+            if (actual.Estatus != "Programado") throw new InvalidOperationException("Solo los viajes Programados pueden completar su preparación.");
             string? operadorNombre = null;
-            if (model.TipoTransporte == "Interno")
-                operadorNombre = await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorUsuarioID, cancellationToken);
+            if (model.TipoTransporte == "Interno" && model.OperadorUsuarioID.HasValue && model.OperadorUsuarioID.Value > 0)
+                operadorNombre = await ObtenerNombreOperadorInternoAsync(cn, tx, model.OperadorUsuarioID.Value, cancellationToken);
             const string sql = @"
 UPDATE dbo.Logistica_Viajes
 SET TipoViaje=@TipoViaje,TipoTransporte=@TipoTransporte,Origen=@Origen,Destino=@Destino,Motivo=@Motivo,
@@ -441,12 +440,11 @@ SELECT @@ROWCOUNT;";
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = Db(model.Observaciones);
                 cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
-                    throw new InvalidOperationException("El viaje cambió mientras se intentaba actualizar.");
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("El viaje cambió mientras se intentaba actualizar.");
             }
-            await InsertarHistorialAsync(cn, tx, model.ViajeID, "VIAJE_EDITADO", "Programado", "Programado", $"Programación actualizada. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.", cancellationToken);
+            await InsertarHistorialAsync(cn, tx, model.ViajeID, "PREPARACION_ACTUALIZADA", "Programado", "Programado", $"Preparación actualizada. Tipo: {model.TipoViaje}. Transporte: {model.TipoTransporte}. Origen: {model.Origen}. Destino: {model.Destino}.", cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Viaje actualizado correctamente.";
+            TempData["LogisticaOk"] = "Preparación del viaje actualizada correctamente.";
             return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
         }
         catch (Exception ex)
@@ -1684,7 +1682,7 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         if (string.IsNullOrWhiteSpace(model.Destino)) ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
         if (string.IsNullOrWhiteSpace(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
         if (model.FechaProgramada == default) ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
-        // Ruta, unidad y chofer pueden quedar pendientes al programar; ValidarViajeListoParaIniciarAsync los exige al salir.
+
     }
 
     private void ValidarModelo(LogisticaViajeEditarVm model)
@@ -1695,7 +1693,29 @@ ORDER BY v.FechaProgramada,v.HoraSalidaProgramada,v.ViajeID;";
         if (string.IsNullOrWhiteSpace(model.Destino)) ModelState.AddModelError(nameof(model.Destino), "El destino es obligatorio.");
         if (string.IsNullOrWhiteSpace(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "El motivo del viaje es obligatorio.");
         if (model.FechaProgramada == default) ModelState.AddModelError(nameof(model.FechaProgramada), "La fecha programada es obligatoria.");
-        // Ruta, unidad y chofer son obligatorios al iniciar, no para guardar la programacion.
+
+    }
+
+    private static async Task<string> ObtenerNombreOperadorInternoAsync(SqlConnection cn, SqlTransaction tx, int operadorUsuarioId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TOP(1)
+LTRIM(RTRIM(CONCAT(ISNULL(P.Nombre,N''),N' ',ISNULL(P.ApellidoPaterno,N''),N' ',ISNULL(P.ApellidoMaterno,N'')))) AS NombreCompleto
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.UsuarioID=@UsuarioID
+AND U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = operadorUsuarioId;
+        var valor = await cmd.ExecuteScalarAsync(cancellationToken);
+        var nombre = valor == null || valor == DBNull.Value ? string.Empty : valor.ToString()?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(nombre)) throw new InvalidOperationException("El operador seleccionado debe ser un usuario activo del departamento de Logística y tener un puesto de Chofer.");
+        return nombre;
+
     }
 
     private static async Task ValidarViajeListoParaIniciarAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)
@@ -1705,36 +1725,75 @@ SELECT TipoViaje,TipoTransporte,Origen,Destino,Motivo,FechaProgramada,HoraSalida
 TransportistaExterno,UnidadExterna,PlacasExternas,ChoferExterno,Estatus
 FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
 WHERE ViajeID=@ViajeID AND Activo=1;";
-        await using var cmd = new SqlCommand(sql, cn, tx);
-        cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
-        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-        if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
-        var estatus = Texto(rd, "Estatus");
-        var tipoViaje = Texto(rd, "TipoViaje");
-        var tipoTransporte = Texto(rd, "TipoTransporte");
-        var origen = Texto(rd, "Origen");
-        var destino = Texto(rd, "Destino");
-        var motivo = Texto(rd, "Motivo");
-        var fechaProgramada = Fecha(rd, "FechaProgramada");
-        var rutaId = EnteroNullable(rd, "RutaID");
-        var unidadId = EnteroNullable(rd, "UnidadID");
-        var operadorUsuarioId = EnteroNullable(rd, "OperadorUsuarioID");
-        var transportista = Texto(rd, "TransportistaExterno");
-        var unidadExterna = Texto(rd, "UnidadExterna");
-        var placasExternas = Texto(rd, "PlacasExternas");
-        var choferExterno = Texto(rd, "ChoferExterno");
+        string estatus, tipoViaje, tipoTransporte, origen, destino, motivo, transportista, unidadExterna, placasExternas, choferExterno;
+        DateTime? fechaProgramada;
+        TimeSpan? horaSalida;
+        int? rutaId, unidadId, operadorUsuarioId;
+        await using (var cmd = new SqlCommand(sql, cn, tx))
+        {
+            cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
+            estatus = Texto(rd, "Estatus");
+            tipoViaje = Texto(rd, "TipoViaje");
+            tipoTransporte = Texto(rd, "TipoTransporte");
+            origen = Texto(rd, "Origen");
+            destino = Texto(rd, "Destino");
+            motivo = Texto(rd, "Motivo");
+            fechaProgramada = Fecha(rd, "FechaProgramada");
+            horaSalida = Hora(rd, "HoraSalidaProgramada");
+            rutaId = EnteroNullable(rd, "RutaID");
+            unidadId = EnteroNullable(rd, "UnidadID");
+            operadorUsuarioId = EnteroNullable(rd, "OperadorUsuarioID");
+            transportista = Texto(rd, "TransportistaExterno");
+            unidadExterna = Texto(rd, "UnidadExterna");
+            placasExternas = Texto(rd, "PlacasExternas");
+            choferExterno = Texto(rd, "ChoferExterno");
+        }
         if (estatus != "Programado") throw new InvalidOperationException("Solo un viaje Programado puede iniciar.");
         var faltantes = new List<string>();
         if (string.IsNullOrWhiteSpace(tipoViaje)) faltantes.Add("tipo de viaje");
+        if (string.IsNullOrWhiteSpace(tipoTransporte)) faltantes.Add("tipo de transporte");
         if (string.IsNullOrWhiteSpace(origen)) faltantes.Add("origen");
         if (string.IsNullOrWhiteSpace(destino)) faltantes.Add("destino");
         if (string.IsNullOrWhiteSpace(motivo)) faltantes.Add("motivo");
         if (!fechaProgramada.HasValue) faltantes.Add("fecha programada");
+        if (!horaSalida.HasValue) faltantes.Add("hora de salida programada");
         if (tipoTransporte == "Interno")
         {
             if (!rutaId.HasValue || rutaId.Value <= 0) faltantes.Add("ruta");
             if (!unidadId.HasValue || unidadId.Value <= 0) faltantes.Add("unidad");
             if (!operadorUsuarioId.HasValue || operadorUsuarioId.Value <= 0) faltantes.Add("operador");
+            if (faltantes.Count == 0)
+            {
+                const string sqlRuta = @"SELECT COUNT_BIG(*) FROM dbo.Logistica_Rutas WHERE RutaID=@RutaID AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlRuta, cn, tx))
+                {
+                    cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = rutaId!.Value;
+                    if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) faltantes.Add("ruta activa");
+                }
+                const string sqlUnidad = @"SELECT COUNT_BIG(*) FROM dbo.Logistica_Unidades WHERE UnidadID=@UnidadID AND Activo=1;";
+                await using (var cmd = new SqlCommand(sqlUnidad, cn, tx))
+                {
+                    cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId!.Value;
+                    if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) faltantes.Add("unidad activa");
+                }
+                const string sqlOperador = @"
+SELECT COUNT_BIG(*)
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.UsuarioID=@UsuarioID
+AND U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
+                await using (var cmd = new SqlCommand(sqlOperador, cn, tx))
+                {
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = operadorUsuarioId!.Value;
+                    if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) faltantes.Add("operador activo de Logística con puesto Chofer");
+                }
+            }
         }
         else if (tipoTransporte == "Externo")
         {
@@ -1744,27 +1803,23 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
             if (string.IsNullOrWhiteSpace(choferExterno)) faltantes.Add("chofer");
         }
         else faltantes.Add("tipo de transporte");
-        if (faltantes.Count > 0) throw new InvalidOperationException($"El viaje todavía no está listo para iniciar. Completa: {string.Join(", ", faltantes)}.");
+        if (faltantes.Count > 0) throw new InvalidOperationException($"El viaje todavía no está listo para iniciar. Completa o corrige: {string.Join(", ", faltantes.Distinct())}.");
     }
     private static string NormalizarTipoViaje(string? valor, bool permitirVacio)
     {
         valor = valor?.Trim() ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(valor))
-            return permitirVacio ? string.Empty : string.Empty;
-
+        if (string.IsNullOrWhiteSpace(valor)) return string.Empty;
         var permitidos = new[]
         {
-            "Ruta de personal",
-            "Recolección de MP",
-            "Traslado entre plantas",
-            "Recolección de material",
-            "Entrega / recolección especial",
-            "Otro"
-        };
-
-        return permitidos.FirstOrDefault(x =>
-            string.Equals(x, valor, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+        "Entrega PT",
+        "Ruta de personal",
+        "Recolección de MP",
+        "Traslado entre plantas",
+        "Recolección de material",
+        "Entrega / recolección especial",
+        "Otro"
+    };
+        return permitidos.FirstOrDefault(x => string.Equals(x, valor, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
     }
 
     private static string NormalizarTipoTransporte(string? valor, bool permitirVacio)

@@ -1,0 +1,1599 @@
+﻿@using ERP.NSQuell.Models
+@using System
+@using System.Collections.Generic
+@using System.Linq
+@model ProduccionPreparacionMaterialesVm
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Preparación de materiales";
+
+    var esperados = (Model.MaterialesEsperados ?? new List<ProduccionMaterialEsperadoVm>())
+        .Where(x => x.CantidadPendienteAlmacen > 0.0005m)
+        .OrderBy(x => x.FechaArranque ?? DateTime.MaxValue)
+        .ThenBy(x => x.MaquinaCodigo)
+        .ThenBy(x => x.NumeroOF)
+        .ThenBy(x => x.TipoOrigen)
+        .ThenBy(x => x.Codigo)
+        .ToList();
+
+    var recepciones = Model.Recepciones ?? new List<ProduccionRecepcionMaterialVm>();
+
+    var pendientesRecepcion = recepciones
+        .Where(x => x.EstaPendiente)
+        .OrderBy(x => x.FechaEntregaAlmacen)
+        .ThenBy(x => x.NumeroOF)
+        .ToList();
+
+    var recientes = recepciones
+        .Where(x => !x.EstaPendiente)
+        .OrderByDescending(x => x.FechaRecepcion ?? x.FechaEntregaAlmacen)
+        .Take(20)
+        .ToList();
+
+    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro) ? "" : Model.Filtro;
+
+    string Cantidad(decimal value) => value.ToString(value % 1m == 0m ? "N0" : "0.####");
+    string CantidadNullable(decimal? value) => value.HasValue ? Cantidad(value.Value) : "—";
+    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+
+    string ClaseEstadoRecepcion(ProduccionRecepcionMaterialVm item)
+    {
+        if (item.EstaRecibidoCompleto) return "ok";
+        if (item.EstaRecibidoParcial) return "partial";
+        if (item.EstaNoRecibido) return "none";
+        return "pending";
+    }
+
+    string TextoEstadoRecepcion(ProduccionRecepcionMaterialVm item)
+    {
+        if (item.EstaRecibidoCompleto) return "Recibido";
+        if (item.EstaRecibidoParcial) return "Recibido parcial";
+        if (item.EstaNoRecibido) return "No recibido";
+        return "Pendiente";
+    }
+}
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+<style>
+    :root {
+        --mat-bg: #f4f7fb;
+        --mat-card: #ffffff;
+        --mat-text: #17233d;
+        --mat-muted: #6f7b91;
+        --mat-line: #dce4ef;
+        --mat-blue: #3158d7;
+        --mat-blue-dark: #2545ae;
+        --mat-blue-soft: #eef3ff;
+        --mat-green: #238353;
+        --mat-green-soft: #eefaf3;
+        --mat-orange: #b96f00;
+        --mat-orange-soft: #fff8e9;
+        --mat-red: #c4322b;
+        --mat-red-soft: #fff3f2;
+        --mat-purple: #6544dd;
+        --mat-purple-soft: #f1edff;
+        --mat-shadow: 0 10px 28px rgba(15,34,74,.06);
+    }
+
+    html[data-nsq-theme="dark"],
+    html[data-bs-theme="dark"] {
+        --mat-bg: #0b1220;
+        --mat-card: #111b2d;
+        --mat-text: #e7eef9;
+        --mat-muted: #9aa9bd;
+        --mat-line: #2d3e55;
+        --mat-blue-soft: #102b4c;
+        --mat-green-soft: #102a20;
+        --mat-orange-soft: #2b2313;
+        --mat-red-soft: #351719;
+        --mat-purple-soft: #20183c;
+        --mat-shadow: 0 10px 28px rgba(0,0,0,.18);
+    }
+
+    .mat-page {
+        min-height: 100vh;
+        padding: 18px;
+        background: var(--mat-bg);
+        color: var(--mat-text);
+    }
+
+    .mat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 18px;
+        background: var(--mat-card);
+        border: 1px solid var(--mat-line);
+        border-radius: 16px;
+        box-shadow: var(--mat-shadow);
+    }
+
+    .mat-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .mat-title-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--mat-blue-soft);
+        color: var(--mat-blue);
+        font-size: 1.1rem;
+    }
+
+    .mat-title h1 {
+        margin: 0;
+        color: var(--mat-text);
+        font-size: 1.2rem;
+        font-weight: 950;
+    }
+
+    .mat-title p {
+        margin: 3px 0 0;
+        color: var(--mat-muted);
+        font-size: .72rem;
+        font-weight: 700;
+    }
+
+    .btnx {
+        min-height: 39px;
+        border: 1px solid var(--mat-line);
+        border-radius: 10px;
+        padding: 8px 12px;
+        background: var(--mat-card);
+        color: var(--mat-text);
+        text-decoration: none;
+        font-size: .72rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        cursor: pointer;
+        transition: .15s ease;
+    }
+
+        .btnx:hover {
+            transform: translateY(-1px);
+            color: var(--mat-text);
+        }
+
+    .btnx-primary {
+        background: var(--mat-blue);
+        border-color: var(--mat-blue);
+        color: #fff;
+    }
+
+        .btnx-primary:hover {
+            background: var(--mat-blue-dark);
+            color: #fff;
+        }
+
+    .btnx-success {
+        background: var(--mat-green);
+        border-color: var(--mat-green);
+        color: #fff;
+    }
+
+        .btnx-success:hover {
+            color: #fff;
+        }
+
+    .btnx-warning {
+        background: var(--mat-orange-soft);
+        border-color: #efd199;
+        color: var(--mat-orange);
+    }
+
+    .btnx-danger {
+        background: var(--mat-red-soft);
+        border-color: #efb7b3;
+        color: var(--mat-red);
+    }
+
+    .flash {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-size: .73rem;
+        font-weight: 800;
+    }
+
+    .summary {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .summary-card {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 12px 14px;
+        border: 1px solid var(--mat-line);
+        border-radius: 14px;
+        background: var(--mat-card);
+    }
+
+    .summary-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        flex: none;
+    }
+
+        .summary-icon.orange {
+            background: var(--mat-orange-soft);
+            color: var(--mat-orange);
+        }
+
+        .summary-icon.blue {
+            background: var(--mat-blue-soft);
+            color: var(--mat-blue);
+        }
+
+        .summary-icon.red {
+            background: var(--mat-red-soft);
+            color: var(--mat-red);
+        }
+
+    .summary-card strong {
+        display: block;
+        color: var(--mat-text);
+        font-size: 1.08rem;
+        line-height: 1;
+        font-weight: 950;
+    }
+
+    .summary-card span {
+        display: block;
+        margin-top: 4px;
+        color: var(--mat-muted);
+        font-size: .61rem;
+        font-weight: 850;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .filters {
+        display: grid;
+        grid-template-columns: minmax(240px,1fr) 270px auto auto;
+        gap: 9px;
+        align-items: end;
+        margin-top: 12px;
+        padding: 12px;
+        background: var(--mat-card);
+        border: 1px solid var(--mat-line);
+        border-radius: 14px;
+    }
+
+    .field label {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--mat-muted);
+        font-size: .61rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+        width: 100%;
+        min-height: 39px;
+        padding: 8px 10px;
+        border: 1px solid var(--mat-line);
+        border-radius: 9px;
+        background: var(--mat-card);
+        color: var(--mat-text);
+        font-size: .75rem;
+        font-weight: 750;
+    }
+
+    .field textarea {
+        min-height: 72px;
+        resize: vertical;
+    }
+
+        .field input:focus,
+        .field select:focus,
+        .field textarea:focus {
+            outline: none;
+            border-color: #7180ff;
+            box-shadow: 0 0 0 3px rgba(79,92,255,.10);
+        }
+
+    .section {
+        margin-top: 17px;
+    }
+
+    .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 2px 9px;
+    }
+
+        .section-head h2 {
+            margin: 0;
+            color: var(--mat-text);
+            font-size: .95rem;
+            font-weight: 950;
+        }
+
+        .section-head p {
+            margin: 3px 0 0;
+            color: var(--mat-muted);
+            font-size: .67rem;
+            font-weight: 700;
+        }
+
+    .section-count {
+        min-width: 30px;
+        height: 28px;
+        padding: 0 9px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: var(--mat-blue-soft);
+        color: var(--mat-blue);
+        font-size: .69rem;
+        font-weight: 950;
+    }
+
+    .machine-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .machine-accordion {
+        border: 1px solid var(--mat-line);
+        border-radius: 15px;
+        background: var(--mat-card);
+        overflow: hidden;
+        box-shadow: var(--mat-shadow);
+    }
+
+        .machine-accordion[open] {
+            border-color: color-mix(in srgb,var(--mat-purple) 40%,var(--mat-line) 60%);
+        }
+
+    .machine-summary {
+        list-style: none;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: minmax(260px,1.25fr) minmax(180px,.8fr) auto 34px;
+        gap: 14px;
+        align-items: center;
+        padding: 12px 14px;
+        background: var(--mat-card);
+        border-left: 5px solid var(--mat-purple);
+    }
+
+        .machine-summary::-webkit-details-marker {
+            display: none;
+        }
+
+    .machine-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .machine-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--mat-purple-soft);
+        color: var(--mat-purple);
+    }
+
+    .machine-main strong {
+        display: block;
+        color: var(--mat-text);
+        font-size: .82rem;
+        font-weight: 950;
+    }
+
+    .machine-main span,
+    .machine-next span {
+        display: block;
+        margin-top: 2px;
+        color: var(--mat-muted);
+        font-size: .6rem;
+        font-weight: 750;
+    }
+
+    .machine-next strong {
+        display: block;
+        color: var(--mat-text);
+        font-size: .72rem;
+        font-weight: 900;
+    }
+
+    .machine-badges {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .mini-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        font-size: .56rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .mini-badge.orange {
+            background: var(--mat-orange-soft);
+            color: var(--mat-orange);
+        }
+
+        .mini-badge.red {
+            background: var(--mat-red-soft);
+            color: var(--mat-red);
+        }
+
+        .mini-badge.blue {
+            background: var(--mat-blue-soft);
+            color: var(--mat-blue);
+        }
+
+        .mini-badge.green {
+            background: var(--mat-green-soft);
+            color: var(--mat-green);
+        }
+
+    .reception-summary {
+        border-left-color: var(--mat-blue);
+    }
+
+        .reception-summary .machine-icon {
+            background: var(--mat-blue-soft);
+            color: var(--mat-blue);
+        }
+
+    .machine-chevron {
+        display: grid;
+        place-items: center;
+        color: var(--mat-muted);
+        font-size: .8rem;
+        transition: transform .18s ease;
+    }
+
+    .machine-accordion[open] .machine-chevron {
+        transform: rotate(180deg);
+    }
+
+    .machine-body {
+        padding: 10px;
+        background: color-mix(in srgb,var(--mat-bg) 88%,var(--mat-card) 12%);
+        border-top: 1px solid var(--mat-line);
+    }
+
+    .of-accordion {
+        margin-bottom: 8px;
+        border: 1px solid var(--mat-line);
+        border-radius: 12px;
+        background: var(--mat-card);
+        overflow: hidden;
+    }
+
+        .of-accordion:last-child {
+            margin-bottom: 0;
+        }
+
+    .of-summary {
+        list-style: none;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: minmax(230px,1fr) minmax(180px,.7fr) auto 30px;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border-left: 4px solid var(--mat-orange);
+    }
+
+        .of-summary::-webkit-details-marker {
+            display: none;
+        }
+
+    .of-main strong {
+        display: block;
+        color: var(--mat-text);
+        font-size: .75rem;
+        font-weight: 950;
+    }
+
+    .of-main span,
+    .of-date span {
+        display: block;
+        margin-top: 2px;
+        color: var(--mat-muted);
+        font-size: .58rem;
+        font-weight: 750;
+    }
+
+    .of-date strong {
+        display: block;
+        color: var(--mat-text);
+        font-size: .68rem;
+        font-weight: 900;
+    }
+
+    .of-status {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .of-chevron {
+        display: grid;
+        place-items: center;
+        color: var(--mat-muted);
+        font-size: .75rem;
+        transition: transform .18s ease;
+    }
+
+    .of-accordion[open] .of-chevron {
+        transform: rotate(180deg);
+    }
+
+    .of-body {
+        padding: 9px;
+        border-top: 1px solid var(--mat-line);
+        background: color-mix(in srgb,var(--mat-bg) 82%,var(--mat-card) 18%);
+    }
+
+    .expected-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 9px;
+    }
+
+    .expected-card {
+        padding: 11px 12px;
+        border: 1px solid var(--mat-line);
+        border-radius: 11px;
+        background: var(--mat-card);
+    }
+
+    .expected-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .material-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: var(--mat-blue-soft);
+        color: var(--mat-blue);
+        font-size: .56rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .expected-card h3 {
+        margin: 7px 0 0;
+        color: var(--mat-text);
+        font-size: .8rem;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+
+    .expected-status {
+        padding: 4px 7px;
+        border-radius: 999px;
+        font-size: .55rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .expected-status.waiting {
+            background: var(--mat-red-soft);
+            color: var(--mat-red);
+        }
+
+        .expected-status.partial {
+            background: var(--mat-orange-soft);
+            color: var(--mat-orange);
+        }
+
+    .expected-amounts {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    .amount {
+        padding: 8px 9px;
+        border: 1px solid var(--mat-line);
+        border-radius: 9px;
+    }
+
+        .amount span {
+            display: block;
+            color: var(--mat-muted);
+            font-size: .52rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .amount strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--mat-text);
+            font-size: .7rem;
+            font-weight: 950;
+        }
+
+        .amount.missing {
+            background: var(--mat-orange-soft);
+            border-color: #efd199;
+        }
+
+            .amount.missing strong {
+                color: var(--mat-orange);
+            }
+
+    .empty {
+        padding: 28px 18px;
+        border: 1px dashed var(--mat-line);
+        border-radius: 14px;
+        background: var(--mat-card);
+        text-align: center;
+        color: var(--mat-muted);
+    }
+
+        .empty i {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 1.45rem;
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--mat-text);
+            font-size: .81rem;
+            font-weight: 950;
+        }
+
+        .empty span {
+            display: block;
+            margin-top: 4px;
+            font-size: .65rem;
+            font-weight: 700;
+        }
+
+    .deliveries {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px;
+    }
+
+    .delivery {
+        background: var(--mat-card);
+        border: 1px solid var(--mat-line);
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: var(--mat-shadow);
+    }
+
+    .delivery-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 13px 10px;
+        border-bottom: 1px solid var(--mat-line);
+    }
+
+    .delivery-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 5px;
+    }
+
+    .type-badge,
+    .context-chip,
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        font-size: .57rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .type-badge {
+        background: var(--mat-blue-soft);
+        color: var(--mat-blue);
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .context-chip {
+        background: color-mix(in srgb,var(--mat-card) 78%,var(--mat-line) 22%);
+        color: var(--mat-muted);
+    }
+
+    .status-badge.pending {
+        background: var(--mat-orange-soft);
+        color: var(--mat-orange);
+    }
+
+    .status-badge.ok {
+        background: var(--mat-green-soft);
+        color: var(--mat-green);
+    }
+
+    .status-badge.partial {
+        background: var(--mat-orange-soft);
+        color: var(--mat-orange);
+    }
+
+    .status-badge.none {
+        background: var(--mat-red-soft);
+        color: var(--mat-red);
+    }
+
+    .delivery h3 {
+        margin: 0;
+        color: var(--mat-text);
+        font-size: .86rem;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+
+    .delivery-sub {
+        margin-top: 3px;
+        color: var(--mat-muted);
+        font-size: .62rem;
+        font-weight: 750;
+    }
+
+    .delivery-body {
+        padding: 11px 13px 13px;
+    }
+
+    .warehouse-box {
+        padding: 10px 11px;
+        border: 1px solid color-mix(in srgb,var(--mat-blue) 20%,var(--mat-line) 80%);
+        border-radius: 11px;
+        background: var(--mat-blue-soft);
+    }
+
+    .warehouse-label {
+        color: var(--mat-muted);
+        font-size: .55rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .045em;
+    }
+
+    .warehouse-main {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 4px;
+    }
+
+        .warehouse-main strong {
+            color: var(--mat-blue);
+            font-size: 1.25rem;
+            line-height: 1;
+            font-weight: 950;
+        }
+
+        .warehouse-main span {
+            color: var(--mat-text);
+            font-size: .65rem;
+            font-weight: 850;
+            text-align: right;
+        }
+
+    .warehouse-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        margin-top: 8px;
+        color: var(--mat-muted);
+        font-size: .59rem;
+        font-weight: 750;
+    }
+
+        .warehouse-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+    .substitution {
+        margin-top: 8px;
+        padding: 8px 9px;
+        border: 1px solid #efd199;
+        border-radius: 9px;
+        background: var(--mat-orange-soft);
+        color: var(--mat-orange);
+        font-size: .62rem;
+        font-weight: 800;
+    }
+
+    .actions {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr 1fr;
+        gap: 7px;
+        margin-top: 10px;
+    }
+
+        .actions form {
+            margin: 0;
+        }
+
+        .actions .btnx {
+            width: 100%;
+            height: 100%;
+        }
+
+    .decision-panel {
+        display: none;
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--mat-line);
+    }
+
+        .decision-panel.show {
+            display: block;
+        }
+
+    .decision-grid {
+        display: grid;
+        grid-template-columns: 170px 1fr auto;
+        gap: 7px;
+        align-items: end;
+    }
+
+        .decision-grid.no-quantity {
+            grid-template-columns: 1fr auto;
+        }
+
+    .readonly-note {
+        margin-top: 9px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: var(--mat-blue-soft);
+        color: var(--mat-blue);
+        font-size: .63rem;
+        font-weight: 800;
+    }
+
+    .history {
+        background: var(--mat-card);
+        border: 1px solid var(--mat-line);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+        .history summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 11px 13px;
+            color: var(--mat-text);
+            font-size: .7rem;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+            .history summary::-webkit-details-marker {
+                display: none;
+            }
+
+    .history-list {
+        border-top: 1px solid var(--mat-line);
+    }
+
+    .history-row {
+        display: grid;
+        grid-template-columns: 1.2fr .7fr .8fr 1fr;
+        gap: 9px;
+        align-items: center;
+        padding: 9px 12px;
+        border-top: 1px solid var(--mat-line);
+        font-size: .62rem;
+    }
+
+        .history-row:first-child {
+            border-top: 0;
+        }
+
+        .history-row strong {
+            display: block;
+            color: var(--mat-text);
+            font-weight: 900;
+        }
+
+        .history-row span {
+            display: block;
+            margin-top: 2px;
+            color: var(--mat-muted);
+            font-weight: 700;
+        }
+
+    @@media(max-width:1100px) {
+        .machine-summary,
+        .of-summary {
+            grid-template-columns: 1fr auto 30px;
+        }
+
+        .machine-next,
+        .of-date {
+            display: none;
+        }
+
+        .filters {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .expected-grid,
+        .deliveries {
+            grid-template-columns: 1fr;
+        }
+
+        .decision-grid,
+        .decision-grid.no-quantity {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media(max-width:700px) {
+        .mat-page {
+            padding: 10px;
+        }
+
+        .mat-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .summary,
+        .filters,
+        .expected-amounts,
+        .actions {
+            grid-template-columns: 1fr;
+        }
+
+        .machine-summary,
+        .of-summary {
+            grid-template-columns: 1fr 30px;
+        }
+
+        .machine-badges,
+        .of-status {
+            display: none;
+        }
+
+        .warehouse-main {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+            .warehouse-main span {
+                text-align: left;
+            }
+
+        .history-row {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+</style>
+
+<div class="mat-page">
+    <header class="mat-header">
+        <div class="mat-title">
+            <div class="mat-title-icon"><i class="bi bi-boxes"></i></div>
+            <div>
+                <h1>Preparación de materiales</h1>
+                <p>Revisa qué debe entregar Almacén y confirma únicamente lo que recibiste físicamente.</p>
+            </div>
+        </div>
+        <a class="btnx" asp-controller="ProduccionPreparacion" asp-action="Index">
+            <i class="bi bi-arrow-left"></i> Volver a Preparación
+        </a>
+    </header>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success flash"><i class="bi bi-check-circle me-1"></i>@TempData["Success"]</div>
+    }
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning flash"><i class="bi bi-exclamation-triangle me-1"></i>@TempData["Warning"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger flash"><i class="bi bi-exclamation-octagon me-1"></i>@TempData["Error"]</div>
+    }
+
+    <section class="summary">
+        <div class="summary-card">
+            <div class="summary-icon orange"><i class="bi bi-hourglass-split"></i></div>
+            <div>
+                <strong>@Model.PendientesAlmacen</strong>
+                <span>Pendientes de Almacén</span>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon blue"><i class="bi bi-box-arrow-in-down"></i></div>
+            <div>
+                <strong>@Model.PendientesConfirmacion</strong>
+                <span>Por confirmar</span>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon red"><i class="bi bi-exclamation-triangle"></i></div>
+            <div>
+                <strong>@Model.AclaracionesPendientes</strong>
+                <span>Con diferencia</span>
+            </div>
+        </div>
+    </section>
+
+    <form method="get" asp-controller="ProduccionPreparacion" asp-action="Materiales" class="filters">
+        <div class="field">
+            <label>Buscar</label>
+            <input type="text" name="filtro" value="@filtroActual" placeholder="OF, material, embalaje, parte..." />
+        </div>
+        <div class="field">
+            <label>Máquina</label>
+            <select name="maquinaId">
+                <option value="">Todas las máquinas</option>
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    if (Model.MaquinaID == maquina.MaquinaID)
+                    {
+                        <option value="@maquina.MaquinaID" selected>@maquina.Texto</option>
+                    }
+                    else
+                    {
+                        <option value="@maquina.MaquinaID">@maquina.Texto</option>
+                    }
+                }
+            </select>
+        </div>
+        <button class="btnx btnx-primary" type="submit"><i class="bi bi-search"></i> Filtrar</button>
+        <a class="btnx" asp-controller="ProduccionPreparacion" asp-action="Materiales"><i class="bi bi-arrow-counterclockwise"></i> Limpiar</a>
+    </form>
+
+    <section class="section">
+        <div class="section-head">
+            <div>
+                <h2>Almacén ya entregó · confirma recepción</h2>
+                <p>Confirma primero lo que ya llegó físicamente. Las entregas están agrupadas por máquina para localizar rápidamente cada OF.</p>
+            </div>
+            <span class="section-count">@pendientesRecepcion.Count</span>
+        </div>
+
+        @if (pendientesRecepcion.Any())
+        {
+            <div class="machine-list" id="recepcionesMaquinas">
+                @foreach (var maquinaGrupo in pendientesRecepcion
+                            .GroupBy(x => new
+                            {
+                                x.MaquinaID,
+                                x.MaquinaCodigo,
+                                x.MaquinaNombre
+                            })
+                            .OrderBy(x => x.Min(y => y.FechaEntregaAlmacen))
+                            .ThenBy(x => x.Key.MaquinaCodigo)
+                            .ThenBy(x => x.Key.MaquinaNombre))
+                {
+                    var maquinaTextoRecepcion = string.IsNullOrWhiteSpace(maquinaGrupo.Key.MaquinaCodigo)
+                    ? "Sin máquina"
+                    : string.IsNullOrWhiteSpace(maquinaGrupo.Key.MaquinaNombre)
+                    ? maquinaGrupo.Key.MaquinaCodigo
+                    : $"{maquinaGrupo.Key.MaquinaCodigo} - {maquinaGrupo.Key.MaquinaNombre}";
+                    var gruposOfRecepcion = maquinaGrupo
+                    .GroupBy(x => x.NumeroOF)
+                    .OrderBy(x => x.Min(y => y.FechaEntregaAlmacen))
+                    .ThenBy(x => x.Key)
+                    .ToList();
+                    var primeraRecepcion = maquinaGrupo.OrderBy(x => x.FechaEntregaAlmacen).FirstOrDefault();
+                    var totalMp = maquinaGrupo.Count(x => x.EsMateriaPrima);
+                    var totalEmbalaje = maquinaGrupo.Count(x => x.EsEmbalaje);
+
+                    <details class="machine-accordion js-machine-accordion">
+                        <summary class="machine-summary reception-summary">
+                            <div class="machine-main">
+                                <div class="machine-icon"><i class="bi bi-box-arrow-in-down"></i></div>
+                                <div>
+                                    <strong>@maquinaTextoRecepcion</strong>
+                                    <span>@gruposOfRecepcion.Count OF@(gruposOfRecepcion.Count == 1 ? "" : "s") · @maquinaGrupo.Count() entrega@(maquinaGrupo.Count() == 1 ? "" : "s") por confirmar</span>
+                                </div>
+                            </div>
+
+                            <div class="machine-next">
+                                @if (primeraRecepcion != null)
+                                {
+                                    <strong>OF @(string.IsNullOrWhiteSpace(primeraRecepcion.NumeroOF) ? "—" : primeraRecepcion.NumeroOF)</strong>
+                                    <span>Entregado @Fecha(primeraRecepcion.FechaEntregaAlmacen)</span>
+                                }
+                            </div>
+
+                            <div class="machine-badges">
+                                @if (totalMp > 0)
+                                {
+                                    <span class="mini-badge blue"><i class="bi bi-droplet-half"></i>@totalMp MP</span>
+                                }
+                                @if (totalEmbalaje > 0)
+                                {
+                                    <span class="mini-badge green"><i class="bi bi-box-seam"></i>@totalEmbalaje embalaje@(totalEmbalaje == 1 ? "" : "s")</span>
+                                }
+                            </div>
+
+                            <span class="machine-chevron"><i class="bi bi-chevron-down"></i></span>
+                        </summary>
+
+                        <div class="machine-body">
+                            <div class="deliveries">
+                                @foreach (var item in maquinaGrupo
+                                                        .OrderBy(x => x.FechaEntregaAlmacen)
+                                                        .ThenBy(x => x.NumeroOF)
+                                                        .ThenBy(x => x.EsMateriaPrima ? 0 : 1)
+                                                        .ThenBy(x => x.CodigoEntregado))
+                                {
+                                    var panelParcial = $"parcial-{item.RecepcionMaterialID}";
+                                    var panelNoRecibido = $"no-recibido-{item.RecepcionMaterialID}";
+
+                                    <article class="delivery">
+                                        <div class="delivery-head">
+                                            <div>
+                                                <div class="delivery-kicker">
+                                                    <span class="type-badge">
+                                                        <i class="bi @(item.EsMateriaPrima ? "bi-droplet-half" : "bi-box-seam")"></i>
+                                                        @item.TipoOrigenTexto
+                                                    </span>
+                                                    <span class="context-chip">OF @(string.IsNullOrWhiteSpace(item.NumeroOF) ? "—" : item.NumeroOF)</span>
+                                                </div>
+                                                <h3>@item.TextoEntregado</h3>
+                                                <div class="delivery-sub">
+                                                    @(string.IsNullOrWhiteSpace(item.MaquinaCodigo) ? "Sin máquina" : item.TextoMaquina)
+                                                    @if (!string.IsNullOrWhiteSpace(item.NumeroParte))
+                                                    {
+                                                        <text> · Parte @item.NumeroParte</text>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <span class="status-badge pending">Por confirmar</span>
+                                        </div>
+
+                                        <div class="delivery-body">
+                                            <div class="warehouse-box">
+                                                <div class="warehouse-label">Almacén reporta que entregó</div>
+                                                <div class="warehouse-main">
+                                                    <strong>@Cantidad(item.CantidadEntregadaAlmacen) @item.Unidad</strong>
+                                                    <span>
+                                                        @if (item.EsMateriaPrima)
+                                                        {
+                                                            <text>@item.TipoMPTexto</text>
+                                                            @if (!string.IsNullOrWhiteSpace(item.Lote) && !string.Equals(item.Lote, "S/L", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                <text> · Lote @item.Lote</text>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <text>@item.CodigoEntregado</text>
+                                                        }
+                                                    </span>
+                                                </div>
+                                                <div class="warehouse-meta">
+                                                    <span><i class="bi bi-person"></i>@(string.IsNullOrWhiteSpace(item.UsuarioEntregaAlmacenNombre) ? "Almacén" : item.UsuarioEntregaAlmacenNombre)</span>
+                                                    <span><i class="bi bi-clock"></i>@Fecha(item.FechaEntregaAlmacen)</span>
+                                                </div>
+                                            </div>
+
+                                            @if (item.EsSustitucion)
+                                            {
+                                                <div class="substitution">
+                                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                                    Solicitado: @item.TextoSolicitado<br />
+                                                    Entregado: @item.TextoEntregado
+                                                </div>
+                                            }
+
+                                            @if (Model.PuedeGestionarMateriales)
+                                            {
+                                                <div class="actions">
+                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionMaterial" method="post" class="js-submit-form">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="RecepcionMaterialID" value="@item.RecepcionMaterialID" />
+                                                        <input type="hidden" name="Decision" value="@ProduccionRecepcionMaterialDecision.Completo" />
+                                                        <button class="btnx btnx-success" type="submit">
+                                                            <i class="bi bi-check2-circle"></i> Sí, recibí completo
+                                                        </button>
+                                                    </form>
+                                                    <button class="btnx btnx-warning js-toggle-panel" type="button" data-target="@panelParcial">
+                                                        <i class="bi bi-dash-circle"></i> Recibí menos
+                                                    </button>
+                                                    <button class="btnx btnx-danger js-toggle-panel" type="button" data-target="@panelNoRecibido">
+                                                        <i class="bi bi-x-circle"></i> No recibí
+                                                    </button>
+                                                </div>
+
+                                                <div class="decision-panel" id="@panelParcial">
+                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionMaterial" method="post" class="decision-grid js-submit-form">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="RecepcionMaterialID" value="@item.RecepcionMaterialID" />
+                                                        <input type="hidden" name="Decision" value="@ProduccionRecepcionMaterialDecision.Parcial" />
+                                                        <div class="field">
+                                                            <label>Cantidad recibida</label>
+                                                            <input type="number" name="CantidadRecibida" min="0.0001" max="@item.CantidadEntregadaAlmacen.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="0.0001" required placeholder="0" />
+                                                        </div>
+                                                        <div class="field">
+                                                            <label>Motivo de la diferencia</label>
+                                                            <input type="text" name="MotivoDiferencia" maxlength="500" required placeholder="Ej. faltó un saco" />
+                                                        </div>
+                                                        <button class="btnx btnx-warning" type="submit"><i class="bi bi-check2"></i> Registrar parcial</button>
+                                                    </form>
+                                                </div>
+
+                                                <div class="decision-panel" id="@panelNoRecibido">
+                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionMaterial" method="post" class="decision-grid no-quantity js-submit-form">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="RecepcionMaterialID" value="@item.RecepcionMaterialID" />
+                                                        <input type="hidden" name="Decision" value="@ProduccionRecepcionMaterialDecision.NoRecibido" />
+                                                        <div class="field">
+                                                            <label>Motivo</label>
+                                                            <input type="text" name="MotivoDiferencia" maxlength="500" required placeholder="Describe brevemente por qué no lo recibiste" />
+                                                        </div>
+                                                        <button class="btnx btnx-danger" type="submit"><i class="bi bi-x-lg"></i> Confirmar no recibido</button>
+                                                    </form>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="readonly-note"><i class="bi bi-eye me-1"></i> Solo lectura. No tienes permiso para confirmar recepciones.</div>
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    </details>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-inbox"></i>
+                <strong>No hay entregas pendientes de confirmar</strong>
+                <span>Cuando Almacén registre una entrega aparecerá aquí.</span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <div>
+                <h2>Próximo a recibir de Almacén</h2>
+                <p>Despliega una máquina para revisar sus OF y el material que todavía falta por entregar.</p>
+            </div>
+            <span class="section-count">@esperados.Count</span>
+        </div>
+
+        @if (esperados.Any())
+        {
+            <div class="machine-list" id="materialesMaquinas">
+                @foreach (var maquinaGrupo in esperados
+                            .GroupBy(x => new
+                            {
+                                x.MaquinaID,
+                                x.MaquinaCodigo,
+                                x.MaquinaNombre
+                            })
+                            .OrderBy(x => x.Min(y => y.FechaArranque ?? DateTime.MaxValue))
+                            .ThenBy(x => x.Key.MaquinaCodigo)
+                            .ThenBy(x => x.Key.MaquinaNombre))
+                {
+                    var maquinaTexto = string.IsNullOrWhiteSpace(maquinaGrupo.Key.MaquinaCodigo)
+                    ? "Sin máquina"
+                    : string.IsNullOrWhiteSpace(maquinaGrupo.Key.MaquinaNombre)
+                    ? maquinaGrupo.Key.MaquinaCodigo
+                    : $"{maquinaGrupo.Key.MaquinaCodigo} - {maquinaGrupo.Key.MaquinaNombre}";
+
+                    var gruposOf = maquinaGrupo
+                    .GroupBy(x => new
+                    {
+                        x.ProgramaProduccionID,
+                        x.NumeroOF,
+                        x.FechaArranque
+                    })
+                    .OrderBy(x => x.Key.FechaArranque ?? DateTime.MaxValue)
+                    .ThenBy(x => x.Key.NumeroOF)
+                    .ToList();
+
+                    var siguienteOf = gruposOf.FirstOrDefault();
+                    var totalParciales = maquinaGrupo.Count(x => x.EsEntregaParcial);
+                    var totalSinEntrega = maquinaGrupo.Count(x => x.SinEntrega);
+
+                    <details class="machine-accordion js-machine-accordion">
+                        <summary class="machine-summary">
+                            <div class="machine-main">
+                                <div class="machine-icon"><i class="bi bi-building-gear"></i></div>
+                                <div>
+                                    <strong>@maquinaTexto</strong>
+                                    <span>@gruposOf.Count OF@(gruposOf.Count == 1 ? "" : "s") · @maquinaGrupo.Count() material@(maquinaGrupo.Count() == 1 ? "" : "es") pendiente@(maquinaGrupo.Count() == 1 ? "" : "s")</span>
+                                </div>
+                            </div>
+
+                            <div class="machine-next">
+                                @if (siguienteOf != null)
+                                {
+                                    <strong>OF @(string.IsNullOrWhiteSpace(siguienteOf.Key.NumeroOF) ? "—" : siguienteOf.Key.NumeroOF)</strong>
+                                    <span>
+                                        @if (siguienteOf.Key.FechaArranque.HasValue)
+                                        {
+                                            <text>@Fecha(siguienteOf.Key.FechaArranque)</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Sin fecha de arranque</text>
+                                        }
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="machine-badges">
+                                @if (totalParciales > 0)
+                                {
+                                    <span class="mini-badge orange"><i class="bi bi-circle-half"></i>@totalParciales parcial@(totalParciales == 1 ? "" : "es")</span>
+                                }
+                                @if (totalSinEntrega > 0)
+                                {
+                                    <span class="mini-badge red"><i class="bi bi-hourglass-split"></i>@totalSinEntrega pendiente@(totalSinEntrega == 1 ? "" : "s")</span>
+                                }
+                            </div>
+
+                            <span class="machine-chevron"><i class="bi bi-chevron-down"></i></span>
+                        </summary>
+
+                        <div class="machine-body">
+                            @foreach (var grupoOf in gruposOf)
+                            {
+                                var parcialesOf = grupoOf.Count(x => x.EsEntregaParcial);
+                                var pendientesOf = grupoOf.Count(x => x.SinEntrega);
+
+                                <details class="of-accordion js-of-accordion">
+                                    <summary class="of-summary">
+                                        <div class="of-main">
+                                            <strong>OF @(string.IsNullOrWhiteSpace(grupoOf.Key.NumeroOF) ? "—" : grupoOf.Key.NumeroOF)</strong>
+                                            <span>@grupoOf.Count() material@(grupoOf.Count() == 1 ? "" : "es") pendiente@(grupoOf.Count() == 1 ? "" : "s") de Almacén</span>
+                                        </div>
+
+                                        <div class="of-date">
+                                            @if (grupoOf.Key.FechaArranque.HasValue)
+                                            {
+                                                <strong>@Fecha(grupoOf.Key.FechaArranque)</strong>
+                                                <span>Se necesita</span>
+                                            }
+                                            else
+                                            {
+                                                <strong>Sin fecha</strong>
+                                                <span>Arranque</span>
+                                            }
+                                        </div>
+
+                                        <div class="of-status">
+                                            @if (parcialesOf > 0)
+                                            {
+                                                <span class="mini-badge orange"><i class="bi bi-circle-half"></i>@parcialesOf parcial@(parcialesOf == 1 ? "" : "es")</span>
+                                            }
+                                            else if (pendientesOf > 0)
+                                            {
+                                                <span class="mini-badge red"><i class="bi bi-hourglass-split"></i>Pendiente</span>
+                                            }
+                                        </div>
+
+                                        <span class="of-chevron"><i class="bi bi-chevron-down"></i></span>
+                                    </summary>
+
+                                    <div class="of-body">
+                                        <div class="expected-grid">
+                                            @foreach (var item in grupoOf.OrderBy(x => x.EsMateriaPrima ? 0 : 1).ThenBy(x => x.Codigo))
+                                            {
+                                                <div class="expected-card">
+                                                    <div class="expected-top">
+                                                        <div>
+                                                            <span class="material-type">
+                                                                <i class="bi @(item.EsMateriaPrima ? "bi-droplet-half" : "bi-box-seam")"></i>
+                                                                @item.TipoOrigenTexto
+                                                            </span>
+                                                            <h3>@item.TextoMaterial</h3>
+                                                        </div>
+
+                                                        @if (item.EsEntregaParcial)
+                                                        {
+                                                            <span class="expected-status partial">Entrega parcial</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="expected-status waiting">Pendiente de Almacén</span>
+                                                        }
+                                                    </div>
+
+                                                    <div class="expected-amounts">
+                                                        <div class="amount">
+                                                            <span>Requerido</span>
+                                                            <strong>@Cantidad(item.CantidadRequerida) @item.Unidad</strong>
+                                                        </div>
+                                                        <div class="amount">
+                                                            <span>Almacén entregó</span>
+                                                            <strong>@Cantidad(item.CantidadEntregadaAlmacen) @item.Unidad</strong>
+                                                        </div>
+                                                        <div class="amount missing">
+                                                            <span>Falta entregar</span>
+                                                            <strong>@Cantidad(item.CantidadPendienteAlmacen) @item.Unidad</strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </details>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-check2-circle"></i>
+                <strong>No hay materiales pendientes de Almacén</strong>
+                <span>Con los filtros actuales, las próximas órdenes ya tienen sus materiales entregados.</span>
+            </div>
+        }
+    </section>
+
+    @if (recientes.Any())
+    {
+        <section class="section">
+            <details class="history">
+                <summary>
+                    <i class="bi bi-clock-history"></i>
+                    Últimas recepciones confirmadas
+                    <span class="section-count ms-auto">@recientes.Count</span>
+                </summary>
+
+                <div class="history-list">
+                    @foreach (var item in recientes)
+                    {
+                        <div class="history-row">
+                            <div>
+                                <strong>@item.TextoEntregado</strong>
+                                <span>OF @(string.IsNullOrWhiteSpace(item.NumeroOF) ? "—" : item.NumeroOF)</span>
+                            </div>
+                            <div>
+                                <strong>@Cantidad(item.CantidadEntregadaAlmacen) @item.Unidad</strong>
+                                <span>Almacén</span>
+                            </div>
+                            <div>
+                                <span class="status-badge @ClaseEstadoRecepcion(item)">@TextoEstadoRecepcion(item)</span>
+                                @if (item.CantidadRecibidaProduccion.HasValue)
+                                {
+                                    <span>@CantidadNullable(item.CantidadRecibidaProduccion) @item.Unidad recibido</span>
+                                }
+                            </div>
+                            <div>
+                                <strong>@(string.IsNullOrWhiteSpace(item.UsuarioRecepcionNombre) ? "Producción" : item.UsuarioRecepcionNombre)</strong>
+                                <span>@Fecha(item.FechaRecepcion)</span>
+                                @if (item.TieneDiferencia && !string.IsNullOrWhiteSpace(item.MotivoDiferencia))
+                                {
+                                    <span>@item.MotivoDiferencia</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </details>
+        </section>
+    }
+</div>
+
+<script>
+    (function () {
+        document.querySelectorAll('.js-machine-accordion').forEach(function (machine) {
+            machine.addEventListener('toggle', function () {
+                if (!machine.open) return;
+
+                document.querySelectorAll('.js-machine-accordion').forEach(function (other) {
+                    if (other !== machine) other.open = false;
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-of-accordion').forEach(function (ofItem) {
+            ofItem.addEventListener('toggle', function () {
+                if (!ofItem.open) return;
+
+                const machine = ofItem.closest('.js-machine-accordion');
+                if (!machine) return;
+
+                machine.querySelectorAll('.js-of-accordion').forEach(function (other) {
+                    if (other !== ofItem) other.open = false;
+                });
+            });
+        });
+
+        document.querySelectorAll('.js-toggle-panel').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetId = button.dataset.target || '';
+                const target = document.getElementById(targetId);
+                if (!target) return;
+
+                const card = button.closest('.delivery');
+                if (card) {
+                    card.querySelectorAll('.decision-panel.show').forEach(function (panel) {
+                        if (panel !== target) panel.classList.remove('show');
+                    });
+                }
+
+                target.classList.toggle('show');
+
+                if (target.classList.contains('show')) {
+                    const input = target.querySelector('input:not([type="hidden"])');
+                    if (input) input.focus();
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-submit-form').forEach(function (form) {
+            form.addEventListener('submit', function () {
+                const button = form.querySelector('button[type="submit"]');
+                if (!button) return;
+
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Guardando...';
+            });
+        });
+    })();
+</script>

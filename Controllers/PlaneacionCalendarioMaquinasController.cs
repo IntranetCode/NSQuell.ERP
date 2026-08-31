@@ -1,4 +1,5 @@
 ﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Servicios.Planeacion;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -11,12 +12,13 @@ namespace ERP.NSQuell.Controllers
     public sealed partial class PlaneacionCalendarioMaquinasController : Controller // NSQ_TODO_PLANEACION_PRODUCCION_V1
     {
         private readonly IConfiguration _configuration;
+        private readonly IPlaneacionSecuenciaService _planeacionSecuenciaService;
 
-        public PlaneacionCalendarioMaquinasController(IConfiguration configuration)
+        public PlaneacionCalendarioMaquinasController(IConfiguration configuration, IPlaneacionSecuenciaService planeacionSecuenciaService)
         {
             _configuration = configuration;
+            _planeacionSecuenciaService = planeacionSecuenciaService;
         }
-
         private string ConnectionString =>
             _configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException(
@@ -41,28 +43,35 @@ namespace ERP.NSQuell.Controllers
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
 
-            // NSQ_PRODUCCION_CALENDARIO_READONLY_V1
             var modoProduccion =
-                Request.Path.Value?.StartsWith(
-                    "/Produccion/Calendario",
-                    StringComparison.OrdinalIgnoreCase) == true ||
-                string.Equals(
-                    Request.Query["modo"].ToString(),
-                    "produccion",
-                    StringComparison.OrdinalIgnoreCase);
+                Request.Path.Value?.StartsWith("/Produccion/Calendario", StringComparison.OrdinalIgnoreCase) == true ||
+                string.Equals(Request.Query["modo"].ToString(), "produccion", StringComparison.OrdinalIgnoreCase);
 
             ViewBag.ModoProduccion = modoProduccion;
 
             var periodo = ResolverPeriodo(vista, fecha, rangoInicio, rangoFin);
+            var ahora = DateTime.Now;
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             var maquinas = Excluir1200TCalendario(
-                await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn)); // NSQ_CALENDARIO_1200T_FIX_V19
-            // NSQ_PRODUCCION_PERSONAL_V7_CALENDARIO
+                await ObtenerMaquinasCalendarioAsync(periodo.Inicio, periodo.Fin, cn));
+
             await AplicarPersonalV7CalendarioAsync(maquinas, periodo.Inicio, periodo.Fin, cn);
+
+            var proyeccion =
+                await _planeacionSecuenciaService.ProyectarInterrupcionesActivasAsync(
+                    ahora,
+                    trabajarDomingo: false,
+                    cn);
+
+            AplicarProyeccionInterrupcionesCalendario(maquinas, proyeccion);
+
             var solicitudesReprogramacion = modoProduccion
                 ? new List<SolicitudReprogramacionCalendarioVm>()
                 : await ObtenerSolicitudesReprogramacionPendientesAsync(cn);
+
             var vm = new PlaneacionCalendarioMaquinasVm
             {
                 Vista = periodo.Vista,
@@ -71,13 +80,434 @@ namespace ERP.NSQuell.Controllers
                 FechaReferencia = fecha,
                 RangoInicio = periodo.RangoInicio,
                 RangoFin = periodo.RangoFin,
-                Ahora = DateTime.Now,
+                Ahora = ahora,
                 Maquinas = maquinas
             };
+
             ViewBag.SolicitudesReprogramacion = solicitudesReprogramacion;
             ViewBag.TotalSolicitudesReprogramacion = solicitudesReprogramacion.Count;
+            ViewBag.HayInterrupcionesActivas = proyeccion.HayInterrupcionesActivas;
+            ViewBag.TotalInterrupcionesActivas = proyeccion.TotalInterrupcionesActivas;
+            ViewBag.FechaCalculoProyeccion = proyeccion.FechaCalculo;
+
             return View(vm);
         }
+
+        private static void AplicarProyeccionInterrupcionesCalendario(
+    List<PlaneacionCalendarioMaquinaVm> maquinas,
+    PlaneacionProyeccionInterrupcionesResultado proyeccion)
+        {
+            if (maquinas == null || maquinas.Count == 0 || proyeccion.Programas == null || proyeccion.Programas.Count == 0)
+                return;
+
+            var proyecciones = proyeccion.Programas
+                .GroupBy(x => x.ProgramaProduccionID)
+                .ToDictionary(x => x.Key, x => x.First());
+
+            foreach (var maquina in maquinas)
+            {
+                foreach (var bloque in maquina.Bloques)
+                {
+                    if (!proyecciones.TryGetValue(bloque.ProgramaProduccionID, out var programa))
+                        continue;
+
+                    bloque.InicioProyectado = programa.InicioProyectado;
+                    bloque.FinProyectado = programa.FinProyectado;
+                    bloque.EsProgramaRaizInterrupcion = programa.EsProgramaRaizInterrupcion;
+                    bloque.ParoProyeccionID = programa.ParoID;
+                    bloque.TipoInterrupcionProyectada = programa.TipoInterrupcion ?? string.Empty;
+                    bloque.MotivoInterrupcionProyectada = programa.MotivoParo ?? string.Empty;
+                    bloque.MinutosImpactoInterrupcion = programa.MinutosImpactoInterrupcion;
+                    bloque.MinutosDesplazamientoProyectado = programa.MinutosDesplazamiento;
+                }
+            }
+        }
+
+        [HttpGet("ProyeccionInterrupcionesActivas")]
+        public async Task<IActionResult> ProyeccionInterrupcionesActivas(DateTime? rangoInicio = null, DateTime? rangoFin = null, bool trabajarDomingo = false)
+        {
+            if (!UsuarioEnSesion())
+            {
+                return Json(new
+                {
+                    ok = false,
+                    sesionExpirada = true,
+                    mensaje = "La sesión terminó. Vuelve a iniciar sesión para continuar."
+                });
+            }
+
+            try
+            {
+                await using var cn = new SqlConnection(ConnectionString);
+                await cn.OpenAsync();
+
+                var proyeccion =
+                    await _planeacionSecuenciaService.ProyectarInterrupcionesActivasAsync(
+                        DateTime.Now,
+                        trabajarDomingo,
+                        cn);
+
+                var programas = proyeccion.Programas.AsEnumerable();
+
+                if (rangoInicio.HasValue)
+                    programas = programas.Where(x => x.FinProyectado > rangoInicio.Value);
+
+                if (rangoFin.HasValue)
+                    programas = programas.Where(x => x.InicioProyectado < rangoFin.Value);
+
+                var lista = programas
+                    .OrderBy(x => x.InicioProyectado)
+                    .ThenBy(x => x.MaquinaID)
+                    .ThenBy(x => x.ProgramaProduccionID)
+                    .Select(x => new
+                    {
+                        programaProduccionID = x.ProgramaProduccionID,
+                        maquinaID = x.MaquinaID,
+                        moldeID = x.MoldeID,
+                        ejecucionProduccionID = x.EjecucionProduccionID,
+                        paroID = x.ParoID,
+                        esProgramaRaizInterrupcion = x.EsProgramaRaizInterrupcion,
+                        tipoInterrupcion = x.TipoInterrupcion,
+                        motivoParo = x.MotivoParo,
+                        inicioOriginal = x.InicioOriginal,
+                        finOriginal = x.FinOriginal,
+                        inicioProyectado = x.InicioProyectado,
+                        finProyectado = x.FinProyectado,
+                        cambioOriginal = x.CambioOriginal,
+                        arranqueOriginal = x.ArranqueOriginal,
+                        cambioProyectado = x.CambioProyectado,
+                        arranqueProyectado = x.ArranqueProyectado,
+                        minutosImpactoInterrupcion = x.MinutosImpactoInterrupcion,
+                        minutosDesplazamiento = x.MinutosDesplazamiento
+                    })
+                    .ToList();
+
+                return Json(new
+                {
+                    ok = true,
+                    fechaCalculo = proyeccion.FechaCalculo,
+                    hayInterrupcionesActivas = proyeccion.HayInterrupcionesActivas,
+                    totalInterrupcionesActivas = proyeccion.TotalInterrupcionesActivas,
+                    programas = lista
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new
+                {
+                    ok = false,
+                    sesionExpirada = false,
+                    mensaje = "No fue posible calcular la proyección actual de Producción: " + ex.Message
+                });
+            }
+        }
+
+        [HttpGet("PrevisualizarInterrupcionUrgente")]
+        public async Task<IActionResult> PrevisualizarInterrupcionUrgente(int programaUrgenteId, int maquinaId, bool trabajarDomingo = false)
+        {
+            if (!UsuarioEnSesion())
+                return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
+
+            if (programaUrgenteId <= 0 || maquinaId <= 0)
+                return BadRequest(new { ok = false, mensaje = "El programa urgente y la máquina son obligatorios." });
+
+            try
+            {
+                await using var cn = new SqlConnection(ConnectionString);
+                await cn.OpenAsync();
+
+                var programaUrgente = await ObtenerProgramaBaseAsync(programaUrgenteId, cn, null, bloquear: false);
+                if (programaUrgente == null)
+                    return NotFound(new { ok = false, mensaje = "No se encontró el programa que se desea declarar urgente." });
+
+                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(programaUrgenteId, cn, null, bloquear: false);
+                if (!string.IsNullOrWhiteSpace(motivoBloqueo))
+                    return BadRequest(new { ok = false, mensaje = "La OF seleccionada no puede utilizarse como interrupción urgente. " + motivoBloqueo });
+
+                var maquinasCompatibles = await ObtenerMaquinasCompatiblesAsync(programaUrgente, cn, null);
+                var maquinaDestino = maquinasCompatibles.FirstOrDefault(x => x.MaquinaID == maquinaId);
+                if (maquinaDestino == null)
+                {
+                    return BadRequest(new
+                    {
+                        ok = false,
+                        mensaje = "La OF urgente no es compatible con la máquina seleccionada.",
+                        maquinasPermitidas = maquinasCompatibles.Select(x => new { maquinaID = x.MaquinaID, codigo = x.Codigo, nombre = x.Nombre }).ToList()
+                    });
+                }
+
+                var programaActual = await ObtenerProduccionActivaParaInterrupcionUrgenteAsync(maquinaId, cn);
+                if (programaActual == null)
+                {
+                    return BadRequest(new
+                    {
+                        ok = false,
+                        mensaje = "La máquina seleccionada no tiene una OF en producción que pueda ser interrumpida. Si la máquina está libre, utiliza la reprogramación normal del calendario."
+                    });
+                }
+
+                if (programaActual.ProgramaProduccionID == programaUrgenteId)
+                    return BadRequest(new { ok = false, mensaje = "La OF urgente y la OF actualmente producida no pueden ser la misma." });
+
+                if (programaActual.EstatusProduccionID != EstatusPrograma.EnProduccion)
+                {
+                    return BadRequest(new
+                    {
+                        ok = false,
+                        mensaje = $"La OF actual está en estado {NombreEstatusProduccion(programaActual.EstatusProduccionID)}. Solo se permitirá iniciar una interrupción urgente cuando la máquina esté produciendo en serie."
+                    });
+                }
+
+                var proyeccionInterrupciones = await _planeacionSecuenciaService.ProyectarInterrupcionesActivasAsync(DateTime.Now, trabajarDomingo, cn);
+                var yaTieneInterrupcion = proyeccionInterrupciones.Programas.Any(x => x.EsProgramaRaizInterrupcion && x.ProgramaProduccionID == programaActual.ProgramaProduccionID);
+                if (yaTieneInterrupcion)
+                {
+                    return BadRequest(new
+                    {
+                        ok = false,
+                        mensaje = "La OF que se encuentra produciendo ya tiene una interrupción activa. No se permiten interrupciones anidadas."
+                    });
+                }
+
+                var ahora = NormalizarFecha(DateTime.Now);
+                var fechaInterrupcion = SiguienteAperturaOperativa(ahora, trabajarDomingo);
+                var cambiaMolde = programaActual.MoldeID != programaUrgente.MoldeID;
+                var horasCambioIda = cambiaMolde ? 1m : 0m;
+                var horasCambioRegreso = cambiaMolde ? 1m : 0m;
+                var horasProduccionUrgente = programaUrgente.HorasProgramadas > 0 ? programaUrgente.HorasProgramadas : 1m;
+
+                var fechaCambioUrgente = fechaInterrupcion;
+                var fechaArranqueUrgente = SumarHorasOperativas(fechaCambioUrgente, horasCambioIda, trabajarDomingo);
+                var fechaFinUrgente = SumarHorasOperativas(fechaArranqueUrgente, horasProduccionUrgente, trabajarDomingo);
+                var fechaPreparacionRegreso = fechaFinUrgente;
+                var fechaReinicioOriginal = SumarHorasOperativas(fechaPreparacionRegreso, horasCambioRegreso, trabajarDomingo);
+
+                var horasImpactoTotal = horasCambioIda + horasProduccionUrgente + horasCambioRegreso;
+                var finOriginalBase = programaActual.FechaFinProgramada > fechaInterrupcion ? programaActual.FechaFinProgramada : fechaInterrupcion;
+                var finOriginalProyectado = SumarHorasOperativas(finOriginalBase, horasImpactoTotal, trabajarDomingo);
+
+                var programasPosterioresImpactados = await ContarProgramasImpactadosPorInterrupcionUrgenteAsync(maquinaId, programaUrgenteId, programaActual.ProgramaProduccionID, fechaInterrupcion, cn);
+
+                var parejaActualId = await ObtenerProgramaParejaLhRhAsync(programaActual.ProgramaProduccionID, cn);
+                var parejaUrgenteId = await ObtenerProgramaParejaLhRhAsync(programaUrgenteId, cn);
+
+                var horarioActualVencido = programaActual.FechaFinProgramada <= ahora;
+
+                var advertencias = new List<string>();
+                if (cambiaMolde)
+                    advertencias.Add("La OF urgente utiliza un molde diferente. Se contempla 1 hora de preparación antes de la urgente y 1 hora para preparar nuevamente la OF interrumpida.");
+                if (parejaActualId.HasValue)
+                    advertencias.Add($"La OF que está produciendo pertenece a una pareja LH/RH. Su programa relacionado es {parejaActualId.Value} y deberá tratarse como parte de la misma interrupción.");
+                if (parejaUrgenteId.HasValue)
+                    advertencias.Add($"La OF urgente pertenece a una pareja LH/RH. Su programa relacionado es {parejaUrgenteId.Value} y deberá programarse junto con ella.");
+                if (horarioActualVencido)
+                    advertencias.Add("La OF actual ya superó su fin programado. La proyección utiliza la hora actual como base mínima; el tiempo restante real deberá conservarse desde Producción.");
+
+                var motivoResumen = cambiaMolde
+                    ? "La interrupción requiere cambio de molde y posteriormente nueva preparación de la OF original."
+                    : "La interrupción conserva el molde actual; no se agrega una hora de cambio de molde.";
+
+                return Json(new
+                {
+                    ok = true,
+                    requiereConfirmacion = true,
+                    fechaCalculo = DateTime.Now,
+                    maquina = new
+                    {
+                        maquinaID = maquinaDestino.MaquinaID,
+                        codigo = maquinaDestino.Codigo,
+                        nombre = maquinaDestino.Nombre
+                    },
+                    programaInterrumpido = new
+                    {
+                        programaProduccionID = programaActual.ProgramaProduccionID,
+                        ejecucionProduccionID = programaActual.EjecucionProduccionID,
+                        solicitudProduccionID = programaActual.SolicitudProduccionID,
+                        parte = programaActual.ParteTexto,
+                        descripcion = programaActual.DescripcionParte,
+                        moldeID = programaActual.MoldeID,
+                        molde = programaActual.MoldeTexto,
+                        inicioProgramado = programaActual.FechaInicioProgramada,
+                        finProgramado = programaActual.FechaFinProgramada,
+                        finProyectado = finOriginalProyectado,
+                        parejaLhRhProgramaID = parejaActualId
+                    },
+                    programaUrgente = new
+                    {
+                        programaProduccionID = programaUrgente.ProgramaProduccionID,
+                        solicitudProduccionID = programaUrgente.SolicitudProduccionID,
+                        parte = ObtenerTextoParte(programaUrgente),
+                        descripcion = programaUrgente.DescripcionParte,
+                        moldeID = programaUrgente.MoldeID,
+                        molde = string.IsNullOrWhiteSpace(programaUrgente.MoldeCodigo) ? "Sin molde" : programaUrgente.MoldeCodigo,
+                        inicioProgramadoActual = programaUrgente.FechaInicioProgramada,
+                        finProgramadoActual = programaUrgente.FechaFinProgramada,
+                        horasProduccion = Math.Round(horasProduccionUrgente, 4),
+                        parejaLhRhProgramaID = parejaUrgenteId
+                    },
+                    interrupcion = new
+                    {
+                        fechaInterrupcion,
+                        cambiaMolde,
+                        horasCambioIda,
+                        fechaArranqueUrgente,
+                        fechaFinUrgente,
+                        horasCambioRegreso,
+                        fechaReinicioOriginal,
+                        horasImpactoTotal = Math.Round(horasImpactoTotal, 4),
+                        minutosImpactoTotal = (int)Math.Round(horasImpactoTotal * 60m, 0, MidpointRounding.AwayFromZero),
+                        programasPosterioresImpactados
+                    },
+                    horarioActualVencido,
+                    motivoResumen,
+                    advertencias,
+                    mensaje = programasPosterioresImpactados > 0
+                        ? $"La interrupción urgente afectará la OF actualmente producida y puede recorrer {programasPosterioresImpactados} programa(s) posterior(es)."
+                        : "La interrupción urgente afectará la OF actualmente producida. No se detectaron programas posteriores reacomodables en esta máquina."
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { ok = false, mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { ok = false, mensaje = "No fue posible calcular la interrupción urgente: " + ex.Message });
+            }
+        }
+
+        private static async Task<ProgramaActivoInterrupcionUrgente?> ObtenerProduccionActivaParaInterrupcionUrgenteAsync(int maquinaId, SqlConnection cn)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    pp.ProgramaProduccionID,
+    pp.SolicitudProduccionID,
+    pp.SolicitudProduccionDetalleID,
+    pp.ParteID,
+    pp.NumeroParte,
+    pp.ReferenciaSAP,
+    pp.DesignacionDescripcionSAP AS DescripcionParte,
+    pp.MoldeID,
+    pp.MoldeCodigo,
+    pp.MaquinaID,
+    pp.MaquinaCodigo,
+    pp.MaquinaNombre,
+    pp.FechaInicioProgramada,
+    ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada)) AS FechaFinProgramada,
+    ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
+    e.EjecucionProduccionID,
+    e.EstatusID AS EstatusProduccionID,
+    e.FechaInicioReal
+FROM dbo.Produccion_Ejecucion e
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID=e.ProgramaProduccionID
+   AND pp.Activo=1
+WHERE e.Activo=1
+  AND pp.MaquinaID=@MaquinaID
+  AND e.EstatusID IN(2,3,4)
+ORDER BY
+    CASE e.EstatusID WHEN 3 THEN 0 WHEN 4 THEN 1 ELSE 2 END,
+    e.EjecucionProduccionID DESC;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new ProgramaActivoInterrupcionUrgente
+            {
+                ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                SolicitudProduccionID = rd["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionID"]),
+                SolicitudProduccionDetalleID = rd["SolicitudProduccionDetalleID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
+                ParteID = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]),
+                NumeroParte = rd["NumeroParte"]?.ToString()?.Trim(),
+                ReferenciaSAP = rd["ReferenciaSAP"]?.ToString()?.Trim(),
+                DescripcionParte = rd["DescripcionParte"]?.ToString()?.Trim(),
+                MoldeID = rd["MoldeID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeID"]),
+                MoldeCodigo = rd["MoldeCodigo"]?.ToString()?.Trim(),
+                MaquinaID = Convert.ToInt32(rd["MaquinaID"]),
+                MaquinaCodigo = rd["MaquinaCodigo"]?.ToString()?.Trim(),
+                MaquinaNombre = rd["MaquinaNombre"]?.ToString()?.Trim(),
+                FechaInicioProgramada = Convert.ToDateTime(rd["FechaInicioProgramada"]),
+                FechaFinProgramada = Convert.ToDateTime(rd["FechaFinProgramada"]),
+                HorasProgramadas = Convert.ToDecimal(rd["HorasProgramadas"]),
+                EstatusProduccionID = Convert.ToInt32(rd["EstatusProduccionID"]),
+                FechaInicioReal = rd["FechaInicioReal"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioReal"])
+            };
+        }
+
+        private static async Task<int> ContarProgramasImpactadosPorInterrupcionUrgenteAsync(int maquinaId, int programaUrgenteId, int programaInterrumpidoId, DateTime desde, SqlConnection cn)
+        {
+            const string sql = @"
+SELECT COUNT(1)
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.Activo=1
+  AND pp.MaquinaID=@MaquinaID
+  AND pp.ProgramaProduccionID<>@ProgramaUrgenteID
+  AND pp.ProgramaProduccionID<>@ProgramaInterrumpidoID
+  AND pp.FechaInicioProgramada IS NOT NULL
+  AND pp.FechaInicioProgramada>=@Desde
+  AND ISNULL(pp.EstatusID,1)=1
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_Ejecucion e
+      WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
+        AND e.Activo=1
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_Inspecciones ci
+      WHERE ci.ProgramaProduccionID=pp.ProgramaProduccionID
+  );";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteId;
+            cmd.Parameters.Add("@ProgramaInterrumpidoID", SqlDbType.Int).Value = programaInterrumpidoId;
+            cmd.Parameters.Add("@Desde", SqlDbType.DateTime).Value = desde;
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+
+        private static async Task<int> ContarProgramasImpactadosPorInterrupcionUrgenteAsync(int maquinaId, int programaUrgenteId, int programaInterrumpidoId, DateTime desde, SqlConnection cn)
+        {
+            const string sql = @"
+SELECT COUNT(1)
+FROM dbo.Planeacion_ProgramaProduccion pp
+WHERE pp.Activo=1
+  AND pp.MaquinaID=@MaquinaID
+  AND pp.ProgramaProduccionID<>@ProgramaUrgenteID
+  AND pp.ProgramaProduccionID<>@ProgramaInterrumpidoID
+  AND pp.FechaInicioProgramada IS NOT NULL
+  AND pp.FechaInicioProgramada>=@Desde
+  AND ISNULL(pp.EstatusID,1)=1
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Produccion_Ejecucion e
+      WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
+        AND e.Activo=1
+  )
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_Inspecciones ci
+      WHERE ci.ProgramaProduccionID=pp.ProgramaProduccionID
+  );";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
+            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteId;
+            cmd.Parameters.Add("@ProgramaInterrumpidoID", SqlDbType.Int).Value = programaInterrumpidoId;
+            cmd.Parameters.Add("@Desde", SqlDbType.DateTime).Value = desde;
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+
+
 
         [HttpGet("MaquinasCompatibles")]
         public async Task<IActionResult> MaquinasCompatibles(int programaProduccionId)
@@ -585,6 +1015,8 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     horasProduccion,
                     cn,
                     tx);
+
+                await SincronizarSecadoDesdeReprogramacionAsync(programa.ProgramaProduccionID, usuarioId, cn, tx);
                 // NSQ_LHRH_CALENDARIO_HOOK_V1
                 var programaParejaMovidoId =
                     await SincronizarParejaLhRhCalendarioAsync(
@@ -2419,11 +2851,217 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                     programa.ProgramaProduccionID;
 
                 await cmd.ExecuteNonQueryAsync();
+
+                await SincronizarSecadoDesdeReprogramacionAsync(programa.ProgramaProduccionID, usuarioId, cn, tx);
             }
 
             // NSQ_DDP_PRODUCCION_V1 - calendario no reasigna operadores.
         }
 
+        private static async Task SincronizarSecadoDesdeReprogramacionAsync(int programaProduccionId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (programaProduccionId <= 0) return;
+
+            const string sql = @"
+DECLARE @MaquinaID INT,
+        @FechaInicioProgramada DATETIME2,
+        @Arranque TIME,
+        @TipoSecado NVARCHAR(100),
+        @HorasSecado DECIMAL(18,4),
+        @MaterialCodigo NVARCHAR(100),
+        @MaterialDescripcion NVARCHAR(250),
+        @EstatusID INT,
+        @ProgramaActivo BIT,
+        @FechaArranque DATETIME2,
+        @FechaInicioSecado DATETIME2,
+        @MinutosSecado INT,
+        @TipoProceso NVARCHAR(30),
+        @RequiereSecado BIT;
+
+SELECT TOP(1)
+    @MaquinaID=pp.MaquinaID,
+    @FechaInicioProgramada=pp.FechaInicioProgramada,
+    @Arranque=pp.Arranque,
+    @TipoSecado=COALESCE(NULLIF(LTRIM(RTRIM(d.TipoSecado)),N''),NULLIF(LTRIM(RTRIM(dt.TipoSecado)),N'')),
+    @HorasSecado=COALESCE(d.HorasSecado,dt.HorasSecado),
+    @MaterialCodigo=COALESCE(NULLIF(LTRIM(RTRIM(d.MaterialCodigo)),N''),NULLIF(LTRIM(RTRIM(dt.MaterialCodigo)),N'')),
+    @MaterialDescripcion=COALESCE(NULLIF(LTRIM(RTRIM(d.MaterialDescripcion)),N''),NULLIF(LTRIM(RTRIM(dt.MaterialDescripcion)),N'')),
+    @EstatusID=ISNULL(pp.EstatusID,1),
+    @ProgramaActivo=pp.Activo
+FROM dbo.Planeacion_ProgramaProduccion pp WITH(UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+   AND d.Activo=1
+LEFT JOIN dbo.ERP_ParteDatosTecnicos dt
+    ON dt.ParteID=pp.ParteID
+   AND dt.Activo=1
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID;
+
+IF @ProgramaActivo IS NULL RETURN;
+
+SET @RequiereSecado=
+    CASE
+        WHEN @ProgramaActivo=1
+         AND @EstatusID NOT IN(5,6,9,99)
+         AND @FechaInicioProgramada IS NOT NULL
+         AND ISNULL(@HorasSecado,0)>0
+         AND (NULLIF(LTRIM(RTRIM(ISNULL(@MaterialCodigo,N''))),N'') IS NOT NULL
+              OR NULLIF(LTRIM(RTRIM(ISNULL(@MaterialDescripcion,N''))),N'') IS NOT NULL)
+        THEN 1
+        ELSE 0
+    END;
+
+IF @RequiereSecado=1
+BEGIN
+    SET @MinutosSecado=CONVERT(INT,CEILING(@HorasSecado*60));
+    SET @TipoProceso=
+        CASE
+            WHEN UPPER(ISNULL(@TipoSecado,N'')) LIKE N'%DESHUM%'
+              OR UPPER(ISNULL(@TipoSecado,N'')) LIKE N'%DESUM%'
+            THEN N'DESHUMIDIFICADO'
+            ELSE N'SECADO'
+        END;
+
+    IF @Arranque IS NULL
+        SET @FechaArranque=@FechaInicioProgramada;
+    ELSE
+    BEGIN
+        SET @FechaArranque=DATEADD(SECOND,DATEDIFF(SECOND,CAST('00:00:00' AS TIME),@Arranque),CAST(CAST(@FechaInicioProgramada AS DATE) AS DATETIME2));
+        IF @FechaArranque<@FechaInicioProgramada SET @FechaArranque=DATEADD(DAY,1,@FechaArranque);
+    END;
+
+    SET @FechaInicioSecado=DATEADD(MINUTE,-@MinutosSecado,@FechaArranque);
+
+    UPDATE sm
+    SET
+        sm.MaquinaProgramadaID=@MaquinaID,
+        sm.TipoSecadoOrigen=NULLIF(LTRIM(RTRIM(@TipoSecado)),N''),
+        sm.TipoProceso=@TipoProceso,
+        sm.HorasSecadoRequeridas=@HorasSecado,
+        sm.MinutosSecadoRequeridos=@MinutosSecado,
+        sm.FechaArranqueProduccion=@FechaArranque,
+        sm.FechaInicioSecadoObjetivo=@FechaInicioSecado,
+        sm.FechaLimiteEntregaMaterial=DATEADD(MINUTE,-ISNULL(sm.MargenEntregaAntesSecadoMinutos,0),@FechaInicioSecado),
+        sm.FechaObjetivoFinSecado=@FechaArranque,
+        sm.Estado=
+            CASE
+                WHEN sm.Estado=N'CANCELADO' THEN
+                    CASE
+                        WHEN EXISTS
+                        (
+                            SELECT 1
+                            FROM dbo.Produccion_SecadoCargas c
+                            WHERE c.SecadoMaterialID=sm.SecadoMaterialID
+                              AND c.Activo=1
+                              AND c.Estado=N'EN_PROCESO'
+                        ) THEN N'EN_PROCESO'
+                        WHEN ISNULL(sm.CantidadFinalizadaKg,0)>0.0005 THEN N'PARCIAL'
+                        ELSE N'PENDIENTE'
+                    END
+                ELSE sm.Estado
+            END,
+        sm.Activo=1,
+        sm.UsuarioModificacionID=@UsuarioID,
+        sm.FechaModificacion=SYSDATETIME()
+    FROM dbo.Produccion_SecadoMaterial sm
+    WHERE sm.ProgramaProduccionID=@ProgramaProduccionID
+      AND sm.Estado<>N'FINALIZADO';
+
+    DECLARE @PreparacionAnticipadaID INT,
+            @EstadoPreparacion NVARCHAR(30);
+
+    SELECT TOP(1)
+        @PreparacionAnticipadaID=PreparacionAnticipadaID,
+        @EstadoPreparacion=Estado
+    FROM dbo.Produccion_PreparacionAnticipada WITH(UPDLOCK,HOLDLOCK)
+    WHERE ProgramaProduccionID=@ProgramaProduccionID
+      AND TipoTarea=N'SECADO_MATERIAL'
+    ORDER BY PreparacionAnticipadaID DESC;
+
+    IF @PreparacionAnticipadaID IS NULL
+    BEGIN
+        INSERT INTO dbo.Produccion_PreparacionAnticipada
+        (
+            ProgramaProduccionID,TipoTarea,FechaObjetivo,FechaAviso,Estado,
+            UsuarioConfirmacionID,FechaConfirmacion,Observaciones,Activo,
+            UsuarioCreacionID,FechaCreacion,UsuarioInicioID,FechaInicioReal,
+            FechaFinReal,DuracionRealMinutos,LimiteMinutosAplicado,
+            ExcedioLimite,MotivoExceso
+        )
+        VALUES
+        (
+            @ProgramaProduccionID,N'SECADO_MATERIAL',@FechaArranque,@FechaInicioSecado,N'PENDIENTE',
+            NULL,NULL,NULL,1,@UsuarioID,SYSDATETIME(),NULL,NULL,NULL,NULL,NULL,0,NULL
+        );
+    END
+    ELSE IF @EstadoPreparacion=N'EN_PROCESO'
+    BEGIN
+        UPDATE dbo.Produccion_PreparacionAnticipada
+        SET FechaObjetivo=@FechaArranque,
+            FechaAviso=@FechaInicioSecado,
+            Activo=1,
+            UsuarioModificacionID=@UsuarioID,
+            FechaModificacion=SYSDATETIME()
+        WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+    END
+    ELSE IF @EstadoPreparacion<>N'CONFIRMADA'
+    BEGIN
+        UPDATE dbo.Produccion_PreparacionAnticipada
+        SET FechaObjetivo=@FechaArranque,
+            FechaAviso=@FechaInicioSecado,
+            Estado=N'PENDIENTE',
+            UsuarioInicioID=NULL,
+            FechaInicioReal=NULL,
+            FechaFinReal=NULL,
+            DuracionRealMinutos=NULL,
+            LimiteMinutosAplicado=NULL,
+            ExcedioLimite=0,
+            MotivoExceso=NULL,
+            UsuarioConfirmacionID=NULL,
+            FechaConfirmacion=NULL,
+            Activo=1,
+            UsuarioModificacionID=@UsuarioID,
+            FechaModificacion=SYSDATETIME()
+        WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+    END
+END
+ELSE
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET Estado=N'CANCELADA',
+        Activo=0,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE ProgramaProduccionID=@ProgramaProduccionID
+      AND TipoTarea=N'SECADO_MATERIAL'
+      AND Estado=N'PENDIENTE'
+      AND Activo=1;
+
+    UPDATE sm
+    SET sm.Estado=N'CANCELADO',
+        sm.UsuarioModificacionID=@UsuarioID,
+        sm.FechaModificacion=SYSDATETIME()
+    FROM dbo.Produccion_SecadoMaterial sm
+    WHERE sm.ProgramaProduccionID=@ProgramaProduccionID
+      AND sm.Activo=1
+      AND sm.Estado IN(N'PENDIENTE',N'PARCIAL')
+      AND ISNULL(sm.CantidadAsignadaKg,0)<=0.0005
+      AND ISNULL(sm.CantidadFinalizadaKg,0)<=0.0005
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_SecadoCargas c
+          WHERE c.SecadoMaterialID=sm.SecadoMaterialID
+            AND c.Activo=1
+            AND c.Estado=N'EN_PROCESO'
+      );
+END;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
+        }
         private static ProgramaCola MapearProgramaCola(SqlDataReader rd)
         {
             return new ProgramaCola

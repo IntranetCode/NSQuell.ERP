@@ -906,44 +906,28 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Movimiento(
-        AlmacenMPMovimientoFormVm model,
-        int? embalajeSolicitadoId,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Movimiento(AlmacenMPMovimientoFormVm model, int? embalajeSolicitadoId, CancellationToken cancellationToken)
     {
         var sesion = ValidarSesion();
         if (sesion != null) return sesion;
 
-        model.Lote = string.IsNullOrWhiteSpace(model.Lote)
-            ? "S/L"
-            : model.Lote.Trim();
+        model.Lote = string.IsNullOrWhiteSpace(model.Lote) ? "S/L" : model.Lote.Trim();
         model.NumeroOF = model.NumeroOF?.Trim();
         model.Observaciones = model.Observaciones?.Trim();
         model.OperacionToken = model.OperacionToken?.Trim() ?? string.Empty;
         model.FechaMovimiento = DateTime.Now;
-        // EsEntregaOF solo identifica el flujo dirigido desde AlmacenOF;
-        // seleccionar una OF manual no convierte el movimiento en una entrega dirigida.
-        var embalajeSolicitadoID = model.EsEntregaOF
-            ? embalajeSolicitadoId.GetValueOrDefault()
-            : model.MaterialID;
+
+        // EsEntregaOF solo identifica el flujo dirigido desde AlmacenOF.
+        // Seleccionar una OF manualmente no convierte el movimiento en entrega dirigida.
+        var embalajeSolicitadoID = model.EsEntregaOF ? embalajeSolicitadoId.GetValueOrDefault() : model.MaterialID;
 
         ModelState.Remove(nameof(model.Unidad));
 
         if (!AlmacenOFEntregaService.TokenValido(model.OperacionToken))
-        {
-            ModelState.AddModelError(
-                nameof(model.OperacionToken),
-                "La operación expiró. Regresa al formulario e inténtalo nuevamente.");
-        }
+            ModelState.AddModelError(nameof(model.OperacionToken), "La operación expiró. Regresa al formulario e inténtalo nuevamente.");
 
-        if (!model.EsEntregaOF
-            && (!model.SolicitudProduccionID.HasValue
-                || model.SolicitudProduccionID.Value <= 0))
-        {
-            ModelState.AddModelError(
-                nameof(model.SolicitudProduccionID),
-                "Selecciona una orden de fabricacion. No se permiten movimientos de embalajes sin OF.");
-        }
+        if (!model.EsEntregaOF && (!model.SolicitudProduccionID.HasValue || model.SolicitudProduccionID.Value <= 0))
+            ModelState.AddModelError(nameof(model.SolicitudProduccionID), "Selecciona una orden de fabricacion. No se permiten movimientos de embalajes sin OF.");
 
         if (model.EsEntregaOF)
         {
@@ -958,154 +942,72 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
             ModelState.Remove(nameof(model.NumeroOF));
             ModelState.Remove(nameof(model.CantidadPendienteOF));
 
-            if (!model.SolicitudProduccionID.HasValue
-                || model.SolicitudProduccionID.Value <= 0)
-            {
-                ModelState.AddModelError(
-                    nameof(model.SolicitudProduccionID),
-                    "La orden de fabricación es obligatoria.");
-            }
+            if (!model.SolicitudProduccionID.HasValue || model.SolicitudProduccionID.Value <= 0)
+                ModelState.AddModelError(nameof(model.SolicitudProduccionID), "La orden de fabricación es obligatoria.");
 
             if (embalajeSolicitadoID <= 0)
-            {
-                ModelState.AddModelError(
-                    string.Empty,
-                    "No se pudo identificar el embalaje solicitado originalmente.");
-            }
+                ModelState.AddModelError(string.Empty, "No se pudo identificar el embalaje solicitado originalmente.");
 
             if (model.MaterialID <= 0)
-            {
-                ModelState.AddModelError(
-                    nameof(model.MaterialID),
-                    "Selecciona el embalaje que se entregará.");
-            }
+                ModelState.AddModelError(nameof(model.MaterialID), "Selecciona el embalaje que se entregará.");
 
             if (string.IsNullOrWhiteSpace(model.Observaciones))
-            {
-                ModelState.AddModelError(
-                    nameof(model.Observaciones),
-                    "Las observaciones son obligatorias para la entrega a una OF.");
-            }
+                ModelState.AddModelError(nameof(model.Observaciones), "Las observaciones son obligatorias para la entrega a una OF.");
         }
 
-        if ((model.TipoMovimiento == "AjustePositivo"
-             || model.TipoMovimiento == "AjusteNegativo")
-            && string.IsNullOrWhiteSpace(model.Observaciones))
-        {
-            ModelState.AddModelError(
-                nameof(model.Observaciones),
-                "El motivo del ajuste es obligatorio.");
-        }
+        if ((model.TipoMovimiento == "AjustePositivo" || model.TipoMovimiento == "AjusteNegativo") && string.IsNullOrWhiteSpace(model.Observaciones))
+            ModelState.AddModelError(nameof(model.Observaciones), "El motivo del ajuste es obligatorio.");
 
         if (!TiposPermitidos.Contains(model.TipoMovimiento))
-        {
-            ModelState.AddModelError(
-                nameof(model.TipoMovimiento),
-                "Tipo de movimiento inválido.");
-        }
+            ModelState.AddModelError(nameof(model.TipoMovimiento), "Tipo de movimiento inválido.");
 
         if (!ModelState.IsValid)
         {
-            await CargarMovimientoAsync(
-                model,
-                cancellationToken,
-                embalajeSolicitadoID);
-            PrepararVistaEntregaEmbalaje(
-                model,
-                embalajeSolicitadoID);
+            await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+            PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID);
             return View(model);
         }
 
-        await using var connection =
-            await AbrirConexionAsync(cancellationToken);
+        await using var connection = await AbrirConexionAsync(cancellationToken);
 
-        if (!await ExisteColumnaAsync(
-                connection,
-                "dbo.AlmacenEmbalajes_Movimientos",
-                "SolicitudProduccionID",
-                cancellationToken))
+        if (!await ExisteColumnaAsync(connection, "dbo.AlmacenEmbalajes_Movimientos", "SolicitudProduccionID", cancellationToken))
         {
-            ModelState.AddModelError(
-                string.Empty,
-                "Falta ejecutar 20_Almacen_MP_EMB_OF_FolioCompra_v1.0.sql.");
-            await CargarMovimientoAsync(
-                model,
-                cancellationToken,
-                embalajeSolicitadoID);
-            PrepararVistaEntregaEmbalaje(
-                model,
-                embalajeSolicitadoID);
+            ModelState.AddModelError(string.Empty, "Falta ejecutar 20_Almacen_MP_EMB_OF_FolioCompra_v1.0.sql.");
+            await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+            PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID);
             return View(model);
         }
 
-        if (model.EsEntregaOF
-            && !await ExisteColumnaAsync(
-                connection,
-                "dbo.AlmacenEmbalajes_Movimientos",
-                "EmbalajeSolicitadoID",
-                cancellationToken))
+        if (model.EsEntregaOF && !await ExisteColumnaAsync(connection, "dbo.AlmacenEmbalajes_Movimientos", "EmbalajeSolicitadoID", cancellationToken))
         {
-            ModelState.AddModelError(
-                string.Empty,
-                "Falta ejecutar el SQL de sustitución de embalajes v5.0.6.");
-            await CargarMovimientoAsync(
-                model,
-                cancellationToken,
-                embalajeSolicitadoID);
-            PrepararVistaEntregaEmbalaje(
-                model,
-                embalajeSolicitadoID);
+            ModelState.AddModelError(string.Empty, "Falta ejecutar el SQL de sustitución de embalajes v5.0.6.");
+            await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+            PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID);
             return View(model);
         }
 
-        await using var transaction =
-            (SqlTransaction)await connection.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-
-        var referencia =
-            AlmacenOFEntregaService.CrearReferencia(
-                "WEB-EMB",
-                model.OperacionToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var referencia = AlmacenOFEntregaService.CrearReferencia("WEB-EMB", model.OperacionToken);
 
         try
         {
-            if (await AlmacenOFEntregaService.ExisteReferenciaEmbalajeAsync(
-                    connection,
-                    transaction,
-                    referencia,
-                    cancellationToken))
+            if (await AlmacenOFEntregaService.ExisteReferenciaEmbalajeAsync(connection, transaction, referencia, cancellationToken))
             {
                 await transaction.RollbackAsync(cancellationToken);
-                Mensaje(
-                    "warning",
-                    "Este movimiento ya había sido registrado. No se creó un duplicado.");
-                return model.EsEntregaOF
-                    ? RedirectToAction("Index", "AlmacenOF")
-                    : RedirectToAction(nameof(Index));
+                Mensaje("warning", "Este movimiento ya había sido registrado. No se creó un duplicado.");
+                return model.EsEntregaOF ? RedirectToAction("Index", "AlmacenOF") : RedirectToAction(nameof(Index));
             }
 
             if (!model.EsEntregaOF)
             {
-                var numeroOFVinculado = await ResolverNumeroOFAsync(
-                    connection,
-                    transaction,
-                    model.SolicitudProduccionID!.Value,
-                    cancellationToken);
+                var numeroOFVinculado = await ResolverNumeroOFAsync(connection, transaction, model.SolicitudProduccionID!.Value, cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(numeroOFVinculado))
                 {
-                    ModelState.AddModelError(
-                        nameof(model.SolicitudProduccionID),
-                        "La orden de fabricacion seleccionada no existe o ya no esta activa.");
+                    ModelState.AddModelError(nameof(model.SolicitudProduccionID), "La orden de fabricacion seleccionada no existe o ya no esta activa.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID);
                     return View(model);
                 }
 
@@ -1118,26 +1020,14 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
 
             if (model.EsEntregaOF)
             {
-                contexto = await AlmacenOFEntregaService.CargarEmbalajeAsync(
-                    connection,
-                    transaction,
-                    model.SolicitudProduccionID!.Value,
-                    embalajeSolicitadoID,
-                    cancellationToken);
+                contexto = await AlmacenOFEntregaService.CargarEmbalajeAsync(connection, transaction, model.SolicitudProduccionID!.Value, embalajeSolicitadoID, cancellationToken);
 
                 if (contexto == null)
                 {
-                    ModelState.AddModelError(
-                        string.Empty,
-                        "El embalaje solicitado originalmente no pertenece a la OF.");
+                    ModelState.AddModelError(string.Empty, "El embalaje solicitado originalmente no pertenece a la OF.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID);
                     return View(model);
                 }
 
@@ -1148,234 +1038,131 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
 
                 if (string.IsNullOrWhiteSpace(contexto.NumeroOF))
                 {
-                    ModelState.AddModelError(
-                        nameof(model.SolicitudProduccionID),
-                        "Planeación todavía no asigna un número de OF válido.");
+                    ModelState.AddModelError(nameof(model.SolicitudProduccionID), "Planeación todavía no asigna un número de OF válido.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID,
-                        codigoSolicitado,
-                        unidadSolicitada);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                     return View(model);
                 }
 
                 if (contexto.Pendiente <= 0.0005m)
                 {
-                    ModelState.AddModelError(
-                        nameof(model.Cantidad),
-                        "La entrega del embalaje solicitado ya está completa.");
+                    ModelState.AddModelError(nameof(model.Cantidad), "La entrega del embalaje solicitado ya está completa.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID,
-                        codigoSolicitado,
-                        unidadSolicitada);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                     return View(model);
                 }
 
                 if (model.Cantidad - contexto.Pendiente > 0.0005m)
                 {
-                    ModelState.AddModelError(
-                        nameof(model.Cantidad),
-                        $"La cantidad excede lo pendiente. Máximo permitido: {contexto.Pendiente:0.###} {contexto.Unidad}.");
+                    ModelState.AddModelError(nameof(model.Cantidad), $"La cantidad excede lo pendiente. Máximo permitido: {contexto.Pendiente:0.###} {contexto.Unidad}.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID,
-                        codigoSolicitado,
-                        unidadSolicitada);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                     return View(model);
                 }
             }
 
             const string embalajeSql = @"
-SELECT Codigo, Nombre, UnidadDefault, RequiereLote
-FROM dbo.ERP_Embalajes WITH (UPDLOCK, HOLDLOCK)
-WHERE EmbalajeID = @Id
-  AND Activo = 1;";
+SELECT Codigo,Nombre,UnidadDefault,RequiereLote
+FROM dbo.ERP_Embalajes WITH(UPDLOCK,HOLDLOCK)
+WHERE EmbalajeID=@Id
+  AND Activo=1;";
 
             string codigoEntregado;
             string nombreEntregado;
             var requiereLote = false;
 
-            await using (var embalajeCommand =
-                new SqlCommand(embalajeSql, connection, transaction))
+            await using (var embalajeCommand = new SqlCommand(embalajeSql, connection, transaction))
             {
-                embalajeCommand.Parameters.Add("@Id", SqlDbType.Int).Value =
-                    model.MaterialID;
+                embalajeCommand.Parameters.Add("@Id", SqlDbType.Int).Value = model.MaterialID;
 
-                await using var reader =
-                    await embalajeCommand.ExecuteReaderAsync(cancellationToken);
+                await using var reader = await embalajeCommand.ExecuteReaderAsync(cancellationToken);
 
                 if (!await reader.ReadAsync(cancellationToken))
                 {
-                    ModelState.AddModelError(
-                        nameof(model.MaterialID),
-                        "El embalaje seleccionado no existe o está inactivo.");
+                    ModelState.AddModelError(nameof(model.MaterialID), "El embalaje seleccionado no existe o está inactivo.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID,
-                        codigoSolicitado,
-                        unidadSolicitada);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                     return View(model);
                 }
 
                 codigoEntregado = Texto(reader, "Codigo");
                 nombreEntregado = Texto(reader, "Nombre");
                 requiereLote = Convert.ToBoolean(reader["RequiereLote"]);
-                model.Unidad = Texto(reader, "UnidadDefault")
-                    .Trim()
-                    .ToUpperInvariant();
+                model.Unidad = Texto(reader, "UnidadDefault").Trim().ToUpperInvariant();
             }
 
-            var mismoEmbalaje = !model.EsEntregaOF
-                || model.MaterialID == embalajeSolicitadoID;
+            var mismoEmbalaje = !model.EsEntregaOF || model.MaterialID == embalajeSolicitadoID;
 
-            if (model.EsEntregaOF
-                && !string.Equals(
-                    model.Unidad,
-                    unidadSolicitada,
-                    StringComparison.OrdinalIgnoreCase))
+            if (model.EsEntregaOF && !string.Equals(model.Unidad, unidadSolicitada, StringComparison.OrdinalIgnoreCase))
             {
-                ModelState.AddModelError(
-                    nameof(model.MaterialID),
-                    $"El embalaje sustituto debe utilizar la misma unidad ({unidadSolicitada}).");
+                ModelState.AddModelError(nameof(model.MaterialID), $"El embalaje sustituto debe utilizar la misma unidad ({unidadSolicitada}).");
                 await transaction.RollbackAsync(cancellationToken);
-                await CargarMovimientoAsync(
-                    model,
-                    cancellationToken,
-                    embalajeSolicitadoID);
-                PrepararVistaEntregaEmbalaje(
-                    model,
-                    embalajeSolicitadoID,
-                    codigoSolicitado,
-                    unidadSolicitada);
+                await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                 return View(model);
             }
 
-            var observacionBaseEntrega =
-                model.EsEntregaOF
-                    ? $"Entrega de embalaje para {model.NumeroOF}."
-                    : string.Empty;
+            var observacionBaseEntrega = model.EsEntregaOF ? $"Entrega de embalaje para {model.NumeroOF}." : string.Empty;
 
-            if (model.EsEntregaOF
-                && !mismoEmbalaje
-                && (string.IsNullOrWhiteSpace(model.Observaciones)
-                    || string.Equals(
-                        model.Observaciones.Trim(),
-                        observacionBaseEntrega,
-                        StringComparison.OrdinalIgnoreCase)))
+            if (model.EsEntregaOF && !mismoEmbalaje && (string.IsNullOrWhiteSpace(model.Observaciones) || string.Equals(model.Observaciones.Trim(), observacionBaseEntrega, StringComparison.OrdinalIgnoreCase)))
             {
-                ModelState.AddModelError(
-                    nameof(model.Observaciones),
-                    "Indica el motivo de usar un embalaje diferente al solicitado.");
+                ModelState.AddModelError(nameof(model.Observaciones), "Indica el motivo de usar un embalaje diferente al solicitado.");
                 await transaction.RollbackAsync(cancellationToken);
-                await CargarMovimientoAsync(
-                    model,
-                    cancellationToken,
-                    embalajeSolicitadoID);
-                PrepararVistaEntregaEmbalaje(
-                    model,
-                    embalajeSolicitadoID,
-                    codigoSolicitado,
-                    unidadSolicitada);
+                await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                 return View(model);
             }
 
-            if (!model.EsEntregaOF
-                && requiereLote
-                && model.Lote == "S/L")
+            if (!model.EsEntregaOF && requiereLote && model.Lote == "S/L")
             {
-                ModelState.AddModelError(
-                    nameof(model.Lote),
-                    "Este embalaje requiere lote.");
+                ModelState.AddModelError(nameof(model.Lote), "Este embalaje requiere lote.");
                 await transaction.RollbackAsync(cancellationToken);
-                await CargarMovimientoAsync(
-                    model,
-                    cancellationToken,
-                    embalajeSolicitadoID);
+                await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
                 return View(model);
             }
 
             if (EsSalidaMP(model.TipoMovimiento))
             {
                 const string saldoSql = @"
-SELECT
-    CONVERT
-    (
-        DECIMAL(18,4),
-        inventario.Disponible
-        + CASE
-              WHEN @UsarReservaPropia = 1
-                  THEN ISNULL
-                       (
-                           (
-                               SELECT SUM(reserva.CantidadReservada)
-                               FROM dbo.AlmacenEmbalajes_Reservas reserva
-                               WHERE reserva.Activo = 1
-                                 AND reserva.SolicitudProduccionID = @SolicitudProduccionID
-                                 AND reserva.EmbalajeID = @EmbalajeSolicitadoID
-                           ),
-                           0
-                       )
-              ELSE 0
-          END
-    )
+SELECT CONVERT
+(
+    DECIMAL(18,4),
+    inventario.Disponible+
+    CASE
+        WHEN @UsarReservaPropia=1 THEN ISNULL
+        (
+            (
+                SELECT SUM(reserva.CantidadReservada)
+                FROM dbo.AlmacenEmbalajes_Reservas reserva
+                WHERE reserva.Activo=1
+                  AND reserva.SolicitudProduccionID=@SolicitudProduccionID
+                  AND reserva.EmbalajeID=@EmbalajeSolicitadoID
+            ),0
+        )
+        ELSE 0
+    END
+)
 FROM dbo.vw_AlmacenEmbalajesInventario inventario
-WHERE inventario.EmbalajeID = @EmbalajeID;";
+WHERE inventario.EmbalajeID=@EmbalajeID;";
 
-                await using var saldoCommand =
-                    new SqlCommand(saldoSql, connection, transaction);
-                saldoCommand.Parameters.Add("@EmbalajeID", SqlDbType.Int).Value =
-                    model.MaterialID;
-                saldoCommand.Parameters.Add("@UsarReservaPropia", SqlDbType.Bit).Value =
-                    model.EsEntregaOF && mismoEmbalaje;
-                saldoCommand.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
-                    model.SolicitudProduccionID.HasValue
-                        ? model.SolicitudProduccionID.Value
-                        : DBNull.Value;
-                saldoCommand.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int).Value =
-                    embalajeSolicitadoID > 0
-                        ? embalajeSolicitadoID
-                        : DBNull.Value;
+                await using var saldoCommand = new SqlCommand(saldoSql, connection, transaction);
+                saldoCommand.Parameters.Add("@EmbalajeID", SqlDbType.Int).Value = model.MaterialID;
+                saldoCommand.Parameters.Add("@UsarReservaPropia", SqlDbType.Bit).Value = model.EsEntregaOF && mismoEmbalaje;
+                saldoCommand.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = model.SolicitudProduccionID.HasValue ? model.SolicitudProduccionID.Value : DBNull.Value;
+                saldoCommand.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int).Value = embalajeSolicitadoID > 0 ? embalajeSolicitadoID : DBNull.Value;
 
-                var saldo = Convert.ToDecimal(
-                    await saldoCommand.ExecuteScalarAsync(cancellationToken)
-                    ?? 0m);
+                var saldo = Convert.ToDecimal(await saldoCommand.ExecuteScalarAsync(cancellationToken) ?? 0m);
 
                 if (saldo < model.Cantidad)
                 {
-                    ModelState.AddModelError(
-                        nameof(model.Cantidad),
-                        $"Stock insuficiente para {codigoEntregado}. Disponible para esta operación: {saldo:0.###} {model.Unidad}.");
+                    ModelState.AddModelError(nameof(model.Cantidad), $"Stock insuficiente para {codigoEntregado}. Disponible para esta operación: {saldo:0.###} {model.Unidad}.");
                     await transaction.RollbackAsync(cancellationToken);
-                    await CargarMovimientoAsync(
-                        model,
-                        cancellationToken,
-                        embalajeSolicitadoID);
-                    PrepararVistaEntregaEmbalaje(
-                        model,
-                        embalajeSolicitadoID,
-                        codigoSolicitado,
-                        unidadSolicitada);
+                    await CargarMovimientoAsync(model, cancellationToken, embalajeSolicitadoID);
+                    PrepararVistaEntregaEmbalaje(model, embalajeSolicitadoID, codigoSolicitado, unidadSolicitada);
                     return View(model);
                 }
             }
@@ -1388,8 +1175,7 @@ WHERE inventario.EmbalajeID = @EmbalajeID;";
                     ? $"[ENTREGA EMBALAJE] Solicitado y entregado: {codigoEntregado}."
                     : $"[SUSTITUCIÓN EMBALAJE] Solicitado: {codigoSolicitado}. Entregado: {codigoEntregado} - {nombreEntregado}.";
 
-                observacionesGuardar =
-                    $"{encabezado} {observacionesGuardar}".Trim();
+                observacionesGuardar = $"{encabezado} {observacionesGuardar}".Trim();
             }
 
             if (observacionesGuardar.Length > 800)
@@ -1398,114 +1184,60 @@ WHERE inventario.EmbalajeID = @EmbalajeID;";
             const string insertSql = @"
 INSERT dbo.AlmacenEmbalajes_Movimientos
 (
-    FechaMovimiento,
-    EmbalajeID,
-    EmbalajeSolicitadoID,
-    TipoMovimiento,
-    Lote,
-    Cantidad,
-    Unidad,
-    UbicacionID,
-    NumeroOF,
-    ResponsableUsuarioID,
-    EntregadoPorNombre,
-    Seguimiento,
-    FechaCreacion,
-    CreadoPor,
-    Activo,
-    RequiereValidacionProduccion,
-    ValidadoProduccion,
-    ReferenciaOperacion,
-    SolicitudProduccionID
+    FechaMovimiento,EmbalajeID,EmbalajeSolicitadoID,TipoMovimiento,Lote,Cantidad,Unidad,
+    UbicacionID,NumeroOF,ResponsableUsuarioID,EntregadoPorNombre,Seguimiento,
+    FechaCreacion,CreadoPor,Activo,RequiereValidacionProduccion,ValidadoProduccion,
+    ReferenciaOperacion,SolicitudProduccionID
 )
+OUTPUT INSERTED.MovimientoID
 VALUES
 (
-    SYSDATETIME(),
-    @EmbalajeID,
-    @EmbalajeSolicitadoID,
-    @Tipo,
-    @Lote,
-    @Cantidad,
-    @Unidad,
-    @UbicacionID,
-    @NumeroOF,
-    @UsuarioID,
-    @Responsable,
-    @Observaciones,
-    SYSUTCDATETIME(),
-    @Responsable,
-    1,
-    0,
-    1,
-    @Referencia,
-    @SolicitudProduccionID
+    SYSDATETIME(),@EmbalajeID,@EmbalajeSolicitadoID,@Tipo,@Lote,@Cantidad,@Unidad,
+    @UbicacionID,@NumeroOF,@UsuarioID,@Responsable,@Observaciones,
+    SYSUTCDATETIME(),@Responsable,1,@RequiereValidacionProduccion,@ValidadoProduccion,
+    @Referencia,@SolicitudProduccionID
 );";
 
-            await using var insert =
-                new SqlCommand(insertSql, connection, transaction);
+            await using var insert = new SqlCommand(insertSql, connection, transaction);
+            insert.Parameters.Add("@EmbalajeID", SqlDbType.Int).Value = model.MaterialID;
+            insert.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int).Value = model.EsEntregaOF ? embalajeSolicitadoID : DBNull.Value;
+            insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value = model.TipoMovimiento;
+            insert.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value = model.Lote;
 
-            insert.Parameters.Add("@EmbalajeID", SqlDbType.Int).Value =
-                model.MaterialID;
-            insert.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int).Value =
-                model.EsEntregaOF
-                    ? embalajeSolicitadoID
-                    : DBNull.Value;
-            insert.Parameters.Add("@Tipo", SqlDbType.NVarChar, 30).Value =
-                model.TipoMovimiento;
-            insert.Parameters.Add("@Lote", SqlDbType.NVarChar, 120).Value =
-                model.Lote;
-
-            var cantidadParametro =
-                insert.Parameters.Add("@Cantidad", SqlDbType.Decimal);
+            var cantidadParametro = insert.Parameters.Add("@Cantidad", SqlDbType.Decimal);
             cantidadParametro.Precision = 18;
             cantidadParametro.Scale = 3;
             cantidadParametro.Value = model.Cantidad;
 
-            insert.Parameters.Add("@Unidad", SqlDbType.NVarChar, 20).Value =
-                model.Unidad;
-            insert.Parameters.Add("@UbicacionID", SqlDbType.Int).Value =
-                model.UbicacionID.HasValue
-                    ? model.UbicacionID.Value
-                    : DBNull.Value;
-            insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value =
-                string.IsNullOrWhiteSpace(model.NumeroOF)
-                    ? DBNull.Value
-                    : model.NumeroOF;
-            insert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                UsuarioID.HasValue
-                    ? UsuarioID.Value
-                    : DBNull.Value;
-            insert.Parameters.Add("@Responsable", SqlDbType.NVarChar, 180).Value =
-                UsuarioNombre;
-            insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value =
-                string.IsNullOrWhiteSpace(observacionesGuardar)
-                    ? DBNull.Value
-                    : observacionesGuardar;
-            insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value =
-                referencia;
-            insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
-                model.SolicitudProduccionID.HasValue
-                    ? model.SolicitudProduccionID.Value
-                    : DBNull.Value;
+            insert.Parameters.Add("@Unidad", SqlDbType.NVarChar, 20).Value = model.Unidad;
+            insert.Parameters.Add("@UbicacionID", SqlDbType.Int).Value = model.UbicacionID.HasValue ? model.UbicacionID.Value : DBNull.Value;
+            insert.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80).Value = string.IsNullOrWhiteSpace(model.NumeroOF) ? DBNull.Value : model.NumeroOF;
+            insert.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
+            insert.Parameters.Add("@Responsable", SqlDbType.NVarChar, 180).Value = UsuarioNombre;
+            insert.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800).Value = string.IsNullOrWhiteSpace(observacionesGuardar) ? DBNull.Value : observacionesGuardar;
+            insert.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120).Value = referencia;
+            insert.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = model.SolicitudProduccionID.HasValue && model.SolicitudProduccionID.Value > 0 ? model.SolicitudProduccionID.Value : DBNull.Value;
+            insert.Parameters.Add("@RequiereValidacionProduccion", SqlDbType.Bit).Value = model.EsEntregaOF;
+            insert.Parameters.Add("@ValidadoProduccion", SqlDbType.Bit).Value = !model.EsEntregaOF;
 
-            await insert.ExecuteNonQueryAsync(cancellationToken);
+            var movimientoAlmacenID = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken) ?? 0L);
+            if (movimientoAlmacenID <= 0)
+                throw new InvalidOperationException("No fue posible obtener el movimiento de embalaje registrado.");
+
+            if (model.EsEntregaOF)
+                await RegistrarRecepcionProduccionEmbalajeAsync(connection, transaction, movimientoAlmacenID, cancellationToken);
 
             if (model.EsEntregaOF)
             {
                 const string sincronizarSql = @"
-IF OBJECT_ID(N'dbo.sp_Almacen_SincronizarReservas', N'P') IS NULL
-    THROW 51160, N'No existe sp_Almacen_SincronizarReservas.', 1;
+IF OBJECT_ID(N'dbo.sp_Almacen_SincronizarReservas',N'P') IS NULL
+    THROW 51160,N'No existe sp_Almacen_SincronizarReservas.',1;
 
 EXEC dbo.sp_Almacen_SincronizarReservas
-    @Usuario = @Usuario;";
+    @Usuario=@Usuario;";
 
-                await using var sincronizar =
-                    new SqlCommand(
-                        sincronizarSql,
-                        connection,
-                        transaction);
-                sincronizar.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value =
-                    UsuarioNombre;
+                await using var sincronizar = new SqlCommand(sincronizarSql, connection, transaction);
+                sincronizar.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120).Value = UsuarioNombre;
                 await sincronizar.ExecuteNonQueryAsync(cancellationToken);
             }
 
@@ -1522,12 +1254,8 @@ EXEC dbo.sp_Almacen_SincronizarReservas
         catch (SqlException ex) when (ex.Number is 2601 or 2627)
         {
             await transaction.RollbackAsync(cancellationToken);
-            Mensaje(
-                "warning",
-                "La operación ya fue procesada. No se creó un movimiento duplicado.");
-            return model.EsEntregaOF
-                ? RedirectToAction("Index", "AlmacenOF")
-                : RedirectToAction(nameof(Index));
+            Mensaje("warning", "La operación ya fue procesada. No se creó un movimiento duplicado.");
+            return model.EsEntregaOF ? RedirectToAction("Index", "AlmacenOF") : RedirectToAction(nameof(Index));
         }
         catch
         {
@@ -1535,11 +1263,139 @@ EXEC dbo.sp_Almacen_SincronizarReservas
             throw;
         }
 
-        return model.EsEntregaOF
-            ? RedirectToAction("Index", "AlmacenOF")
-            : RedirectToAction(nameof(Index));
+        return model.EsEntregaOF ? RedirectToAction("Index", "AlmacenOF") : RedirectToAction(nameof(Index));
     }
 
+    private async Task RegistrarRecepcionProduccionEmbalajeAsync(SqlConnection connection, SqlTransaction transaction, long movimientoAlmacenID, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+DECLARE @RecepcionMaterialID BIGINT;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.Produccion_RecepcionMateriales WITH(UPDLOCK,HOLDLOCK)
+    WHERE TipoOrigen=N'EMBALAJE'
+      AND MovimientoAlmacenID=@MovimientoAlmacenID
+      AND Activo=1
+)
+    RETURN;
+
+INSERT dbo.Produccion_RecepcionMateriales
+(
+    TipoOrigen,
+    MovimientoAlmacenID,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
+    ProgramaProduccionID,
+    EjecucionProduccionID,
+    NumeroOFSnapshot,
+    MaterialSolicitadoID,
+    MaterialEntregadoID,
+    EmbalajeSolicitadoID,
+    EmbalajeEntregadoID,
+    CodigoSolicitadoSnapshot,
+    DescripcionSolicitadaSnapshot,
+    CodigoEntregadoSnapshot,
+    DescripcionEntregadaSnapshot,
+    TipoMP,
+    Lote,
+    Unidad,
+    CantidadEntregadaAlmacen,
+    FechaEntregaAlmacen,
+    UsuarioEntregaAlmacenID,
+    UsuarioEntregaAlmacenNombre,
+    ReferenciaOperacion,
+    ObservacionesAlmacen,
+    EstadoRecepcion,
+    CantidadRecibidaProduccion,
+    EstadoAclaracion,
+    Activo,
+    UsuarioCreacionID,
+    FechaCreacion
+)
+OUTPUT INSERTED.RecepcionMaterialID
+SELECT
+    N'EMBALAJE',
+    m.MovimientoID,
+    m.SolicitudProduccionID,
+    NULL,
+    NULL,
+    NULL,
+    LTRIM(RTRIM(ISNULL(m.NumeroOF,N''))),
+    NULL,
+    NULL,
+    m.EmbalajeSolicitadoID,
+    m.EmbalajeID,
+    solicitado.Codigo,
+    solicitado.Nombre,
+    entregado.Codigo,
+    entregado.Nombre,
+    NULL,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.Lote,N''))),N''),
+    ISNULL(NULLIF(LTRIM(RTRIM(m.Unidad)),N''),entregado.UnidadDefault),
+    CONVERT(DECIMAL(18,4),m.Cantidad),
+    m.FechaMovimiento,
+    m.ResponsableUsuarioID,
+    NULLIF(LTRIM(RTRIM(ISNULL(m.EntregadoPorNombre,m.CreadoPor))),N''),
+    m.ReferenciaOperacion,
+    m.Seguimiento,
+    N'PENDIENTE',
+    NULL,
+    N'NO_APLICA',
+    1,
+    m.ResponsableUsuarioID,
+    SYSDATETIME()
+FROM dbo.AlmacenEmbalajes_Movimientos m
+INNER JOIN dbo.ERP_Embalajes solicitado
+    ON solicitado.EmbalajeID=m.EmbalajeSolicitadoID
+INNER JOIN dbo.ERP_Embalajes entregado
+    ON entregado.EmbalajeID=m.EmbalajeID
+WHERE m.MovimientoID=@MovimientoAlmacenID
+  AND m.Activo=1
+  AND m.SolicitudProduccionID IS NOT NULL
+  AND m.EmbalajeSolicitadoID IS NOT NULL;
+
+SET @RecepcionMaterialID=SCOPE_IDENTITY();
+
+IF @RecepcionMaterialID IS NULL
+    THROW 51221,N'No fue posible generar la recepción pendiente de embalaje para Producción.',1;
+
+IF @UsuarioID IS NOT NULL
+BEGIN
+    INSERT dbo.Produccion_RecepcionMaterialesHistorial
+    (
+        RecepcionMaterialID,
+        Evento,
+        EstadoRecepcionAnterior,
+        EstadoRecepcionNuevo,
+        CantidadRecibidaAnterior,
+        CantidadRecibidaNueva,
+        EstadoAclaracionAnterior,
+        EstadoAclaracionNuevo,
+        Comentario,
+        UsuarioID,
+        FechaEvento
+    )
+    SELECT
+        @RecepcionMaterialID,
+        N'ENTREGA_ALMACEN',
+        NULL,
+        N'PENDIENTE',
+        NULL,
+        NULL,
+        NULL,
+        N'NO_APLICA',
+        N'Almacén registró la entrega de embalaje. Pendiente de confirmación física por Producción.',
+        @UsuarioID,
+        SYSDATETIME();
+END;";
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@MovimientoAlmacenID", SqlDbType.BigInt).Value = movimientoAlmacenID;
+        command.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = UsuarioID.HasValue ? UsuarioID.Value : DBNull.Value;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
     private async Task CargarMovimientoAsync(
         AlmacenMPMovimientoFormVm vm,
         CancellationToken cancellationToken,

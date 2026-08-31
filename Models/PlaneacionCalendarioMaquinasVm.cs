@@ -189,6 +189,18 @@ namespace ERP.NSQuell.Models
         public TimeSpan? Cambio { get; set; }
         public TimeSpan? Arranque { get; set; }
 
+        public DateTime? InicioProyectado { get; set; }
+        public DateTime? FinProyectado { get; set; }
+        public bool EsProgramaRaizInterrupcion { get; set; }
+        public int? ParoProyeccionID { get; set; }
+        public string TipoInterrupcionProyectada { get; set; } = string.Empty;
+        public string MotivoInterrupcionProyectada { get; set; } = string.Empty;
+        public int MinutosImpactoInterrupcion { get; set; }
+        public int MinutosDesplazamientoProyectado { get; set; }
+        public bool TieneProyeccionInterrupcion => InicioProyectado.HasValue || FinProyectado.HasValue;
+        public DateTime InicioVisual => InicioProyectado ?? Inicio;
+        public DateTime FinVisual => FinProyectado ?? Fin;
+
         public int EstatusID { get; set; }
         public int Carril { get; set; }
 

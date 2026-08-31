@@ -1,97 +1,129 @@
 ﻿@using ERP.NSQuell.Models
+@using System.Globalization
 @using System.Linq
-@model ProduccionPreparacionIndexVm
+@model ProduccionSecadoIndexVm
+
 @{
     Layout = "_Layout";
     ViewData["Title"] = "Secado de material";
 
-    var tareas = Model.Tareas ?? new List<ProduccionPreparacionTareaVm>();
-    var secados = tareas.Where(x => x.EsSecadoMaterial).ToList();
-
-    var pendientes = secados
-        .Where(x => x.EstaPendiente)
+    var materiales = Model.Materiales ?? new List<ProduccionSecadoMaterialVm>();
+    var tolvas = Model.Tolvas ?? new List<ProduccionSecadoTolvaVm>();
+    var pendientesPlaneacion = (Model.PendientesPlaneacion ?? new List<ProduccionPreparacionTareaVm>())
         .OrderBy(x => x.FechaAviso)
         .ThenBy(x => x.FechaObjetivo)
+        .ThenBy(x => x.ProgramaProduccionID)
         .ToList();
 
-    var secando = secados
-        .Where(x => x.EstaConfirmada &&
-                    x.FechaDisponibleEstimada.HasValue &&
-                    x.FechaDisponibleEstimada.Value > Model.FechaConsulta)
-        .OrderBy(x => x.FechaDisponibleEstimada)
+    var cargasActivas = materiales
+        .SelectMany(x => x.Cargas.Select(c => new
+        {
+            Material = x,
+            Carga = c
+        }))
+        .Where(x => x.Carga.EstaEnProceso)
+        .OrderBy(x => x.Carga.FechaFinEsperada ?? DateTime.MaxValue)
         .ToList();
 
-    var listos = secados
-        .Where(x => x.EstaConfirmada &&
-                    x.FechaDisponibleEstimada.HasValue &&
-                    x.FechaDisponibleEstimada.Value <= Model.FechaConsulta)
-        .OrderByDescending(x => x.FechaDisponibleEstimada)
+    var pendientes = materiales
+        .Where(x =>
+            !x.EstaFinalizado &&
+            !x.EstaCancelado &&
+            !x.TieneCargaEnProceso &&
+            x.RequiereNuevaCarga)
+        .OrderByDescending(x => x.DebeAlertarEspera)
+        .ThenBy(x => x.FechaInicioSecadoObjetivo ?? DateTime.MaxValue)
+        .ThenBy(x => x.FechaArranqueProduccion ?? DateTime.MaxValue)
+        .ToList();
+
+    var finalizados = materiales
+        .Where(x => x.EstaFinalizado)
+        .OrderByDescending(x => x.FechaUltimoFinSecado ?? DateTime.MinValue)
         .Take(40)
         .ToList();
 
-    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro) ? "" : Model.Filtro;
+    var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro)
+        ? string.Empty
+        : Model.Filtro;
 
-    bool LlegariaTardeSiIniciaAhora(ProduccionPreparacionTareaVm tarea)
+    var totalAlertas = Model.TotalAlertasEspera + Model.TotalCargasRetrasadas;
+    var totalKgPendientesSecado = pendientes.Sum(x => x.CantidadPendienteAsignarKg);
+    var totalKgEsperadosRecepcion = pendientesPlaneacion.Sum(x => x.CantidadMpPendienteRecepcionKg);
+
+    string Fecha(DateTime? value) =>
+        value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+
+    string Cantidad(decimal value) =>
+        $"{value:0.####} KG";
+
+    string Horas(decimal? value) =>
+        value.HasValue && value.Value > 0 ? $"{value.Value:0.##} h" : "—";
+
+    string EstadoPlaneacionClase(ProduccionPreparacionTareaVm tarea)
     {
-        if (!tarea.HorasSecado.HasValue ||
-            tarea.HorasSecado.Value <= 0 ||
-            !tarea.FechaArranque.HasValue)
-            return false;
-
-        return Model.FechaConsulta
-            .AddHours(Convert.ToDouble(tarea.HorasSecado.Value)) >
-            tarea.FechaArranque.Value;
+        if (Model.FechaConsulta > tarea.FechaObjetivo) return "danger";
+        if (Model.FechaConsulta >= tarea.FechaAviso) return "warning";
+        return "primary";
     }
 
-    int MinutosRetrasoSiIniciaAhora(ProduccionPreparacionTareaVm tarea)
+    string EstadoPlaneacionTexto(ProduccionPreparacionTareaVm tarea)
     {
-        if (!LlegariaTardeSiIniciaAhora(tarea) ||
-            !tarea.HorasSecado.HasValue ||
-            !tarea.FechaArranque.HasValue)
-            return 0;
-
-        var disponible = Model.FechaConsulta
-            .AddHours(Convert.ToDouble(tarea.HorasSecado.Value));
-
-        return Math.Max(
-            0,
-            (int)Math.Ceiling(
-                (disponible - tarea.FechaArranque.Value).TotalMinutes));
+        if (Model.FechaConsulta > tarea.FechaObjetivo) return "Recepción urgente";
+        if (Model.FechaConsulta >= tarea.FechaAviso) return "Debe iniciar secado";
+        return "Esperando recepción de MP";
     }
 
-    var riesgosPendientes = pendientes.Count(LlegariaTardeSiIniciaAhora);
-    var riesgosEnProceso = secando.Count(x => x.SecadoLlegaraTarde);
-    var totalRiesgos = riesgosPendientes + riesgosEnProceso;
-
-    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
-    string Hora(DateTime? value) => value?.ToString("HH:mm") ?? "—";
-    string Horas(decimal? value) => value.HasValue ? $"{value.Value:0.##} h" : "—";
-
-    string ClasePendiente(ProduccionPreparacionTareaVm tarea)
+    string Duracion(int minutos)
     {
-        if (LlegariaTardeSiIniciaAhora(tarea)) return "task-risk";
-        if (tarea.EsVencida) return "task-overdue";
-        if (tarea.EsHacerAhora) return "task-now";
-        return "task-next";
+        if (minutos <= 0)
+            return "—";
+
+        var horas = minutos / 60;
+        var resto = minutos % 60;
+
+        if (horas <= 0)
+            return $"{resto} min";
+
+        if (resto <= 0)
+            return $"{horas} h";
+
+        return $"{horas} h {resto} min";
     }
 
-    string BadgePendiente(ProduccionPreparacionTareaVm tarea)
+    string EstadoMaterialClase(ProduccionSecadoMaterialVm material)
     {
-        if (LlegariaTardeSiIniciaAhora(tarea)) return "risk";
-        if (tarea.EsVencida) return "overdue";
-        if (tarea.EsHacerAhora) return "now";
-        return "next";
+        if (material.EstaFinalizado)
+            return "success";
+
+        if (material.DebeAlertarEspera)
+            return "danger";
+
+        if (material.EstaParcial)
+            return "warning";
+
+        if (material.TieneCargaEnProceso)
+            return "primary";
+
+        return "pending";
     }
 
-    string TextoPendiente(ProduccionPreparacionTareaVm tarea)
+    string EstadoCargaClase(ProduccionSecadoCargaVm carga)
     {
-        if (LlegariaTardeSiIniciaAhora(tarea)) return "Riesgo de atraso";
-        if (tarea.EsVencida) return "Vencido";
-        if (tarea.EsHacerAhora) return "Iniciar ahora";
-        return "Próximo";
+        if (carga.EstaRetrasada)
+            return "danger";
+
+        if (carga.TiempoRequeridoCumplido)
+            return "success";
+
+        if (carga.EstaProximaAFinalizar)
+            return "warning";
+
+        return "primary";
     }
 }
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+      rel="stylesheet" />
 
 <style>
     :root {
@@ -101,7 +133,7 @@
         --dry-muted: #6f7b91;
         --dry-line: #dce4ef;
         --dry-orange: #d89216;
-        --dry-orange-dark: #ad6e0e;
+        --dry-orange-dark: #a96808;
         --dry-orange-soft: #fff5df;
         --dry-blue: #315bd6;
         --dry-blue-soft: #eef3ff;
@@ -111,7 +143,8 @@
         --dry-red-soft: #fff3f2;
         --dry-purple: #623cff;
         --dry-purple-soft: #f3efff;
-        --dry-shadow: 0 12px 30px rgba(15,34,74,.07);
+        --dry-gray-soft: #f6f8fb;
+        --dry-shadow: 0 12px 30px rgba(15, 34, 74, .07);
     }
 
     html[data-nsq-theme="dark"],
@@ -126,7 +159,8 @@
         --dry-green-soft: #102a20;
         --dry-red-soft: #351719;
         --dry-purple-soft: #241b38;
-        --dry-shadow: 0 12px 30px rgba(0,0,0,.16);
+        --dry-gray-soft: #152136;
+        --dry-shadow: 0 12px 30px rgba(0, 0, 0, .16);
     }
 
     .dry-page {
@@ -143,9 +177,9 @@
         gap: 16px;
         padding: 18px 20px;
         border-radius: 20px;
-        background: linear-gradient(120deg,#7f4e00,#bd7808 66%,#e2a333);
+        background: linear-gradient(120deg, #7f4e00, #bd7808 66%, #e2a333);
         color: #fff;
-        box-shadow: 0 18px 45px rgba(155,93,0,.18);
+        box-shadow: 0 18px 45px rgba(155, 93, 0, .18);
     }
 
     .hero-main {
@@ -177,6 +211,7 @@
         color: rgba(255,255,255,.84);
         font-size: .79rem;
         font-weight: 650;
+        max-width: 760px;
     }
 
     .hero-actions {
@@ -195,6 +230,7 @@
         padding: 8px 13px;
         text-decoration: none;
         font-weight: 900;
+        font-size: .76rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -205,6 +241,12 @@
 
         .btnx:hover {
             transform: translateY(-1px);
+        }
+
+        .btnx:disabled {
+            opacity: .52;
+            cursor: not-allowed;
+            transform: none;
         }
 
     .btnx-light {
@@ -235,16 +277,22 @@
         color: #fff;
     }
 
-        .btnx-success:hover {
-            background: #176d44;
-            color: #fff;
-        }
+    .btnx-danger {
+        background: var(--dry-red);
+        border-color: var(--dry-red);
+        color: #fff;
+    }
 
     .btnx-outline {
         background: var(--dry-card);
-        color: var(--dry-text);
         border-color: var(--dry-line);
+        color: var(--dry-text);
     }
+
+        .btnx-outline:hover {
+            color: var(--dry-orange);
+            border-color: var(--dry-orange);
+        }
 
     .flash {
         margin-top: 12px;
@@ -254,29 +302,40 @@
         font-weight: 800;
     }
 
-    .risk-banner {
+    .permission-note,
+    .alert-banner {
         margin-top: 12px;
-        border: 1px solid #efaaa5;
-        background: var(--dry-red-soft);
-        color: var(--dry-red);
         border-radius: 15px;
         padding: 12px 14px;
         display: flex;
         gap: 10px;
         align-items: flex-start;
-        font-size: .76rem;
-        font-weight: 800;
+        font-size: .72rem;
+        font-weight: 750;
     }
 
-        .risk-banner strong {
+    .permission-note {
+        border: 1px solid #aabdf0;
+        background: var(--dry-blue-soft);
+        color: var(--dry-blue);
+    }
+
+    .alert-banner {
+        border: 1px solid #efaaa5;
+        background: var(--dry-red-soft);
+        color: var(--dry-red);
+    }
+
+        .alert-banner strong,
+        .permission-note strong {
             display: block;
-            margin-bottom: 2px;
             font-weight: 950;
+            margin-bottom: 2px;
         }
 
     .stats {
         display: grid;
-        grid-template-columns: repeat(4,minmax(0,1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 10px;
         margin-top: 14px;
     }
@@ -304,22 +363,22 @@
 
         .stat-icon.orange {
             background: var(--dry-orange-soft);
-            color: var(--dry-orange)
+            color: var(--dry-orange);
         }
 
         .stat-icon.blue {
             background: var(--dry-blue-soft);
-            color: var(--dry-blue)
+            color: var(--dry-blue);
         }
 
         .stat-icon.green {
             background: var(--dry-green-soft);
-            color: var(--dry-green)
+            color: var(--dry-green);
         }
 
         .stat-icon.red {
             background: var(--dry-red-soft);
-            color: var(--dry-red)
+            color: var(--dry-red);
         }
 
     .stat-value {
@@ -334,7 +393,7 @@
         display: block;
         margin-top: 4px;
         color: var(--dry-muted);
-        font-size: .63rem;
+        font-size: .61rem;
         font-weight: 850;
         text-transform: uppercase;
         letter-spacing: .03em;
@@ -356,7 +415,7 @@
     .field label {
         display: block;
         margin-bottom: 5px;
-        font-size: .64rem;
+        font-size: .62rem;
         font-weight: 950;
         text-transform: uppercase;
         letter-spacing: .04em;
@@ -372,12 +431,13 @@
         border-radius: 10px;
         background: var(--dry-card);
         padding: 8px 10px;
+        font-size: .75rem;
         font-weight: 750;
         color: var(--dry-text);
     }
 
     .field textarea {
-        min-height: 70px;
+        min-height: 72px;
         resize: vertical;
     }
 
@@ -389,8 +449,16 @@
             box-shadow: 0 0 0 3px rgba(216,146,22,.13);
         }
 
+    .field-help {
+        display: block;
+        margin-top: 5px;
+        color: var(--dry-muted);
+        font-size: .61rem;
+        font-weight: 700;
+    }
+
     .section {
-        margin-top: 16px;
+        margin-top: 17px;
     }
 
     .section-head {
@@ -428,13 +496,226 @@
         font-weight: 950;
     }
 
-    .running-grid {
+    .planned-grid {
         display: grid;
         grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px;
+    }
+
+    .planned-card {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-left: 5px solid var(--dry-blue);
+        border-radius: 16px;
+        padding: 13px 14px;
+        box-shadow: var(--dry-shadow);
+    }
+
+        .planned-card.is-warning {
+            border-left-color: var(--dry-orange);
+        }
+
+        .planned-card.is-danger {
+            border-left-color: var(--dry-red);
+        }
+
+    .planned-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .planned-title {
+        display: flex;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .planned-icon {
+        width: 41px;
+        height: 41px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: var(--dry-blue-soft);
+        color: var(--dry-blue);
+        flex: none;
+    }
+
+    .planned-title h3 {
+        margin: 0;
+        color: var(--dry-text);
+        font-size: .86rem;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+
+    .planned-title small {
+        display: block;
+        margin-top: 3px;
+        color: var(--dry-muted);
+        font-size: .62rem;
+        font-weight: 750;
+    }
+
+    .planned-note {
+        margin-top: 9px;
+        padding: 9px 10px;
+        border-radius: 10px;
+        background: var(--dry-blue-soft);
+        color: var(--dry-blue);
+        font-size: .63rem;
+        font-weight: 800;
+    }
+
+    .tolva-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0,1fr));
+        gap: 10px;
+    }
+
+    .tolva-card {
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 15px;
+        padding: 12px;
+        box-shadow: 0 7px 18px rgba(15,34,74,.035);
+    }
+
+        .tolva-card.is-free {
+            border-left: 4px solid var(--dry-green);
+        }
+
+        .tolva-card.is-busy {
+            border-left: 4px solid var(--dry-orange);
+        }
+
+        .tolva-card.is-disabled {
+            border-left: 4px solid var(--dry-red);
+            opacity: .78;
+        }
+
+    .tolva-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .tolva-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: var(--dry-orange-soft);
+        color: var(--dry-orange);
+        flex: none;
+    }
+
+    .tolva-title {
+        display: flex;
+        gap: 9px;
+        min-width: 0;
+    }
+
+        .tolva-title strong {
+            display: block;
+            font-size: .78rem;
+            font-weight: 950;
+            color: var(--dry-text);
+        }
+
+        .tolva-title small {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-muted);
+            font-size: .6rem;
+            font-weight: 750;
+        }
+
+    .tolva-info {
+        margin-top: 9px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+        .tolva-info div {
+            background: var(--dry-gray-soft);
+            border-radius: 9px;
+            padding: 7px 8px;
+        }
+
+        .tolva-info span,
+        .info span {
+            display: block;
+            color: var(--dry-muted);
+            font-size: .53rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+        }
+
+        .tolva-info strong {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-text);
+            font-size: .65rem;
+            font-weight: 900;
+        }
+
+    .busy-info {
+        margin-top: 8px;
+        padding: 8px 9px;
+        border-radius: 9px;
+        background: var(--dry-orange-soft);
+        color: var(--dry-orange-dark);
+        font-size: .61rem;
+        font-weight: 850;
+    }
+
+    .status-pill {
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: .58rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .status-pill.primary {
+            background: var(--dry-blue-soft);
+            color: var(--dry-blue);
+        }
+
+        .status-pill.pending {
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange);
+        }
+
+        .status-pill.warning {
+            background: #fff2cc;
+            color: #8a5b00;
+        }
+
+        .status-pill.success {
+            background: var(--dry-green-soft);
+            color: var(--dry-green);
+        }
+
+        .status-pill.danger {
+            background: var(--dry-red-soft);
+            color: var(--dry-red);
+        }
+
+    .running-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0,1fr));
         gap: 12px;
     }
 
-    .dry-card {
+    .load-card {
         background: var(--dry-card);
         border: 1px solid var(--dry-line);
         border-radius: 18px;
@@ -442,31 +723,33 @@
         box-shadow: var(--dry-shadow);
     }
 
-        .dry-card.is-late {
+        .load-card.is-danger {
             border: 2px solid var(--dry-red);
-            box-shadow: 0 14px 34px rgba(196,50,43,.14);
         }
 
-    .card-top {
+        .load-card.is-ready {
+            border: 2px solid var(--dry-green);
+        }
+
+    .load-head {
         padding: 13px 15px;
         background: var(--dry-orange-soft);
         border-bottom: 1px solid var(--dry-line);
         display: flex;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 12px;
-        align-items: flex-start;
     }
 
-    .machine {
+    .load-machine {
         display: flex;
-        align-items: center;
         gap: 10px;
         min-width: 0;
     }
 
-    .machine-icon {
-        width: 38px;
-        height: 38px;
+    .load-machine-icon {
+        width: 40px;
+        height: 40px;
         border-radius: 11px;
         background: #fff3d9;
         color: var(--dry-orange);
@@ -475,77 +758,34 @@
         flex: none;
     }
 
-    html[data-nsq-theme="dark"] .machine-icon,
-    html[data-bs-theme="dark"] .machine-icon {
+    html[data-nsq-theme="dark"] .load-machine-icon,
+    html[data-bs-theme="dark"] .load-machine-icon {
         background: #3a2c13;
     }
 
-    .machine strong {
+    .load-machine strong {
         display: block;
-        font-size: .83rem;
-        font-weight: 950;
         color: var(--dry-text);
+        font-size: .82rem;
+        font-weight: 950;
     }
 
-    .machine small {
+    .load-machine small {
         display: block;
         margin-top: 2px;
         color: var(--dry-muted);
-        font-size: .63rem;
+        font-size: .61rem;
         font-weight: 750;
     }
 
-    .status-pill {
-        border-radius: 999px;
-        padding: 5px 9px;
-        font-size: .6rem;
-        font-weight: 950;
-        white-space: nowrap;
-    }
-
-        .status-pill.drying {
-            background: var(--dry-orange-soft);
-            color: var(--dry-orange)
-        }
-
-        .status-pill.late {
-            background: var(--dry-red);
-            color: #fff
-        }
-
-        .status-pill.ready {
-            background: var(--dry-green-soft);
-            color: var(--dry-green)
-        }
-
-        .status-pill.overdue {
-            background: var(--dry-red-soft);
-            color: var(--dry-red)
-        }
-
-        .status-pill.now {
-            background: var(--dry-orange-soft);
-            color: var(--dry-orange)
-        }
-
-        .status-pill.next {
-            background: var(--dry-blue-soft);
-            color: var(--dry-blue)
-        }
-
-        .status-pill.risk {
-            background: var(--dry-red);
-            color: #fff
-        }
-
-    .card-bodyx {
-        padding: 15px;
+    .load-body {
+        padding: 14px;
     }
 
     .material-box {
         display: flex;
-        align-items: flex-start;
         gap: 11px;
+        align-items: flex-start;
         border: 1px solid var(--dry-line);
         border-radius: 14px;
         padding: 11px 12px;
@@ -566,17 +806,16 @@
     .material-box span {
         display: block;
         color: var(--dry-muted);
-        font-size: .57rem;
+        font-size: .55rem;
         font-weight: 950;
         text-transform: uppercase;
-        letter-spacing: .04em;
     }
 
     .material-box strong {
         display: block;
         margin-top: 3px;
         color: var(--dry-text);
-        font-size: .83rem;
+        font-size: .82rem;
         font-weight: 950;
         overflow-wrap: anywhere;
     }
@@ -585,14 +824,14 @@
         display: block;
         margin-top: 3px;
         color: var(--dry-muted);
-        font-size: .64rem;
+        font-size: .62rem;
         font-weight: 750;
     }
 
     .info-grid {
         margin-top: 9px;
         display: grid;
-        grid-template-columns: repeat(4,minmax(0,1fr));
+        grid-template-columns: repeat(4, minmax(0,1fr));
         gap: 7px;
     }
 
@@ -603,23 +842,13 @@
         min-width: 0;
     }
 
-        .info span {
-            display: block;
-            color: var(--dry-muted);
-            font-size: .55rem;
-            font-weight: 950;
-            text-transform: uppercase;
-            letter-spacing: .035em;
-        }
-
         .info strong {
             display: block;
             margin-top: 3px;
             color: var(--dry-text);
-            font-size: .68rem;
+            font-size: .67rem;
             font-weight: 900;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            overflow-wrap: anywhere;
         }
 
     .timer-box {
@@ -641,7 +870,7 @@
 
     .timer-label {
         color: var(--dry-muted);
-        font-size: .6rem;
+        font-size: .59rem;
         text-transform: uppercase;
         font-weight: 950;
         letter-spacing: .04em;
@@ -650,8 +879,8 @@
     .timer-value {
         margin-top: 2px;
         color: var(--dry-orange-dark);
+        font-size: 1.35rem;
         font-weight: 950;
-        font-size: 1.38rem;
         letter-spacing: .02em;
     }
 
@@ -663,7 +892,7 @@
     .timer-sub {
         margin-top: 3px;
         color: var(--dry-muted);
-        font-size: .64rem;
+        font-size: .62rem;
         font-weight: 750;
     }
 
@@ -674,7 +903,7 @@
         .timer-target strong {
             display: block;
             color: var(--dry-text);
-            font-size: .83rem;
+            font-size: .8rem;
             font-weight: 950;
         }
 
@@ -682,7 +911,7 @@
             display: block;
             margin-top: 2px;
             color: var(--dry-muted);
-            font-size: .59rem;
+            font-size: .57rem;
             font-weight: 800;
         }
 
@@ -707,32 +936,150 @@
         transition: width .25s ease;
     }
 
-    .late-alert {
-        margin-top: 10px;
-        border-radius: 11px;
+    .load-card.is-ready .progressx > div {
+        background: var(--dry-green);
+    }
+
+    .load-card.is-danger .progressx > div {
+        background: var(--dry-red);
+    }
+
+    .load-alert {
+        margin-top: 9px;
+        border-radius: 10px;
         padding: 9px 10px;
-        background: var(--dry-red-soft);
-        color: var(--dry-red);
-        border: 1px solid #efb1ad;
-        font-size: .66rem;
-        font-weight: 900;
+        font-size: .64rem;
+        font-weight: 850;
     }
 
-    html[data-nsq-theme="dark"] .late-alert,
-    html[data-bs-theme="dark"] .late-alert {
-        border-color: #7f2b32;
+        .load-alert.warning {
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange-dark);
+            border: 1px solid #edcf93;
+        }
+
+        .load-alert.success {
+            background: var(--dry-green-soft);
+            color: var(--dry-green);
+            border: 1px solid #afdcc6;
+        }
+
+        .load-alert.danger {
+            background: var(--dry-red-soft);
+            color: var(--dry-red);
+            border: 1px solid #efb1ad;
+        }
+
+    .actions {
+        margin-top: 11px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
     }
 
-    .machine-group {
+    .action-panel {
+        display: none;
+        margin-top: 10px;
+        padding: 11px;
+        border: 1px solid var(--dry-line);
+        border-radius: 12px;
+        background: var(--dry-gray-soft);
+    }
+
+        .action-panel.show {
+            display: block;
+        }
+
+    .action-form {
+        display: grid;
+        gap: 9px;
+    }
+
+    .form-row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+    }
+
+    .panel-title {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 9px;
+        color: var(--dry-text);
+        font-size: .72rem;
+        font-weight: 950;
+    }
+
+    .segment-details,
+    .history-details,
+    .tolva-details {
+        margin-top: 10px;
+        border: 1px solid var(--dry-line);
+        border-radius: 11px;
+        overflow: hidden;
+        background: var(--dry-card);
+    }
+
+        .segment-details summary,
+        .history-details summary,
+        .tolva-details summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 9px 10px;
+            color: var(--dry-muted);
+            font-size: .63rem;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+            .segment-details summary::-webkit-details-marker,
+            .history-details summary::-webkit-details-marker,
+            .tolva-details summary::-webkit-details-marker {
+                display: none;
+            }
+
+    .segment-list {
+        border-top: 1px solid var(--dry-line);
+    }
+
+    .segment-row {
+        display: grid;
+        grid-template-columns: 70px 1fr 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-top: 1px solid var(--dry-line);
+        font-size: .61rem;
+    }
+
+        .segment-row:first-child {
+            border-top: 0;
+        }
+
+        .segment-row strong {
+            color: var(--dry-text);
+            font-weight: 900;
+        }
+
+        .segment-row span {
+            color: var(--dry-muted);
+            font-weight: 700;
+        }
+
+    .material-group {
+        margin-bottom: 12px;
         background: var(--dry-card);
         border: 1px solid var(--dry-line);
         border-radius: 16px;
         overflow: hidden;
         box-shadow: var(--dry-shadow);
-        margin-bottom: 12px;
     }
 
-        .machine-group summary {
+        .material-group > summary {
             list-style: none;
             cursor: pointer;
             padding: 13px 15px;
@@ -740,34 +1087,21 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            background: var(--dry-card);
             border-bottom: 1px solid transparent;
         }
 
-        .machine-group[open] summary {
+        .material-group[open] > summary {
             border-bottom-color: var(--dry-line);
         }
 
-        .machine-group summary::-webkit-details-marker {
+        .material-group > summary::-webkit-details-marker {
             display: none;
-        }
-
-        .machine-group summary::after {
-            content: "\F282";
-            font-family: "bootstrap-icons";
-            font-size: .8rem;
-            color: var(--dry-muted);
-            transition: transform .15s ease;
-        }
-
-        .machine-group[open] summary::after {
-            transform: rotate(180deg);
         }
 
     .group-title {
         display: flex;
-        align-items: center;
         gap: 10px;
+        align-items: center;
         min-width: 0;
     }
 
@@ -785,31 +1119,29 @@
     .group-title strong {
         display: block;
         color: var(--dry-text);
-        font-size: .82rem;
+        font-size: .8rem;
         font-weight: 950;
     }
 
     .group-title small {
         display: block;
-        color: var(--dry-muted);
-        font-size: .63rem;
-        font-weight: 750;
         margin-top: 2px;
+        color: var(--dry-muted);
+        font-size: .61rem;
+        font-weight: 750;
     }
 
     .group-count {
         margin-left: auto;
-        margin-right: 10px;
         padding: 5px 9px;
         border-radius: 999px;
         background: var(--dry-orange-soft);
         color: var(--dry-orange);
-        font-size: .62rem;
+        font-size: .61rem;
         font-weight: 950;
-        white-space: nowrap;
     }
 
-    .group-body {
+    .material-grid {
         padding: 10px;
         background: var(--dry-bg);
         display: grid;
@@ -817,74 +1149,66 @@
         gap: 10px;
     }
 
-    .task {
+    .pending-card {
         background: var(--dry-card);
         border: 1px solid var(--dry-line);
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 8px 22px rgba(15,34,74,.04);
+        border-radius: 15px;
+        padding: 13px;
     }
 
-        .task.task-overdue {
-            border-left: 5px solid var(--dry-red)
+        .pending-card.is-alert {
+            border: 2px solid var(--dry-red);
         }
 
-        .task.task-now {
-            border-left: 5px solid var(--dry-orange)
+        .pending-card.is-partial {
+            border-left: 5px solid var(--dry-orange);
         }
 
-        .task.task-next {
-            border-left: 5px solid var(--dry-blue)
-        }
-
-        .task.task-risk {
-            border: 2px solid var(--dry-red)
-        }
-
-    .task-main {
-        padding: 13px 14px;
-    }
-
-    .task-head {
+    .pending-head {
         display: flex;
-        align-items: flex-start;
         justify-content: space-between;
+        align-items: flex-start;
         gap: 10px;
     }
 
-    .task-title {
+    .pending-title {
         display: flex;
         gap: 10px;
-        align-items: flex-start;
         min-width: 0;
     }
 
-    .task-icon {
+    .pending-icon {
         width: 41px;
         height: 41px;
         border-radius: 12px;
+        background: var(--dry-purple-soft);
+        color: var(--dry-purple);
         display: grid;
         place-items: center;
         flex: none;
-        background: var(--dry-orange-soft);
-        color: var(--dry-orange);
-        font-size: 1.08rem;
     }
 
-    .task-kicker {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        align-items: center;
-        margin-bottom: 3px;
-    }
-
-    .task-type {
-        font-size: .61rem;
+    .pending-title h3 {
+        margin: 0;
+        color: var(--dry-text);
+        font-size: .86rem;
         font-weight: 950;
-        text-transform: uppercase;
-        letter-spacing: .06em;
-        color: var(--dry-orange);
+        overflow-wrap: anywhere;
+    }
+
+    .pending-title small {
+        display: block;
+        margin-top: 3px;
+        color: var(--dry-muted);
+        font-size: .62rem;
+        font-weight: 700;
+    }
+
+    .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 4px;
     }
 
     .chip {
@@ -895,171 +1219,120 @@
         border-radius: 999px;
         background: var(--dry-blue-soft);
         color: var(--dry-blue);
-        font-size: .59rem;
+        font-size: .56rem;
         font-weight: 900;
     }
 
-    .task h3 {
-        margin: 0;
-        font-size: .91rem;
-        font-weight: 950;
-        color: var(--dry-text);
-        overflow-wrap: anywhere;
-    }
-
-    .task-sub {
-        margin-top: 3px;
-        color: var(--dry-muted);
-        font-size: .67rem;
-        font-weight: 700;
-        line-height: 1.35;
-    }
-
-    .process-banner {
+    .process-row {
         margin-top: 10px;
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-
-    .process-main,
-    .process-time {
-        border: 1px solid var(--dry-line);
-        border-radius: 13px;
-        padding: 10px 11px;
-    }
-
-    .process-main {
-        background: var(--dry-orange-soft);
-    }
-
-        .process-main span,
-        .process-time span {
-            display: block;
-            color: var(--dry-muted);
-            font-size: .56rem;
-            text-transform: uppercase;
-            font-weight: 950;
-            letter-spacing: .04em;
-        }
-
-        .process-main strong {
-            display: block;
-            margin-top: 2px;
-            color: var(--dry-orange-dark);
-            font-size: .93rem;
-            font-weight: 950;
-        }
-
-    html[data-nsq-theme="dark"] .process-main strong,
-    html[data-bs-theme="dark"] .process-main strong {
-        color: #ffc45c;
-    }
-
-    .process-time strong {
-        display: block;
-        margin-top: 3px;
-        color: var(--dry-text);
-        font-size: .85rem;
-        font-weight: 950;
-    }
-
-    .pending-info {
-        margin-top: 9px;
-        display: grid;
-        grid-template-columns: repeat(2,minmax(0,1fr));
         gap: 7px;
     }
 
-        .pending-info div {
-            border: 1px solid var(--dry-line);
-            border-radius: 10px;
-            padding: 8px 9px;
+    .process-box {
+        border: 1px solid var(--dry-line);
+        border-radius: 11px;
+        padding: 9px 10px;
+    }
+
+        .process-box.primary {
+            background: var(--dry-orange-soft);
         }
 
-        .pending-info span {
+        .process-box span {
             display: block;
             color: var(--dry-muted);
-            font-size: .55rem;
+            font-size: .54rem;
             text-transform: uppercase;
             font-weight: 950;
         }
 
-        .pending-info strong {
+        .process-box strong {
             display: block;
             margin-top: 3px;
             color: var(--dry-text);
-            font-size: .68rem;
-            font-weight: 900;
+            font-size: .74rem;
+            font-weight: 950;
         }
 
-    .actions {
-        margin-top: 11px;
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
+    .quantity-grid {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 6px;
     }
 
-    .confirm-panel {
-        display: none;
+    .quantity-box {
+        border: 1px solid var(--dry-line);
+        border-radius: 10px;
+        padding: 8px;
+    }
+
+        .quantity-box span {
+            display: block;
+            color: var(--dry-muted);
+            font-size: .51rem;
+            text-transform: uppercase;
+            font-weight: 950;
+        }
+
+        .quantity-box strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--dry-text);
+            font-size: .67rem;
+            font-weight: 950;
+        }
+
+        .quantity-box.remaining {
+            background: var(--dry-orange-soft);
+        }
+
+    .schedule-grid {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 6px;
+    }
+
+    .schedule-box {
+        border: 1px solid var(--dry-line);
+        border-radius: 9px;
+        padding: 8px;
+    }
+
+        .schedule-box span {
+            display: block;
+            color: var(--dry-muted);
+            font-size: .51rem;
+            font-weight: 950;
+            text-transform: uppercase;
+        }
+
+        .schedule-box strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--dry-text);
+            font-size: .63rem;
+            font-weight: 850;
+        }
+
+    .start-panel {
         margin-top: 10px;
         padding-top: 10px;
         border-top: 1px solid var(--dry-line);
     }
 
-        .confirm-panel.show {
-            display: block;
-        }
-
-    .confirm-form {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 8px;
-        align-items: end;
-    }
-
-    .disabled-note {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        min-height: 38px;
-        padding: 7px 10px;
+    .no-tolva {
+        margin-top: 10px;
+        padding: 9px 10px;
         border-radius: 10px;
-        background: var(--dry-blue-soft);
-        color: var(--dry-blue);
+        background: var(--dry-red-soft);
+        color: var(--dry-red);
         font-size: .63rem;
         font-weight: 850;
     }
-
-    .empty {
-        background: var(--dry-card);
-        border: 1px dashed var(--dry-line);
-        border-radius: 15px;
-        padding: 28px 18px;
-        text-align: center;
-        color: var(--dry-muted);
-    }
-
-        .empty i {
-            font-size: 1.5rem;
-            display: block;
-            margin-bottom: 7px;
-        }
-
-        .empty strong {
-            display: block;
-            color: var(--dry-text);
-            font-size: .82rem;
-            font-weight: 950;
-        }
-
-        .empty span {
-            display: block;
-            margin-top: 4px;
-            font-size: .67rem;
-            font-weight: 700;
-        }
 
     .ready-list {
         background: var(--dry-card);
@@ -1071,12 +1344,12 @@
 
     .ready-row {
         display: grid;
-        grid-template-columns: 1.15fr 1.25fr .8fr 1fr auto;
+        grid-template-columns: 1.05fr 1.4fr .8fr 1fr auto;
         gap: 10px;
         align-items: center;
         padding: 11px 13px;
         border-top: 1px solid var(--dry-line);
-        font-size: .68rem;
+        font-size: .66rem;
     }
 
         .ready-row:first-child {
@@ -1084,6 +1357,7 @@
         }
 
         .ready-row strong {
+            display: block;
             color: var(--dry-text);
             font-weight: 900;
         }
@@ -1100,71 +1374,282 @@
         font-weight: 950 !important;
     }
 
-    @@media(max-width:1100px) {
+    .empty {
+        background: var(--dry-card);
+        border: 1px dashed var(--dry-line);
+        border-radius: 15px;
+        padding: 28px 18px;
+        text-align: center;
+        color: var(--dry-muted);
+    }
+
+        .empty i {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 1.5rem;
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--dry-text);
+            font-size: .82rem;
+            font-weight: 950;
+        }
+
+        .empty span {
+            display: block;
+            margin-top: 4px;
+            font-size: .66rem;
+            font-weight: 700;
+        }
+
+    .stat-priority {
+        border-color: #e7bc68;
+        background: linear-gradient(135deg,var(--dry-card),var(--dry-orange-soft));
+    }
+
+    .stat-sub {
+        display: block;
+        margin-top: 4px;
+        color: var(--dry-muted);
+        font-size: .58rem;
+        font-weight: 750;
+    }
+
+    .section-priority {
+        margin-top: 20px;
+        padding: 14px;
+        border: 1px solid #edcf93;
+        border-radius: 20px;
+        background: linear-gradient(180deg,var(--dry-orange-soft),transparent 190px);
+    }
+
+    html[data-nsq-theme="dark"] .section-priority,
+    html[data-bs-theme="dark"] .section-priority {
+        border-color: #5a4318;
+    }
+
+    .section-kpi {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+        .section-kpi .kg-pill {
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: var(--dry-orange-soft);
+            color: var(--dry-orange-dark);
+            font-size: .68rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+    .waiting-section {
+        padding: 14px;
+        border: 1px solid var(--dry-line);
+        border-radius: 20px;
+        background: linear-gradient(180deg,var(--dry-blue-soft),transparent 190px);
+    }
+
+    .waiting-machine {
+        margin-bottom: 11px;
+        background: var(--dry-card);
+        border: 1px solid var(--dry-line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--dry-shadow);
+    }
+
+        .waiting-machine > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+        }
+
+            .waiting-machine > summary::-webkit-details-marker {
+                display: none;
+            }
+
+    .waiting-machine-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+        .waiting-machine-title i {
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            background: var(--dry-blue-soft);
+            color: var(--dry-blue);
+            flex: none;
+        }
+
+        .waiting-machine-title strong {
+            display: block;
+            font-size: .8rem;
+            font-weight: 950;
+            color: var(--dry-text);
+        }
+
+        .waiting-machine-title small {
+            display: block;
+            margin-top: 2px;
+            color: var(--dry-muted);
+            font-size: .61rem;
+            font-weight: 750;
+        }
+
+    .waiting-machine-kpi {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .waiting-kg {
+        margin-top: 10px;
+        padding: 11px 12px;
+        border-radius: 12px;
+        background: linear-gradient(135deg,var(--dry-blue-soft),var(--dry-card));
+        border: 1px solid #b9c9f2;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+    html[data-nsq-theme="dark"] .waiting-kg,
+    html[data-bs-theme="dark"] .waiting-kg {
+        border-color: #344b72;
+    }
+
+    .waiting-kg span {
+        color: var(--dry-muted);
+        font-size: .58rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .waiting-kg strong {
+        color: var(--dry-blue);
+        font-size: 1.08rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+    .waiting-foot {
+        margin-top: 9px;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        padding-top: 9px;
+        border-top: 1px dashed var(--dry-line);
+        color: var(--dry-muted);
+        font-size: .61rem;
+        font-weight: 750;
+    }
+
+    @@media(max-width:1200px) {
+        .tolva-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+
+        .running-grid,
+        .material-grid,
+        .planned-grid {
+            grid-template-columns: 1fr;
+        }
+
         .stats {
-            grid-template-columns: repeat(2,minmax(0,1fr))
+            grid-template-columns: repeat(2,minmax(0,1fr));
         }
+    }
 
+    @@media(max-width:900px) {
         .filters {
-            grid-template-columns: 1fr 1fr
+            grid-template-columns: 1fr 1fr;
         }
 
-        .running-grid, .group-body {
-            grid-template-columns: 1fr
-        }
-
-        .info-grid {
-            grid-template-columns: repeat(2,minmax(0,1fr))
+        .info-grid,
+        .quantity-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr));
         }
     }
 
     @@media(max-width:720px) {
         .dry-page {
-            padding: 10px
+            padding: 10px;
         }
 
         .hero {
+            flex-direction: column;
             align-items: flex-start;
-            flex-direction: column
         }
 
         .hero-actions {
+            justify-content: flex-start;
             width: 100%;
-            justify-content: flex-start
         }
 
-        .stats {
-            grid-template-columns: 1fr 1fr
+        .stats,
+        .filters,
+        .tolva-grid,
+        .process-row,
+        .form-row-2 {
+            grid-template-columns: 1fr;
         }
 
-        .filters {
-            grid-template-columns: 1fr
+        .timer-box {
+            grid-template-columns: 1fr;
         }
 
-        .process-banner {
-            grid-template-columns: 1fr
-        }
-
-        .confirm-form {
-            grid-template-columns: 1fr
+        .timer-target {
+            text-align: left;
         }
 
         .ready-row {
-            grid-template-columns: 1fr 1fr
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .segment-row {
+            grid-template-columns: 1fr 1fr;
         }
     }
 </style>
 
 <div class="dry-page"
      id="secadoPage"
-     data-server-now="@Model.FechaConsulta.ToString("O")">
+     data-server-now="@Model.FechaConsulta.ToString("O")"
+     data-estado-url="@Url.Action("EstadoSecado", "ProduccionPreparacion")"
+     data-tolerancia-fin="@Model.Configuracion.MinutosToleranciaFin">
 
     <section class="hero">
         <div class="hero-main">
-            <div class="hero-icon"><i class="bi bi-thermometer-sun"></i></div>
+            <div class="hero-icon">
+                <i class="bi bi-thermometer-sun"></i>
+            </div>
+
             <div>
                 <h1>Secado de material</h1>
-                <p>Controla cuándo debe entrar el material al secador o deshumificador y si estará disponible antes del arranque.</p>
+                <p>
+                    Control operativo de materia prima recibida, cargas de secado,
+                    tolvas, cambios de tolva y liberación del material al cumplir
+                    el tiempo requerido.
+                </p>
             </div>
         </div>
 
@@ -1172,31 +1657,36 @@
             <a class="btnx btnx-light"
                asp-controller="ProduccionPreparacion"
                asp-action="Index">
-                <i class="bi bi-grid-1x2"></i> Tablero
+                <i class="bi bi-grid-1x2"></i>
+                Tablero
             </a>
 
             <a class="btnx btnx-light"
                asp-controller="ProduccionPreparacion"
                asp-action="CambioMolde">
-                <i class="bi bi-tools"></i> Cambios de molde
+                <i class="bi bi-tools"></i>
+                Cambios de molde
             </a>
 
             <a class="btnx btnx-light"
                asp-controller="ProduccionPreparacion"
                asp-action="Embalajes">
-                <i class="bi bi-box-seam"></i> Embalajes
+                <i class="bi bi-box-seam"></i>
+                Embalajes
             </a>
 
             <a class="btnx btnx-light"
                asp-controller="ProduccionPreparacion"
                asp-action="Historial">
-                <i class="bi bi-clock-history"></i> Historial
+                <i class="bi bi-clock-history"></i>
+                Historial
             </a>
 
             <a class="btnx btnx-light"
                asp-controller="Produccion"
                asp-action="Index">
-                <i class="bi bi-arrow-left"></i> Producción
+                <i class="bi bi-arrow-left"></i>
+                Producción
             </a>
         </div>
     </section>
@@ -1204,72 +1694,104 @@
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success flash">
-            <i class="bi bi-check-circle me-1"></i>@TempData["Success"]
+            <i class="bi bi-check-circle me-1"></i>
+            @TempData["Success"]
         </div>
     }
 
     @if (TempData["Warning"] != null)
     {
         <div class="alert alert-warning flash">
-            <i class="bi bi-exclamation-triangle me-1"></i>@TempData["Warning"]
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            @TempData["Warning"]
         </div>
     }
 
     @if (TempData["Error"] != null)
     {
         <div class="alert alert-danger flash">
-            <i class="bi bi-exclamation-octagon me-1"></i>@TempData["Error"]
+            <i class="bi bi-exclamation-octagon me-1"></i>
+            @TempData["Error"]
         </div>
     }
 
-    @if (totalRiesgos > 0)
+    @if (!Model.PuedeGestionarSecado)
     {
-        <div class="risk-banner">
+        <div class="permission-note">
+            <i class="bi bi-eye fs-5"></i>
+            <div>
+                <strong>Modo consulta</strong>
+                Puedes consultar el estado del secado, pero tu usuario no tiene permiso
+                para iniciar cargas, cambiar tolvas o finalizar procesos.
+            </div>
+        </div>
+    }
+
+    @if (totalAlertas > 0)
+    {
+        <div class="alert-banner">
             <i class="bi bi-exclamation-triangle-fill fs-5"></i>
             <div>
-                <strong>Hay material con riesgo de no estar listo para el arranque.</strong>
-                @if (riesgosPendientes > 0)
+                <strong>Hay procesos que requieren atención.</strong>
+
+                @if (Model.TotalAlertasEspera > 0)
                 {
-                    <span>@riesgosPendientes tarea(s) aún no se han iniciado y, si comienzan ahora, llegarían tarde.</span>
+                    <span>
+                        @Model.TotalAlertasEspera material(es) llevan más tiempo del permitido
+                        esperando iniciar secado.
+                    </span>
                 }
-                @if (riesgosEnProceso > 0)
+
+                @if (Model.TotalCargasRetrasadas > 0)
                 {
-                    <span> @riesgosEnProceso secado(s) ya iniciados tienen disponibilidad estimada posterior al arranque.</span>
+                    <span>
+                        @Model.TotalCargasRetrasadas carga(s) ya superaron su tiempo esperado
+                        más la tolerancia configurada.
+                    </span>
                 }
             </div>
         </div>
     }
 
     <section class="stats">
-        <div class="stat">
-            <div class="stat-icon orange"><i class="bi bi-hourglass-split"></i></div>
+        <div class="stat stat-priority">
+            <div class="stat-icon orange"><i class="bi bi-box2-heart"></i></div>
             <div>
-                <span class="stat-value">@pendientes.Count</span>
-                <span class="stat-label">Pendientes por iniciar</span>
+                <span class="stat-value">@Cantidad(totalKgPendientesSecado)</span>
+                <span class="stat-label">MP disponible para secar</span>
+                <span class="stat-sub">@pendientes.Count lote@(pendientes.Count == 1 ? "" : "s") pendiente@(pendientes.Count == 1 ? "" : "s")</span>
             </div>
         </div>
-
         <div class="stat">
             <div class="stat-icon blue"><i class="bi bi-droplet-half"></i></div>
             <div>
-                <span class="stat-value">@secando.Count</span>
-                <span class="stat-label">En secado</span>
+                <span class="stat-value">@cargasActivas.Count</span>
+                <span class="stat-label">Cargas en proceso</span>
+                <span class="stat-sub">Secado activo en tolva</span>
             </div>
         </div>
-
         <div class="stat">
-            <div class="stat-icon green"><i class="bi bi-check2-circle"></i></div>
+            <div class="stat-icon blue"><i class="bi bi-truck"></i></div>
             <div>
-                <span class="stat-value">@listos.Count</span>
-                <span class="stat-label">Material listo</span>
+                <span class="stat-value">@Cantidad(totalKgEsperadosRecepcion)</span>
+                <span class="stat-label">MP esperando recepción</span>
+                <span class="stat-sub">@pendientesPlaneacion.Count OF@(pendientesPlaneacion.Count == 1 ? "" : "s") pendiente@(pendientesPlaneacion.Count == 1 ? "" : "s")</span>
             </div>
         </div>
-
+        <div class="stat">
+            <div class="stat-icon green"><i class="bi bi-box-arrow-in-down"></i></div>
+            <div>
+                <span class="stat-value">@Model.TotalTolvasDisponibles</span>
+                <span class="stat-label">Tolvas disponibles</span>
+                <span class="stat-sub">@Model.TotalTolvasOcupadas ocupada@(Model.TotalTolvasOcupadas == 1 ? "" : "s")</span>
+            </div>
+        </div>
         <div class="stat">
             <div class="stat-icon red"><i class="bi bi-exclamation-octagon"></i></div>
             <div>
-                <span class="stat-value">@totalRiesgos</span>
-                <span class="stat-label">Con riesgo de atraso</span>
+                <span class="stat-value">@totalAlertas</span>
+                <span class="stat-label">Alertas operativas</span>
+                <span class="stat-sub">Espera o cargas retrasadas</span>
             </div>
         </div>
     </section>
@@ -1284,7 +1806,7 @@
             <input type="text"
                    name="filtro"
                    value="@filtroActual"
-                   placeholder="OF, parte, material o máquina..." />
+                   placeholder="OF, material o máquina..." />
         </div>
 
         <div class="field">
@@ -1296,193 +1818,68 @@
                 {
                     if (Model.MaquinaID == maquina.MaquinaID)
                     {
-                        <option value="@maquina.MaquinaID" selected>@maquina.Texto</option>
+                        <option value="@maquina.MaquinaID" selected>
+                            @maquina.Texto
+                        </option>
                     }
                     else
                     {
-                        <option value="@maquina.MaquinaID">@maquina.Texto</option>
+                        <option value="@maquina.MaquinaID">
+                            @maquina.Texto
+                        </option>
                     }
                 }
             </select>
         </div>
 
         <button class="btnx btnx-primary" type="submit">
-            <i class="bi bi-search"></i> Filtrar
+            <i class="bi bi-search"></i>
+            Filtrar
         </button>
 
         <a class="btnx btnx-outline"
            asp-controller="ProduccionPreparacion"
            asp-action="Secado">
-            <i class="bi bi-arrow-counterclockwise"></i> Limpiar
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Limpiar
         </a>
     </form>
 
-    <section class="section">
+    <section class="section section-priority">
         <div class="section-head">
             <div>
-                <h2>Material en secado</h2>
-                <p>El contador se calcula desde la hora real en que se registró el ingreso al secador.</p>
+                <h2><i class="bi bi-thermometer-sun me-1"></i> Material listo para entrar a secado</h2>
+                <p>
+                    Materia prima ya confirmada físicamente. Aquí se acumulan las recepciones de la misma OF mientras no haya iniciado un lote de secado.
+                </p>
             </div>
-            <span class="section-count">@secando.Count</span>
-        </div>
 
-        @if (secando.Any())
-        {
-            <div class="running-grid">
-                @foreach (var tarea in secando)
-                {
-                    var inicio = tarea.FechaConfirmacion;
-                    var disponible = tarea.FechaDisponibleEstimada;
-                    var totalMinutos = inicio.HasValue && disponible.HasValue
-                    ? Math.Max(1, (int)Math.Ceiling((disponible.Value - inicio.Value).TotalMinutes))
-                    : 1;
-
-                    var transcurridos = inicio.HasValue
-                    ? Math.Max(0, (int)Math.Floor((Model.FechaConsulta - inicio.Value).TotalMinutes))
-                    : 0;
-
-                    var porcentaje = Math.Min(
-                    100,
-                    Math.Max(
-                    0,
-                    Math.Round((decimal)transcurridos * 100m / totalMinutos, 0)));
-
-                    <article class="dry-card js-secando @(tarea.SecadoLlegaraTarde ? "is-late" : "")"
-                             data-start="@(tarea.FechaConfirmacion?.ToString("O") ?? "")"
-                             data-ready="@(tarea.FechaDisponibleEstimada?.ToString("O") ?? "")"
-                             data-total-minutes="@totalMinutos">
-
-                        <div class="card-top">
-                            <div class="machine">
-                                <div class="machine-icon">
-                                    <i class="bi bi-droplet-half"></i>
-                                </div>
-                                <div>
-                                    <strong>@tarea.TextoMaquina</strong>
-                                    <small>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) · @tarea.TextoParte</small>
-                                </div>
-                            </div>
-
-                            @if (tarea.SecadoLlegaraTarde)
-                            {
-                                <span class="status-pill late">Llegará tarde</span>
-                            }
-                            else
-                            {
-                                <span class="status-pill drying">Secando</span>
-                            }
-                        </div>
-
-                        <div class="card-bodyx">
-                            <div class="material-box">
-                                <div class="material-icon">
-                                    <i class="bi bi-box2"></i>
-                                </div>
-                                <div>
-                                    <span>Material</span>
-                                    <strong>@tarea.TextoMaterial</strong>
-                                    <small>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Proceso de secado" : tarea.TipoSecado) · @Horas(tarea.HorasSecado)</small>
-                                </div>
-                            </div>
-
-                            <div class="info-grid">
-                                <div class="info">
-                                    <span>Inicio real</span>
-                                    <strong>@Fecha(tarea.FechaConfirmacion)</strong>
-                                </div>
-
-                                <div class="info">
-                                    <span>Disponible estimado</span>
-                                    <strong>@Fecha(tarea.FechaDisponibleEstimada)</strong>
-                                </div>
-
-                                <div class="info">
-                                    <span>Arranque</span>
-                                    <strong>@Fecha(tarea.FechaArranque)</strong>
-                                </div>
-
-                                <div class="info">
-                                    <span>Cantidad programada</span>
-                                    <strong>@tarea.CantidadProgramada.ToString("N0") PZA</strong>
-                                </div>
-                            </div>
-
-                            <div class="timer-box">
-                                <div>
-                                    <div class="timer-label">Tiempo restante de secado</div>
-                                    <div class="timer-value js-countdown">Calculando...</div>
-                                    <div class="timer-sub js-countdown-sub">
-                                        Disponible estimado @Fecha(tarea.FechaDisponibleEstimada)
-                                    </div>
-                                </div>
-
-                                <div class="timer-target">
-                                    <strong>@Horas(tarea.HorasSecado)</strong>
-                                    <span>tiempo requerido</span>
-                                </div>
-                            </div>
-
-                            <div class="progressx">
-                                <div class="js-progress" style="width:@porcentaje%"></div>
-                            </div>
-
-                            @if (tarea.SecadoLlegaraTarde)
-                            {
-                                <div class="late-alert">
-                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                    Con el inicio real registrado, el material estaría disponible
-                                    <strong>@tarea.MinutosRetrasoSecado minuto(s)</strong>
-                                    después del arranque programado.
-                                </div>
-                            }
-
-                            <div class="actions">
-                                @if (tarea.EjecucionProduccionID.HasValue)
-                                {
-                                    <a class="btnx btnx-outline"
-                                       asp-controller="Produccion"
-                                       asp-action="Detalle"
-                                       asp-route-id="@tarea.EjecucionProduccionID.Value">
-                                        <i class="bi bi-box-arrow-up-right"></i> Ver producción
-                                    </a>
-                                }
-                            </div>
-                        </div>
-                    </article>
-                }
+            <div class="section-kpi">
+                <span class="kg-pill">@Cantidad(totalKgPendientesSecado) disponibles</span>
+                <span class="section-count">@pendientes.Count</span>
             </div>
-        }
-        else
-        {
-            <div class="empty">
-                <i class="bi bi-droplet-half"></i>
-                <strong>No hay materiales en secado</strong>
-                <span>Cuando se registre el ingreso al secador, la tarea aparecerá aquí con su tiempo restante.</span>
-            </div>
-        }
-    </section>
-
-    <section class="section">
-        <div class="section-head">
-            <div>
-                <h2>Pendientes por iniciar</h2>
-                <p>El sistema calcula la hora recomendada de inicio usando el tiempo de secado configurado para la parte.</p>
-            </div>
-            <span class="section-count">@pendientes.Count</span>
         </div>
 
         @if (pendientes.Any())
         {
             foreach (var grupo in pendientes
-            .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre })
-            .OrderBy(x => x.Key.MaquinaCodigo)
-            .ThenBy(x => x.Key.MaquinaNombre))
+            .GroupBy(x => new
             {
-                var nombreMaquina = string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
-                ? grupo.Key.MaquinaCodigo ?? "Sin máquina"
-                : $"{grupo.Key.MaquinaCodigo} · {grupo.Key.MaquinaNombre}";
+                x.MaquinaProgramadaID,
+                x.MaquinaProgramadaCodigo,
+                x.MaquinaProgramadaNombre
+            })
+            .OrderBy(x => x.Key.MaquinaProgramadaCodigo)
+            .ThenBy(x => x.Key.MaquinaProgramadaNombre))
+            {
+                var maquinaTexto =
+                string.IsNullOrWhiteSpace(grupo.Key.MaquinaProgramadaCodigo)
+                ? "Sin máquina"
+                : string.IsNullOrWhiteSpace(grupo.Key.MaquinaProgramadaNombre)
+                ? grupo.Key.MaquinaProgramadaCodigo
+                : $"{grupo.Key.MaquinaProgramadaCodigo} - {grupo.Key.MaquinaProgramadaNombre}";
 
-                <details class="machine-group">
+                <details class="material-group" open>
                     <summary>
                         <div class="group-title">
                             <div class="group-icon">
@@ -1490,163 +1887,340 @@
                             </div>
 
                             <div>
-                                <strong>@nombreMaquina</strong>
-                                <small>@grupo.Count() material@(grupo.Count() == 1 ? "" : "es") pendiente(s) de secado</small>
+                                <strong>@maquinaTexto</strong>
+                                <small>
+                                    @grupo.Count()
+                                    material@(grupo.Count() == 1 ? "" : "es")
+                                    pendiente(s)
+                                </small>
                             </div>
                         </div>
 
-                        <span class="group-count">@grupo.Count()</span>
+                        <span class="group-count">
+                            @grupo.Count()
+                        </span>
                     </summary>
 
-                    <div class="group-body">
-                        @foreach (var tarea in grupo.OrderBy(x => x.FechaAviso))
+                    <div class="material-grid">
+                        @foreach (var material in grupo)
                         {
-                            var llegariaTarde = LlegariaTardeSiIniciaAhora(tarea);
-                            var retraso = MinutosRetrasoSiIniciaAhora(tarea);
+                            var tolvasCompatibles = tolvas
+                            .Where(x =>
+                            x.DisponibleParaUsar &&
+                            (
+                            string.Equals(
+                            x.TipoProcesoPermitido,
+                            "AMBOS",
+                            StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(
+                            x.TipoProcesoPermitido,
+                            material.TipoProceso,
+                            StringComparison.OrdinalIgnoreCase)
+                            ))
+                            .OrderByDescending(x =>
+                            material.TolvaSugeridaID.HasValue &&
+                            x.TolvaID == material.TolvaSugeridaID.Value)
+                            .ThenBy(x => x.MaquinaCodigo)
+                            .ThenBy(x => x.Codigo)
+                            .ToList();
 
-                            <article class="task @ClasePendiente(tarea)">
-                                <div class="task-main">
-                                    <div class="task-head">
-                                        <div class="task-title">
-                                            <div class="task-icon">
-                                                <i class="bi bi-thermometer-sun"></i>
+                            ProduccionSecadoTolvaVm? tolvaPredeterminada = null;
+
+                            if (material.TolvaSugeridaID.HasValue)
+                            {
+                                tolvaPredeterminada = tolvasCompatibles
+                                .FirstOrDefault(x =>
+                                x.TolvaID == material.TolvaSugeridaID.Value);
+                            }
+
+                            if (tolvaPredeterminada == null)
+                            {
+                                tolvaPredeterminada = tolvasCompatibles.FirstOrDefault();
+                            }
+
+                            var cantidadInicial = tolvaPredeterminada != null
+                            ? Math.Min(
+                            material.CantidadPendienteAsignarKg,
+                            tolvaPredeterminada.CapacidadKg)
+                            : material.CantidadPendienteAsignarKg;
+
+                            <article class="pending-card @(material.DebeAlertarEspera ? "is-alert" : material.EstaParcial ? "is-partial" : "")">
+                                <div class="pending-head">
+                                    <div class="pending-title">
+                                        <div class="pending-icon">
+                                            <i class="bi bi-box2"></i>
+                                        </div>
+
+                                        <div>
+                                            <div class="chips">
+                                                @if (!string.IsNullOrWhiteSpace(material.NumeroOF))
+                                                {
+                                                    <span class="chip">
+                                                        OF @material.NumeroOF
+                                                    </span>
+                                                }
+
+                                                @if (!string.IsNullOrWhiteSpace(material.TipoMPTexto))
+                                                {
+                                                    <span class="chip">
+                                                        @material.TipoMPTexto
+                                                    </span>
+                                                }
+
+                                                @if (!string.IsNullOrWhiteSpace(material.Lote))
+                                                {
+                                                    <span class="chip">
+                                                        Lote @material.Lote
+                                                    </span>
+                                                }
                                             </div>
 
-                                            <div>
-                                                <div class="task-kicker">
-                                                    <span class="task-type">Secado de material</span>
+                                            <h3>@material.TextoMaterial</h3>
 
-                                                    @if (!string.IsNullOrWhiteSpace(tarea.NumeroOF))
-                                                    {
-                                                        <span class="chip">OF @tarea.NumeroOF</span>
-                                                    }
+                                            <small>
+                                                Recibido @material.FechaRecepcionProduccion.ToString("dd/MM/yyyy HH:mm")
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <span class="status-pill @EstadoMaterialClase(material)">
+                                        @material.EstadoTexto
+                                    </span>
+                                </div>
+
+                                <div class="process-row">
+                                    <div class="process-box primary">
+                                        <span>Proceso requerido</span>
+                                        <strong>@material.TipoProcesoTexto</strong>
+                                    </div>
+
+                                    <div class="process-box">
+                                        <span>Tiempo requerido</span>
+                                        <strong>@Duracion(material.MinutosSecadoRequeridos)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="quantity-grid">
+                                    <div class="quantity-box">
+                                        <span>Recibido</span>
+                                        <strong>@Cantidad(material.CantidadRecibidaKg)</strong>
+                                    </div>
+
+                                    <div class="quantity-box">
+                                        <span>Asignado</span>
+                                        <strong>@Cantidad(material.CantidadAsignadaKg)</strong>
+                                    </div>
+
+                                    <div class="quantity-box">
+                                        <span>Finalizado</span>
+                                        <strong>@Cantidad(material.CantidadFinalizadaKg)</strong>
+                                    </div>
+
+                                    <div class="quantity-box remaining">
+                                        <span>Por asignar</span>
+                                        <strong>@Cantidad(material.CantidadPendienteAsignarKg)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="schedule-grid">
+                                    <div class="schedule-box">
+                                        <span>Inicio objetivo</span>
+                                        <strong>@Fecha(material.FechaInicioSecadoObjetivo)</strong>
+                                    </div>
+
+                                    <div class="schedule-box">
+                                        <span>Fin objetivo</span>
+                                        <strong>@Fecha(material.FechaObjetivoFinSecado)</strong>
+                                    </div>
+
+                                    <div class="schedule-box">
+                                        <span>Arranque producción</span>
+                                        <strong>@Fecha(material.FechaArranqueProduccion)</strong>
+                                    </div>
+
+                                    <div class="schedule-box">
+                                        <span>Tolva sugerida</span>
+                                        <strong>@material.TextoTolvaSugerida</strong>
+                                    </div>
+                                </div>
+
+                                @if (material.DebeAlertarEspera)
+                                {
+                                    <div class="load-alert danger">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                        El material lleva
+                                        <strong>@material.MinutosEsperaActual minuto(s)</strong>
+                                        esperando iniciar su primera carga.
+                                    </div>
+                                }
+
+                                @if (material.RecepcionTardia)
+                                {
+                                    <div class="load-alert warning">
+                                        <i class="bi bi-clock-history me-1"></i>
+                                        Producción confirmó el material
+                                        <strong>@material.MinutosRetrasoRecepcion minuto(s)</strong>
+                                        después de la hora límite estimada.
+                                    </div>
+                                }
+
+                                @if (material.Cargas.Any())
+                                {
+                                    <details class="history-details">
+                                        <summary>
+                                            <i class="bi bi-clock-history"></i>
+                                            Cargas anteriores (@material.Cargas.Count)
+                                        </summary>
+
+                                        <div class="segment-list">
+                                            @foreach (var cargaAnterior in material.Cargas
+                                                                        .OrderByDescending(x => x.NumeroCarga))
+                                            {
+                                                <div class="segment-row">
+                                                    <strong>
+                                                        #@cargaAnterior.NumeroCarga
+                                                    </strong>
+
+                                                    <div>
+                                                        <strong>@cargaAnterior.TextoTolva</strong>
+                                                        <span>@Cantidad(cargaAnterior.CantidadKg)</span>
+                                                    </div>
+
+                                                    <div>
+                                                        <span>
+                                                            @Fecha(cargaAnterior.FechaInicioReal)
+                                                        </span>
+                                                        <span>
+                                                            a @Fecha(cargaAnterior.FechaFinReal)
+                                                        </span>
+                                                    </div>
+
+                                                    <span class="status-pill @(cargaAnterior.EstaFinalizada ? "success" : cargaAnterior.EstaCancelada ? "danger" : "primary")">
+                                                        @cargaAnterior.EstadoTexto
+                                                    </span>
                                                 </div>
-
-                                                <h3>@tarea.TextoMaterial</h3>
-                                                <div class="task-sub">@tarea.TextoParte · @tarea.TextoMaquina</div>
-                                            </div>
-                                        </div>
-
-                                        <span class="status-pill @BadgePendiente(tarea)">
-                                            @TextoPendiente(tarea)
-                                        </span>
-                                    </div>
-
-                                    <div class="process-banner">
-                                        <div class="process-main">
-                                            <span>Proceso requerido</span>
-                                            <strong>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "SECADO" : tarea.TipoSecado)</strong>
-                                        </div>
-
-                                        <div class="process-time">
-                                            <span>Tiempo requerido</span>
-                                            <strong>@Horas(tarea.HorasSecado)</strong>
-                                        </div>
-                                    </div>
-
-                                    <div class="pending-info">
-                                        <div>
-                                            <span>Iniciar secado</span>
-                                            <strong>@Fecha(tarea.FechaAviso)</strong>
-                                        </div>
-
-                                        <div>
-                                            <span>Debe estar listo</span>
-                                            <strong>@Fecha(tarea.FechaObjetivo)</strong>
-                                        </div>
-
-                                        <div>
-                                            <span>Arranque programado</span>
-                                            <strong>@Fecha(tarea.FechaArranque)</strong>
-                                        </div>
-
-                                        <div>
-                                            <span>Cantidad programada</span>
-                                            <strong>@tarea.CantidadProgramada.ToString("N0") PZA</strong>
-                                        </div>
-                                    </div>
-
-                                    @if (llegariaTarde)
-                                    {
-                                        <div class="late-alert">
-                                            <i class="bi bi-exclamation-octagon-fill me-1"></i>
-                                            Si el secado comienza ahora, el material estaría disponible aproximadamente
-                                            <strong>@retraso minuto(s) después del arranque</strong>.
-                                        </div>
-                                    }
-                                    else if (tarea.EsHacerAhora)
-                                    {
-                                        <div class="late-alert"
-                                             style="background:var(--dry-orange-soft);color:var(--dry-orange);border-color:#efcf92">
-                                            <i class="bi bi-clock-fill me-1"></i>
-                                            Ya está dentro de la ventana de inicio. @tarea.TextoTiempo.
-                                        </div>
-                                    }
-
-                                    <div class="actions">
-                                        @if (Model.PuedeGestionarSecado)
-                                        {
-                                            if (!tarea.EsProxima || llegariaTarde)
-                                            {
-                                                <button type="button"
-                                                        class="btnx btnx-primary js-toggle-confirmar"
-                                                        data-target="confirmar-@tarea.PreparacionAnticipadaID">
-                                                    <i class="bi bi-play-fill"></i> Registrar ingreso a secador
-                                                </button>
                                             }
-                                            else
-                                            {
-                                                <span class="disabled-note">
-                                                    <i class="bi bi-clock-history"></i>
-                                                    Programado para iniciar a las @Hora(tarea.FechaAviso)
-                                                </span>
-                                            }
-                                        }
+                                        </div>
+                                    </details>
+                                }
 
-                                        @if (tarea.EjecucionProduccionID.HasValue)
-                                        {
-                                            <a class="btnx btnx-outline"
-                                               asp-controller="Produccion"
-                                               asp-action="Detalle"
-                                               asp-route-id="@tarea.EjecucionProduccionID.Value">
-                                                <i class="bi bi-box-arrow-up-right"></i> Ver producción
-                                            </a>
-                                        }
-                                    </div>
-
-                                    @if (Model.PuedeGestionarSecado &&
-                                                            (!tarea.EsProxima || llegariaTarde))
+                                @if (Model.PuedeGestionarSecado)
+                                {
+                                    if (tolvasCompatibles.Any())
                                     {
-                                        <div class="confirm-panel"
-                                             id="confirmar-@tarea.PreparacionAnticipadaID">
-
+                                        <div class="start-panel">
                                             <form asp-controller="ProduccionPreparacion"
-                                                  asp-action="ConfirmarPreparacion"
+                                                  asp-action="IniciarSecado"
                                                   method="post"
-                                                  class="confirm-form js-confirm-form">
+                                                  class="action-form js-start-form js-post-form"
+                                                  data-pending="@material.CantidadPendienteAsignarKg.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                  data-confirm="¿Confirmas el inicio de esta carga de secado?">
 
                                                 @Html.AntiForgeryToken()
 
                                                 <input type="hidden"
-                                                       name="PreparacionAnticipadaID"
-                                                       value="@tarea.PreparacionAnticipadaID" />
+                                                       name="SecadoMaterialID"
+                                                       value="@material.SecadoMaterialID" />
+
+                                                <div class="form-row-2">
+                                                    <div class="field">
+                                                        <label>Tolva</label>
+
+                                                        <select name="TolvaID"
+                                                                class="js-tolva-select"
+                                                                required>
+                                                            <option value="">
+                                                                Selecciona una tolva...
+                                                            </option>
+
+                                                            @foreach (var tolvaDisponible in tolvasCompatibles)
+                                                            {
+                                                                if (tolvaPredeterminada != null &&
+                                                                tolvaDisponible.TolvaID == tolvaPredeterminada.TolvaID)
+                                                                {
+                                                                    <option value="@tolvaDisponible.TolvaID"
+                                                                            data-capacity="@tolvaDisponible.CapacidadKg.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                                            selected>
+                                                                        @tolvaDisponible.Texto
+                                                                    </option>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <option value="@tolvaDisponible.TolvaID"
+                                                                            data-capacity="@tolvaDisponible.CapacidadKg.ToString("0.####", CultureInfo.InvariantCulture)">
+                                                                        @tolvaDisponible.Texto
+                                                                    </option>
+                                                                }
+                                                            }
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="field">
+                                                        <label>Cantidad a cargar</label>
+
+                                                        <input type="number"
+                                                               name="CantidadKg"
+                                                               class="js-cantidad-input"
+                                                               min="0.0001"
+                                                               step="0.0001"
+                                                               value="@cantidadInicial.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                               required />
+
+                                                        <span class="field-help js-capacity-hint"></span>
+                                                    </div>
+                                                </div>
 
                                                 <div class="field">
                                                     <label>Observaciones</label>
+
                                                     <textarea name="Observaciones"
-                                              maxlength="500"
-                                              placeholder="Secador utilizado, lote, condición del material, observación de arranque, etc."></textarea>
+                                          maxlength="1000"
+                                          placeholder="Condición del material, temperatura inicial, lote, observaciones del arranque, etc."></textarea>
                                                 </div>
 
-                                                <button class="btnx btnx-success"
-                                                        type="submit">
-                                                    <i class="bi bi-play-circle"></i>
-                                                    Iniciar secado
-                                                </button>
+                                                <div class="actions">
+                                                    <button type="submit"
+                                                            class="btnx btnx-primary">
+                                                        <i class="bi bi-play-circle"></i>
+                                                        Iniciar carga
+                                                    </button>
+
+                                                    @if (material.EjecucionProduccionID.HasValue)
+                                                    {
+                                                        <a class="btnx btnx-outline"
+                                                           asp-controller="Produccion"
+                                                           asp-action="Detalle"
+                                                           asp-route-id="@material.EjecucionProduccionID.Value">
+                                                            <i class="bi bi-box-arrow-up-right"></i>
+                                                            Ver producción
+                                                        </a>
+                                                    }
+                                                </div>
                                             </form>
                                         </div>
                                     }
-                                </div>
+                                    else
+                                    {
+                                        <div class="no-tolva">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            No hay una tolva disponible compatible con
+                                            <strong>@material.TipoProcesoTexto</strong>.
+                                            Finaliza o libera otra carga antes de continuar.
+                                        </div>
+                                    }
+                                }
+                                else if (material.EjecucionProduccionID.HasValue)
+                                {
+                                    <div class="actions">
+                                        <a class="btnx btnx-outline"
+                                           asp-controller="Produccion"
+                                           asp-action="Detalle"
+                                           asp-route-id="@material.EjecucionProduccionID.Value">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                            Ver producción
+                                        </a>
+                                    </div>
+                                }
                             </article>
                         }
                     </div>
@@ -1657,14 +2231,670 @@
         {
             <div class="empty">
                 <i class="bi bi-check2-circle"></i>
-                <strong>No hay secados pendientes</strong>
-                <span>No se encontraron materiales pendientes de ingresar al proceso de secado.</span>
+                <strong>No hay material pendiente por iniciar</strong>
+                <span>
+                    No se encontraron cantidades disponibles esperando una nueva carga de secado.
+                </span>
             </div>
         }
     </section>
 
     <section class="section">
-        <details class="machine-group">
+        <div class="section-head">
+            <div>
+                <h2>Cargas en proceso</h2>
+                <p>
+                    Cada carga conserva su cronómetro aunque sea movida a otra tolva.
+                    La finalización se habilita cuando se cumple el tiempo requerido.
+                </p>
+            </div>
+
+            <span class="section-count">@cargasActivas.Count</span>
+        </div>
+
+        @if (cargasActivas.Any())
+        {
+            <div class="running-grid">
+                @foreach (var item in cargasActivas)
+                {
+                    var material = item.Material;
+                    var carga = item.Carga;
+
+                    var totalMinutos = Math.Max(1, carga.DuracionRequeridaMinutos);
+                    var transcurridos = Math.Max(0, carga.MinutosTranscurridos);
+
+                    var porcentaje = Math.Min(
+                    100,
+                    Math.Max(
+                    0,
+                    (int)Math.Round(
+                    (decimal)transcurridos * 100m / totalMinutos,
+                    0)));
+
+                    var tolvasCambio = tolvas
+                    .Where(x =>
+                    x.DisponibleParaUsar &&
+                    x.TolvaID != carga.TolvaIDActual &&
+                    x.CapacidadKg + ProduccionSecadoReglas.ToleranciaCantidad >= carga.CantidadKg &&
+                    (
+                    string.Equals(
+                    x.TipoProcesoPermitido,
+                    "AMBOS",
+                    StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                    x.TipoProcesoPermitido,
+                    material.TipoProceso,
+                    StringComparison.OrdinalIgnoreCase)
+                    ))
+                    .OrderBy(x => x.MaquinaCodigo)
+                    .ThenBy(x => x.Codigo)
+                    .ToList();
+
+                    <article class="load-card js-load-card @(carga.EstaRetrasada ? "is-danger" : carga.TiempoRequeridoCumplido ? "is-ready" : "")"
+                             data-load-id="@carga.SecadoCargaID"
+                             data-start="@(carga.FechaInicioReal?.ToString("O") ?? "")"
+                             data-end="@(carga.FechaFinEsperada?.ToString("O") ?? "")"
+                             data-duration-minutes="@carga.DuracionRequeridaMinutos">
+
+                        <div class="load-head">
+                            <div class="load-machine">
+                                <div class="load-machine-icon">
+                                    <i class="bi bi-droplet-half"></i>
+                                </div>
+
+                                <div>
+                                    <strong>
+                                        @carga.TextoTolva
+                                    </strong>
+
+                                    <small>
+                                        @material.TextoMaquina
+                                        · Carga #@carga.NumeroCarga
+                                        · OF @(string.IsNullOrWhiteSpace(material.NumeroOF) ? "—" : material.NumeroOF)
+                                    </small>
+                                </div>
+                            </div>
+
+                            <span class="status-pill @EstadoCargaClase(carga) js-load-status">
+                                @carga.EstadoTexto
+                            </span>
+                        </div>
+
+                        <div class="load-body">
+                            <div class="material-box">
+                                <div class="material-icon">
+                                    <i class="bi bi-box2"></i>
+                                </div>
+
+                                <div>
+                                    <span>Material</span>
+                                    <strong>@material.TextoMaterial</strong>
+
+                                    <small>
+                                        @material.TipoProcesoTexto
+                                        · @Cantidad(carga.CantidadKg)
+
+                                        @if (!string.IsNullOrWhiteSpace(material.TipoMPTexto))
+                                        {
+                                            <text> · @material.TipoMPTexto</text>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(material.Lote))
+                                        {
+                                            <text> · Lote @material.Lote</text>
+                                        }
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="info-grid">
+                            <div class="info">
+                                <span>Inicio real</span>
+                                <strong>@Fecha(carga.FechaInicioReal)</strong>
+                            </div>
+
+                            <div class="info">
+                                <span>Fin esperado</span>
+                                <strong class="js-end-label">
+                                    @Fecha(carga.FechaFinEsperada)
+                                </strong>
+                            </div>
+
+                            <div class="info">
+                                <span>Tiempo requerido</span>
+                                <strong>@Duracion(carga.DuracionRequeridaMinutos)</strong>
+                            </div>
+
+                            <div class="info">
+                                <span>Espera previa</span>
+                                <strong>
+                                    @(carga.MinutosEsperaAntesInicio.HasValue
+                                                                    ? $"{carga.MinutosEsperaAntesInicio.Value} min"
+                                                                    : "0 min")
+                            </strong>
+                        </div>
+                    </div>
+
+                            <div class="timer-box">
+                                <div>
+                                    <div class="timer-label">
+                                        Tiempo restante
+                                    </div>
+
+                                    <div class="timer-value js-countdown">
+                                        Calculando...
+                                    </div>
+
+                                    <div class="timer-sub js-countdown-sub">
+                                        Fin esperado @Fecha(carga.FechaFinEsperada)
+                                    </div>
+                                </div>
+
+                                <div class="timer-target">
+                                    <strong>@Cantidad(carga.CantidadKg)</strong>
+                                    <span>cantidad en esta carga</span>
+                                </div>
+                            </div>
+
+                            <div class="progressx">
+                                <div class="js-progress"
+                                     style="width:@porcentaje%"></div>
+                            </div>
+
+                            <div class="js-state-alert">
+                        @if (carga.EstaRetrasada)
+                                {
+                                    <div class="load-alert danger">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                        La carga lleva
+                                        <strong>@carga.MinutosRetrasoActual minuto(s)</strong>
+                                        después del fin esperado y ya superó la tolerancia.
+                                    </div>
+                                }
+                                else if (carga.TiempoRequeridoCumplido)
+                                {
+                                    <div class="load-alert success">
+                                        <i class="bi bi-check-circle-fill me-1"></i>
+                                        El tiempo requerido ya se cumplió.
+                                        La carga puede finalizarse.
+                                    </div>
+                                }
+                                else if (carga.EstaProximaAFinalizar)
+                                {
+                                    <div class="load-alert warning">
+                                        <i class="bi bi-clock-fill me-1"></i>
+                                        La carga está próxima a terminar.
+                                        Faltan aproximadamente
+                                        <strong>@carga.MinutosRestantes minuto(s)</strong>.
+                                    </div>
+                                }
+                            </div>
+
+                            @if (carga.Segmentos.Any())
+                            {
+                                <details class="segment-details">
+                                    <summary>
+                                        <i class="bi bi-diagram-3"></i>
+                                        Recorrido de tolvas
+                                        (@carga.Segmentos.Count segmento@(carga.Segmentos.Count == 1 ? "" : "s"))
+                                    </summary>
+
+                                    <div class="segment-list">
+                                        @foreach (var segmento in carga.Segmentos.OrderBy(x => x.NumeroSegmento))
+                                        {
+                                            <div class="segment-row">
+                                                <strong>
+                                                    #@segmento.NumeroSegmento
+                                                </strong>
+
+                                                <div>
+                                                    <strong>@segmento.TextoTolva</strong>
+
+                                                    @if (segmento.EsCambioTolva)
+                                                    {
+                                                        <span>
+                                                            Cambio de tolva
+                                                        </span>
+                                                    }
+                                            </div>
+
+                                            <div>
+                                                <span>
+                                                    @segmento.FechaInicio.ToString("dd/MM HH:mm")
+                                                    -
+                                                    @(segmento.FechaFin.HasValue
+                                                                                            ? segmento.FechaFin.Value.ToString("dd/MM HH:mm")
+                                                                                            : "Actual")
+                                    </span>
+
+                                    @if (segmento.MinutosSegmento.HasValue)
+                                                    {
+                                                        <span>
+                                                            @segmento.MinutosSegmento.Value min
+                                                        </span>
+                                                    }
+                                                </div>
+
+                                                <div>
+                                                    @if (segmento.EstaAbierto)
+                                                    {
+                                                        <span class="status-pill primary">
+                                                            Actual
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="status-pill success">
+                                                            Cerrado
+                                                        </span>
+                                                    }
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(segmento.MotivoCambio))
+                                                {
+                                                    <div style="grid-column:1/-1;color:var(--dry-muted)">
+                                                        <i class="bi bi-chat-left-text me-1"></i>
+                                                        @segmento.MotivoCambio
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </details>
+                            }
+
+                            <div class="actions">
+                                @if (Model.PuedeGestionarSecado)
+                                {
+                                    <button type="button"
+                                            class="btnx btnx-outline js-toggle-panel"
+                                            data-target="cambiarTolva-@carga.SecadoCargaID">
+                                        <i class="bi bi-arrow-left-right"></i>
+                                        Cambiar tolva
+                                    </button>
+
+                                    <button type="button"
+                                            class="btnx btnx-success js-toggle-panel js-open-finish"
+                                            data-target="finalizar-@carga.SecadoCargaID"
+                                            @(carga.TiempoRequeridoCumplido ? null : "disabled")>
+                                        <i class="bi bi-check-circle"></i>
+                                        Finalizar carga
+                                    </button>
+                                }
+
+                                @if (material.EjecucionProduccionID.HasValue)
+                                {
+                                    <a class="btnx btnx-outline"
+                                       asp-controller="Produccion"
+                                       asp-action="Detalle"
+                                       asp-route-id="@material.EjecucionProduccionID.Value">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                        Ver producción
+                                    </a>
+                                }
+                            </div>
+
+                            @if (Model.PuedeGestionarSecado)
+                            {
+                                <div class="action-panel"
+                                     id="cambiarTolva-@carga.SecadoCargaID">
+
+                                    <div class="panel-title">
+                                        <i class="bi bi-arrow-left-right"></i>
+                                        Cambiar tolva sin reiniciar cronómetro
+                                    </div>
+
+                                    @if (tolvasCambio.Any())
+                                    {
+                                        <form asp-controller="ProduccionPreparacion"
+                                              asp-action="CambiarTolvaSecado"
+                                              method="post"
+                                              class="action-form js-post-form"
+                                              data-confirm="¿Confirmas el cambio de tolva? El tiempo de secado continuará corriendo.">
+
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden"
+                                                   name="SecadoCargaID"
+                                                   value="@carga.SecadoCargaID" />
+
+                                            <div class="field">
+                                                <label>Nueva tolva</label>
+
+                                                <select name="TolvaNuevaID"
+                                                        required>
+                                                    <option value="">
+                                                        Selecciona una tolva...
+                                                    </option>
+
+                                                    @foreach (var tolvaCambio in tolvasCambio)
+                                                    {
+                                                        <option value="@tolvaCambio.TolvaID">
+                                                            @tolvaCambio.Texto
+                                                        </option>
+                                                    }
+                                                </select>
+
+                                                <span class="field-help">
+                                                    Solo se muestran tolvas disponibles,
+                                                    compatibles con el proceso y con capacidad suficiente.
+                                                </span>
+                                            </div>
+
+                                            <div class="field">
+                                                <label>Motivo del cambio</label>
+
+                                                <textarea name="MotivoCambio"
+                                          maxlength="500"
+                                          required
+                                          placeholder="Ej. mantenimiento, falla de tolva, ajuste operativo..."></textarea>
+                                            </div>
+
+                                            <div class="actions">
+                                                <button class="btnx btnx-primary"
+                                                        type="submit">
+                                                    <i class="bi bi-arrow-left-right"></i>
+                                                    Confirmar cambio
+                                                </button>
+                                            </div>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <div class="no-tolva">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            No existe otra tolva disponible con capacidad
+                                            y proceso compatibles para esta carga.
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="action-panel"
+                                     id="finalizar-@carga.SecadoCargaID">
+
+                                    <div class="panel-title">
+                                        <i class="bi bi-check-circle"></i>
+                                        Finalizar carga de secado
+                                    </div>
+
+                                    <form asp-controller="ProduccionPreparacion"
+                                          asp-action="FinalizarSecado"
+                                          method="post"
+                                          class="action-form js-post-form"
+                                          data-confirm="¿Confirmas que la carga terminó físicamente su proceso de secado?">
+
+                                        @Html.AntiForgeryToken()
+
+                                        <input type="hidden"
+                                               name="SecadoCargaID"
+                                               value="@carga.SecadoCargaID" />
+
+                                        <div class="field">
+                                            <label>Observaciones</label>
+
+                                            <textarea name="Observaciones"
+                                          maxlength="1000"
+                                          placeholder="Condición final del material, temperatura, observaciones del proceso, etc."></textarea>
+                                        </div>
+
+                                        <div class="actions">
+                                            <button class="btnx btnx-success js-finish-submit"
+                                                    type="submit"
+                                                    @(carga.TiempoRequeridoCumplido ? null : "disabled")>
+                                                <i class="bi bi-check2-circle"></i>
+                                                Confirmar finalización
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-droplet-half"></i>
+                <strong>No hay cargas de secado activas</strong>
+                <span>
+                    Cuando se inicie una carga, aparecerá aquí con su tolva,
+                    cantidad y contador en tiempo real.
+                </span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <details class="tolva-details" open>
+            <summary>
+                <i class="bi bi-boxes"></i>
+                Estado de tolvas
+                <span class="section-count">@tolvas.Count</span>
+            </summary>
+
+            <div style="padding:10px;background:var(--dry-bg)">
+                @if (tolvas.Any())
+                {
+                    <div class="tolva-grid">
+                        @foreach (var tolva in tolvas)
+                        {
+                            var claseTolva = tolva.DisponibleParaUsar
+                            ? "is-free"
+                            : tolva.EstaOcupada
+                            ? "is-busy"
+                            : "is-disabled";
+
+                            <article class="tolva-card @claseTolva">
+                                <div class="tolva-top">
+                                    <div class="tolva-title">
+                                        <div class="tolva-icon">
+                                            <i class="bi bi-box2"></i>
+                                        </div>
+
+                                        <div>
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(tolva.Codigo)
+                                                                                        ? tolva.Nombre
+                                                                                        : $"{tolva.Codigo} - {tolva.Nombre}")
+                                    </strong>
+
+                                            <small>
+                                                @tolva.MaquinaCodigo
+                                        @if (!string.IsNullOrWhiteSpace(tolva.MaquinaNombre))
+                                                {
+                                                    <text> · @tolva.MaquinaNombre</text>
+                                                }
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <span class="status-pill @(tolva.DisponibleParaUsar ? "success" : tolva.EstaOcupada ? "warning" : "danger")">
+                                        @tolva.EstadoTexto
+                                    </span>
+                                </div>
+
+                                <div class="tolva-info">
+                                    <div>
+                                        <span>Capacidad</span>
+                                        <strong>@Cantidad(tolva.CapacidadKg)</strong>
+                                    </div>
+
+                                    <div>
+                                        <span>Proceso</span>
+                                        <strong>@tolva.TipoProcesoPermitido</strong>
+                                    </div>
+                                </div>
+
+                                @if (tolva.EstaOcupada)
+                                {
+                                    <div class="busy-info">
+                                        <i class="bi bi-hourglass-split me-1"></i>
+                                        OF @(string.IsNullOrWhiteSpace(tolva.NumeroOFActiva) ? "—" : tolva.NumeroOFActiva)
+                                        · @(string.IsNullOrWhiteSpace(tolva.MaterialCodigoActivo) ? "Material" : tolva.MaterialCodigoActivo)
+
+                                        @if (tolva.FechaFinEsperadaActiva.HasValue)
+                                        {
+                                            <text>
+                                                · Fin esperado @Fecha(tolva.FechaFinEsperadaActiva)
+                                            </text>
+                                        }
+                                    </div>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty">
+                        <i class="bi bi-boxes"></i>
+                        <strong>No hay tolvas configuradas</strong>
+                        <span>No se encontraron tolvas activas para el proceso de secado.</span>
+                    </div>
+                }
+            </div>
+        </details>
+    </section>
+
+    <section class="section waiting-section">
+        <div class="section-head">
+            <div>
+                <h2><i class="bi bi-truck me-1"></i> Próximos materiales · esperando recepción</h2>
+                <p>
+                    Materia prima requerida para secado que Planeación ya tiene programada, pero Producción todavía no ha confirmado físicamente.
+                </p>
+            </div>
+            <div class="section-kpi">
+                <span class="kg-pill" style="background:var(--dry-blue-soft);color:var(--dry-blue)">@Cantidad(totalKgEsperadosRecepcion) por recibir</span>
+                <span class="section-count" style="background:var(--dry-blue-soft);color:var(--dry-blue)">@pendientesPlaneacion.Count</span>
+            </div>
+        </div>
+
+        @if (pendientesPlaneacion.Any())
+        {
+            foreach (var grupo in pendientesPlaneacion
+            .GroupBy(x => new { x.MaquinaID, x.MaquinaCodigo, x.MaquinaNombre })
+            .OrderBy(x => x.Key.MaquinaCodigo)
+            .ThenBy(x => x.Key.MaquinaNombre))
+            {
+                var maquinaTexto = string.IsNullOrWhiteSpace(grupo.Key.MaquinaCodigo)
+                ? "Sin máquina"
+                : string.IsNullOrWhiteSpace(grupo.Key.MaquinaNombre)
+                ? grupo.Key.MaquinaCodigo
+                : $"{grupo.Key.MaquinaCodigo} - {grupo.Key.MaquinaNombre}";
+                var kgEsperadosMaquina = grupo.Sum(x => x.CantidadMpPendienteRecepcionKg);
+                <details class="waiting-machine" open>
+                    <summary>
+                        <div class="waiting-machine-title">
+                            <i class="bi bi-building-gear"></i>
+                            <div>
+                                <strong>@maquinaTexto</strong>
+                                <small>@grupo.Count() OF@(grupo.Count() == 1 ? "" : "s") esperando materia prima</small>
+                            </div>
+                        </div>
+                        <div class="waiting-machine-kpi">
+                            <span class="status-pill primary">@Cantidad(kgEsperadosMaquina) esperados</span>
+                            <span class="section-count" style="background:var(--dry-blue-soft);color:var(--dry-blue)">@grupo.Count()</span>
+                        </div>
+                    </summary>
+                    <div class="planned-grid" style="padding:10px;background:var(--dry-bg)">
+                        @foreach (var tarea in grupo.OrderBy(x => x.FechaAviso).ThenBy(x => x.FechaObjetivo))
+                        {
+                            var clasePlaneacion = EstadoPlaneacionClase(tarea);
+                            var cantidadMpEsperada = tarea.CantidadMpKg ?? 0m;
+                            var cantidadMpRecibida = tarea.CantidadMpRecibidaProduccionKg;
+                            var cantidadMpFaltante = tarea.CantidadMpPendienteRecepcionKg;
+                            <article class="planned-card @(clasePlaneacion == "danger" ? "is-danger" : clasePlaneacion == "warning" ? "is-warning" : "")">
+                                <div class="planned-head">
+                                    <div class="planned-title">
+                                        <div class="planned-icon"><i class="bi bi-truck"></i></div>
+                                        <div>
+                                            <div class="chips">
+                                                <span class="chip">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
+                                                <span class="chip">@tarea.TextoParte</span>
+                                            </div>
+                                            <h3>@tarea.TextoMaterial</h3>
+                                            @if (!string.IsNullOrWhiteSpace(tarea.DescripcionParte))
+                                            {
+                                                <small>@tarea.DescripcionParte</small>
+                                            }
+                                        </div>
+                                    </div>
+                                    <span class="status-pill @clasePlaneacion">@EstadoPlaneacionTexto(tarea)</span>
+                                </div>
+
+                                <div class="waiting-kg">
+                                    <div>
+                                        <span>Materia prima que falta recibir</span>
+                                        <div class="field-help">Lo que todavía esperamos físicamente de Almacén para esta OF</div>
+                                    </div>
+                                    <strong>@(cantidadMpEsperada > 0 ? Cantidad(cantidadMpFaltante) : "Por definir")</strong>
+                                </div>
+
+                                @if (cantidadMpEsperada > 0)
+                                {
+                                    <div class="quantity-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                                        <div class="quantity-box">
+                                            <span>Requerido por OF</span>
+                                            <strong>@Cantidad(cantidadMpEsperada)</strong>
+                                        </div>
+                                        <div class="quantity-box">
+                                            <span>Ya confirmado</span>
+                                            <strong>@Cantidad(cantidadMpRecibida)</strong>
+                                        </div>
+                                        <div class="quantity-box remaining">
+                                            <span>Falta recibir</span>
+                                            <strong>@Cantidad(cantidadMpFaltante)</strong>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="process-row">
+                                    <div class="process-box primary">
+                                        <span>Proceso requerido</span>
+                                        <strong>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Secado" : tarea.TipoSecado)</strong>
+                                    </div>
+                                    <div class="process-box">
+                                        <span>Tiempo de secado</span>
+                                        <strong>@Horas(tarea.HorasSecado)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="schedule-grid">
+                                    <div class="schedule-box">
+                                        <span>Debe iniciar secado</span>
+                                        <strong>@Fecha(tarea.FechaAviso)</strong>
+                                    </div>
+                                    <div class="schedule-box">
+                                        <span>Arranque producción</span>
+                                        <strong>@Fecha(tarea.FechaArranque ?? tarea.FechaObjetivo)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="waiting-foot">
+                                    <span><i class="bi bi-box-arrow-in-down me-1"></i>Pendiente de confirmación física en Producción</span>
+                                    <span>@tarea.CantidadProgramada.ToString("N0") PZA programadas</span>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </details>
+            }
+        }
+        else
+        {
+            <div class="empty">
+                <i class="bi bi-truck"></i>
+                <strong>No hay materia prima pendiente de recepción para secado</strong>
+                <span>Los programas visibles ya tienen material físico confirmado o no requieren secado.</span>
+            </div>
+        }
+    </section>
+
+    <section class="section">
+        <details class="material-group">
             <summary>
                 <div class="group-title">
                     <div class="group-icon"
@@ -1673,52 +2903,72 @@
                     </div>
 
                     <div>
-                        <strong>Material listo recientemente</strong>
-                        <small>@listos.Count material@(listos.Count == 1 ? "" : "es") con tiempo de secado cumplido</small>
+                        <strong>Material finalizado recientemente</strong>
+                        <small>
+                            @finalizados.Count material@(finalizados.Count == 1 ? "" : "es")
+                            con secado completado
+                        </small>
                     </div>
                 </div>
+
+                <span class="group-count">@finalizados.Count</span>
             </summary>
 
-            @if (listos.Any())
+            @if (finalizados.Any())
             {
-                <div class="ready-list">
-                    @foreach (var tarea in listos)
-                    {
-                        <div class="ready-row">
-                            <div>
-                                <strong>@tarea.TextoMaquina</strong>
-                                <span>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
-                            </div>
-
-                            <div>
-                                <strong>@tarea.TextoMaterial</strong>
-                                <span>@(string.IsNullOrWhiteSpace(tarea.TipoSecado) ? "Secado" : tarea.TipoSecado) · @Horas(tarea.HorasSecado)</span>
-                            </div>
-
-                            <div>
-                                <strong>@Fecha(tarea.FechaConfirmacion)</strong>
-                                <span>Inicio secado</span>
-                            </div>
-
-                            <div>
-                                <strong>@Fecha(tarea.FechaDisponibleEstimada)</strong>
-                                <span>Disponible desde</span>
-                            </div>
-
-                            <div>
-                                <span class="ok-text">
-                                    <i class="bi bi-check-circle me-1"></i>Listo
-                                </span>
-                            </div>
+                <div style="padding:10px;background:var(--dry-bg)">
+                    <div class="ready-list">
+                        @foreach (var material in finalizados)
+                        {
+                            <div class="ready-row">
+                                <div>
+                                    <strong>@material.TextoMaquina</strong>
+                                    <span>
+                                        OF @(string.IsNullOrWhiteSpace(material.NumeroOF)
+                                                                        ? "—"
+                                                                        : material.NumeroOF)
+                            </span>
                         </div>
-                    }
+
+                                <div>
+                                    <strong>@material.TextoMaterial</strong>
+                                    <span>
+                                        @material.TipoProcesoTexto
+                                        · @Cantidad(material.CantidadFinalizadaKg)
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <strong>
+                                        @Duracion(material.MinutosSecadoRequeridos)
+                                    </strong>
+                                    <span>Tiempo requerido</span>
+                                </div>
+
+                                <div>
+                                    <strong>
+                                        @Fecha(material.FechaUltimoFinSecado)
+                                    </strong>
+                                    <span>Última finalización</span>
+                                </div>
+
+                                <div>
+                                    <span class="ok-text">
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        Finalizado
+                                    </span>
+                                </div>
+                            </div>
+                                        }
+                    </div>
                 </div>
             }
             else
             {
-                <div class="empty" style="border:0;border-radius:0">
+                <div class="empty"
+                     style="border:0;border-radius:0">
                     <i class="bi bi-clock-history"></i>
-                    <strong>Aún no hay materiales con secado cumplido recientemente</strong>
+                    <strong>No hay material finalizado recientemente</strong>
                 </div>
             }
         </details>
@@ -1730,11 +2980,17 @@
         const page = document.getElementById('secadoPage');
         if (!page) return;
 
-        const serverNowValue = page.dataset.serverNow || '';
-        const parsedServerNow = Date.parse(serverNowValue);
-        const serverOffset = Number.isFinite(parsedServerNow)
-            ? parsedServerNow - Date.now()
-            : 0;
+        let serverOffset = 0;
+
+        const parsedServerNow = Date.parse(page.dataset.serverNow || '');
+
+        if (Number.isFinite(parsedServerNow)) {
+            serverOffset = parsedServerNow - Date.now();
+        }
+
+        const estadoUrl = page.dataset.estadoUrl || '';
+        const toleranciaFinMinutos =
+            Number.parseInt(page.dataset.toleranciaFin || '0', 10) || 0;
 
         function nowServer() {
             return Date.now() + serverOffset;
@@ -1754,19 +3010,18 @@
                    String(seconds).padStart(2, '0');
         }
 
-        function updateDryingCard(card) {
-            const startValue = card.dataset.start || '';
-            const readyValue = card.dataset.ready || '';
+        function updateLoadCard(card) {
+            const start = Date.parse(card.dataset.start || '');
+            const end = Date.parse(card.dataset.end || '');
 
-            const start = Date.parse(startValue);
-            const ready = Date.parse(readyValue);
-
-            if (!Number.isFinite(start) || !Number.isFinite(ready)) return;
+            if (!Number.isFinite(start) || !Number.isFinite(end))
+                return;
 
             const now = nowServer();
-            const remaining = ready - now;
-            const total = Math.max(1, ready - start);
+            const remaining = end - now;
             const elapsed = Math.max(0, now - start);
+            const total = Math.max(1, end - start);
+
             const percent = Math.min(
                 100,
                 Math.max(
@@ -1776,70 +3031,467 @@
             const countdown = card.querySelector('.js-countdown');
             const subtitle = card.querySelector('.js-countdown-sub');
             const progress = card.querySelector('.js-progress');
-
-            if (countdown) {
-                countdown.textContent = remaining > 0
-                    ? formatDuration(remaining)
-                    : '00:00:00';
-            }
-
-            if (subtitle && remaining <= 0) {
-                subtitle.textContent =
-                    'El tiempo requerido de secado ya se cumplió. Actualiza la pantalla para moverlo a Material listo.';
-            }
+            const status = card.querySelector('.js-load-status');
+            const stateAlert = card.querySelector('.js-state-alert');
+            const finishOpen = card.querySelector('.js-open-finish');
+            const finishSubmit = card.querySelector('.js-finish-submit');
 
             if (progress) {
                 progress.style.width = percent + '%';
             }
+
+            if (remaining > 0) {
+                if (countdown) {
+                    countdown.textContent = formatDuration(remaining);
+                }
+
+                if (subtitle) {
+                    subtitle.textContent =
+                        'El proceso continúa hasta cumplir el tiempo requerido.';
+                }
+
+                if (finishOpen) {
+                    finishOpen.disabled = true;
+                }
+
+                if (finishSubmit) {
+                    finishSubmit.disabled = true;
+                }
+
+                const remainingMinutes =
+                    Math.ceil(remaining / 60000);
+
+                if (status) {
+                    status.classList.remove(
+                        'success',
+                        'danger',
+                        'warning');
+
+                    if (remainingMinutes <= 15) {
+                        status.classList.add('warning');
+                        status.textContent = 'Próxima a terminar';
+                    } else {
+                        status.classList.add('primary');
+                        status.textContent = 'En secado';
+                    }
+                }
+
+                return;
+            }
+
+            const overdueMilliseconds =
+                Math.max(0, now - end);
+
+            const overdueMinutes =
+                Math.floor(overdueMilliseconds / 60000);
+
+            if (countdown) {
+                if (overdueMilliseconds < 60000) {
+                    countdown.textContent = 'TIEMPO CUMPLIDO';
+                } else {
+                    countdown.textContent =
+                        '+' + formatDuration(overdueMilliseconds);
+                }
+            }
+
+            if (subtitle) {
+                subtitle.textContent =
+                    overdueMinutes > 0
+                        ? 'Tiempo adicional después del fin esperado.'
+                        : 'La carga ya puede finalizarse.';
+            }
+
+            if (finishOpen) {
+                finishOpen.disabled = false;
+            }
+
+            if (finishSubmit) {
+                finishSubmit.disabled = false;
+            }
+
+            card.classList.add('is-ready');
+
+            if (status) {
+                status.classList.remove(
+                    'primary',
+                    'warning',
+                    'success',
+                    'danger');
+
+                if (overdueMinutes > toleranciaFinMinutos) {
+                    status.classList.add('danger');
+                    status.textContent = 'Retrasada';
+                    card.classList.add('is-danger');
+                } else {
+                    status.classList.add('success');
+                    status.textContent = 'Tiempo cumplido';
+                    card.classList.remove('is-danger');
+                }
+            }
+
+            if (stateAlert) {
+                if (overdueMinutes > toleranciaFinMinutos) {
+                    stateAlert.innerHTML =
+                        '<div class="load-alert danger">' +
+                        '<i class="bi bi-exclamation-octagon-fill me-1"></i>' +
+                        'La carga lleva <strong>' +
+                        overdueMinutes +
+                        ' minuto(s)</strong> después de su fin esperado.' +
+                        '</div>';
+                } else {
+                    stateAlert.innerHTML =
+                        '<div class="load-alert success">' +
+                        '<i class="bi bi-check-circle-fill me-1"></i>' +
+                        'El tiempo requerido ya se cumplió. ' +
+                        'La carga puede finalizarse.' +
+                        '</div>';
+                }
+            }
         }
 
-        function updateAllDrying() {
-            document.querySelectorAll('.js-secando')
-                .forEach(updateDryingCard);
+        function updateAllLoads() {
+            document
+                .querySelectorAll('.js-load-card')
+                .forEach(updateLoadCard);
         }
 
-        document.querySelectorAll('.js-toggle-confirmar')
+        document
+            .querySelectorAll('.js-toggle-panel')
             .forEach(function (button) {
                 button.addEventListener('click', function () {
-                    const targetId = button.dataset.target || '';
-                    const panel = document.getElementById(targetId);
+                    if (button.disabled)
+                        return;
 
-                    if (!panel) return;
+                    const targetId =
+                        button.dataset.target || '';
 
-                    document.querySelectorAll('.confirm-panel.show')
-                        .forEach(function (other) {
-                            if (other !== panel) {
-                                other.classList.remove('show');
-                            }
-                        });
+                    const panel =
+                        document.getElementById(targetId);
+
+                    if (!panel)
+                        return;
+
+                    const card =
+                        button.closest('.js-load-card');
+
+                    if (card) {
+                        card
+                            .querySelectorAll('.action-panel.show')
+                            .forEach(function (other) {
+                                if (other !== panel) {
+                                    other.classList.remove('show');
+                                }
+                            });
+                    }
 
                     panel.classList.toggle('show');
 
                     if (panel.classList.contains('show')) {
-                        const textarea = panel.querySelector('textarea');
-                        if (textarea) textarea.focus();
+                        const firstField =
+                            panel.querySelector(
+                                'select, textarea, input:not([type="hidden"])');
+
+                        if (firstField) {
+                            window.setTimeout(function () {
+                                firstField.focus();
+                            }, 50);
+                        }
                     }
                 });
             });
 
-        document.querySelectorAll('.js-confirm-form')
+        function configureStartForm(form) {
+            const select =
+                form.querySelector('.js-tolva-select');
+
+            const quantity =
+                form.querySelector('.js-cantidad-input');
+
+            const hint =
+                form.querySelector('.js-capacity-hint');
+
+            const pending =
+                Number.parseFloat(
+                    form.dataset.pending || '0') || 0;
+
+            if (!select || !quantity)
+                return;
+
+            function updateCapacity() {
+                const option =
+                    select.options[select.selectedIndex];
+
+                if (!option || !option.value) {
+                    quantity.removeAttribute('max');
+
+                    if (hint) {
+                        hint.textContent =
+                            'Selecciona una tolva para consultar su capacidad.';
+                    }
+
+                    return;
+                }
+
+                const capacity =
+                    Number.parseFloat(
+                        option.dataset.capacity || '0') || 0;
+
+                const allowed =
+                    Math.max(
+                        0,
+                        Math.min(
+                            pending,
+                            capacity));
+
+                quantity.max =
+                    allowed.toFixed(4);
+
+                let current =
+                    Number.parseFloat(quantity.value || '0');
+
+                if (!Number.isFinite(current) ||
+                    current <= 0 ||
+                    current > allowed) {
+
+                    quantity.value =
+                        allowed
+                            .toFixed(4)
+                            .replace(/\.?0+$/, '');
+                }
+
+                if (hint) {
+                    hint.textContent =
+                        'Disponible del material: ' +
+                        pending.toFixed(4) +
+                        ' KG · Capacidad de tolva: ' +
+                        capacity.toFixed(4) +
+                        ' KG · Máximo para esta carga: ' +
+                        allowed.toFixed(4) +
+                        ' KG';
+                }
+
+                validateQuantity();
+            }
+
+            function validateQuantity() {
+                const option =
+                    select.options[select.selectedIndex];
+
+                const capacity =
+                    option && option.value
+                        ? Number.parseFloat(
+                            option.dataset.capacity || '0') || 0
+                        : 0;
+
+                const allowed =
+                    Math.max(
+                        0,
+                        Math.min(
+                            pending,
+                            capacity));
+
+                const value =
+                    Number.parseFloat(
+                        quantity.value || '0');
+
+                quantity.setCustomValidity('');
+
+                if (!Number.isFinite(value) ||
+                    value <= 0) {
+                    quantity.setCustomValidity(
+                        'La cantidad debe ser mayor a cero.');
+
+                    return;
+                }
+
+                if (value > pending + 0.0005) {
+                    quantity.setCustomValidity(
+                        'La cantidad supera el material pendiente por asignar.');
+
+                    return;
+                }
+
+                if (value > capacity + 0.0005) {
+                    quantity.setCustomValidity(
+                        'La cantidad supera la capacidad de la tolva seleccionada.');
+
+                    return;
+                }
+
+                if (value > allowed + 0.0005) {
+                    quantity.setCustomValidity(
+                        'La cantidad indicada no es válida para esta carga.');
+                }
+            }
+
+            select.addEventListener(
+                'change',
+                updateCapacity);
+
+            quantity.addEventListener(
+                'input',
+                validateQuantity);
+
+            updateCapacity();
+        }
+
+        document
+            .querySelectorAll('.js-start-form')
+            .forEach(configureStartForm);
+
+        document
+            .querySelectorAll('.js-post-form')
             .forEach(function (form) {
-                form.addEventListener('submit', function () {
-                    const button =
-                        form.querySelector('button[type="submit"]');
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        return;
+                    }
 
-                    if (!button) return;
+                    const message =
+                        form.dataset.confirm || '';
 
-                    button.disabled = true;
-                    button.innerHTML =
-                        '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Registrando...';
+                    if (message &&
+                        !window.confirm(message)) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    const submitButton =
+                        form.querySelector(
+                            'button[type="submit"]');
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+
+                        submitButton.innerHTML =
+                            '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>' +
+                            ' Procesando...';
+                    }
                 });
             });
 
-        updateAllDrying();
+        async function syncLoadState(card) {
+            if (!estadoUrl)
+                return;
 
-        if (document.querySelector('.js-secando')) {
-            window.setInterval(updateAllDrying, 1000);
+            const loadId =
+                card.dataset.loadId || '';
+
+            if (!loadId)
+                return;
+
+            try {
+                const response = await fetch(
+                    estadoUrl +
+                    '?id=' +
+                    encodeURIComponent(loadId),
+                    {
+                        method: 'GET',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                if (!response.ok)
+                    return;
+
+                const data =
+                    await response.json();
+
+                if (!data)
+                    return;
+
+                const estado =
+                    String(data.estado || '')
+                        .toUpperCase();
+
+                if (estado &&
+                    estado !== 'EN_PROCESO') {
+
+                    window.location.reload();
+                    return;
+                }
+
+                if (data.ahoraServidor) {
+                    const serverNow =
+                        Date.parse(data.ahoraServidor);
+
+                    if (Number.isFinite(serverNow)) {
+                        serverOffset =
+                            serverNow - Date.now();
+                    }
+                }
+
+                if (data.fechaInicioReal) {
+                    card.dataset.start =
+                        data.fechaInicioReal;
+                }
+
+                if (data.fechaFinEsperada) {
+                    card.dataset.end =
+                        data.fechaFinEsperada;
+
+                    const label =
+                        card.querySelector(
+                            '.js-end-label');
+
+                    if (label) {
+                        const date =
+                            new Date(
+                                data.fechaFinEsperada);
+
+                        if (!Number.isNaN(
+                            date.getTime())) {
+
+                            label.textContent =
+                                date.toLocaleDateString(
+                                    'es-MX',
+                                    {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric'
+                                    }) +
+                                ' ' +
+                                date.toLocaleTimeString(
+                                    'es-MX',
+                                    {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        hour12: false
+                                    });
+                        }
+                    }
+                }
+
+                updateLoadCard(card);
+            }
+            catch {
+
+            }
+        }
+
+        async function syncAllLoadStates() {
+            const cards =
+                Array.from(
+                    document.querySelectorAll(
+                        '.js-load-card'));
+
+            for (const card of cards) {
+                await syncLoadState(card);
+            }
+        }
+
+        updateAllLoads();
+
+        if (document.querySelector('.js-load-card')) {
+            window.setInterval(
+                updateAllLoads,
+                1000);
+
+            window.setInterval(
+                syncAllLoadStates,
+                60000);
         }
     })();
 </script>
