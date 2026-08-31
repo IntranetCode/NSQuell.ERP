@@ -52,6 +52,101 @@
 }
 
 @section Scripts {
+    @* NSQ_MENU_GROUP_NATIVE_ROUTE_V4_7_1_START *@
+    <script id="NSQ_MENU_GROUP_NATIVE_ROUTE_V4_7_1">
+        (function () {
+            function restoreNativeGroupRoute() {
+                var path = (window.location.pathname || '').replace(/\/+$/, '');
+
+                if (!/^\/Menu\/Grupo(?:\/|$)/i.test(path)) {
+                    return;
+                }
+
+                document.body.classList.add('nsq-menu-group-native-route-v47');
+
+                document
+                    .querySelectorAll('.nsq-global-routebar')
+                    .forEach(function (route) {
+                        route.remove();
+                    });
+
+                document
+                    .querySelectorAll('.migapan')
+                    .forEach(function (route) {
+                        route.hidden = false;
+                        route.removeAttribute('hidden');
+                        route.removeAttribute('aria-hidden');
+                        route.classList.remove(
+                            'nsq-legacy-route-hidden',
+                            'd-none'
+                        );
+
+                        route.style.setProperty(
+                            'display',
+                            'flex',
+                            'important'
+                        );
+
+                        route.style.setProperty(
+                            'visibility',
+                            'visible',
+                            'important'
+                        );
+
+                        route.style.setProperty(
+                            'opacity',
+                            '1',
+                            'important'
+                        );
+
+                        route
+                            .querySelectorAll(
+                                '.migapan__back, .nsq-legacy-back-hidden, [hidden]'
+                            )
+                            .forEach(function (control) {
+                                control.hidden = false;
+                                control.removeAttribute('hidden');
+                                control.removeAttribute('aria-hidden');
+                                control.classList.remove(
+                                    'nsq-legacy-back-hidden',
+                                    'd-none'
+                                );
+
+                                control.style.removeProperty('display');
+                                control.style.removeProperty('visibility');
+                                control.style.removeProperty('opacity');
+                            });
+                    });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener(
+                    'DOMContentLoaded',
+                    function () {
+                        restoreNativeGroupRoute();
+
+                        window.setTimeout(
+                            restoreNativeGroupRoute,
+                            0
+                        );
+                    },
+                    { once: true }
+                );
+            }
+            else {
+                restoreNativeGroupRoute();
+            }
+
+            window.addEventListener(
+                'load',
+                restoreNativeGroupRoute,
+                { once: true }
+            );
+        })();
+    </script>
+    @* NSQ_MENU_GROUP_NATIVE_ROUTE_V4_7_1_END *@
+
+
     <script src="~/js/overlay.js" asp-append-version="true"></script>
     <script src="~/js/dashboard.js" asp-append-version="true"></script>
     <script type="application/ld+json">

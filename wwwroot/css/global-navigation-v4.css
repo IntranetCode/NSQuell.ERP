@@ -1,0 +1,3284 @@
+﻿/* NSQ_GLOBAL_NAV_V4_CSS */
+
+:root {
+    --nsq-global-nav-z: 3000;
+    --nsq-global-nav-panel-z: 3040;
+}
+
+body.nsq-unified-navbar-active {
+    overflow-x: hidden !important;
+}
+
+html body.nsq-unified-navbar-active .global-navbar-host,
+html body.nsq-unified-navbar-active .layout-top-navbar-host,
+html body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: var(--nsq-global-nav-z) !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.10) !important;
+    background: linear-gradient(135deg,rgba(8,16,29,.95),rgba(15,23,42,.91)) !important;
+    box-shadow: 0 8px 26px rgba(0,0,0,.18) !important;
+    backdrop-filter: blur(18px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .global-navbar-host,
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .layout-top-navbar-host,
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    border-bottom-color: rgba(41,67,95,.12) !important;
+    background: linear-gradient(135deg,rgba(255,255,255,.97),rgba(248,250,252,.93)) !important;
+    box-shadow: 0 7px 24px rgba(41,67,95,.11) !important;
+}
+
+html.nsq-nav-scrolled body.nsq-unified-navbar-active .global-navbar-host,
+html.nsq-nav-scrolled body.nsq-unified-navbar-active .layout-top-navbar-host,
+html.nsq-nav-scrolled body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    background: linear-gradient(135deg,rgba(8,16,29,.82),rgba(15,23,42,.76)) !important;
+}
+
+html[data-nsq-theme="light"].nsq-nav-scrolled body.nsq-unified-navbar-active .global-navbar-host,
+html[data-nsq-theme="light"].nsq-nav-scrolled body.nsq-unified-navbar-active .layout-top-navbar-host,
+html[data-nsq-theme="light"].nsq-nav-scrolled body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    background: linear-gradient(135deg,rgba(255,255,255,.87),rgba(248,250,252,.81)) !important;
+}
+
+html body.nsq-unified-navbar-active .top-navbar {
+    position: relative !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: .30rem clamp(.45rem,.75vw,.85rem) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html body.nsq-unified-navbar-active .top-navbar .navbar-content {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 62px !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0,1fr) auto !important;
+    align-items: center !important;
+    gap: clamp(.55rem,.9vw,.95rem) !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-left,
+html body.nsq-unified-navbar-active .navbar-right,
+html body.nsq-unified-navbar-active .nsq-global-department-slot {
+    min-width: 0 !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-right {
+    justify-self: end !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: .35rem !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-brand {
+    gap: .52rem !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-logo,
+html body.nsq-unified-navbar-active .nsq-brand-logo {
+    width: 62px !important;
+    height: 62px !important;
+    flex: 0 0 62px !important;
+    padding: 2px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    object-fit: contain !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-title,
+html body.nsq-unified-navbar-active .nsq-brand-title {
+    max-width: 175px !important;
+    color: #f8fafc !important;
+    font-size: 1rem !important;
+    font-weight: 950 !important;
+    letter-spacing: .055em !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-title::after,
+html body.nsq-unified-navbar-active .nsq-brand-title::after {
+    display: none !important;
+    content: none !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .navbar-title,
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .nsq-brand-title {
+    color: #0d1929 !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher-text {
+    display: none !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher-icon {
+    width: 32px !important;
+    height: 32px !important;
+}
+
+html body.nsq-unified-navbar-active .quick-action-btn {
+    width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 12px !important;
+}
+
+body.nsq-unified-navbar-active .planeacion-global-shortcuts,
+body.nsq-unified-navbar-active .alm-module-nav__bar {
+    display: none !important;
+}
+
+body.nsq-unified-navbar-active .alm-module-nav {
+    margin-top: 0 !important;
+}
+
+body.nsq-unified-navbar-active .alm-module-route {
+    margin-top: .55rem !important;
+}
+
+html body.nsq-unified-navbar-active .global-render-host {
+    width: 100% !important;
+    max-width: none !important;
+    padding: .62rem clamp(.45rem,.7vw,.8rem) 1rem !important;
+}
+
+.nsq-global-department-slot,
+.nsq-dept-nav {
+    width: 100%;
+    min-width: 0;
+}
+
+.nsq-dept-nav {
+    position: relative;
+}
+
+.nsq-context-shell {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto auto;
+    align-items: center;
+    gap: .28rem;
+}
+
+.nsq-context-strip {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .16rem;
+    padding: .08rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+}
+
+.nsq-context-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.nsq-context-menu-link {
+    min-height: 41px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .38rem;
+    padding: .43rem .56rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #c9d5e5 !important;
+    background: transparent;
+    text-decoration: none !important;
+    font-size: .70rem;
+    font-weight: 850;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.nsq-context-menu-link > i:first-child {
+    width: 16px;
+    color: #60a5fa;
+    text-align: center;
+}
+
+.nsq-context-menu-link:hover,
+.nsq-context-menu-link.is-open {
+    color: #fff !important;
+    background: rgba(255,255,255,.055);
+    border-color: rgba(148,163,184,.12);
+}
+
+.nsq-context-menu-link.is-active {
+    color: #fff !important;
+    border-color: rgba(244,123,32,.23);
+    background: rgba(244,123,32,.10);
+    box-shadow: inset 0 -2px 0 rgba(244,123,32,.95);
+}
+
+.nsq-context-menu-link.is-active > i:first-child {
+    color: #ffb86b;
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link {
+    color: #31465f !important;
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link > i:first-child {
+    color: #004aad;
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link:hover,
+html[data-nsq-theme="light"] .nsq-context-menu-link.is-open {
+    color: #12375f !important;
+    background: rgba(0,74,173,.055);
+    border-color: rgba(0,74,173,.10);
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link.is-active {
+    color: #9a4300 !important;
+    background: rgba(244,123,32,.09);
+    border-color: rgba(244,123,32,.20);
+}
+
+.nsq-context-chevron {
+    color: #94a3b8 !important;
+    font-size: .54rem !important;
+}
+
+.is-open > .nsq-context-chevron {
+    transform: rotate(180deg);
+}
+
+.nsq-nav-scroll-button {
+    width: 28px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(148,163,184,.13);
+    border-radius: 9px;
+    color: #cbd5e1;
+    background: rgba(255,255,255,.035);
+    cursor: pointer;
+}
+
+.nsq-nav-scroll-button:hover {
+    color: #fff;
+    background: rgba(37,99,235,.11);
+    border-color: rgba(96,165,250,.22);
+}
+
+.nsq-nav-scroll-button[hidden] {
+    display: none !important;
+}
+
+.nsq-departments-launcher {
+    min-height: 42px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .38rem;
+    padding: .42rem .58rem;
+    border: 1px solid rgba(96,165,250,.20) !important;
+    border-radius: 10px;
+    color: #dbeafe !important;
+    background: linear-gradient(180deg,rgba(37,99,235,.12),rgba(37,99,235,.055)) !important;
+    font-size: .69rem;
+    font-weight: 900;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nsq-departments-launcher:hover,
+.nsq-departments-launcher.is-open {
+    color: #fff !important;
+    border-color: rgba(96,165,250,.34) !important;
+    background: linear-gradient(180deg,rgba(37,99,235,.19),rgba(37,99,235,.09)) !important;
+}
+
+.nsq-departments-launcher > i:first-child {
+    color: #7dd3fc;
+}
+
+.nsq-departments-launcher__count {
+    min-width: 20px;
+    height: 20px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0 .30rem;
+    border-radius: 999px;
+    color: #dbeafe;
+    background: rgba(96,165,250,.16);
+    font-size: .59rem;
+    font-weight: 950;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher {
+    color: #24496d !important;
+    border-color: rgba(0,74,173,.15) !important;
+    background: linear-gradient(180deg,#edf5ff,#f7faff) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher__count {
+    color: #004aad;
+    background: rgba(0,74,173,.08);
+}
+
+.nsq-nav-popover-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 3040;
+    pointer-events: none;
+}
+
+.nsq-context-panel,
+.nsq-departments-panel {
+    position: fixed;
+    display: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    background: rgba(8,15,27,.985);
+    box-shadow: 0 24px 60px rgba(0,0,0,.34);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    pointer-events: auto;
+    scrollbar-width: thin;
+}
+
+.nsq-context-panel.is-open,
+.nsq-departments-panel.is-open {
+    display: block;
+}
+
+.nsq-context-panel {
+    width: min(720px,calc(100vw - 24px));
+    padding: .68rem;
+}
+
+.nsq-departments-panel {
+    width: min(920px,calc(100vw - 24px));
+    padding: .72rem;
+}
+
+.nsq-context-panel__head,
+.nsq-departments-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .9rem;
+    padding: .18rem .18rem .62rem;
+    border-bottom: 1px solid rgba(148,163,184,.13);
+}
+
+.nsq-context-panel__title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .58rem;
+}
+
+.nsq-context-panel__icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    color: #ffb86b;
+    background: rgba(244,123,32,.11);
+    border: 1px solid rgba(244,123,32,.19);
+}
+
+.nsq-context-panel__title strong,
+.nsq-departments-panel__head strong {
+    display: block;
+    color: #fff;
+    font-size: .90rem;
+    font-weight: 900;
+}
+
+.nsq-context-panel__title small,
+.nsq-departments-panel__head small {
+    display: block;
+    margin-top: .10rem;
+    color: #94a3b8;
+    font-size: .68rem;
+}
+
+.nsq-context-panel__open {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: .30rem;
+    padding: .42rem .56rem;
+    border: 1px solid rgba(96,165,250,.16);
+    border-radius: 9px;
+    color: #93c5fd !important;
+    background: rgba(37,99,235,.09);
+    text-decoration: none !important;
+    font-size: .66rem;
+    font-weight: 850;
+}
+
+.nsq-context-sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(190px,1fr));
+    gap: .34rem;
+    padding-top: .56rem;
+}
+
+.nsq-context-section-link {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: .43rem;
+    padding: .50rem .56rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #cbd5e1 !important;
+    background: rgba(255,255,255,.024);
+    text-decoration: none !important;
+    font-size: .71rem;
+    font-weight: 780;
+}
+
+.nsq-context-section-link:hover,
+.nsq-context-section-link.is-active {
+    color: #fff !important;
+    background: rgba(244,123,32,.085);
+    border-color: rgba(244,123,32,.16);
+}
+
+.nsq-section-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    color: #60a5fa;
+    background: rgba(37,99,235,.08);
+    font-size: .58rem;
+}
+
+.nsq-departments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(230px,1fr));
+    gap: .48rem;
+    padding-top: .60rem;
+}
+
+.nsq-department-card {
+    min-width: 0;
+    padding: .62rem;
+    border: 1px solid rgba(148,163,184,.10);
+    border-radius: 12px;
+    background: rgba(255,255,255,.028);
+}
+
+.nsq-department-card__title {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    align-items: center;
+    gap: .42rem;
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.nsq-department-card__icon {
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    color: #7dd3fc;
+    background: rgba(37,99,235,.10);
+}
+
+.nsq-department-card__name {
+    min-width: 0;
+    font-size: .75rem;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nsq-department-card > p {
+    margin: .38rem 0 .42rem;
+    color: #94a3b8;
+    font-size: .64rem;
+    line-height: 1.35;
+}
+
+.nsq-department-card__menus {
+    display: grid;
+    gap: .10rem;
+}
+
+.nsq-department-card__menus a {
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    gap: .36rem;
+    padding: .28rem .34rem;
+    border-radius: 7px;
+    color: #b7c5d7 !important;
+    text-decoration: none !important;
+    font-size: .65rem;
+    font-weight: 720;
+}
+
+.nsq-department-card__menus a i {
+    width: 14px;
+    color: #60a5fa;
+    text-align: center;
+}
+
+.nsq-department-card__menus a:hover {
+    color: #fff !important;
+    background: rgba(255,255,255,.045);
+}
+
+html[data-nsq-theme="light"] .nsq-context-panel,
+html[data-nsq-theme="light"] .nsq-departments-panel {
+    background: rgba(255,255,255,.99);
+    border-color: rgba(41,67,95,.12);
+    box-shadow: 0 22px 55px rgba(41,67,95,.18);
+}
+
+html[data-nsq-theme="light"] .nsq-context-panel__title strong,
+html[data-nsq-theme="light"] .nsq-departments-panel__head strong,
+html[data-nsq-theme="light"] .nsq-department-card__title {
+    color: #0d1929 !important;
+}
+
+html[data-nsq-theme="light"] .nsq-context-panel__title small,
+html[data-nsq-theme="light"] .nsq-departments-panel__head small,
+html[data-nsq-theme="light"] .nsq-department-card > p {
+    color: #64748b;
+}
+
+html[data-nsq-theme="light"] .nsq-context-section-link,
+html[data-nsq-theme="light"] .nsq-department-card__menus a {
+    color: #31465f !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card {
+    background: #f8fafc;
+    border-color: rgba(41,67,95,.09);
+}
+
+.nsq-mobile-nav-toggle,
+.nsq-mobile-nav {
+    display: none;
+}
+
+@media (max-width: 1450px) {
+    html body.nsq-unified-navbar-active .user-name {
+        max-width: 150px !important;
+    }
+
+    html body.nsq-unified-navbar-active .user-role {
+        display: none !important;
+    }
+
+    .nsq-departments-launcher__text {
+        display: none;
+    }
+}
+
+@media (max-width: 1120px) {
+    html body.nsq-unified-navbar-active .navbar-title,
+    html body.nsq-unified-navbar-active .nsq-brand-title {
+        max-width: 120px !important;
+        font-size: .88rem !important;
+    }
+
+    html body.nsq-unified-navbar-active .navbar-logo,
+    html body.nsq-unified-navbar-active .nsq-brand-logo {
+        width: 54px !important;
+        height: 54px !important;
+        flex-basis: 54px !important;
+    }
+
+    html body.nsq-unified-navbar-active .user-info {
+        display: none !important;
+    }
+
+    html body.nsq-unified-navbar-active .user-toggle {
+        width: 42px !important;
+        min-width: 42px !important;
+        padding: 0 !important;
+    }
+}
+
+@media (max-width: 960px) {
+    html body.nsq-unified-navbar-active .top-navbar .navbar-content {
+        grid-template-columns: minmax(0,1fr) auto !important;
+        grid-template-areas: "brand actions" "navigation navigation";
+        gap: .34rem !important;
+    }
+
+    html body.nsq-unified-navbar-active .navbar-left {
+        grid-area: brand;
+    }
+
+    html body.nsq-unified-navbar-active .navbar-right {
+        grid-area: actions;
+    }
+
+    html body.nsq-unified-navbar-active .nsq-global-department-slot {
+        grid-area: navigation;
+    }
+
+    .nsq-context-shell,
+    .nsq-nav-popover-layer {
+        display: none !important;
+    }
+
+    .nsq-mobile-nav-toggle {
+        width: 100%;
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .42rem;
+        padding: .40rem .55rem;
+        border: 1px solid rgba(148,163,184,.14);
+        border-radius: 9px;
+        color: #dbeafe;
+        background: rgba(255,255,255,.04);
+        font-size: .70rem;
+        font-weight: 850;
+    }
+
+    .nsq-mobile-nav {
+        max-height: 68vh;
+        margin-top: .34rem;
+        padding: .48rem;
+        overflow-y: auto;
+        border: 1px solid rgba(148,163,184,.13);
+        border-radius: 11px;
+        background: rgba(8,15,27,.99);
+        box-shadow: 0 18px 42px rgba(0,0,0,.25);
+    }
+
+    .nsq-mobile-nav:not([hidden]) {
+        display: block;
+    }
+
+    .nsq-mobile-caption {
+        padding: .30rem .38rem .44rem;
+        color: #94a3b8;
+        font-size: .62rem;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .nsq-mobile-caption--other {
+        margin-top: .48rem;
+        padding-top: .58rem;
+        border-top: 1px solid rgba(148,163,184,.13);
+    }
+
+    .nsq-mobile-menu,
+    .nsq-mobile-group {
+        border-bottom: 1px solid rgba(148,163,184,.09);
+    }
+
+    .nsq-mobile-menu summary,
+    .nsq-mobile-group summary {
+        min-height: 41px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .45rem;
+        padding: .44rem .40rem;
+        color: #e2e8f0;
+        list-style: none;
+        cursor: pointer;
+        font-size: .71rem;
+        font-weight: 850;
+    }
+
+    .nsq-mobile-menu summary::-webkit-details-marker,
+    .nsq-mobile-group summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .nsq-mobile-menu__body,
+    .nsq-mobile-group__body {
+        display: grid;
+        gap: .12rem;
+        padding: 0 .20rem .44rem 1.38rem;
+    }
+
+    .nsq-mobile-submenu,
+    .nsq-mobile-department-home,
+    .nsq-mobile-menu__title {
+        min-height: 33px;
+        display: flex;
+        align-items: center;
+        gap: .36rem;
+        padding: .34rem .40rem;
+        border-radius: 7px;
+        color: #b8c6d8 !important;
+        text-decoration: none !important;
+        font-size: .66rem;
+        font-weight: 740;
+    }
+
+    .nsq-mobile-submenu.is-active {
+        color: #ffb86b !important;
+        background: rgba(244,123,32,.085);
+    }
+
+    html[data-nsq-theme="light"] .nsq-mobile-nav {
+        background: rgba(255,255,255,.995);
+        border-color: rgba(41,67,95,.11);
+    }
+
+    html[data-nsq-theme="light"] .nsq-mobile-menu summary,
+    html[data-nsq-theme="light"] .nsq-mobile-group summary {
+        color: #243b55;
+    }
+
+    html[data-nsq-theme="light"] .nsq-mobile-submenu,
+    html[data-nsq-theme="light"] .nsq-mobile-department-home,
+    html[data-nsq-theme="light"] .nsq-mobile-menu__title {
+        color: #35516f !important;
+    }
+}
+
+body.nsq-unified-navbar-active .alm-shell-header,
+body.nsq-unified-navbar-active .clientes-sidebar,
+body.nsq-unified-navbar-active .clientes-topbar,
+body.nsq-unified-navbar-active .material-sidebar,
+body.nsq-unified-navbar-active .material-topbar-wrap,
+body.nsq-unified-navbar-active .altas-sidebar,
+body.nsq-unified-navbar-active .altas-topbar,
+body.nsq-unified-navbar-active .maq-sidebar,
+body.nsq-unified-navbar-active .maq-mobile-header,
+body.nsq-unified-navbar-active .app-sidebar {
+    display: none !important;
+}
+
+.modal-backdrop {
+    z-index: 9100 !important;
+}
+
+.modal {
+    z-index: 9110 !important;
+}
+
+.offcanvas-backdrop {
+    z-index: 9000 !important;
+}
+
+.offcanvas {
+    z-index: 9010 !important;
+}
+
+
+/* NSQ_GLOBAL_NAV_V4_3_ROUTE_IN_CONTENT_CSS_BASE */
+
+/* Departamentos: solo icono. El boton ni siquiera existe cuando el usuario
+   no tiene otros departamentos permitidos; esa condicion ya viene de V4. */
+.nsq-departments-launcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 10px !important;
+}
+
+.nsq-departments-launcher__text,
+.nsq-departments-launcher__count,
+.nsq-departments-launcher > .nsq-context-chevron {
+    display: none !important;
+}
+
+.nsq-departments-launcher > i:first-child {
+    width: auto !important;
+    margin: 0 !important;
+    font-size: .92rem !important;
+}
+
+/* Tema: icono solamente. Se cubren tanto la clase como el id historico
+   para que ninguna regla vieja de _TopNavbar vuelva a mostrar el texto. */
+html body.nsq-unified-navbar-active .theme-switcher-text,
+html body.nsq-unified-navbar-active #themeToggleText {
+    display: none !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+/* Hover claro para cada departamento y para sus accesos internos. */
+.nsq-department-card {
+    transition:
+        transform .16s ease,
+        border-color .16s ease,
+        background .16s ease,
+        box-shadow .16s ease;
+}
+
+.nsq-department-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96,165,250,.34) !important;
+    background: rgba(37,99,235,.075) !important;
+    box-shadow:
+        0 11px 25px rgba(0,0,0,.13),
+        inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.nsq-department-card:hover .nsq-department-card__title,
+.nsq-department-card__title:hover {
+    color: #ffffff !important;
+}
+
+.nsq-department-card__menus a {
+    transition:
+        color .14s ease,
+        background .14s ease,
+        transform .14s ease;
+}
+
+.nsq-department-card__menus a:hover,
+.nsq-department-card__menus a:focus-visible {
+    color: #ffffff !important;
+    background: rgba(96,165,250,.105) !important;
+    transform: translateX(2px);
+    outline: none !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover {
+    border-color: rgba(0,74,173,.24) !important;
+    background: #eef6ff !important;
+    box-shadow:
+        0 10px 24px rgba(41,67,95,.12),
+        inset 0 1px 0 rgba(255,255,255,.85);
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover .nsq-department-card__title,
+html[data-nsq-theme="light"] .nsq-department-card__title:hover {
+    color: #003b86 !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__menus a:hover,
+html[data-nsq-theme="light"] .nsq-department-card__menus a:focus-visible {
+    color: #003b86 !important;
+    background: rgba(0,74,173,.075) !important;
+}
+
+/* ALMACEN: su layout es independiente y el sticky era inconsistente.
+   Solo aqui usamos fixed y dejamos espacio exacto mediante una variable
+   calculada por JS. */
+body.nsq-unified-navbar-active.nsq-layout-almacen {
+    padding-top: var(--nsq-almacen-navbar-height, 72px) !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen > .nsq-unified-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen > .global-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen > .layout-top-navbar-host {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    z-index: var(--nsq-global-nav-z) !important;
+}
+
+/* El breadcrumb de Almacen queda pegado debajo del navbar, pero sigue siendo
+   una pieza separada del navbar. */
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-main {
+    padding-top: 0 !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-routebar,
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-module-route {
+    margin-top: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-top: 0 !important;
+}
+
+@media (max-width: 960px) {
+    .nsq-departments-launcher {
+        display: none !important;
+    }
+}
+
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_2_NAVIGATION_CSS
+   ============================================================== */
+
+/* El lanzador de departamentos sale del carril principal mediante JS
+   y queda como icono compacto junto al titulo del departamento. */
+.nsq-context-shell {
+    grid-template-columns: auto minmax(0,1fr) auto !important;
+}
+
+.nsq-departments-launcher.nsq-departments-launcher--brand {
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    flex: 0 0 38px !important;
+    margin: 0 0 0 .18rem !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+}
+
+.nsq-departments-launcher.nsq-departments-launcher--brand:hover,
+.nsq-departments-launcher.nsq-departments-launcher--brand.is-open {
+    transform: none !important;
+    box-shadow: 0 5px 14px rgba(37,99,235,.10) !important;
+}
+
+/* Tema: no solo se oculta el texto; se fuerza tambien el tamano real
+   del boton para que no conserve el ancho de la capsula antigua. */
+html body.nsq-unified-navbar-active button.theme-switcher,
+html body.nsq-unified-navbar-active .theme-switcher,
+html body.nsq-unified-navbar-active button#themeToggle {
+    inline-size: 38px !important;
+    width: 38px !important;
+    min-inline-size: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    block-size: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    flex: 0 0 38px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 10px !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher-icon {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    flex: 0 0 30px !important;
+    margin: 0 !important;
+}
+
+/* Hover de los departamentos: se hace mas evidente cual tarjeta o acceso
+   esta bajo el puntero, manteniendo light/dark. */
+.nsq-department-card:hover,
+.nsq-department-card:focus-within {
+    transform: translateY(-2px) !important;
+    border-color: rgba(96,165,250,.48) !important;
+    background:
+        linear-gradient(
+            145deg,
+            rgba(37,99,235,.115),
+            rgba(255,255,255,.035)
+        ) !important;
+    box-shadow:
+        0 13px 28px rgba(0,0,0,.16),
+        inset 3px 0 0 rgba(96,165,250,.74) !important;
+}
+
+.nsq-department-card__title:hover,
+.nsq-department-card__title:focus-visible {
+    color: #ffffff !important;
+    outline: none !important;
+}
+
+.nsq-department-card__menus a:hover,
+.nsq-department-card__menus a:focus-visible {
+    color: #ffffff !important;
+    background: rgba(96,165,250,.15) !important;
+    box-shadow: inset 2px 0 0 rgba(96,165,250,.75) !important;
+    transform: translateX(3px) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover,
+html[data-nsq-theme="light"] .nsq-department-card:focus-within {
+    border-color: rgba(0,74,173,.32) !important;
+    background:
+        linear-gradient(
+            145deg,
+            #eaf4ff,
+            #f8fbff
+        ) !important;
+    box-shadow:
+        0 12px 26px rgba(41,67,95,.13),
+        inset 3px 0 0 rgba(0,74,173,.62) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__menus a:hover,
+html[data-nsq-theme="light"] .nsq-department-card__menus a:focus-visible {
+    color: #003b86 !important;
+    background: rgba(0,74,173,.10) !important;
+    box-shadow: inset 2px 0 0 rgba(0,74,173,.62) !important;
+}
+
+/* ==============================================================
+   BARRA GLOBAL DE RUTA
+   Es independiente del navbar, pero queda pegada inmediatamente debajo.
+   ============================================================== */
+
+.nsq-global-routebar {
+    position: sticky;
+    top: var(--nsq-navbar-current-height, 70px);
+    z-index: 2920;
+
+    width: 100%;
+    max-width: none;
+
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+
+    min-height: 50px;
+
+    margin: 0 0 .65rem;
+    padding:
+        .42rem
+        clamp(.55rem, .85vw, .95rem);
+
+    border: 0;
+    border-bottom:
+        1px solid rgba(148,163,184,.14);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(15,23,42,.90),
+            rgba(17,24,39,.77)
+        );
+
+    box-shadow:
+        0 8px 22px rgba(0,0,0,.13);
+
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(255,255,255,.96),
+            rgba(248,250,252,.91)
+        );
+
+    border-bottom-color:
+        rgba(41,67,95,.11);
+
+    box-shadow:
+        0 7px 20px rgba(41,67,95,.09);
+}
+
+.nsq-global-routebar__back {
+    flex: 0 0 auto;
+
+    min-height: 36px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .42rem;
+
+    padding: .36rem .62rem;
+
+    border:
+        1px solid rgba(148,163,184,.16);
+
+    border-radius: 9px;
+
+    color: #e2e8f0;
+
+    background: rgba(255,255,255,.05);
+
+    font-size: .72rem;
+    font-weight: 900;
+
+    cursor: pointer;
+}
+
+.nsq-global-routebar__back:hover {
+    color: #ffffff;
+
+    border-color:
+        rgba(244,123,32,.38);
+
+    background:
+        rgba(244,123,32,.13);
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__back {
+    color: #203a55;
+
+    border-color:
+        rgba(41,67,95,.12);
+
+    background:
+        rgba(41,67,95,.035);
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__back:hover {
+    color: #9a4300;
+
+    border-color:
+        rgba(244,123,32,.25);
+
+    background:
+        rgba(244,123,32,.08);
+}
+
+.nsq-global-routebar__trail {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    display: flex;
+    align-items: center;
+    gap: .38rem;
+
+    margin: 0;
+    padding: 0;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    list-style: none;
+
+    scrollbar-width: none;
+}
+
+.nsq-global-routebar__trail::-webkit-scrollbar {
+    display: none;
+}
+
+.nsq-global-routebar__item {
+    flex: 0 0 auto;
+
+    color: #94a3b8;
+
+    font-size: .70rem;
+    font-weight: 760;
+
+    white-space: nowrap;
+}
+
+.nsq-global-routebar__item a {
+    color: #b9c8da !important;
+    text-decoration: none !important;
+}
+
+.nsq-global-routebar__item a:hover {
+    color: #ffffff !important;
+}
+
+.nsq-global-routebar__item--current {
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.nsq-global-routebar__separator {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: .78rem;
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__item {
+    color: #667991;
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__item a {
+    color: #526c88 !important;
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__item a:hover,
+html[data-nsq-theme="light"] .nsq-global-routebar__item--current {
+    color: #0d1929 !important;
+}
+
+/* Ocultamos solamente la ruta vieja de Almacen. La nueva barra global
+   conserva Regresar y toda la jerarquia. */
+body.nsq-unified-navbar-active .alm-routebar {
+    display: none !important;
+}
+
+/* ==============================================================
+   SCROLL DE ALMACEN
+   V4.1 dependia de encontrar .alm-main mientras el HTML aun se estaba
+   parseando. V4.2 identifica Almacen por URL y encuentra el host desde
+   el propio componente, por lo que ya no depende del orden del DOM.
+   ============================================================== */
+
+body.nsq-unified-navbar-active.nsq-layout-almacen {
+    padding-top:
+        var(--nsq-navbar-current-height, 70px) !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.nsq-unified-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.global-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.layout-top-navbar-host {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+
+    width: 100% !important;
+    max-width: none !important;
+
+    margin: 0 !important;
+
+    z-index: var(--nsq-global-nav-z, 3000) !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-main {
+    padding-top: 0 !important;
+}
+
+@media (max-width: 960px) {
+    .nsq-global-routebar {
+        top: var(--nsq-navbar-current-height, 64px);
+        gap: .45rem;
+        min-height: 46px;
+        padding: .36rem .50rem;
+    }
+
+    .nsq-global-routebar__back span {
+        display: none;
+    }
+
+    .nsq-global-routebar__back {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        min-height: 34px;
+        padding: 0;
+    }
+}
+
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_3_ROUTE_IN_CONTENT_CSS
+   ============================================================== */
+
+/* Titulo + selector de departamentos se comportan visualmente como
+   una sola unidad, sin anidar elementos interactivos. */
+.nsq-brand-cluster {
+    min-width: 0;
+
+    display: inline-flex;
+    align-items: center;
+
+    gap: .22rem;
+}
+
+.nsq-brand-cluster .navbar-brand {
+    margin: 0 !important;
+}
+
+.nsq-brand-cluster
+.nsq-departments-launcher--brand {
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+
+    height: 30px !important;
+    min-height: 30px !important;
+
+    flex: 0 0 30px !important;
+
+    margin: 0 0 0 .05rem !important;
+    padding: 0 !important;
+
+    border-radius: 8px !important;
+
+    border-color:
+        rgba(96,165,250,.16) !important;
+
+    background:
+        rgba(37,99,235,.055) !important;
+
+    box-shadow: none !important;
+}
+
+.nsq-brand-cluster
+.nsq-departments-launcher--brand
+> i:first-child {
+    font-size: .72rem !important;
+}
+
+.nsq-brand-cluster
+.nsq-departments-launcher--brand:hover,
+.nsq-brand-cluster
+.nsq-departments-launcher--brand.is-open {
+    border-color:
+        rgba(96,165,250,.34) !important;
+
+    background:
+        rgba(37,99,235,.12) !important;
+}
+
+/* ==============================================================
+   ROUTEBAR: YA NO PERTENECE AL NAVBAR
+   Vive en el flujo normal del contenido y desaparece al hacer scroll.
+   ============================================================== */
+
+.nsq-global-routebar {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+
+    z-index: 50 !important;
+
+    width: 100% !important;
+    max-width: none !important;
+
+    min-height: 40px !important;
+
+    margin:
+        0
+        0
+        .48rem !important;
+
+    padding:
+        .26rem
+        .42rem !important;
+
+    border:
+        1px solid rgba(148,163,184,.12) !important;
+
+    border-radius: 10px !important;
+
+    background:
+        rgba(15,23,42,.54) !important;
+
+    box-shadow:
+        0 4px 12px rgba(0,0,0,.075) !important;
+
+    backdrop-filter: blur(9px) !important;
+    -webkit-backdrop-filter: blur(9px) !important;
+}
+
+html[data-nsq-theme="light"]
+.nsq-global-routebar {
+    border-color:
+        rgba(41,67,95,.10) !important;
+
+    background:
+        rgba(255,255,255,.82) !important;
+
+    box-shadow:
+        0 4px 11px rgba(41,67,95,.065) !important;
+}
+
+.nsq-global-routebar__back {
+    min-height: 31px !important;
+
+    padding:
+        .25rem
+        .48rem !important;
+
+    border-radius: 8px !important;
+
+    font-size: .66rem !important;
+}
+
+.nsq-global-routebar__trail {
+    gap: .30rem !important;
+}
+
+.nsq-global-routebar__item {
+    font-size: .65rem !important;
+}
+
+.nsq-global-routebar__separator {
+    font-size: .70rem !important;
+}
+
+/* La navegación global reemplaza TODAS las barras de ruta antiguas
+   de Almacén: tanto la del layout como la de _AlmacenNavegacion. */
+body.nsq-unified-navbar-active
+.alm-routebar,
+body.nsq-unified-navbar-active
+.alm-module-route,
+body.nsq-unified-navbar-active
+.alm-module-nav__bar {
+    display: none !important;
+}
+
+body.nsq-unified-navbar-active
+.alm-module-nav {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Almacén conserva solamente el navbar fixed.
+   La routebar ya vive dentro de alm-main y no debe compensarse
+   como una segunda barra fija. */
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.alm-main {
+    padding-top: 0 !important;
+}
+
+/* El main no debe dejar espacio fantasma por las rutas viejas. */
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.alm-module-nav + * {
+    margin-top: 0 !important;
+}
+
+@media (max-width: 960px) {
+    .nsq-global-routebar {
+        min-height: 37px !important;
+        padding: .22rem .34rem !important;
+    }
+
+    .nsq-global-routebar__back {
+        width: 31px !important;
+        min-width: 31px !important;
+        height: 31px !important;
+        min-height: 31px !important;
+    }
+}
+
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_4_UNIFICAR_RUTAS_CSS
+   ============================================================== */
+
+/* Menu/Index conserva su pagina standalone, pero ahora usa el mismo
+   _TopNavbar compartido y no la barra propia antigua. */
+.nsq-menu-index-global-host {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: var(--nsq-global-nav-z, 3000) !important;
+
+    width: 100vw !important;
+    max-width: 100vw !important;
+
+    margin-left: calc(50% - 50vw) !important;
+    margin-right: calc(50% - 50vw) !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+
+    padding: 0 !important;
+}
+
+/* NSQ_GLOBAL_NAV_V4_CSS */
+
+:root {
+    --nsq-global-nav-z: 3000;
+    --nsq-global-nav-panel-z: 3040;
+}
+
+body.nsq-unified-navbar-active {
+    overflow-x: hidden !important;
+}
+
+html body.nsq-unified-navbar-active .global-navbar-host,
+html body.nsq-unified-navbar-active .layout-top-navbar-host,
+html body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: var(--nsq-global-nav-z) !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.10) !important;
+    background: linear-gradient(135deg,rgba(8,16,29,.95),rgba(15,23,42,.91)) !important;
+    box-shadow: 0 8px 26px rgba(0,0,0,.18) !important;
+    backdrop-filter: blur(18px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .global-navbar-host,
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .layout-top-navbar-host,
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    border-bottom-color: rgba(41,67,95,.12) !important;
+    background: linear-gradient(135deg,rgba(255,255,255,.97),rgba(248,250,252,.93)) !important;
+    box-shadow: 0 7px 24px rgba(41,67,95,.11) !important;
+}
+
+html.nsq-nav-scrolled body.nsq-unified-navbar-active .global-navbar-host,
+html.nsq-nav-scrolled body.nsq-unified-navbar-active .layout-top-navbar-host,
+html.nsq-nav-scrolled body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    background: linear-gradient(135deg,rgba(8,16,29,.82),rgba(15,23,42,.76)) !important;
+}
+
+html[data-nsq-theme="light"].nsq-nav-scrolled body.nsq-unified-navbar-active .global-navbar-host,
+html[data-nsq-theme="light"].nsq-nav-scrolled body.nsq-unified-navbar-active .layout-top-navbar-host,
+html[data-nsq-theme="light"].nsq-nav-scrolled body.nsq-unified-navbar-active .nsq-unified-navbar-host {
+    background: linear-gradient(135deg,rgba(255,255,255,.87),rgba(248,250,252,.81)) !important;
+}
+
+html body.nsq-unified-navbar-active .top-navbar {
+    position: relative !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: .30rem clamp(.45rem,.75vw,.85rem) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html body.nsq-unified-navbar-active .top-navbar .navbar-content {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 62px !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0,1fr) auto !important;
+    align-items: center !important;
+    gap: clamp(.55rem,.9vw,.95rem) !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-left,
+html body.nsq-unified-navbar-active .navbar-right,
+html body.nsq-unified-navbar-active .nsq-global-department-slot {
+    min-width: 0 !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-right {
+    justify-self: end !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: .35rem !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-brand {
+    gap: .52rem !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-logo,
+html body.nsq-unified-navbar-active .nsq-brand-logo {
+    width: 62px !important;
+    height: 62px !important;
+    flex: 0 0 62px !important;
+    padding: 2px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    object-fit: contain !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-title,
+html body.nsq-unified-navbar-active .nsq-brand-title {
+    max-width: 175px !important;
+    color: #f8fafc !important;
+    font-size: 1rem !important;
+    font-weight: 950 !important;
+    letter-spacing: .055em !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+html body.nsq-unified-navbar-active .navbar-title::after,
+html body.nsq-unified-navbar-active .nsq-brand-title::after {
+    display: none !important;
+    content: none !important;
+}
+
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .navbar-title,
+html[data-nsq-theme="light"] body.nsq-unified-navbar-active .nsq-brand-title {
+    color: #0d1929 !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher-text {
+    display: none !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher-icon {
+    width: 32px !important;
+    height: 32px !important;
+}
+
+html body.nsq-unified-navbar-active .quick-action-btn {
+    width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 12px !important;
+}
+
+body.nsq-unified-navbar-active .planeacion-global-shortcuts,
+body.nsq-unified-navbar-active .alm-module-nav__bar {
+    display: none !important;
+}
+
+body.nsq-unified-navbar-active .alm-module-nav {
+    margin-top: 0 !important;
+}
+
+body.nsq-unified-navbar-active .alm-module-route {
+    margin-top: .55rem !important;
+}
+
+html body.nsq-unified-navbar-active .global-render-host {
+    width: 100% !important;
+    max-width: none !important;
+    padding: .62rem clamp(.45rem,.7vw,.8rem) 1rem !important;
+}
+
+.nsq-global-department-slot,
+.nsq-dept-nav {
+    width: 100%;
+    min-width: 0;
+}
+
+.nsq-dept-nav {
+    position: relative;
+}
+
+.nsq-context-shell {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto auto;
+    align-items: center;
+    gap: .28rem;
+}
+
+.nsq-context-strip {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .16rem;
+    padding: .08rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+}
+
+.nsq-context-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.nsq-context-menu-link {
+    min-height: 41px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .38rem;
+    padding: .43rem .56rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #c9d5e5 !important;
+    background: transparent;
+    text-decoration: none !important;
+    font-size: .70rem;
+    font-weight: 850;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.nsq-context-menu-link > i:first-child {
+    width: 16px;
+    color: #60a5fa;
+    text-align: center;
+}
+
+.nsq-context-menu-link:hover,
+.nsq-context-menu-link.is-open {
+    color: #fff !important;
+    background: rgba(255,255,255,.055);
+    border-color: rgba(148,163,184,.12);
+}
+
+.nsq-context-menu-link.is-active {
+    color: #fff !important;
+    border-color: rgba(244,123,32,.23);
+    background: rgba(244,123,32,.10);
+    box-shadow: inset 0 -2px 0 rgba(244,123,32,.95);
+}
+
+.nsq-context-menu-link.is-active > i:first-child {
+    color: #ffb86b;
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link {
+    color: #31465f !important;
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link > i:first-child {
+    color: #004aad;
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link:hover,
+html[data-nsq-theme="light"] .nsq-context-menu-link.is-open {
+    color: #12375f !important;
+    background: rgba(0,74,173,.055);
+    border-color: rgba(0,74,173,.10);
+}
+
+html[data-nsq-theme="light"] .nsq-context-menu-link.is-active {
+    color: #9a4300 !important;
+    background: rgba(244,123,32,.09);
+    border-color: rgba(244,123,32,.20);
+}
+
+.nsq-context-chevron {
+    color: #94a3b8 !important;
+    font-size: .54rem !important;
+}
+
+.is-open > .nsq-context-chevron {
+    transform: rotate(180deg);
+}
+
+.nsq-nav-scroll-button {
+    width: 28px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(148,163,184,.13);
+    border-radius: 9px;
+    color: #cbd5e1;
+    background: rgba(255,255,255,.035);
+    cursor: pointer;
+}
+
+.nsq-nav-scroll-button:hover {
+    color: #fff;
+    background: rgba(37,99,235,.11);
+    border-color: rgba(96,165,250,.22);
+}
+
+.nsq-nav-scroll-button[hidden] {
+    display: none !important;
+}
+
+.nsq-departments-launcher {
+    min-height: 42px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .38rem;
+    padding: .42rem .58rem;
+    border: 1px solid rgba(96,165,250,.20) !important;
+    border-radius: 10px;
+    color: #dbeafe !important;
+    background: linear-gradient(180deg,rgba(37,99,235,.12),rgba(37,99,235,.055)) !important;
+    font-size: .69rem;
+    font-weight: 900;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nsq-departments-launcher:hover,
+.nsq-departments-launcher.is-open {
+    color: #fff !important;
+    border-color: rgba(96,165,250,.34) !important;
+    background: linear-gradient(180deg,rgba(37,99,235,.19),rgba(37,99,235,.09)) !important;
+}
+
+.nsq-departments-launcher > i:first-child {
+    color: #7dd3fc;
+}
+
+.nsq-departments-launcher__count {
+    min-width: 20px;
+    height: 20px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0 .30rem;
+    border-radius: 999px;
+    color: #dbeafe;
+    background: rgba(96,165,250,.16);
+    font-size: .59rem;
+    font-weight: 950;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher {
+    color: #24496d !important;
+    border-color: rgba(0,74,173,.15) !important;
+    background: linear-gradient(180deg,#edf5ff,#f7faff) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-departments-launcher__count {
+    color: #004aad;
+    background: rgba(0,74,173,.08);
+}
+
+.nsq-nav-popover-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 3040;
+    pointer-events: none;
+}
+
+.nsq-context-panel,
+.nsq-departments-panel {
+    position: fixed;
+    display: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    background: rgba(8,15,27,.985);
+    box-shadow: 0 24px 60px rgba(0,0,0,.34);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    pointer-events: auto;
+    scrollbar-width: thin;
+}
+
+.nsq-context-panel.is-open,
+.nsq-departments-panel.is-open {
+    display: block;
+}
+
+.nsq-context-panel {
+    width: min(720px,calc(100vw - 24px));
+    padding: .68rem;
+}
+
+.nsq-departments-panel {
+    width: min(920px,calc(100vw - 24px));
+    padding: .72rem;
+}
+
+.nsq-context-panel__head,
+.nsq-departments-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .9rem;
+    padding: .18rem .18rem .62rem;
+    border-bottom: 1px solid rgba(148,163,184,.13);
+}
+
+.nsq-context-panel__title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .58rem;
+}
+
+.nsq-context-panel__icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    color: #ffb86b;
+    background: rgba(244,123,32,.11);
+    border: 1px solid rgba(244,123,32,.19);
+}
+
+.nsq-context-panel__title strong,
+.nsq-departments-panel__head strong {
+    display: block;
+    color: #fff;
+    font-size: .90rem;
+    font-weight: 900;
+}
+
+.nsq-context-panel__title small,
+.nsq-departments-panel__head small {
+    display: block;
+    margin-top: .10rem;
+    color: #94a3b8;
+    font-size: .68rem;
+}
+
+.nsq-context-panel__open {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: .30rem;
+    padding: .42rem .56rem;
+    border: 1px solid rgba(96,165,250,.16);
+    border-radius: 9px;
+    color: #93c5fd !important;
+    background: rgba(37,99,235,.09);
+    text-decoration: none !important;
+    font-size: .66rem;
+    font-weight: 850;
+}
+
+.nsq-context-sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(190px,1fr));
+    gap: .34rem;
+    padding-top: .56rem;
+}
+
+.nsq-context-section-link {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: .43rem;
+    padding: .50rem .56rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #cbd5e1 !important;
+    background: rgba(255,255,255,.024);
+    text-decoration: none !important;
+    font-size: .71rem;
+    font-weight: 780;
+}
+
+.nsq-context-section-link:hover,
+.nsq-context-section-link.is-active {
+    color: #fff !important;
+    background: rgba(244,123,32,.085);
+    border-color: rgba(244,123,32,.16);
+}
+
+.nsq-section-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    color: #60a5fa;
+    background: rgba(37,99,235,.08);
+    font-size: .58rem;
+}
+
+.nsq-departments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(230px,1fr));
+    gap: .48rem;
+    padding-top: .60rem;
+}
+
+.nsq-department-card {
+    min-width: 0;
+    padding: .62rem;
+    border: 1px solid rgba(148,163,184,.10);
+    border-radius: 12px;
+    background: rgba(255,255,255,.028);
+}
+
+.nsq-department-card__title {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    align-items: center;
+    gap: .42rem;
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.nsq-department-card__icon {
+    width: 31px;
+    height: 31px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    color: #7dd3fc;
+    background: rgba(37,99,235,.10);
+}
+
+.nsq-department-card__name {
+    min-width: 0;
+    font-size: .75rem;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nsq-department-card > p {
+    margin: .38rem 0 .42rem;
+    color: #94a3b8;
+    font-size: .64rem;
+    line-height: 1.35;
+}
+
+.nsq-department-card__menus {
+    display: grid;
+    gap: .10rem;
+}
+
+.nsq-department-card__menus a {
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    gap: .36rem;
+    padding: .28rem .34rem;
+    border-radius: 7px;
+    color: #b7c5d7 !important;
+    text-decoration: none !important;
+    font-size: .65rem;
+    font-weight: 720;
+}
+
+.nsq-department-card__menus a i {
+    width: 14px;
+    color: #60a5fa;
+    text-align: center;
+}
+
+.nsq-department-card__menus a:hover {
+    color: #fff !important;
+    background: rgba(255,255,255,.045);
+}
+
+html[data-nsq-theme="light"] .nsq-context-panel,
+html[data-nsq-theme="light"] .nsq-departments-panel {
+    background: rgba(255,255,255,.99);
+    border-color: rgba(41,67,95,.12);
+    box-shadow: 0 22px 55px rgba(41,67,95,.18);
+}
+
+html[data-nsq-theme="light"] .nsq-context-panel__title strong,
+html[data-nsq-theme="light"] .nsq-departments-panel__head strong,
+html[data-nsq-theme="light"] .nsq-department-card__title {
+    color: #0d1929 !important;
+}
+
+html[data-nsq-theme="light"] .nsq-context-panel__title small,
+html[data-nsq-theme="light"] .nsq-departments-panel__head small,
+html[data-nsq-theme="light"] .nsq-department-card > p {
+    color: #64748b;
+}
+
+html[data-nsq-theme="light"] .nsq-context-section-link,
+html[data-nsq-theme="light"] .nsq-department-card__menus a {
+    color: #31465f !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card {
+    background: #f8fafc;
+    border-color: rgba(41,67,95,.09);
+}
+
+.nsq-mobile-nav-toggle,
+.nsq-mobile-nav {
+    display: none;
+}
+
+@media (max-width: 1450px) {
+    html body.nsq-unified-navbar-active .user-name {
+        max-width: 150px !important;
+    }
+
+    html body.nsq-unified-navbar-active .user-role {
+        display: none !important;
+    }
+
+    .nsq-departments-launcher__text {
+        display: none;
+    }
+}
+
+@media (max-width: 1120px) {
+    html body.nsq-unified-navbar-active .navbar-title,
+    html body.nsq-unified-navbar-active .nsq-brand-title {
+        max-width: 120px !important;
+        font-size: .88rem !important;
+    }
+
+    html body.nsq-unified-navbar-active .navbar-logo,
+    html body.nsq-unified-navbar-active .nsq-brand-logo {
+        width: 54px !important;
+        height: 54px !important;
+        flex-basis: 54px !important;
+    }
+
+    html body.nsq-unified-navbar-active .user-info {
+        display: none !important;
+    }
+
+    html body.nsq-unified-navbar-active .user-toggle {
+        width: 42px !important;
+        min-width: 42px !important;
+        padding: 0 !important;
+    }
+}
+
+@media (max-width: 960px) {
+    html body.nsq-unified-navbar-active .top-navbar .navbar-content {
+        grid-template-columns: minmax(0,1fr) auto !important;
+        grid-template-areas: "brand actions" "navigation navigation";
+        gap: .34rem !important;
+    }
+
+    html body.nsq-unified-navbar-active .navbar-left {
+        grid-area: brand;
+    }
+
+    html body.nsq-unified-navbar-active .navbar-right {
+        grid-area: actions;
+    }
+
+    html body.nsq-unified-navbar-active .nsq-global-department-slot {
+        grid-area: navigation;
+    }
+
+    .nsq-context-shell,
+    .nsq-nav-popover-layer {
+        display: none !important;
+    }
+
+    .nsq-mobile-nav-toggle {
+        width: 100%;
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .42rem;
+        padding: .40rem .55rem;
+        border: 1px solid rgba(148,163,184,.14);
+        border-radius: 9px;
+        color: #dbeafe;
+        background: rgba(255,255,255,.04);
+        font-size: .70rem;
+        font-weight: 850;
+    }
+
+    .nsq-mobile-nav {
+        max-height: 68vh;
+        margin-top: .34rem;
+        padding: .48rem;
+        overflow-y: auto;
+        border: 1px solid rgba(148,163,184,.13);
+        border-radius: 11px;
+        background: rgba(8,15,27,.99);
+        box-shadow: 0 18px 42px rgba(0,0,0,.25);
+    }
+
+    .nsq-mobile-nav:not([hidden]) {
+        display: block;
+    }
+
+    .nsq-mobile-caption {
+        padding: .30rem .38rem .44rem;
+        color: #94a3b8;
+        font-size: .62rem;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .nsq-mobile-caption--other {
+        margin-top: .48rem;
+        padding-top: .58rem;
+        border-top: 1px solid rgba(148,163,184,.13);
+    }
+
+    .nsq-mobile-menu,
+    .nsq-mobile-group {
+        border-bottom: 1px solid rgba(148,163,184,.09);
+    }
+
+    .nsq-mobile-menu summary,
+    .nsq-mobile-group summary {
+        min-height: 41px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .45rem;
+        padding: .44rem .40rem;
+        color: #e2e8f0;
+        list-style: none;
+        cursor: pointer;
+        font-size: .71rem;
+        font-weight: 850;
+    }
+
+    .nsq-mobile-menu summary::-webkit-details-marker,
+    .nsq-mobile-group summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .nsq-mobile-menu__body,
+    .nsq-mobile-group__body {
+        display: grid;
+        gap: .12rem;
+        padding: 0 .20rem .44rem 1.38rem;
+    }
+
+    .nsq-mobile-submenu,
+    .nsq-mobile-department-home,
+    .nsq-mobile-menu__title {
+        min-height: 33px;
+        display: flex;
+        align-items: center;
+        gap: .36rem;
+        padding: .34rem .40rem;
+        border-radius: 7px;
+        color: #b8c6d8 !important;
+        text-decoration: none !important;
+        font-size: .66rem;
+        font-weight: 740;
+    }
+
+    .nsq-mobile-submenu.is-active {
+        color: #ffb86b !important;
+        background: rgba(244,123,32,.085);
+    }
+
+    html[data-nsq-theme="light"] .nsq-mobile-nav {
+        background: rgba(255,255,255,.995);
+        border-color: rgba(41,67,95,.11);
+    }
+
+    html[data-nsq-theme="light"] .nsq-mobile-menu summary,
+    html[data-nsq-theme="light"] .nsq-mobile-group summary {
+        color: #243b55;
+    }
+
+    html[data-nsq-theme="light"] .nsq-mobile-submenu,
+    html[data-nsq-theme="light"] .nsq-mobile-department-home,
+    html[data-nsq-theme="light"] .nsq-mobile-menu__title {
+        color: #35516f !important;
+    }
+}
+
+body.nsq-unified-navbar-active .alm-shell-header,
+body.nsq-unified-navbar-active .clientes-sidebar,
+body.nsq-unified-navbar-active .clientes-topbar,
+body.nsq-unified-navbar-active .material-sidebar,
+body.nsq-unified-navbar-active .material-topbar-wrap,
+body.nsq-unified-navbar-active .altas-sidebar,
+body.nsq-unified-navbar-active .altas-topbar,
+body.nsq-unified-navbar-active .maq-sidebar,
+body.nsq-unified-navbar-active .maq-mobile-header,
+body.nsq-unified-navbar-active .app-sidebar {
+    display: none !important;
+}
+
+.modal-backdrop {
+    z-index: 9100 !important;
+}
+
+.modal {
+    z-index: 9110 !important;
+}
+
+.offcanvas-backdrop {
+    z-index: 9000 !important;
+}
+
+.offcanvas {
+    z-index: 9010 !important;
+}
+
+
+/* NSQ_GLOBAL_NAV_V4_3_ROUTE_IN_CONTENT_CSS_BASE */
+
+/* Departamentos: solo icono. El boton ni siquiera existe cuando el usuario
+   no tiene otros departamentos permitidos; esa condicion ya viene de V4. */
+.nsq-departments-launcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 10px !important;
+}
+
+.nsq-departments-launcher__text,
+.nsq-departments-launcher__count,
+.nsq-departments-launcher > .nsq-context-chevron {
+    display: none !important;
+}
+
+.nsq-departments-launcher > i:first-child {
+    width: auto !important;
+    margin: 0 !important;
+    font-size: .92rem !important;
+}
+
+/* Tema: icono solamente. Se cubren tanto la clase como el id historico
+   para que ninguna regla vieja de _TopNavbar vuelva a mostrar el texto. */
+html body.nsq-unified-navbar-active .theme-switcher-text,
+html body.nsq-unified-navbar-active #themeToggleText {
+    display: none !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+/* Hover claro para cada departamento y para sus accesos internos. */
+.nsq-department-card {
+    transition:
+        transform .16s ease,
+        border-color .16s ease,
+        background .16s ease,
+        box-shadow .16s ease;
+}
+
+.nsq-department-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96,165,250,.34) !important;
+    background: rgba(37,99,235,.075) !important;
+    box-shadow:
+        0 11px 25px rgba(0,0,0,.13),
+        inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.nsq-department-card:hover .nsq-department-card__title,
+.nsq-department-card__title:hover {
+    color: #ffffff !important;
+}
+
+.nsq-department-card__menus a {
+    transition:
+        color .14s ease,
+        background .14s ease,
+        transform .14s ease;
+}
+
+.nsq-department-card__menus a:hover,
+.nsq-department-card__menus a:focus-visible {
+    color: #ffffff !important;
+    background: rgba(96,165,250,.105) !important;
+    transform: translateX(2px);
+    outline: none !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover {
+    border-color: rgba(0,74,173,.24) !important;
+    background: #eef6ff !important;
+    box-shadow:
+        0 10px 24px rgba(41,67,95,.12),
+        inset 0 1px 0 rgba(255,255,255,.85);
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover .nsq-department-card__title,
+html[data-nsq-theme="light"] .nsq-department-card__title:hover {
+    color: #003b86 !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__menus a:hover,
+html[data-nsq-theme="light"] .nsq-department-card__menus a:focus-visible {
+    color: #003b86 !important;
+    background: rgba(0,74,173,.075) !important;
+}
+
+/* ALMACEN: su layout es independiente y el sticky era inconsistente.
+   Solo aqui usamos fixed y dejamos espacio exacto mediante una variable
+   calculada por JS. */
+body.nsq-unified-navbar-active.nsq-layout-almacen {
+    padding-top: var(--nsq-almacen-navbar-height, 72px) !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen > .nsq-unified-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen > .global-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen > .layout-top-navbar-host {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    z-index: var(--nsq-global-nav-z) !important;
+}
+
+/* El breadcrumb de Almacen queda pegado debajo del navbar, pero sigue siendo
+   una pieza separada del navbar. */
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-main {
+    padding-top: 0 !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-routebar,
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-module-route {
+    margin-top: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-top: 0 !important;
+}
+
+@media (max-width: 960px) {
+    .nsq-departments-launcher {
+        display: none !important;
+    }
+}
+
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_2_NAVIGATION_CSS
+   ============================================================== */
+
+/* El lanzador de departamentos sale del carril principal mediante JS
+   y queda como icono compacto junto al titulo del departamento. */
+.nsq-context-shell {
+    grid-template-columns: auto minmax(0,1fr) auto !important;
+}
+
+.nsq-departments-launcher.nsq-departments-launcher--brand {
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    flex: 0 0 38px !important;
+    margin: 0 0 0 .18rem !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+}
+
+.nsq-departments-launcher.nsq-departments-launcher--brand:hover,
+.nsq-departments-launcher.nsq-departments-launcher--brand.is-open {
+    transform: none !important;
+    box-shadow: 0 5px 14px rgba(37,99,235,.10) !important;
+}
+
+/* Tema: no solo se oculta el texto; se fuerza tambien el tamano real
+   del boton para que no conserve el ancho de la capsula antigua. */
+html body.nsq-unified-navbar-active button.theme-switcher,
+html body.nsq-unified-navbar-active .theme-switcher,
+html body.nsq-unified-navbar-active button#themeToggle {
+    inline-size: 38px !important;
+    width: 38px !important;
+    min-inline-size: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    block-size: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    flex: 0 0 38px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 10px !important;
+}
+
+html body.nsq-unified-navbar-active .theme-switcher-icon {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    flex: 0 0 30px !important;
+    margin: 0 !important;
+}
+
+/* Hover de los departamentos: se hace mas evidente cual tarjeta o acceso
+   esta bajo el puntero, manteniendo light/dark. */
+.nsq-department-card:hover,
+.nsq-department-card:focus-within {
+    transform: translateY(-2px) !important;
+    border-color: rgba(96,165,250,.48) !important;
+    background:
+        linear-gradient(
+            145deg,
+            rgba(37,99,235,.115),
+            rgba(255,255,255,.035)
+        ) !important;
+    box-shadow:
+        0 13px 28px rgba(0,0,0,.16),
+        inset 3px 0 0 rgba(96,165,250,.74) !important;
+}
+
+.nsq-department-card__title:hover,
+.nsq-department-card__title:focus-visible {
+    color: #ffffff !important;
+    outline: none !important;
+}
+
+.nsq-department-card__menus a:hover,
+.nsq-department-card__menus a:focus-visible {
+    color: #ffffff !important;
+    background: rgba(96,165,250,.15) !important;
+    box-shadow: inset 2px 0 0 rgba(96,165,250,.75) !important;
+    transform: translateX(3px) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card:hover,
+html[data-nsq-theme="light"] .nsq-department-card:focus-within {
+    border-color: rgba(0,74,173,.32) !important;
+    background:
+        linear-gradient(
+            145deg,
+            #eaf4ff,
+            #f8fbff
+        ) !important;
+    box-shadow:
+        0 12px 26px rgba(41,67,95,.13),
+        inset 3px 0 0 rgba(0,74,173,.62) !important;
+}
+
+html[data-nsq-theme="light"] .nsq-department-card__menus a:hover,
+html[data-nsq-theme="light"] .nsq-department-card__menus a:focus-visible {
+    color: #003b86 !important;
+    background: rgba(0,74,173,.10) !important;
+    box-shadow: inset 2px 0 0 rgba(0,74,173,.62) !important;
+}
+
+/* ==============================================================
+   BARRA GLOBAL DE RUTA
+   Es independiente del navbar, pero queda pegada inmediatamente debajo.
+   ============================================================== */
+
+.nsq-global-routebar {
+    position: sticky;
+    top: var(--nsq-navbar-current-height, 70px);
+    z-index: 2920;
+
+    width: 100%;
+    max-width: none;
+
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+
+    min-height: 50px;
+
+    margin: 0 0 .65rem;
+    padding:
+        .42rem
+        clamp(.55rem, .85vw, .95rem);
+
+    border: 0;
+    border-bottom:
+        1px solid rgba(148,163,184,.14);
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(15,23,42,.90),
+            rgba(17,24,39,.77)
+        );
+
+    box-shadow:
+        0 8px 22px rgba(0,0,0,.13);
+
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(255,255,255,.96),
+            rgba(248,250,252,.91)
+        );
+
+    border-bottom-color:
+        rgba(41,67,95,.11);
+
+    box-shadow:
+        0 7px 20px rgba(41,67,95,.09);
+}
+
+.nsq-global-routebar__back {
+    flex: 0 0 auto;
+
+    min-height: 36px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .42rem;
+
+    padding: .36rem .62rem;
+
+    border:
+        1px solid rgba(148,163,184,.16);
+
+    border-radius: 9px;
+
+    color: #e2e8f0;
+
+    background: rgba(255,255,255,.05);
+
+    font-size: .72rem;
+    font-weight: 900;
+
+    cursor: pointer;
+}
+
+.nsq-global-routebar__back:hover {
+    color: #ffffff;
+
+    border-color:
+        rgba(244,123,32,.38);
+
+    background:
+        rgba(244,123,32,.13);
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__back {
+    color: #203a55;
+
+    border-color:
+        rgba(41,67,95,.12);
+
+    background:
+        rgba(41,67,95,.035);
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__back:hover {
+    color: #9a4300;
+
+    border-color:
+        rgba(244,123,32,.25);
+
+    background:
+        rgba(244,123,32,.08);
+}
+
+.nsq-global-routebar__trail {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    display: flex;
+    align-items: center;
+    gap: .38rem;
+
+    margin: 0;
+    padding: 0;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    list-style: none;
+
+    scrollbar-width: none;
+}
+
+.nsq-global-routebar__trail::-webkit-scrollbar {
+    display: none;
+}
+
+.nsq-global-routebar__item {
+    flex: 0 0 auto;
+
+    color: #94a3b8;
+
+    font-size: .70rem;
+    font-weight: 760;
+
+    white-space: nowrap;
+}
+
+.nsq-global-routebar__item a {
+    color: #b9c8da !important;
+    text-decoration: none !important;
+}
+
+.nsq-global-routebar__item a:hover {
+    color: #ffffff !important;
+}
+
+.nsq-global-routebar__item--current {
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.nsq-global-routebar__separator {
+    flex: 0 0 auto;
+    color: #64748b;
+    font-size: .78rem;
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__item {
+    color: #667991;
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__item a {
+    color: #526c88 !important;
+}
+
+html[data-nsq-theme="light"] .nsq-global-routebar__item a:hover,
+html[data-nsq-theme="light"] .nsq-global-routebar__item--current {
+    color: #0d1929 !important;
+}
+
+/* Ocultamos solamente la ruta vieja de Almacen. La nueva barra global
+   conserva Regresar y toda la jerarquia. */
+body.nsq-unified-navbar-active .alm-routebar {
+    display: none !important;
+}
+
+/* ==============================================================
+   SCROLL DE ALMACEN
+   V4.1 dependia de encontrar .alm-main mientras el HTML aun se estaba
+   parseando. V4.2 identifica Almacen por URL y encuentra el host desde
+   el propio componente, por lo que ya no depende del orden del DOM.
+   ============================================================== */
+
+body.nsq-unified-navbar-active.nsq-layout-almacen {
+    padding-top:
+        var(--nsq-navbar-current-height, 70px) !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.nsq-unified-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.global-navbar-host,
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.layout-top-navbar-host {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+
+    width: 100% !important;
+    max-width: none !important;
+
+    margin: 0 !important;
+
+    z-index: var(--nsq-global-nav-z, 3000) !important;
+}
+
+body.nsq-unified-navbar-active.nsq-layout-almacen .alm-main {
+    padding-top: 0 !important;
+}
+
+@media (max-width: 960px) {
+    .nsq-global-routebar {
+        top: var(--nsq-navbar-current-height, 64px);
+        gap: .45rem;
+        min-height: 46px;
+        padding: .36rem .50rem;
+    }
+
+    .nsq-global-routebar__back span {
+        display: none;
+    }
+
+    .nsq-global-routebar__back {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        min-height: 34px;
+        padding: 0;
+    }
+}
+
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_3_ROUTE_IN_CONTENT_CSS
+   ============================================================== */
+
+/* Titulo + selector de departamentos se comportan visualmente como
+   una sola unidad, sin anidar elementos interactivos. */
+.nsq-brand-cluster {
+    min-width: 0;
+
+    display: inline-flex;
+    align-items: center;
+
+    gap: .22rem;
+}
+
+.nsq-brand-cluster .navbar-brand {
+    margin: 0 !important;
+}
+
+.nsq-brand-cluster
+.nsq-departments-launcher--brand {
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+
+    height: 30px !important;
+    min-height: 30px !important;
+
+    flex: 0 0 30px !important;
+
+    margin: 0 0 0 .05rem !important;
+    padding: 0 !important;
+
+    border-radius: 8px !important;
+
+    border-color:
+        rgba(96,165,250,.16) !important;
+
+    background:
+        rgba(37,99,235,.055) !important;
+
+    box-shadow: none !important;
+}
+
+.nsq-brand-cluster
+.nsq-departments-launcher--brand
+> i:first-child {
+    font-size: .72rem !important;
+}
+
+.nsq-brand-cluster
+.nsq-departments-launcher--brand:hover,
+.nsq-brand-cluster
+.nsq-departments-launcher--brand.is-open {
+    border-color:
+        rgba(96,165,250,.34) !important;
+
+    background:
+        rgba(37,99,235,.12) !important;
+}
+
+/* ==============================================================
+   ROUTEBAR: YA NO PERTENECE AL NAVBAR
+   Vive en el flujo normal del contenido y desaparece al hacer scroll.
+   ============================================================== */
+
+.nsq-global-routebar {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+
+    z-index: 50 !important;
+
+    width: 100% !important;
+    max-width: none !important;
+
+    min-height: 40px !important;
+
+    margin:
+        0
+        0
+        .48rem !important;
+
+    padding:
+        .26rem
+        .42rem !important;
+
+    border:
+        1px solid rgba(148,163,184,.12) !important;
+
+    border-radius: 10px !important;
+
+    background:
+        rgba(15,23,42,.54) !important;
+
+    box-shadow:
+        0 4px 12px rgba(0,0,0,.075) !important;
+
+    backdrop-filter: blur(9px) !important;
+    -webkit-backdrop-filter: blur(9px) !important;
+}
+
+html[data-nsq-theme="light"]
+.nsq-global-routebar {
+    border-color:
+        rgba(41,67,95,.10) !important;
+
+    background:
+        rgba(255,255,255,.82) !important;
+
+    box-shadow:
+        0 4px 11px rgba(41,67,95,.065) !important;
+}
+
+.nsq-global-routebar__back {
+    min-height: 31px !important;
+
+    padding:
+        .25rem
+        .48rem !important;
+
+    border-radius: 8px !important;
+
+    font-size: .66rem !important;
+}
+
+.nsq-global-routebar__trail {
+    gap: .30rem !important;
+}
+
+.nsq-global-routebar__item {
+    font-size: .65rem !important;
+}
+
+.nsq-global-routebar__separator {
+    font-size: .70rem !important;
+}
+
+/* La navegación global reemplaza TODAS las barras de ruta antiguas
+   de Almacén: tanto la del layout como la de _AlmacenNavegacion. */
+body.nsq-unified-navbar-active
+.alm-routebar,
+body.nsq-unified-navbar-active
+.alm-module-route,
+body.nsq-unified-navbar-active
+.alm-module-nav__bar {
+    display: none !important;
+}
+
+body.nsq-unified-navbar-active
+.alm-module-nav {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Almacén conserva solamente el navbar fixed.
+   La routebar ya vive dentro de alm-main y no debe compensarse
+   como una segunda barra fija. */
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.alm-main {
+    padding-top: 0 !important;
+}
+
+/* El main no debe dejar espacio fantasma por las rutas viejas. */
+body.nsq-unified-navbar-active.nsq-layout-almacen
+.alm-module-nav + * {
+    margin-top: 0 !important;
+}
+
+@media (max-width: 960px) {
+    .nsq-global-routebar {
+        min-height: 37px !important;
+        padding: .22rem .34rem !important;
+    }
+
+    .nsq-global-routebar__back {
+        width: 31px !important;
+        min-width: 31px !important;
+        height: 31px !important;
+        min-height: 31px !important;
+    }
+}
+
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_4_UNIFICAR_RUTAS_CSS
+   ============================================================== */
+
+/* Menu/Index conserva su pagina standalone, pero ahora usa el mismo
+   _TopNavbar compartido y no la barra propia antigua. */
+.nsq-menu-index-global-host {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: var(--nsq-global-nav-z, 3000) !important;
+
+    width: 100vw !important;
+    max-width: 100vw !important;
+
+    margin-left: calc(50% - 50vw) !important;
+    margin-right: calc(50% - 50vw) !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+
+    padding: 0 !important;
+}
+
+/* En portales de grupo NO existe breadcrumb global ni breadcrumb legado. */
+body.nsq-routebar-suppressed .nsq-global-routebar,
+body.nsq-menu-group-page .migapan {
+    display: none !important;
+}
+
+/* Navegaciones historicas que ya quedaron reemplazadas por la ruta global. */
+body.nsq-global-route-active .pln-routebar,
+body.nsq-global-route-active .alm-routebar,
+body.nsq-global-route-active .alm-module-route,
+body.nsq-global-route-active .alm-module-nav,
+body.nsq-global-route-active .migapan {
+    display: none !important;
+}
+
+/* Marcadores que aplica JS a controles Regresar/Volver duplicados. */
+.nsq-legacy-back-hidden,
+.nsq-legacy-route-hidden {
+    display: none !important;
+}
+
+/* Navegaciones historicas que ya quedaron reemplazadas por la ruta global. */
+body.nsq-global-route-active .pln-routebar,
+body.nsq-global-route-active .alm-routebar,
+body.nsq-global-route-active .alm-module-route,
+body.nsq-global-route-active .alm-module-nav,
+body.nsq-global-route-active .migapan {
+    display: none !important;
+}
+
+/* Marcadores que aplica JS a controles Regresar/Volver duplicados. */
+.nsq-legacy-back-hidden,
+.nsq-legacy-route-hidden {
+    display: none !important;
+}
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_7_1_SPACING_AND_GROUP_ROUTE
+   ============================================================== */
+
+/* /Menu/Grupo usa exclusivamente su migapan nativa. */
+body.nsq-menu-group-native-route-v47
+.nsq-global-routebar {
+    display: none !important;
+}
+
+body.nsq-menu-group-native-route-v47
+.migapan {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Evita doble espacio vertical:
+   _Layout ya da padding al host y varias vistas agregan otro padding
+   inmediatamente despues de la barra global. */
+.global-render-host:has(> .nsq-global-routebar) {
+    padding-top: .35rem !important;
+}
+
+.global-render-host
+> .nsq-global-routebar {
+    margin-bottom: .28rem !important;
+}
+
+.global-render-host
+> .nsq-global-routebar
++ * {
+    margin-top: 0 !important;
+}
+
+/* Producción usa .page con 24px superiores propios.
+   Cuando el breadcrumb ya ocupa la primera linea, reducimos únicamente
+   ese padding superior, conservando laterales e inferior. */
+.global-render-host
+> .nsq-global-routebar
++ .page {
+    padding-top: .35rem !important;
+}
+
+/* Mismo criterio para wrappers Bootstrap y shells departamentales. */
+.global-render-host
+> .nsq-global-routebar
++ .container,
+.global-render-host
+> .nsq-global-routebar
++ .container-fluid,
+.global-render-host
+> .nsq-global-routebar
++ .main-wrapper,
+.global-render-host
+> .nsq-global-routebar
++ .content-wrapper,
+.global-render-host
+> .nsq-global-routebar
++ .page-wrapper {
+    margin-top: 0 !important;
+    padding-top: .35rem !important;
+}
+
+/* En Almacén la routebar puede vivir dentro de alm-main. */
+.alm-main
+> .nsq-global-routebar {
+    margin-bottom: .28rem !important;
+}
+
+.alm-main
+> .nsq-global-routebar
++ * {
+    margin-top: 0 !important;
+}
+
+/* Los wrappers de navegación heredados que quedaron vacíos
+   no deben reservar espacio. */
+.pln-routebar[hidden],
+.alm-routebar[hidden],
+.alm-module-route[hidden],
+.alm-module-nav[hidden],
+.nsq-legacy-route-hidden {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
+
+/* ==============================================================
+   NSQ_GLOBAL_NAV_V4_8_2_DEDUP_ROUTES_AND_SPACING_CSS
+   ============================================================== */
+
+body.nsq-route-canonical-v48
+.pln-routebar,
+body.nsq-route-canonical-v48
+.alm-routebar,
+body.nsq-route-canonical-v48
+.alm-module-route,
+body.nsq-route-canonical-v48
+.alm-module-nav,
+body.nsq-route-canonical-v48
+.erp-page-breadcrumb,
+body.nsq-route-canonical-v48
+.nsq-legacy-route-hidden-v48,
+body.nsq-route-canonical-v48
+.nsq-legacy-back-hidden-v48 {
+    display: none !important;
+}
+
+body.nsq-menu-group-native-route-v48
+.nsq-global-routebar {
+    display: none !important;
+}
+
+body.nsq-menu-group-native-route-v48
+.migapan {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* La ruta global es el primer elemento funcional de una pantalla
+   operativa; el host no necesita otro bloque grande arriba. */
+body.nsq-route-canonical-v48
+.global-render-host {
+    padding-top: .35rem !important;
+}
+
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar {
+    margin-top: 0 !important;
+    margin-bottom: .28rem !important;
+}
+
+/* El wrapper inmediatamente posterior no reserva un segundo margen. */
+body.nsq-route-canonical-v48
+.nsq-route-content-first-v48 {
+    margin-top: 0 !important;
+}
+
+/* Wrappers departamentales conocidos que históricamente sumaban
+   18-28 px adicionales encima del primer bloque visual. */
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar
++ .page,
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar
++ .quality-index-page,
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar
++ .gp12-index-page,
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar
++ .compras-page,
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar
++ .container,
+body.nsq-route-canonical-v48
+.global-render-host
+> .nsq-global-routebar
++ .container-fluid {
+    margin-top: 0 !important;
+    padding-top: .35rem !important;
+}
+
+body.nsq-route-canonical-v48
+.alm-main
+> .nsq-global-routebar {
+    margin-top: 0 !important;
+    margin-bottom: .28rem !important;
+}
+
+body.nsq-route-canonical-v48
+.alm-main
+> .nsq-global-routebar
++ * {
+    margin-top: 0 !important;
+}
+
+/* Compras ya dispone de la ruta global. Los accesos de proceso se
+   conservan; solamente se retira el breadcrumb histórico duplicado. */
+body.nsq-route-canonical-v48
+.erp-page-breadcrumb {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
