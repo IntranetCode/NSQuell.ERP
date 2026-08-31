@@ -1,0 +1,340 @@
+﻿@using System.Linq
+@model ERP.NSQuell.ViewComponents.GlobalDepartmentNavigationVm
+@* NSQ_GLOBAL_NAV_V4_2_VIEW *@
+
+@{
+    var activeGroup = Model.Groups.FirstOrDefault(x => x.IsActive);
+
+    var departmentGroups = activeGroup == null
+        ? Model.Groups.ToList()
+        : Model.Groups
+            .Where(x => x.MenuGrupoID != activeGroup.MenuGrupoID)
+            .ToList();
+
+    var mobileOtherGroups = departmentGroups;
+
+    // NSQ_GLOBAL_NAV_V4_2_BREADCRUMB_DATA
+    var activeMenu = activeGroup?
+        .Menus
+        .FirstOrDefault(x => x.IsActive);
+
+    var activeSubMenu = activeMenu?
+        .SubMenus
+        .FirstOrDefault(x => x.IsActive);
+
+    var currentController =
+        ViewContext.RouteData.Values["controller"]?.ToString()
+        ?? string.Empty;
+
+    var currentAction =
+        ViewContext.RouteData.Values["action"]?.ToString()
+        ?? "Index";
+
+    var activeDepartmentUrl =
+        activeGroup == null
+            ? string.Empty
+            : $"/Menu/Grupo/{activeGroup.MenuGrupoID}";
+}
+
+<link rel="stylesheet"
+      href="~/css/global-navigation-v4.css"
+      asp-append-version="true" />
+
+<div class="nsq-dept-nav"
+     data-nsq-department-nav
+     data-active-department="@(activeGroup?.Nombre ?? string.Empty)"
+     data-active-department-url="@activeDepartmentUrl"
+     data-active-menu="@(activeMenu?.Nombre ?? string.Empty)"
+     data-active-menu-url="@(activeMenu?.HomeUrl ?? string.Empty)"
+     data-active-section="@(activeSubMenu?.Nombre ?? string.Empty)"
+     data-active-section-url="@(activeSubMenu?.Url ?? string.Empty)"
+     data-current-controller="@currentController"
+     data-current-action="@currentAction"
+     data-load-failed="@(Model.LoadFailed ? "1" : "0")">
+
+    @if (Model.Groups.Count > 0)
+    {
+        <div class="nsq-context-shell"
+             aria-label="Navegación del ERP">
+
+            <button type="button"
+                    class="nsq-nav-scroll-button"
+                    data-nsq-scroll-left
+                    aria-label="Desplazar navegación a la izquierda"
+                    hidden>
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+            </button>
+
+            <div class="nsq-context-strip"
+                 data-nsq-context-strip
+                 role="menubar">
+
+                @if (activeGroup != null)
+                {
+                    @foreach (var menu in activeGroup.Menus)
+                    {
+                        <a href="@menu.HomeUrl"
+                           class="nsq-context-menu-link @(menu.IsActive ? "is-active" : string.Empty)"
+                           data-nsq-menu-button="@menu.MenuID"
+                           aria-controls="nsqMenuPanel_@menu.MenuID"
+                           aria-expanded="false"
+                           role="menuitem">
+
+                            <i class="@menu.Icono" aria-hidden="true"></i>
+                            <span>@menu.Nombre</span>
+
+                            @if (menu.SubMenus.Count > 0)
+                            {
+                                <i class="fa-solid fa-chevron-down nsq-context-chevron"
+                                   aria-hidden="true"></i>
+                            }
+                        </a>
+                    }
+                }
+            </div>
+
+            <button type="button"
+                    class="nsq-nav-scroll-button"
+                    data-nsq-scroll-right
+                    aria-label="Desplazar navegación a la derecha"
+                    hidden>
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </button>
+
+            @if (departmentGroups.Count > 0)
+            {
+                <button type="button"
+                        class="nsq-departments-launcher"
+                        data-nsq-departments-button
+                        aria-controls="nsqDepartmentsPanel"
+                        aria-expanded="false"
+                        title="Otros departamentos">
+
+                    <i class="fa-solid fa-table-cells-large"
+                       aria-hidden="true"></i>
+
+                    <span class="nsq-departments-launcher__text">
+                        Departamentos
+                    </span>
+
+                    <span class="nsq-departments-launcher__count">
+                        @departmentGroups.Count
+                    </span>
+
+                    <i class="fa-solid fa-chevron-down nsq-context-chevron"
+                       aria-hidden="true"></i>
+                </button>
+            }
+        </div>
+
+        <button type="button"
+                class="nsq-mobile-nav-toggle"
+                data-nsq-mobile-toggle
+                aria-expanded="false"
+                aria-controls="nsqMobileDepartments">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
+            <span>Navegación</span>
+        </button>
+
+        <div class="nsq-nav-popover-layer"
+             data-nsq-popover-layer>
+
+            @if (activeGroup != null)
+            {
+                @foreach (var menu in activeGroup.Menus)
+                {
+                    <section class="nsq-context-panel"
+                             id="nsqMenuPanel_@menu.MenuID"
+                             data-nsq-menu-panel="@menu.MenuID"
+                             aria-hidden="true">
+
+                        <div class="nsq-context-panel__head">
+                            <div class="nsq-context-panel__title">
+                                <span class="nsq-context-panel__icon">
+                                    <i class="@menu.Icono"
+                                       aria-hidden="true"></i>
+                                </span>
+
+                                <div>
+                                    <strong>@menu.Nombre</strong>
+
+                                    @if (!string.IsNullOrWhiteSpace(menu.Descripcion))
+                                    {
+                                        <small>@menu.Descripcion</small>
+                                    }
+                                </div>
+                            </div>
+
+                            <a href="@menu.HomeUrl"
+                               class="nsq-context-panel__open">
+                                Abrir módulo
+                                <i class="fa-solid fa-arrow-right"
+                                   aria-hidden="true"></i>
+                            </a>
+                        </div>
+
+                        <div class="nsq-context-sections">
+                            @foreach (var sub in menu.SubMenus)
+                            {
+                                <a href="@sub.Url"
+                                   class="nsq-context-section-link @(sub.IsActive ? "is-active" : string.Empty)">
+                                    <span class="nsq-section-icon">
+                                        <i class="fa-solid fa-arrow-right"
+                                           aria-hidden="true"></i>
+                                    </span>
+
+                                    <span>@sub.Nombre</span>
+                                </a>
+                            }
+                        </div>
+                    </section>
+                }
+            }
+
+            @if (departmentGroups.Count > 0)
+            {
+                <section class="nsq-departments-panel"
+                         id="nsqDepartmentsPanel"
+                         data-nsq-departments-panel
+                         aria-hidden="true">
+
+                    <div class="nsq-departments-panel__head">
+                        <div>
+                            <strong>Departamentos</strong>
+                            <small>
+                                Solo se muestran los departamentos y módulos permitidos para tu usuario.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="nsq-departments-grid">
+                        @foreach (var group in departmentGroups)
+                        {
+                            <article class="nsq-department-card">
+                                <a href="/Menu/Grupo/@group.MenuGrupoID"
+                                   class="nsq-department-card__title">
+                                    <span class="nsq-department-card__icon">
+                                        <i class="@group.Icono"
+                                           aria-hidden="true"></i>
+                                    </span>
+
+                                    <span class="nsq-department-card__name">
+                                        @group.Nombre
+                                    </span>
+
+                                    <i class="fa-solid fa-arrow-right"
+                                       aria-hidden="true"></i>
+                                </a>
+
+                                @if (!string.IsNullOrWhiteSpace(group.Descripcion))
+                                {
+                                    <p>@group.Descripcion</p>
+                                }
+
+                                <div class="nsq-department-card__menus">
+                                    @foreach (var menu in group.Menus.Take(6))
+                                    {
+                                        <a href="@menu.HomeUrl">
+                                            <i class="@menu.Icono"
+                                               aria-hidden="true"></i>
+                                            <span>@menu.Nombre</span>
+                                        </a>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+
+        <div class="nsq-mobile-nav"
+             id="nsqMobileDepartments"
+             data-nsq-mobile-panel
+             hidden>
+
+            @if (activeGroup != null)
+            {
+                <div class="nsq-mobile-caption">
+                    @activeGroup.Nombre
+                </div>
+
+                @foreach (var menu in activeGroup.Menus)
+                {
+                    <details class="nsq-mobile-menu"
+                             open="@(menu.IsActive ? "open" : null)">
+                        <summary>
+                            <span>
+                                <i class="@menu.Icono"
+                                   aria-hidden="true"></i>
+                                @menu.Nombre
+                            </span>
+
+                            <i class="fa-solid fa-chevron-down"
+                               aria-hidden="true"></i>
+                        </summary>
+
+                        <div class="nsq-mobile-menu__body">
+                            @foreach (var sub in menu.SubMenus)
+                            {
+                                <a href="@sub.Url"
+                                   class="nsq-mobile-submenu @(sub.IsActive ? "is-active" : string.Empty)">
+                                    @sub.Nombre
+                                </a>
+                            }
+                        </div>
+                    </details>
+                }
+            }
+
+            @if (mobileOtherGroups.Count > 0)
+            {
+                <div class="nsq-mobile-caption nsq-mobile-caption--other">
+                    Otros departamentos
+                </div>
+
+                @foreach (var group in mobileOtherGroups)
+                {
+                    <details class="nsq-mobile-group">
+                        <summary>
+                            <span>
+                                <i class="@group.Icono"
+                                   aria-hidden="true"></i>
+                                @group.Nombre
+                            </span>
+
+                            <i class="fa-solid fa-chevron-down"
+                               aria-hidden="true"></i>
+                        </summary>
+
+                        <div class="nsq-mobile-group__body">
+                            <a href="/Menu/Grupo/@group.MenuGrupoID"
+                               class="nsq-mobile-department-home">
+                                Inicio de @group.Nombre
+                            </a>
+
+                            @foreach (var menu in group.Menus)
+                            {
+                                <a href="@menu.HomeUrl"
+                                   class="nsq-mobile-menu__title">
+                                    <i class="@menu.Icono"
+                                       aria-hidden="true"></i>
+                                    @menu.Nombre
+                                </a>
+                            }
+                        </div>
+                    </details>
+                }
+            }
+        </div>
+    }
+</div>
+
+<script>
+    if (document.body) {
+        document.body.classList.add('nsq-unified-navbar-active');
+    }
+</script>
+
+<script src="~/js/global-navigation-v4.js"
+        asp-append-version="true"></script>

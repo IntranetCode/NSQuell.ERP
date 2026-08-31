@@ -288,8 +288,20 @@ namespace ERP.NSQuell.Controllers
 
                 var programasPosterioresImpactados = await ContarProgramasImpactadosPorInterrupcionUrgenteAsync(maquinaId, programaUrgenteId, programaActual.ProgramaProduccionID, fechaInterrupcion, cn);
 
-                var parejaActualId = await ObtenerProgramaParejaLhRhAsync(programaActual.ProgramaProduccionID, cn);
-                var parejaUrgenteId = await ObtenerProgramaParejaLhRhAsync(programaUrgenteId, cn);
+                // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_PAREJA_ACTUAL_START
+                var parejaActualId =
+                    await ObtenerProgramaParejaLhRhIdAsync(
+                        programaActual.ProgramaProduccionID,
+                        cn,
+                        null!);
+                // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_PAREJA_ACTUAL_END
+                // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_PAREJA_URGENTE_START
+                var parejaUrgenteId =
+                    await ObtenerProgramaParejaLhRhIdAsync(
+                        programaUrgenteId,
+                        cn,
+                        null!);
+                // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_PAREJA_URGENTE_END
 
                 var horarioActualVencido = programaActual.FechaFinProgramada <= ahora;
 
@@ -336,7 +348,11 @@ namespace ERP.NSQuell.Controllers
                     {
                         programaProduccionID = programaUrgente.ProgramaProduccionID,
                         solicitudProduccionID = programaUrgente.SolicitudProduccionID,
-                        parte = ObtenerTextoParte(programaUrgente),
+                        // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_PARTE_START
+                        parte = !string.IsNullOrWhiteSpace(programaUrgente.ReferenciaSAP)
+                            ? programaUrgente.ReferenciaSAP
+                            : (programaUrgente.NumeroParte ?? string.Empty),
+                        // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_PARTE_END
                         descripcion = programaUrgente.DescripcionParte,
                         moldeID = programaUrgente.MoldeID,
                         molde = string.IsNullOrWhiteSpace(programaUrgente.MoldeCodigo) ? "Sin molde" : programaUrgente.MoldeCodigo,
@@ -376,6 +392,39 @@ namespace ERP.NSQuell.Controllers
             }
         }
 
+// NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_CLASS_START
+        private sealed class ProgramaActivoInterrupcionUrgente
+        {
+            public int ProgramaProduccionID { get; init; }
+            public int EjecucionProduccionID { get; init; }
+            public int? SolicitudProduccionID { get; init; }
+            public int? SolicitudProduccionDetalleID { get; init; }
+            public int? ParteID { get; init; }
+            public string? NumeroParte { get; init; }
+            public string? ReferenciaSAP { get; init; }
+            public string? DescripcionParte { get; init; }
+            public int? MoldeID { get; init; }
+            public string? MoldeCodigo { get; init; }
+            public int MaquinaID { get; init; }
+            public string? MaquinaCodigo { get; init; }
+            public string? MaquinaNombre { get; init; }
+            public DateTime FechaInicioProgramada { get; init; }
+            public DateTime FechaFinProgramada { get; init; }
+            public decimal HorasProgramadas { get; init; }
+            public int EstatusProduccionID { get; init; }
+            public DateTime? FechaInicioReal { get; init; }
+
+            public string ParteTexto =>
+                !string.IsNullOrWhiteSpace(ReferenciaSAP)
+                    ? ReferenciaSAP!
+                    : (NumeroParte ?? string.Empty);
+
+            public string MoldeTexto =>
+                string.IsNullOrWhiteSpace(MoldeCodigo)
+                    ? "Sin molde"
+                    : MoldeCodigo!;
+        }
+// NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_CLASS_END
         private static async Task<ProgramaActivoInterrupcionUrgente?> ObtenerProduccionActivaParaInterrupcionUrgenteAsync(int maquinaId, SqlConnection cn)
         {
             const string sql = @"
@@ -473,39 +522,7 @@ WHERE pp.Activo=1
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
 
-        private static async Task<int> ContarProgramasImpactadosPorInterrupcionUrgenteAsync(int maquinaId, int programaUrgenteId, int programaInterrumpidoId, DateTime desde, SqlConnection cn)
-        {
-            const string sql = @"
-SELECT COUNT(1)
-FROM dbo.Planeacion_ProgramaProduccion pp
-WHERE pp.Activo=1
-  AND pp.MaquinaID=@MaquinaID
-  AND pp.ProgramaProduccionID<>@ProgramaUrgenteID
-  AND pp.ProgramaProduccionID<>@ProgramaInterrumpidoID
-  AND pp.FechaInicioProgramada IS NOT NULL
-  AND pp.FechaInicioProgramada>=@Desde
-  AND ISNULL(pp.EstatusID,1)=1
-  AND NOT EXISTS
-  (
-      SELECT 1
-      FROM dbo.Produccion_Ejecucion e
-      WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
-        AND e.Activo=1
-  )
-  AND NOT EXISTS
-  (
-      SELECT 1
-      FROM dbo.Calidad_Inspecciones ci
-      WHERE ci.ProgramaProduccionID=pp.ProgramaProduccionID
-  );";
-
-            await using var cmd = new SqlCommand(sql, cn);
-            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
-            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteId;
-            cmd.Parameters.Add("@ProgramaInterrumpidoID", SqlDbType.Int).Value = programaInterrumpidoId;
-            cmd.Parameters.Add("@Desde", SqlDbType.DateTime).Value = desde;
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        }
+        // NSQ_FIX_PLANEACION_INTERRUPCION_BUILD_V1_2_DUPLICATE_REMOVED
 
 
 
