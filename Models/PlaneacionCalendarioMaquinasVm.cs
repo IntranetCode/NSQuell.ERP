@@ -142,6 +142,13 @@ namespace ERP.NSQuell.Models
         public List<PlaneacionCalendarioBloqueVm> Bloques { get; set; }
     }
 
+    public sealed class PlaneacionInterrupcionUrgenteRequest
+    {
+        public int ProgramaUrgenteID { get; set; }
+        public int MaquinaID { get; set; }
+        public string Motivo { get; set; } = string.Empty;
+        public bool TrabajarDomingo { get; set; }
+    }
     public sealed class PlaneacionCalendarioBloqueVm
     {
         public PlaneacionCalendarioBloqueVm()

@@ -1045,81 +1045,55 @@ ORDER BY
 
             return lista;
         }
-
-        private static async Task SincronizarTareaPreparacionAsync(
-            int programaProduccionId,
-            string tipoTarea,
-            DateTime fechaObjetivo,
-            DateTime fechaAviso,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private static async Task SincronizarTareaPreparacionAsync(int programaProduccionId, string tipoTarea, DateTime fechaObjetivo, DateTime fechaAviso, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             fechaObjetivo = NormalizarFechaPreparacion(fechaObjetivo);
             fechaAviso = NormalizarFechaPreparacion(fechaAviso);
-
             const string sql = @"
 DECLARE @PreparacionAnticipadaID INT;
 DECLARE @EstadoActual NVARCHAR(30);
-
+DECLARE @EsRetornoUrgente BIT=0;
 SELECT TOP(1)
     @PreparacionAnticipadaID=PreparacionAnticipadaID,
-    @EstadoActual=Estado
+    @EstadoActual=Estado,
+    @EsRetornoUrgente=CASE
+        WHEN TipoTarea=N'CAMBIO_MOLDE'
+         AND ISNULL(Observaciones,N'') LIKE N'%NSQ_RETORNO_URGENTE:%'
+            THEN 1
+        ELSE 0
+    END
 FROM dbo.Produccion_PreparacionAnticipada WITH(UPDLOCK,HOLDLOCK)
 WHERE ProgramaProduccionID=@ProgramaProduccionID
   AND TipoTarea=@TipoTarea
 ORDER BY PreparacionAnticipadaID DESC;
-
 IF @PreparacionAnticipadaID IS NULL
 BEGIN
     INSERT INTO dbo.Produccion_PreparacionAnticipada
     (
-        ProgramaProduccionID,
-        TipoTarea,
-        FechaObjetivo,
-        FechaAviso,
-        Estado,
-        UsuarioConfirmacionID,
-        FechaConfirmacion,
-        Observaciones,
-        Activo,
-        UsuarioCreacionID,
-        FechaCreacion,
-        UsuarioInicioID,
-        FechaInicioReal,
-        FechaFinReal,
-        DuracionRealMinutos,
-        LimiteMinutosAplicado,
-        ExcedioLimite,
-        MotivoExceso
+        ProgramaProduccionID,TipoTarea,FechaObjetivo,FechaAviso,Estado,
+        UsuarioConfirmacionID,FechaConfirmacion,Observaciones,Activo,
+        UsuarioCreacionID,FechaCreacion,UsuarioInicioID,FechaInicioReal,
+        FechaFinReal,DuracionRealMinutos,LimiteMinutosAplicado,
+        ExcedioLimite,MotivoExceso
     )
     VALUES
     (
-        @ProgramaProduccionID,
-        @TipoTarea,
-        @FechaObjetivo,
-        @FechaAviso,
-        @EstadoPendiente,
-        NULL,
-        NULL,
-        NULL,
-        1,
-        @UsuarioID,
-        SYSDATETIME(),
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        0,
-        NULL
+        @ProgramaProduccionID,@TipoTarea,@FechaObjetivo,@FechaAviso,@EstadoPendiente,
+        NULL,NULL,NULL,1,@UsuarioID,SYSDATETIME(),NULL,NULL,NULL,NULL,NULL,0,NULL
     );
+END
+ELSE IF @EsRetornoUrgente=1 AND @EstadoActual IN(@EstadoPendiente,@EstadoEnProceso)
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET Activo=1,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
 END
 ELSE IF @EstadoActual=@EstadoEnProceso
 BEGIN
     UPDATE dbo.Produccion_PreparacionAnticipada
-    SET
-        FechaObjetivo=@FechaObjetivo,
+    SET FechaObjetivo=@FechaObjetivo,
         FechaAviso=@FechaAviso,
         Activo=1,
         UsuarioModificacionID=@UsuarioID,
@@ -1129,8 +1103,7 @@ END
 ELSE IF @EstadoActual<>@EstadoConfirmada
 BEGIN
     UPDATE dbo.Produccion_PreparacionAnticipada
-    SET
-        FechaObjetivo=@FechaObjetivo,
+    SET FechaObjetivo=@FechaObjetivo,
         FechaAviso=@FechaAviso,
         Estado=@EstadoPendiente,
         UsuarioInicioID=NULL,
@@ -1147,7 +1120,6 @@ BEGIN
         FechaModificacion=SYSDATETIME()
     WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
 END;";
-
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
             cmd.Parameters.Add("@TipoTarea", SqlDbType.NVarChar, 40).Value = tipoTarea;
@@ -1157,29 +1129,25 @@ END;";
             cmd.Parameters.Add("@EstadoPendiente", SqlDbType.NVarChar, 30).Value = ProduccionPreparacionEstado.Pendiente;
             cmd.Parameters.Add("@EstadoEnProceso", SqlDbType.NVarChar, 30).Value = ProduccionPreparacionEstado.EnProceso;
             cmd.Parameters.Add("@EstadoConfirmada", SqlDbType.NVarChar, 30).Value = ProduccionPreparacionEstado.Confirmada;
-
             await cmd.ExecuteNonQueryAsync();
         }
-
-        private static async Task CancelarTareaPreparacionNoAplicableAsync(
-            int programaProduccionId,
-            string tipoTarea,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private static async Task CancelarTareaPreparacionNoAplicableAsync(int programaProduccionId, string tipoTarea, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 UPDATE dbo.Produccion_PreparacionAnticipada
-SET
-    Estado=@EstadoCancelada,
+SET Estado=@EstadoCancelada,
     Activo=0,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=SYSDATETIME()
 WHERE ProgramaProduccionID=@ProgramaProduccionID
   AND TipoTarea=@TipoTarea
   AND Estado=@EstadoPendiente
-  AND Activo=1;";
-
+  AND Activo=1
+  AND NOT
+  (
+      TipoTarea=N'CAMBIO_MOLDE'
+      AND ISNULL(Observaciones,N'') LIKE N'%NSQ_RETORNO_URGENTE:%'
+  );";
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
             cmd.Parameters.Add("@TipoTarea", SqlDbType.NVarChar, 40).Value = tipoTarea;
@@ -1188,11 +1156,6 @@ WHERE ProgramaProduccionID=@ProgramaProduccionID
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }
-
-        // ============================================================
-        // CARGA DE TAREAS PARA TABLERO / VISTAS
-        // ============================================================
-
         private async Task<List<ProduccionPreparacionTareaVm>> CargarPreparacionAnticipadaAsync(
             string? tipoTarea,
             string? filtro,

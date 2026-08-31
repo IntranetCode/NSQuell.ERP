@@ -212,49 +212,17 @@ namespace ERP.NSQuell.Controllers
             var vm = new ProduccionDetalleVm
             {
                 Ejecucion = ejecucion,
-
-                RegistrosHora =
-                    await ObtenerRegistrosHoraAsync(
-                        id,
-                        cn),
-
-                Paros =
-                    await ObtenerParosAsync(
-                        id,
-                        cn),
-
-                MotivosParo =
-                    await CargarMotivosParoAsync(
-                        cn),
-
-                ChecklistResumen =
-                    await ObtenerResumenChecklistArranqueAsync(
-                        id,
-                        cn),
-
-                CalidadResumen =
-                    calidadResumen,
-
-                MonitoreoTurnoActual =
-                    monitoreoTurnoActual,
-
-                CambioTurnoTecnico =
-                    await ConstruirCambioTurnoTecnicoAsync(
-                        ejecucion,
-                        cn)
+                ParejaLhRh = await ObtenerParejaLhRhProduccionAsync(ejecucion.ProgramaProduccionID, cn),
+                RegistrosHora = await ObtenerRegistrosHoraAsync(id, cn),
+                Paros = await ObtenerParosAsync(id, cn),
+                MotivosParo = await CargarMotivosParoAsync(cn),
+                ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn),
+                CalidadResumen = calidadResumen,
+                MonitoreoTurnoActual = monitoreoTurnoActual,
+                CambioTurnoTecnico = await ConstruirCambioTurnoTecnicoAsync(ejecucion, cn)
             };
 
-            // ============================================================
-            // CONFIGURACIÓN REAL DE PRODUCCIÓN
-            //
-            // Aquí cargamos:
-            // - cavidades definidas por el técnico
-            // - ciclo real
-            // - objetivo real calculado
-            // - contador base
-            // - configuración vigente
-            // - historial de configuraciones
-            // ============================================================
+           
             var contextoConfiguracion =
                 await ObtenerContextoConfiguracionCorridaAsync(
                     id,
@@ -1313,17 +1281,9 @@ VALUES
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Iniciar(
-       int programaProduccionId,
-       int? operadorId = null,
-       string? operadorNombre = null,
-       int? operadorAuxiliarId = null,
-       string? operadorAuxiliarNombre = null,
-       string? observaciones = null,
-       List<long>? etiquetasBlancasSeleccionadas = null)
+        public async Task<IActionResult> Iniciar(int programaProduccionId, int? operadorId = null, string? operadorNombre = null, int? operadorAuxiliarId = null, string? operadorAuxiliarNombre = null, string? observaciones = null, List<long>? etiquetasBlancasSeleccionadas = null)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
 
             if (programaProduccionId <= 0)
             {
@@ -1335,17 +1295,10 @@ VALUES
             operadorAuxiliarNombre = string.IsNullOrWhiteSpace(operadorAuxiliarNombre) ? null : operadorAuxiliarNombre.Trim();
             observaciones = string.IsNullOrWhiteSpace(observaciones) ? null : observaciones.Trim();
 
-            if (operadorId.HasValue && operadorId.Value <= 0)
-                operadorId = null;
-
-            if (operadorAuxiliarId.HasValue && operadorAuxiliarId.Value <= 0)
-                operadorAuxiliarId = null;
-
-            if (operadorId.HasValue)
-                operadorNombre = null;
-
-            if (operadorAuxiliarId.HasValue)
-                operadorAuxiliarNombre = null;
+            if (operadorId.HasValue && operadorId.Value <= 0) operadorId = null;
+            if (operadorAuxiliarId.HasValue && operadorAuxiliarId.Value <= 0) operadorAuxiliarId = null;
+            if (operadorId.HasValue) operadorNombre = null;
+            if (operadorAuxiliarId.HasValue) operadorAuxiliarNombre = null;
 
             if (operadorNombre?.Length > 200)
             {
@@ -1366,39 +1319,26 @@ VALUES
             }
 
             var usuarioId = ObtenerUsuarioID();
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
-                var ejecucionExistenteId = await ObtenerEjecucionActivaPorProgramaAsync(
-                    programaProduccionId,
-                    cn,
-                    tx);
+                var ejecucionExistenteId = await ObtenerEjecucionActivaPorProgramaAsync(programaProduccionId, cn, tx);
 
                 if (ejecucionExistenteId.HasValue)
                 {
                     await tx.CommitAsync();
-
                     TempData["Info"] = "Este programa ya tiene una ejecución de producción activa.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = ejecucionExistenteId.Value });
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionExistenteId.Value });
                 }
 
-                var programa = await ObtenerProgramaParaIniciarAsync(
-                    programaProduccionId,
-                    cn,
-                    tx);
+                var programa = await ObtenerProgramaParaIniciarAsync(programaProduccionId, cn, tx);
 
                 if (programa == null)
                 {
                     await tx.RollbackAsync();
-
                     TempData["Error"] = "No se encontró el programa de producción o ya no está disponible para iniciar.";
                     return RedirectToAction(nameof(Index));
                 }
@@ -1406,7 +1346,6 @@ VALUES
                 if (!programa.MaquinaID.HasValue || programa.MaquinaID.Value <= 0)
                 {
                     await tx.RollbackAsync();
-
                     TempData["Error"] = "El programa no tiene máquina asignada. No puede iniciar preparación.";
                     return RedirectToAction(nameof(Index));
                 }
@@ -1416,44 +1355,24 @@ VALUES
                 if (cantidadProgramadaPlaneacion <= 0)
                 {
                     await tx.RollbackAsync();
-
                     TempData["Error"] = "El programa no tiene una cantidad válida para iniciar Producción.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                // NSQ_PREPARACION_MOLDE_BLOQUEO_V1
-                // Cambio de molde SI bloquea.
-                // MP/secado y embalaje NO bloquean.
-                var estadoCambioMoldeInicio =
-                    await ObtenerEstadoCambioMoldeProgramaAsync(
-                        programaProduccionId,
-                        cn,
-                        tx);
+                var parejaLhRh = await ObtenerParejaLhRhProduccionAsync(programaProduccionId, cn, tx);
+                ValidarParejaLhRhParaInicio(parejaLhRh);
 
-                if (estadoCambioMoldeInicio.RequiereCambioMolde &&
-                    !string.Equals(
-                        estadoCambioMoldeInicio.Estado,
-                        EstadoMoldeConfirmada,
-                        StringComparison.OrdinalIgnoreCase))
+                var estadoCambioMoldeInicio = await ObtenerEstadoCambioMoldeProgramaAsync(programaProduccionId, cn, tx);
+
+                if (estadoCambioMoldeInicio.RequiereCambioMolde && !string.Equals(estadoCambioMoldeInicio.Estado, EstadoMoldeConfirmada, StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        MensajeBloqueoCambioMolde(
-                            estadoCambioMoldeInicio.Estado);
-
+                    TempData["Error"] = MensajeBloqueoCambioMolde(estadoCambioMoldeInicio.Estado);
                     return RedirectToAction(nameof(Index));
                 }
 
-                // NSQ_PERSONAL_PROGRAMADO_INICIAR_V30
-                var personalProgramado = await ObtenerPersonalProgramadoProduccionAsync(
-                    programaProduccionId,
-                    DateTime.Now,
-                    programa.FechaInicioProgramada,
-                    cn,
-                    tx);
+                var personalProgramado = await ObtenerPersonalProgramadoProduccionAsync(programaProduccionId, DateTime.Now, programa.FechaInicioProgramada, cn, tx);
 
-                // NSQ_PERSONAL_INICIO_V8_FUENTE_VERDAD
                 if (personalProgramado?.OperadorID.HasValue == true)
                 {
                     operadorId = personalProgramado.OperadorID;
@@ -1466,136 +1385,40 @@ VALUES
                     operadorAuxiliarNombre = null;
                 }
 
-                const string sqlMaquinaOcupada = @"
-SELECT TOP (1)
-    e.EjecucionProduccionID,
-    e.ProgramaProduccionID,
-    e.MaquinaID,
-    e.MaquinaCodigo,
-    e.MaquinaNombre,
-    e.OperadorID,
-    e.OperadorNombre,
-    e.EstatusID,
-    e.FechaInicioReal
-FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
-WHERE e.Activo=1
-  AND e.MaquinaID=@MaquinaID
-  AND e.ProgramaProduccionID<>@ProgramaProduccionID
-  AND e.FechaLiberacionMaquina IS NULL
-  AND e.EstatusID IN(@EnPreparacion,@EnProduccion,@Pausado)
-ORDER BY e.EjecucionProduccionID DESC;";
+                var bloqueoMaquina = await ObtenerBloqueoMaquinaParaInicioAsync(programaProduccionId, programa.MaquinaID.Value, parejaLhRh?.ProgramaParejaID, cn, tx);
 
-                int? ejecucionOcupanteId = null;
-                int? programaOcupanteId = null;
-                int? estatusOcupanteId = null;
-                string? maquinaOcupadaCodigo = null;
-                string? operadorOcupante = null;
-                DateTime? fechaInicioOcupante = null;
-
-                await using (var cmdOcupada = new SqlCommand(sqlMaquinaOcupada, cn, tx))
-                {
-                    cmdOcupada.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = programa.MaquinaID.Value;
-                    cmdOcupada.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
-                    cmdOcupada.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;
-                    cmdOcupada.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
-                    cmdOcupada.Parameters.Add("@Pausado", SqlDbType.Int).Value = ProduccionEstatus.Pausado;
-
-                    await using var rdOcupada = await cmdOcupada.ExecuteReaderAsync();
-
-                    if (await rdOcupada.ReadAsync())
-                    {
-                        ejecucionOcupanteId = Convert.ToInt32(rdOcupada["EjecucionProduccionID"]);
-                        programaOcupanteId = Convert.ToInt32(rdOcupada["ProgramaProduccionID"]);
-                        estatusOcupanteId = Convert.ToInt32(rdOcupada["EstatusID"]);
-
-                        maquinaOcupadaCodigo = rdOcupada["MaquinaCodigo"] == DBNull.Value
-                            ? null
-                            : rdOcupada["MaquinaCodigo"].ToString();
-
-                        operadorOcupante = rdOcupada["OperadorNombre"] == DBNull.Value
-                            ? null
-                            : rdOcupada["OperadorNombre"].ToString();
-
-                        fechaInicioOcupante = rdOcupada["FechaInicioReal"] == DBNull.Value
-                            ? null
-                            : Convert.ToDateTime(rdOcupada["FechaInicioReal"]);
-                    }
-                }
-
-                if (ejecucionOcupanteId.HasValue)
+                if (bloqueoMaquina != null)
                 {
                     await tx.RollbackAsync();
-
-                    var maquinaTexto = !string.IsNullOrWhiteSpace(maquinaOcupadaCodigo)
-                        ? maquinaOcupadaCodigo.Trim()
-                        : programa.MaquinaCodigo ?? "seleccionada";
-
-                    var estatusTexto = estatusOcupanteId switch
-                    {
-                        ProduccionEstatus.EnPreparacion => "en preparación",
-                        ProduccionEstatus.EnProduccion => "en producción",
-                        ProduccionEstatus.Pausado => "pausada",
-                        _ => "activa"
-                    };
-
-                    var mensaje =
-                        $"No puedes iniciar esta OF porque la máquina {maquinaTexto} " +
-                        $"está ocupada por el Programa {programaOcupanteId}, " +
-                        $"ejecución {ejecucionOcupanteId}, actualmente {estatusTexto}.";
-
-                    if (!string.IsNullOrWhiteSpace(operadorOcupante))
-                        mensaje += " Operador: " + operadorOcupante.Trim() + ".";
-
-                    if (fechaInicioOcupante.HasValue)
-                        mensaje += " Inicio real: " + fechaInicioOcupante.Value.ToString("dd/MM/yyyy HH:mm") + ".";
-
-                    mensaje += " Termina o libera la ejecución anterior antes de iniciar la siguiente preparación.";
-
-                    TempData["Error"] = mensaje;
+                    TempData["Error"] = ConstruirMensajeBloqueoMaquinaInicio(bloqueoMaquina, programa.MaquinaCodigo);
                     return RedirectToAction(nameof(Index));
                 }
 
                 int? operadorPrincipalFinalId = operadorId;
                 string? operadorPrincipalFinalNombre = operadorNombre;
 
-                if (!operadorPrincipalFinalId.HasValue &&
-                    string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) &&
-                    programa.OperadorPrincipalPlaneadoID.HasValue)
-                {
+                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) && programa.OperadorPrincipalPlaneadoID.HasValue)
                     operadorPrincipalFinalId = programa.OperadorPrincipalPlaneadoID;
-                }
 
                 if (operadorPrincipalFinalId.HasValue)
                 {
-                    operadorPrincipalFinalNombre = await ObtenerNombreOperadorProduccionAsync(
-                        operadorPrincipalFinalId.Value,
-                        cn,
-                        tx);
+                    operadorPrincipalFinalNombre = await ObtenerNombreOperadorProduccionAsync(operadorPrincipalFinalId.Value, cn, tx);
 
                     if (string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
                     {
                         await tx.RollbackAsync();
-
                         TempData["Error"] = "El operador principal seleccionado no está activo o su puesto no es OPERADOR.";
                         return RedirectToAction(nameof(Index));
                     }
                 }
 
-                if (!operadorPrincipalFinalId.HasValue &&
-                    string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
                 {
-                    var operadorSugerido = await ObtenerOperadorSugeridoProduccionAsync(
-                        programa.MaquinaID.Value,
-                        DateTime.Now,
-                        cn,
-                        tx);
+                    var operadorSugerido = await ObtenerOperadorSugeridoProduccionAsync(programa.MaquinaID.Value, DateTime.Now, cn, tx);
 
                     if (operadorSugerido != null)
                     {
-                        var nombreValidado = await ObtenerNombreOperadorProduccionAsync(
-                            operadorSugerido.OperadorID,
-                            cn,
-                            tx);
+                        var nombreValidado = await ObtenerNombreOperadorProduccionAsync(operadorSugerido.OperadorID, cn, tx);
 
                         if (!string.IsNullOrWhiteSpace(nombreValidado))
                         {
@@ -1605,412 +1428,225 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     }
                 }
 
-                if (!operadorPrincipalFinalId.HasValue &&
-                    string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "Debes indicar un operador principal antes de iniciar la preparación. " +
-                        "Selecciona un operador del catálogo o captura su nombre manual.";
-
+                    TempData["Error"] = "Debes indicar un operador principal antes de iniciar la preparación. Selecciona un operador del catálogo o captura su nombre manual.";
                     return RedirectToAction(nameof(Index));
                 }
 
                 int? operadorAuxiliarFinalId = operadorAuxiliarId;
                 string? operadorAuxiliarFinalNombre = operadorAuxiliarNombre;
 
-                if (!operadorAuxiliarFinalId.HasValue &&
-                    string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) &&
-                    programa.OperadorAuxiliarID.HasValue)
-                {
+                if (!operadorAuxiliarFinalId.HasValue && string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) && programa.OperadorAuxiliarID.HasValue)
                     operadorAuxiliarFinalId = programa.OperadorAuxiliarID;
-                }
 
                 if (operadorAuxiliarFinalId.HasValue)
                 {
-                    operadorAuxiliarFinalNombre = await ObtenerNombrePersonaActivaProduccionAsync(
-                        operadorAuxiliarFinalId.Value,
-                        cn,
-                        tx);
+                    operadorAuxiliarFinalNombre = await ObtenerNombrePersonaActivaProduccionAsync(operadorAuxiliarFinalId.Value, cn, tx);
 
                     if (string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre))
                     {
                         await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "El auxiliar seleccionado no esta activo o ya no existe en el catalogo de Personal.";
-
+                        TempData["Error"] = "El auxiliar seleccionado no esta activo o ya no existe en el catalogo de Personal.";
                         return RedirectToAction(nameof(Index));
                     }
                 }
 
-                if (operadorPrincipalFinalId.HasValue &&
-                    operadorAuxiliarFinalId.HasValue &&
-                    operadorPrincipalFinalId.Value == operadorAuxiliarFinalId.Value)
+                if (operadorPrincipalFinalId.HasValue && operadorAuxiliarFinalId.HasValue && operadorPrincipalFinalId.Value == operadorAuxiliarFinalId.Value)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "El operador principal y el auxiliar de producción no pueden ser la misma persona.";
-
+                    TempData["Error"] = "El operador principal y el auxiliar de producción no pueden ser la misma persona.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (!string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) &&
-                    !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) &&
-                    string.Equals(
-                        operadorPrincipalFinalNombre.Trim(),
-                        operadorAuxiliarFinalNombre.Trim(),
-                        StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) && !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) && string.Equals(operadorPrincipalFinalNombre.Trim(), operadorAuxiliarFinalNombre.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "El operador principal y el auxiliar de producción no pueden ser la misma persona.";
-
+                    TempData["Error"] = "El operador principal y el auxiliar de producción no pueden ser la misma persona.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                // NSQ_ESCALA_OPERADORES_V5_BEGIN
-                if (!operadorPrincipalFinalId.HasValue &&
-                    string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "Indica el operador principal: selecciona uno de la lista o captura el nombre manual.";
-
+                    TempData["Error"] = "Indica el operador principal: selecciona uno de la lista o captura el nombre manual.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                var partePolivalenciaValidacion = await ResolverPartePolivalenciaProgramaAsync(
-                    programa.ProgramaProduccionID,
-                    programa.ParteID,
-                    cn,
-                    tx);
-
-                var tieneMatrizPolivalencia =
-                    partePolivalenciaValidacion.HasValue &&
-                    await ParteTienePolivalenciaProduccionAsync(
-                        partePolivalenciaValidacion.Value,
-                        cn,
-                        tx);
+                var partePolivalenciaValidacion = await ResolverPartePolivalenciaProgramaAsync(programa.ProgramaProduccionID, programa.ParteID, cn, tx);
+                var tieneMatrizPolivalencia = partePolivalenciaValidacion.HasValue && await ParteTienePolivalenciaProduccionAsync(partePolivalenciaValidacion.Value, cn, tx);
 
                 if (operadorPrincipalFinalId.HasValue)
                 {
                     if (tieneMatrizPolivalencia)
                     {
-                        var nivelSeleccionado = await ObtenerNivelPolivalenciaProduccionAsync(
-                            partePolivalenciaValidacion!.Value,
-                            operadorPrincipalFinalId.Value,
-                            cn,
-                            tx);
+                        var nivelSeleccionado = await ObtenerNivelPolivalenciaProduccionAsync(partePolivalenciaValidacion!.Value, operadorPrincipalFinalId.Value, cn, tx);
 
-                        if (!nivelSeleccionado.HasValue ||
-                            nivelSeleccionado.Value < 1 ||
-                            nivelSeleccionado.Value > 4)
+                        if (!nivelSeleccionado.HasValue || nivelSeleccionado.Value < 1 || nivelSeleccionado.Value > 4)
                         {
                             await tx.RollbackAsync();
-
-                            TempData["Error"] =
-                                "Para esta pieza, el operador seleccionado debe estar evaluado N1-N4 en la matriz de Polivalencia. " +
-                                "Si necesitas una excepcion, usa Nombre manual sin seleccionar operador.";
-
+                            TempData["Error"] = "Para esta pieza, el operador seleccionado debe estar evaluado N1-N4 en la matriz de Polivalencia. Si necesitas una excepcion, usa Nombre manual sin seleccionar operador.";
                             return RedirectToAction(nameof(Index));
                         }
                     }
-                    else if (!await PersonaEsOperadorActivoProduccionAsync(
-                                 operadorPrincipalFinalId.Value,
-                                 cn,
-                                 tx))
+                    else if (!await PersonaEsOperadorActivoProduccionAsync(operadorPrincipalFinalId.Value, cn, tx))
                     {
                         await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "La pieza no tiene matriz; selecciona una persona activa del catalogo de Operadores o captura el nombre manual.";
-
+                        TempData["Error"] = "La pieza no tiene matriz; selecciona una persona activa del catalogo de Operadores o captura su nombre manual.";
                         return RedirectToAction(nameof(Index));
                     }
                 }
 
-                if (operadorAuxiliarFinalId.HasValue &&
-                    !await PersonaEsAuxiliarActivoProduccionAsync(
-                        operadorAuxiliarFinalId.Value,
-                        cn,
-                        tx))
+                if (operadorAuxiliarFinalId.HasValue && !await PersonaEsAuxiliarActivoProduccionAsync(operadorAuxiliarFinalId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "El auxiliar debe seleccionarse del catalogo activo de Auxiliares.";
-
+                    TempData["Error"] = "El auxiliar debe seleccionarse del catalogo activo de Auxiliares.";
                     return RedirectToAction(nameof(Index));
                 }
-                // NSQ_ESCALA_OPERADORES_V5_END
 
-                // NSQ_PERSONAL_INICIO_V8_TECNICO_SMED
                 int? tecnicoProduccionFinalId = personalProgramado?.TecnicoID;
                 string? tecnicoProduccionFinalNombre = personalProgramado?.TecnicoNombre;
                 int? smedFinalId = personalProgramado?.SmedID;
                 string? smedFinalNombre = personalProgramado?.SmedNombre;
 
-                var apoyoYaProgramado =
-                    tecnicoProduccionFinalId.HasValue || smedFinalId.HasValue;
+                var apoyoYaProgramado = tecnicoProduccionFinalId.HasValue || smedFinalId.HasValue;
 
                 if (!apoyoYaProgramado)
                 {
-                    var responsableApoyo =
-                        Request.Form["responsableApoyo"].ToString().Trim();
+                    var responsableApoyo = Request.Form["responsableApoyo"].ToString().Trim();
 
                     if (!string.IsNullOrWhiteSpace(responsableApoyo))
                     {
-                        var partesApoyo = responsableApoyo.Split(
-                            ':',2,StringSplitOptions.TrimEntries);
+                        var partesApoyo = responsableApoyo.Split(':', 2, StringSplitOptions.TrimEntries);
 
-                        if (partesApoyo.Length != 2 ||
-                            !int.TryParse(partesApoyo[1],out var apoyoId) ||
-                            apoyoId <= 0)
+                        if (partesApoyo.Length != 2 || !int.TryParse(partesApoyo[1], out var apoyoId) || apoyoId <= 0)
                         {
                             await tx.RollbackAsync();
-                            TempData["Error"] =
-                                "El responsable Técnico/SMED seleccionado no es válido.";
+                            TempData["Error"] = "El responsable Técnico/SMED seleccionado no es válido.";
                             return RedirectToAction(nameof(Index));
                         }
 
-                        var tipoApoyo=partesApoyo[0].Trim().ToUpperInvariant();
-                        var validacionApoyo=
-                            await ValidarResponsableApoyoInicioV8Async(
-                                apoyoId,tipoApoyo,cn,tx);
+                        var tipoApoyo = partesApoyo[0].Trim().ToUpperInvariant();
+                        var validacionApoyo = await ValidarResponsableApoyoInicioV8Async(apoyoId, tipoApoyo, cn, tx);
 
-                        if (!validacionApoyo.Valido ||
-                            string.IsNullOrWhiteSpace(validacionApoyo.Nombre))
+                        if (!validacionApoyo.Valido || string.IsNullOrWhiteSpace(validacionApoyo.Nombre))
                         {
                             await tx.RollbackAsync();
-                            TempData["Error"] =
-                                "El responsable seleccionado ya no pertenece al catálogo activo de Técnico/SMED.";
+                            TempData["Error"] = "El responsable seleccionado ya no pertenece al catálogo activo de Técnico/SMED.";
                             return RedirectToAction(nameof(Index));
                         }
 
                         if (tipoApoyo == "SMED")
                         {
-                            smedFinalId=apoyoId;
-                            smedFinalNombre=validacionApoyo.Nombre;
+                            smedFinalId = apoyoId;
+                            smedFinalNombre = validacionApoyo.Nombre;
                         }
                         else
                         {
-                            tecnicoProduccionFinalId=apoyoId;
-                            tecnicoProduccionFinalNombre=validacionApoyo.Nombre;
+                            tecnicoProduccionFinalId = apoyoId;
+                            tecnicoProduccionFinalNombre = validacionApoyo.Nombre;
                         }
                     }
                 }
 
                 if (tecnicoProduccionFinalId.HasValue)
                 {
-                    var validoTec=await ValidarResponsableApoyoInicioV8Async(
-                        tecnicoProduccionFinalId.Value,"TECNICO",cn,tx);
+                    var validoTec = await ValidarResponsableApoyoInicioV8Async(tecnicoProduccionFinalId.Value, "TECNICO", cn, tx);
+
                     if (!validoTec.Valido)
                     {
                         await tx.RollbackAsync();
-                        TempData["Error"]="El Técnico programado ya no está activo o ya no corresponde al rol.";
+                        TempData["Error"] = "El Técnico programado ya no está activo o ya no corresponde al rol.";
                         return RedirectToAction(nameof(Index));
                     }
-                    tecnicoProduccionFinalNombre=validoTec.Nombre;
+
+                    tecnicoProduccionFinalNombre = validoTec.Nombre;
                 }
 
                 if (smedFinalId.HasValue)
                 {
-                    var validoSmed=await ValidarResponsableApoyoInicioV8Async(
-                        smedFinalId.Value,"SMED",cn,tx);
+                    var validoSmed = await ValidarResponsableApoyoInicioV8Async(smedFinalId.Value, "SMED", cn, tx);
+
                     if (!validoSmed.Valido)
                     {
                         await tx.RollbackAsync();
-                        TempData["Error"]="El SMED programado ya no está activo o ya no corresponde al rol.";
+                        TempData["Error"] = "El SMED programado ya no está activo o ya no corresponde al rol.";
                         return RedirectToAction(nameof(Index));
                     }
-                    smedFinalNombre=validoSmed.Nombre;
+
+                    smedFinalNombre = validoSmed.Nombre;
                 }
 
                 if (!tecnicoProduccionFinalId.HasValue && !smedFinalId.HasValue)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"]=
-                        "Para iniciar la preparación debe existir al menos un Técnico en Producción o un SMED.";
+                    TempData["Error"] = "Para iniciar la preparación debe existir al menos un Técnico en Producción o un SMED.";
                     return RedirectToAction(nameof(Index));
                 }
 
                 bool CoincideConOperadorOAuxiliar(int personaId)
                 {
-                    return
-                        (operadorPrincipalFinalId.HasValue &&
-                         operadorPrincipalFinalId.Value==personaId)
-                        ||
-                        (operadorAuxiliarFinalId.HasValue &&
-                         operadorAuxiliarFinalId.Value==personaId);
+                    return (operadorPrincipalFinalId.HasValue && operadorPrincipalFinalId.Value == personaId) || (operadorAuxiliarFinalId.HasValue && operadorAuxiliarFinalId.Value == personaId);
                 }
 
-                if (tecnicoProduccionFinalId.HasValue &&
-                    CoincideConOperadorOAuxiliar(tecnicoProduccionFinalId.Value))
+                if (tecnicoProduccionFinalId.HasValue && CoincideConOperadorOAuxiliar(tecnicoProduccionFinalId.Value))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"]=
-                        "El Técnico en Producción debe ser distinto del operador principal y del auxiliar.";
+                    TempData["Error"] = "El Técnico en Producción debe ser distinto del operador principal y del auxiliar.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (smedFinalId.HasValue &&
-                    CoincideConOperadorOAuxiliar(smedFinalId.Value))
+                if (smedFinalId.HasValue && CoincideConOperadorOAuxiliar(smedFinalId.Value))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"]=
-                        "El SMED debe ser distinto del operador principal y del auxiliar.";
+                    TempData["Error"] = "El SMED debe ser distinto del operador principal y del auxiliar.";
                     return RedirectToAction(nameof(Index));
                 }
 
-                await SincronizarCoberturaFaltanteInicioV8Async(
-                    programaProduccionId,DateTime.Now,programa.FechaInicioProgramada,
-                    tecnicoProduccionFinalId,smedFinalId,operadorAuxiliarFinalId,
-                    usuarioId,cn,tx);
-                // ============================================================
-                // PRODUCTO INCOMPLETO / ETIQUETAS BLANCAS
-                // Producción es quien decide y reserva al iniciar.
-                // ============================================================
-                var etiquetasBlancasValidadas =
-                    await ValidarEtiquetasBlancasInicioAsync(
-                        etiquetasBlancasSeleccionadas,
-                        programa,
-                        cn,
-                        tx);
+                await SincronizarCoberturaFaltanteInicioV8Async(programaProduccionId, DateTime.Now, programa.FechaInicioProgramada, tecnicoProduccionFinalId, smedFinalId, operadorAuxiliarFinalId, usuarioId, cn, tx);
 
-                var cantidadEtiquetaBlanca =
-                    etiquetasBlancasValidadas.Sum(x => x.CantidadPiezas);
-
-                var cantidadPlaneadaEjecucion =
-                    cantidadProgramadaPlaneacion - cantidadEtiquetaBlanca;
+                var etiquetasBlancasValidadas = await ValidarEtiquetasBlancasInicioAsync(etiquetasBlancasSeleccionadas, programa, cn, tx);
+                var cantidadEtiquetaBlanca = etiquetasBlancasValidadas.Sum(x => x.CantidadPiezas);
+                var cantidadPlaneadaEjecucion = cantidadProgramadaPlaneacion - cantidadEtiquetaBlanca;
 
                 if (cantidadPlaneadaEjecucion < 0)
-                {
-                    throw new InvalidOperationException(
-                        $"Las etiquetas blancas seleccionadas contienen {cantidadEtiquetaBlanca:N0} piezas, " +
-                        $"pero Planeación programó {cantidadProgramadaPlaneacion:N0} piezas.");
-                }
+                    throw new InvalidOperationException($"Las etiquetas blancas seleccionadas contienen {cantidadEtiquetaBlanca:N0} piezas, pero Planeación programó {cantidadProgramadaPlaneacion:N0} piezas.");
 
                 var observacionesFinales = observaciones;
+                var textoOperadores = "Operadores al iniciar preparación. Principal: " + operadorPrincipalFinalNombre!.Trim() + ".";
+                textoOperadores += !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) ? " Auxiliar: " + operadorAuxiliarFinalNombre.Trim() + "." : " Auxiliar: sin asignar.";
+                textoOperadores += !string.IsNullOrWhiteSpace(tecnicoProduccionFinalNombre) ? " Técnico en Producción: " + tecnicoProduccionFinalNombre.Trim() + "." : " Técnico en Producción: sin asignar.";
+                textoOperadores += !string.IsNullOrWhiteSpace(smedFinalNombre) ? " SMED: " + smedFinalNombre.Trim() + "." : " SMED: sin asignar.";
 
-                var textoOperadores =
-                    "Operadores al iniciar preparación. Principal: " +
-                    operadorPrincipalFinalNombre!.Trim() +
-                    ".";
+                if (parejaLhRh != null)
+                    textoOperadores += $" Producción conjunta LH/RH grupo {parejaLhRh.GrupoLhRh}; contraparte Programa {parejaLhRh.ProgramaParejaID}, {parejaLhRh.OFParejaTexto}.";
 
-                if (!string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre))
-                {
-                    textoOperadores +=
-                        " Auxiliar: " +
-                        operadorAuxiliarFinalNombre.Trim() +
-                        ".";
-                }
-                else
-                {
-                    textoOperadores +=
-                        " Auxiliar: sin asignar.";
-                }
-
-                if (!string.IsNullOrWhiteSpace(tecnicoProduccionFinalNombre))
-                {
-                    textoOperadores +=
-                        " Técnico en Producción: " +
-                        tecnicoProduccionFinalNombre.Trim() +
-                        ".";
-                }
-                else
-                {
-                    textoOperadores +=
-                        " Técnico en Producción: sin asignar.";
-                }
-
-                textoOperadores += !string.IsNullOrWhiteSpace(smedFinalNombre)
-                    ? " SMED: " + smedFinalNombre.Trim() + "."
-                    : " SMED: sin asignar.";
-
-                observacionesFinales =
-                    string.IsNullOrWhiteSpace(observacionesFinales)
-                        ? textoOperadores
-                        : observacionesFinales +
-                          Environment.NewLine +
-                          textoOperadores;
+                observacionesFinales = string.IsNullOrWhiteSpace(observacionesFinales) ? textoOperadores : observacionesFinales + Environment.NewLine + textoOperadores;
 
                 if (observacionesFinales.Length > 500)
                     observacionesFinales = observacionesFinales[..500];
 
-                // La ejecución nace con la cantidad NETA.
-                // Planeacion_ProgramaProduccion.CantidadProgramada NO se modifica.
-                var ejecucionId =
-                    await InsertarEjecucionAsync(
-                        programa,
-                        cantidadPlaneadaEjecucion,
-                        operadorPrincipalFinalId,
-                        operadorPrincipalFinalNombre,
-                        operadorAuxiliarFinalId,
-                        operadorAuxiliarFinalNombre,
-                        tecnicoProduccionFinalId,
-                        tecnicoProduccionFinalNombre,
-                        observacionesFinales,
-                        usuarioId,
-                        cn,
-                        tx);
+                var ejecucionId = await InsertarEjecucionAsync(programa, cantidadPlaneadaEjecucion, operadorPrincipalFinalId, operadorPrincipalFinalNombre, operadorAuxiliarFinalId, operadorAuxiliarFinalNombre, tecnicoProduccionFinalId, tecnicoProduccionFinalNombre, observacionesFinales, usuarioId, cn, tx);
 
-                // La reserva se hace después de obtener EjecucionProduccionID
-                // y dentro de la misma transacción.
-                await ReservarEtiquetasBlancasInicioAsync(
-                    etiquetasBlancasValidadas,
-                    programa,
-                    ejecucionId,
-                    usuarioId,
-                    cn,
-                    tx);
-
-                await SincronizarOperadorProgramaAsync(
-                    programaProduccionId,
-                    operadorPrincipalFinalId,
-                    "PRINCIPAL",
-                    usuarioId,
-                    cn,
-                    tx);
-
-                await SincronizarOperadorProgramaAsync(
-                    programaProduccionId,
-                    operadorAuxiliarFinalId,
-                    "AUXILIAR",
-                    usuarioId,
-                    cn,
-                    tx);
-
-                await MarcarProgramaEnPreparacionAsync(
-                    programaProduccionId,
-                    usuarioId,
-                    cn,
-                    tx);
-
+                await ReservarEtiquetasBlancasInicioAsync(etiquetasBlancasValidadas, programa, ejecucionId, usuarioId, cn, tx);
+                await SincronizarOperadorProgramaAsync(programaProduccionId, operadorPrincipalFinalId, "PRINCIPAL", usuarioId, cn, tx);
+                await SincronizarOperadorProgramaAsync(programaProduccionId, operadorAuxiliarFinalId, "AUXILIAR", usuarioId, cn, tx);
+                await MarcarProgramaEnPreparacionAsync(programaProduccionId, usuarioId, cn, tx);
                 await tx.CommitAsync();
 
-                var mensajeInicio =
-                    string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre)
-                        ? "Preparación iniciada correctamente con operador principal confirmado. Continúa con el checklist de arranque."
-                        : "Preparación iniciada correctamente con operador principal, auxiliar de producción y responsables confirmados. Continúa con el checklist de arranque.";
+                var mensajeInicio = string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre)
+                    ? "Preparación iniciada correctamente con operador principal confirmado. Continúa con el checklist de arranque."
+                    : "Preparación iniciada correctamente con operador principal, auxiliar de producción y responsables confirmados. Continúa con el checklist de arranque.";
 
                 if (cantidadEtiquetaBlanca > 0)
-                {
-                    mensajeInicio +=
-                        $" Se aplicaron {cantidadEtiquetaBlanca:N0} pieza(s) de etiqueta blanca. " +
-                        $"Planeación conserva {cantidadProgramadaPlaneacion:N0} pieza(s) programadas y " +
-                        $"Producción ejecutará {cantidadPlaneadaEjecucion:N0} pieza(s).";
-                }
+                    mensajeInicio += $" Se aplicaron {cantidadEtiquetaBlanca:N0} pieza(s) de etiqueta blanca. Planeación conserva {cantidadProgramadaPlaneacion:N0} pieza(s) programadas y Producción ejecutará {cantidadPlaneadaEjecucion:N0} pieza(s).";
+
+                if (parejaLhRh != null)
+                    mensajeInicio += $" Producción detectó la pareja LH/RH con {parejaLhRh.OFParejaTexto}. Ambas OF deben completar su preparación y liberación de Calidad antes de iniciar serie conjunta.";
 
                 TempData["Success"] = mensajeInicio;
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = ejecucionId });
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionId });
             }
             catch (Exception ex)
             {
@@ -2022,48 +1658,31 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 {
                 }
 
-                TempData["Error"] =
-                    "No fue posible iniciar la preparación: " +
-                    ex.Message;
-
+                TempData["Error"] = "No fue posible iniciar la preparación: " + ex.Message;
                 return RedirectToAction(nameof(Index));
             }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> IniciarSerie(
-    int ejecucionProduccionId)
+        public async Task<IActionResult> IniciarSerie(int ejecucionProduccionId, long? contadorMaquinaActual = null)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
 
             if (ejecucionProduccionId <= 0)
             {
-                TempData["Error"] =
-                    "No se recibió la ejecución de producción.";
-
+                TempData["Error"] = "No se recibió la ejecución de producción.";
                 return RedirectToAction(nameof(Index));
             }
 
             var usuarioId = ObtenerUsuarioID();
-
-            await using var cn =
-                new SqlConnection(ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
-            await using var tx =
-                (SqlTransaction)await cn.BeginTransactionAsync(
-                    IsolationLevel.Serializable);
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
-                var ejecucion =
-                    await ObtenerEjecucionAsync(
-                        ejecucionProduccionId,
-                        cn,
-                        tx);
+                var ejecucion = await ObtenerEjecucionAsync(ejecucionProduccionId, cn, tx);
 
                 if (ejecucion == null)
                 {
@@ -2071,186 +1690,376 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     return NotFound();
                 }
 
-                if (ejecucion.EstatusID ==
-                    ProduccionEstatus.EnProduccion)
+                var parejaLhRh = await ObtenerParejaLhRhProduccionAsync(
+                    ejecucion.ProgramaProduccionID,
+                    cn,
+                    tx);
+
+                ProduccionEjecucionVm? ejecucionPareja = null;
+
+                if (parejaLhRh != null)
                 {
-                    await tx.CommitAsync();
+                    if (!parejaLhRh.EsCompatibleFisicamente)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"La pareja LH/RH grupo {parejaLhRh.GrupoLhRh} ya no conserva la misma máquina, molde y ventana programada. Corrige Planeación antes de iniciar serie.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
 
-                    TempData["Info"] =
-                        "La producción ya se encuentra en serie.";
+                    if (!parejaLhRh.EjecucionParejaID.HasValue || parejaLhRh.EjecucionParejaID.Value <= 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"Esta OF pertenece a una producción conjunta LH/RH. Primero debes iniciar la preparación de {parejaLhRh.OFParejaTexto}. Las dos ejecuciones deben existir antes de iniciar serie.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
 
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
-                }
-
-                if (ejecucion.EstatusID !=
-                    ProduccionEstatus.EnPreparacion)
-                {
-                    await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "Solo puedes iniciar o reiniciar serie cuando " +
-                        "la ejecución está en preparación.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
-                }
-
-                var tieneParoAbierto =
-                    await TieneParoAbiertoAsync(
-                        ejecucionProduccionId,
+                    ejecucionPareja = await ObtenerEjecucionAsync(
+                        parejaLhRh.EjecucionParejaID.Value,
                         cn,
                         tx);
 
-                if (tieneParoAbierto)
-                {
-                    await tx.RollbackAsync();
+                    if (ejecucionPareja == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"No fue posible encontrar la ejecución activa de {parejaLhRh.OFParejaTexto}.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
 
-                    TempData["Error"] =
-                        "No puedes iniciar o reiniciar serie mientras " +
-                        "exista un paro abierto.";
+                    if (ejecucion.MaquinaID != ejecucionPareja.MaquinaID)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Las ejecuciones LH/RH ya no pertenecen a la misma máquina.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
 
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
+                    if (ejecucion.MoldeID.HasValue &&
+                       ejecucionPareja.MoldeID.HasValue &&
+                       ejecucion.MoldeID.Value != ejecucionPareja.MoldeID.Value)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Las ejecuciones LH/RH ya no tienen el mismo molde.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
                 }
 
-              
-                var configuracionCorrida =
-                    await ObtenerConfiguracionActualAsync(
-                        ejecucionProduccionId,
-                        cn,
-                        tx);
+                if (ejecucion.EstatusID == ProduccionEstatus.EnProduccion)
+                {
+                    if (ejecucionPareja == null)
+                    {
+                        await tx.CommitAsync();
+                        TempData["Info"] = "La producción ya se encuentra en serie.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (ejecucionPareja.EstatusID == ProduccionEstatus.EnProduccion)
+                    {
+                        await tx.CommitAsync();
+                        TempData["Info"] = $"La producción conjunta LH/RH grupo {parejaLhRh!.GrupoLhRh} ya se encuentra en serie.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Se detectó una inconsistencia LH/RH: el Programa {ejecucion.ProgramaProduccionID} está produciendo pero el Programa {ejecucionPareja.ProgramaProduccionID} no. No se permitirá incorporar una OF después del arranque.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                if (ejecucion.EstatusID != ProduccionEstatus.EnPreparacion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Solo puedes iniciar o reiniciar serie cuando la ejecución está en preparación.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                if (ejecucionPareja != null && ejecucionPareja.EstatusID != ProduccionEstatus.EnPreparacion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{parejaLhRh!.OFParejaTexto} todavía no está lista para el arranque conjunto. Su estado actual es {ProduccionEstatus.Nombre(ejecucionPareja.EstatusID)}. Ambas OF deben estar EN PREPARACIÓN.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                if (ejecucionPareja != null && !CoincidenOperadoresLhRh(ejecucion, ejecucionPareja))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Las OF LH/RH tienen operadores principales diferentes. Programa {ejecucion.ProgramaProduccionID}: {ejecucion.OperadorNombre ?? "sin operador"}. Programa {ejecucionPareja.ProgramaProduccionID}: {ejecucionPareja.OperadorNombre ?? "sin operador"}.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No puedes iniciar o reiniciar serie mientras exista un paro abierto.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                if (ejecucionPareja != null &&
+                   await TieneParoAbiertoAsync(ejecucionPareja.EjecucionProduccionID, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{parejaLhRh!.OFParejaTexto} todavía tiene un paro abierto. No se puede arrancar una producción LH/RH parcialmente.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                var configuracionCorrida = await ObtenerConfiguracionActualAsync(
+                    ejecucionProduccionId,
+                    cn,
+                    tx);
 
                 if (configuracionCorrida == null)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "Antes de iniciar Producción en serie, el Técnico de Producción debe confirmar " +
-                        "las cavidades que realmente se utilizarán, el tiempo de ciclo real y el contador actual de la máquina.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
+                    TempData["Error"] = "Antes de iniciar Producción en serie, el Técnico de Producción debe confirmar las cavidades que realmente se utilizarán, el tiempo de ciclo real y el contador actual de la máquina.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
                 }
 
                 if (configuracionCorrida.CavidadesUsadas <= 0)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La configuración real de Producción no tiene un número válido de cavidades.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
+                    TempData["Error"] = "La configuración real de Producción no tiene un número válido de cavidades.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
                 }
 
                 if (configuracionCorrida.TiempoCicloSegundos <= 0)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La configuración real de Producción no tiene un tiempo de ciclo válido.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
+                    TempData["Error"] = "La configuración real de Producción no tiene un tiempo de ciclo válido.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
                 }
 
                 if (!configuracionCorrida.ContadorInicioVigencia.HasValue)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La configuración real de Producción no tiene contador base. " +
-                        "El Técnico de Producción debe confirmar el contador actual de la máquina.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
+                    TempData["Error"] = "La configuración real de Producción no tiene contador base. El Técnico de Producción debe confirmar el contador actual de la máquina.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
                 }
 
-                // ============================================================
-                // CALIDAD
-                // ============================================================
-                var validacionCalidad =
-                    await ValidarInicioSerieCalidadAsync(
-                        ejecucionProduccionId,
+                ProduccionConfiguracionCorridaVm? configuracionPareja = null;
+
+                if (ejecucionPareja != null)
+                {
+                    configuracionPareja = await ObtenerConfiguracionActualAsync(
+                        ejecucionPareja.EjecucionProduccionID,
                         cn,
                         tx);
+
+                    if (configuracionPareja == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"{parejaLhRh!.OFParejaTexto} todavía no tiene configuración real de Producción.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (configuracionPareja.CavidadesUsadas <= 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"La configuración de {parejaLhRh!.OFParejaTexto} no tiene un número válido de cavidades.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (configuracionPareja.TiempoCicloSegundos <= 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"La configuración de {parejaLhRh!.OFParejaTexto} no tiene un tiempo de ciclo válido.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (!configuracionPareja.ContadorInicioVigencia.HasValue)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"La configuración de {parejaLhRh!.OFParejaTexto} no tiene contador base.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (Math.Abs(configuracionCorrida.TiempoCicloSegundos - configuracionPareja.TiempoCicloSegundos) > 0.0001m)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"Las OF LH/RH tienen tiempos de ciclo diferentes ({configuracionCorrida.TiempoCicloSegundos:0.####} s y {configuracionPareja.TiempoCicloSegundos:0.####} s). Ambas pertenecen al mismo ciclo físico de máquina.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (configuracionCorrida.ContadorInicioVigencia.Value != configuracionPareja.ContadorInicioVigencia.Value)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"Las OF LH/RH tienen contadores base diferentes ({configuracionCorrida.ContadorInicioVigencia.Value:N0} y {configuracionPareja.ContadorInicioVigencia.Value:N0}). Ambas deben partir del mismo contador físico.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+                }
+
+                var contextoReinicio = await ObtenerContextoReinicioSerieAsync(
+                    ejecucionProduccionId,
+                    cn,
+                    tx);
+
+                ContextoReinicioSerie? contextoReinicioPareja = null;
+
+                if (ejecucionPareja != null)
+                {
+                    contextoReinicioPareja = await ObtenerContextoReinicioSerieAsync(
+                        ejecucionPareja.EjecucionProduccionID,
+                        cn,
+                        tx);
+                }
+
+                var algunoTieneReinicio =
+                    contextoReinicio != null ||
+                    contextoReinicioPareja != null;
+
+                if (algunoTieneReinicio)
+                {
+                    if (!contadorMaquinaActual.HasValue)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Para reiniciar serie debes capturar el contador que muestra físicamente la máquina en este momento. Ese valor será la nueva base y evitará sumar los ciclos de la interrupción.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (contadorMaquinaActual.Value < 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El contador actual de la máquina no puede ser negativo.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+                }
+
+                var validacionCalidad = await ValidarInicioSerieCalidadAsync(
+                    ejecucionProduccionId,
+                    cn,
+                    tx);
 
                 if (!validacionCalidad.Permitido)
                 {
                     await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        validacionCalidad.Mensaje;
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id = ejecucionProduccionId
-                        });
+                    TempData["Error"] = validacionCalidad.Mensaje;
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
                 }
 
-                var contextoReinicio =
-                    await ObtenerContextoReinicioSerieAsync(
-                        ejecucionProduccionId,
+                ValidacionInicioSerieResultado? validacionCalidadPareja = null;
+
+                if (ejecucionPareja != null)
+                {
+                    validacionCalidadPareja = await ValidarInicioSerieCalidadAsync(
+                        ejecucionPareja.EjecucionProduccionID,
                         cn,
                         tx);
 
-                var ahora =
-                    NormalizarFechaMinuto(
-                        DateTime.Now);
+                    if (!validacionCalidadPareja.Permitido)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"{parejaLhRh!.OFParejaTexto} todavía no está liberada para iniciar serie. {validacionCalidadPareja.Mensaje}";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+                }
 
-                var esReinicio =
-                    contextoReinicio != null;
-
+                var ahora = NormalizarFechaMinuto(DateTime.Now);
                 var programasRecorridos = 0;
+                var esReinicio = contextoReinicio != null;
+                var esReinicioLhRh = false;
+                ContextoReinicioLhRhInterno? contextoFisicoLhRh = null;
 
-                if (esReinicio)
+                if (ejecucionPareja == null)
                 {
-                    /*
-                     * El reinicio de Producción es la fuente de verdad.
-                     * No usamos únicamente FechaFinParo porque después
-                     * puede existir espera de primeras piezas / Calidad.
-                     */
-                    programasRecorridos =
-     await _planeacionSecuenciaService.ReacomodarPorInterrupcionAsync(
-         ejecucion.ProgramaProduccionID,
-         ejecucionProduccionId,
-         contextoReinicio!.FechaInicioParo,
-         ahora,
-         usuarioId,
-         cn,
-         tx,
-         trabajarDomingo: false);
+                    if (contextoReinicio != null)
+                    {
+                        programasRecorridos = await _planeacionSecuenciaService.ReacomodarPorInterrupcionAsync(
+                            ejecucion.ProgramaProduccionID,
+                            ejecucionProduccionId,
+                            contextoReinicio.FechaInicioParo,
+                            ahora,
+                            usuarioId,
+                            cn,
+                            tx,
+                            trabajarDomingo: false);
+
+                        await RebasarContadorReinicioSerieAsync(
+                            ejecucionProduccionId,
+                            ejecucion.MaquinaID,
+                            contextoReinicio.ParoID,
+                            contadorMaquinaActual!.Value,
+                            ahora,
+                            usuarioId,
+                            cn,
+                            tx);
+                    }
+                }
+                else
+                {
+                    var ambosTienenReinicio =
+                        contextoReinicio != null &&
+                        contextoReinicioPareja != null;
+
+                    if (algunoTieneReinicio && !ambosTienenReinicio)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La producción LH/RH tiene un reinicio inconsistente: solamente una de las dos OF está pendiente de reinicio.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    if (ambosTienenReinicio)
+                    {
+                        contextoFisicoLhRh = await ObtenerContextoReinicioLhRhAsync(
+                            contextoReinicio!.ParoID,
+                            contextoReinicioPareja!.ParoID,
+                            ejecucion.EjecucionProduccionID,
+                            ejecucionPareja.EjecucionProduccionID,
+                            cn,
+                            tx);
+
+                        if (contextoFisicoLhRh == null)
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] = "Las dos OF no pertenecen al mismo paro físico LH/RH. No se realizará un reinicio parcial.";
+                            return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                        }
+
+                        esReinicio = true;
+                        esReinicioLhRh = true;
+
+                        var ejecucionRaiz =
+                            ejecucion.ProgramaProduccionID <= ejecucionPareja.ProgramaProduccionID
+                                ? ejecucion
+                                : ejecucionPareja;
+
+                        var ejecucionSecundaria =
+                            ejecucionRaiz.EjecucionProduccionID == ejecucion.EjecucionProduccionID
+                                ? ejecucionPareja
+                                : ejecucion;
+
+                        programasRecorridos = await _planeacionSecuenciaService.ReacomodarPorInterrupcionAsync(
+                            ejecucionRaiz.ProgramaProduccionID,
+                            ejecucionRaiz.EjecucionProduccionID,
+                            contextoFisicoLhRh.FechaInicioFisica,
+                            ahora,
+                            usuarioId,
+                            cn,
+                            tx,
+                            trabajarDomingo: false);
+
+                        await SincronizarFinParejaLhRhDesdeProgramaAsync(
+                            ejecucionRaiz.ProgramaProduccionID,
+                            ejecucionSecundaria.ProgramaProduccionID,
+                            usuarioId,
+                            cn,
+                            tx);
+
+                        await RebasarContadorReinicioSerieAsync(
+                            ejecucion.EjecucionProduccionID,
+                            ejecucion.MaquinaID,
+                            contextoReinicio.ParoID,
+                            contadorMaquinaActual!.Value,
+                            ahora,
+                            usuarioId,
+                            cn,
+                            tx);
+
+                        await RebasarContadorReinicioSerieAsync(
+                            ejecucionPareja.EjecucionProduccionID,
+                            ejecucionPareja.MaquinaID,
+                            contextoReinicioPareja.ParoID,
+                            contadorMaquinaActual.Value,
+                            ahora,
+                            usuarioId,
+                            cn,
+                            tx);
+                    }
                 }
 
                 await CambiarEstatusEjecucionAsync(
@@ -2280,19 +2089,58 @@ ORDER BY e.EjecucionProduccionID DESC;";
                     cn,
                     tx);
 
+                if (ejecucionPareja != null)
+                {
+                    await CambiarEstatusEjecucionAsync(
+                        ejecucionPareja.EjecucionProduccionID,
+                        ProduccionEstatus.EnProduccion,
+                        usuarioId,
+                        cn,
+                        tx);
+
+                    await MarcarProgramaEnProduccionAsync(
+                        ejecucionPareja.ProgramaProduccionID,
+                        ahora,
+                        usuarioId,
+                        cn,
+                        tx);
+
+                    await MarcarCalidadEnMonitoreoAsync(
+                        ejecucionPareja.EjecucionProduccionID,
+                        usuarioId,
+                        cn,
+                        tx);
+
+                    await RegistrarInicioSerieHistorialProduccionAsync(
+                        ejecucionPareja.EjecucionProduccionID,
+                        validacionCalidadPareja!.InspeccionID,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
+
                 await tx.CommitAsync();
 
-                if (esReinicio)
+                if (esReinicioLhRh)
                 {
                     TempData["Success"] =
-                        "Producción reiniciada correctamente. " +
-                        "Se recalculó la OF afectada y se recorrieron " +
-                        programasRecorridos +
-                        " programa(s) adicionales por cola de máquina y/o ocupación de molde. " +
-                        $"Configuración vigente: {configuracionCorrida.CavidadesUsadas:N0} cavidad(es), " +
-                        $"{configuracionCorrida.TiempoCicloSegundos:0.####} s de ciclo, " +
-                        $"objetivo aproximado {configuracionCorrida.ObjetivoHoraOperativo:N0} pzas/h. " +
-                        "Las capturas continuarán desde el contador de máquina.";
+                        $"Producción conjunta LH/RH reiniciada correctamente. Los Programas {ejecucion.ProgramaProduccionID} y {ejecucionPareja!.ProgramaProduccionID} regresaron juntos a producción a las {ahora:HH:mm}. " +
+                        $"El contador físico quedó rebasado en {contadorMaquinaActual!.Value:N0} para ambas OF. " +
+                        $"El impacto se calculó una sola vez desde {contextoFisicoLhRh!.FechaInicioFisica:dd/MM/yyyy HH:mm} hasta el reinicio real. " +
+                        $"Se recorrieron {programasRecorridos} programa(s) posteriores.";
+                }
+                else if (ejecucionPareja != null)
+                {
+                    TempData["Success"] =
+                        $"Producción conjunta LH/RH iniciada correctamente. Los Programas {ejecucion.ProgramaProduccionID} y {ejecucionPareja.ProgramaProduccionID} pasaron juntos a EN PRODUCCIÓN a las {ahora:HH:mm}. " +
+                        $"Grupo LH/RH: {parejaLhRh!.GrupoLhRh}. Ciclo físico compartido: {configuracionCorrida.TiempoCicloSegundos:0.####} s. Contador inicial compartido: {configuracionCorrida.ContadorInicioVigencia.Value:N0}.";
+                }
+                else if (esReinicio)
+                {
+                    TempData["Success"] =
+                        $"Producción reiniciada correctamente a las {ahora:HH:mm}. " +
+                        $"El contador físico quedó rebasado en {contadorMaquinaActual!.Value:N0}; los ciclos realizados durante la interrupción no se contabilizarán como producción de esta OF. " +
+                        $"Se recorrieron {programasRecorridos} programa(s) posteriores.";
                 }
                 else
                 {
@@ -2300,16 +2148,10 @@ ORDER BY e.EjecucionProduccionID DESC;";
                         "Producción en serie iniciada correctamente. " +
                         $"Configuración confirmada: {configuracionCorrida.CavidadesUsadas:N0} cavidad(es), " +
                         $"{configuracionCorrida.TiempoCicloSegundos:0.####} s de ciclo, " +
-                        $"objetivo aproximado {configuracionCorrida.ObjetivoHoraOperativo:N0} pzas/h. " +
-                        "El operador ya puede registrar el contador de máquina por hora.";
+                        $"objetivo aproximado {configuracionCorrida.ObjetivoHoraOperativo:N0} pzas/h. El operador ya puede registrar el contador de máquina por hora.";
                 }
 
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new
-                    {
-                        id = ejecucionProduccionId
-                    });
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
             }
             catch (Exception ex)
             {
@@ -2321,21 +2163,10 @@ ORDER BY e.EjecucionProduccionID DESC;";
                 {
                 }
 
-                TempData["Error"] =
-                    "No fue posible iniciar o reiniciar producción en serie: " +
-                    ex.Message;
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new
-                    {
-                        id = ejecucionProduccionId
-                    });
+                TempData["Error"] = "No fue posible iniciar o reiniciar producción en serie: " + ex.Message;
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
             }
         }
-
-
-
         private static async Task RegistrarInicioSerieHistorialProduccionAsync(
     int ejecucionProduccionId,
     int? inspeccionId,
@@ -2550,32 +2381,21 @@ WHERE ci.InspeccionID=@InspeccionID
             }
         }
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> IniciarParo(
-            ProduccionParoPostVm vm)
+        public async Task<IActionResult> IniciarParo(ProduccionParoPostVm vm)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (vm.EjecucionProduccionID <= 0) return RedirectToAction(nameof(Index));
 
             var usuarioId = ObtenerUsuarioID();
-
-            if (vm.EjecucionProduccionID <= 0)
-                return RedirectToAction(nameof(Index));
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
-                var ejecucion =
-                    await ObtenerEjecucionAsync(
-                        vm.EjecucionProduccionID,
-                        cn,
-                        tx);
+                var ejecucion = await ObtenerEjecucionAsync(vm.EjecucionProduccionID, cn, tx);
 
                 if (ejecucion == null)
                 {
@@ -2583,531 +2403,123 @@ WHERE ci.InspeccionID=@InspeccionID
                     return NotFound();
                 }
 
-                var tieneParoAbierto =
-                    await TieneParoAbiertoAsync(
-                        vm.EjecucionProduccionID,
-                        cn,
-                        tx);
-
-                if (tieneParoAbierto)
+                if (await TieneParoAbiertoAsync(ejecucion.EjecucionProduccionID, cn, tx))
                 {
                     await tx.RollbackAsync();
+                    TempData["Error"] = "Esta ejecución ya tiene un paro abierto.";
+                    return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                }
 
-                    TempData["Error"] =
-                        "Esta ejecución ya tiene un paro abierto.";
+                var parejaLhRh = await ObtenerParejaLhRhProduccionAsync(ejecucion.ProgramaProduccionID, cn, tx);
+                ProduccionEjecucionVm? ejecucionPareja = null;
 
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = vm.EjecucionProduccionID });
+                if (parejaLhRh != null)
+                {
+                    if (!parejaLhRh.EsCompatibleFisicamente)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"La pareja LH/RH grupo {parejaLhRh.GrupoLhRh} ya no conserva la misma máquina, molde y ventana programada. Corrige Planeación antes de registrar el paro.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    if (!parejaLhRh.EjecucionParejaID.HasValue || parejaLhRh.EjecucionParejaID.Value <= 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"No se encontró la ejecución activa de {parejaLhRh.OFParejaTexto}. Un paro físico LH/RH no puede afectar solamente una de las dos OF.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    ejecucionPareja = await ObtenerEjecucionAsync(parejaLhRh.EjecucionParejaID.Value, cn, tx);
+
+                    if (ejecucionPareja == null)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"No fue posible cargar la ejecución de {parejaLhRh.OFParejaTexto}.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion || ejecucionPareja.EstatusID != ProduccionEstatus.EnProduccion)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Un paro físico LH/RH solo puede iniciarse cuando las dos OF se encuentran EN PRODUCCIÓN.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    if (ejecucion.MaquinaID != ejecucionPareja.MaquinaID)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Las ejecuciones LH/RH ya no pertenecen a la misma máquina. No se puede registrar un paro conjunto.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    if (ejecucion.FechaLiberacionMaquina.HasValue || ejecucionPareja.FechaLiberacionMaquina.HasValue)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Una de las ejecuciones LH/RH ya tiene la máquina liberada. No se puede registrar un paro físico conjunto.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    if (await TieneParoAbiertoAsync(ejecucionPareja.EjecucionProduccionID, cn, tx))
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"{parejaLhRh.OFParejaTexto} ya tiene un paro abierto. No se creará un segundo paro sobre la misma producción física.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
                 }
 
                 var motivoTexto = vm.MotivoParoTexto;
 
                 if (vm.MotivoParoID.HasValue)
-                {
-                    motivoTexto =
-                        await ObtenerMotivoParoNombreAsync(
-                            vm.MotivoParoID.Value,
-                            cn,
-                            tx);
-                }
+                    motivoTexto = await ObtenerMotivoParoNombreAsync(vm.MotivoParoID.Value, cn, tx);
 
-                const string sqlInsert = @"
-INSERT INTO dbo.Produccion_Paros
-(
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    MaquinaID,
-    OperadorID,
-    FechaInicioParo,
-    MotivoParoID,
-    MotivoParoTexto,
-    Descripcion,
-    UsuarioCreacionID,
-    FechaCreacion,
-    Activo
-)
-VALUES
-(
-    @EjecucionProduccionID,
-    @ProgramaProduccionID,
-    @SolicitudProduccionID,
-    @MaquinaID,
-    @OperadorID,
-    GETDATE(),
-    @MotivoParoID,
-    @MotivoParoTexto,
-    @Descripcion,
-    @UsuarioID,
-    GETDATE(),
-    1
-);";
+                var fechaInicioParo = DateTime.Now;
+                Guid? grupoParoLhRh = ejecucionPareja != null ? Guid.NewGuid() : null;
 
-                await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
-                {
-                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value =
-                        ejecucion.EjecucionProduccionID;
-
-                    cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
-                        ejecucion.ProgramaProduccionID;
-
-                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value =
-                        (object?)ejecucion.SolicitudProduccionID ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value =
-                        (object?)ejecucion.MaquinaID ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value =
-                        (object?)ejecucion.OperadorID ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@MotivoParoID", SqlDbType.Int).Value =
-                        (object?)vm.MotivoParoID ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@MotivoParoTexto", SqlDbType.NVarChar, 200).Value =
-                        (object?)motivoTexto ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@Descripcion", SqlDbType.NVarChar, 500).Value =
-                        (object?)vm.Descripcion ?? DBNull.Value;
-
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value =
-                        usuarioId;
-
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-                await CambiarEstatusEjecucionAsync(
-                    ejecucion.EjecucionProduccionID,
-                    ProduccionEstatus.Pausado,
+                var paroPrincipalId = await InsertarParoProduccionInternoAsync(
+                    ejecucion,
+                    vm.MotivoParoID,
+                    motivoTexto,
+                    vm.Descripcion,
+                    fechaInicioParo,
+                    grupoParoLhRh,
+                    ejecucionPareja != null,
                     usuarioId,
                     cn,
                     tx);
 
-                await CambiarEstatusProgramaAsync(
-                    ejecucion.ProgramaProduccionID,
-                    ProgramaProduccionEstatus.Pausado,
-                    usuarioId,
-                    cn,
-                    tx);
+                int? paroParejaId = null;
 
-                await tx.CommitAsync();
-
-                TempData["Success"] =
-                    "Paro iniciado correctamente.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No fue posible iniciar el paro: " + ex.Message;
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
-            }
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CerrarParo(ProduccionCerrarParoPostVm vm)
-        {
-            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-            if (vm.ParoID <= 0)
-            {
-                TempData["Error"] = "No se recibió correctamente el paro.";
-                return RedirectToAction(nameof(Index));
-            }
-            var usuarioId = ObtenerUsuarioID();
-            await using var cn = new SqlConnection(ConnectionString);
-            await cn.OpenAsync();
-            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-            var ejecucionProduccionId = 0;
-            try
-            {
-                const string sqlLeer = @"SELECT TOP (1) ParoID,EjecucionProduccionID,FechaInicioParo FROM dbo.Produccion_Paros WITH (UPDLOCK,HOLDLOCK) WHERE ParoID=@ParoID AND Activo=1 AND FechaFinParo IS NULL;";
-                DateTime fechaInicioParo;
-                await using (var cmd = new SqlCommand(sqlLeer, cn, tx))
+                if (ejecucionPareja != null)
                 {
-                    cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = vm.ParoID;
-                    await using var rd = await cmd.ExecuteReaderAsync();
-                    if (!await rd.ReadAsync())
-                    {
-                        await tx.RollbackAsync();
-                        TempData["Error"] = "No se encontró un paro abierto para cerrar.";
-                        return RedirectToAction(nameof(Index));
-                    }
-                    ejecucionProduccionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
-                    fechaInicioParo = Convert.ToDateTime(rd["FechaInicioParo"]);
-                }
-                var duracionMinutos = (int)Math.Max(0, Math.Floor((DateTime.Now - fechaInicioParo).TotalMinutes));
-                var requiereReliberacion = duracionMinutos > 15;
-                const string sqlCerrar = @"UPDATE dbo.Produccion_Paros SET FechaFinParo=GETDATE(),DuracionMinutos=@DuracionMinutos,EsMayorA15Minutos=CASE WHEN @DuracionMinutos>15 THEN 1 ELSE 0 END,Descripcion=CASE WHEN @ObservacionesCierre IS NULL OR LTRIM(RTRIM(@ObservacionesCierre))=N'' THEN Descripcion WHEN Descripcion IS NULL OR LTRIM(RTRIM(Descripcion))=N'' THEN @ObservacionesCierre ELSE Descripcion+CHAR(13)+CHAR(10)+N'Cierre: '+@ObservacionesCierre END,UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE() WHERE ParoID=@ParoID AND EjecucionProduccionID=@EjecucionProduccionID AND Activo=1 AND FechaFinParo IS NULL; IF @@ROWCOUNT<>1 THROW 51400,'El paro cambió mientras se intentaba cerrar.',1;";
-                await using (var cmd = new SqlCommand(sqlCerrar, cn, tx))
-                {
-                    cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = vm.ParoID;
-                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                    cmd.Parameters.Add("@DuracionMinutos", SqlDbType.Int).Value = duracionMinutos;
-                    cmd.Parameters.Add("@ObservacionesCierre", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.ObservacionesCierre) ? DBNull.Value : vm.ObservacionesCierre.Trim();
-                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    await cmd.ExecuteNonQueryAsync();
-                }
-                var ejecucion = await ObtenerEjecucionAsync(ejecucionProduccionId, cn, tx);
-                if (ejecucion == null)
-                {
-                    await tx.RollbackAsync();
-                    return NotFound();
-                }
-                if (requiereReliberacion)
-                {
-                    await CambiarEstatusEjecucionAsync(ejecucionProduccionId, ProduccionEstatus.EnPreparacion, usuarioId, cn, tx);
-                    await CambiarEstatusProgramaAsync(ejecucion.ProgramaProduccionID, ProgramaProduccionEstatus.EnPreparacion, usuarioId, cn, tx);
-                    await CrearOActualizarSolicitudReliberacionCalidadPorParoAsync(ejecucionProduccionId, vm.ParoID, duracionMinutos, usuarioId, cn, tx);
-                    await tx.CommitAsync();
-                    TempData["Success"] = "Paro cerrado. Al superar 15 minutos, Producción regresó a preparación y Calidad debe autorizar la reliberación antes de reiniciar la serie.";
-                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
-                }
-                await CambiarEstatusEjecucionAsync(ejecucionProduccionId, ProduccionEstatus.EnProduccion, usuarioId, cn, tx);
-                await CambiarEstatusProgramaAsync(ejecucion.ProgramaProduccionID, ProgramaProduccionEstatus.EnProduccion, usuarioId, cn, tx);
-                await tx.CommitAsync();
-                TempData["Success"] = "Paro cerrado correctamente. La producción continúa en serie.";
-                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-                TempData["Error"] = "No fue posible cerrar el paro: " + ex.Message;
-                return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
-            }
-        }
-        private async Task CrearOActualizarSolicitudReliberacionCalidadPorParoAsync(int ejecucionProduccionId, int paroId, int duracionMinutos, int usuarioId, SqlConnection cn, SqlTransaction tx)
-        {
-            if (ejecucionProduccionId <= 0) throw new ArgumentException("La ejecución de producción no es válida.", nameof(ejecucionProduccionId));
-            if (paroId <= 0) throw new ArgumentException("El paro de producción no es válido.", nameof(paroId));
-            if (duracionMinutos <= 15) throw new InvalidOperationException("Solo se debe solicitar reliberación cuando el paro sea mayor a 15 minutos.");
-            const string sqlObtenerInspeccion = @"SELECT TOP (1) ci.InspeccionID,ci.Estado,ci.ChecklistArranqueID,ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK) WHERE ci.EjecucionProduccionID=@EjecucionProduccionID AND ISNULL(ci.Estado,N'')<>N'CERRADA' ORDER BY ci.InspeccionID DESC;";
-            int inspeccionId;
-            string estadoAnterior;
-            int? checklistArranqueId;
-            bool configuracionInvalidada;
-            await using (var cmd = new SqlCommand(sqlObtenerInspeccion, cn, tx))
-            {
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                await using var rd = await cmd.ExecuteReaderAsync();
-                if (!await rd.ReadAsync()) throw new InvalidOperationException("No existe una inspección activa de Calidad para esta ejecución. Primero debe completarse y enviarse el checklist de arranque.");
-                inspeccionId = Convert.ToInt32(rd["InspeccionID"]);
-                estadoAnterior = rd["Estado"] == DBNull.Value ? string.Empty : rd["Estado"].ToString() ?? string.Empty;
-                checklistArranqueId = rd["ChecklistArranqueID"] == DBNull.Value ? null : Convert.ToInt32(rd["ChecklistArranqueID"]);
-                configuracionInvalidada = rd["ConfiguracionInvalidada"] != DBNull.Value && Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
-            }
-            if (!checklistArranqueId.HasValue || checklistArranqueId.Value <= 0) throw new InvalidOperationException("La inspección de Calidad no tiene un checklist de arranque relacionado.");
-            if (configuracionInvalidada) throw new InvalidOperationException("La configuración de la inspección ya se encuentra invalidada. Calidad debe resolver esa condición antes de procesar la reliberación por paro.");
-            const string sqlValidarParo = @"SELECT COUNT(1) FROM dbo.Produccion_Paros WITH (UPDLOCK,HOLDLOCK) WHERE ParoID=@ParoID AND EjecucionProduccionID=@EjecucionProduccionID AND Activo=1 AND FechaFinParo IS NOT NULL AND ISNULL(EsMayorA15Minutos,0)=1;";
-            await using (var cmd = new SqlCommand(sqlValidarParo, cn, tx))
-            {
-                cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) <= 0) throw new InvalidOperationException("El paro no está cerrado, no pertenece a la ejecución o no fue marcado como mayor a 15 minutos.");
-            }
-            const string sqlExiste = @"SELECT TOP (1) ReliberacionID FROM dbo.Calidad_Reliberaciones WITH (UPDLOCK,HOLDLOCK) WHERE InspeccionID=@InspeccionID AND EjecucionProduccionID=@EjecucionProduccionID AND ParoID=@ParoID AND Activo=1;";
-            int? reliberacionId;
-            await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
-            {
-                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
-                var resultado = await cmd.ExecuteScalarAsync();
-                reliberacionId = resultado == null || resultado == DBNull.Value ? null : Convert.ToInt32(resultado);
-            }
-            var observacion = $"Solicitud automática de reliberación por paro mayor a 15 minutos. ParoID: {paroId}. Duración registrada: {duracionMinutos} minuto(s).";
-            const string sqlActualizarInspeccion = @"UPDATE dbo.Calidad_Inspecciones SET RequiereReliberacion=1,Liberado=0,Estado=N'PENDIENTE_RELIBERACION',ResultadoCalidad=NULL,Etiqueta=NULL,CincoDisparosSegregados=0,CantidadDisparosConformes=0,ValidacionDimensional=NULL,ValidacionApariencia=NULL,ValidacionGauge=NULL,ValidacionConductividad=NULL,FechaNotificacionCalidad=GETDATE(),UsuarioNotificoID=@UsuarioID,MotivoDevolucion=N'Paro mayor a 15 minutos. Se requieren cinco disparos y reliberación de Calidad.',Observaciones=CASE WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observacion ELSE Observaciones+CHAR(13)+CHAR(10)+@Observacion END,UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE() WHERE InspeccionID=@InspeccionID AND EjecucionProduccionID=@EjecucionProduccionID AND ISNULL(Estado,N'')<>N'CERRADA'; IF @@ROWCOUNT<>1 THROW 51401,'No fue posible marcar la inspección como pendiente de reliberación.',1;";
-            await using (var cmd = new SqlCommand(sqlActualizarInspeccion, cn, tx))
-            {
-                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                cmd.Parameters.Add("@Observacion", SqlDbType.NVarChar, 1000).Value = observacion;
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                await cmd.ExecuteNonQueryAsync();
-            }
-            if (reliberacionId.HasValue)
-            {
-                const string sqlReactivar = @"UPDATE dbo.Calidad_Reliberaciones SET Resultado=N'PENDIENTE',FechaSolicitud=GETDATE(),FechaValidacion=NULL,UsuarioSolicitudID=@UsuarioID,UsuarioCalidadID=NULL,Observaciones=CASE WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observacion ELSE Observaciones+CHAR(13)+CHAR(10)+@Observacion END,UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE() WHERE ReliberacionID=@ReliberacionID AND Activo=1;";
-                await using var cmd = new SqlCommand(sqlReactivar, cn, tx);
-                cmd.Parameters.Add("@ReliberacionID", SqlDbType.Int).Value = reliberacionId.Value;
-                cmd.Parameters.Add("@Observacion", SqlDbType.NVarChar, 1000).Value = "La solicitud de reliberación fue sincronizada nuevamente desde Producción.";
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                await cmd.ExecuteNonQueryAsync();
-            }
-            else
-            {
-                const string sqlInsertar = @"DECLARE @NumeroReliberacion INT; SELECT @NumeroReliberacion=ISNULL(MAX(NumeroReliberacion),0)+1 FROM dbo.Calidad_Reliberaciones WITH (UPDLOCK,HOLDLOCK) WHERE InspeccionID=@InspeccionID; INSERT INTO dbo.Calidad_Reliberaciones(InspeccionID,EjecucionProduccionID,ParoID,NumeroReliberacion,Motivo,FechaSolicitud,UsuarioSolicitudID,Resultado,Observaciones,UsuarioCreacionID,FechaCreacion,Activo) VALUES(@InspeccionID,@EjecucionProduccionID,@ParoID,@NumeroReliberacion,@Motivo,GETDATE(),@UsuarioID,N'PENDIENTE',@Observaciones,@UsuarioID,GETDATE(),1);";
-                await using var cmd = new SqlCommand(sqlInsertar, cn, tx);
-                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
-                cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
-                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = $"Paro mayor a 15 minutos. Duración registrada: {duracionMinutos} minuto(s).";
-                cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = "Producción debe ejecutar nuevamente cinco disparos de prueba y Calidad debe autorizar la reliberación antes de reiniciar la serie.";
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                await cmd.ExecuteNonQueryAsync();
-            }
-            const string sqlHistorial = @"INSERT INTO dbo.Calidad_InspeccionHistorial(InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,Etiqueta,Comentario,UsuarioID,FechaMovimiento) VALUES(@InspeccionID,N'SOLICITUD_RELIBERACION',@EstadoAnterior,N'PENDIENTE_RELIBERACION',NULL,NULL,@Comentario,@UsuarioID,GETDATE());";
-            await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
-            {
-                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
-                cmd.Parameters.Add("@EstadoAnterior", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(estadoAnterior) ? DBNull.Value : estadoAnterior;
-                cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = observacion + " Producción regresó a preparación y queda bloqueada hasta la autorización de Calidad.";
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                await cmd.ExecuteNonQueryAsync();
-            }
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Terminar(
-     ProduccionTerminarPostVm vm)
-        {
-            if (!UsuarioEnSesion())
-                return RedirectToAction(
-                    "Login",
-                    "Login");
-
-            if (vm.EjecucionProduccionID <= 0)
-            {
-                TempData["Error"] =
-                    "No se recibió una ejecución de Producción válida.";
-
-                return RedirectToAction(
-                    nameof(Index));
-            }
-
-            var usuarioId =
-                ObtenerUsuarioID();
-
-            await using var cn =
-                new SqlConnection(
-                    ConnectionString);
-
-            await cn.OpenAsync();
-
-            await using var tx =
-                (SqlTransaction)
-                await cn.BeginTransactionAsync(
-                    IsolationLevel.Serializable);
-
-            try
-            {
-                var ejecucion =
-                    await ObtenerEjecucionAsync(
-                        vm.EjecucionProduccionID,
+                    paroParejaId = await InsertarParoProduccionInternoAsync(
+                        ejecucionPareja,
+                        vm.MotivoParoID,
+                        motivoTexto,
+                        vm.Descripcion,
+                        fechaInicioParo,
+                        grupoParoLhRh,
+                        true,
+                        usuarioId,
                         cn,
                         tx);
-
-                if (ejecucion == null)
-                {
-                    await tx.RollbackAsync();
-
-                    return NotFound();
                 }
 
+                await CambiarEstatusEjecucionAsync(ejecucion.EjecucionProduccionID, ProduccionEstatus.Pausado, usuarioId, cn, tx);
+                await CambiarEstatusProgramaAsync(ejecucion.ProgramaProduccionID, ProgramaProduccionEstatus.Pausado, usuarioId, cn, tx);
 
-                /* ========================================================
-                   SOLO SE PUEDE TERMINAR UNA EJECUCIÓN QUE REALMENTE
-                   ESTÁ EN UN ESTADO TERMINABLE.
-                   ======================================================== */
-                if (!ProduccionEstatus.PuedeTerminar(
-                    ejecucion.EstatusID))
+                if (ejecucionPareja != null)
                 {
-                    await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La producción no se encuentra en un estado válido para terminar.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id =
-                                vm.EjecucionProduccionID
-                        });
+                    await CambiarEstatusEjecucionAsync(ejecucionPareja.EjecucionProduccionID, ProduccionEstatus.Pausado, usuarioId, cn, tx);
+                    await CambiarEstatusProgramaAsync(ejecucionPareja.ProgramaProduccionID, ProgramaProduccionEstatus.Pausado, usuarioId, cn, tx);
                 }
-
-
-               
-                await RecalcularTotalesEjecucionAsync(
-                    vm.EjecucionProduccionID,
-                    usuarioId,
-                    cn,
-                    tx);
-
-                var validacion =
-                    await ValidarTerminarProduccionAsync(
-                        vm.EjecucionProduccionID,
-                        cn,
-                        tx);
-
-                if (!validacion.Permitido)
-                {
-                    await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "No se puede terminar la producción porque existen pendientes: " +
-                        validacion.Mensaje;
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new
-                        {
-                            id =
-                                vm.EjecucionProduccionID
-                        });
-                }
-
-
-                /* ========================================================
-                   YA NO EXISTEN PENDIENTES.
-
-                   AHORA SÍ PUEDE TERMINAR.
-                   ======================================================== */
-                var estatusProduccion =
-                    vm.TerminarParcial
-                        ? ProduccionEstatus
-                            .TerminadoParcial
-                        : ProduccionEstatus
-                            .Terminado;
-
-
-                const string sqlCerrar = @"
-UPDATE dbo.Produccion_Ejecucion
-SET
-    FechaFinReal = GETDATE(),
-
-    EstatusID = @EstatusID,
-
-    Observaciones =
-        CASE
-            WHEN @Observaciones IS NULL
-                 OR LTRIM(RTRIM(@Observaciones)) = N''
-                THEN Observaciones
-
-            WHEN Observaciones IS NULL
-                 OR LTRIM(RTRIM(Observaciones)) = N''
-                THEN @Observaciones
-
-            ELSE
-                Observaciones
-                + CHAR(13)
-                + CHAR(10)
-                + @Observaciones
-        END,
-
-    UsuarioModificacionID =
-        @UsuarioID,
-
-    FechaModificacion =
-        GETDATE()
-
-WHERE EjecucionProduccionID =
-      @EjecucionProduccionID
-
-  AND Activo = 1
-
-  AND EstatusID IN
-  (
-      @EnProduccion,
-      @Pausado,
-      @TerminadoParcial
-  );
-
-IF @@ROWCOUNT <> 1
-    THROW 51090,
-          'La ejecución cambió de estado mientras se intentaba terminar.',
-          1;
-";
-
-
-                await using (
-                    var cmd =
-                        new SqlCommand(
-                            sqlCerrar,
-                            cn,
-                            tx))
-                {
-                    cmd.Parameters.Add(
-                        "@EjecucionProduccionID",
-                        SqlDbType.Int).Value =
-                        vm.EjecucionProduccionID;
-
-                    cmd.Parameters.Add(
-                        "@EstatusID",
-                        SqlDbType.Int).Value =
-                        estatusProduccion;
-
-                    cmd.Parameters.Add(
-                        "@EnProduccion",
-                        SqlDbType.Int).Value =
-                        ProduccionEstatus
-                            .EnProduccion;
-
-                    cmd.Parameters.Add(
-                        "@Pausado",
-                        SqlDbType.Int).Value =
-                        ProduccionEstatus
-                            .Pausado;
-
-                    cmd.Parameters.Add(
-                        "@TerminadoParcial",
-                        SqlDbType.Int).Value =
-                        ProduccionEstatus
-                            .TerminadoParcial;
-
-                    cmd.Parameters.Add(
-                        "@Observaciones",
-                        SqlDbType.NVarChar,
-                        500).Value =
-                        string.IsNullOrWhiteSpace(
-                            vm.Observaciones)
-                            ? DBNull.Value
-                            : vm.Observaciones.Trim();
-
-                    cmd.Parameters.Add(
-                        "@UsuarioID",
-                        SqlDbType.Int).Value =
-                        usuarioId;
-
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-
-                /* ========================================================
-                   PLANEACIÓN TAMBIÉN PASA A TERMINADO
-                   ======================================================== */
-                await MarcarProgramaTerminadoAsync(
-                    ejecucion.ProgramaProduccionID,
-                    usuarioId,
-                    cn,
-                    tx);
-
 
                 await tx.CommitAsync();
 
+                TempData["Success"] = ejecucionPareja == null
+                    ? $"Paro {paroPrincipalId} iniciado correctamente."
+                    : $"Paro físico LH/RH iniciado correctamente. Los Programas {ejecucion.ProgramaProduccionID} y {ejecucionPareja.ProgramaProduccionID} quedaron pausados en la misma operación. Paros relacionados: {paroPrincipalId} y {paroParejaId}.";
 
-                TempData["Success"] =
-                    vm.TerminarParcial
-                        ? "Producción terminada parcialmente. No existen pendientes de cajas ni de Calidad."
-                        : "Producción terminada correctamente. Todas las piezas fueron asignadas a cajas y no existen pendientes de Calidad.";
-
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new
-                    {
-                        id =
-                            vm.EjecucionProduccionID
-                    });
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
             catch (Exception ex)
             {
@@ -3119,18 +2531,1069 @@ IF @@ROWCOUNT <> 1
                 {
                 }
 
-                TempData["Error"] =
-                    "No fue posible terminar producción: " +
-                    ex.Message;
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new
-                    {
-                        id =
-                            vm.EjecucionProduccionID
-                    });
+                TempData["Error"] = "No fue posible iniciar el paro: " + ex.Message;
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CerrarParo(ProduccionCerrarParoPostVm vm)
+        {
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+            if (vm.ParoID <= 0)
+            {
+                TempData["Error"] = "No se recibió correctamente el paro.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            var ejecucionProduccionId = 0;
+
+            try
+            {
+                const string sqlLeer = @"
+SELECT TOP(1)
+    ParoID,
+    EjecucionProduccionID,
+    ProgramaProduccionID,
+    FechaInicioParo,
+    ISNULL(EsInterrupcionUrgente,0) AS EsInterrupcionUrgente,
+    ProgramaUrgenteID,
+    ISNULL(EsParoLhRh,0) AS EsParoLhRh,
+    GrupoParoLhRh
+FROM dbo.Produccion_Paros WITH(UPDLOCK,HOLDLOCK)
+WHERE ParoID=@ParoID
+  AND Activo=1
+  AND FechaFinParo IS NULL;";
+
+                int programaProduccionId;
+                DateTime fechaInicioParo;
+                bool esInterrupcionUrgente;
+                int? programaUrgenteId;
+                bool esParoLhRh;
+                Guid? grupoParoLhRh;
+
+                await using (var cmd = new SqlCommand(sqlLeer, cn, tx))
+                {
+                    cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = vm.ParoID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "No se encontró un paro abierto para cerrar.";
+                        return RedirectToAction(nameof(Index));
+                    }
+
+                    ejecucionProduccionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
+                    programaProduccionId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                    fechaInicioParo = Convert.ToDateTime(rd["FechaInicioParo"]);
+                    esInterrupcionUrgente = rd["EsInterrupcionUrgente"] != DBNull.Value && Convert.ToBoolean(rd["EsInterrupcionUrgente"]);
+                    programaUrgenteId = rd["ProgramaUrgenteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaUrgenteID"]);
+                    esParoLhRh = rd["EsParoLhRh"] != DBNull.Value && Convert.ToBoolean(rd["EsParoLhRh"]);
+                    grupoParoLhRh = rd["GrupoParoLhRh"] == DBNull.Value ? null : (Guid?)rd["GrupoParoLhRh"];
+                }
+
+                if (esInterrupcionUrgente)
+                {
+                    await tx.RollbackAsync();
+
+                    string referenciaUrgente;
+
+                    if (programaUrgenteId.HasValue)
+                    {
+                        await using var cmdUrgente = new SqlCommand(@"
+SELECT TOP(1) SolicitudProduccionID
+FROM dbo.Planeacion_ProgramaProduccion
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1;", cn);
+
+                        cmdUrgente.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaUrgenteId.Value;
+                        var resultadoUrgente = await cmdUrgente.ExecuteScalarAsync();
+
+                        referenciaUrgente = resultadoUrgente != null && resultadoUrgente != DBNull.Value
+                            ? $"OF {Convert.ToInt32(resultadoUrgente)}"
+                            : $"programa {programaUrgenteId.Value}";
+                    }
+                    else
+                    {
+                        referenciaUrgente = "la OF urgente";
+                    }
+
+                    TempData["Error"] = $"Este paro fue generado automáticamente por una interrupción urgente de Planeación y no puede cerrarse manualmente. Se cerrará automáticamente cuando termine {referenciaUrgente}.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                var ahora = DateTime.Now;
+                var observacionesCierre = string.IsNullOrWhiteSpace(vm.ObservacionesCierre) ? null : vm.ObservacionesCierre.Trim();
+
+                if (observacionesCierre?.Length > 500)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Las observaciones de cierre no pueden superar 500 caracteres.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                if (esParoLhRh)
+                {
+                    if (!grupoParoLhRh.HasValue)
+                        throw new InvalidOperationException("El paro está marcado como LH/RH pero no tiene identificador de grupo.");
+
+                    var parosGrupo = await ObtenerParosAbiertosGrupoLhRhAsync(grupoParoLhRh.Value, cn, tx);
+
+                    if (parosGrupo.Count != 2)
+                        throw new InvalidOperationException($"El grupo de paro LH/RH debería contener exactamente 2 paros abiertos y actualmente contiene {parosGrupo.Count}. No se realizará un cierre parcial.");
+
+                    if (parosGrupo.Any(x => x.EsInterrupcionUrgente))
+                        throw new InvalidOperationException("El grupo LH/RH contiene una interrupción urgente y no puede cerrarse manualmente.");
+
+                    var paroA = parosGrupo.OrderBy(x => x.ProgramaProduccionID).First();
+                    var paroB = parosGrupo.OrderBy(x => x.ProgramaProduccionID).Last();
+
+                    var relacionLhRh = await ObtenerParejaLhRhProduccionAsync(paroA.ProgramaProduccionID, cn, tx);
+
+                    if (relacionLhRh == null || relacionLhRh.ProgramaParejaID != paroB.ProgramaProduccionID)
+                        throw new InvalidOperationException("Los dos paros del grupo ya no corresponden a la misma pareja LH/RH de Planeación.");
+
+                    var ejecucionA = await ObtenerEjecucionAsync(paroA.EjecucionProduccionID, cn, tx);
+                    var ejecucionB = await ObtenerEjecucionAsync(paroB.EjecucionProduccionID, cn, tx);
+
+                    if (ejecucionA == null || ejecucionB == null)
+                        throw new InvalidOperationException("No fue posible encontrar las dos ejecuciones del paro LH/RH.");
+
+                    if (ejecucionA.EstatusID != ProduccionEstatus.Pausado || ejecucionB.EstatusID != ProduccionEstatus.Pausado)
+                        throw new InvalidOperationException("Las dos ejecuciones LH/RH deben permanecer pausadas hasta cerrar conjuntamente el paro.");
+
+                    const string sqlCerrarGrupo = @"
+UPDATE dbo.Produccion_Paros
+SET FechaFinParo=@FechaFin,
+    DuracionMinutos=DATEDIFF(MINUTE,FechaInicioParo,@FechaFin),
+    EsMayorA15Minutos=CASE WHEN DATEDIFF(MINUTE,FechaInicioParo,@FechaFin)>15 THEN 1 ELSE 0 END,
+    Descripcion=CASE
+        WHEN @ObservacionesCierre IS NULL OR LTRIM(RTRIM(@ObservacionesCierre))=N'' THEN Descripcion
+        WHEN Descripcion IS NULL OR LTRIM(RTRIM(Descripcion))=N'' THEN @ObservacionesCierre
+        ELSE Descripcion+CHAR(13)+CHAR(10)+N'Cierre: '+@ObservacionesCierre
+    END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE Activo=1
+  AND FechaFinParo IS NULL
+  AND ISNULL(EsParoLhRh,0)=1
+  AND GrupoParoLhRh=@GrupoParoLhRh
+  AND ISNULL(EsInterrupcionUrgente,0)=0;";
+
+                    int filasCerradas;
+
+                    await using (var cmd = new SqlCommand(sqlCerrarGrupo, cn, tx))
+                    {
+                        cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = ahora;
+                        cmd.Parameters.Add("@ObservacionesCierre", SqlDbType.NVarChar, 500).Value = (object?)observacionesCierre ?? DBNull.Value;
+                        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                        cmd.Parameters.Add("@GrupoParoLhRh", SqlDbType.UniqueIdentifier).Value = grupoParoLhRh.Value;
+                        filasCerradas = await cmd.ExecuteNonQueryAsync();
+                    }
+
+                    if (filasCerradas != 2)
+                        throw new InvalidOperationException("El grupo LH/RH cambió mientras se intentaba cerrar. No se aplicará un cierre parcial.");
+
+                    var fechaInicioFisica = parosGrupo.Min(x => x.FechaInicioParo);
+                    var duracionMinutos = (int)Math.Max(0, Math.Floor((ahora - fechaInicioFisica).TotalMinutes));
+                    var requiereReliberacion = duracionMinutos > 15;
+
+                    if (requiereReliberacion)
+                    {
+                        foreach (var paro in parosGrupo)
+                        {
+                            var ejecucionGrupo = paro.EjecucionProduccionID == ejecucionA.EjecucionProduccionID ? ejecucionA : ejecucionB;
+                            var duracionFila = (int)Math.Max(0, Math.Floor((ahora - paro.FechaInicioParo).TotalMinutes));
+
+                            await CambiarEstatusEjecucionAsync(ejecucionGrupo.EjecucionProduccionID, ProduccionEstatus.EnPreparacion, usuarioId, cn, tx);
+                            await CambiarEstatusProgramaAsync(ejecucionGrupo.ProgramaProduccionID, ProgramaProduccionEstatus.EnPreparacion, usuarioId, cn, tx);
+                            await CrearOActualizarSolicitudReliberacionCalidadPorParoAsync(ejecucionGrupo.EjecucionProduccionID, paro.ParoID, duracionFila, usuarioId, cn, tx);
+                        }
+
+                        await tx.CommitAsync();
+
+                        TempData["Success"] = $"Paro LH/RH cerrado después de {duracionMinutos} minuto(s). Las dos OF regresaron a preparación y ambas requieren reliberación de Calidad antes de reiniciar juntas.";
+                        return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                    }
+
+                    var programasRecorridos = await _planeacionSecuenciaService.ReacomodarPorInterrupcionAsync(
+                        ejecucionA.ProgramaProduccionID,
+                        ejecucionA.EjecucionProduccionID,
+                        fechaInicioFisica,
+                        ahora,
+                        usuarioId,
+                        cn,
+                        tx,
+                        trabajarDomingo: false);
+
+                    await SincronizarFinParejaLhRhDesdeProgramaAsync(ejecucionA.ProgramaProduccionID, ejecucionB.ProgramaProduccionID, usuarioId, cn, tx);
+
+                    await CambiarEstatusEjecucionAsync(ejecucionA.EjecucionProduccionID, ProduccionEstatus.EnProduccion, usuarioId, cn, tx);
+                    await CambiarEstatusProgramaAsync(ejecucionA.ProgramaProduccionID, ProgramaProduccionEstatus.EnProduccion, usuarioId, cn, tx);
+                    await CambiarEstatusEjecucionAsync(ejecucionB.EjecucionProduccionID, ProduccionEstatus.EnProduccion, usuarioId, cn, tx);
+                    await CambiarEstatusProgramaAsync(ejecucionB.ProgramaProduccionID, ProgramaProduccionEstatus.EnProduccion, usuarioId, cn, tx);
+
+                    await tx.CommitAsync();
+
+                    TempData["Success"] = $"Paro LH/RH cerrado correctamente después de {duracionMinutos} minuto(s). Las dos OF regresaron juntas a producción y se recorrieron {programasRecorridos} programa(s) posteriores.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                var duracionParo = (int)Math.Max(0, Math.Floor((ahora - fechaInicioParo).TotalMinutes));
+                var requiereReliberacionIndividual = duracionParo > 15;
+
+                const string sqlCerrarIndividual = @"
+UPDATE dbo.Produccion_Paros
+SET FechaFinParo=@FechaFin,
+    DuracionMinutos=@DuracionMinutos,
+    EsMayorA15Minutos=CASE WHEN @DuracionMinutos>15 THEN 1 ELSE 0 END,
+    Descripcion=CASE
+        WHEN @ObservacionesCierre IS NULL OR LTRIM(RTRIM(@ObservacionesCierre))=N'' THEN Descripcion
+        WHEN Descripcion IS NULL OR LTRIM(RTRIM(Descripcion))=N'' THEN @ObservacionesCierre
+        ELSE Descripcion+CHAR(13)+CHAR(10)+N'Cierre: '+@ObservacionesCierre
+    END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE ParoID=@ParoID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaFinParo IS NULL
+  AND ISNULL(EsInterrupcionUrgente,0)=0
+  AND ISNULL(EsParoLhRh,0)=0;
+
+IF @@ROWCOUNT<>1
+    THROW 51400,'El paro cambió mientras se intentaba cerrar o no corresponde a un paro individual cerrable manualmente.',1;";
+
+                await using (var cmd = new SqlCommand(sqlCerrarIndividual, cn, tx))
+                {
+                    cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = ahora;
+                    cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = vm.ParoID;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                    cmd.Parameters.Add("@DuracionMinutos", SqlDbType.Int).Value = duracionParo;
+                    cmd.Parameters.Add("@ObservacionesCierre", SqlDbType.NVarChar, 500).Value = (object?)observacionesCierre ?? DBNull.Value;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                var ejecucion = await ObtenerEjecucionAsync(ejecucionProduccionId, cn, tx);
+
+                if (ejecucion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                if (requiereReliberacionIndividual)
+                {
+                    await CambiarEstatusEjecucionAsync(ejecucionProduccionId, ProduccionEstatus.EnPreparacion, usuarioId, cn, tx);
+                    await CambiarEstatusProgramaAsync(ejecucion.ProgramaProduccionID, ProgramaProduccionEstatus.EnPreparacion, usuarioId, cn, tx);
+                    await CrearOActualizarSolicitudReliberacionCalidadPorParoAsync(ejecucionProduccionId, vm.ParoID, duracionParo, usuarioId, cn, tx);
+                    await tx.CommitAsync();
+
+                    TempData["Success"] = "Paro cerrado. Al superar 15 minutos, Producción regresó a preparación y Calidad debe autorizar la reliberación antes de reiniciar la serie.";
+                    return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+                }
+
+                var programasRecorridosIndividual = await _planeacionSecuenciaService.ReacomodarPorInterrupcionAsync(
+                    ejecucion.ProgramaProduccionID,
+                    ejecucionProduccionId,
+                    fechaInicioParo,
+                    ahora,
+                    usuarioId,
+                    cn,
+                    tx,
+                    trabajarDomingo: false);
+
+                await CambiarEstatusEjecucionAsync(ejecucionProduccionId, ProduccionEstatus.EnProduccion, usuarioId, cn, tx);
+                await CambiarEstatusProgramaAsync(ejecucion.ProgramaProduccionID, ProgramaProduccionEstatus.EnProduccion, usuarioId, cn, tx);
+                await tx.CommitAsync();
+
+                TempData["Success"] = $"Paro cerrado correctamente. La producción continúa en serie y se recorrieron {programasRecorridosIndividual} programa(s) posteriores por el tiempo real del paro.";
+                return RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId });
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] = "No fue posible cerrar el paro: " + ex.Message;
+
+                return ejecucionProduccionId > 0
+                    ? RedirectToAction(nameof(Detalle), new { id = ejecucionProduccionId })
+                    : RedirectToAction(nameof(Index));
+            }
+        }
+
+        private static async Task<int?> ObtenerProgramaUrgenteRaizInterrupcionAsync(int programaUrgenteId, int? programaUrgenteParejaId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT TOP(1) ProgramaUrgenteID
+FROM dbo.Produccion_Paros WITH(UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+  AND FechaFinParo IS NULL
+  AND ISNULL(EsInterrupcionUrgente,0)=1
+  AND
+  (
+      ProgramaUrgenteID=@ProgramaUrgenteID
+      OR
+      (
+          @ProgramaUrgenteParejaID IS NOT NULL
+          AND ProgramaUrgenteID=@ProgramaUrgenteParejaID
+      )
+  )
+ORDER BY ParoID DESC;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteId;
+            cmd.Parameters.Add("@ProgramaUrgenteParejaID", SqlDbType.Int).Value = (object?)programaUrgenteParejaId ?? DBNull.Value;
+            var result = await cmd.ExecuteScalarAsync();
+            return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
+        }
+        private static async Task<bool> TodasEjecucionesUrgentesConcluyeronFisicamenteAsync(int programaUrgenteRaizId, int? programaUrgenteParejaId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+DECLARE @Esperadas INT=CASE WHEN @ProgramaUrgenteParejaID IS NULL THEN 1 ELSE 2 END;
+DECLARE @Concluidas INT;
+SELECT @Concluidas=COUNT(DISTINCT e.ProgramaProduccionID)
+FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+WHERE e.Activo=1
+  AND
+  (
+      e.ProgramaProduccionID=@ProgramaUrgenteRaizID
+      OR
+      (
+          @ProgramaUrgenteParejaID IS NOT NULL
+          AND e.ProgramaProduccionID=@ProgramaUrgenteParejaID
+      )
+  )
+  AND
+  (
+      e.FechaLiberacionMaquina IS NOT NULL
+      OR e.FechaFinReal IS NOT NULL
+      OR e.EstatusID IN(5,6,9)
+  );
+SELECT CASE WHEN ISNULL(@Concluidas,0)=@Esperadas THEN 1 ELSE 0 END;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaUrgenteRaizID", SqlDbType.Int).Value = programaUrgenteRaizId;
+            cmd.Parameters.Add("@ProgramaUrgenteParejaID", SqlDbType.Int).Value = (object?)programaUrgenteParejaId ?? DBNull.Value;
+            return Convert.ToInt32(await cmd.ExecuteScalarAsync()) == 1;
+        }
+        private static async Task<List<InterrupcionUrgenteRetornoContexto>> ObtenerInterrupcionesUrgentesRetornoAsync(int programaUrgenteRaizId, SqlConnection cn, SqlTransaction tx)
+        {
+            var lista = new List<InterrupcionUrgenteRetornoContexto>();
+            const string sql = @"
+SELECT
+    p.ParoID,
+    p.EjecucionProduccionID AS EjecucionInterrumpidaID,
+    p.ProgramaProduccionID AS ProgramaInterrumpidoID,
+    p.ProgramaUrgenteID,
+    p.MaquinaID,
+    p.FechaInicioParo,
+    ISNULL(p.EsParoLhRh,0) AS EsParoLhRh,
+    p.GrupoParoLhRh,
+    e.EstatusID AS EstatusEjecucionInterrumpida,
+    ppOrigen.MoldeID AS MoldeInterrumpidoID,
+    ppUrgente.MoldeID AS MoldeUrgenteID
+FROM dbo.Produccion_Paros p WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+    ON e.EjecucionProduccionID=p.EjecucionProduccionID
+   AND e.ProgramaProduccionID=p.ProgramaProduccionID
+   AND e.Activo=1
+LEFT JOIN dbo.Planeacion_ProgramaProduccion ppOrigen WITH(UPDLOCK,HOLDLOCK)
+    ON ppOrigen.ProgramaProduccionID=p.ProgramaProduccionID
+   AND ppOrigen.Activo=1
+LEFT JOIN dbo.Planeacion_ProgramaProduccion ppUrgente WITH(UPDLOCK,HOLDLOCK)
+    ON ppUrgente.ProgramaProduccionID=p.ProgramaUrgenteID
+   AND ppUrgente.Activo=1
+WHERE p.Activo=1
+  AND p.FechaFinParo IS NULL
+  AND ISNULL(p.EsInterrupcionUrgente,0)=1
+  AND p.ProgramaUrgenteID=@ProgramaUrgenteID
+ORDER BY p.ProgramaProduccionID,p.ParoID;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteRaizId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new InterrupcionUrgenteRetornoContexto
+                {
+                    ParoID = Convert.ToInt32(rd["ParoID"]),
+                    EjecucionInterrumpidaID = Convert.ToInt32(rd["EjecucionInterrumpidaID"]),
+                    ProgramaInterrumpidoID = Convert.ToInt32(rd["ProgramaInterrumpidoID"]),
+                    ProgramaUrgenteID = Convert.ToInt32(rd["ProgramaUrgenteID"]),
+                    MaquinaID = rd["MaquinaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaID"]),
+                    FechaInicioParo = Convert.ToDateTime(rd["FechaInicioParo"]),
+                    EsParoLhRh = rd["EsParoLhRh"] != DBNull.Value && Convert.ToBoolean(rd["EsParoLhRh"]),
+                    GrupoParoLhRh = rd["GrupoParoLhRh"] == DBNull.Value ? null : (Guid?)rd["GrupoParoLhRh"],
+                    EstatusEjecucionInterrumpida = Convert.ToInt32(rd["EstatusEjecucionInterrumpida"]),
+                    MoldeInterrumpidoID = rd["MoldeInterrumpidoID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeInterrumpidoID"]),
+                    MoldeUrgenteID = rd["MoldeUrgenteID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeUrgenteID"])
+                });
+            }
+            return lista;
+        }
+        private async Task CrearOActualizarSolicitudReliberacionCalidadPorParoAsync(int ejecucionProduccionId, int paroId, int duracionMinutos, int usuarioId, SqlConnection cn, SqlTransaction tx, bool forzarReliberacion = false)
+        {
+            if (ejecucionProduccionId <= 0) throw new ArgumentException("La ejecución de producción no es válida.", nameof(ejecucionProduccionId));
+            if (paroId <= 0) throw new ArgumentException("El paro de producción no es válido.", nameof(paroId));
+            if (duracionMinutos <= 15 && !forzarReliberacion) throw new InvalidOperationException("Solo se debe solicitar reliberación cuando el paro sea mayor a 15 minutos o exista una condición especial que obligue a reliberar.");
+
+            const string sqlObtenerInspeccion = @"SELECT TOP(1) ci.InspeccionID,ci.Estado,ci.ChecklistArranqueID,ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada FROM dbo.Calidad_Inspecciones ci WITH(UPDLOCK,HOLDLOCK) WHERE ci.EjecucionProduccionID=@EjecucionProduccionID AND ISNULL(ci.Estado,N'')<>N'CERRADA' ORDER BY ci.InspeccionID DESC;";
+            int inspeccionId;
+            string estadoAnterior;
+            int? checklistArranqueId;
+            bool configuracionInvalidada;
+
+            await using (var cmd = new SqlCommand(sqlObtenerInspeccion, cn, tx))
+            {
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync()) throw new InvalidOperationException("No existe una inspección activa de Calidad para esta ejecución. Primero debe completarse y enviarse el checklist de arranque.");
+                inspeccionId = Convert.ToInt32(rd["InspeccionID"]);
+                estadoAnterior = rd["Estado"] == DBNull.Value ? string.Empty : rd["Estado"].ToString() ?? string.Empty;
+                checklistArranqueId = rd["ChecklistArranqueID"] == DBNull.Value ? null : Convert.ToInt32(rd["ChecklistArranqueID"]);
+                configuracionInvalidada = rd["ConfiguracionInvalidada"] != DBNull.Value && Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+            }
+
+            if (!checklistArranqueId.HasValue || checklistArranqueId.Value <= 0) throw new InvalidOperationException("La inspección de Calidad no tiene un checklist de arranque relacionado.");
+            if (configuracionInvalidada) throw new InvalidOperationException("La configuración de la inspección ya se encuentra invalidada. Calidad debe resolver esa condición antes de procesar la reliberación.");
+
+            const string sqlValidarParo = @"
+SELECT COUNT(1)
+FROM dbo.Produccion_Paros WITH(UPDLOCK,HOLDLOCK)
+WHERE ParoID=@ParoID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaFinParo IS NOT NULL
+  AND
+  (
+      ISNULL(EsMayorA15Minutos,0)=1
+      OR (@ForzarReliberacion=1 AND ISNULL(EsInterrupcionUrgente,0)=1)
+  );";
+
+            await using (var cmd = new SqlCommand(sqlValidarParo, cn, tx))
+            {
+                cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                cmd.Parameters.Add("@ForzarReliberacion", SqlDbType.Bit).Value = forzarReliberacion;
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) <= 0) throw new InvalidOperationException("El paro no está cerrado o no cumple las condiciones necesarias para solicitar reliberación.");
+            }
+
+            const string sqlExiste = @"SELECT TOP(1) ReliberacionID FROM dbo.Calidad_Reliberaciones WITH(UPDLOCK,HOLDLOCK) WHERE InspeccionID=@InspeccionID AND EjecucionProduccionID=@EjecucionProduccionID AND ParoID=@ParoID AND Activo=1;";
+            int? reliberacionId;
+
+            await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
+            {
+                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
+                var resultado = await cmd.ExecuteScalarAsync();
+                reliberacionId = resultado == null || resultado == DBNull.Value ? null : Convert.ToInt32(resultado);
+            }
+
+            var motivo = forzarReliberacion
+                ? $"Interrupción urgente con cambio de molde. Duración registrada: {duracionMinutos} minuto(s). Se requieren primeras piezas y nueva autorización de Calidad."
+                : $"Paro mayor a 15 minutos. Duración registrada: {duracionMinutos} minuto(s).";
+
+            var observacion = $"Solicitud automática de reliberación. ParoID: {paroId}. {motivo}";
+
+            const string sqlActualizarInspeccion = @"UPDATE dbo.Calidad_Inspecciones SET RequiereReliberacion=1,Liberado=0,Estado=N'PENDIENTE_RELIBERACION',ResultadoCalidad=NULL,Etiqueta=NULL,CincoDisparosSegregados=0,CantidadDisparosConformes=0,ValidacionDimensional=NULL,ValidacionApariencia=NULL,ValidacionGauge=NULL,ValidacionConductividad=NULL,FechaNotificacionCalidad=GETDATE(),UsuarioNotificoID=@UsuarioID,MotivoDevolucion=@Motivo,Observaciones=CASE WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observacion ELSE Observaciones+CHAR(13)+CHAR(10)+@Observacion END,UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE() WHERE InspeccionID=@InspeccionID AND EjecucionProduccionID=@EjecucionProduccionID AND ISNULL(Estado,N'')<>N'CERRADA'; IF @@ROWCOUNT<>1 THROW 51401,'No fue posible marcar la inspección como pendiente de reliberación.',1;";
+
+            await using (var cmd = new SqlCommand(sqlActualizarInspeccion, cn, tx))
+            {
+                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = motivo.Length > 500 ? motivo[..500] : motivo;
+                cmd.Parameters.Add("@Observacion", SqlDbType.NVarChar, 1000).Value = observacion.Length > 1000 ? observacion[..1000] : observacion;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            if (reliberacionId.HasValue)
+            {
+                const string sqlReactivar = @"UPDATE dbo.Calidad_Reliberaciones SET Resultado=N'PENDIENTE',FechaSolicitud=GETDATE(),FechaValidacion=NULL,UsuarioSolicitudID=@UsuarioID,UsuarioCalidadID=NULL,Motivo=@Motivo,Observaciones=CASE WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observacion ELSE Observaciones+CHAR(13)+CHAR(10)+@Observacion END,UsuarioModificacionID=@UsuarioID,FechaModificacion=GETDATE() WHERE ReliberacionID=@ReliberacionID AND Activo=1;";
+                await using var cmd = new SqlCommand(sqlReactivar, cn, tx);
+                cmd.Parameters.Add("@ReliberacionID", SqlDbType.Int).Value = reliberacionId.Value;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = motivo.Length > 500 ? motivo[..500] : motivo;
+                cmd.Parameters.Add("@Observacion", SqlDbType.NVarChar, 1000).Value = observacion.Length > 1000 ? observacion[..1000] : observacion;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                const string sqlInsertar = @"DECLARE @NumeroReliberacion INT; SELECT @NumeroReliberacion=ISNULL(MAX(NumeroReliberacion),0)+1 FROM dbo.Calidad_Reliberaciones WITH(UPDLOCK,HOLDLOCK) WHERE InspeccionID=@InspeccionID; INSERT INTO dbo.Calidad_Reliberaciones(InspeccionID,EjecucionProduccionID,ParoID,NumeroReliberacion,Motivo,FechaSolicitud,UsuarioSolicitudID,Resultado,Observaciones,UsuarioCreacionID,FechaCreacion,Activo) VALUES(@InspeccionID,@EjecucionProduccionID,@ParoID,@NumeroReliberacion,@Motivo,GETDATE(),@UsuarioID,N'PENDIENTE',@Observacion,@UsuarioID,GETDATE(),1);";
+                await using var cmd = new SqlCommand(sqlInsertar, cn, tx);
+                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+                cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500).Value = motivo.Length > 500 ? motivo[..500] : motivo;
+                cmd.Parameters.Add("@Observacion", SqlDbType.NVarChar, 1000).Value = observacion.Length > 1000 ? observacion[..1000] : observacion;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlHistorial = @"INSERT INTO dbo.Calidad_InspeccionHistorial(InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,Etiqueta,Comentario,UsuarioID,FechaMovimiento) VALUES(@InspeccionID,N'SOLICITUD_RELIBERACION',@EstadoAnterior,N'PENDIENTE_RELIBERACION',NULL,NULL,@Comentario,@UsuarioID,GETDATE());";
+
+            await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
+            {
+                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+                cmd.Parameters.Add("@EstadoAnterior", SqlDbType.NVarChar, 50).Value = string.IsNullOrWhiteSpace(estadoAnterior) ? DBNull.Value : estadoAnterior;
+                cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 1000).Value = observacion.Length > 1000 ? observacion[..1000] : observacion;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        private static async Task ReactivarCambioMoldeRetornoUrgenteAsync(int programaProduccionId, int paroId, DateTime fechaRetorno, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            var observacion = $"NSQ_RETORNO_URGENTE:ParoID={paroId}; Cambio de molde obligatorio para regresar a la OF interrumpida después de finalizar la producción urgente.";
+            if (observacion.Length > 500) observacion = observacion[..500];
+            const string sql = @"
+DECLARE @PreparacionAnticipadaID INT;
+SELECT TOP(1) @PreparacionAnticipadaID=PreparacionAnticipadaID
+FROM dbo.Produccion_PreparacionAnticipada WITH(UPDLOCK,HOLDLOCK)
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND TipoTarea=N'CAMBIO_MOLDE'
+ORDER BY PreparacionAnticipadaID DESC;
+IF @PreparacionAnticipadaID IS NULL
+BEGIN
+    INSERT INTO dbo.Produccion_PreparacionAnticipada
+    (
+        ProgramaProduccionID,TipoTarea,FechaObjetivo,FechaAviso,Estado,
+        UsuarioConfirmacionID,FechaConfirmacion,Observaciones,Activo,
+        UsuarioCreacionID,FechaCreacion,UsuarioInicioID,FechaInicioReal,
+        FechaFinReal,DuracionRealMinutos,LimiteMinutosAplicado,
+        ExcedioLimite,MotivoExceso
+    )
+    VALUES
+    (
+        @ProgramaProduccionID,N'CAMBIO_MOLDE',@FechaRetorno,@FechaRetorno,N'PENDIENTE',
+        NULL,NULL,@Observaciones,1,@UsuarioID,SYSDATETIME(),NULL,NULL,NULL,NULL,NULL,0,NULL
+    );
+END
+ELSE
+BEGIN
+    UPDATE dbo.Produccion_PreparacionAnticipada
+    SET FechaObjetivo=@FechaRetorno,
+        FechaAviso=@FechaRetorno,
+        Estado=N'PENDIENTE',
+        UsuarioInicioID=NULL,
+        FechaInicioReal=NULL,
+        FechaFinReal=NULL,
+        DuracionRealMinutos=NULL,
+        LimiteMinutosAplicado=NULL,
+        ExcedioLimite=0,
+        MotivoExceso=NULL,
+        UsuarioConfirmacionID=NULL,
+        FechaConfirmacion=NULL,
+        Observaciones=LEFT
+        (
+            @Observaciones+
+            CASE
+                WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN N''
+                ELSE CHAR(13)+CHAR(10)+Observaciones
+            END,
+            500
+        ),
+        Activo=1,
+        UsuarioModificacionID=@UsuarioID,
+        FechaModificacion=SYSDATETIME()
+    WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID;
+END;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            cmd.Parameters.Add("@FechaRetorno", SqlDbType.DateTime2).Value = fechaRetorno;
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = observacion;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
+        }
+        private static async Task<string?> ObtenerBloqueoCambioMoldeRetornoUrgenteAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (ejecucionProduccionId <= 0) return null;
+            const string sql = @"
+SELECT TOP(1)
+    p.ParoID,
+    p.FechaFinParo,
+    tarea.Estado,
+    tarea.FechaConfirmacion
+FROM dbo.Produccion_Paros p WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Planeacion_ProgramaProduccion origen WITH(UPDLOCK,HOLDLOCK)
+    ON origen.ProgramaProduccionID=p.ProgramaProduccionID
+   AND origen.Activo=1
+INNER JOIN dbo.Planeacion_ProgramaProduccion urgente WITH(UPDLOCK,HOLDLOCK)
+    ON urgente.ProgramaProduccionID=p.ProgramaUrgenteID
+   AND urgente.Activo=1
+OUTER APPLY
+(
+    SELECT TOP(1)
+        pa.Estado,
+        pa.FechaConfirmacion
+    FROM dbo.Produccion_PreparacionAnticipada pa WITH(UPDLOCK,HOLDLOCK)
+    WHERE pa.ProgramaProduccionID=p.ProgramaProduccionID
+      AND pa.TipoTarea=N'CAMBIO_MOLDE'
+    ORDER BY pa.PreparacionAnticipadaID DESC
+) tarea
+WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+  AND p.Activo=1
+  AND p.FechaFinParo IS NOT NULL
+  AND ISNULL(p.EsInterrupcionUrgente,0)=1
+  AND ISNULL(origen.MoldeID,-1)<>ISNULL(urgente.MoldeID,-1)
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_InspeccionHistorial h
+      INNER JOIN dbo.Calidad_Inspecciones ci
+          ON ci.InspeccionID=h.InspeccionID
+      WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
+        AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+        AND h.FechaMovimiento>=p.FechaFinParo
+  )
+ORDER BY p.FechaFinParo DESC,p.ParoID DESC;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return null;
+            var paroId = Convert.ToInt32(rd["ParoID"]);
+            var fechaFinParo = Convert.ToDateTime(rd["FechaFinParo"]);
+            var estado = rd["Estado"] == DBNull.Value ? string.Empty : rd["Estado"]?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
+            var fechaConfirmacion = rd["FechaConfirmacion"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaConfirmacion"]);
+            if (estado == "CONFIRMADA" && fechaConfirmacion.HasValue && fechaConfirmacion.Value >= fechaFinParo) return null;
+            if (estado == "EN_PROCESO") return $"El cambio de molde para regresar de la interrupción urgente del paro {paroId} todavía está en proceso. Finalízalo antes de reiniciar la serie.";
+            if (estado == "CONFIRMADA") return $"Existe una confirmación de cambio de molde, pero es anterior al cierre de la interrupción urgente del paro {paroId}. Debe confirmarse nuevamente el montaje del molde original.";
+            return $"La OF proviene de una interrupción urgente con cambio de molde. Debes realizar y confirmar el cambio de molde de retorno correspondiente al paro {paroId} antes de reiniciar Producción.";
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Terminar(ProduccionTerminarPostVm vm)
+        {
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
+            if (vm.EjecucionProduccionID <= 0)
+            {
+                TempData["Error"] = "No se recibió una ejecución de Producción válida.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            try
+            {
+                var ejecucion = await ObtenerEjecucionAsync(
+                    vm.EjecucionProduccionID,
+                    cn,
+                    tx);
+
+                if (ejecucion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                if (!ProduccionEstatus.PuedeTerminar(ejecucion.EstatusID))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La producción no se encuentra en un estado válido para terminar.";
+                    return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                }
+
+                await RecalcularTotalesEjecucionAsync(
+                    vm.EjecucionProduccionID,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                var validacion = await ValidarTerminarProduccionAsync(
+                    vm.EjecucionProduccionID,
+                    cn,
+                    tx);
+
+                if (!validacion.Permitido)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No se puede terminar la producción porque existen pendientes: " + validacion.Mensaje;
+                    return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                }
+
+                var estatusProduccion = vm.TerminarParcial
+                    ? ProduccionEstatus.TerminadoParcial
+                    : ProduccionEstatus.Terminado;
+
+                const string sqlCerrar = @"
+UPDATE dbo.Produccion_Ejecucion
+SET FechaFinReal=GETDATE(),
+    EstatusID=@EstatusID,
+    Observaciones=
+        CASE
+            WHEN @Observaciones IS NULL OR LTRIM(RTRIM(@Observaciones))=N''
+                THEN Observaciones
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                THEN @Observaciones
+            ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones
+        END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND EstatusID IN(@EnProduccion,@Pausado,@TerminadoParcial);
+
+IF @@ROWCOUNT<>1
+    THROW 51090,'La ejecución cambió de estado mientras se intentaba terminar.',1;";
+
+                await using (var cmd = new SqlCommand(sqlCerrar, cn, tx))
+                {
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                    cmd.Parameters.Add("@EstatusID", SqlDbType.Int).Value = estatusProduccion;
+                    cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
+                    cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = ProduccionEstatus.Pausado;
+                    cmd.Parameters.Add("@TerminadoParcial", SqlDbType.Int).Value = ProduccionEstatus.TerminadoParcial;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value =
+                        string.IsNullOrWhiteSpace(vm.Observaciones)
+                            ? DBNull.Value
+                            : vm.Observaciones.Trim();
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await MarcarProgramaTerminadoAsync(
+                    ejecucion.ProgramaProduccionID,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await tx.CommitAsync();
+
+                TempData["Success"] = vm.TerminarParcial
+                    ? "Producción terminada parcialmente. No existen pendientes de cajas ni de Calidad."
+                    : "Producción terminada correctamente. Todas las piezas fueron asignadas a cajas y no existen pendientes de Calidad.";
+
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] = "No fue posible terminar producción: " + ex.Message;
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+            }
+        }
+        private async Task<InterrupcionUrgenteRetornoResultado?> ProcesarRetornoInterrupcionUrgenteAsync(int programaUrgenteId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            var relacionUrgenteInicial = await ObtenerParejaLhRhProduccionAsync(programaUrgenteId, cn, tx);
+            var programaUrgenteRaizId = await ObtenerProgramaUrgenteRaizInterrupcionAsync(
+                programaUrgenteId,
+                relacionUrgenteInicial?.ProgramaParejaID,
+                cn,
+                tx);
+
+            if (!programaUrgenteRaizId.HasValue) return null;
+
+            var relacionUrgenteRaiz = await ObtenerParejaLhRhProduccionAsync(programaUrgenteRaizId.Value, cn, tx);
+            var programaUrgenteParejaId = relacionUrgenteRaiz?.ProgramaParejaID;
+
+            if (!await TodasEjecucionesUrgentesConcluyeronFisicamenteAsync(
+                programaUrgenteRaizId.Value,
+                programaUrgenteParejaId,
+                cn,
+                tx))
+            {
+                return null;
+            }
+
+            var contextos = await ObtenerInterrupcionesUrgentesRetornoAsync(
+                programaUrgenteRaizId.Value,
+                cn,
+                tx);
+
+            if (contextos.Count == 0) return null;
+
+            if (contextos.Count > 2)
+                throw new InvalidOperationException("La interrupción urgente tiene más de dos ejecuciones originales relacionadas. Revisa los datos antes de procesar el retorno.");
+
+            if (contextos.Any(x => x.EstatusEjecucionInterrumpida != ProduccionEstatus.Pausado))
+                throw new InvalidOperationException("Una de las OF interrumpidas ya no se encuentra pausada. No es seguro ejecutar el retorno.");
+
+            var esLhRh = contextos.Any(x => x.EsParoLhRh);
+
+            if (esLhRh)
+            {
+                if (contextos.Count != 2)
+                    throw new InvalidOperationException("La interrupción urgente LH/RH no contiene exactamente dos paros relacionados. No se realizará un retorno parcial.");
+
+                if (contextos.Any(x => !x.EsParoLhRh))
+                    throw new InvalidOperationException("La interrupción contiene una mezcla inválida de paro individual y paro LH/RH.");
+
+                var grupo = contextos[0].GrupoParoLhRh;
+
+                if (!grupo.HasValue || contextos.Any(x => x.GrupoParoLhRh != grupo))
+                    throw new InvalidOperationException("Los dos paros urgentes LH/RH no pertenecen al mismo grupo físico.");
+
+                var relacionOriginal = await ObtenerParejaLhRhProduccionAsync(
+                    contextos[0].ProgramaInterrumpidoID,
+                    cn,
+                    tx);
+
+                if (relacionOriginal == null ||
+                   relacionOriginal.ProgramaParejaID != contextos[1].ProgramaInterrumpidoID)
+                {
+                    throw new InvalidOperationException("Los dos paros urgentes ya no corresponden a la misma pareja LH/RH.");
+                }
+
+                if (contextos.Select(x => x.CambiaMolde).Distinct().Count() > 1)
+                    throw new InvalidOperationException("La pareja LH/RH presenta una inconsistencia de molde respecto de la OF urgente.");
+            }
+            else if (contextos.Count != 1)
+            {
+                throw new InvalidOperationException("Se encontraron varios paros individuales asociados a la misma interrupción urgente.");
+            }
+
+            var ahora = NormalizarFechaMinuto(DateTime.Now);
+            var fechaInicioFisica = contextos.Min(x => x.FechaInicioParo);
+            var duracionMinutos = (int)Math.Max(0, Math.Floor((ahora - fechaInicioFisica).TotalMinutes));
+            var cambiaMolde = contextos.Any(x => x.CambiaMolde);
+            var requiereReliberacion = cambiaMolde || duracionMinutos > 15;
+
+            const string sqlCerrar = @"
+UPDATE dbo.Produccion_Paros
+SET FechaFinParo=@FechaFin,
+    DuracionMinutos=DATEDIFF(MINUTE,FechaInicioParo,@FechaFin),
+    EsMayorA15Minutos=CASE WHEN DATEDIFF(MINUTE,FechaInicioParo,@FechaFin)>15 THEN 1 ELSE 0 END,
+    Descripcion=CASE
+        WHEN Descripcion IS NULL OR LTRIM(RTRIM(Descripcion))=N''
+            THEN N'Interrupción urgente finalizada. La producción prioritaria liberó la máquina y la OF interrumpida queda pendiente de reinicio real.'
+        ELSE Descripcion+CHAR(13)+CHAR(10)+N'Cierre: la producción urgente liberó físicamente la máquina. La OF original queda pendiente de reinicio real y rebase de contador.'
+    END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE Activo=1
+  AND FechaFinParo IS NULL
+  AND ISNULL(EsInterrupcionUrgente,0)=1
+  AND ProgramaUrgenteID=@ProgramaUrgenteID;";
+
+            int filasCerradas;
+
+            await using (var cmd = new SqlCommand(sqlCerrar, cn, tx))
+            {
+                cmd.Parameters.Add("@FechaFin", SqlDbType.DateTime).Value = ahora;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteRaizId.Value;
+                filasCerradas = await cmd.ExecuteNonQueryAsync();
+            }
+
+            if (filasCerradas != contextos.Count)
+                throw new InvalidOperationException("La interrupción urgente cambió mientras se procesaba el retorno. No se aplicará un cierre parcial.");
+
+            foreach (var contexto in contextos)
+            {
+                var duracionFila = (int)Math.Max(
+                    0,
+                    Math.Floor((ahora - contexto.FechaInicioParo).TotalMinutes));
+
+                await CambiarEstatusEjecucionAsync(
+                    contexto.EjecucionInterrumpidaID,
+                    ProduccionEstatus.EnPreparacion,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                await CambiarEstatusProgramaAsync(
+                    contexto.ProgramaInterrumpidoID,
+                    ProgramaProduccionEstatus.EnPreparacion,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                if (requiereReliberacion)
+                {
+                    if (contexto.CambiaMolde)
+                    {
+                        await ReactivarCambioMoldeRetornoUrgenteAsync(
+                            contexto.ProgramaInterrumpidoID,
+                            contexto.ParoID,
+                            ahora,
+                            usuarioId,
+                            cn,
+                            tx);
+                    }
+
+                    await CrearOActualizarSolicitudReliberacionCalidadPorParoAsync(
+                        contexto.EjecucionInterrumpidaID,
+                        contexto.ParoID,
+                        duracionFila,
+                        usuarioId,
+                        cn,
+                        tx,
+                        forzarReliberacion: contexto.CambiaMolde);
+                }
+                else
+                {
+                    await PrepararCalidadReinicioUrgenteSinReliberacionAsync(
+                        contexto.EjecucionInterrumpidaID,
+                        contexto.ParoID,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
+            }
+
+            var principal = contextos
+                .OrderBy(x => x.ProgramaInterrumpidoID)
+                .First();
+
+            return new InterrupcionUrgenteRetornoResultado
+            {
+                ParoID = principal.ParoID,
+                EjecucionInterrumpidaID = principal.EjecucionInterrumpidaID,
+                ProgramaInterrumpidoID = principal.ProgramaInterrumpidoID,
+                DuracionMinutos = duracionMinutos,
+                CambiaMolde = cambiaMolde,
+                RequiereReliberacion = requiereReliberacion,
+                ProgramasRecorridos = 0
+            };
+        }
+        private static async Task PrepararCalidadReinicioUrgenteSinReliberacionAsync(int ejecucionProduccionId, int paroId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+DECLARE @InspeccionID INT;
+DECLARE @EstadoAnterior NVARCHAR(50);
+DECLARE @ResultadoCalidad NVARCHAR(50);
+DECLARE @Etiqueta NVARCHAR(50);
+DECLARE @Liberado BIT;
+DECLARE @ConfiguracionInvalidada BIT;
+
+SELECT TOP(1)
+    @InspeccionID=ci.InspeccionID,
+    @EstadoAnterior=ci.Estado,
+    @ResultadoCalidad=ci.ResultadoCalidad,
+    @Etiqueta=ci.Etiqueta,
+    @Liberado=ISNULL(ci.Liberado,0),
+    @ConfiguracionInvalidada=ISNULL(ci.ConfiguracionInvalidada,0)
+FROM dbo.Calidad_Inspecciones ci WITH(UPDLOCK,HOLDLOCK)
+WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
+  AND ISNULL(ci.Estado,N'')<>N'CERRADA'
+ORDER BY ci.InspeccionID DESC;
+
+IF @InspeccionID IS NULL
+    THROW 51640,'No existe una inspección activa de Calidad para regresar a la OF interrumpida.',1;
+
+IF ISNULL(@ConfiguracionInvalidada,0)=1
+    THROW 51641,'La configuración de Calidad está invalidada. No es seguro reiniciar automáticamente después de la urgencia.',1;
+
+IF ISNULL(@Liberado,0)=0
+   OR UPPER(LTRIM(RTRIM(ISNULL(@ResultadoCalidad,N''))))<>N'VERDE'
+   OR UPPER(LTRIM(RTRIM(ISNULL(@Etiqueta,N''))))<>N'VERDE'
+    THROW 51642,'La OF interrumpida ya no conserva una liberación verde válida de Calidad.',1;
+
+UPDATE dbo.Calidad_Inspecciones
+SET Estado=N'PRODUCCION_LIBERADA',
+    RequiereReliberacion=0,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE InspeccionID=@InspeccionID;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'RETORNO_URGENTE_SIN_RELIBERACION',
+    @EstadoAnterior,
+    N'PRODUCCION_LIBERADA',
+    @ResultadoCalidad,
+    @Etiqueta,
+    N'La interrupción urgente terminó sin cambio de molde y sin superar 15 minutos. Se conserva la liberación verde previa; Producción debe confirmar el contador actual y reiniciar serie.',
+    @UsuarioID,
+    GETDATE()
+);";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await cmd.ExecuteNonQueryAsync();
+        }
+        private async Task RebasarContadorReinicioSerieAsync(int ejecucionProduccionId, int? maquinaId, int paroId, long contadorMaquinaActual, DateTime fechaReinicio, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (ejecucionProduccionId <= 0)
+                throw new InvalidOperationException("La ejecución no es válida para rebasar el contador.");
+
+            if (contadorMaquinaActual < 0)
+                throw new InvalidOperationException("El contador actual de la máquina no puede ser negativo.");
+
+            var configuracion = await ObtenerConfiguracionActualAsync(
+                ejecucionProduccionId,
+                cn,
+                tx);
+
+            if (configuracion == null)
+                throw new InvalidOperationException("No existe una configuración vigente para establecer la nueva base del contador.");
+
+            var ultimaLectura = await ObtenerUltimaLecturaContadorAsync(
+                ejecucionProduccionId,
+                cn,
+                tx);
+
+            var huboReinicioFisico =
+                ultimaLectura != null &&
+                contadorMaquinaActual < ultimaLectura.ValorContador;
+
+            var tipoLectura = huboReinicioFisico
+                ? ProduccionTipoLecturaContador.ReinicioContador
+                : "REBASE_REINICIO_SERIE";
+
+            var motivoReinicio = huboReinicioFisico
+                ? $"Al reiniciar serie después del ParoID {paroId}, el contador físico capturado ({contadorMaquinaActual:N0}) fue menor a la última lectura de esta ejecución ({ultimaLectura!.ValorContador:N0})."
+                : null;
+
+            var observaciones =
+                $"Nueva base lógica del contador al reiniciar serie después del ParoID {paroId}. " +
+                $"Contador físico confirmado: {contadorMaquinaActual:N0}. " +
+                "Esta lectura evita atribuir a la OF reiniciada los ciclos realizados durante la interrupción, preparación o producción urgente.";
+
+            await RegistrarLecturaContadorConfiguracionAsync(
+                ejecucionProduccionId,
+                configuracion.ConfiguracionCorridaID,
+                maquinaId,
+                tipoLectura,
+                contadorMaquinaActual,
+                fechaReinicio,
+                huboReinicioFisico,
+                motivoReinicio,
+                observaciones,
+                usuarioId,
+                cn,
+                tx);
         }
         private async Task<ProduccionEjecucionVm?> ObtenerEjecucionAsync(int ejecucionProduccionId, SqlConnection cn)
         {
@@ -7690,127 +8153,150 @@ WHERE ProgramaProduccionID = @ProgramaProduccionID
 
             await cmd.ExecuteNonQueryAsync();
         }
-
-
-        private async Task<bool> EsReinicioSeriePendienteAsync(
-    int ejecucionProduccionId,
-    SqlConnection cn)
+        private async Task<bool> EsReinicioSeriePendienteAsync(int ejecucionProduccionId, SqlConnection cn)
         {
+            if (ejecucionProduccionId <= 0) return false;
+
             const string sql = @"
-SELECT
-    CASE
-        WHEN EXISTS
+SELECT CASE
+    WHEN EXISTS
+    (
+        SELECT 1
+        FROM dbo.Produccion_Paros p
+        OUTER APPLY
         (
-            SELECT 1
-            FROM dbo.Produccion_Paros p
-            INNER JOIN dbo.Calidad_Reliberaciones r
-                ON r.ParoID = p.ParoID
-               AND r.EjecucionProduccionID = p.EjecucionProduccionID
-               AND r.Activo = 1
-            WHERE p.EjecucionProduccionID = @EjecucionProduccionID
-              AND p.Activo = 1
-              AND p.FechaFinParo IS NOT NULL
-              AND ISNULL(p.EsMayorA15Minutos, 0) = 1
-              AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado, N'')))) = N'AUTORIZADA'
-              AND NOT EXISTS
+            SELECT TOP(1)
+                r.ReliberacionID,
+                r.Resultado,
+                r.FechaValidacion
+            FROM dbo.Calidad_Reliberaciones r
+            WHERE r.ParoID=p.ParoID
+              AND r.EjecucionProduccionID=p.EjecucionProduccionID
+              AND r.Activo=1
+            ORDER BY r.NumeroReliberacion DESC,r.ReliberacionID DESC
+        ) r
+        WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+          AND p.Activo=1
+          AND p.FechaFinParo IS NOT NULL
+          AND
+          (
+              ISNULL(p.EsMayorA15Minutos,0)=1
+              OR ISNULL(p.EsInterrupcionUrgente,0)=1
+          )
+          AND
+          (
               (
-                  SELECT 1
-                  FROM dbo.Calidad_InspeccionHistorial h
-                  INNER JOIN dbo.Calidad_Inspecciones ci
-                      ON ci.InspeccionID = h.InspeccionID
-                  WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
-                    AND h.Movimiento = N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
-                    AND h.FechaMovimiento >=
-                        COALESCE(r.FechaValidacion, p.FechaFinParo)
+                  ISNULL(p.EsInterrupcionUrgente,0)=1
+                  AND r.ReliberacionID IS NULL
               )
-        )
-        THEN CAST(1 AS BIT)
-        ELSE CAST(0 AS BIT)
-    END;";
+              OR UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N''))))=N'AUTORIZADA'
+          )
+          AND NOT EXISTS
+          (
+              SELECT 1
+              FROM dbo.Calidad_InspeccionHistorial h
+              INNER JOIN dbo.Calidad_Inspecciones ci
+                  ON ci.InspeccionID=h.InspeccionID
+              WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
+                AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+                AND h.FechaMovimiento>=COALESCE(r.FechaValidacion,p.FechaFinParo)
+          )
+    )
+    THEN CAST(1 AS BIT)
+    ELSE CAST(0 AS BIT)
+END;";
 
             await using var cmd = new SqlCommand(sql, cn);
-
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucionProduccionId;
-
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
             var resultado = await cmd.ExecuteScalarAsync();
 
-            return resultado != null &&
-                   resultado != DBNull.Value &&
-                   Convert.ToBoolean(resultado);
+            return resultado != null && resultado != DBNull.Value && Convert.ToBoolean(resultado);
         }
-
         private sealed class ContextoReinicioSerie
         {
             public int ParoID { get; set; }
-            public int ReliberacionID { get; set; }
+            public int? ReliberacionID { get; set; }
             public DateTime FechaInicioParo { get; set; }
             public DateTime FechaFinParo { get; set; }
             public DateTime? FechaValidacionCalidad { get; set; }
+            public bool EsInterrupcionUrgente { get; set; }
+            public int? ProgramaUrgenteID { get; set; }
+            public bool EsMayorA15Minutos { get; set; }
+            public bool RequiereReliberacion => ReliberacionID.HasValue;
         }
 
-        private async Task<ContextoReinicioSerie?>
-    ObtenerContextoReinicioSerieAsync(
-        int ejecucionProduccionId,
-        SqlConnection cn,
-        SqlTransaction tx)
+     
+        private async Task<ContextoReinicioSerie?> ObtenerContextoReinicioSerieAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
         {
+            if (ejecucionProduccionId <= 0) return null;
+
             const string sql = @"
-SELECT TOP (1)
+SELECT TOP(1)
     p.ParoID,
     p.FechaInicioParo,
     p.FechaFinParo,
+    ISNULL(p.EsMayorA15Minutos,0) AS EsMayorA15Minutos,
+    ISNULL(p.EsInterrupcionUrgente,0) AS EsInterrupcionUrgente,
+    p.ProgramaUrgenteID,
     r.ReliberacionID,
     r.FechaValidacion
-FROM dbo.Produccion_Paros p WITH (UPDLOCK, HOLDLOCK)
-INNER JOIN dbo.Calidad_Reliberaciones r WITH (UPDLOCK, HOLDLOCK)
-    ON r.ParoID = p.ParoID
-   AND r.EjecucionProduccionID = p.EjecucionProduccionID
-   AND r.Activo = 1
-WHERE p.EjecucionProduccionID = @EjecucionProduccionID
-  AND p.Activo = 1
+FROM dbo.Produccion_Paros p WITH(UPDLOCK,HOLDLOCK)
+OUTER APPLY
+(
+    SELECT TOP(1)
+        cr.ReliberacionID,
+        cr.Resultado,
+        cr.FechaValidacion
+    FROM dbo.Calidad_Reliberaciones cr WITH(UPDLOCK,HOLDLOCK)
+    WHERE cr.ParoID=p.ParoID
+      AND cr.EjecucionProduccionID=p.EjecucionProduccionID
+      AND cr.Activo=1
+    ORDER BY cr.NumeroReliberacion DESC,cr.ReliberacionID DESC
+) r
+WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+  AND p.Activo=1
   AND p.FechaFinParo IS NOT NULL
-  AND ISNULL(p.EsMayorA15Minutos, 0) = 1
-  AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado, N'')))) = N'AUTORIZADA'
+  AND
+  (
+      ISNULL(p.EsMayorA15Minutos,0)=1
+      OR ISNULL(p.EsInterrupcionUrgente,0)=1
+  )
+  AND
+  (
+      (
+          ISNULL(p.EsInterrupcionUrgente,0)=1
+          AND r.ReliberacionID IS NULL
+      )
+      OR UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N''))))=N'AUTORIZADA'
+  )
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Calidad_InspeccionHistorial h
       INNER JOIN dbo.Calidad_Inspecciones ci
-          ON ci.InspeccionID = h.InspeccionID
-      WHERE ci.EjecucionProduccionID = @EjecucionProduccionID
-        AND h.Movimiento = N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
-        AND h.FechaMovimiento >=
-            COALESCE(r.FechaValidacion, p.FechaFinParo)
+          ON ci.InspeccionID=h.InspeccionID
+      WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
+        AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
+        AND h.FechaMovimiento>=COALESCE(r.FechaValidacion,p.FechaFinParo)
   )
-ORDER BY
-    p.FechaInicioParo DESC,
-    p.ParoID DESC;";
+ORDER BY p.FechaInicioParo DESC,p.ParoID DESC;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
-
-            cmd.Parameters.Add(
-                "@EjecucionProduccionID",
-                SqlDbType.Int).Value =
-                ejecucionProduccionId;
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
 
             await using var rd = await cmd.ExecuteReaderAsync();
-
-            if (!await rd.ReadAsync())
-                return null;
+            if (!await rd.ReadAsync()) return null;
 
             return new ContextoReinicioSerie
             {
                 ParoID = Convert.ToInt32(rd["ParoID"]),
-                ReliberacionID = Convert.ToInt32(rd["ReliberacionID"]),
+                ReliberacionID = rd["ReliberacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["ReliberacionID"]),
                 FechaInicioParo = Convert.ToDateTime(rd["FechaInicioParo"]),
                 FechaFinParo = Convert.ToDateTime(rd["FechaFinParo"]),
-                FechaValidacionCalidad =
-                    rd["FechaValidacion"] == DBNull.Value
-                        ? null
-                        : Convert.ToDateTime(rd["FechaValidacion"])
+                FechaValidacionCalidad = rd["FechaValidacion"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaValidacion"]),
+                EsInterrupcionUrgente = rd["EsInterrupcionUrgente"] != DBNull.Value && Convert.ToBoolean(rd["EsInterrupcionUrgente"]),
+                ProgramaUrgenteID = rd["ProgramaUrgenteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaUrgenteID"]),
+                EsMayorA15Minutos = rd["EsMayorA15Minutos"] != DBNull.Value && Convert.ToBoolean(rd["EsMayorA15Minutos"])
             };
         }
 
@@ -8998,39 +9484,41 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID
 
             const string sql = @"
 SELECT
-    ParoID,
-    EjecucionProduccionID,
-    ProgramaProduccionID,
-    SolicitudProduccionID,
-    MaquinaID,
-    OperadorID,
-    FechaInicioParo,
-    FechaFinParo,
+    p.ParoID,
+    p.EjecucionProduccionID,
+    p.ProgramaProduccionID,
+    p.SolicitudProduccionID,
+    p.MaquinaID,
+    p.OperadorID,
+    p.FechaInicioParo,
+    p.FechaFinParo,
     CASE
-        WHEN FechaFinParo IS NOT NULL
-            THEN ISNULL(DuracionMinutos,DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo))
-        ELSE DATEDIFF(MINUTE,FechaInicioParo,GETDATE())
+        WHEN p.FechaFinParo IS NOT NULL THEN ISNULL(p.DuracionMinutos,DATEDIFF(MINUTE,p.FechaInicioParo,p.FechaFinParo))
+        ELSE DATEDIFF(MINUTE,p.FechaInicioParo,GETDATE())
     END AS DuracionMinutos,
-    MotivoParoID,
-    MotivoParoTexto,
-    Descripcion,
-    CAST
-    (
-        CASE
-            WHEN ISNULL(EsMayorA15Minutos,0)=1 THEN 1
-            WHEN DATEDIFF(MINUTE,FechaInicioParo,ISNULL(FechaFinParo,GETDATE()))>15 THEN 1
-            ELSE 0
-        END
-    AS BIT) AS EsMayorA15Minutos,
-    UsuarioCreacionID,
-    FechaCreacion,
-    UsuarioModificacionID,
-    FechaModificacion,
-    Activo
-FROM dbo.Produccion_Paros
-WHERE EjecucionProduccionID=@EjecucionProduccionID
-  AND Activo=1
-ORDER BY FechaInicioParo DESC,ParoID DESC;";
+    p.MotivoParoID,
+    p.MotivoParoTexto,
+    p.Descripcion,
+    CAST(CASE
+        WHEN ISNULL(p.EsMayorA15Minutos,0)=1 THEN 1
+        WHEN DATEDIFF(MINUTE,p.FechaInicioParo,ISNULL(p.FechaFinParo,GETDATE()))>15 THEN 1
+        ELSE 0
+    END AS BIT) AS EsMayorA15Minutos,
+    CAST(ISNULL(p.EsInterrupcionUrgente,0) AS BIT) AS EsInterrupcionUrgente,
+    p.ProgramaUrgenteID,
+    pu.SolicitudProduccionID AS SolicitudUrgenteID,
+    p.UsuarioCreacionID,
+    p.FechaCreacion,
+    p.UsuarioModificacionID,
+    p.FechaModificacion,
+    p.Activo
+FROM dbo.Produccion_Paros p
+LEFT JOIN dbo.Planeacion_ProgramaProduccion pu
+    ON pu.ProgramaProduccionID=p.ProgramaUrgenteID
+   AND pu.Activo=1
+WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+  AND p.Activo=1
+ORDER BY p.FechaInicioParo DESC,p.ParoID DESC;";
 
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
@@ -9053,6 +9541,9 @@ ORDER BY FechaInicioParo DESC,ParoID DESC;";
                     MotivoParoTexto = rd["MotivoParoTexto"] == DBNull.Value ? null : rd["MotivoParoTexto"]?.ToString()?.Trim(),
                     Descripcion = rd["Descripcion"] == DBNull.Value ? null : rd["Descripcion"]?.ToString()?.Trim(),
                     EsMayorA15Minutos = rd["EsMayorA15Minutos"] != DBNull.Value && Convert.ToBoolean(rd["EsMayorA15Minutos"]),
+                    EsInterrupcionUrgente = rd["EsInterrupcionUrgente"] != DBNull.Value && Convert.ToBoolean(rd["EsInterrupcionUrgente"]),
+                    ProgramaUrgenteID = rd["ProgramaUrgenteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaUrgenteID"]),
+                    SolicitudUrgenteID = rd["SolicitudUrgenteID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudUrgenteID"]),
                     UsuarioCreacionID = rd["UsuarioCreacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioCreacionID"]),
                     FechaCreacion = rd["FechaCreacion"] == DBNull.Value ? DateTime.MinValue : Convert.ToDateTime(rd["FechaCreacion"]),
                     UsuarioModificacionID = rd["UsuarioModificacionID"] == DBNull.Value ? null : Convert.ToInt32(rd["UsuarioModificacionID"]),
@@ -9202,37 +9693,104 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
             resultado.Mensaje = "La máquina puede liberarse.";
             return resultado;
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LiberarMaquina(ProduccionLiberarMaquinaPostVm vm)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
             if (vm.EjecucionProduccionID <= 0)
             {
                 TempData["Error"] = "No se recibió una ejecución de Producción válida.";
                 return RedirectToAction(nameof(Index));
             }
-            var observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? null : vm.Observaciones.Trim();
+
+            var observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
+                ? null
+                : vm.Observaciones.Trim();
+
             if (observaciones?.Length > 500)
             {
                 TempData["Error"] = "Las observaciones de liberación no pueden superar 500 caracteres.";
                 return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
+
             var usuarioId = ObtenerUsuarioID();
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
             try
             {
-                var validacion = await ValidarLiberacionMaquinaAsync(vm.EjecucionProduccionID, cn, tx);
+                var ejecucion = await ObtenerEjecucionAsync(
+                    vm.EjecucionProduccionID,
+                    cn,
+                    tx);
+
+                if (ejecucion == null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound();
+                }
+
+                var parejaLhRh = await ObtenerParejaLhRhProduccionAsync(
+                    ejecucion.ProgramaProduccionID,
+                    cn,
+                    tx);
+
+                ProduccionEjecucionVm? ejecucionPareja = null;
+
+                if (parejaLhRh != null)
+                {
+                    if (!parejaLhRh.EsCompatibleFisicamente)
+                        throw new InvalidOperationException($"La producción LH/RH grupo {parejaLhRh.GrupoLhRh} ya no conserva la misma máquina, molde y ventana.");
+
+                    if (!parejaLhRh.EjecucionParejaID.HasValue ||
+                       parejaLhRh.EjecucionParejaID.Value <= 0)
+                    {
+                        throw new InvalidOperationException($"No se encontró la ejecución de {parejaLhRh.OFParejaTexto}. Una producción LH/RH no puede liberar la máquina parcialmente.");
+                    }
+
+                    ejecucionPareja = await ObtenerEjecucionAsync(
+                        parejaLhRh.EjecucionParejaID.Value,
+                        cn,
+                        tx);
+
+                    if (ejecucionPareja == null)
+                        throw new InvalidOperationException($"No fue posible recuperar la ejecución de {parejaLhRh.OFParejaTexto}.");
+
+                    if (ejecucionPareja.MaquinaID != ejecucion.MaquinaID)
+                        throw new InvalidOperationException("Las dos ejecuciones LH/RH ya no pertenecen a la misma máquina.");
+                }
+
+                var validacion = await ValidarLiberacionMaquinaAsync(
+                    ejecucion.EjecucionProduccionID,
+                    cn,
+                    tx);
+
                 if (!validacion.Permitido)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = validacion.Mensaje;
                     return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
                 }
+
+                if (ejecucionPareja != null)
+                {
+                    var validacionPareja = await ValidarLiberacionMaquinaAsync(
+                        ejecucionPareja.EjecucionProduccionID,
+                        cn,
+                        tx);
+
+                    if (!validacionPareja.Permitido)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = $"{parejaLhRh!.OFParejaTexto}: {validacionPareja.Mensaje}";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+                }
+
                 const string sql = @"
 UPDATE dbo.Produccion_Ejecucion
 SET FechaLiberacionMaquina=GETDATE(),
@@ -9240,22 +9798,79 @@ SET FechaLiberacionMaquina=GETDATE(),
     ObservacionesLiberacionMaquina=@Observaciones,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=GETDATE()
-WHERE EjecucionProduccionID=@EjecucionProduccionID
-  AND Activo=1
+WHERE Activo=1
   AND EstatusID=@EnProduccion
-  AND FechaLiberacionMaquina IS NULL;
-IF @@ROWCOUNT<>1
-    THROW 51091,'La ejecución cambió de estado o la máquina ya fue liberada.',1;";
+  AND FechaLiberacionMaquina IS NULL
+  AND
+  (
+      EjecucionProduccionID=@EjecucionProduccionID
+      OR
+      (
+          @EjecucionParejaID IS NOT NULL
+          AND EjecucionProduccionID=@EjecucionParejaID
+      )
+  );
+
+SELECT @@ROWCOUNT;";
+
+                int filasLiberadas;
+
                 await using (var cmd = new SqlCommand(sql, cn, tx))
                 {
-                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
+                    cmd.Parameters.Add("@EjecucionParejaID", SqlDbType.Int).Value = (object?)ejecucionPareja?.EjecucionProduccionID ?? DBNull.Value;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = (object?)observaciones ?? DBNull.Value;
                     cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
-                    await cmd.ExecuteNonQueryAsync();
+                    filasLiberadas = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                 }
+
+                var esperadas = ejecucionPareja == null ? 1 : 2;
+
+                if (filasLiberadas != esperadas)
+                {
+                    throw new InvalidOperationException(
+                        ejecucionPareja == null
+                            ? "La ejecución cambió de estado o la máquina ya fue liberada."
+                            : "Las ejecuciones LH/RH cambiaron de estado o una de ellas ya había liberado la máquina. No se permitirá una liberación parcial.");
+                }
+
+                var retornoInterrupcionUrgente = await ProcesarRetornoInterrupcionUrgenteAsync(
+                    ejecucion.ProgramaProduccionID,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 await tx.CommitAsync();
-                TempData["Success"] = "Máquina liberada correctamente. La ejecución continúa abierta para cajas, Calidad, GP12 y cierre posterior.";
+
+                var mensaje = ejecucionPareja == null
+                    ? "Máquina liberada correctamente. La ejecución continúa abierta para cajas, Calidad, GP12 y cierre posterior."
+                    : $"Máquina liberada correctamente para la producción conjunta LH/RH. Los Programas {ejecucion.ProgramaProduccionID} y {ejecucionPareja.ProgramaProduccionID} liberaron la máquina en la misma operación.";
+
+                if (retornoInterrupcionUrgente != null)
+                {
+                    mensaje += $" Se cerró la interrupción urgente de la producción original iniciada por el Programa {retornoInterrupcionUrgente.ProgramaInterrumpidoID}. La OF interrumpida quedó EN PREPARACIÓN y todavía no está produciendo.";
+
+                    if (retornoInterrupcionUrgente.RequiereReliberacion)
+                    {
+                        if (retornoInterrupcionUrgente.CambiaMolde)
+                        {
+                            mensaje += " Como la urgencia utilizó un molde diferente, debe realizarse el cambio de molde de retorno, presentar nuevamente primeras piezas y obtener autorización de Calidad.";
+                        }
+                        else
+                        {
+                            mensaje += " Como la interrupción superó 15 minutos, deben presentarse nuevamente primeras piezas y Calidad debe autorizar la reliberación.";
+                        }
+
+                        mensaje += " Después se deberá capturar el contador físico actual y pulsar Reiniciar serie.";
+                    }
+                    else
+                    {
+                        mensaje += " No requiere una nueva reliberación de Calidad porque conservó el mismo molde y no superó 15 minutos. Aun así, debe capturarse el contador físico actual y pulsar Reiniciar serie para excluir los ciclos fabricados durante la urgencia.";
+                    }
+                }
+
+                TempData["Success"] = mensaje;
             }
             catch (Exception ex)
             {
@@ -9266,11 +9881,12 @@ IF @@ROWCOUNT<>1
                 catch
                 {
                 }
+
                 TempData["Error"] = "No fue posible liberar la máquina: " + ex.Message;
             }
+
             return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
-
         private static ProduccionEjecucionVm MapearEjecucion(SqlDataReader rd)
         {
             return new ProduccionEjecucionVm
@@ -10582,6 +11198,31 @@ WHERE e.Activo=1
             return maquinas;
         }
 
+        private sealed class InterrupcionUrgenteRetornoContexto
+        {
+            public int ParoID { get; set; }
+            public int EjecucionInterrumpidaID { get; set; }
+            public int ProgramaInterrumpidoID { get; set; }
+            public int ProgramaUrgenteID { get; set; }
+            public int? MaquinaID { get; set; }
+            public DateTime FechaInicioParo { get; set; }
+            public bool EsParoLhRh { get; set; }
+            public Guid? GrupoParoLhRh { get; set; }
+            public int EstatusEjecucionInterrumpida { get; set; }
+            public int? MoldeInterrumpidoID { get; set; }
+            public int? MoldeUrgenteID { get; set; }
+            public bool CambiaMolde => MoldeInterrumpidoID != MoldeUrgenteID;
+        }
+        private sealed class InterrupcionUrgenteRetornoResultado
+        {
+            public int ParoID { get; set; }
+            public int EjecucionInterrumpidaID { get; set; }
+            public int ProgramaInterrumpidoID { get; set; }
+            public int DuracionMinutos { get; set; }
+            public bool CambiaMolde { get; set; }
+            public bool RequiereReliberacion { get; set; }
+            public int ProgramasRecorridos { get; set; }
+        }
         private sealed class ValidacionInicioSerieResultado
         {
             public bool Permitido { get; set; }

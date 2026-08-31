@@ -797,55 +797,42 @@ public sealed class ProduccionRegistroHoraVm
 public sealed class ProduccionParoVm
 {
     public int ParoID { get; set; }
-
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
-
     public int? MaquinaID { get; set; }
     public int? OperadorID { get; set; }
-
     public DateTime FechaInicioParo { get; set; } = DateTime.Now;
     public DateTime? FechaFinParo { get; set; }
     public int? DuracionMinutos { get; set; }
-
     public int? MotivoParoID { get; set; }
     public string? MotivoParoTexto { get; set; }
     public string? Descripcion { get; set; }
-
     public bool EsMayorA15Minutos { get; set; }
-
+    public bool EsInterrupcionUrgente { get; set; }
+    public int? ProgramaUrgenteID { get; set; }
+    public int? SolicitudUrgenteID { get; set; }
     public int? UsuarioCreacionID { get; set; }
     public DateTime FechaCreacion { get; set; }
     public int? UsuarioModificacionID { get; set; }
     public DateTime? FechaModificacion { get; set; }
     public bool Activo { get; set; } = true;
-
     public bool EstaAbierto => !FechaFinParo.HasValue;
-
+    public bool PuedeCerrarManual => EstaAbierto && !EsInterrupcionUrgente;
     public string DuracionTexto
     {
         get
         {
             var minutos = DuracionMinutos;
-
-            if (!minutos.HasValue && EstaAbierto)
-                minutos = (int)Math.Max(0, (DateTime.Now - FechaInicioParo).TotalMinutes);
-
-            if (!minutos.HasValue)
-                return "-";
-
-            if (minutos.Value < 60)
-                return $"{minutos.Value} min";
-
+            if (!minutos.HasValue && EstaAbierto) minutos = (int)Math.Max(0, (DateTime.Now - FechaInicioParo).TotalMinutes);
+            if (!minutos.HasValue) return "-";
+            if (minutos.Value < 60) return $"{minutos.Value} min";
             var horas = minutos.Value / 60;
             var resto = minutos.Value % 60;
-
             return $"{horas} h {resto} min";
         }
     }
 }
-
 public sealed class ProduccionMotivoParoVm
 {
     public int MotivoParoID { get; set; }
@@ -1208,9 +1195,66 @@ public sealed class ProduccionAlertaReprogramacionVm
     }
 }
 
+public sealed class ProduccionParejaLhRhVm
+{
+    public int GrupoLhRh { get; set; }
+    public int ProgramaProduccionID { get; set; }
+    public int ProgramaParejaID { get; set; }
+    public int? SolicitudProduccionParejaID { get; set; }
+    public string? FolioSolicitudPareja { get; set; }
+    public string? NumeroOFPareja { get; set; }
+    public int? EjecucionParejaID { get; set; }
+    public int? EstatusEjecucionParejaID { get; set; }
+    public int EstatusProgramaParejaID { get; set; } = ProgramaProduccionEstatus.Pendiente;
+    public int? ParteParejaID { get; set; }
+    public string? NumeroPartePareja { get; set; }
+    public string? ReferenciaSAPPareja { get; set; }
+    public string? DescripcionPartePareja { get; set; }
+    public int? MaquinaParejaID { get; set; }
+    public string? MaquinaParejaCodigo { get; set; }
+    public string? MaquinaParejaNombre { get; set; }
+    public int? MoldeParejaID { get; set; }
+    public string? MoldeParejaCodigo { get; set; }
+    public int CantidadProgramadaPareja { get; set; }
+    public int CantidadProducidaPareja { get; set; }
+    public DateTime? FechaInicioProgramadaPareja { get; set; }
+    public DateTime? FechaFinProgramadaPareja { get; set; }
+    public bool MismaMaquina { get; set; }
+    public bool MismoMolde { get; set; }
+    public bool MismaVentanaProgramada { get; set; }
+    public bool TieneEjecucionPareja => EjecucionParejaID.HasValue && EjecucionParejaID.Value > 0;
+    public bool ParejaEnPreparacion => EstatusEjecucionParejaID == ProduccionEstatus.EnPreparacion;
+    public bool ParejaEnProduccion => EstatusEjecucionParejaID == ProduccionEstatus.EnProduccion;
+    public bool ParejaPausada => EstatusEjecucionParejaID == ProduccionEstatus.Pausado;
+    public bool EsCompatibleFisicamente => MismaMaquina && MismoMolde && MismaVentanaProgramada;
+    public string OFParejaTexto
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(NumeroOFPareja)) return NumeroOFPareja;
+            if (!string.IsNullOrWhiteSpace(FolioSolicitudPareja)) return FolioSolicitudPareja;
+            if (SolicitudProduccionParejaID.HasValue) return $"OF {SolicitudProduccionParejaID.Value}";
+            return $"Programa {ProgramaParejaID}";
+        }
+    }
+    public string ParteParejaTexto
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ReferenciaSAPPareja)) return ReferenciaSAPPareja;
+            if (!string.IsNullOrWhiteSpace(NumeroPartePareja)) return NumeroPartePareja;
+            return $"Parte {ParteParejaID}";
+        }
+    }
+    public string EstatusParejaTexto => EstatusEjecucionParejaID.HasValue ? ProduccionEstatus.Nombre(EstatusEjecucionParejaID.Value) : ProgramaProduccionEstatus.Nombre(EstatusProgramaParejaID);
+}
+
 public sealed class ProduccionDetalleVm
 {
     public ProduccionEjecucionVm Ejecucion { get; set; } = new();
+
+    public ProduccionParejaLhRhVm? ParejaLhRh { get; set; }
+    public bool EsProduccionLhRh => ParejaLhRh != null;
 
     public List<ProduccionRegistroHoraVm> RegistrosHora { get; set; } = new();
 
