@@ -1550,12 +1550,15 @@ WHERE m.Activo=1
   AND m.TipoMovimiento=N'Salida'
   AND m.SolicitudProduccionID IS NOT NULL
   AND ISNULL(m.Cantidad,0)>0.0005
+  -- NSQ_MATERIALES_SYNC_ORIGEN_UNICO_V1_MP
+  -- UX_Produccion_RecepcionMateriales_OrigenMovimiento protege la identidad
+  -- TipoOrigen + MovimientoAlmacenID aunque una recepcion historica este inactiva.
+  -- No se debe intentar crear una segunda recepcion para el mismo movimiento.
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Produccion_RecepcionMateriales r
-      WHERE r.Activo=1
-        AND r.TipoOrigen=N'MP'
+      WHERE r.TipoOrigen=N'MP'
         AND r.MovimientoAlmacenID=m.MovimientoID
   )
   AND EXISTS
@@ -1641,12 +1644,14 @@ WHERE m.Activo=1
   AND m.SolicitudProduccionID IS NOT NULL
   AND m.EmbalajeSolicitadoID IS NOT NULL
   AND ISNULL(m.Cantidad,0)>0.0005
+  -- NSQ_MATERIALES_SYNC_ORIGEN_UNICO_V1_EMBALAJE
+  -- Misma idempotencia para embalajes: una recepcion historica/inactiva
+  -- sigue ocupando la identidad TipoOrigen + MovimientoAlmacenID.
   AND NOT EXISTS
   (
       SELECT 1
       FROM dbo.Produccion_RecepcionMateriales r
-      WHERE r.Activo=1
-        AND r.TipoOrigen=N'EMBALAJE'
+      WHERE r.TipoOrigen=N'EMBALAJE'
         AND r.MovimientoAlmacenID=m.MovimientoID
   )
   AND EXISTS
