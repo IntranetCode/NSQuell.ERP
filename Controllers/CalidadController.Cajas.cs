@@ -2151,7 +2151,9 @@ VALUES
     FROM dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
     INNER JOIN dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
         ON e.EjecucionProduccionID=i.EjecucionProduccionID
-       AND e.Activo=1
+       -- NSQ_CALIDAD_CAJA_INSPECCION_ACTIVA_V1_1
+       -- Calidad mantiene la corrida vigente aunque la ejecucion
+       -- historica de Produccion haya quedado Activo=0.
     LEFT JOIN dbo.SolicitudesProduccion sp
         ON sp.SolicitudProduccionID=
            COALESCE(e.SolicitudProduccionID,i.SolicitudProduccionID)

@@ -1122,6 +1122,56 @@ SELECT CAST(SCOPE_IDENTITY() AS BIGINT);";
             return Convert.ToInt64(resultado);
         }
 
+        // NSQ_GP12_CAJAS_REPORTADAS_CALIDAD_V1_RECEIVE
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RecibirCajaReportada(int solicitudGP12ID)
+        {
+            if (solicitudGP12ID <= 0)
+                return NotFound();
+
+            string? codigo = null;
+
+            await using (var cn = new SqlConnection(ConnectionString))
+            {
+                await cn.OpenAsync();
+
+                const string sql = @"
+SELECT TOP(1)
+    pc.CodigoBarrasOrigen
+FROM dbo.GP12_Solicitudes s
+INNER JOIN dbo.Produccion_Cajas pc
+    ON pc.CajaProduccionID=s.CajaProduccionID
+WHERE s.SolicitudGP12ID=@SolicitudGP12ID
+  AND s.Activo=1
+  AND pc.Activo=1
+  AND s.CajaProduccionID IS NOT NULL
+  AND UPPER(LTRIM(RTRIM(ISNULL(s.Origen,N''))))=N'CALIDAD';";
+
+                await using var cmd = new SqlCommand(sql, cn);
+                cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value =
+                    solicitudGP12ID;
+
+                var value = await cmd.ExecuteScalarAsync();
+                codigo = value == null || value == DBNull.Value
+                    ? null
+                    : value.ToString()?.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                TempData["Error"] =
+                    "La caja reportada por Calidad no tiene un código de origen asociado.";
+                return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
+            }
+
+            return await RecibirCajaEscaneada(
+                new GP12RecepcionEscaneoViewModel
+                {
+                    SolicitudGP12ID = solicitudGP12ID,
+                    CodigoBarras = codigo
+                });
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RecibirCajaEscaneada(GP12RecepcionEscaneoViewModel model)
@@ -3506,12 +3556,317 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
             public decimal CantidadRecibida { get; set; }
             public decimal CantidadProcesada { get; set; }
         }
+        // NSQ_GP12_CAJAS_REPORTADAS_CALIDAD_V1_LOADER
+        // NSQ_GP12_CAJAS_DESDE_CALIDAD_V1_3_LOADER
+        private async Task CargarCajasReportadasCalidadAsync(
+            GP12DetalleViewModel model)
+        {
+            model.CajasReportadasCalidad.Clear();
 
+            if (!string.Equals(
+                    model.Origen,
+                    GP12Origen.Calidad,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
 
-        private async Task<GP12DetalleViewModel?> ConstruirDetalleAsync(int solicitudGP12ID)
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            const string sql = @"
+SELECT
+    gp.SolicitudGP12ID,
+    cl.CajaProduccionID,
+    cl.CajaLiberadaID,
+
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(gp.OrdenFabricacion)),N''),
+        NULLIF(LTRIM(RTRIM(ci.OrdenTrabajo)),N''),
+        NULLIF(LTRIM(RTRIM(pc.NumeroOFEtiqueta)),N''),
+        NULLIF(LTRIM(RTRIM(sp.NumeroOFRecibida)),N''),
+        NULLIF(LTRIM(RTRIM(sp.FolioSolicitud)),N'')
+    ) AS OrdenFabricacion,
+
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(gp.NumeroParte)),N''),
+        NULLIF(LTRIM(RTRIM(ci.NumeroParte)),N''),
+        NULLIF(LTRIM(RTRIM(pc.NumeroParteEtiqueta)),N'')
+    ) AS NumeroParte,
+
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(gp.Motivo)),N''),
+        NULLIF(LTRIM(RTRIM(cl.Observaciones)),N''),
+        NULLIF(LTRIM(RTRIM(pc.MotivoCalidad)),N'')
+    ) AS Motivo,
+
+    gp.EstatusID,
+
+    COALESCE(
+        gp.FechaSolicitud,
+        cl.FechaValidacionCalidad,
+        cl.FechaCreacion
+    ) AS FechaSolicitud,
+
+    gp.FechaRecepcion,
+    ISNULL(gp.CantidadRecibida,0) AS CantidadRecibida,
+
+    ISNULL(pc.NumeroCaja,0) AS NumeroCaja,
+
+    COALESCE(
+        NULLIF(pc.FolioCaja,N''),
+        NULLIF(cl.FolioCaja,N''),
+        NULLIF(pc.Etiqueta,N''),
+        CONVERT(NVARCHAR(100),pc.CajaProduccionID)
+    ) AS FolioCaja,
+
+    ISNULL(
+        NULLIF(pc.CantidadPiezas,0),
+        ISNULL(NULLIF(cl.CantidadPiezas,0),pc.Cantidad)
+    ) AS CantidadPiezas,
+
+    pc.CodigoBarrasOrigen,
+    cl.Estado AS EstadoCalidad,
+    cl.Destino AS DestinoCalidad,
+    cl.FechaValidacionCalidad
+
+FROM dbo.Calidad_CajasLiberadas cl
+
+INNER JOIN dbo.Produccion_Cajas pc
+    ON pc.CajaProduccionID=cl.CajaProduccionID
+
+LEFT JOIN dbo.Calidad_Inspecciones ci
+    ON ci.InspeccionID=cl.InspeccionID
+
+LEFT JOIN dbo.SolicitudesProduccion sp
+    ON sp.SolicitudProduccionID=
+       COALESCE(pc.SolicitudProduccionID,ci.SolicitudProduccionID)
+
+OUTER APPLY
+(
+    SELECT TOP(1)
+        s.SolicitudGP12ID,
+        s.OrdenFabricacion,
+        s.NumeroParte,
+        s.Motivo,
+        s.EstatusID,
+        s.FechaSolicitud,
+        s.FechaRecepcion,
+        s.CantidadRecibida
+    FROM dbo.GP12_Solicitudes s
+    WHERE s.Activo=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(s.Origen,N''))))=N'CALIDAD'
+      AND
+      (
+            s.CajaLiberadaID=cl.CajaLiberadaID
+         OR s.CajaProduccionID=cl.CajaProduccionID
+      )
+    ORDER BY s.SolicitudGP12ID DESC
+) gp
+
+WHERE cl.Activo=1
+  AND pc.Activo=1
+
+  AND
+  (
+       UPPER(LTRIM(RTRIM(ISNULL(cl.Destino,N''))))=N'GP12'
+    OR UPPER(LTRIM(RTRIM(ISNULL(cl.Estado,N''))))=N'EN_GP12'
+    OR UPPER(LTRIM(RTRIM(ISNULL(pc.ResultadoCalidad,N''))))=N'GP12'
+    OR UPPER(LTRIM(RTRIM(ISNULL(pc.EstatusCalidad,N''))))=N'GP12'
+  )
+
+  AND
+  (
+       (
+           @CalidadInspeccionID IS NOT NULL
+           AND cl.InspeccionID=@CalidadInspeccionID
+       )
+    OR (
+           @EjecucionProduccionID IS NOT NULL
+           AND cl.EjecucionProduccionID=@EjecucionProduccionID
+       )
+    OR (
+           @SolicitudProduccionID IS NOT NULL
+           AND COALESCE(
+                   pc.SolicitudProduccionID,
+                   ci.SolicitudProduccionID
+               )=@SolicitudProduccionID
+       )
+    OR (
+           @OrdenFabricacion IS NOT NULL
+           AND UPPER(
+               REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                   LTRIM(RTRIM(COALESCE(
+                       ci.OrdenTrabajo,
+                       pc.NumeroOFEtiqueta,
+                       sp.NumeroOFRecibida,
+                       sp.FolioSolicitud,
+                       N''
+                   ))),
+                   N'OF',N''),
+                   N'-',N''),
+                   N'/',N''),
+                   N'''',N''),
+                   N' ',N'')
+           ) =
+           UPPER(
+               REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                   LTRIM(RTRIM(@OrdenFabricacion)),
+                   N'OF',N''),
+                   N'-',N''),
+                   N'/',N''),
+                   N'''',N''),
+                   N' ',N'')
+           )
+       )
+  )
+
+ORDER BY
+    ISNULL(pc.NumeroCaja,0),
+    cl.CajaLiberadaID;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add(
+                "@CalidadInspeccionID",
+                SqlDbType.Int).Value =
+                (object?)model.CalidadInspeccionID ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@EjecucionProduccionID",
+                SqlDbType.Int).Value =
+                (object?)model.EjecucionProduccionID ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@SolicitudProduccionID",
+                SqlDbType.Int).Value =
+                (object?)model.SolicitudProduccionID ??
+                DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@OrdenFabricacion",
+                SqlDbType.NVarChar,
+                100).Value =
+                string.IsNullOrWhiteSpace(
+                    model.OrdenFabricacion)
+                    ? DBNull.Value
+                    : model.OrdenFabricacion.Trim();
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                if (rd["CajaProduccionID"] == DBNull.Value)
+                    continue;
+
+                model.CajasReportadasCalidad.Add(
+                    new GP12CajaReportadaCalidadViewModel
+                    {
+                        SolicitudGP12ID =
+                            rd["SolicitudGP12ID"] == DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd["SolicitudGP12ID"]),
+
+                        CajaProduccionID =
+                            Convert.ToInt64(
+                                rd["CajaProduccionID"]),
+
+                        CajaLiberadaID =
+                            Convert.ToInt32(
+                                rd["CajaLiberadaID"]),
+
+                        OrdenFabricacion =
+                            rd["OrdenFabricacion"] == DBNull.Value
+                                ? null
+                                : rd["OrdenFabricacion"]
+                                    ?.ToString()?.Trim(),
+
+                        NumeroParte =
+                            rd["NumeroParte"] == DBNull.Value
+                                ? null
+                                : rd["NumeroParte"]
+                                    ?.ToString()?.Trim(),
+
+                        Motivo =
+                            rd["Motivo"] == DBNull.Value
+                                ? null
+                                : rd["Motivo"]
+                                    ?.ToString()?.Trim(),
+
+                        EstatusID =
+                            rd["EstatusID"] == DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd["EstatusID"]),
+
+                        FechaSolicitud =
+                            Convert.ToDateTime(
+                                rd["FechaSolicitud"]),
+
+                        FechaRecepcion =
+                            rd["FechaRecepcion"] == DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rd["FechaRecepcion"]),
+
+                        CantidadRecibida =
+                            Convert.ToDecimal(
+                                rd["CantidadRecibida"]),
+
+                        NumeroCaja =
+                            Convert.ToInt32(
+                                rd["NumeroCaja"]),
+
+                        FolioCaja =
+                            rd["FolioCaja"]
+                                ?.ToString()?.Trim()
+                            ?? rd["CajaProduccionID"]
+                                .ToString()!,
+
+                        CantidadPiezas =
+                            Convert.ToInt32(
+                                rd["CantidadPiezas"]),
+
+                        CodigoBarrasOrigen =
+                            rd["CodigoBarrasOrigen"] == DBNull.Value
+                                ? null
+                                : rd["CodigoBarrasOrigen"]
+                                    ?.ToString()?.Trim(),
+
+                        EstadoCalidad =
+                            rd["EstadoCalidad"]
+                                ?.ToString()?.Trim()
+                            ?? string.Empty,
+
+                        DestinoCalidad =
+                            rd["DestinoCalidad"] == DBNull.Value
+                                ? null
+                                : rd["DestinoCalidad"]
+                                    ?.ToString()?.Trim(),
+
+                        FechaValidacionCalidad =
+                            rd["FechaValidacionCalidad"] == DBNull.Value
+                                ? null
+                                : Convert.ToDateTime(
+                                    rd["FechaValidacionCalidad"])
+                    });
+            }
+        }
+private async Task<GP12DetalleViewModel?> ConstruirDetalleAsync(int solicitudGP12ID)
         {
             var model = await CargarEncabezadoAsync(solicitudGP12ID);
             if (model == null) return null;
+
+            // NSQ_GP12_CAJAS_REPORTADAS_CALIDAD_V1_CONTROLLER
+            await CargarCajasReportadasCalidadAsync(model);
+
             await CargarEtiquetasAsync(model);
             await CargarInventarioAsync(model);
             await CargarProgramacionesAsync(model);

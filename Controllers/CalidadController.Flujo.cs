@@ -370,7 +370,31 @@ SELECT TOP (1)
         FROM dbo.Calidad_MonitoreosProceso m
         WHERE m.InspeccionID=i.InspeccionID
           AND m.Activo=1
-          AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=@MonitoreoPendiente
+          AND
+          (
+              (
+                  ISNULL(m.FlujoMonitoreoVersion,1)<2
+                  AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=@MonitoreoPendiente
+              )
+              OR
+              (
+                  ISNULL(m.FlujoMonitoreoVersion,1)>=2
+                  AND
+                  (
+                      m.FechaHoraDisparo IS NULL
+                      OR ISNULL(m.MuestraDisparoEmbolsada,0)=0
+                      OR m.RegistroHoraID IS NULL
+                      OR EXISTS
+                      (
+                          SELECT 1
+                          FROM dbo.Produccion_RegistroHora rh
+                          WHERE rh.RegistroHoraID=m.RegistroHoraID
+                            AND ISNULL(rh.CantidadScrap,0)>0
+                            AND m.CantidadScrapValidadaProduccion IS NULL
+                      )
+                  )
+              )
+          )
     ) AS MonitoreosPendientes,
     (
         SELECT COUNT(1)
@@ -2081,8 +2105,7 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                 const string sqlInicioReal = @"
 SELECT TOP (1) FechaInicioReal
 FROM dbo.Produccion_Ejecucion
-WHERE EjecucionProduccionID = @EjecucionProduccionID
-  AND Activo = 1;";
+WHERE EjecucionProduccionID = @EjecucionProduccionID;";
 
                 await using var cn = new SqlConnection(ConnectionString);
                 await cn.OpenAsync();
@@ -2153,6 +2176,879 @@ WHERE NOT EXISTS
             return creados;
         }
 
+        // ================================================================
+        // NSQ_CALIDAD_MONITOREO_AUDITORIA_V2_CONTROLLER
+        // A) Validacion exclusiva del scrap reportado por Produccion.
+        // ================================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ValidarScrapMonitoreoV2(
+            CalidadMonitoreoScrapV2ViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["Error"] =
+                    "La cantidad de scrap validada no es valida.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            model.Observaciones = model.Observaciones?.Trim();
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            try
+            {
+                const string sqlContexto = @"
+SELECT
+    m.RegistroHoraID,
+    ISNULL(m.FlujoMonitoreoVersion,1) AS FlujoMonitoreoVersion,
+    m.CantidadScrapValidadaProduccion,
+    ISNULL(rh.CantidadScrap,0) AS ScrapReportado,
+    i.Estado
+FROM dbo.Calidad_MonitoreosProceso m WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+    ON i.InspeccionID=m.InspeccionID
+LEFT JOIN dbo.Produccion_RegistroHora rh
+    ON rh.RegistroHoraID=m.RegistroHoraID
+WHERE m.MonitoreoID=@MonitoreoID
+  AND m.InspeccionID=@InspeccionID
+  AND m.Activo=1;";
+
+                int? registroHoraId;
+                int version;
+                int? yaValidado;
+                int scrapReportado;
+                string estado;
+
+                await using (var cmd =
+                    new SqlCommand(sqlContexto, cn, tx))
+                {
+                    cmd.Parameters.Add(
+                        "@MonitoreoID",
+                        SqlDbType.Int).Value =
+                        model.MonitoreoID;
+
+                    cmd.Parameters.Add(
+                        "@InspeccionID",
+                        SqlDbType.Int).Value =
+                        model.InspeccionID;
+
+                    await using var rd =
+                        await cmd.ExecuteReaderAsync();
+
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+
+                    registroHoraId =
+                        rd["RegistroHoraID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["RegistroHoraID"]);
+
+                    version =
+                        Convert.ToInt32(rd["FlujoMonitoreoVersion"]);
+
+                    yaValidado =
+                        rd["CantidadScrapValidadaProduccion"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(
+                                rd["CantidadScrapValidadaProduccion"]);
+
+                    scrapReportado =
+                        Convert.ToInt32(rd["ScrapReportado"]);
+
+                    estado =
+                        rd["Estado"]?.ToString()?.Trim()
+                        ?? string.Empty;
+                }
+
+                if (version < 2)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "Este periodo pertenece al monitoreo historico y no usa la validacion V2.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (!string.Equals(
+                        estado,
+                        CalidadEstados.MonitoreoActivo,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La inspeccion ya no se encuentra en monitoreo activo.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (!registroHoraId.HasValue)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "Produccion aun no ha registrado el periodo. Todavia no hay scrap que validar.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (yaValidado.HasValue)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Mensaje"] =
+                        $"El scrap de este periodo ya fue validado con {yaValidado.Value:N0} pieza(s).";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (model.CantidadScrapValidadaProduccion >
+                    scrapReportado)
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        $"Produccion reporto {scrapReportado:N0} pieza(s) scrap. Calidad no puede validar una cantidad mayor desde este registro.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                if (model.CantidadScrapValidadaProduccion !=
+                        scrapReportado &&
+                    string.IsNullOrWhiteSpace(model.Observaciones))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "La cantidad validada es distinta a la reportada por Produccion. Indica la diferencia en observaciones.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
+                }
+
+                var ahora = DateTime.Now;
+
+                const string sqlUpdate = @"
+UPDATE dbo.Calidad_MonitoreosProceso
+SET
+    CantidadScrapValidadaProduccion=@CantidadValidada,
+    ObservacionesScrapProduccion=@Observaciones,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE MonitoreoID=@MonitoreoID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND ISNULL(FlujoMonitoreoVersion,1)>=2
+  AND CantidadScrapValidadaProduccion IS NULL;
+
+IF @@ROWCOUNT<>1
+    THROW 51820,'La validacion de scrap cambio mientras se guardaba.',1;";
+
+                await using (var cmd =
+                    new SqlCommand(sqlUpdate, cn, tx))
+                {
+                    cmd.Parameters.Add(
+                        "@CantidadValidada",
+                        SqlDbType.Int).Value =
+                        model.CantidadScrapValidadaProduccion;
+
+                    cmd.Parameters.Add(
+                        "@Observaciones",
+                        SqlDbType.NVarChar,
+                        1000).Value =
+                        string.IsNullOrWhiteSpace(model.Observaciones)
+                            ? DBNull.Value
+                            : model.Observaciones;
+
+                    cmd.Parameters.Add(
+                        "@UsuarioID",
+                        SqlDbType.Int).Value =
+                        usuarioId.Value;
+
+                    cmd.Parameters.Add(
+                        "@Ahora",
+                        SqlDbType.DateTime2).Value =
+                        ahora;
+
+                    cmd.Parameters.Add(
+                        "@MonitoreoID",
+                        SqlDbType.Int).Value =
+                        model.MonitoreoID;
+
+                    cmd.Parameters.Add(
+                        "@InspeccionID",
+                        SqlDbType.Int).Value =
+                        model.InspeccionID;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                if (model.CantidadScrapValidadaProduccion > 0)
+                {
+                    var observacionScrap =
+                        $"Scrap reportado por Produccion y validado fisicamente por Calidad. " +
+                        $"RegistroHoraID: {registroHoraId.Value}. " +
+                        $"Reportado: {scrapReportado:N0}. " +
+                        $"Validado: {model.CantidadScrapValidadaProduccion:N0}.";
+
+                    if (!string.IsNullOrWhiteSpace(model.Observaciones))
+                        observacionScrap += " " + model.Observaciones;
+
+                    if (observacionScrap.Length > 1000)
+                        observacionScrap =
+                            observacionScrap[..1000];
+
+                    const string sqlScrap = @"
+INSERT INTO dbo.Calidad_DisposicionesMaterial
+(
+    InspeccionID,
+    MonitoreoID,
+    RegistroHoraID,
+    OrigenHallazgo,
+    TipoMaterial,
+    CantidadAfectada,
+    Etiqueta,
+    Disposicion,
+    Responsable,
+    FechaInicio,
+    FechaFin,
+    CantidadLiberada,
+    CantidadScrap,
+    ResultadoFinal,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    UsuarioModificacionID,
+    FechaModificacion,
+    Activo,
+    EstadoTratamiento,
+    FechaInicioTratamiento,
+    FechaFinTratamiento
+)
+OUTPUT INSERTED.DisposicionID
+VALUES
+(
+    @InspeccionID,
+    @MonitoreoID,
+    @RegistroHoraID,
+    N'PRODUCCION',
+    @TipoMaterial,
+    @Cantidad,
+    N'ROJA',
+    N'SCRAP_CONFIRMADO',
+    N'CALIDAD',
+    @Ahora,
+    @Ahora,
+    0,
+    @Cantidad,
+    @ResultadoFinal,
+    @Observaciones,
+    @UsuarioID,
+    @Ahora,
+    @UsuarioID,
+    @Ahora,
+    1,
+    N'CONCLUIDA',
+    @Ahora,
+    @Ahora
+);";
+
+                    int disposicionId;
+
+                    await using (var cmd =
+                        new SqlCommand(sqlScrap, cn, tx))
+                    {
+                        cmd.Parameters.Add(
+                            "@InspeccionID",
+                            SqlDbType.Int).Value =
+                            model.InspeccionID;
+
+                        cmd.Parameters.Add(
+                            "@MonitoreoID",
+                            SqlDbType.Int).Value =
+                            model.MonitoreoID;
+
+                        cmd.Parameters.Add(
+                            "@RegistroHoraID",
+                            SqlDbType.Int).Value =
+                            registroHoraId.Value;
+
+                        cmd.Parameters.Add(
+                            "@TipoMaterial",
+                            SqlDbType.NVarChar,
+                            30).Value =
+                            CalidadTipoMaterial.NoConforme;
+
+                        cmd.Parameters.Add(
+                            "@Cantidad",
+                            SqlDbType.Int).Value =
+                            model.CantidadScrapValidadaProduccion;
+
+                        cmd.Parameters.Add(
+                            "@ResultadoFinal",
+                            SqlDbType.NVarChar,
+                            20).Value =
+                            CalidadResultadoDisposicion.Scrap;
+
+                        cmd.Parameters.Add(
+                            "@Observaciones",
+                            SqlDbType.NVarChar,
+                            1000).Value =
+                            observacionScrap;
+
+                        cmd.Parameters.Add(
+                            "@UsuarioID",
+                            SqlDbType.Int).Value =
+                            usuarioId.Value;
+
+                        cmd.Parameters.Add(
+                            "@Ahora",
+                            SqlDbType.DateTime2).Value =
+                            ahora;
+
+                        var value =
+                            await cmd.ExecuteScalarAsync();
+
+                        if (value == null ||
+                            value == DBNull.Value)
+                        {
+                            throw new InvalidOperationException(
+                                "No fue posible crear la disposicion del scrap validado.");
+                        }
+
+                        disposicionId =
+                            Convert.ToInt32(value);
+                    }
+
+                    await CrearEntregaScrapSqlAsync(
+                        model.InspeccionID,
+                        disposicionId,
+                        model.CantidadScrapValidadaProduccion,
+                        observacionScrap,
+                        usuarioId.Value,
+                        ahora,
+                        cn,
+                        tx);
+                }
+
+                const string sqlHistorial = @"
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'MONITOREO_SCRAP_VALIDADO',
+    N'MONITOREO_ACTIVO',
+    N'MONITOREO_ACTIVO',
+    NULL,
+    N'ROJA',
+    CONCAT(
+        N'Scrap Produccion reportado: ',
+        @Reportado,
+        N'. Scrap validado por Calidad: ',
+        @Validado,
+        N'.'
+    ),
+    @UsuarioID,
+    @Ahora
+);";
+
+                await using (var cmd =
+                    new SqlCommand(sqlHistorial, cn, tx))
+                {
+                    cmd.Parameters.Add(
+                        "@InspeccionID",
+                        SqlDbType.Int).Value =
+                        model.InspeccionID;
+
+                    cmd.Parameters.Add(
+                        "@Reportado",
+                        SqlDbType.Int).Value =
+                        scrapReportado;
+
+                    cmd.Parameters.Add(
+                        "@Validado",
+                        SqlDbType.Int).Value =
+                        model.CantidadScrapValidadaProduccion;
+
+                    cmd.Parameters.Add(
+                        "@UsuarioID",
+                        SqlDbType.Int).Value =
+                        usuarioId.Value;
+
+                    cmd.Parameters.Add(
+                        "@Ahora",
+                        SqlDbType.DateTime2).Value =
+                        ahora;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+
+                TempData["Mensaje"] =
+                    $"Scrap validado: {model.CantidadScrapValidadaProduccion:N0} de {scrapReportado:N0} pieza(s) reportada(s).";
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] =
+                    "No fue posible validar el scrap de Produccion: " +
+                    ex.Message;
+            }
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.InspeccionID });
+        }
+
+        // ================================================================
+        // B) Monitoreo 1: disparo solicitado, medido y embolsado.
+        // ================================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RegistrarDisparoMonitoreoV2(
+            CalidadMonitoreoDisparoV2ViewModel model)
+        {
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            model.Observaciones =
+                model.Observaciones?.Trim();
+
+            if (!ModelState.IsValid ||
+                model.FechaHoraDisparo == default)
+            {
+                TempData["Error"] =
+                    "Captura la hora del disparo.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (!model.MuestraDisparoEmbolsada)
+            {
+                TempData["Error"] =
+                    "Confirma que la muestra del disparo fue embolsada.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (model.ConHallazgo &&
+                string.IsNullOrWhiteSpace(model.Observaciones))
+            {
+                TempData["Error"] =
+                    "Describe el hallazgo detectado en el disparo.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            // NSQ_CALIDAD_MONITOREO_V2_1_CONTROLLER
+            // El retrabajo se gestiona fuera de este monitoreo.
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            try
+            {
+                const string sql = @"
+UPDATE m WITH(UPDLOCK,HOLDLOCK)
+SET
+    FechaHoraDisparo=@FechaHoraDisparo,
+    UsuarioDisparoCalidadID=@UsuarioID,
+    MuestraDisparoEmbolsada=1,
+    DisparoConHallazgo=@ConHallazgo,
+    DisparoRetrabajoSolicitado=0,
+    ObservacionesDisparo=@Observaciones,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+FROM dbo.Calidad_MonitoreosProceso m
+INNER JOIN dbo.Calidad_Inspecciones i
+    ON i.InspeccionID=m.InspeccionID
+WHERE m.MonitoreoID=@MonitoreoID
+  AND m.InspeccionID=@InspeccionID
+  AND m.Activo=1
+  AND ISNULL(m.FlujoMonitoreoVersion,1)>=2
+  AND m.FechaHoraDisparo IS NULL
+  AND UPPER(LTRIM(RTRIM(ISNULL(i.Estado,N''))))=N'MONITOREO_ACTIVO';
+
+IF @@ROWCOUNT<>1
+    THROW 51821,'El disparo ya fue registrado o el monitoreo cambio de estado.',1;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'MONITOREO_DISPARO_AUDITADO',
+    N'MONITOREO_ACTIVO',
+    N'MONITOREO_ACTIVO',
+    CASE WHEN @ConHallazgo=1 THEN N'NO_CONFORME' ELSE N'CONFORME' END,
+    CASE WHEN @ConHallazgo=1 THEN N'AMARILLA' ELSE N'VERDE' END,
+    CONCAT(
+        N'Disparo auditado a las ',
+        CONVERT(NVARCHAR(16),@FechaHoraDisparo,120),
+        N'. Muestra embolsada: SI. Hallazgo: ',
+        CASE WHEN @ConHallazgo=1 THEN N'SI' ELSE N'NO' END,
+        N'.'
+    ),
+    @UsuarioID,
+    @Ahora
+);";
+
+                await using var cmd =
+                    new SqlCommand(sql, cn, tx);
+
+                cmd.Parameters.Add(
+                    "@FechaHoraDisparo",
+                    SqlDbType.DateTime2).Value =
+                    model.FechaHoraDisparo;
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId.Value;
+
+                cmd.Parameters.Add(
+                    "@ConHallazgo",
+                    SqlDbType.Bit).Value =
+                    model.ConHallazgo;
+
+
+                cmd.Parameters.Add(
+                    "@Observaciones",
+                    SqlDbType.NVarChar,
+                    1000).Value =
+                    string.IsNullOrWhiteSpace(model.Observaciones)
+                        ? DBNull.Value
+                        : model.Observaciones;
+
+                cmd.Parameters.Add(
+                    "@Ahora",
+                    SqlDbType.DateTime2).Value =
+                    DateTime.Now;
+
+                cmd.Parameters.Add(
+                    "@MonitoreoID",
+                    SqlDbType.Int).Value =
+                    model.MonitoreoID;
+
+                cmd.Parameters.Add(
+                    "@InspeccionID",
+                    SqlDbType.Int).Value =
+                    model.InspeccionID;
+
+                await cmd.ExecuteNonQueryAsync();
+
+                await tx.CommitAsync();
+
+                TempData["Mensaje"] =
+                    "Disparo auditado y muestra embolsada registrados.";
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] =
+                    "No fue posible guardar el disparo auditado: " +
+                    ex.Message;
+            }
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.InspeccionID });
+        }
+
+        // ================================================================
+        // C) Monitoreo 2: revision aleatoria de piezas de la caja.
+        // ================================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RegistrarRevisionCajaMonitoreoV2(
+            CalidadMonitoreoCajaV2ViewModel model)
+        {
+            var usuarioId = ObtenerUsuarioIdActual();
+
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            model.Observaciones =
+                model.Observaciones?.Trim();
+
+            var resultado =
+                NormalizarResultadoMonitoreo(model.Resultado);
+
+            if (!ModelState.IsValid ||
+                resultado == null ||
+                (
+                    resultado != CalidadResultadoMonitoreo.Conforme &&
+                    resultado != CalidadResultadoMonitoreo.NoConforme
+                ))
+            {
+                TempData["Error"] =
+                    "Selecciona Conforme o No conforme para la revision aleatoria.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (resultado ==
+                    CalidadResultadoMonitoreo.Conforme &&
+                !model.MuestraCajaPTConfirmada)
+            {
+                TempData["Error"] =
+                    "Confirma que las piezas revisadas conformes se colocaron en la caja de PT.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (resultado ==
+                    CalidadResultadoMonitoreo.NoConforme &&
+                string.IsNullOrWhiteSpace(model.Observaciones))
+            {
+                TempData["Error"] =
+                    "Describe el hallazgo de la revision aleatoria.";
+
+                return RedirectToAction(
+                    nameof(Detalle),
+                    new { id = model.InspeccionID });
+            }
+
+            if (resultado ==
+                CalidadResultadoMonitoreo.NoConforme)
+            {
+                model.MuestraCajaPTConfirmada = false;
+            }
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            try
+            {
+                const string sql = @"
+UPDATE m WITH(UPDLOCK,HOLDLOCK)
+SET
+    FechaHoraRevision=@Ahora,
+    CantidadRevisadaMuestra=@CantidadRevisada,
+    Resultado=@Resultado,
+    DefectoCodigo=NULL,
+    DefectoDescripcion=NULL,
+    CantidadSospechosa=0,
+    CantidadNoRecuperable=0,
+    RequiereSeleccion=0,
+    RequiereRetrabajo=0,
+    ResponsableRetrabajo=NULL,
+    Observaciones=@Observaciones,
+    MuestraCajaPTConfirmada=@MuestraCajaPTConfirmada,
+    UsuarioCalidadID=@UsuarioID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+FROM dbo.Calidad_MonitoreosProceso m
+INNER JOIN dbo.Calidad_Inspecciones i
+    ON i.InspeccionID=m.InspeccionID
+WHERE m.MonitoreoID=@MonitoreoID
+  AND m.InspeccionID=@InspeccionID
+  AND m.Activo=1
+  AND ISNULL(m.FlujoMonitoreoVersion,1)>=2
+  AND m.FechaHoraRevision IS NULL
+  AND UPPER(LTRIM(RTRIM(ISNULL(i.Estado,N''))))=N'MONITOREO_ACTIVO';
+
+IF @@ROWCOUNT<>1
+    THROW 51822,'La revision aleatoria ya fue registrada o el monitoreo cambio de estado.',1;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,
+    Movimiento,
+    EstadoAnterior,
+    EstadoNuevo,
+    ResultadoCalidad,
+    Etiqueta,
+    Comentario,
+    UsuarioID,
+    FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    N'MONITOREO_CAJA_ALEATORIO',
+    N'MONITOREO_ACTIVO',
+    N'MONITOREO_ACTIVO',
+    @Resultado,
+    CASE WHEN @Resultado=N'CONFORME' THEN N'VERDE' ELSE N'AMARILLA' END,
+    CONCAT(
+        N'Revision aleatoria de ',
+        @CantidadRevisada,
+        N' pieza(s) de caja. Resultado: ',
+        @Resultado,
+        N'. Piezas conformes colocadas en caja PT: ',
+        CASE WHEN @MuestraCajaPTConfirmada=1 THEN N'SI' ELSE N'NO' END,
+        N'.'
+    ),
+    @UsuarioID,
+    @Ahora
+);";
+
+                await using var cmd =
+                    new SqlCommand(sql, cn, tx);
+
+                cmd.Parameters.Add(
+                    "@Ahora",
+                    SqlDbType.DateTime2).Value =
+                    DateTime.Now;
+
+                cmd.Parameters.Add(
+                    "@CantidadRevisada",
+                    SqlDbType.Int).Value =
+                    model.CantidadRevisada;
+
+                cmd.Parameters.Add(
+                    "@Resultado",
+                    SqlDbType.NVarChar,
+                    20).Value =
+                    resultado;
+
+
+                cmd.Parameters.Add(
+                    "@MuestraCajaPTConfirmada",
+                    SqlDbType.Bit).Value =
+                    model.MuestraCajaPTConfirmada;
+
+                cmd.Parameters.Add(
+                    "@Observaciones",
+                    SqlDbType.NVarChar,
+                    1000).Value =
+                    string.IsNullOrWhiteSpace(model.Observaciones)
+                        ? DBNull.Value
+                        : model.Observaciones;
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId.Value;
+
+                cmd.Parameters.Add(
+                    "@MonitoreoID",
+                    SqlDbType.Int).Value =
+                    model.MonitoreoID;
+
+                cmd.Parameters.Add(
+                    "@InspeccionID",
+                    SqlDbType.Int).Value =
+                    model.InspeccionID;
+
+                await cmd.ExecuteNonQueryAsync();
+
+                await tx.CommitAsync();
+
+                TempData["Mensaje"] =
+                    "Revision aleatoria de caja registrada.";
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
+                TempData["Error"] =
+                    "No fue posible guardar la revision aleatoria: " +
+                    ex.Message;
+            }
+
+            return RedirectToAction(
+                nameof(Detalle),
+                new { id = model.InspeccionID });
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RegistrarMonitoreo(CalidadMonitoreoGuardarViewModel model)
@@ -4083,6 +4979,18 @@ SELECT
     m.ResponsableRetrabajo,
     m.Observaciones,
 
+    -- NSQ_CALIDAD_MONITOREO_AUDITORIA_V2_CONTROLLER
+    ISNULL(m.FlujoMonitoreoVersion,1) AS FlujoMonitoreoVersion,
+    m.CantidadScrapValidadaProduccion,
+    m.ObservacionesScrapProduccion,
+    m.FechaHoraDisparo,
+    m.UsuarioDisparoCalidadID,
+    m.MuestraDisparoEmbolsada,
+    m.DisparoConHallazgo,
+    m.DisparoRetrabajoSolicitado,
+    m.ObservacionesDisparo,
+    m.MuestraCajaPTConfirmada,
+
     rh.FechaProduccion,
     rh.HoraInicio,
     rh.HoraFin,
@@ -4130,6 +5038,53 @@ ORDER BY m.NumeroHora;";
                     RequiereRetrabajo = Convert.ToBoolean(rd["RequiereRetrabajo"]),
                     ResponsableRetrabajo = rd["ResponsableRetrabajo"] as string,
                     Observaciones = rd["Observaciones"] as string,
+
+                    FlujoMonitoreoVersion =
+                        rd["FlujoMonitoreoVersion"] == DBNull.Value
+                            ? (byte)1
+                            : Convert.ToByte(rd["FlujoMonitoreoVersion"]),
+
+                    CantidadScrapValidadaProduccion =
+                        rd["CantidadScrapValidadaProduccion"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["CantidadScrapValidadaProduccion"]),
+
+                    ObservacionesScrapProduccion =
+                        rd["ObservacionesScrapProduccion"] as string,
+
+                    FechaHoraDisparo =
+                        rd["FechaHoraDisparo"] == DBNull.Value
+                            ? null
+                            : Convert.ToDateTime(rd["FechaHoraDisparo"]),
+
+                    UsuarioDisparoCalidadID =
+                        rd["UsuarioDisparoCalidadID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["UsuarioDisparoCalidadID"]),
+
+                    MuestraDisparoEmbolsada =
+                        rd["MuestraDisparoEmbolsada"] == DBNull.Value
+                            ? null
+                            : Convert.ToBoolean(rd["MuestraDisparoEmbolsada"]),
+
+                    DisparoConHallazgo =
+                        rd["DisparoConHallazgo"] == DBNull.Value
+                            ? null
+                            : Convert.ToBoolean(rd["DisparoConHallazgo"]),
+
+                    DisparoRetrabajoSolicitado =
+                        rd["DisparoRetrabajoSolicitado"] == DBNull.Value
+                            ? null
+                            : Convert.ToBoolean(rd["DisparoRetrabajoSolicitado"]),
+
+                    ObservacionesDisparo =
+                        rd["ObservacionesDisparo"] as string,
+
+                    MuestraCajaPTConfirmada =
+                        rd["MuestraCajaPTConfirmada"] == DBNull.Value
+                            ? null
+                            : Convert.ToBoolean(rd["MuestraCajaPTConfirmada"]),
+
                     FechaProduccion = rd["FechaProduccion"] == DBNull.Value
                         ? null
                         : Convert.ToDateTime(rd["FechaProduccion"]),

@@ -583,10 +583,47 @@ namespace ERP.NSQuell.Models
                         CantidadProcesada * 100m / CantidadRecibida),
                     1);
     }
+    // NSQ_GP12_CAJAS_REPORTADAS_CALIDAD_V1_MODEL
+    // NSQ_GP12_CAJAS_DESDE_CALIDAD_V1_3_MODEL
+    public sealed class GP12CajaReportadaCalidadViewModel
+    {
+        public int? SolicitudGP12ID { get; set; }
+        public long CajaProduccionID { get; set; }
+        public int CajaLiberadaID { get; set; }
 
-    public class GP12DetalleViewModel
+        public string? OrdenFabricacion { get; set; }
+        public string? NumeroParte { get; set; }
+        public string FolioCaja { get; set; } = string.Empty;
+
+        public int NumeroCaja { get; set; }
+        public int CantidadPiezas { get; set; }
+
+        public string? CodigoBarrasOrigen { get; set; }
+        public string? Motivo { get; set; }
+
+        public string EstadoCalidad { get; set; } = string.Empty;
+        public string? DestinoCalidad { get; set; }
+        public DateTime? FechaValidacionCalidad { get; set; }
+
+        public int? EstatusID { get; set; }
+        public DateTime FechaSolicitud { get; set; }
+        public DateTime? FechaRecepcion { get; set; }
+        public decimal CantidadRecibida { get; set; }
+
+        public bool TieneSolicitudGP12 =>
+            SolicitudGP12ID.HasValue &&
+            SolicitudGP12ID.Value > 0;
+
+        public bool YaRecibida =>
+            FechaRecepcion.HasValue ||
+            CantidadRecibida > 0;
+    }
+public class GP12DetalleViewModel
     {
         public int SolicitudGP12ID { get; set; }
+
+        public List<GP12CajaReportadaCalidadViewModel>
+            CajasReportadasCalidad { get; set; } = new();
 
         public string Origen { get; set; } = string.Empty;
 

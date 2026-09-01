@@ -6,13 +6,22 @@
     var porcentajeMonitoreoCss = Model.PorcentajeMonitoreosAtendidos.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
     var ahora = DateTime.Now;
     var monitoreosOrdenados = Model.Monitoreos.OrderBy(x => x.FechaHoraProgramada).ToList();
-    var monitoreosAtendidos = monitoreosOrdenados.Where(x => !x.EsPendiente).OrderByDescending(x => x.FechaHoraProgramada).ToList();
+    // NSQ_CALIDAD_MONITOREO_V2_1_VIEW
+    // Todas las horas se muestran como cards colapsables.
+    // Solo se abre automaticamente la primera hora pendiente cuya hora ya llego.
+    // Si una hora anterior sigue pendiente, las siguientes no se abren solas.
+    var monitoreosAtendidos = monitoreosOrdenados.Where(x => false).ToList();
     var monitoreosPendientes = monitoreosOrdenados.Where(x => x.EsPendiente).ToList();
-    var monitoreoVigente = monitoreosPendientes.Where(x => x.PuedeCapturar || x.TieneRegistroProduccion || x.FechaHoraProgramada <= ahora).OrderBy(x => x.FechaHoraProgramada).FirstOrDefault();
-    monitoreoVigente ??= monitoreosPendientes.OrderBy(x => x.FechaHoraProgramada).FirstOrDefault();
-    var monitoreoSiguiente = monitoreosPendientes.Where(x => monitoreoVigente == null || x.MonitoreoID != monitoreoVigente.MonitoreoID).OrderBy(x => x.FechaHoraProgramada).FirstOrDefault();
-    var monitoreosVisibles = monitoreosPendientes.Where(x => (monitoreoVigente != null && x.MonitoreoID == monitoreoVigente.MonitoreoID) || (monitoreoSiguiente != null && x.MonitoreoID == monitoreoSiguiente.MonitoreoID)).OrderBy(x => x.FechaHoraProgramada).ToList();
-    var monitoreosFuturos = monitoreosPendientes.Where(x => (monitoreoVigente == null || x.MonitoreoID != monitoreoVigente.MonitoreoID) && (monitoreoSiguiente == null || x.MonitoreoID != monitoreoSiguiente.MonitoreoID)).OrderBy(x => x.FechaHoraProgramada).ToList();
+    var monitoreoVigente = monitoreosPendientes
+        .Where(x => x.FechaHoraProgramada <= ahora)
+        .OrderBy(x => x.FechaHoraProgramada)
+        .FirstOrDefault();
+    var monitoreoSiguiente = monitoreosPendientes
+        .Where(x => monitoreoVigente == null || x.MonitoreoID != monitoreoVigente.MonitoreoID)
+        .OrderBy(x => x.FechaHoraProgramada)
+        .FirstOrDefault();
+    var monitoreosVisibles = monitoreosOrdenados;
+    var monitoreosFuturos = monitoreosOrdenados.Where(x => false).ToList();
 }
 <style>
     .quality-monitoring {
@@ -432,6 +441,33 @@
             padding: 15px
         }
     }
+
+    /* NSQ_CALIDAD_MONITOREO_V2_1_COLLAPSE_CSS */
+    .quality-monitoring .quality-monitor-featured.qm-hour-collapsible {
+        transition: box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .quality-monitoring .quality-monitor-featured.qm-hour-collapsible.is-collapsed > *:not(:first-child) {
+        display: none !important;
+    }
+
+    .quality-monitoring .quality-monitor-featured.qm-hour-collapsible.is-collapsed > :first-child {
+        margin-bottom: 0 !important;
+    }
+
+    .quality-monitoring .qm-hour-toggle {
+        min-height: 32px;
+        padding: 5px 9px;
+        font-size: .74rem;
+    }
+
+    .quality-monitoring .qm-hour-toggle i {
+        transition: transform .18s ease;
+    }
+
+    .quality-monitoring .quality-monitor-featured.qm-hour-collapsible:not(.is-collapsed) .qm-hour-toggle i {
+        transform: rotate(180deg);
+    }
 </style>
 
 <div class="quality-monitoring">
@@ -440,8 +476,8 @@
         <section class="quality-card" id="monitoreos-calidad">
             <div class="quality-card-header">
                 <div>
-                    <h2><i class="fa-solid fa-clock"></i>Monitoreos de proceso cada hora</h2>
-                    <div class="quality-help">Calidad revisa por separado el material segregado por Producción y su propia muestra del proceso.</div>
+                    <h2><i class="fa-solid fa-clock"></i>Monitoreo de Calidad por periodo</h2>
+                    <div class="quality-help">Cada periodo registra el scrap reportado por Producción, un disparo auditado y una revisión aleatoria de piezas de caja.</div>
                 </div>
                 @if (estado == CalidadEstados.MonitoreoActivo)
                 {
@@ -585,9 +621,33 @@
                                             </span>
                                         }
 
-                                        <span class="badge @monitor.ResultadoBadgeClase">
-                                            @monitor.ResultadoTexto
-                                        </span>
+                                        @if (monitor.EsFlujoAuditoriaV2)
+                                        {
+                                            @if (monitor.RevisionCajaCompleta)
+                                            {
+                                                <span class="badge @monitor.ResultadoBadgeClase">
+                                                    @monitor.ResultadoTexto
+                                                </span>
+                                            }
+                                            else if (monitor.EsPendiente)
+                                            {
+                                                <span class="badge bg-warning text-dark">
+                                                    Pendiente requerido
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">
+                                                    Monitoreo requerido completo
+                                                </span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="badge @monitor.ResultadoBadgeClase">
+                                                @monitor.ResultadoTexto
+                                            </span>
+                                        }
                                     </div>
                                 </div>
 
@@ -596,14 +656,17 @@
                                         <div class="quality-data-label">Captura vinculada</div>
                                         <div class="fw-semibold">@monitor.RangoProduccion</div>
                                     </div>
-                                    <div class="col-md-2">
-                                        <div class="quality-data-label">OK reportado</div>
-                                        <div class="fw-bold text-success">@monitor.CantidadOKProduccion</div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="quality-data-label">Sospechoso reportado</div>
-                                        <div class="fw-bold text-warning">@monitor.CantidadSospechosaProduccion</div>
-                                    </div>
+                                    @if (!monitor.EsFlujoAuditoriaV2)
+                                    {
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">OK reportado</div>
+                                            <div class="fw-bold text-success">@monitor.CantidadOKProduccion</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Sospechoso reportado</div>
+                                            <div class="fw-bold text-warning">@monitor.CantidadSospechosaProduccion</div>
+                                        </div>
+                                    }
                                     <div class="col-md-2">
                                         <div class="quality-data-label">Scrap reportado</div>
                                         <div class="fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
@@ -624,8 +687,300 @@
 
                                 @if (monitor.PuedeCapturar && estado == CalidadEstados.MonitoreoActivo)
                                 {
-                                    <form asp-controller="Calidad"
-                                          asp-action="RegistrarMonitoreo"
+                                    @* NSQ_CALIDAD_MONITOREO_AUDITORIA_V2_VIEW *@
+                                    @if (monitor.EsFlujoAuditoriaV2)
+                                    {
+                                        <div class="d-grid gap-3">
+                                            <div class="qm-step qm-step-a">
+                                                <div class="qm-step-header">
+                                                    <div class="qm-step-icon">♻</div>
+                                                    <div>
+                                                        <div class="qm-step-title">A) Scrap reportado por Producción</div>
+                                                        <div class="quality-help">
+                                                            Producción reporta únicamente scrap. Calidad valida físicamente cuántas piezas están presentes.
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="qm-step-body">
+                                                    @if (!monitor.TieneRegistroProduccion)
+                                                    {
+                                                        <div class="alert alert-secondary mb-0">
+                                                            Esperando la captura del periodo de Producción para conocer el scrap reportado.
+                                                        </div>
+                                                    }
+                                                    else if (monitor.CantidadScrapProduccion <= 0)
+                                                    {
+                                                        <div class="alert alert-success mb-0">
+                                                            Producción no reportó scrap en este periodo. No hay piezas de scrap por validar.
+                                                        </div>
+                                                    }
+                                                    else if (monitor.CantidadScrapValidadaProduccion.HasValue)
+                                                    {
+                                                        <div class="row g-3">
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Scrap reportado</div>
+                                                                <div class="fs-5 fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Scrap validado</div>
+                                                                <div class="fs-5 fw-bold">@monitor.CantidadScrapValidadaProduccion.Value</div>
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <div class="quality-data-label">Observaciones</div>
+                                                                <div>@Mostrar(monitor.ObservacionesScrapProduccion)</div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <form asp-controller="Calidad"
+                                                              asp-action="ValidarScrapMonitoreoV2"
+                                                              method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
+                                                            <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+
+                                                            <div class="row g-3">
+                                                                <div class="col-md-3">
+                                                                    <label class="form-label fw-semibold">Scrap reportado</label>
+                                                                    <div class="form-control bg-light fw-bold text-danger">
+                                                                        @monitor.CantidadScrapProduccion
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-3">
+                                                                    <label class="form-label fw-semibold">
+                                                                        Cantidad de scrap validada
+                                                                    </label>
+                                                                    <input type="number"
+                                                                           name="CantidadScrapValidadaProduccion"
+                                                                           min="0"
+                                                                           max="@monitor.CantidadScrapProduccion"
+                                                                           value="@monitor.CantidadScrapProduccion"
+                                                                           class="form-control"
+                                                                           required />
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <label class="form-label fw-semibold">Observaciones</label>
+                                                                    <textarea name="Observaciones"
+                                                                              rows="2"
+                                                                              maxlength="1000"
+                                                                              class="form-control"
+                                                                              placeholder="Obligatorio si la cantidad física no coincide con lo reportado."></textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="mt-3 text-end">
+                                                                <button type="submit"
+                                                                        class="quality-btn quality-btn-primary">
+                                                                    Validar scrap
+                                                                </button>
+                                                            </div>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <div class="qm-step qm-step-b">
+                                                <div class="qm-step-header">
+                                                    <div class="qm-step-icon">🔬</div>
+                                                    <div>
+                                                        <div class="qm-step-title">B) Monitoreo 1 · Disparo auditado</div>
+                                                        <div class="quality-help">
+                                                            El auditor solicita un disparo, observa y mide la pieza, la embolsa y registra la revisión. El auditor se toma automáticamente de la sesión.
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="qm-step-body">
+                                                    @if (monitor.DisparoCompleto)
+                                                    {
+                                                        <div class="row g-3">
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Hora del disparo</div>
+                                                                <div class="fw-bold">@monitor.FechaHoraDisparo?.ToString("dd/MM/yyyy HH:mm")</div>
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <div class="quality-data-label">Embolsada</div>
+                                                                <div class="fw-bold text-success">Sí</div>
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <div class="quality-data-label">Hallazgo</div>
+                                                                <div class="fw-bold">
+                                                                    @(monitor.DisparoConHallazgo == true ? "Sí" : "No")
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Observaciones</div>
+                                                                <div>@Mostrar(monitor.ObservacionesDisparo)</div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <form asp-controller="Calidad"
+                                                              asp-action="RegistrarDisparoMonitoreoV2"
+                                                              method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
+                                                            <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+
+                                                            <div class="row g-3">
+                                                                <div class="col-md-3">
+                                                                    <label class="form-label fw-semibold">Hora del disparo</label>
+                                                                    <input type="datetime-local"
+                                                                           name="FechaHoraDisparo"
+                                                                           value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
+                                                                           class="form-control"
+                                                                           required />
+                                                                </div>
+                                                                <div class="col-md-3">
+                                                                    <label class="form-label fw-semibold">Resultado</label>
+                                                                    <select name="ConHallazgo" class="form-select">
+                                                                        <option value="false">Sin hallazgo</option>
+                                                                        <option value="true">Con hallazgo</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-md-3 d-flex align-items-end">
+                                                                    <label class="form-check">
+                                                                        <input type="checkbox"
+                                                                               class="form-check-input"
+                                                                               name="MuestraDisparoEmbolsada"
+                                                                               value="true" />
+                                                                        <span class="form-check-label fw-semibold">
+                                                                            Pieza medida y embolsada
+                                                                        </span>
+                                                                    </label>
+                                                                </div>
+
+                                                                <div class="col-12">
+                                                                    <label class="form-label fw-semibold">Observaciones del auditor</label>
+                                                                    <textarea name="Observaciones"
+                                                                              rows="2"
+                                                                              maxlength="1000"
+                                                                              class="form-control"
+                                                                              placeholder="Mediciones, observaciones o hallazgo detectado."></textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="mt-3 text-end">
+                                                                <button type="submit"
+                                                                        class="quality-btn quality-btn-primary">
+                                                                    Guardar disparo auditado
+                                                                </button>
+                                                            </div>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <div class="qm-step qm-step-b">
+                                                <div class="qm-step-header">
+                                                    <div class="qm-step-icon">📦</div>
+                                                    <div>
+                                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                                            <div class="qm-step-title">C) Monitoreo 2 · Revisión aleatoria de caja</div>
+                                                            <span class="badge bg-secondary">OPCIONAL</span>
+                                                        </div>
+                                                        <div class="quality-help">
+                                                            Se registra únicamente cuando el auditor decide tomar una muestra aleatoria de la caja de Producción.
+                                                            No bloquea el avance a la siguiente hora ni el cierre del monitoreo.
+                                                            Si las piezas son conformes, se confirma que se colocaron en la caja de PT.
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="qm-step-body">
+                                                    @if (monitor.RevisionCajaCompleta)
+                                                    {
+                                                        <div class="row g-3">
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Piezas revisadas</div>
+                                                                <div class="fs-5 fw-bold">@monitor.CantidadRevisadaMuestra</div>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Resultado</div>
+                                                                <div class="fw-bold">@monitor.ResultadoTexto</div>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Caja PT</div>
+                                                                <div class="fw-bold">
+                                                                    @(monitor.MuestraCajaPTConfirmada == true ? "Colocadas en PT" : "No aplica")
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <div class="quality-data-label">Observaciones</div>
+                                                                <div>@Mostrar(monitor.Observaciones)</div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <form asp-controller="Calidad"
+                                                              asp-action="RegistrarRevisionCajaMonitoreoV2"
+                                                              method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
+                                                            <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+
+                                                            <div class="row g-3">
+                                                                <div class="col-md-3">
+                                                                    <label class="form-label fw-semibold">¿Cuántas piezas revisaste?</label>
+                                                                    <input type="number"
+                                                                           name="CantidadRevisada"
+                                                                           min="1"
+                                                                           class="form-control"
+                                                                           required />
+                                                                </div>
+                                                                <div class="col-md-3">
+                                                                    <label class="form-label fw-semibold">Resultado</label>
+                                                                    <select name="Resultado"
+                                                                            class="form-select"
+                                                                            required>
+                                                                        <option value="" selected>Selecciona si realizaste la revisión</option>
+                                                                        <option value="@CalidadResultadoMonitoreo.Conforme">Conforme</option>
+                                                                        <option value="@CalidadResultadoMonitoreo.NoConforme">No conforme</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-md-3 d-flex align-items-end">
+                                                                    <label class="form-check">
+                                                                        <input type="checkbox"
+                                                                               class="form-check-input"
+                                                                               name="MuestraCajaPTConfirmada"
+                                                                               value="true" />
+                                                                        <span class="form-check-label fw-semibold">
+                                                                            Piezas conformes colocadas en caja PT
+                                                                        </span>
+                                                                    </label>
+                                                                </div>
+
+                                                                <div class="col-12">
+                                                                    <label class="form-label fw-semibold">Observaciones</label>
+                                                                    <textarea name="Observaciones"
+                                                                              rows="2"
+                                                                              maxlength="1000"
+                                                                              class="form-control"
+                                                                              placeholder="Describe el hallazgo si la revisión no es conforme."></textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="mt-3 text-end">
+                                                                <button type="submit"
+                                                                        class="quality-btn quality-btn-primary">
+                                                                    Guardar revisión de caja
+                                                                </button>
+                                                            </div>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <form asp-controller="Calidad"
+                                              asp-action="RegistrarMonitoreo"
                                           method="post"
                                           class="monitor-form"
                                           data-monitor-form
@@ -1013,6 +1368,7 @@
                                             </button>
                                         </div>
                                     </form>
+                                    }
                                 }
                                 else if (monitor.EsPendiente && !monitor.TieneRegistroProduccion)
                                 {
@@ -1159,14 +1515,30 @@
                                                     @(monitor.FechaHoraRevision?.ToString("dd/MM/yyyy HH:mm") ?? "Sin fecha")
                                                 </div>
 
-                                                <div class="quality-help">
-                                                    Producción segregó:
-                                                    @(monitor.CantidadSospechosaProduccion + monitor.CantidadScrapProduccion)
-                                                    · Muestra Calidad:
-                                                    @monitor.CantidadRevisadaMuestra
-                                                    · Afectado Calidad:
-                                                    @monitor.CantidadAfectadaCalidad
-                                                </div>
+                                                @if (monitor.EsFlujoAuditoriaV2)
+                                                {
+                                                    <div class="quality-help">
+                                                        Scrap reportado:
+                                                        @monitor.CantidadScrapProduccion
+                                                        · Scrap validado:
+                                                        @(monitor.CantidadScrapValidadaProduccion?.ToString() ?? "Pendiente")
+                                                        · Disparo:
+                                                        @(monitor.FechaHoraDisparo?.ToString("HH:mm") ?? "Pendiente")
+                                                        · Muestra aleatoria:
+                                                        @monitor.CantidadRevisadaMuestra
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="quality-help">
+                                                        Producción segregó:
+                                                        @(monitor.CantidadSospechosaProduccion + monitor.CantidadScrapProduccion)
+                                                        · Muestra Calidad:
+                                                        @monitor.CantidadRevisadaMuestra
+                                                        · Afectado Calidad:
+                                                        @monitor.CantidadAfectadaCalidad
+                                                    </div>
+                                                }
                                             </div>
 
                                             <span class="badge @monitor.ResultadoBadgeClase">
@@ -1550,4 +1922,72 @@
         actualizarResultado();
         actualizarBalanceProduccion();
     });
+</script>
+<!-- NSQ_CALIDAD_MONITOREO_V2_1_COLLAPSE_JS -->
+<script>
+(function () {
+    function inicializarCardsHoras() {
+        document
+            .querySelectorAll('#monitoreos-calidad .quality-monitor-featured')
+            .forEach(function (card) {
+                if (card.dataset.qmCollapseInit === '1') {
+                    return;
+                }
+
+                card.dataset.qmCollapseInit = '1';
+                card.classList.add('qm-hour-collapsible');
+
+                const header = card.firstElementChild;
+                if (!header) {
+                    return;
+                }
+
+                const esVigente =
+                    card.querySelector('.quality-period-kind-current') !== null;
+
+                card.classList.toggle('is-collapsed', !esVigente);
+
+                const zonaAcciones =
+                    header.lastElementChild || header;
+
+                const boton =
+                    document.createElement('button');
+
+                boton.type = 'button';
+                boton.className =
+                    'quality-btn quality-btn-light qm-hour-toggle';
+
+                function sincronizarBoton() {
+                    const colapsada =
+                        card.classList.contains('is-collapsed');
+
+                    boton.innerHTML =
+                        '<i class="fa-solid fa-chevron-down"></i>' +
+                        (colapsada ? ' Abrir' : ' Minimizar');
+
+                    boton.setAttribute(
+                        'aria-expanded',
+                        colapsada ? 'false' : 'true');
+                }
+
+                boton.addEventListener('click', function () {
+                    card.classList.toggle('is-collapsed');
+                    sincronizarBoton();
+                });
+
+                zonaAcciones.appendChild(boton);
+                sincronizarBoton();
+            });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener(
+            'DOMContentLoaded',
+            inicializarCardsHoras,
+            { once: true });
+    }
+    else {
+        inicializarCardsHoras();
+    }
+})();
 </script>

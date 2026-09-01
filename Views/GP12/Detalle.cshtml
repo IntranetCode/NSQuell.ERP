@@ -1580,9 +1580,9 @@
                             <div class="scan-reception @(Model.FechaRecepcion.HasValue ? "received" : "")" id="recepcion-caja-escaner">
                                 <div class="scan-reception-head">
                                     <div>
-                                        <h3 class="scan-reception-title">Recepción física de caja por escáner</h3>
+                                        <h3 class="scan-reception-title">Cajas reportadas por Calidad / recepción GP12</h3>
                                         <div class="scan-reception-help">
-                                            Esta solicitud proviene de una caja física enviada por Calidad. Escanea exactamente la misma etiqueta con la que se formó la caja en Producción.
+                                            Las cajas enviadas por Calidad se identifican automáticamente por su vínculo con la OF. No es necesario volver a capturar el código de barras.
                                         </div>
                                     </div>
                                     @if (Model.FechaRecepcion.HasValue)
@@ -1594,8 +1594,196 @@
                                         <span class="scan-reception-status">Pendiente de recepción</span>
                                     }
                                 </div>
+                                @* NSQ_GP12_CAJAS_REPORTADAS_CALIDAD_V1_VIEW *@
+                                @* NSQ_GP12_CAJAS_DESDE_CALIDAD_V1_3_VIEW *@
+                                @if (string.Equals(
+                                        Model.Origen,
+                                        GP12Origen.Calidad,
+                                        StringComparison.OrdinalIgnoreCase))
+                                {
+                                    @if (Model.CajasReportadasCalidad.Any())
+                                    {
+                                        <div class="notice"
+                                             style="margin-bottom:12px;">
+                                            <strong>
+                                                @Model.CajasReportadasCalidad.Count
+                                                caja(s) enviadas por Calidad a GP12 para
+                                                @(Model.OrdenFabricacion ?? "esta OF")
+                                            </strong>
+                                            <div style="margin-top:5px;">
+                                                Estas cajas salen de la trazabilidad de Calidad.
+                                                No necesitas volver a escanear su etiqueta para
+                                                identificarlas.
+                                            </div>
+                                        </div>
 
-                                @if (!Model.FechaRecepcion.HasValue && Model.PuedeRecibir)
+                                        <div class="table-wrap"
+                                             style="margin-bottom:12px;">
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Caja</th>
+                                                        <th>OF</th>
+                                                        <th>Parte</th>
+                                                        <th>Piezas</th>
+                                                        <th>Calidad</th>
+                                                        <th>GP12</th>
+                                                        <th>Recepción GP12</th>
+                                                        <th>Acción</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (
+                                                        var cajaReportada
+                                                        in Model.CajasReportadasCalidad)
+                                                    {
+                                                        <tr>
+                                                            <td>
+                                                                <strong>
+                                                                    @cajaReportada.FolioCaja
+                                                                </strong>
+                                                                <div style="font-size:11px;color:#667085;">
+                                                                    Caja Producción
+                                                                    #@cajaReportada.CajaProduccionID
+                                                                    · Calidad
+                                                                    #@cajaReportada.CajaLiberadaID
+                                                                </div>
+                                                            </td>
+
+                                                            <td>
+                                                                @(cajaReportada.OrdenFabricacion ?? "-")
+                                                            </td>
+
+                                                            <td>
+                                                                @(cajaReportada.NumeroParte ?? "-")
+                                                            </td>
+
+                                                            <td>
+                                                                @cajaReportada.CantidadPiezas.ToString("N0")
+                                                            </td>
+
+                                                            <td>
+                                                                <span class="tag-chip yellow">
+                                                                    @(string.IsNullOrWhiteSpace(
+                                                                        cajaReportada.EstadoCalidad)
+                                                                        ? "EN GP12"
+                                                                        : cajaReportada.EstadoCalidad)
+                                                                </span>
+                                                            </td>
+
+                                                            <td>
+                                                                @if (
+                                                                    cajaReportada.TieneSolicitudGP12)
+                                                                {
+                                                                    <a asp-controller="GP12"
+                                                                       asp-action="Detalle"
+                                                                       asp-route-id="@cajaReportada.SolicitudGP12ID"
+                                                                       class="btn secondary">
+                                                                        GP12
+                                                                        #@cajaReportada.SolicitudGP12ID
+                                                                    </a>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="tag-chip legacy">
+                                                                        Sin vínculo
+                                                                    </span>
+                                                                }
+                                                            </td>
+
+                                                            <td>
+                                                                @if (cajaReportada.YaRecibida)
+                                                                {
+                                                                    <span class="tag-chip yellow">
+                                                                        Recibida
+                                                                    </span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="tag-chip legacy">
+                                                                        Pendiente
+                                                                    </span>
+                                                                }
+                                                            </td>
+
+                                                            <td>
+                                                                @if (
+                                                                    cajaReportada.TieneSolicitudGP12 &&
+                                                                    !cajaReportada.YaRecibida &&
+                                                                    (
+                                                                        !cajaReportada.EstatusID.HasValue ||
+                                                                        !GP12Estatus.EsFinal(
+                                                                            cajaReportada.EstatusID.Value)
+                                                                    ))
+                                                                {
+                                                                    <form asp-controller="GP12"
+                                                                          asp-action="RecibirCajaReportada"
+                                                                          method="post"
+                                                                          style="margin:0;">
+                                                                        @Html.AntiForgeryToken()
+
+                                                                        <input type="hidden"
+                                                                               name="solicitudGP12ID"
+                                                                               value="@cajaReportada.SolicitudGP12ID" />
+
+                                                                        <button type="submit"
+                                                                                class="btn primary">
+                                                                            Recibir esta caja
+                                                                        </button>
+                                                                    </form>
+                                                                }
+                                                                else if (
+                                                                    !cajaReportada.TieneSolicitudGP12)
+                                                                {
+                                                                    <span style="font-size:12px;color:#b45309;">
+                                                                        Falta vínculo GP12
+                                                                    </span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="tag-chip yellow">
+                                                                        Sin acción pendiente
+                                                                    </span>
+                                                                }
+                                                            </td>
+                                                        </tr>
+
+                                                        @if (
+                                                            !string.IsNullOrWhiteSpace(
+                                                                cajaReportada.Motivo))
+                                                        {
+                                                            <tr>
+                                                                <td colspan="8"
+                                                                    style="font-size:12px;color:#667085;background:#fafafa;">
+                                                                    <strong>Motivo Calidad:</strong>
+                                                                    @cajaReportada.Motivo
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="notice"
+                                             style="margin-bottom:12px;border-color:#f59e0b;background:#fffbeb;">
+                                            <strong>
+                                                No se encontraron cajas marcadas por Calidad
+                                                como enviadas a GP12 para esta OF.
+                                            </strong>
+                                            <div style="margin-top:5px;">
+                                                No se mostrará un lector manual porque esta
+                                                solicitud proviene de Calidad. Si esto aparece,
+                                                hay que revisar la trazabilidad Calidad → GP12,
+                                                no volver a escanear la caja.
+                                            </div>
+                                        </div>
+                                    }
+                                }
+
+                                @if (!string.Equals(Model.Origen, GP12Origen.Calidad, StringComparison.OrdinalIgnoreCase) && !Model.FechaRecepcion.HasValue && Model.PuedeRecibir)
                                 {
                                     <form asp-controller="GP12"
                                           asp-action="RecibirCajaEscaneada"

@@ -276,10 +276,13 @@ namespace ERP.NSQuell.Models.ViewModels
         public int MonitoreosDisponiblesCaptura => Monitoreos.Count(x => x.PuedeCapturar);
         public int MonitoreosEsperandoProduccion => Monitoreos.Count(x => x.EsPendiente && !x.TieneRegistroProduccion);
         public int MonitoreosAtendidos => Monitoreos.Count(x => !x.EsPendiente);
-        public int MonitoreosConformes => Monitoreos.Count(x => x.Resultado == CalidadResultadoMonitoreo.Conforme);
+        public int MonitoreosConformes => Monitoreos.Count(x =>
+            x.EsFlujoAuditoriaV2
+                ? !x.EsPendiente && !x.TieneHallazgo
+                : x.Resultado == CalidadResultadoMonitoreo.Conforme);
+
         public int MonitoreosConHallazgo => Monitoreos.Count(x =>
-            x.Resultado == CalidadResultadoMonitoreo.Sospechoso ||
-            x.Resultado == CalidadResultadoMonitoreo.NoConforme);
+            x.TieneHallazgo);
         public int MonitoreosReinspeccionados => Monitoreos.Count(x => x.Resultado == CalidadResultadoMonitoreo.Reinspeccion);
         public int TotalMuestraRevisada => Monitoreos.Sum(x => x.CantidadRevisadaMuestra);
         public int TotalMaterialAfectado => Monitoreos.Sum(x => x.CantidadAfectadaCalidad);
@@ -604,6 +607,64 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Observaciones { get; set; }
     }
 
+    // NSQ_CALIDAD_MONITOREO_AUDITORIA_V2_MODELS
+    public class CalidadMonitoreoScrapV2ViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int MonitoreoID { get; set; }
+
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
+        [Range(0, int.MaxValue)]
+        public int CantidadScrapValidadaProduccion { get; set; }
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
+
+    public class CalidadMonitoreoDisparoV2ViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int MonitoreoID { get; set; }
+
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
+        public DateTime FechaHoraDisparo { get; set; }
+
+        public bool MuestraDisparoEmbolsada { get; set; }
+
+        public bool ConHallazgo { get; set; }
+
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
+
+    public class CalidadMonitoreoCajaV2ViewModel
+    {
+        [Range(1, int.MaxValue)]
+        public int MonitoreoID { get; set; }
+
+        [Range(1, int.MaxValue)]
+        public int InspeccionID { get; set; }
+
+        [Range(1, int.MaxValue)]
+        public int CantidadRevisada { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string Resultado { get; set; } =
+            CalidadResultadoMonitoreo.Pendiente;
+
+        public bool MuestraCajaPTConfirmada { get; set; }
+
+        public bool RequiereRetrabajo { get; set; }
+
+        [StringLength(1000)]
+        public string? Observaciones { get; set; }
+    }
     public class CalidadMonitoreoGuardarViewModel
     {
         [Range(1, int.MaxValue)]
@@ -946,6 +1007,20 @@ namespace ERP.NSQuell.Models.ViewModels
         public DateTime FechaHoraProgramada { get; set; }
         public DateTime? FechaHoraRevision { get; set; }
 
+        // NSQ_CALIDAD_MONITOREO_AUDITORIA_V2_ITEM
+        public byte FlujoMonitoreoVersion { get; set; } = 1;
+        public int? CantidadScrapValidadaProduccion { get; set; }
+        public string? ObservacionesScrapProduccion { get; set; }
+
+        public DateTime? FechaHoraDisparo { get; set; }
+        public int? UsuarioDisparoCalidadID { get; set; }
+        public bool? MuestraDisparoEmbolsada { get; set; }
+        public bool? DisparoConHallazgo { get; set; }
+        public bool? DisparoRetrabajoSolicitado { get; set; }
+        public string? ObservacionesDisparo { get; set; }
+
+        public bool? MuestraCajaPTConfirmada { get; set; }
+
         public DateTime? FechaProduccion { get; set; }
         public TimeSpan? HoraInicioProduccion { get; set; }
         public TimeSpan? HoraFinProduccion { get; set; }
@@ -966,17 +1041,77 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? ResponsableRetrabajo { get; set; }
         public string? Observaciones { get; set; }
 
-        public bool EsPendiente => Resultado == CalidadResultadoMonitoreo.Pendiente;
-        public bool TieneRegistroProduccion => RegistroHoraID.HasValue;
+        public bool EsFlujoAuditoriaV2 =>
+            FlujoMonitoreoVersion >= 2;
+
+        public bool TieneRegistroProduccion =>
+            RegistroHoraID.HasValue;
+
+        public bool ScrapValidacionCompleta =>
+            !EsFlujoAuditoriaV2 ||
+            (
+                TieneRegistroProduccion &&
+                (
+                    CantidadScrapProduccion <= 0 ||
+                    CantidadScrapValidadaProduccion.HasValue
+                )
+            );
+
+        public bool DisparoCompleto =>
+            !EsFlujoAuditoriaV2 ||
+            (
+                FechaHoraDisparo.HasValue &&
+                MuestraDisparoEmbolsada == true
+            );
+
+        public bool RevisionCajaCompleta =>
+            !EsFlujoAuditoriaV2 ||
+            (
+                FechaHoraRevision.HasValue &&
+                Resultado != CalidadResultadoMonitoreo.Pendiente &&
+                (
+                    Resultado != CalidadResultadoMonitoreo.Conforme ||
+                    MuestraCajaPTConfirmada == true
+                )
+            );
+
+        // NSQ_CALIDAD_MONITOREO_V2_1_LOGICA
+        // En V2.1 el flujo obligatorio de cada periodo es:
+        // A) scrap de Produccion resuelto + B) disparo auditado.
+        // C) la revision aleatoria de caja es opcional y no bloquea
+        // el avance al siguiente periodo ni el cierre del monitoreo.
+        public bool EsPendiente =>
+            EsFlujoAuditoriaV2
+                ? !(ScrapValidacionCompleta &&
+                    DisparoCompleto)
+                : Resultado == CalidadResultadoMonitoreo.Pendiente;
+
         public bool PuedeCapturar =>
+            EsFlujoAuditoriaV2
+                ? FechaHoraProgramada <= DateTime.Now &&
+                  (
+                      !ScrapValidacionCompleta ||
+                      !DisparoCompleto ||
+                      !RevisionCajaCompleta
+                  )
+                : EsPendiente &&
+                  TieneRegistroProduccion &&
+                  CantidadProducidaPeriodo > 0;
+
+        public bool EsperandoProduccion =>
             EsPendiente &&
-            TieneRegistroProduccion &&
-            CantidadProducidaPeriodo > 0;
-        public bool EsperandoProduccion => EsPendiente && !TieneRegistroProduccion;
-        public bool EstaVencido => EsPendiente && FechaHoraProgramada < DateTime.Now;
+            !TieneRegistroProduccion;
+
+        public bool EstaVencido =>
+            EsPendiente &&
+            FechaHoraProgramada < DateTime.Now;
+
         public bool TieneHallazgo =>
-            Resultado == CalidadResultadoMonitoreo.Sospechoso ||
-            Resultado == CalidadResultadoMonitoreo.NoConforme;
+            EsFlujoAuditoriaV2
+                ? DisparoConHallazgo == true ||
+                  Resultado == CalidadResultadoMonitoreo.NoConforme
+                : Resultado == CalidadResultadoMonitoreo.Sospechoso ||
+                  Resultado == CalidadResultadoMonitoreo.NoConforme;
 
         public int CantidadAfectadaCalidad =>
             CantidadSospechosa + CantidadNoRecuperable;
