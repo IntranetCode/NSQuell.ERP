@@ -8,6 +8,7 @@ namespace ERP.NSQuell.Models
         public const string SecadoMaterial = "SECADO_MATERIAL";
         public const string PrepararEmbalaje = "PREPARAR_EMBALAJE";
         public const string CambioMolde = "CAMBIO_MOLDE";
+        public const string MateriaPrima = "MATERIA_PRIMA";
     }
 
     public static class ProduccionPreparacionEstado
@@ -125,7 +126,7 @@ namespace ERP.NSQuell.Models
         public decimal CantidadMpRecibidaProduccionKg { get; set; }
         public decimal CantidadMpPendienteRecepcionKg => Math.Max(0m, (CantidadMpKg ?? 0m) - CantidadMpRecibidaProduccionKg);
 
-
+        public bool EsMateriaPrima => string.Equals(TipoTarea, ProduccionPreparacionTipo.MateriaPrima, StringComparison.OrdinalIgnoreCase);
         public string? MaterialCodigo { get; set; }
         public string? MaterialDescripcion { get; set; }
         public string? EmbalajeCodigo { get; set; }
@@ -160,6 +161,7 @@ namespace ERP.NSQuell.Models
         {
             get
             {
+                if (EsMateriaPrima) return "Materia prima";
                 if (EsSecadoMaterial) return "Secado de material";
                 if (EsPreparacionEmbalaje) return "Preparar embalaje";
                 if (EsCambioMolde) return "Cambio de molde";

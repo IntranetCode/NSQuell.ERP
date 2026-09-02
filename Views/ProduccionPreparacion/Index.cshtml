@@ -139,6 +139,7 @@
         if (t.EsCambioMolde) return "Cambio de molde";
         if (t.EsPreparacionEmbalaje) return "Embalaje";
         if (t.EsSecadoMaterial) return "Secado";
+        if (t.EsMateriaPrima) return "Materia prima";
 
         return "Preparación";
     }
@@ -146,27 +147,27 @@
     string TipoIcono(ProduccionPreparacionTareaVm t)
     {
         if (t.EsCambioMolde) return "bi-tools";
+        if (t.EsMateriaPrima) return "bi-droplet-half";
         if (t.EsPreparacionEmbalaje) return "bi-box-seam";
         if (t.EsSecadoMaterial) return "bi-thermometer-sun";
-
         return "bi-gear";
     }
 
     string TipoClase(ProduccionPreparacionTareaVm t)
     {
         if (t.EsCambioMolde) return "molde";
+        if (t.EsMateriaPrima) return "materia-prima";
         if (t.EsPreparacionEmbalaje) return "embalaje";
         if (t.EsSecadoMaterial) return "secado";
-
         return "";
     }
 
     string TituloTarea(ProduccionPreparacionTareaVm t)
     {
         if (t.EsCambioMolde) return t.TextoCambioMolde;
+        if (t.EsMateriaPrima) return t.TextoMaterial;
         if (t.EsPreparacionEmbalaje) return t.TextoEmbalaje;
         if (t.EsSecadoMaterial) return t.TextoMaterial;
-
         return t.TipoTareaNombre;
     }
 
@@ -180,6 +181,14 @@
             return t.DuracionProgramadaCambioMoldeMinutos.HasValue
                 ? $"Programado: {t.DuracionProgramadaCambioMoldeMinutos.Value} min"
                 : $"Límite máquina: {t.LimiteCambioMoldeMinutos} min";
+        }
+
+        if (t.EsMateriaPrima)
+        {
+            var requerida = t.CantidadMpKg.GetValueOrDefault();
+            var recibida = t.CantidadMpRecibidaProduccionKg;
+            var pendiente = Math.Max(0m, requerida - recibida);
+            return $"{recibida:0.####} / {requerida:0.####} KG recibidos · faltan {pendiente:0.####} KG";
         }
 
         if (t.EsPreparacionEmbalaje)
@@ -294,6 +303,12 @@
         if (t.EsCambioMolde)
             return Url.Action(
                 "CambioMolde",
+                "ProduccionPreparacion",
+                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+
+        if (t.EsMateriaPrima)
+            return Url.Action(
+                "Materiales",
                 "ProduccionPreparacion",
                 new { maquinaId = t.MaquinaID, filtro }) ?? "#";
 
@@ -758,10 +773,6 @@
             background: var(--panel);
         }
 
-            .section-shell > summary::-webkit-details-marker {
-                display: none;
-            }
-
         .section-shell[open] > summary {
             background: var(--graySoft);
             border-bottom: 1px solid var(--line);
@@ -1116,6 +1127,11 @@
             color: var(--orange)
         }
 
+        .type.materia-prima i {
+            background: var(--greenSoft);
+            color: var(--green);
+        }
+
     .task-detail {
         max-width: 330px;
     }
@@ -1349,11 +1365,6 @@
         }
     }
 
-
-    /* =========================================================
-           JERARQUÍA ERP V4 · MÁQUINA > OF > ACTIVIDADES
-           Mayor sangría, conectores y cuadrícula visible.
-           ========================================================= */
     .level-kicker {
         display: block;
         margin-bottom: 4px;
@@ -1484,10 +1495,6 @@
             cursor: pointer;
             user-select: none;
         }
-
-            .program-block > summary::-webkit-details-marker {
-                display: none;
-            }
 
     .program-head {
         min-height: 72px;
@@ -1656,6 +1663,10 @@
             border-left-color: var(--blue);
         }
 
+        .program-tasks .task-table tr.task-materia-prima td:first-child {
+            border-left-color: var(--green);
+        }
+
         .program-tasks .task-table tr.task-risk td {
             background: linear-gradient(90deg,var(--redSoft),#fff 32%);
         }
@@ -1716,6 +1727,11 @@
     .task-embalaje .activity-bullet {
         background: var(--blueSoft);
         color: var(--blue);
+    }
+
+    .task-materia-prima .activity-bullet {
+        background: var(--greenSoft);
+        color: var(--green);
     }
 
     .activity-kicker {
@@ -2258,9 +2274,9 @@
                                                             @foreach (var tarea in programa
                                                                                                             .OrderBy(x =>
                                                                                                             x.EsCambioMolde ? 1 :
-                                                                                                            x.EsSecadoMaterial ? 2 :
-                                                                                                            x.EsPreparacionEmbalaje ? 3 : 4)
-                                                                                                            .ThenBy(x => x.FechaObjetivo))
+                                                                                                            x.EsMateriaPrima ? 2 :
+                                                                                                            x.EsSecadoMaterial ? 3 :
+                                                                                                            x.EsPreparacionEmbalaje ? 4 : 5))
                                                             {
                                                                 var claseFila = EsRiesgo(tarea)
                                                                 ? "task-risk"
@@ -2378,7 +2394,7 @@
 
             <span class="section-summary-title">
                 <strong>Estado operativo por máquina</strong>
-                <span>Resumen de la próxima OF de cada máquina: secado, embalaje, cambio de molde y preparación general.</span>
+                <span>Resumen de la próxima OF de cada máquina: materia prima, secado, embalaje, cambio de molde y preparación general.</span>
             </span>
 
             <span class="section-count">@gruposMaquina.Count</span>
@@ -2397,6 +2413,7 @@
                             <tr>
                                 <th>Máquina</th>
                                 <th>Próxima OF</th>
+                                <th>Materia prima</th>
                                 <th>Secado</th>
                                 <th>Embalaje</th>
                                 <th>Cambio de molde</th>
@@ -2418,6 +2435,12 @@
                                 .ToList();
 
                                 var programaReferencia = programas.FirstOrDefault();
+
+                                var materiaPrima = programaReferencia == null
+                                ? null
+                                : TareaDelPrograma(
+                                programaReferencia,
+                                ProduccionPreparacionTipo.MateriaPrima);
 
                                 var secado = programaReferencia == null
                                 ? null
@@ -2473,11 +2496,28 @@
                                     </td>
 
                                     <td class="matrix-state">
+                                        <span class="state @EstadoClase(materiaPrima)">
+                                            @EstadoTarea(materiaPrima)
+                                        </span>
+
+                                @if (materiaPrima != null)
+                                        {
+                                            var requeridaMp = materiaPrima.CantidadMpKg.GetValueOrDefault();
+                                            var recibidaMp = materiaPrima.CantidadMpRecibidaProduccionKg;
+                                            var pendienteMp = Math.Max(0m, requeridaMp - recibidaMp);
+
+                                            <span class="time-sub">
+                                                @pendienteMp.ToString("0.####") KG pendiente(s)
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <td class="matrix-state">
                                         <span class="state @EstadoClase(secado)">
                                             @EstadoTarea(secado)
                                         </span>
 
-                                @if (secado != null)
+                                        @if (secado != null)
                                         {
                                             <span class="time-sub">
                                                 @(SecadoEnProceso(secado)
