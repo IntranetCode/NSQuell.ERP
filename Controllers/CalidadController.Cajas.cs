@@ -399,6 +399,8 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
 
                 await tx.CommitAsync();
 
+
+
                 TempData["Mensaje"] = decision switch
                 {
                     DecisionCajaLiberar => $"Caja {caja.FolioCaja} validada con etiqueta verde. Producción ya la verá como PENDIENTE ENTREGA A ALMACÉN.",
@@ -1799,16 +1801,8 @@ ORDER BY
 
             try
             {
-                /*
-                 * ============================================================
-                 * 1. LA ETIQUETA FÍSICA YA ESTÁ RELACIONADA A UNA CAJA
-                 * ============================================================
-                 *
-                 * Esto cubre:
-                 * - reescaneos;
-                 * - cajas devueltas por Calidad y corregidas por Producción;
-                 * - registros anteriores/legacy.
-                 */
+               
+                 
                 const string sqlExistente = @"
 SELECT TOP(1)
     pc.CajaProduccionID,
@@ -2091,10 +2085,10 @@ VALUES
                             1000).Value =
                             $"Calidad realizó el primer escaneo físico de una caja existente. " +
                             $"OF: {numeroOF}. Parte: {numeroParte}. Cantidad: {parseado.Cantidad:N0}.";
-
                         await cmd.ExecuteNonQueryAsync();
                     }
 
+                    await AsegurarTrazabilidadHorariaCajaAsync(cajaExistenteId.Value, usuarioId.Value, cn, tx);
                     await tx.CommitAsync();
 
                     TempData["Mensaje"] =
@@ -2107,11 +2101,6 @@ VALUES
                         new { id = inspeccionExistenteId.Value });
                 }
 
-                /*
-                 * ============================================================
-                 * 2. RESOLVER LA CORRIDA A PARTIR DE LA ETIQUETA DE PLANEACIÓN
-                 * ============================================================
-                 */
                 const string sqlContexto = @"
 ;WITH Candidatos AS
 (
@@ -2453,25 +2442,6 @@ ORDER BY
 
                 var ahora = DateTime.Now;
 
-                /*
-                 * ============================================================
-                 * 3. CASO ESPECIAL: CAJA QUE NACIÓ CON ETIQUETA BLANCA
-                 * ============================================================
-                 *
-                 * La caja YA EXISTE en Produccion_Cajas porque originalmente
-                 * fue un producto incompleto.
-                 *
-                 * Al completarse:
-                 * - TipoCaja = OK
-                 * - EsProductoIncompleto = 0
-                 * - EstadoProductoIncompleto = COMPLETA
-                 * - EstadoCajaID = PendienteCalidad
-                 * - CodigoBarrasOrigen = NULL
-                 *
-                 * Aquí NO se crea otra caja.
-                 * Solamente se vincula la etiqueta física colocada por Planeación
-                 * a la misma CajaProduccionID.
-                 */
                 var cajaBlancaCompletada =
                     await VincularCajaCompletadaEtiquetaBlancaAsync(
                         inspeccionIdReal,
@@ -2487,9 +2457,9 @@ ORDER BY
                         ahora,
                         cn,
                         tx);
-
                 if (cajaBlancaCompletada.Vinculada)
                 {
+                    await AsegurarTrazabilidadHorariaCajaAsync(cajaBlancaCompletada.CajaProduccionID, usuarioId.Value, cn, tx);
                     await tx.CommitAsync();
 
                     TempData["Mensaje"] =
@@ -2497,23 +2467,10 @@ ORDER BY
                         $"Proviene de la etiqueta blanca {cajaBlancaCompletada.EtiquetaBlanca}. " +
                         $"Cantidad: {parseado.Cantidad:N0}. Ahora Calidad puede validarla.";
 
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = inspeccionIdReal });
+                    return RedirectToAction(nameof(Detalle), new { id = inspeccionIdReal });
                 }
 
-                /*
-                 * ============================================================
-                 * 4. CAJA NORMAL
-                 * ============================================================
-                 *
-                 * Si llegamos aquí:
-                 * - la etiqueta todavía no pertenece a una caja;
-                 * - tampoco existe una caja blanca completada pendiente
-                 *   que deba reutilizarse.
-                 *
-                 * Entonces el primer escaneo de Calidad crea la caja real.
-                 */
+               
                 const string sqlConsumo = @"
 SELECT
     ISNULL
@@ -2887,11 +2844,10 @@ VALUES
                         string.IsNullOrWhiteSpace(parseado.Designacion)
                             ? DBNull.Value
                             : parseado.Designacion.Trim();
-
-                    cajaProduccionId =
-                        Convert.ToInt64(
-                            await cmd.ExecuteScalarAsync());
+                    cajaProduccionId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
                 }
+
+                await AsegurarTrazabilidadHorariaCajaAsync(cajaProduccionId, usuarioId.Value, cn, tx);
 
                 const string sqlHistorial = @"
 INSERT INTO dbo.Calidad_InspeccionHistorial

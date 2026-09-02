@@ -3065,6 +3065,176 @@ ORDER BY
             }
         }
 
+        private static async Task AsegurarTrazabilidadHorariaCajaAsync(long cajaProduccionId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        {
+            if (cajaProduccionId <= 0) throw new InvalidOperationException("La caja de Producción no es válida.");
+            if (usuarioId <= 0) throw new InvalidOperationException("El usuario que registra la trazabilidad no es válido.");
+            const string sqlCaja = @"
+SELECT
+    c.CajaProduccionID,
+    c.EjecucionProduccionID,
+    ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) AS CantidadPiezas
+FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
+WHERE c.CajaProduccionID=@CajaProduccionID
+  AND c.Activo=1;";
+            int ejecucionCajaId;
+            int cantidadCaja;
+            await using (var cmd = new SqlCommand(sqlCaja, cn, tx))
+            {
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync()) throw new InvalidOperationException("No se encontró la caja de Producción para generar su trazabilidad horaria.");
+                ejecucionCajaId = Convert.ToInt32(rd["EjecucionProduccionID"]);
+                cantidadCaja = Convert.ToInt32(rd["CantidadPiezas"]);
+            }
+            if (cantidadCaja <= 0) throw new InvalidOperationException("La caja no tiene una cantidad válida para generar su trazabilidad horaria.");
+            const string sqlTotalActual = @"
+SELECT ISNULL(SUM(CantidadPiezas),0)
+FROM dbo.Produccion_CajaRegistroHoraDetalle WITH(UPDLOCK,HOLDLOCK)
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1;";
+            int totalTrazado;
+            await using (var cmd = new SqlCommand(sqlTotalActual, cn, tx))
+            {
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                var value = await cmd.ExecuteScalarAsync();
+                totalTrazado = value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+            }
+            if (totalTrazado > cantidadCaja) throw new InvalidOperationException($"La caja {cajaProduccionId} conserva una trazabilidad mayor a su contenido físico. Caja: {cantidadCaja:N0}; trazado: {totalTrazado:N0}.");
+            if (totalTrazado == cantidadCaja) return;
+            const string sqlOrigenDetalle = @"
+SELECT
+    od.EjecucionProduccionID,
+    SUM(ISNULL(od.CantidadPiezas,0)) AS CantidadPiezas
+FROM dbo.Produccion_CajaOrigenDetalle od WITH(UPDLOCK,HOLDLOCK)
+WHERE od.CajaProduccionID=@CajaProduccionID
+  AND od.Activo=1
+GROUP BY od.EjecucionProduccionID
+ORDER BY MIN(od.CajaOrigenDetalleID);";
+            var origenes = new List<(int EjecucionProduccionID, int CantidadPiezas)>();
+            await using (var cmd = new SqlCommand(sqlOrigenDetalle, cn, tx))
+            {
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                while (await rd.ReadAsync())
+                {
+                    var ejecucionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
+                    var cantidad = Convert.ToInt32(rd["CantidadPiezas"]);
+                    if (ejecucionId > 0 && cantidad > 0) origenes.Add((ejecucionId, cantidad));
+                }
+            }
+            if (origenes.Count == 0) origenes.Add((ejecucionCajaId, cantidadCaja));
+            else
+            {
+                var totalOrigen = origenes.Sum(x => x.CantidadPiezas);
+                if (totalOrigen != cantidadCaja) throw new InvalidOperationException($"La caja {cajaProduccionId} conserva detalle de origen por {totalOrigen:N0} pieza(s), pero físicamente contiene {cantidadCaja:N0}. No se generó una trazabilidad incompleta.");
+            }
+            foreach (var origen in origenes)
+            {
+                const string sqlYaTrazadoOrigen = @"
+SELECT ISNULL(SUM(CantidadPiezas),0)
+FROM dbo.Produccion_CajaRegistroHoraDetalle WITH(UPDLOCK,HOLDLOCK)
+WHERE CajaProduccionID=@CajaProduccionID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1;";
+                int yaTrazadoOrigen;
+                await using (var cmd = new SqlCommand(sqlYaTrazadoOrigen, cn, tx))
+                {
+                    cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = origen.EjecucionProduccionID;
+                    var value = await cmd.ExecuteScalarAsync();
+                    yaTrazadoOrigen = value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+                }
+                if (yaTrazadoOrigen > origen.CantidadPiezas) throw new InvalidOperationException($"La caja {cajaProduccionId} tiene más piezas trazadas para la ejecución {origen.EjecucionProduccionID} que las registradas como origen.");
+                var faltanteOrigen = origen.CantidadPiezas - yaTrazadoOrigen;
+                if (faltanteOrigen <= 0) continue;
+                const string sqlRegistros = @"
+SELECT
+    rh.RegistroHoraID,
+    rh.OperadorID,
+    ISNULL(rh.CantidadOK,0) AS CantidadOK,
+    ISNULL
+    (
+        (
+            SELECT SUM(d.CantidadPiezas)
+            FROM dbo.Produccion_CajaRegistroHoraDetalle d WITH(UPDLOCK,HOLDLOCK)
+            WHERE d.RegistroHoraID=rh.RegistroHoraID
+              AND d.Activo=1
+        ),
+        0
+    ) AS CantidadYaAsignada
+FROM dbo.Produccion_RegistroHora rh WITH(UPDLOCK,HOLDLOCK)
+WHERE rh.EjecucionProduccionID=@EjecucionProduccionID
+  AND rh.Activo=1
+  AND rh.OperadorID IS NOT NULL
+  AND rh.OperadorID>0
+ORDER BY
+    rh.FechaProduccion,
+    rh.HoraInicio,
+    rh.RegistroHoraID;";
+                var registros = new List<(int RegistroHoraID, int OperadorID, int CantidadOK, int CantidadYaAsignada)>();
+                await using (var cmd = new SqlCommand(sqlRegistros, cn, tx))
+                {
+                    cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = origen.EjecucionProduccionID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    while (await rd.ReadAsync())
+                    {
+                        registros.Add((Convert.ToInt32(rd["RegistroHoraID"]), Convert.ToInt32(rd["OperadorID"]), Convert.ToInt32(rd["CantidadOK"]), Convert.ToInt32(rd["CantidadYaAsignada"])));
+                    }
+                }
+                foreach (var registro in registros)
+                {
+                    if (faltanteOrigen <= 0) break;
+                    var disponible = Math.Max(0, registro.CantidadOK - registro.CantidadYaAsignada);
+                    if (disponible <= 0) continue;
+                    var tomar = Math.Min(disponible, faltanteOrigen);
+                    const string sqlGuardar = @"
+UPDATE dbo.Produccion_CajaRegistroHoraDetalle
+SET CantidadPiezas=CantidadPiezas+@Cantidad,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE CajaProduccionID=@CajaProduccionID
+  AND RegistroHoraID=@RegistroHoraID
+  AND Activo=1;
+IF @@ROWCOUNT=0
+BEGIN
+    INSERT INTO dbo.Produccion_CajaRegistroHoraDetalle
+    (
+        CajaProduccionID,EjecucionProduccionID,RegistroHoraID,OperadorID,CantidadPiezas,
+        UsuarioCreacionID,FechaCreacion,Activo
+    )
+    VALUES
+    (
+        @CajaProduccionID,@EjecucionProduccionID,@RegistroHoraID,@OperadorID,@Cantidad,
+        @UsuarioID,SYSDATETIME(),1
+    );
+END;";
+                    await using var cmdGuardar = new SqlCommand(sqlGuardar, cn, tx);
+                    cmdGuardar.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                    cmdGuardar.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = origen.EjecucionProduccionID;
+                    cmdGuardar.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = registro.RegistroHoraID;
+                    cmdGuardar.Parameters.Add("@OperadorID", SqlDbType.Int).Value = registro.OperadorID;
+                    cmdGuardar.Parameters.Add("@Cantidad", SqlDbType.Int).Value = tomar;
+                    cmdGuardar.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+                    await cmdGuardar.ExecuteNonQueryAsync();
+                    faltanteOrigen -= tomar;
+                }
+                if (faltanteOrigen > 0) throw new InvalidOperationException($"No fue posible relacionar {faltanteOrigen:N0} pieza(s) de la caja {cajaProduccionId} con capturas horarias de la ejecución {origen.EjecucionProduccionID}. Se evitó asignarlas a un operador incorrecto.");
+            }
+            const string sqlValidar = @"
+SELECT ISNULL(SUM(CantidadPiezas),0)
+FROM dbo.Produccion_CajaRegistroHoraDetalle
+WHERE CajaProduccionID=@CajaProduccionID
+  AND Activo=1;";
+            int totalFinal;
+            await using (var cmd = new SqlCommand(sqlValidar, cn, tx))
+            {
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionId;
+                var value = await cmd.ExecuteScalarAsync();
+                totalFinal = value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+            }
+            if (totalFinal != cantidadCaja) throw new InvalidOperationException($"La trazabilidad de la caja {cajaProduccionId} quedó incompleta. Caja: {cantidadCaja:N0}; relacionado: {totalFinal:N0}.");
+        }
         private async Task<(int CantidadOK, int CantidadSospechosa, int CantidadScrap)> ObtenerCantidadesProduccionMonitoreoAsync(int registroHoraId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
