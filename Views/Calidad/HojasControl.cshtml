@@ -1,7 +1,7 @@
 @model ERP.NSQuell.Models.ViewModels.CalidadHCCBandejaViewModel
 @{
     Layout = "_Layout";
-    ViewData["Title"] = "Hojas de Control de Calidad";
+    ViewData["Title"] = "Control de Calidad";
 }
 <link rel="stylesheet" href="~/css/calidad-hcc-v2.css" asp-append-version="true" />
 
@@ -9,7 +9,7 @@
     <section class="hcc-hero">
         <div>
             <div class="hcc-eyebrow"><i class="fa-solid fa-ruler-combined"></i> CALIDAD · CONTROL DE PROCESO</div>
-            <h1>Hojas de Control de Calidad</h1>
+            <h1>Control de Calidad</h1>
             <p>La bandeja se genera automáticamente desde Producción y Calidad. Cada arranque, cambio de producción, cambio de turno o reliberación queda ligado a su OF, pieza, máquina y formato HCC vigente.</p>
             <div class="hcc-hero-actions">
                 <a class="hcc-btn hcc-btn-light" asp-action="HCCPlantillas"><i class="fa-solid fa-book-open"></i> Biblioteca técnica</a>
@@ -36,7 +36,7 @@
     }
 
     <section class="hcc-kpis">
-        <article class="hcc-kpi hcc-kpi-pending"><div class="hcc-kpi-icon"><i class="fa-solid fa-clipboard-list"></i></div><div><small>Pendientes</small><strong>@Model.Pendientes</strong><span>HCC que requieren captura</span></div></article>
+        <article class="hcc-kpi hcc-kpi-pending"><div class="hcc-kpi-icon"><i class="fa-solid fa-clipboard-list"></i></div><div><small>Pendientes</small><strong>@Model.Pendientes</strong><span>Controles que requieren captura</span></div></article>
         <article class="hcc-kpi hcc-kpi-ok"><div class="hcc-kpi-icon"><i class="fa-solid fa-check-double"></i></div><div><small>Completadas hoy</small><strong>@Model.CompletadasHoy</strong><span>Registros finalizados</span></div></article>
         <article class="hcc-kpi hcc-kpi-warning"><div class="hcc-kpi-icon"><i class="fa-solid fa-link-slash"></i></div><div><small>Sin plantilla</small><strong>@Model.SinPlantilla</strong><span>Corridas que requieren vínculo técnico</span></div></article>
     </section>
@@ -55,7 +55,7 @@
     </section>
 
     <section class="hcc-section-head">
-        <div><span class="hcc-section-kicker">TRABAJO OPERATIVO</span><h2>@(Model.Estado == "COMPLETADA" ? "Hojas completadas" : Model.Estado == "TODOS" ? "Todas las hojas" : "Hojas que debe atender Calidad")</h2></div>
+        <div><span class="hcc-section-kicker">TRABAJO OPERATIVO</span><h2>@(Model.Estado == "COMPLETADA" ? "Controles completados" : Model.Estado == "TODOS" ? "Todos los controles" : "Controles que debe atender Calidad")</h2></div>
         <span class="hcc-count">@Model.TotalMostrados registro(s)</span>
     </section>
 

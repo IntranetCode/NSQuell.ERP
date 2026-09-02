@@ -567,7 +567,18 @@ ORDER BY
 
                 if (esRutaHcc && groupToken.Equals("CALIDAD", StringComparison.OrdinalIgnoreCase))
                 {
-                    menu.IsActive = menuToken.Equals("HOJASDECONTROL", StringComparison.OrdinalIgnoreCase);
+                                        // NSQ_CONTROL_CALIDAD_BREADCRUMB_HCC_V3
+                    // El nombre visible del menu ahora es "Control de Calidad".
+                    // Conservamos tambien el token historico para instalaciones
+                    // que aun no hayan ejecutado el cambio de nombre en BD.
+                    menu.IsActive =
+                        menuToken.Equals(
+                            "CONTROLDECALIDAD",
+                            StringComparison.OrdinalIgnoreCase)
+                        ||
+                        menuToken.Equals(
+                            "HOJASDECONTROL",
+                            StringComparison.OrdinalIgnoreCase);
                 }
                 else if (esCalendarioProduccion && groupToken.Equals("PRODUCCION", StringComparison.OrdinalIgnoreCase))
                 {
