@@ -745,14 +745,18 @@ public sealed class ProduccionRegistroHoraVm
     public string RangoHora => $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
     public bool TieneCaptura => CantidadOK > 0 || CantidadSospechosa > 0 || CantidadScrap > 0 || !string.IsNullOrWhiteSpace(Observaciones);
     public bool EsCorteTiempoExtra => EsTiempoExtra && TiempoExtraID.HasValue && NumeroCorteTiempoExtra.HasValue;
-    public bool TieneAjustesProduccion => AjustadoPorProduccion || AjustesProduccion.Count > 0;
+ 
     public int DiferenciaOKRespectoOriginal => CantidadOK - CantidadOKOriginal;
     public int DiferenciaScrapRespectoOriginal => CantidadScrap - CantidadScrapOriginal;
     public string TipoBloqueTexto => EsCorteTiempoExtra ? $"Tiempo extra · corte #{NumeroCorteTiempoExtra}" : EsTiempoExtra ? "Tiempo extra" : "Producción normal";
+
+
+    public bool TieneAjustesProduccion => AjustadoPorProduccion || AjustesProduccion.Count > 0;
 }
 
 public sealed class ProduccionAjustarRegistroHoraPostVm
 {
+    public int EjecucionProduccionID { get; set; }
     public int RegistroHoraID { get; set; }
     public int CantidadOK { get; set; }
     public int CantidadScrap { get; set; }
@@ -761,26 +765,22 @@ public sealed class ProduccionAjustarRegistroHoraPostVm
 
 public sealed class ProduccionRegistroHoraAjusteProduccionVm
 {
-    public int AjusteProduccionID { get; set; }
+    public long AjusteProduccionID { get; set; }
     public int RegistroHoraID { get; set; }
     public int EjecucionProduccionID { get; set; }
     public int? OperadorID { get; set; }
     public int OKAntes { get; set; }
-    public int SospechosoAntes { get; set; }
     public int ScrapAntes { get; set; }
     public int OKDespues { get; set; }
-    public int SospechosoDespues { get; set; }
     public int ScrapDespues { get; set; }
-    public int? PiezasCalculadasContador { get; set; }
     public long? MovimientoBonusID { get; set; }
-    public string TipoAjuste { get; set; } = string.Empty;
     public string Motivo { get; set; } = string.Empty;
     public int UsuarioAjusteID { get; set; }
-    public string? UsuarioAjusteNombre { get; set; }
+    public string UsuarioAjusteNombre { get; set; } = string.Empty;
     public DateTime FechaAjuste { get; set; }
     public bool Activo { get; set; } = true;
-    public int DeltaOK => OKDespues - OKAntes;
-    public int DeltaScrap => ScrapDespues - ScrapAntes;
+    public int DiferenciaOK => OKDespues - OKAntes;
+    public int DiferenciaScrap => ScrapDespues - ScrapAntes;
 }
 
 public sealed class ProduccionParoVm
@@ -1365,6 +1365,7 @@ public sealed class ProduccionTerminarPostVm
     public bool TerminarParcial { get; set; }
     public string? Observaciones { get; set; }
 }
+
 
 public sealed class ProduccionOperadorTabletVm
 {
@@ -3044,5 +3045,34 @@ public sealed class ProduccionOperadorCajasVm
     {
         public int EjecucionProduccionID { get; set; }
         public string CodigoBarras { get; set; } = string.Empty;
+    }
+
+    public sealed class ProduccionAjustarRegistroHoraPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+        public int RegistroHoraID { get; set; }
+        public int CantidadOK { get; set; }
+        public int CantidadScrap { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    public sealed class ProduccionRegistroHoraAjusteProduccionVm
+    {
+        public long AjusteProduccionID { get; set; }
+        public int RegistroHoraID { get; set; }
+        public int EjecucionProduccionID { get; set; }
+        public int? OperadorID { get; set; }
+        public int OKAntes { get; set; }
+        public int ScrapAntes { get; set; }
+        public int OKDespues { get; set; }
+        public int ScrapDespues { get; set; }
+        public long? MovimientoBonusID { get; set; }
+        public string Motivo { get; set; } = string.Empty;
+        public int UsuarioAjusteID { get; set; }
+        public string UsuarioAjusteNombre { get; set; } = string.Empty;
+        public DateTime FechaAjuste { get; set; }
+        public bool Activo { get; set; }
+        public int DiferenciaOK => OKDespues - OKAntes;
+        public int DiferenciaScrap => ScrapDespues - ScrapAntes;
     }
 }

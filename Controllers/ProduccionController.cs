@@ -45,6 +45,7 @@ namespace ERP.NSQuell.Controllers
             public bool PuedeVerCapturasHora => PuedeVerTodo || EsAuxiliarProduccion || EsOperadorProduccion;
             public bool PuedeCapturarHora => PuedeVerTodo || EsOperadorProduccion;
             public bool PuedeGestionarSugerenciaCambioTurno => PuedeVerTodo || EsAuxiliarProduccion;
+            public bool PuedeCorregirCapturasHora => PuedeVerTodo || EsAuxiliarProduccion;
         }
 
 
@@ -185,6 +186,8 @@ namespace ERP.NSQuell.Controllers
             ViewBag.PuedeVerCapturasHora = permisos.PuedeVerCapturasHora;
             ViewBag.PuedeCapturarHora = permisos.PuedeCapturarHora;
             ViewBag.PuedeGestionarSugerenciaCambioTurno = permisos.PuedeGestionarSugerenciaCambioTurno;
+
+            ViewBag.PuedeCorregirCapturasHora = permisos.PuedeCorregirCapturasHora;
 
             var autorizacionTerminacionParcial = await ObtenerAutorizacionTerminacionParcialAsync(id, cn);
 
@@ -3746,12 +3749,10 @@ FROM dbo.Produccion_RegistroHora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
 ORDER BY FechaProduccion DESC,HoraInicio DESC,RegistroHoraID DESC;";
-
             await using (var cmd = new SqlCommand(sql, cn))
             {
                 cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
                 await using var rd = await cmd.ExecuteReaderAsync();
-
                 while (await rd.ReadAsync())
                 {
                     lista.Add(new ProduccionRegistroHoraVm
@@ -3790,13 +3791,14 @@ ORDER BY FechaProduccion DESC,HoraInicio DESC,RegistroHoraID DESC;";
                     });
                 }
             }
-
             foreach (var registro in lista)
+            {
                 registro.Segmentos = await ObtenerSegmentosRegistroHoraAsync(registro.RegistroHoraID, cn);
-
+                registro.AjustesProduccion = await ObtenerAjustesProduccionRegistroHoraAsync(registro.RegistroHoraID, cn);
+                registro.AjustadoPorProduccion = registro.AjustesProduccion.Count > 0;
+            }
             return lista;
         }
-
         private async Task<List<ProduccionRegistroHoraSegmentoVm>> ObtenerSegmentosRegistroHoraAsync(int registroHoraId, SqlConnection cn)
         {
             var lista = new List<ProduccionRegistroHoraSegmentoVm>();
