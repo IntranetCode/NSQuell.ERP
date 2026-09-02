@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace ERP.NSQuell.Controllers
 {
@@ -1173,6 +1174,178 @@ WHERE s.SolicitudGP12ID=@SolicitudGP12ID
                     CodigoBarras = codigo
                 });
         }
+
+        private static async Task RegistrarDescuentoBonusScrapGP12Async(int solicitudGP12ID, int inspeccionGP12ID, decimal cantidadScrap, int usuarioID, SqlConnection cn, SqlTransaction tx)
+        {
+            if (solicitudGP12ID <= 0) throw new InvalidOperationException("La solicitud GP12 no es válida para afectar el bonus.");
+            if (inspeccionGP12ID <= 0) throw new InvalidOperationException("La inspección GP12 no es válida para afectar el bonus.");
+            if (cantidadScrap <= 0) return;
+            const string sqlSolicitud = @"
+SELECT
+    s.CajaProduccionID,
+    s.Origen,
+    ISNULL(pc.CantidadPiezas,ISNULL(pc.Cantidad,0)) AS CantidadCaja
+FROM dbo.GP12_Solicitudes s WITH(UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Produccion_Cajas pc WITH(UPDLOCK,HOLDLOCK)
+    ON pc.CajaProduccionID=s.CajaProduccionID
+   AND pc.Activo=1
+WHERE s.SolicitudGP12ID=@SolicitudGP12ID
+  AND s.Activo=1;";
+            long? cajaProduccionID;
+            string origen;
+            int cantidadCaja;
+            await using (var cmd = new SqlCommand(sqlSolicitud, cn, tx))
+            {
+                cmd.Parameters.Add("@SolicitudGP12ID", SqlDbType.Int).Value = solicitudGP12ID;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                if (!await rd.ReadAsync()) throw new InvalidOperationException("No se encontró la solicitud GP12 para relacionar el scrap con el bonus.");
+                cajaProduccionID = rd["CajaProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["CajaProduccionID"]);
+                origen = rd["Origen"] == DBNull.Value ? string.Empty : rd["Origen"]?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
+                cantidadCaja = rd["CantidadCaja"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadCaja"]);
+            }
+            if (!cajaProduccionID.HasValue || cajaProduccionID.Value <= 0) return;
+            if (cantidadScrap != decimal.Truncate(cantidadScrap)) throw new InvalidOperationException("El scrap de una caja física de Producción debe expresarse en piezas completas para afectar el bonus.");
+            var piezasScrap = decimal.ToInt32(cantidadScrap);
+            if (piezasScrap <= 0) return;
+            if (cantidadCaja <= 0) throw new InvalidOperationException("La caja relacionada con GP12 no tiene una cantidad física válida.");
+            if (piezasScrap > cantidadCaja) throw new InvalidOperationException($"GP12 intenta descontar {piezasScrap:N0} pieza(s), pero la caja solamente contiene {cantidadCaja:N0}.");
+            var prefijoReferencia = $"GP12_INSPECCION:{inspeccionGP12ID}:SCRAP:";
+            const string sqlExistente = @"
+SELECT ISNULL(SUM(-CONVERT(BIGINT,PiezasMovimiento)),0)
+FROM dbo.Produccion_BonusOperadorMovimientos WITH(UPDLOCK,HOLDLOCK)
+WHERE TipoMovimiento=@TipoMovimiento
+  AND ReferenciaEvento LIKE @Prefijo+N'%'
+  AND PiezasMovimiento<0
+  AND Activo=1;";
+            long descuentoExistente;
+            await using (var cmd = new SqlCommand(sqlExistente, cn, tx))
+            {
+                cmd.Parameters.Add("@TipoMovimiento", SqlDbType.NVarChar, 120).Value = ProduccionTipoMovimientoBonus.ScrapConfirmadoGP12;
+                cmd.Parameters.Add("@Prefijo", SqlDbType.NVarChar, 400).Value = prefijoReferencia;
+                var value = await cmd.ExecuteScalarAsync();
+                descuentoExistente = value == null || value == DBNull.Value ? 0L : Convert.ToInt64(value);
+            }
+            if (descuentoExistente == piezasScrap) return;
+            if (descuentoExistente > 0) throw new InvalidOperationException($"La inspección GP12 {inspeccionGP12ID} ya tiene {descuentoExistente:N0} pieza(s) descontadas del bonus, pero ahora intenta registrar {piezasScrap:N0}. Se evitó duplicar o alterar un movimiento previamente aplicado.");
+            const string sqlTrazabilidad = @"
+SELECT
+    d.EjecucionProduccionID,
+    d.RegistroHoraID,
+    d.OperadorID,
+    d.CantidadPiezas,
+    rh.FechaProduccion,
+    rh.HoraInicio,
+    rh.HoraFin,
+    ISNULL
+    (
+        (
+            SELECT SUM(CONVERT(BIGINT,m.PiezasMovimiento))
+            FROM dbo.Produccion_BonusOperadorMovimientos m WITH(UPDLOCK,HOLDLOCK)
+            WHERE m.RegistroHoraID=d.RegistroHoraID
+              AND m.OperadorID=d.OperadorID
+              AND m.Activo=1
+        ),
+        0
+    ) AS SaldoBonus
+FROM dbo.Produccion_CajaRegistroHoraDetalle d WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Produccion_RegistroHora rh WITH(UPDLOCK,HOLDLOCK)
+    ON rh.RegistroHoraID=d.RegistroHoraID
+   AND rh.EjecucionProduccionID=d.EjecucionProduccionID
+   AND rh.Activo=1
+WHERE d.CajaProduccionID=@CajaProduccionID
+  AND d.Activo=1
+ORDER BY d.CajaRegistroHoraDetalleID;";
+            var origenes = new List<GP12BonusOrigenHoraData>();
+            await using (var cmd = new SqlCommand(sqlTrazabilidad, cn, tx))
+            {
+                cmd.Parameters.Add("@CajaProduccionID", SqlDbType.BigInt).Value = cajaProduccionID.Value;
+                await using var rd = await cmd.ExecuteReaderAsync();
+                while (await rd.ReadAsync())
+                {
+                    var cantidadOrigen = Convert.ToInt32(rd["CantidadPiezas"]);
+                    var saldo = Convert.ToInt64(rd["SaldoBonus"]);
+                    origenes.Add(new GP12BonusOrigenHoraData
+                    {
+                        EjecucionProduccionID = Convert.ToInt32(rd["EjecucionProduccionID"]),
+                        RegistroHoraID = Convert.ToInt32(rd["RegistroHoraID"]),
+                        OperadorID = Convert.ToInt32(rd["OperadorID"]),
+                        CantidadCaja = cantidadOrigen,
+                        SaldoBonus = saldo,
+                        FechaProduccion = Convert.ToDateTime(rd["FechaProduccion"]),
+                        HoraInicio = rd["HoraInicio"] == DBNull.Value ? TimeSpan.Zero : (TimeSpan)rd["HoraInicio"],
+                        HoraFin = rd["HoraFin"] == DBNull.Value ? TimeSpan.Zero : (TimeSpan)rd["HoraFin"],
+                        CapacidadDescuento = (int)Math.Min(cantidadOrigen, Math.Max(0L, saldo))
+                    });
+                }
+            }
+            if (origenes.Count == 0) throw new InvalidOperationException($"La caja {cajaProduccionID.Value} no conserva trazabilidad hacia Produccion_RegistroHora. GP12 no puede determinar qué operador debe recibir el descuento.");
+            var totalTrazado = origenes.Sum(x => x.CantidadCaja);
+            if (totalTrazado != cantidadCaja) throw new InvalidOperationException($"La trazabilidad de la caja {cajaProduccionID.Value} no coincide con su cantidad física. Caja: {cantidadCaja:N0}; trazado: {totalTrazado:N0}.");
+            var capacidadTotal = origenes.Sum(x => (long)x.CapacidadDescuento);
+            if (capacidadTotal < piezasScrap) throw new InvalidOperationException($"GP12 confirmó {piezasScrap:N0} pieza(s) scrap, pero los registros horarios de la caja solamente conservan {capacidadTotal:N0} pieza(s) disponibles en el bonus. Se evitó un descuento doble.");
+            foreach (var item in origenes)
+            {
+                var cuotaExacta = (decimal)piezasScrap * item.CantidadCaja / totalTrazado;
+                var baseAsignacion = (int)Math.Floor(cuotaExacta);
+                item.ScrapAsignado = Math.Min(baseAsignacion, item.CapacidadDescuento);
+                item.Fraccion = cuotaExacta - Math.Floor(cuotaExacta);
+            }
+            var pendiente = piezasScrap - origenes.Sum(x => x.ScrapAsignado);
+            while (pendiente > 0)
+            {
+                var asigno = false;
+                foreach (var item in origenes.OrderByDescending(x => x.Fraccion).ThenBy(x => x.RegistroHoraID))
+                {
+                    if (pendiente <= 0) break;
+                    if (item.ScrapAsignado >= item.CapacidadDescuento) continue;
+                    item.ScrapAsignado++;
+                    pendiente--;
+                    asigno = true;
+                }
+                if (!asigno) throw new InvalidOperationException("No existe saldo suficiente en los registros horarios relacionados con la caja para distribuir todo el scrap confirmado por GP12.");
+            }
+            foreach (var item in origenes.Where(x => x.ScrapAsignado > 0))
+            {
+                var referenciaEvento = $"{prefijoReferencia}REGISTRO:{item.RegistroHoraID}";
+                var motivo = $"GP12 confirmó {item.ScrapAsignado:N0} pieza(s) scrap correspondientes a la caja {cajaProduccionID.Value}, solicitud GP12 {solicitudGP12ID}, inspección GP12 {inspeccionGP12ID}. El RegistroHoraID {item.RegistroHoraID} aportó {item.CantidadCaja:N0} pieza(s) a la caja.";
+                if (!string.IsNullOrWhiteSpace(origen)) motivo += $" Origen GP12: {origen}.";
+                if (motivo.Length > 2000) motivo = motivo[..2000];
+                var inicioBloque = item.FechaProduccion.Date.Add(item.HoraInicio);
+                var fechaMovimiento = item.FechaProduccion.Date.Add(item.HoraFin);
+                if (fechaMovimiento <= inicioBloque) fechaMovimiento = fechaMovimiento.AddDays(1);
+                const string sqlInsert = @"
+INSERT INTO dbo.Produccion_BonusOperadorMovimientos
+(
+    OperadorID,EjecucionProduccionID,RegistroHoraID,MonitoreoID,DisposicionID,
+    TipoMovimiento,PiezasMovimiento,PiezasReferencia,Motivo,ReferenciaEvento,
+    UsuarioCreacionID,FechaMovimiento,Activo
+)
+SELECT
+    @OperadorID,@EjecucionProduccionID,@RegistroHoraID,NULL,NULL,
+    @TipoMovimiento,@PiezasMovimiento,@PiezasReferencia,@Motivo,@ReferenciaEvento,
+    @UsuarioID,@FechaMovimiento,1
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.Produccion_BonusOperadorMovimientos WITH(UPDLOCK,HOLDLOCK)
+    WHERE ReferenciaEvento=@ReferenciaEvento
+      AND Activo=1
+);";
+                await using var cmd = new SqlCommand(sqlInsert, cn, tx);
+                cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = item.OperadorID;
+                cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = item.EjecucionProduccionID;
+                cmd.Parameters.Add("@RegistroHoraID", SqlDbType.Int).Value = item.RegistroHoraID;
+                cmd.Parameters.Add("@TipoMovimiento", SqlDbType.NVarChar, 120).Value = ProduccionTipoMovimientoBonus.ScrapConfirmadoGP12;
+                cmd.Parameters.Add("@PiezasMovimiento", SqlDbType.Int).Value = -item.ScrapAsignado;
+                cmd.Parameters.Add("@PiezasReferencia", SqlDbType.Int).Value = item.CantidadCaja;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 2000).Value = motivo;
+                cmd.Parameters.Add("@ReferenciaEvento", SqlDbType.NVarChar, 400).Value = referenciaEvento;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioID;
+                cmd.Parameters.Add("@FechaMovimiento", SqlDbType.DateTime2).Value = fechaMovimiento;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RecibirCajaEscaneada(GP12RecepcionEscaneoViewModel model)
@@ -4847,6 +5020,7 @@ IF @@ROWCOUNT<>1
                 if (cantidadScrap > 0)
                 {
                     await CrearEntregaScrapDesdeGP12Async(solicitudGP12ID, inspeccionGP12ID, cantidadScrap, observaciones, usuarioID.Value, cn, tx);
+                    await RegistrarDescuentoBonusScrapGP12Async(solicitudGP12ID, inspeccionGP12ID, cantidadScrap, usuarioID.Value, cn, tx);
                 }
                 if (solicitudEtiquetaID.HasValue)
                 {
@@ -4951,14 +5125,14 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
                     await cmd.ExecuteNonQueryAsync();
                 }
                 var mensajeHistorial = $"Inspección GP12 terminada. Revisadas: {cantidadRevisada:N4}; OK: {cantidadOK:N4}; NOK: {cantidadNOK:N4}; retrabajadas: {cantidadRetrabajada:N4}; scrap: {cantidadScrap:N4}.";
-                if (cantidadScrap > 0) mensajeHistorial += $" Se generó una entrega de scrap por {cantidadScrap:N4} pieza(s) en estado PENDIENTE_ENTREGA_GP12.";
+                if (cantidadScrap > 0) mensajeHistorial += $" Se generó una entrega de scrap por {cantidadScrap:N4} pieza(s) en estado PENDIENTE_ENTREGA_GP12 y, cuando la solicitud proviene de una caja trazable de Producción, el scrap fue descontado del bonus de sus operadores origen.";
                 await AgregarHistorialAsync(cn, tx, solicitudGP12ID, GP12Movimientos.InspeccionTerminada, estatusAnterior, nuevoEstatus, GP12EntidadHistorial.Inspeccion, inspeccionGP12ID, mensajeHistorial, usuarioID.Value);
                 await tx.CommitAsync();
                 if (cantidadScrap > 0)
                 {
                     TempData["Mensaje"] = procesoCompleto
-                        ? $"Inspección GP12 terminada. Se identificaron {cantidadScrap:N4} pieza(s) scrap. El material quedó pendiente de entrega a Almacén."
-                        : $"Inspección registrada. Se identificaron {cantidadScrap:N4} pieza(s) scrap pendientes de entrega a Almacén y aún existe material por procesar.";
+                        ? $"Inspección GP12 terminada. Se identificaron {cantidadScrap:N4} pieza(s) scrap. El material quedó pendiente de entrega a Almacén y el bonus fue conciliado cuando existió trazabilidad con Producción."
+                        : $"Inspección registrada. Se identificaron {cantidadScrap:N4} pieza(s) scrap pendientes de entrega a Almacén. El bonus fue conciliado cuando existió trazabilidad con Producción y aún existe material por procesar.";
                 }
                 else
                 {
@@ -4976,7 +5150,6 @@ WHERE SolicitudGP12ID=@SolicitudGP12ID
             }
             return RedirectToAction(nameof(Detalle), new { id = solicitudGP12ID });
         }
-
         private async Task CargarEtiquetasAsync(
             GP12DetalleViewModel model)
         {
@@ -5830,6 +6003,21 @@ VALUES
             return valor == DBNull.Value
                 ? null
                 : (TimeSpan)valor;
+        }
+
+        private sealed class GP12BonusOrigenHoraData
+        {
+            public int EjecucionProduccionID { get; set; }
+            public int RegistroHoraID { get; set; }
+            public int OperadorID { get; set; }
+            public int CantidadCaja { get; set; }
+            public long SaldoBonus { get; set; }
+            public DateTime FechaProduccion { get; set; }
+            public TimeSpan HoraInicio { get; set; }
+            public TimeSpan HoraFin { get; set; }
+            public int CapacidadDescuento { get; set; }
+            public int ScrapAsignado { get; set; }
+            public decimal Fraccion { get; set; }
         }
     }
 }

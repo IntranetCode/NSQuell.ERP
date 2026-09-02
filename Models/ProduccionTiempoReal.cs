@@ -33,6 +33,7 @@ namespace ERP.NSQuell.Models
         public const string ProduccionHoraProvisional = "PRODUCCION_HORA_PROVISIONAL";
         public const string ScrapConfirmadoCalidad = "SCRAP_CONFIRMADO_CALIDAD";
         public const string RecuperacionCalidad = "RECUPERACION_CALIDAD";
+        public const string ScrapConfirmadoGP12 = "SCRAP_CONFIRMADO_GP12";
         public const string CorreccionPositiva = "CORRECCION_POSITIVA";
         public const string CorreccionNegativa = "CORRECCION_NEGATIVA";
 
@@ -43,6 +44,7 @@ namespace ERP.NSQuell.Models
                 ProduccionHoraProvisional => "Producción por hora",
                 ScrapConfirmadoCalidad => "Scrap confirmado por Calidad",
                 RecuperacionCalidad => "Material recuperado por Calidad",
+                ScrapConfirmadoGP12 => "Scrap confirmado por GP12",
                 CorreccionPositiva => "Corrección positiva",
                 CorreccionNegativa => "Corrección negativa",
                 _ => "Movimiento de bonus"
