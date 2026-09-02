@@ -538,7 +538,7 @@ VALUES(@Registro,@Plantilla,N'CAPTURA_OPERATIVA',@Comentario,@Usuario);";
             }
 
             await tx.CommitAsync();
-            TempData["Mensaje"] = $"Hoja de Control de Calidad guardada. Resultado general: {resultadoGeneral}.";
+            TempData["Mensaje"] = $"Control de Calidad guardado. Resultado general: {resultadoGeneral}.";
             return RedirectToAction(nameof(RegistroHCC), new { id = registroId });
         }
         catch (Exception ex)
