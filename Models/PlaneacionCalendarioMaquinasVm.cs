@@ -148,6 +148,9 @@ namespace ERP.NSQuell.Models
         public int MaquinaID { get; set; }
         public string Motivo { get; set; } = string.Empty;
         public bool TrabajarDomingo { get; set; }
+
+        public bool AutorizaTerminacionParcial { get; set; }
+        public string? MotivoTerminacionParcial { get; set; }
     }
     public sealed class PlaneacionCalendarioBloqueVm
     {

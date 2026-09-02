@@ -233,7 +233,7 @@ namespace ERP.NSQuell.Controllers
         }
 
         [HttpGet("PrevisualizarInterrupcionUrgente")]
-        public async Task<IActionResult> PrevisualizarInterrupcionUrgente(int programaUrgenteId, int maquinaId, bool trabajarDomingo = false)
+        public async Task<IActionResult> PrevisualizarInterrupcionUrgente(int programaUrgenteId, int maquinaId, bool trabajarDomingo = false, bool autorizaTerminacionParcial = false)
         {
             if (!UsuarioEnSesion())
                 return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
@@ -256,6 +256,7 @@ namespace ERP.NSQuell.Controllers
 
                 var maquinasCompatibles = await ObtenerMaquinasCompatiblesAsync(programaUrgente, cn, null);
                 var maquinaDestino = maquinasCompatibles.FirstOrDefault(x => x.MaquinaID == maquinaId);
+
                 if (maquinaDestino == null)
                 {
                     return BadRequest(new
@@ -290,6 +291,7 @@ namespace ERP.NSQuell.Controllers
 
                 var proyeccionInterrupciones = await _planeacionSecuenciaService.ProyectarInterrupcionesActivasAsync(DateTime.Now, trabajarDomingo, cn);
                 var yaTieneInterrupcion = proyeccionInterrupciones.Programas.Any(x => x.EsProgramaRaizInterrupcion && x.ProgramaProduccionID == programaActual.ProgramaProduccionID);
+
                 if (yaTieneInterrupcion)
                 {
                     return BadRequest(new
@@ -299,49 +301,96 @@ namespace ERP.NSQuell.Controllers
                     });
                 }
 
+                var parejaActualId = await ObtenerProgramaParejaLhRhAsync(programaActual.ProgramaProduccionID, cn);
+                var parejaUrgenteId = await ObtenerProgramaParejaLhRhAsync(programaUrgenteId, cn);
+
+                if (autorizaTerminacionParcial && parejaActualId.HasValue)
+                {
+                    return BadRequest(new
+                    {
+                        ok = false,
+                        mensaje = "La terminación parcial de una producción LH/RH todavía no está habilitada. Primero debe definirse qué sucede con la OF contraparte y con el lado del molde que continúa produciendo."
+                    });
+                }
+
                 var ahora = NormalizarFecha(DateTime.Now);
                 var fechaInterrupcion = SiguienteAperturaOperativa(ahora, trabajarDomingo);
-                var cambiaMolde = programaActual.MoldeID != programaUrgente.MoldeID;
+
+                var cambiaMolde = !CoincidenMoldesInterrupcionUrgente(
+                    programaActual.MoldeID,
+                    programaActual.MoldeCodigo,
+                    programaUrgente.MoldeID,
+                    programaUrgente.MoldeCodigo);
+
                 var horasCambioIda = cambiaMolde ? 1m : 0m;
-                var horasCambioRegreso = cambiaMolde ? 1m : 0m;
+                var horasCambioRegreso = autorizaTerminacionParcial ? 0m : (cambiaMolde ? 1m : 0m);
                 var horasProduccionUrgente = programaUrgente.HorasProgramadas > 0 ? programaUrgente.HorasProgramadas : 1m;
 
                 var fechaCambioUrgente = fechaInterrupcion;
                 var fechaArranqueUrgente = SumarHorasOperativas(fechaCambioUrgente, horasCambioIda, trabajarDomingo);
                 var fechaFinUrgente = SumarHorasOperativas(fechaArranqueUrgente, horasProduccionUrgente, trabajarDomingo);
-                var fechaPreparacionRegreso = fechaFinUrgente;
-                var fechaReinicioOriginal = SumarHorasOperativas(fechaPreparacionRegreso, horasCambioRegreso, trabajarDomingo);
+
+                DateTime? fechaReinicioOriginal = null;
+                DateTime? finOriginalProyectado = null;
+
+                if (autorizaTerminacionParcial)
+                {
+                    finOriginalProyectado = fechaInterrupcion;
+                }
+                else
+                {
+                    fechaReinicioOriginal = SumarHorasOperativas(fechaFinUrgente, horasCambioRegreso, trabajarDomingo);
+                    var finOriginalBase = programaActual.FechaFinProgramada > fechaInterrupcion
+                        ? programaActual.FechaFinProgramada
+                        : fechaInterrupcion;
+
+                    finOriginalProyectado = SumarHorasOperativas(finOriginalBase, horasCambioIda + horasProduccionUrgente + horasCambioRegreso, trabajarDomingo);
+                }
 
                 var horasImpactoTotal = horasCambioIda + horasProduccionUrgente + horasCambioRegreso;
-                var finOriginalBase = programaActual.FechaFinProgramada > fechaInterrupcion ? programaActual.FechaFinProgramada : fechaInterrupcion;
-                var finOriginalProyectado = SumarHorasOperativas(finOriginalBase, horasImpactoTotal, trabajarDomingo);
 
-                var programasPosterioresImpactados = await ContarProgramasImpactadosPorInterrupcionUrgenteAsync(maquinaId, programaUrgenteId, programaActual.ProgramaProduccionID, fechaInterrupcion, cn);
-
-                var parejaActualId = await ObtenerProgramaParejaLhRhAsync(programaActual.ProgramaProduccionID, cn);
-                var parejaUrgenteId = await ObtenerProgramaParejaLhRhAsync(programaUrgenteId, cn);
+                var programasPosterioresImpactados = await ContarProgramasImpactadosPorInterrupcionUrgenteAsync(
+                    maquinaId,
+                    programaUrgenteId,
+                    programaActual.ProgramaProduccionID,
+                    fechaInterrupcion,
+                    cn);
 
                 var horarioActualVencido = programaActual.FechaFinProgramada <= ahora;
-
                 var advertencias = new List<string>();
+
                 if (cambiaMolde)
-                    advertencias.Add("La OF urgente utiliza un molde diferente. Se contempla 1 hora de preparación antes de la urgente y 1 hora para preparar nuevamente la OF interrumpida.");
+                {
+                    advertencias.Add(
+                        autorizaTerminacionParcial
+                            ? "La OF urgente utiliza un molde diferente. Se contempla 1 hora de preparación para la OF urgente; no se contempla cambio de regreso porque Planeación está autorizando terminar parcialmente la OF actual."
+                            : "La OF urgente utiliza un molde diferente. Se contempla 1 hora de preparación antes de la urgente y 1 hora para preparar nuevamente la OF interrumpida.");
+                }
+
                 if (parejaActualId.HasValue)
                     advertencias.Add($"La OF que está produciendo pertenece a una pareja LH/RH. Su programa relacionado es {parejaActualId.Value} y deberá tratarse como parte de la misma interrupción.");
+
                 if (parejaUrgenteId.HasValue)
                     advertencias.Add($"La OF urgente pertenece a una pareja LH/RH. Su programa relacionado es {parejaUrgenteId.Value} y deberá programarse junto con ella.");
-                if (horarioActualVencido)
-                    advertencias.Add("La OF actual ya superó su fin programado. La proyección utiliza la hora actual como base mínima; el tiempo restante real deberá conservarse desde Producción.");
 
-                var motivoResumen = cambiaMolde
-                    ? "La interrupción requiere cambio de molde y posteriormente nueva preparación de la OF original."
-                    : "La interrupción conserva el molde actual; no se agrega una hora de cambio de molde.";
+                if (horarioActualVencido)
+                    advertencias.Add("La OF actual ya superó su fin programado. La proyección utiliza la hora actual como base mínima.");
+
+                if (autorizaTerminacionParcial)
+                    advertencias.Add("Planeación está indicando que la OF interrumpida no regresará después de la producción urgente. El Auxiliar o Técnico de Producción deberá ejecutar posteriormente el cierre parcial.");
+
+                var motivoResumen = autorizaTerminacionParcial
+                    ? "Planeación autoriza que la OF actual sea interrumpida y posteriormente cerrada como terminación parcial. La OF no regresará después de la urgente."
+                    : cambiaMolde
+                        ? "La interrupción requiere cambio de molde y posteriormente nueva preparación de la OF original."
+                        : "La interrupción conserva el molde actual; la OF original regresará después de terminar la producción urgente.";
 
                 return Json(new
                 {
                     ok = true,
                     requiereConfirmacion = true,
                     fechaCalculo = DateTime.Now,
+                    terminacionParcialAutorizada = autorizaTerminacionParcial,
                     maquina = new
                     {
                         maquinaID = maquinaDestino.MaquinaID,
@@ -391,9 +440,11 @@ namespace ERP.NSQuell.Controllers
                     horarioActualVencido,
                     motivoResumen,
                     advertencias,
-                    mensaje = programasPosterioresImpactados > 0
-                        ? $"La interrupción urgente afectará la OF actualmente producida y puede recorrer {programasPosterioresImpactados} programa(s) posterior(es)."
-                        : "La interrupción urgente afectará la OF actualmente producida. No se detectaron programas posteriores reacomodables en esta máquina."
+                    mensaje = autorizaTerminacionParcial
+                        ? "La OF actual será interrumpida por orden de Planeación y quedará autorizada para terminación parcial. No se proyecta su regreso después de la urgente."
+                        : programasPosterioresImpactados > 0
+                            ? $"La interrupción urgente afectará la OF actualmente producida y puede recorrer {programasPosterioresImpactados} programa(s) posterior(es)."
+                            : "La interrupción urgente afectará la OF actualmente producida. No se detectaron programas posteriores reacomodables en esta máquina."
                 });
             }
             catch (InvalidOperationException ex)
@@ -406,75 +457,237 @@ namespace ERP.NSQuell.Controllers
             }
         }
 
-
         [HttpPost("ConfirmarInterrupcionUrgente")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmarInterrupcionUrgente([FromBody] PlaneacionInterrupcionUrgenteRequest request)
         {
-            if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
-            if (request == null || request.ProgramaUrgenteID <= 0 || request.MaquinaID <= 0) return BadRequest(new { ok = false, mensaje = "La OF urgente y la máquina son obligatorias." });
+            if (!UsuarioEnSesion())
+                return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
+
+            if (request == null || request.ProgramaUrgenteID <= 0 || request.MaquinaID <= 0)
+                return BadRequest(new { ok = false, mensaje = "La OF urgente y la máquina son obligatorias." });
+
             request.Motivo = (request.Motivo ?? string.Empty).Trim();
-            if (request.Motivo.Length < 5) return BadRequest(new { ok = false, mensaje = "Escribe un motivo claro para justificar la interrupción urgente." });
-            if (request.Motivo.Length > 500) return BadRequest(new { ok = false, mensaje = "El motivo no puede superar 500 caracteres." });
+            request.MotivoTerminacionParcial = (request.MotivoTerminacionParcial ?? string.Empty).Trim();
+
+            if (request.Motivo.Length < 5)
+                return BadRequest(new { ok = false, mensaje = "Escribe un motivo claro para justificar la interrupción urgente." });
+
+            if (request.Motivo.Length > 500)
+                return BadRequest(new { ok = false, mensaje = "El motivo no puede superar 500 caracteres." });
+
+            if (request.AutorizaTerminacionParcial)
+            {
+                if (request.MotivoTerminacionParcial.Length < 5)
+                    return BadRequest(new { ok = false, mensaje = "Planeación debe indicar el motivo por el que autoriza terminar parcialmente la OF interrumpida." });
+
+                if (request.MotivoTerminacionParcial.Length > 500)
+                    return BadRequest(new { ok = false, mensaje = "El motivo de terminación parcial no puede superar 500 caracteres." });
+            }
+            else
+            {
+                request.MotivoTerminacionParcial = null;
+            }
+
             var usuarioId = ObtenerUsuarioID();
-            if (usuarioId <= 0) return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al usuario." });
+
+            if (usuarioId <= 0)
+                return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al usuario." });
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
             try
             {
                 await TomarCandadoCalendarioAsync(cn, tx);
                 await ActivarReacomodoPlaneacionAsync(cn, tx);
+
                 var programaUrgente = await ObtenerProgramaBaseAsync(request.ProgramaUrgenteID, cn, tx, bloquear: true);
-                if (programaUrgente == null) throw new InvalidOperationException("No se encontró la OF urgente.");
-                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(programaUrgente.ProgramaProduccionID, cn, tx, bloquear: true);
-                if (!string.IsNullOrWhiteSpace(motivoBloqueo)) throw new InvalidOperationException("La OF urgente ya no está disponible. " + motivoBloqueo);
+
+                if (programaUrgente == null)
+                    throw new InvalidOperationException("No se encontró la OF urgente.");
+
+                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(
+                    programaUrgente.ProgramaProduccionID,
+                    cn,
+                    tx,
+                    bloquear: true);
+
+                if (!string.IsNullOrWhiteSpace(motivoBloqueo))
+                    throw new InvalidOperationException("La OF urgente ya no está disponible. " + motivoBloqueo);
+
                 var compatibles = await ObtenerMaquinasCompatiblesAsync(programaUrgente, cn, tx);
                 var maquinaDestino = compatibles.FirstOrDefault(x => x.MaquinaID == request.MaquinaID);
-                if (maquinaDestino == null) throw new InvalidOperationException("La máquina seleccionada ya no es compatible con la OF urgente.");
-                var programaActual = await ObtenerProduccionActivaParaInterrupcionUrgenteAsync(request.MaquinaID, cn, tx, bloquear: true);
-                if (programaActual == null) throw new InvalidOperationException("La máquina ya no tiene una OF activa en Producción. Actualiza el calendario y vuelve a intentarlo.");
-                if (programaActual.EstatusProduccionID != EstatusPrograma.EnProduccion) throw new InvalidOperationException($"La OF actual ya no se encuentra produciendo. Estado actual: {NombreEstatusProduccion(programaActual.EstatusProduccionID)}.");
-                var parejaActualId = await ObtenerProgramaParejaLhRhAsync(programaActual.ProgramaProduccionID, cn, tx);
-                var parejaUrgenteId = await ObtenerProgramaParejaLhRhAsync(programaUrgente.ProgramaProduccionID, cn, tx);
+
+                if (maquinaDestino == null)
+                    throw new InvalidOperationException("La máquina seleccionada ya no es compatible con la OF urgente.");
+
+                var programaActual = await ObtenerProduccionActivaParaInterrupcionUrgenteAsync(
+                    request.MaquinaID,
+                    cn,
+                    tx,
+                    bloquear: true);
+
+                if (programaActual == null)
+                    throw new InvalidOperationException("La máquina ya no tiene una OF activa en Producción. Actualiza el calendario y vuelve a intentarlo.");
+
+                if (programaActual.EstatusProduccionID != EstatusPrograma.EnProduccion)
+                    throw new InvalidOperationException($"La OF actual ya no se encuentra produciendo. Estado actual: {NombreEstatusProduccion(programaActual.EstatusProduccionID)}.");
+
+                var parejaActualId = await ObtenerProgramaParejaLhRhAsync(
+                    programaActual.ProgramaProduccionID,
+                    cn,
+                    tx);
+
+                var parejaUrgenteId = await ObtenerProgramaParejaLhRhAsync(
+                    programaUrgente.ProgramaProduccionID,
+                    cn,
+                    tx);
+
+                if (request.AutorizaTerminacionParcial && parejaActualId.HasValue)
+                    throw new InvalidOperationException("La terminación parcial de una pareja LH/RH todavía no está habilitada. Primero debe definirse la política para el lado del molde que continúa produciendo.");
+
                 ProgramaActivoInterrupcionUrgente? programaActualPareja = null;
                 ProgramaBase? programaUrgentePareja = null;
-                if (programaActual.ProgramaProduccionID == programaUrgente.ProgramaProduccionID || parejaUrgenteId == programaActual.ProgramaProduccionID || parejaActualId == programaUrgente.ProgramaProduccionID || (parejaActualId.HasValue && parejaUrgenteId.HasValue && parejaActualId.Value == parejaUrgenteId.Value))
+
+                if (programaActual.ProgramaProduccionID == programaUrgente.ProgramaProduccionID
+                    || parejaUrgenteId == programaActual.ProgramaProduccionID
+                    || parejaActualId == programaUrgente.ProgramaProduccionID
+                    || (parejaActualId.HasValue && parejaUrgenteId.HasValue && parejaActualId.Value == parejaUrgenteId.Value))
+                {
                     throw new InvalidOperationException("La OF urgente no puede ser la misma OF que actualmente se encuentra produciendo ni su contraparte LH/RH.");
+                }
+
                 if (await ExisteParoAbiertoEjecucionAsync(programaActual.EjecucionProduccionID, cn, tx))
                     throw new InvalidOperationException("La ejecución actual ya tiene un paro abierto. No se permiten interrupciones anidadas.");
+
                 if (parejaActualId.HasValue)
                 {
-                    programaActualPareja = await ObtenerProduccionActivaProgramaInterrupcionUrgenteAsync(parejaActualId.Value, request.MaquinaID, cn, tx, bloquear: true);
-                    if (programaActualPareja == null) throw new InvalidOperationException($"La OF que está produciendo pertenece a una pareja LH/RH, pero no se encontró una ejecución activa para el Programa {parejaActualId.Value}. No se realizará una interrupción parcial.");
-                    if (programaActualPareja.EstatusProduccionID != EstatusPrograma.EnProduccion) throw new InvalidOperationException($"La pareja LH/RH del programa actual no está produciendo. Programa {programaActualPareja.ProgramaProduccionID}, estado {NombreEstatusProduccion(programaActualPareja.EstatusProduccionID)}.");
-                    if (programaActualPareja.MaquinaID != programaActual.MaquinaID) throw new InvalidOperationException("Las OF LH/RH actuales ya no están ejecutándose en la misma máquina.");
-                    if (!CoincidenMoldesInterrupcionUrgente(programaActual.MoldeID, programaActual.MoldeCodigo, programaActualPareja.MoldeID, programaActualPareja.MoldeCodigo)) throw new InvalidOperationException("Las OF LH/RH actuales ya no conservan el mismo molde.");
-                    if (programaActual.FechaInicioProgramada != programaActualPareja.FechaInicioProgramada || programaActual.FechaFinProgramada != programaActualPareja.FechaFinProgramada) throw new InvalidOperationException("Las OF LH/RH actuales ya no conservan la misma ventana programada.");
-                    if (await ExisteParoAbiertoEjecucionAsync(programaActualPareja.EjecucionProduccionID, cn, tx)) throw new InvalidOperationException("La pareja LH/RH de la ejecución actual ya tiene un paro abierto. No se realizará una interrupción parcial.");
+                    programaActualPareja = await ObtenerProduccionActivaProgramaInterrupcionUrgenteAsync(
+                        parejaActualId.Value,
+                        request.MaquinaID,
+                        cn,
+                        tx,
+                        bloquear: true);
+
+                    if (programaActualPareja == null)
+                        throw new InvalidOperationException($"La OF que está produciendo pertenece a una pareja LH/RH, pero no se encontró una ejecución activa para el Programa {parejaActualId.Value}. No se realizará una interrupción parcial.");
+
+                    if (programaActualPareja.EstatusProduccionID != EstatusPrograma.EnProduccion)
+                        throw new InvalidOperationException($"La pareja LH/RH del programa actual no está produciendo. Programa {programaActualPareja.ProgramaProduccionID}, estado {NombreEstatusProduccion(programaActualPareja.EstatusProduccionID)}.");
+
+                    if (programaActualPareja.MaquinaID != programaActual.MaquinaID)
+                        throw new InvalidOperationException("Las OF LH/RH actuales ya no están ejecutándose en la misma máquina.");
+
+                    if (!CoincidenMoldesInterrupcionUrgente(
+                        programaActual.MoldeID,
+                        programaActual.MoldeCodigo,
+                        programaActualPareja.MoldeID,
+                        programaActualPareja.MoldeCodigo))
+                    {
+                        throw new InvalidOperationException("Las OF LH/RH actuales ya no conservan el mismo molde.");
+                    }
+
+                    if (programaActual.FechaInicioProgramada != programaActualPareja.FechaInicioProgramada
+                        || programaActual.FechaFinProgramada != programaActualPareja.FechaFinProgramada)
+                    {
+                        throw new InvalidOperationException("Las OF LH/RH actuales ya no conservan la misma ventana programada.");
+                    }
+
+                    if (await ExisteParoAbiertoEjecucionAsync(programaActualPareja.EjecucionProduccionID, cn, tx))
+                        throw new InvalidOperationException("La pareja LH/RH de la ejecución actual ya tiene un paro abierto. No se realizará una interrupción parcial.");
                 }
-                if (await ExisteInterrupcionUrgenteActivaParaProgramaAsync(programaUrgente.ProgramaProduccionID, cn, tx))
+
+                if (await ExisteInterrupcionUrgenteActivaParaProgramaAsync(
+                    programaUrgente.ProgramaProduccionID,
+                    cn,
+                    tx))
+                {
                     throw new InvalidOperationException("Esta OF ya participa en otra interrupción urgente activa.");
+                }
+
                 if (parejaUrgenteId.HasValue)
                 {
-                    programaUrgentePareja = await ObtenerProgramaBaseAsync(parejaUrgenteId.Value, cn, tx, bloquear: true);
-                    if (programaUrgentePareja == null) throw new InvalidOperationException($"La OF urgente pertenece a una pareja LH/RH, pero no se encontró el Programa {parejaUrgenteId.Value}.");
-                    var bloqueoPareja = await ObtenerMotivoBloqueoMovimientoAsync(programaUrgentePareja.ProgramaProduccionID, cn, tx, bloquear: true);
-                    if (!string.IsNullOrWhiteSpace(bloqueoPareja)) throw new InvalidOperationException($"La pareja LH/RH de la OF urgente no está disponible. {bloqueoPareja}");
+                    programaUrgentePareja = await ObtenerProgramaBaseAsync(
+                        parejaUrgenteId.Value,
+                        cn,
+                        tx,
+                        bloquear: true);
+
+                    if (programaUrgentePareja == null)
+                        throw new InvalidOperationException($"La OF urgente pertenece a una pareja LH/RH, pero no se encontró el Programa {parejaUrgenteId.Value}.");
+
+                    var bloqueoPareja = await ObtenerMotivoBloqueoMovimientoAsync(
+                        programaUrgentePareja.ProgramaProduccionID,
+                        cn,
+                        tx,
+                        bloquear: true);
+
+                    if (!string.IsNullOrWhiteSpace(bloqueoPareja))
+                        throw new InvalidOperationException($"La pareja LH/RH de la OF urgente no está disponible. {bloqueoPareja}");
+
                     var compatiblesPareja = await ObtenerMaquinasCompatiblesAsync(programaUrgentePareja, cn, tx);
-                    if (!compatiblesPareja.Any(x => x.MaquinaID == request.MaquinaID)) throw new InvalidOperationException("La máquina seleccionada no es compatible con ambas OF de la pareja LH/RH urgente.");
-                    if (programaUrgentePareja.MaquinaID != programaUrgente.MaquinaID) throw new InvalidOperationException("La pareja LH/RH urgente ya no conserva la misma máquina programada antes de la interrupción.");
-                    if (!CoincidenMoldesInterrupcionUrgente(programaUrgente.MoldeID, programaUrgente.MoldeCodigo, programaUrgentePareja.MoldeID, programaUrgentePareja.MoldeCodigo)) throw new InvalidOperationException("La pareja LH/RH urgente ya no conserva el mismo molde.");
-                    if (programaUrgente.FechaInicioProgramada != programaUrgentePareja.FechaInicioProgramada || programaUrgente.FechaFinProgramada != programaUrgentePareja.FechaFinProgramada) throw new InvalidOperationException("La pareja LH/RH urgente ya no conserva la misma ventana programada.");
-                    if (Math.Abs(programaUrgente.HorasProgramadas - programaUrgentePareja.HorasProgramadas) > 0.0001m) throw new InvalidOperationException("La pareja LH/RH urgente tiene horas programadas diferentes. Corrige Planeación antes de interrumpir Producción.");
-                    if (await ExisteInterrupcionUrgenteActivaParaProgramaAsync(programaUrgentePareja.ProgramaProduccionID, cn, tx)) throw new InvalidOperationException("La pareja LH/RH de la OF urgente ya participa en otra interrupción.");
+
+                    if (!compatiblesPareja.Any(x => x.MaquinaID == request.MaquinaID))
+                        throw new InvalidOperationException("La máquina seleccionada no es compatible con ambas OF de la pareja LH/RH urgente.");
+
+                    if (programaUrgentePareja.MaquinaID != programaUrgente.MaquinaID)
+                        throw new InvalidOperationException("La pareja LH/RH urgente ya no conserva la misma máquina programada antes de la interrupción.");
+
+                    if (!CoincidenMoldesInterrupcionUrgente(
+                        programaUrgente.MoldeID,
+                        programaUrgente.MoldeCodigo,
+                        programaUrgentePareja.MoldeID,
+                        programaUrgentePareja.MoldeCodigo))
+                    {
+                        throw new InvalidOperationException("La pareja LH/RH urgente ya no conserva el mismo molde.");
+                    }
+
+                    if (programaUrgente.FechaInicioProgramada != programaUrgentePareja.FechaInicioProgramada
+                        || programaUrgente.FechaFinProgramada != programaUrgentePareja.FechaFinProgramada)
+                    {
+                        throw new InvalidOperationException("La pareja LH/RH urgente ya no conserva la misma ventana programada.");
+                    }
+
+                    if (Math.Abs(programaUrgente.HorasProgramadas - programaUrgentePareja.HorasProgramadas) > 0.0001m)
+                        throw new InvalidOperationException("La pareja LH/RH urgente tiene horas programadas diferentes. Corrige Planeación antes de interrumpir Producción.");
+
+                    if (await ExisteInterrupcionUrgenteActivaParaProgramaAsync(
+                        programaUrgentePareja.ProgramaProduccionID,
+                        cn,
+                        tx))
+                    {
+                        throw new InvalidOperationException("La pareja LH/RH de la OF urgente ya participa en otra interrupción.");
+                    }
                 }
-                var fechaInterrupcion = SiguienteAperturaOperativa(NormalizarFecha(DateTime.Now), request.TrabajarDomingo);
-                var cambiaMolde = !CoincidenMoldesInterrupcionUrgente(programaActual.MoldeID, programaActual.MoldeCodigo, programaUrgente.MoldeID, programaUrgente.MoldeCodigo);
+
+                var fechaInterrupcion = SiguienteAperturaOperativa(
+                    NormalizarFecha(DateTime.Now),
+                    request.TrabajarDomingo);
+
+                var cambiaMolde = !CoincidenMoldesInterrupcionUrgente(
+                    programaActual.MoldeID,
+                    programaActual.MoldeCodigo,
+                    programaUrgente.MoldeID,
+                    programaUrgente.MoldeCodigo);
+
                 var horasCambio = cambiaMolde ? 1m : 0m;
-                var horasProduccion = programaUrgente.HorasProgramadas > 0 ? programaUrgente.HorasProgramadas : 1m;
-                var fechaArranque = SumarHorasOperativas(fechaInterrupcion, horasCambio, request.TrabajarDomingo);
-                var fechaFin = SumarHorasOperativas(fechaArranque, horasProduccion, request.TrabajarDomingo);
+                var horasProduccion = programaUrgente.HorasProgramadas > 0
+                    ? programaUrgente.HorasProgramadas
+                    : 1m;
+
+                var fechaArranque = SumarHorasOperativas(
+                    fechaInterrupcion,
+                    horasCambio,
+                    request.TrabajarDomingo);
+
+                var fechaFin = SumarHorasOperativas(
+                    fechaArranque,
+                    horasProduccion,
+                    request.TrabajarDomingo);
+
                 if (programaUrgente.MoldeID.HasValue)
                 {
                     var finConflictoMolde = await ObtenerFinCruceMoldeInterrupcionUrgenteAsync(
@@ -487,41 +700,177 @@ namespace ERP.NSQuell.Controllers
                         fechaFin,
                         cn,
                         tx);
-                    if (finConflictoMolde.HasValue) throw new InvalidOperationException($"El molde de la OF urgente está ocupado por otra programación hasta {finConflictoMolde.Value:dd/MM/yyyy HH:mm}. La interrupción no puede confirmarse en este momento.");
+
+                    if (finConflictoMolde.HasValue)
+                        throw new InvalidOperationException($"El molde de la OF urgente está ocupado por otra programación hasta {finConflictoMolde.Value:dd/MM/yyyy HH:mm}. La interrupción no puede confirmarse en este momento.");
                 }
-                var nuevaSecuencia = await ObtenerSiguienteSecuenciaAsync(maquinaDestino.MaquinaID, programaUrgente.ProgramaProduccionID, cn, tx);
+
+                var nuevaSecuencia = await ObtenerSiguienteSecuenciaAsync(
+                    maquinaDestino.MaquinaID,
+                    programaUrgente.ProgramaProduccionID,
+                    cn,
+                    tx);
+
                 var esInterrupcionLhRh = programaActualPareja != null;
                 Guid? grupoParoLhRh = esInterrupcionLhRh ? Guid.NewGuid() : null;
-                var paroId = await CrearParoInterrupcionUrgenteAsync(programaActual, programaUrgente.ProgramaProduccionID, fechaInterrupcion, request.Motivo, esInterrupcionLhRh, grupoParoLhRh, usuarioId, cn, tx);
+
+                var paroId = await CrearParoInterrupcionUrgenteAsync(
+                    programaActual,
+                    programaUrgente.ProgramaProduccionID,
+                    fechaInterrupcion,
+                    request.Motivo,
+                    esInterrupcionLhRh,
+                    grupoParoLhRh,
+                    request.AutorizaTerminacionParcial,
+                    request.MotivoTerminacionParcial,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 int? paroParejaId = null;
+
                 if (programaActualPareja != null)
                 {
-                    paroParejaId = await CrearParoInterrupcionUrgenteAsync(programaActualPareja, programaUrgente.ProgramaProduccionID, fechaInterrupcion, request.Motivo, true, grupoParoLhRh, usuarioId, cn, tx);
+                    paroParejaId = await CrearParoInterrupcionUrgenteAsync(
+                        programaActualPareja,
+                        programaUrgente.ProgramaProduccionID,
+                        fechaInterrupcion,
+                        request.Motivo,
+                        true,
+                        grupoParoLhRh,
+                        false,
+                        null,
+                        usuarioId,
+                        cn,
+                        tx);
                 }
-                await PausarProduccionPorInterrupcionUrgenteAsync(programaActual, usuarioId, cn, tx);
-                if (programaActualPareja != null) await PausarProduccionPorInterrupcionUrgenteAsync(programaActualPareja, usuarioId, cn, tx);
-                await ActualizarProgramaUrgenteParaInterrupcionAsync(programaUrgente, maquinaDestino, fechaInterrupcion, fechaArranque, fechaFin, horasProduccion, nuevaSecuencia, usuarioId, cn, tx);
-                if (programaUrgentePareja != null)
-                    await ActualizarProgramaUrgenteParaInterrupcionAsync(programaUrgentePareja, maquinaDestino, fechaInterrupcion, fechaArranque, fechaFin, horasProduccion, nuevaSecuencia + 1, usuarioId, cn, tx);
-                await SincronizarDocumentosRelacionadosAsync(programaUrgente, maquinaDestino, fechaInterrupcion, fechaArranque, fechaFin, horasProduccion, cn, tx);
-                await SincronizarSecadoDesdeReprogramacionAsync(programaUrgente.ProgramaProduccionID, usuarioId, cn, tx);
+
+                await PausarProduccionPorInterrupcionUrgenteAsync(
+                    programaActual,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                if (programaActualPareja != null)
+                {
+                    await PausarProduccionPorInterrupcionUrgenteAsync(
+                        programaActualPareja,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
+
+                await ActualizarProgramaUrgenteParaInterrupcionAsync(
+                    programaUrgente,
+                    maquinaDestino,
+                    fechaInterrupcion,
+                    fechaArranque,
+                    fechaFin,
+                    horasProduccion,
+                    nuevaSecuencia,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 if (programaUrgentePareja != null)
                 {
-                    await SincronizarDocumentosRelacionadosAsync(programaUrgentePareja, maquinaDestino, fechaInterrupcion, fechaArranque, fechaFin, horasProduccion, cn, tx);
-                    await SincronizarSecadoDesdeReprogramacionAsync(programaUrgentePareja.ProgramaProduccionID, usuarioId, cn, tx);
+                    await ActualizarProgramaUrgenteParaInterrupcionAsync(
+                        programaUrgentePareja,
+                        maquinaDestino,
+                        fechaInterrupcion,
+                        fechaArranque,
+                        fechaFin,
+                        horasProduccion,
+                        nuevaSecuencia + 1,
+                        usuarioId,
+                        cn,
+                        tx);
                 }
-                await InsertarHistorialInterrupcionUrgenteAsync(programaUrgente, programaActual, maquinaDestino, fechaInterrupcion, fechaArranque, fechaFin, horasProduccion, usuarioId, request.Motivo, cn, tx);
+
+                await SincronizarDocumentosRelacionadosAsync(
+                    programaUrgente,
+                    maquinaDestino,
+                    fechaInterrupcion,
+                    fechaArranque,
+                    fechaFin,
+                    horasProduccion,
+                    cn,
+                    tx);
+
+                await SincronizarSecadoDesdeReprogramacionAsync(
+                    programaUrgente.ProgramaProduccionID,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 if (programaUrgentePareja != null)
-                    await InsertarHistorialInterrupcionUrgenteAsync(programaUrgentePareja, programaActualPareja ?? programaActual, maquinaDestino, fechaInterrupcion, fechaArranque, fechaFin, horasProduccion, usuarioId, request.Motivo, cn, tx);
-                await ReordenarSecuenciasAsync(programaUrgente.MaquinaID, maquinaDestino.MaquinaID, cn, tx);
+                {
+                    await SincronizarDocumentosRelacionadosAsync(
+                        programaUrgentePareja,
+                        maquinaDestino,
+                        fechaInterrupcion,
+                        fechaArranque,
+                        fechaFin,
+                        horasProduccion,
+                        cn,
+                        tx);
+
+                    await SincronizarSecadoDesdeReprogramacionAsync(
+                        programaUrgentePareja.ProgramaProduccionID,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
+
+                await InsertarHistorialInterrupcionUrgenteAsync(
+                    programaUrgente,
+                    programaActual,
+                    maquinaDestino,
+                    fechaInterrupcion,
+                    fechaArranque,
+                    fechaFin,
+                    horasProduccion,
+                    usuarioId,
+                    request.Motivo,
+                    cn,
+                    tx);
+
+                if (programaUrgentePareja != null)
+                {
+                    await InsertarHistorialInterrupcionUrgenteAsync(
+                        programaUrgentePareja,
+                        programaActualPareja ?? programaActual,
+                        maquinaDestino,
+                        fechaInterrupcion,
+                        fechaArranque,
+                        fechaFin,
+                        horasProduccion,
+                        usuarioId,
+                        request.Motivo,
+                        cn,
+                        tx);
+                }
+
+                await ReordenarSecuenciasAsync(
+                    programaUrgente.MaquinaID,
+                    maquinaDestino.MaquinaID,
+                    cn,
+                    tx);
+
                 await DesactivarReacomodoPlaneacionAsync(cn, tx);
                 await tx.CommitAsync();
+
                 var mensaje = programaActualPareja != null
                     ? $"Interrupción urgente registrada. Los Programas {programaActual.ProgramaProduccionID} y {programaActualPareja.ProgramaProduccionID} quedaron pausados conjuntamente."
                     : $"Interrupción urgente registrada. El Programa {programaActual.ProgramaProduccionID} quedó pausado.";
+
                 mensaje += programaUrgentePareja != null
                     ? $" Los Programas urgentes LH/RH {programaUrgente.ProgramaProduccionID} y {programaUrgentePareja.ProgramaProduccionID} quedaron juntos en preparación en la máquina {maquinaDestino.Codigo}."
                     : $" El Programa urgente {programaUrgente.ProgramaProduccionID} quedó en preparación en la máquina {maquinaDestino.Codigo}.";
+
+                if (request.AutorizaTerminacionParcial)
+                    mensaje += " Planeación autorizó expresamente la terminación parcial de la OF interrumpida. La ejecución deberá ser cerrada por un Auxiliar o Técnico de Producción y no regresará después de la urgente.";
+
                 return Json(new
                 {
                     ok = true,
@@ -540,6 +889,7 @@ namespace ERP.NSQuell.Controllers
                     fechaInterrupcion,
                     fechaArranqueUrgente = fechaArranque,
                     fechaFinUrgente = fechaFin,
+                    autorizaTerminacionParcial = request.AutorizaTerminacionParcial,
                     mensaje
                 });
             }
@@ -563,6 +913,7 @@ namespace ERP.NSQuell.Controllers
                 await LimpiarContextoSinTransaccionAsync(cn);
             }
         }
+
 
         [HttpGet("MaquinasCompatibles")]
         public async Task<IActionResult> MaquinasCompatibles(int programaProduccionId)
@@ -1771,7 +2122,19 @@ ORDER BY ISNULL
             var result = await cmd.ExecuteScalarAsync();
             return result == null || result == DBNull.Value ? null : Convert.ToDateTime(result);
         }
-        private static async Task<int> CrearParoInterrupcionUrgenteAsync(ProgramaActivoInterrupcionUrgente programaActual, int programaUrgenteId, DateTime fechaInicio, string motivo, bool esParoLhRh, Guid? grupoParoLhRh, int usuarioId, SqlConnection cn, SqlTransaction tx)
+
+        private static async Task<int> CrearParoInterrupcionUrgenteAsync(
+    ProgramaActivoInterrupcionUrgente programaActual,
+    int programaUrgenteId,
+    DateTime fechaInicio,
+    string motivo,
+    bool esParoLhRh,
+    Guid? grupoParoLhRh,
+    bool autorizaTerminacionParcial,
+    string? motivoTerminacionParcial,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
         {
             const string sql = @"
 INSERT INTO dbo.Produccion_Paros
@@ -1789,6 +2152,11 @@ INSERT INTO dbo.Produccion_Paros
     GrupoParoLhRh,
     EsInterrupcionUrgente,
     ProgramaUrgenteID,
+    AutorizaTerminacionParcial,
+    MotivoTerminacionParcial,
+    UsuarioAutorizaTerminacionParcialID,
+    FechaAutorizacionTerminacionParcial,
+    TerminacionParcialEjecutada,
     UsuarioCreacionID,
     FechaCreacion,
     Activo
@@ -1809,11 +2177,18 @@ VALUES
     @GrupoParoLhRh,
     1,
     @ProgramaUrgenteID,
+    @AutorizaTerminacionParcial,
+    @MotivoTerminacionParcial,
+    CASE WHEN @AutorizaTerminacionParcial=1 THEN @UsuarioID ELSE NULL END,
+    CASE WHEN @AutorizaTerminacionParcial=1 THEN GETDATE() ELSE NULL END,
+    0,
     @UsuarioID,
     GETDATE(),
     1
 );";
+
             await using var cmd = new SqlCommand(sql, cn, tx);
+
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = programaActual.EjecucionProduccionID;
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaActual.ProgramaProduccionID;
             cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = (object?)programaActual.SolicitudProduccionID ?? DBNull.Value;
@@ -1824,9 +2199,18 @@ VALUES
             cmd.Parameters.Add("@EsParoLhRh", SqlDbType.Bit).Value = esParoLhRh;
             cmd.Parameters.Add("@GrupoParoLhRh", SqlDbType.UniqueIdentifier).Value = (object?)grupoParoLhRh ?? DBNull.Value;
             cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteId;
+            cmd.Parameters.Add("@AutorizaTerminacionParcial", SqlDbType.Bit).Value = autorizaTerminacionParcial;
+            cmd.Parameters.Add("@MotivoTerminacionParcial", SqlDbType.NVarChar, 500).Value =
+                autorizaTerminacionParcial && !string.IsNullOrWhiteSpace(motivoTerminacionParcial)
+                    ? motivoTerminacionParcial.Trim()
+                    : DBNull.Value;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
             var result = await cmd.ExecuteScalarAsync();
-            if (result == null || result == DBNull.Value) throw new InvalidOperationException("No fue posible registrar el paro provocado por la interrupción urgente.");
+
+            if (result == null || result == DBNull.Value)
+                throw new InvalidOperationException("No fue posible registrar el paro provocado por la interrupción urgente.");
+
             return Convert.ToInt32(result);
         }
         private static async Task PausarProduccionPorInterrupcionUrgenteAsync(ProgramaActivoInterrupcionUrgente programaActual, int usuarioId, SqlConnection cn, SqlTransaction tx)

@@ -618,129 +618,63 @@ WHERE e.EjecucionProduccionID=@Ejecucion
             defectos
         });
     }
-
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult>
-        AplicarRelevoV91(
-            ProduccionRelevoV91PostVm vm)
+    public async Task<IActionResult> AplicarRelevoV91(ProduccionRelevoV91PostVm vm)
     {
-        if (!UsuarioEnSesion())
-            return RedirectToAction(
-                "Login",
-                "Login");
+        if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
 
         IActionResult Volver()
         {
-            return RedirectToAction(
-                "Index",
-                "ProduccionPersonal",
-                new
-                {
-                    vista=
-                        string.IsNullOrWhiteSpace(
-                            vm.Vista)
-                            ? "dia"
-                            : vm.Vista,
-
-                    fechaDesde=
-                        vm.FechaDesde?
-                            .ToString(
-                                "yyyy-MM-dd") ??
-                        vm.FechaTrabajo
-                            .ToString(
-                                "yyyy-MM-dd"),
-
-                    fechaHasta=
-                        vm.FechaHasta?
-                            .ToString(
-                                "yyyy-MM-dd"),
-
-                    panel=
-                        string.IsNullOrWhiteSpace(
-                            vm.Panel)
-                            ? "planner"
-                            : vm.Panel
-                });
+            return RedirectToAction("Index", "ProduccionPersonal", new
+            {
+                vista = string.IsNullOrWhiteSpace(vm.Vista) ? "dia" : vm.Vista,
+                fechaDesde = vm.FechaDesde?.ToString("yyyy-MM-dd") ?? vm.FechaTrabajo.ToString("yyyy-MM-dd"),
+                fechaHasta = vm.FechaHasta?.ToString("yyyy-MM-dd"),
+                panel = string.IsNullOrWhiteSpace(vm.Panel) ? "planner" : vm.Panel
+            });
         }
 
-        if (vm.EjecucionProduccionID <= 0 ||
-            vm.ProgramaProduccionID <= 0 ||
-            vm.OperadorEntranteID <= 0 ||
-            vm.TurnoID <= 0 ||
-            vm.SegmentoInicio == DateTime.MinValue ||
-            vm.SegmentoFin <= vm.SegmentoInicio)
+        if (vm.EjecucionProduccionID <= 0 || vm.ProgramaProduccionID <= 0 || vm.OperadorEntranteID <= 0 || vm.TurnoID <= 0 || vm.SegmentoInicio == DateTime.MinValue || vm.SegmentoFin <= vm.SegmentoInicio)
         {
-            TempData["Error"] =
-                "No se recibieron datos válidos para el relevo.";
-
+            TempData["Error"] = "No se recibieron datos válidos para el relevo.";
             return Volver();
         }
 
-        var motivo =
-            (vm.Motivo ??
-             string.Empty).Trim();
+        var motivo = (vm.Motivo ?? string.Empty).Trim();
+        var justificacion = (vm.Justificacion ?? string.Empty).Trim();
 
-        var justificacion =
-            (vm.Justificacion ??
-             string.Empty).Trim();
-
-        if (motivo.Length < 3 ||
-            justificacion.Length < 5)
+        if (motivo.Length < 3 || justificacion.Length < 5)
         {
-            TempData["Error"] =
-                "Motivo y justificación son obligatorios.";
-
+            TempData["Error"] = "Motivo y justificación son obligatorios.";
             return Volver();
         }
 
-        // NSQ_PRODUCCION_RELEVO_V9_2_ESTADO_Y_MOTIVOS
         if (!MotivosRelevoV92.Contains(motivo))
         {
-            TempData["Error"] =
-                "El motivo de relevo no pertenece al catálogo autorizado.";
-
+            TempData["Error"] = "El motivo de relevo no pertenece al catálogo autorizado.";
             return Volver();
         }
 
-        if (vm.CantidadSospechosa < 0 ||
-            vm.CantidadScrap < 0)
+        if (vm.CantidadScrap < 0)
         {
-            TempData["Error"] =
-                "Sospechosas y Scrap no pueden ser negativos.";
-
+            TempData["Error"] = "La cantidad de piezas rojas/Scrap no puede ser negativa.";
             return Volver();
         }
 
-        await using var cn =
-            new SqlConnection(
-                ConnectionString);
+        vm.CantidadSospechosa = 0;
 
+        await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
-
-        await using var tx =
-            (SqlTransaction)
-            await cn.BeginTransactionAsync(
-                IsolationLevel.Serializable);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
         try
         {
-            if (!await ExisteTablaTramosV91Async(
-                    cn,
-                    tx))
-            {
-                throw new InvalidOperationException(
-                    "Falta dbo.Produccion_OperadorTramos. Ejecuta primero SQL 48 con @Aplicar=1.");
-            }
+            if (!await ExisteTablaTramosV91Async(cn, tx))
+                throw new InvalidOperationException("Falta dbo.Produccion_OperadorTramos. Ejecuta primero SQL 48 con @Aplicar=1.");
 
-            var usuarioId =
-                ObtenerUsuarioID();
-
-            if (usuarioId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "No se pudo identificar al usuario que realiza el relevo.");
-            }
+            var usuarioId = ObtenerUsuarioID();
+            if (usuarioId <= 0) throw new InvalidOperationException("No se pudo identificar al usuario que realiza el relevo.");
 
             const string lockSql = @"
 SELECT TOP(1)
@@ -762,330 +696,139 @@ WHERE e.EjecucionProduccionID=@Ejecucion
             int estatusId;
             DateTime? inicioReal;
 
-            await using (
-                var cmd =
-                    new SqlCommand(
-                        lockSql,
-                        cn,
-                        tx))
+            await using (var cmd = new SqlCommand(lockSql, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@Ejecucion",
-                    SqlDbType.Int).Value =
-                    vm.EjecucionProduccionID;
-
-                await using var rd =
-                    await cmd.ExecuteReaderAsync();
+                cmd.Parameters.Add("@Ejecucion", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                await using var rd = await cmd.ExecuteReaderAsync();
 
                 if (!await rd.ReadAsync())
-                {
-                    throw new InvalidOperationException(
-                        "La ejecución de Producción ya no existe.");
-                }
+                    throw new InvalidOperationException("La ejecución de Producción ya no existe.");
 
-                programaId =
-                    Convert.ToInt32(
-                        rd["ProgramaProduccionID"]);
-
-                parteId =
-                    rd["ParteID"] == DBNull.Value
-                        ? null
-                        : Convert.ToInt32(
-                            rd["ParteID"]);
-
-                salienteId =
-                    rd["OperadorID"] == DBNull.Value
-                        ? null
-                        : Convert.ToInt32(
-                            rd["OperadorID"]);
-
-                salienteNombre =
-                    rd["OperadorNombre"]?.ToString()
-                        ?.Trim() ??
-                    string.Empty;
-
-                estatusId =
-                    Convert.ToInt32(
-                        rd["EstatusID"]);
-
-                inicioReal =
-                    rd["FechaInicioReal"] == DBNull.Value
-                        ? null
-                        : Convert.ToDateTime(
-                            rd["FechaInicioReal"]);
+                programaId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                parteId = rd["ParteID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteID"]);
+                salienteId = rd["OperadorID"] == DBNull.Value ? null : Convert.ToInt32(rd["OperadorID"]);
+                salienteNombre = rd["OperadorNombre"]?.ToString()?.Trim() ?? string.Empty;
+                estatusId = Convert.ToInt32(rd["EstatusID"]);
+                inicioReal = rd["FechaInicioReal"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioReal"]);
             }
 
-            if (programaId !=
-                vm.ProgramaProduccionID)
-            {
-                throw new InvalidOperationException(
-                    "La OF cambió mientras se preparaba el relevo. Actualiza la pantalla.");
-            }
+            if (programaId != vm.ProgramaProduccionID)
+                throw new InvalidOperationException("La OF cambió mientras se preparaba el relevo. Actualiza la pantalla.");
 
-            if (estatusId !=
-                ProduccionEstatus.EnProduccion)
-            {
-                throw new InvalidOperationException(
-                    "La OF ya no está en producción activa.");
-            }
+            if (estatusId != ProduccionEstatus.EnProduccion)
+                throw new InvalidOperationException("La OF ya no está en producción activa.");
 
-            if (!salienteId.HasValue ||
-                salienteId.Value <= 0)
-            {
-                throw new InvalidOperationException(
-                    "La ejecución no tiene operador actual.");
-            }
+            if (!salienteId.HasValue || salienteId.Value <= 0)
+                throw new InvalidOperationException("La ejecución no tiene operador actual.");
 
-            if (salienteId.Value ==
-                vm.OperadorEntranteID)
-            {
-                throw new InvalidOperationException(
-                    "El operador seleccionado ya es el operador actual.");
-            }
+            if (salienteId.Value == vm.OperadorEntranteID)
+                throw new InvalidOperationException("El operador seleccionado ya es el operador actual.");
 
-            var ahora =
-                AlMinutoV91(
-                    DateTime.Now);
+            var ahora = AlMinutoV91(DateTime.Now);
 
-            if (ahora < vm.SegmentoInicio ||
-                ahora >= vm.SegmentoFin)
-            {
-                throw new InvalidOperationException(
-                    "El horario seleccionado ya no corresponde al tramo activo. Actualiza la pantalla.");
-            }
+            if (ahora < vm.SegmentoInicio || ahora >= vm.SegmentoFin)
+                throw new InvalidOperationException("El horario seleccionado ya no corresponde al tramo activo. Actualiza la pantalla.");
 
-            var entrante =
-                await ValidarEntranteV91Async(
-                    vm.OperadorEntranteID,
-                    parteId,
-                    cn,
-                    tx);
+            var entrante = await ValidarEntranteV91Async(vm.OperadorEntranteID, parteId, cn, tx);
+            if (!entrante.Valido) throw new InvalidOperationException(entrante.Mensaje);
 
-            if (!entrante.Valido)
-            {
-                throw new InvalidOperationException(
-                    entrante.Mensaje);
-            }
+            if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx))
+                throw new InvalidOperationException("Existe un paro abierto. Finalízalo antes de realizar el relevo para no mezclar tiempos.");
 
-            if (await TieneParoAbiertoAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx))
-            {
-                throw new InvalidOperationException(
-                    "Existe un paro abierto. Finalízalo antes de realizar el relevo para no mezclar tiempos.");
-            }
-
-            var tiempoExtra =
-                await ObtenerTiempoExtraActivoAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx,
-                    true);
-
+            var tiempoExtra = await ObtenerTiempoExtraActivoAsync(vm.EjecucionProduccionID, cn, tx, true);
             if (tiempoExtra != null)
-            {
-                throw new InvalidOperationException(
-                    "Hay una sesión de tiempo extra activa. Finalízala antes de cambiar al operador.");
-            }
+                throw new InvalidOperationException("Hay una sesión de tiempo extra activa. Finalízala antes de cambiar al operador.");
 
-            var ejecucion =
-                await ObtenerEjecucionOperadorAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
-
+            var ejecucion = await ObtenerEjecucionOperadorAsync(vm.EjecucionProduccionID, cn, tx);
             if (ejecucion == null)
-            {
-                throw new InvalidOperationException(
-                    "No fue posible cargar la ejecución para realizar el corte.");
-            }
+                throw new InvalidOperationException("No fue posible cargar la ejecución para realizar el corte.");
 
-            var filas =
-                await ObtenerFilasCapturaHoraAsync(
-                    vm.EjecucionProduccionID,
-                    vm.ProgramaProduccionID,
-                    cn,
-                    tx);
+            var filas = await ObtenerFilasCapturaHoraAsync(vm.EjecucionProduccionID, vm.ProgramaProduccionID, cn, tx);
+            var filasSegmentoV95 = filas
+                .Where(x => FilaCruzaSegmentoV95(x, vm.SegmentoInicio, vm.SegmentoFin))
+                .ToList();
 
-            // NSQ_PRODUCCION_RELEVO_V9_5_PENDIENTES_POR_TURNO
-            var filasSegmentoV95 =
-                filas
-                    .Where(x =>
-                        FilaCruzaSegmentoV95(
-                            x,
-                            vm.SegmentoInicio,
-                            vm.SegmentoFin))
-                    .ToList();
-
-            var vencida =
-                filasSegmentoV95
-                    .Where(x =>
-                        !x.Capturada &&
-                        InicioFilaV91(x) >= vm.SegmentoInicio &&
-                        InicioFilaV91(x) < vm.SegmentoFin &&
-                        FinFilaV91(x) <= ahora)
-                    .OrderBy(
-                        InicioFilaV91)
-                    .FirstOrDefault();
+            var vencida = filasSegmentoV95
+                .Where(x => !x.Capturada && InicioFilaV91(x) >= vm.SegmentoInicio && InicioFilaV91(x) < vm.SegmentoFin && FinFilaV91(x) <= ahora)
+                .OrderBy(InicioFilaV91)
+                .FirstOrDefault();
 
             if (vencida != null)
             {
-                var pendienteInicio =
-                    InicioFilaSegmentoV95(
-                        vencida,
-                        vm.SegmentoInicio);
-
-                var pendienteFin =
-                    FinFilaSegmentoV95(
-                        vencida,
-                        vm.SegmentoFin);
-
-                throw new InvalidOperationException(
-                    $"Antes de cambiar al operador falta capturar " +
-                    $"{pendienteInicio:HH:mm}–{pendienteFin:HH:mm} " +
-                    $"de este mismo turno ({vm.SegmentoInicio:HH:mm}–{vm.SegmentoFin:HH:mm}). " +
-                    "Ese bloque debe quedar con el operador saliente.");
+                var pendienteInicio = InicioFilaSegmentoV95(vencida, vm.SegmentoInicio);
+                var pendienteFin = FinFilaSegmentoV95(vencida, vm.SegmentoFin);
+                throw new InvalidOperationException($"Antes de cambiar al operador falta capturar {pendienteInicio:HH:mm}–{pendienteFin:HH:mm} de este mismo turno ({vm.SegmentoInicio:HH:mm}–{vm.SegmentoFin:HH:mm}). Ese bloque debe quedar con el operador saliente.");
             }
 
-            var filaActual =
-                filasSegmentoV95
-                    .Where(x =>
-                        !x.Capturada)
-                    .FirstOrDefault(x =>
-                        InicioFilaV91(x) < ahora &&
-                        FinFilaV91(x) > ahora);
+            var filaActual = filasSegmentoV95
+                .Where(x => !x.Capturada)
+                .FirstOrDefault(x => InicioFilaV91(x) < ahora && FinFilaV91(x) > ahora);
 
-            var contadorAntes =
-                await ObtenerUltimaLecturaContadorMaquinaAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
-
+            var contadorAntes = await ObtenerUltimaLecturaContadorMaquinaAsync(vm.EjecucionProduccionID, cn);
             int? registroParcialId = null;
             long? contadorCorte = contadorAntes;
-            int okParcial = 0;
-            int piezasFisicasParcial = 0;
+            var okParcial = 0;
+            var piezasFisicasParcial = 0;
+            var scrapParcial = 0;
 
             if (filaActual != null)
             {
                 if (!vm.ContadorMaquinaActual.HasValue)
-                {
-                    throw new InvalidOperationException(
-                        "El relevo ocurre dentro de un bloque productivo. Captura el contador actual.");
-                }
+                    throw new InvalidOperationException("El relevo ocurre dentro de un bloque productivo. Captura el contador actual.");
 
-                // NSQ_PRODUCCION_RELEVO_V9_5_PENDIENTES_POR_TURNO
-                // Si una fila de captura cruza la frontera del turno
-                // (ej. 14:12-15:12 y el turno empieza 15:00),
-                // el tramo del operador actual comienza en 15:00.
-                var inicioParcial =
-                    InicioFilaSegmentoV95(
-                        filaActual,
-                        vm.SegmentoInicio);
+                if (vm.ContadorMaquinaActual.Value < 0)
+                    throw new InvalidOperationException("El contador de la máquina no puede ser negativo.");
+
+                var inicioParcial = InicioFilaSegmentoV95(filaActual, vm.SegmentoInicio);
 
                 if (ahora <= inicioParcial)
+                    throw new InvalidOperationException("El corte no genera minutos productivos para el operador saliente.");
+
+                var calculo = await CalcularProduccionContadorHoraAsync(
+                    vm.EjecucionProduccionID,
+                    inicioParcial,
+                    ahora,
+                    vm.ContadorMaquinaActual.Value,
+                    cn,
+                    tx);
+
+                scrapParcial = vm.CantidadScrap;
+
+                if ((long)scrapParcial > calculo.PiezasCalculadas)
+                    throw new InvalidOperationException($"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero capturaste {scrapParcial:N0} pieza(s) rojas/Scrap.");
+
+                var defectos = await ValidarYNormalizarDefectosScrapAsync(scrapParcial, vm.DefectosScrap, cn, tx);
+                if (!defectos.Valido) throw new InvalidOperationException(defectos.Mensaje);
+
+                vm.DefectosScrap = defectos.Defectos;
+                piezasFisicasParcial = calculo.PiezasCalculadas;
+                okParcial = calculo.PiezasCalculadas - scrapParcial;
+
+                var registroVm = new ProduccionRegistroHoraPostVm
                 {
-                    throw new InvalidOperationException(
-                        "El corte no genera minutos productivos para el operador saliente.");
-                }
+                    EjecucionProduccionID = vm.EjecucionProduccionID,
+                    FechaProduccion = inicioParcial.Date,
+                    HoraInicio = inicioParcial.TimeOfDay.ToString(@"hh\:mm"),
+                    HoraFin = ahora.TimeOfDay.ToString(@"hh\:mm"),
+                    ContadorMaquinaActual = vm.ContadorMaquinaActual,
+                    CantidadOK = okParcial,
+                    OkModificadoManual = false,
+                    CantidadSospechosa = 0,
+                    CantidadScrap = scrapParcial,
+                    DefectosScrap = vm.DefectosScrap,
+                    Observaciones = $"RELEVO V9.1 | {motivo} | {justificacion}"
+                };
 
-                var calculo =
-                    await CalcularProduccionContadorHoraAsync(
-                        vm.EjecucionProduccionID,
-                        inicioParcial,
-                        ahora,
-                        vm.ContadorMaquinaActual.Value,
-                        cn,
-                        tx);
-
-                var noOk =
-                    (long)vm.CantidadSospechosa +
-                    vm.CantidadScrap;
-
-                if (noOk >
-                    calculo.PiezasCalculadas)
-                {
-                    throw new InvalidOperationException(
-                        $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, " +
-                        $"pero Sospechosas + Scrap suman {noOk:N0}.");
-                }
-
-                var defectos =
-                    await ValidarYNormalizarDefectosScrapAsync(
-                        vm.CantidadScrap,
-                        vm.DefectosScrap,
-                        cn,
-                        tx);
-
-                if (!defectos.Valido)
-                {
-                    throw new InvalidOperationException(
-                        defectos.Mensaje);
-                }
-
-                vm.DefectosScrap =
-                    defectos.Defectos;
-
-                piezasFisicasParcial =
-                    calculo.PiezasCalculadas;
-
-                okParcial =
-                    calculo.PiezasCalculadas -
-                    Convert.ToInt32(noOk);
-
-                var registroVm =
-                    new ProduccionRegistroHoraPostVm
-                    {
-                        EjecucionProduccionID=
-                            vm.EjecucionProduccionID,
-
-                        FechaProduccion=
-                            inicioParcial.Date,
-
-                        HoraInicio=
-                            inicioParcial.TimeOfDay
-                                .ToString(
-                                    @"hh\:mm"),
-
-                        HoraFin=
-                            ahora.TimeOfDay
-                                .ToString(
-                                    @"hh\:mm"),
-
-                        ContadorMaquinaActual=
-                            vm.ContadorMaquinaActual,
-
-                        CantidadOK=
-                            okParcial,
-
-                        OkModificadoManual=
-                            false,
-
-                        CantidadSospechosa=
-                            vm.CantidadSospechosa,
-
-                        CantidadScrap=
-                            vm.CantidadScrap,
-
-                        DefectosScrap=
-                            vm.DefectosScrap,
-
-                        Observaciones=
-                            $"RELEVO V9.1 | {motivo} | {justificacion}"
-                    };
-
-                registroParcialId =
-                    await InsertarRegistroHoraAsync(
-                        ejecucion,
-                        registroVm,
-                        inicioParcial.TimeOfDay,
-                        ahora.TimeOfDay,
-                        salienteId.Value,
-                        usuarioId,
-                        calculo,
-                        cn,
-                        tx);
+                registroParcialId = await InsertarRegistroHoraAsync(
+                    ejecucion,
+                    registroVm,
+                    inicioParcial.TimeOfDay,
+                    ahora.TimeOfDay,
+                    salienteId.Value,
+                    usuarioId,
+                    calculo,
+                    cn,
+                    tx);
 
                 await GuardarDefectosScrapAsync(
                     registroParcialId.Value,
@@ -1124,29 +867,23 @@ WHERE e.EjecucionProduccionID=@Ejecucion
                     cn,
                     tx);
 
-                await VincularRegistroHoraConCalidadAsync(
-                    ejecucion,
-                    registroVm,
-                    inicioParcial.TimeOfDay,
-                    ahora.TimeOfDay,
-                    registroParcialId.Value,
-                    usuarioId,
-                    cn,
-                    tx);
+                if (calculo.PiezasCalculadas > 0)
+                {
+                    await VincularRegistroHoraConCalidadAsync(
+                        ejecucion,
+                        registroVm,
+                        inicioParcial.TimeOfDay,
+                        ahora.TimeOfDay,
+                        registroParcialId.Value,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
 
-                await RecalcularTotalesEjecucionAsync(
-                    vm.EjecucionProduccionID,
-                    usuarioId,
-                    cn,
-                    tx);
-
-                contadorCorte =
-                    vm.ContadorMaquinaActual.Value;
+                await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
+                contadorCorte = vm.ContadorMaquinaActual.Value;
             }
 
-            // Cerrar automaticamente cualquier tramo cuyo limite
-            // ya termino. Evita que un tramo de un turno anterior permanezca
-            // abierto y bloquee un relevo del siguiente segmento.
             const string cerrarExpiradosSql = @"
 UPDATE dbo.Produccion_OperadorTramos
 SET FechaHoraFinReal=FechaHoraFinLimite,
@@ -1157,28 +894,11 @@ WHERE EjecucionProduccionID=@Ejecucion
   AND FechaHoraFinReal IS NULL
   AND FechaHoraFinLimite<=@Ahora;";
 
-            await using (
-                var cmd =
-                    new SqlCommand(
-                        cerrarExpiradosSql,
-                        cn,
-                        tx))
+            await using (var cmd = new SqlCommand(cerrarExpiradosSql, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@Usuario",
-                    SqlDbType.Int).Value =
-                    usuarioId;
-
-                cmd.Parameters.Add(
-                    "@Ejecucion",
-                    SqlDbType.Int).Value =
-                    vm.EjecucionProduccionID;
-
-                cmd.Parameters.Add(
-                    "@Ahora",
-                    SqlDbType.DateTime2).Value =
-                    ahora;
-
+                cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@Ejecucion", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -1198,52 +918,26 @@ ORDER BY TramoOperadorID DESC;";
             int? operadorTramoAbierto = null;
             DateTime? inicioTramoAbierto = null;
 
-            await using (
-                var cmd =
-                    new SqlCommand(
-                        tramoAbiertoSql,
-                        cn,
-                        tx))
+            await using (var cmd = new SqlCommand(tramoAbiertoSql, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@Ejecucion",
-                    SqlDbType.Int).Value =
-                    vm.EjecucionProduccionID;
-
-                await using var rd =
-                    await cmd.ExecuteReaderAsync();
+                cmd.Parameters.Add("@Ejecucion", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                await using var rd = await cmd.ExecuteReaderAsync();
 
                 if (await rd.ReadAsync())
                 {
-                    tramoAbiertoId =
-                        Convert.ToInt64(
-                            rd["TramoOperadorID"]);
-
-                    operadorTramoAbierto =
-                        Convert.ToInt32(
-                            rd["OperadorID"]);
-
-                    inicioTramoAbierto =
-                        Convert.ToDateTime(
-                            rd["FechaHoraInicio"]);
+                    tramoAbiertoId = Convert.ToInt64(rd["TramoOperadorID"]);
+                    operadorTramoAbierto = Convert.ToInt32(rd["OperadorID"]);
+                    inicioTramoAbierto = Convert.ToDateTime(rd["FechaHoraInicio"]);
                 }
             }
 
             if (tramoAbiertoId.HasValue)
             {
-                if (operadorTramoAbierto !=
-                    salienteId.Value)
-                {
-                    throw new InvalidOperationException(
-                        "El tramo abierto pertenece a otro operador. Actualiza la pantalla antes de continuar.");
-                }
+                if (operadorTramoAbierto != salienteId.Value)
+                    throw new InvalidOperationException("El tramo abierto pertenece a otro operador. Actualiza la pantalla antes de continuar.");
 
-                if (!inicioTramoAbierto.HasValue ||
-                    ahora <= inicioTramoAbierto.Value)
-                {
-                    throw new InvalidOperationException(
-                        "No se puede realizar dos relevos en el mismo minuto. Intenta nuevamente en el siguiente minuto.");
-                }
+                if (!inicioTramoAbierto.HasValue || ahora <= inicioTramoAbierto.Value)
+                    throw new InvalidOperationException("No se puede realizar dos relevos en el mismo minuto. Intenta nuevamente en el siguiente minuto.");
 
                 const string cerrarSql = @"
 UPDATE dbo.Produccion_OperadorTramos
@@ -1259,62 +953,29 @@ WHERE TramoOperadorID=@Tramo
 IF @@ROWCOUNT<>1
     THROW 51131,'El tramo actual cambió mientras se realizaba el relevo.',1;";
 
-                await using var cmd =
-                    new SqlCommand(
-                        cerrarSql,
-                        cn,
-                        tx);
-
-                cmd.Parameters.Add(
-                    "@Corte",
-                    SqlDbType.DateTime2).Value =
-                    ahora;
-
-                cmd.Parameters.Add(
-                    "@ContadorFin",
-                    SqlDbType.BigInt).Value =
-                    (object?)contadorCorte ??
-                    DBNull.Value;
-
-                cmd.Parameters.Add(
-                    "@RegistroHoraCorteID",
-                    SqlDbType.Int).Value =
-                    (object?)registroParcialId ??
-                    DBNull.Value;
-
-                cmd.Parameters.Add(
-                    "@Usuario",
-                    SqlDbType.Int).Value =
-                    usuarioId;
-
-                cmd.Parameters.Add(
-                    "@Tramo",
-                    SqlDbType.BigInt).Value =
-                    tramoAbiertoId.Value;
-
+                await using var cmd = new SqlCommand(cerrarSql, cn, tx);
+                cmd.Parameters.Add("@Corte", SqlDbType.DateTime2).Value = ahora;
+                cmd.Parameters.Add("@ContadorFin", SqlDbType.BigInt).Value = (object?)contadorCorte ?? DBNull.Value;
+                cmd.Parameters.Add("@RegistroHoraCorteID", SqlDbType.Int).Value = (object?)registroParcialId ?? DBNull.Value;
+                cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@Tramo", SqlDbType.BigInt).Value = tramoAbiertoId.Value;
                 await cmd.ExecuteNonQueryAsync();
             }
             else
             {
-                var inicioSaliente =
-                    inicioReal.HasValue &&
-                    inicioReal.Value >
-                    vm.SegmentoInicio
-                        ? inicioReal.Value
-                        : vm.SegmentoInicio;
+                var inicioSaliente = inicioReal.HasValue && inicioReal.Value > vm.SegmentoInicio
+                    ? inicioReal.Value
+                    : vm.SegmentoInicio;
 
-                inicioSaliente =
-                    AlMinutoV91(
-                        inicioSaliente);
+                inicioSaliente = AlMinutoV91(inicioSaliente);
 
                 if (inicioSaliente < ahora)
                 {
-                    var contadorInicioSaliente =
-                        await ObtenerContadorAntesV91Async(
-                            vm.EjecucionProduccionID,
-                            inicioSaliente,
-                            cn,
-                            tx);
+                    var contadorInicioSaliente = await ObtenerContadorAntesV91Async(
+                        vm.EjecucionProduccionID,
+                        inicioSaliente,
+                        cn,
+                        tx);
 
                     const string seedSql = @"
 INSERT dbo.Produccion_OperadorTramos
@@ -1362,93 +1023,21 @@ VALUES
     1
 );";
 
-                    await using var cmd =
-                        new SqlCommand(
-                            seedSql,
-                            cn,
-                            tx);
-
-                    cmd.Parameters.Add(
-                        "@Ejecucion",
-                        SqlDbType.Int).Value =
-                        vm.EjecucionProduccionID;
-
-                    cmd.Parameters.Add(
-                        "@Programa",
-                        SqlDbType.Int).Value =
-                        vm.ProgramaProduccionID;
-
-                    cmd.Parameters.Add(
-                        "@TurnoID",
-                        SqlDbType.Int).Value =
-                        vm.TurnoID;
-
-                    cmd.Parameters.Add(
-                        "@FechaTrabajo",
-                        SqlDbType.Date).Value =
-                        vm.FechaTrabajo.Date;
-
-                    cmd.Parameters.Add(
-                        "@Operador",
-                        SqlDbType.Int).Value =
-                        salienteId.Value;
-
-                    cmd.Parameters.Add(
-                        "@Inicio",
-                        SqlDbType.DateTime2).Value =
-                        inicioSaliente;
-
-                    cmd.Parameters.Add(
-                        "@FinLimite",
-                        SqlDbType.DateTime2).Value =
-                        vm.SegmentoFin;
-
-                    cmd.Parameters.Add(
-                        "@Corte",
-                        SqlDbType.DateTime2).Value =
-                        ahora;
-
-                    cmd.Parameters.Add(
-                        "@ContadorInicio",
-                        SqlDbType.BigInt).Value =
-                        (object?)contadorInicioSaliente ??
-                        DBNull.Value;
-
-                    cmd.Parameters.Add(
-                        "@ContadorFin",
-                        SqlDbType.BigInt).Value =
-                        (object?)contadorCorte ??
-                        DBNull.Value;
-
-                    cmd.Parameters.Add(
-                        "@Registro",
-                        SqlDbType.Int).Value =
-                        (object?)registroParcialId ??
-                        DBNull.Value;
-
-                    cmd.Parameters.Add(
-                        "@Motivo",
-                        SqlDbType.NVarChar,
-                        150).Value =
-                        motivo[
-                            ..Math.Min(
-                                150,
-                                motivo.Length)];
-
-                    cmd.Parameters.Add(
-                        "@Justificacion",
-                        SqlDbType.NVarChar,
-                        500).Value =
-                        justificacion[
-                            ..Math.Min(
-                                500,
-                                justificacion.Length)];
-
-                    cmd.Parameters.Add(
-                        "@Usuario",
-                        SqlDbType.Int).Value =
-                        usuarioId;
-
+                    await using var cmd = new SqlCommand(seedSql, cn, tx);
+                    cmd.Parameters.Add("@Ejecucion", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                    cmd.Parameters.Add("@Programa", SqlDbType.Int).Value = vm.ProgramaProduccionID;
+                    cmd.Parameters.Add("@TurnoID", SqlDbType.Int).Value = vm.TurnoID;
+                    cmd.Parameters.Add("@FechaTrabajo", SqlDbType.Date).Value = vm.FechaTrabajo.Date;
+                    cmd.Parameters.Add("@Operador", SqlDbType.Int).Value = salienteId.Value;
+                    cmd.Parameters.Add("@Inicio", SqlDbType.DateTime2).Value = inicioSaliente;
+                    cmd.Parameters.Add("@FinLimite", SqlDbType.DateTime2).Value = vm.SegmentoFin;
+                    cmd.Parameters.Add("@Corte", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@ContadorInicio", SqlDbType.BigInt).Value = (object?)contadorInicioSaliente ?? DBNull.Value;
+                    cmd.Parameters.Add("@ContadorFin", SqlDbType.BigInt).Value = (object?)contadorCorte ?? DBNull.Value;
+                    cmd.Parameters.Add("@Registro", SqlDbType.Int).Value = (object?)registroParcialId ?? DBNull.Value;
+                    cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 150).Value = motivo[..Math.Min(150, motivo.Length)];
+                    cmd.Parameters.Add("@Justificacion", SqlDbType.NVarChar, 500).Value = justificacion[..Math.Min(500, justificacion.Length)];
+                    cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
                     await cmd.ExecuteNonQueryAsync();
                 }
             }
@@ -1495,90 +1084,31 @@ VALUES
     1
 );";
 
-            await using (
-                var cmd =
-                    new SqlCommand(
-                        nuevoTramoSql,
-                        cn,
-                        tx))
+            await using (var cmd = new SqlCommand(nuevoTramoSql, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@Ejecucion",
-                    SqlDbType.Int).Value =
-                    vm.EjecucionProduccionID;
-
-                cmd.Parameters.Add(
-                    "@Programa",
-                    SqlDbType.Int).Value =
-                    vm.ProgramaProduccionID;
-
-                cmd.Parameters.Add(
-                    "@TurnoID",
-                    SqlDbType.Int).Value =
-                    vm.TurnoID;
-
-                cmd.Parameters.Add(
-                    "@FechaTrabajo",
-                    SqlDbType.Date).Value =
-                    vm.FechaTrabajo.Date;
-
-                cmd.Parameters.Add(
-                    "@Entrante",
-                    SqlDbType.Int).Value =
-                    vm.OperadorEntranteID;
-
-                cmd.Parameters.Add(
-                    "@Corte",
-                    SqlDbType.DateTime2).Value =
-                    ahora;
-
-                cmd.Parameters.Add(
-                    "@FinLimite",
-                    SqlDbType.DateTime2).Value =
-                    vm.SegmentoFin;
-
-                cmd.Parameters.Add(
-                    "@ContadorInicio",
-                    SqlDbType.BigInt).Value =
-                    (object?)contadorCorte ??
-                    DBNull.Value;
-
-                cmd.Parameters.Add(
-                    "@Motivo",
-                    SqlDbType.NVarChar,
-                    150).Value =
-                    motivo[
-                        ..Math.Min(
-                            150,
-                            motivo.Length)];
-
-                cmd.Parameters.Add(
-                    "@Justificacion",
-                    SqlDbType.NVarChar,
-                    500).Value =
-                    justificacion[
-                        ..Math.Min(
-                            500,
-                            justificacion.Length)];
-
-                cmd.Parameters.Add(
-                    "@Usuario",
-                    SqlDbType.Int).Value =
-                    usuarioId;
-
+                cmd.Parameters.Add("@Ejecucion", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                cmd.Parameters.Add("@Programa", SqlDbType.Int).Value = vm.ProgramaProduccionID;
+                cmd.Parameters.Add("@TurnoID", SqlDbType.Int).Value = vm.TurnoID;
+                cmd.Parameters.Add("@FechaTrabajo", SqlDbType.Date).Value = vm.FechaTrabajo.Date;
+                cmd.Parameters.Add("@Entrante", SqlDbType.Int).Value = vm.OperadorEntranteID;
+                cmd.Parameters.Add("@Corte", SqlDbType.DateTime2).Value = ahora;
+                cmd.Parameters.Add("@FinLimite", SqlDbType.DateTime2).Value = vm.SegmentoFin;
+                cmd.Parameters.Add("@ContadorInicio", SqlDbType.BigInt).Value = (object?)contadorCorte ?? DBNull.Value;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 150).Value = motivo[..Math.Min(150, motivo.Length)];
+                cmd.Parameters.Add("@Justificacion", SqlDbType.NVarChar, 500).Value = justificacion[..Math.Min(500, justificacion.Length)];
+                cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
                 await cmd.ExecuteNonQueryAsync();
             }
 
             const string updateEjecucionSql = @"
 UPDATE e
 SET OperadorID=@Entrante,
-    OperadorNombre=
-        LTRIM(RTRIM(CONCAT(
-            ISNULL(p.Nombre,N''),
-            N' ',
-            ISNULL(p.ApellidoPaterno,N''),
-            N' ',
-            ISNULL(p.ApellidoMaterno,N'')))),
+    OperadorNombre=LTRIM(RTRIM(CONCAT(
+        ISNULL(p.Nombre,N''),
+        N' ',
+        ISNULL(p.ApellidoPaterno,N''),
+        N' ',
+        ISNULL(p.ApellidoMaterno,N'')))),
     OperadoresModificadosManual=1,
     MotivoCambioOperadores=@MotivoCambio,
     UsuarioModificacionID=@Usuario,
@@ -1594,42 +1124,13 @@ WHERE e.EjecucionProduccionID=@Ejecucion
 IF @@ROWCOUNT<>1
     THROW 51132,'El operador actual cambió mientras se confirmaba el relevo.',1;";
 
-            await using (
-                var cmd =
-                    new SqlCommand(
-                        updateEjecucionSql,
-                        cn,
-                        tx))
+            await using (var cmd = new SqlCommand(updateEjecucionSql, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@Entrante",
-                    SqlDbType.Int).Value =
-                    vm.OperadorEntranteID;
-
-                cmd.Parameters.Add(
-                    "@MotivoCambio",
-                    SqlDbType.NVarChar,
-                    500).Value =
-                    $"Relevo V9.1 {ahora:dd/MM HH:mm}: " +
-                    motivo +
-                    ". " +
-                    justificacion;
-
-                cmd.Parameters.Add(
-                    "@Usuario",
-                    SqlDbType.Int).Value =
-                    usuarioId;
-
-                cmd.Parameters.Add(
-                    "@Ejecucion",
-                    SqlDbType.Int).Value =
-                    vm.EjecucionProduccionID;
-
-                cmd.Parameters.Add(
-                    "@Saliente",
-                    SqlDbType.Int).Value =
-                    salienteId.Value;
-
+                cmd.Parameters.Add("@Entrante", SqlDbType.Int).Value = vm.OperadorEntranteID;
+                cmd.Parameters.Add("@MotivoCambio", SqlDbType.NVarChar, 500).Value = $"Relevo V9.1 {ahora:dd/MM HH:mm}: {motivo}. {justificacion}";
+                cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                cmd.Parameters.Add("@Ejecucion", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                cmd.Parameters.Add("@Saliente", SqlDbType.Int).Value = salienteId.Value;
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -1673,111 +1174,36 @@ VALUES
     SYSDATETIME()
 );";
 
-            await using (
-                var cmd =
-                    new SqlCommand(
-                        historialSql,
-                        cn,
-                        tx))
+            await using (var cmd = new SqlCommand(historialSql, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@Programa",
-                    SqlDbType.Int).Value =
-                    vm.ProgramaProduccionID;
-
-                cmd.Parameters.Add(
-                    "@Fecha",
-                    SqlDbType.Date).Value =
-                    vm.FechaTrabajo.Date;
-
-                cmd.Parameters.Add(
-                    "@TurnoID",
-                    SqlDbType.Int).Value =
-                    vm.TurnoID;
-
-                cmd.Parameters.Add(
-                    "@TurnoNombre",
-                    SqlDbType.NVarChar,
-                    100).Value =
-                    string.IsNullOrWhiteSpace(
-                        vm.TurnoNombre)
-                        ? $"Turno {vm.TurnoID}"
-                        : vm.TurnoNombre.Trim();
-
-                cmd.Parameters.Add(
-                    "@Corte",
-                    SqlDbType.DateTime2).Value =
-                    ahora;
-
-                cmd.Parameters.Add(
-                    "@Fin",
-                    SqlDbType.DateTime2).Value =
-                    vm.SegmentoFin;
-
-                cmd.Parameters.Add(
-                    "@Anterior",
-                    SqlDbType.Int).Value =
-                    salienteId.Value;
-
-                cmd.Parameters.Add(
-                    "@Nuevo",
-                    SqlDbType.Int).Value =
-                    vm.OperadorEntranteID;
-
-                cmd.Parameters.Add(
-                    "@Motivo",
-                    SqlDbType.NVarChar,
-                    150).Value =
-                    motivo[
-                        ..Math.Min(
-                            150,
-                            motivo.Length)];
-
-                cmd.Parameters.Add(
-                    "@Justificacion",
-                    SqlDbType.NVarChar,
-                    500).Value =
-                    justificacion[
-                        ..Math.Min(
-                            500,
-                            justificacion.Length)];
-
-                cmd.Parameters.Add(
-                    "@Usuario",
-                    SqlDbType.Int).Value =
-                    usuarioId;
-
+                cmd.Parameters.Add("@Programa", SqlDbType.Int).Value = vm.ProgramaProduccionID;
+                cmd.Parameters.Add("@Fecha", SqlDbType.Date).Value = vm.FechaTrabajo.Date;
+                cmd.Parameters.Add("@TurnoID", SqlDbType.Int).Value = vm.TurnoID;
+                cmd.Parameters.Add("@TurnoNombre", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(vm.TurnoNombre) ? $"Turno {vm.TurnoID}" : vm.TurnoNombre.Trim();
+                cmd.Parameters.Add("@Corte", SqlDbType.DateTime2).Value = ahora;
+                cmd.Parameters.Add("@Fin", SqlDbType.DateTime2).Value = vm.SegmentoFin;
+                cmd.Parameters.Add("@Anterior", SqlDbType.Int).Value = salienteId.Value;
+                cmd.Parameters.Add("@Nuevo", SqlDbType.Int).Value = vm.OperadorEntranteID;
+                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 150).Value = motivo[..Math.Min(150, motivo.Length)];
+                cmd.Parameters.Add("@Justificacion", SqlDbType.NVarChar, 500).Value = justificacion[..Math.Min(500, justificacion.Length)];
+                cmd.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
                 await cmd.ExecuteNonQueryAsync();
             }
 
             await tx.CommitAsync();
 
-            TempData["Success"] =
-                filaActual != null
-                    ? $"Relevo aplicado a las {ahora:HH:mm}. " +
-                      $"{salienteNombre} conserva el bloque parcial con " +
-                      $"{okParcial:N0} OK de {piezasFisicasParcial:N0} pieza(s) físicas. " +
-                      $"{entrante.Nombre} continúa hasta máximo {vm.SegmentoFin:HH:mm}."
-                    : $"Relevo aplicado a las {ahora:HH:mm}. " +
-                      $"{entrante.Nombre} continúa hasta máximo {vm.SegmentoFin:HH:mm}.";
+            TempData["Success"] = filaActual != null
+                ? $"Relevo aplicado a las {ahora:HH:mm}. {salienteNombre} conserva el bloque parcial con {okParcial:N0} verdes/OK y {scrapParcial:N0} rojas/Scrap de {piezasFisicasParcial:N0} pieza(s) físicas. {entrante.Nombre} continúa hasta máximo {vm.SegmentoFin:HH:mm}."
+                : $"Relevo aplicado a las {ahora:HH:mm}. {entrante.Nombre} continúa hasta máximo {vm.SegmentoFin:HH:mm}.";
 
             return Volver();
         }
         catch (Exception ex)
         {
-            try
-            {
-                await tx.RollbackAsync();
-            }
-            catch
-            {
-            }
-
-            TempData["Error"] =
-                "No fue posible realizar el relevo: " +
-                ex.Message;
-
+            try { await tx.RollbackAsync(); } catch { }
+            TempData["Error"] = "No fue posible realizar el relevo: " + ex.Message;
             return Volver();
         }
-    }
+    
+}
 }

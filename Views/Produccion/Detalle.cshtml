@@ -10,7 +10,12 @@
     var puedeVerCapturasHora = ViewBag.PuedeVerCapturasHora is bool verCapturasHora && verCapturasHora;
     var puedeGestionarSugerenciaCambioTurno = ViewBag.PuedeGestionarSugerenciaCambioTurno is bool gestionarSugerenciaTurno && gestionarSugerenciaTurno;
     var puedeGestionarConfiguracionCorrida = ViewBag.PuedeGestionarConfiguracionCorrida is bool gestionarConfiguracionCorrida && gestionarConfiguracionCorrida;
-
+    var terminarParcialAutorizado=ViewBag.TerminarParcialAutorizado is bool parcialAutorizado&&parcialAutorizado;
+var puedeEjecutarTerminacionParcial=ViewBag.PuedeEjecutarTerminacionParcial is bool ejecutarParcial&&ejecutarParcial;
+var motivoTerminacionParcial=ViewBag.TerminarParcialMotivo as string;
+var fechaAutorizacionTerminacionParcial=ViewBag.TerminarParcialFechaAutorizacion as DateTime?;
+var faltantesOk=Math.Max(0,e.CantidadPlaneada-e.CantidadOKTotal);
+var metaOkCumplida=faltantesOk==0;
     var configuracionTiempoReal = Model.ConfiguracionTiempoReal;
     var configuracionActual = configuracionTiempoReal?.ConfiguracionActual;
     var tieneConfiguracionCorrida = configuracionActual?.EstaVigente == true;
@@ -64,10 +69,14 @@
 
     var accionActual = "SEGUIMIENTO";
 
-    if (Model.TieneParoAbierto)
-    {
-        accionActual = "CERRAR_PARO";
-    }
+    if(terminarParcialAutorizado&&puedeEjecutarTerminacionParcial&&e.PuedeTerminar)
+{
+    accionActual="TERMINAR";
+}
+else if(Model.TieneParoAbierto)
+{
+    accionActual="CERRAR_PARO";
+}
     else if (Model.MostrarAvisoMonitoreoTurno && monitoreoTurno != null)
     {
         accionActual = "MONITOREO_TURNO";
@@ -2894,44 +2903,154 @@ else if (e.PuedePausar)
                 </div>
             }
 
-            @if (e.PuedeTerminar && !Model.TieneParoAbierto)
+            @if(e.PuedeTerminar&&(!Model.TieneParoAbierto||terminarParcialAutorizado))
+{
+    <div class="panel" id="panelTerminar" data-collapsible data-default-open="@(accionActual=="TERMINAR"?"true":"false")">
+        <div class="panel-header">
+            <i class="bi bi-flag me-1"></i>
+            @(terminarParcialAutorizado?"Terminación parcial autorizada":"Terminar producción")
+        </div>
+
+        <div class="panel-body">
+            @if(terminarParcialAutorizado)
             {
-                <div class="panel" id="panelTerminar" data-collapsible data-default-open="@(accionActual == "TERMINAR" ? "true" : "false")">
-                    <div class="panel-header">
-                        <i class="bi bi-flag me-1"></i>
-                        Terminar producción
+                <div class="alert alert-warning border-warning">
+                    <div class="fw-bold mb-1">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        Planeación autorizó la terminación parcial
                     </div>
 
-                    <div class="panel-body">
-                        <form method="post" action="@Url.Action("Terminar", "Produccion")">
-                            @Html.AntiForgeryToken()
-
-                            <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
-
-                            <div class="form-check form-switch mb-3">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       name="TerminarParcial"
-                                       value="true"
-                                       id="TerminarParcial" />
-                                <label class="form-check-label fw-bold" for="TerminarParcial">
-                                    Terminar parcial
-                                </label>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Observaciones</label>
-                                <textarea name="Observaciones" rows="2" maxlength="500" class="form-control"></textarea>
-                            </div>
-
-                            <button type="submit" class="btn btn-danger w-100 btn-strong">
-                                <i class="bi bi-check2-circle me-1"></i>
-                                Terminar producción
-                            </button>
-                        </form>
+                    <div class="small">
+                        Producción no está tomando esta decisión. La orden fue emitida desde Planeación durante la interrupción de la OF.
                     </div>
+
+                    @if(!string.IsNullOrWhiteSpace(motivoTerminacionParcial))
+                    {
+                        <div class="mt-2">
+                            <strong>Motivo:</strong>
+                            @motivoTerminacionParcial
+                        </div>
+                    }
+
+                    @if(fechaAutorizacionTerminacionParcial.HasValue)
+                    {
+                        <div class="small text-muted mt-1">
+                            Autorizado el @fechaAutorizacionTerminacionParcial.Value.ToString("dd/MM/yyyy HH:mm")
+                        </div>
+                    }
                 </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <strong>Piezas OK actuales</strong>
+                        <span>@e.CantidadOKTotal.ToString("N0") / @e.CantidadPlaneada.ToString("N0")</span>
+                    </div>
+
+                    @if(faltantesOk>0)
+                    {
+                        <div class="text-warning fw-bold small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Faltan @faltantesOk.ToString("N0") pieza(s) OK para la meta normal; por eso este cierre será parcial.
+                        </div>
+                    }
+                </div>
+
+                @if(puedeEjecutarTerminacionParcial)
+                {
+                    <form method="post" action="@Url.Action("Terminar","Produccion")">
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+                        <input type="hidden" name="TerminarParcial" value="true" />
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                Observaciones del cierre
+                            </label>
+
+                            <textarea name="Observaciones"
+                                      rows="2"
+                                      maxlength="500"
+                                      class="form-control"
+                                      placeholder="Observaciones de la ejecución física del cierre parcial..."></textarea>
+                        </div>
+
+                        <div class="alert alert-danger small">
+                            <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                            Al confirmar, esta OF quedará terminada parcialmente y no regresará después de finalizar la producción urgente.
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-danger w-100 btn-strong"
+                                onclick="return confirm('Planeación autorizó terminar parcialmente esta OF. ¿Confirmas que el cierre físico ya puede ejecutarse?');">
+                            <i class="bi bi-check2-circle me-1"></i>
+                            Ejecutar terminación parcial autorizada
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-person-lock me-1"></i>
+                        La terminación parcial ya fue autorizada por Planeación, pero únicamente puede ejecutarla un Auxiliar o Técnico de Producción.
+                    </div>
+                }
             }
+            else
+            {
+                <form method="post" action="@Url.Action("Terminar","Produccion")">
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden" name="EjecucionProduccionID" value="@e.EjecucionProduccionID" />
+                    <input type="hidden" name="TerminarParcial" value="false" />
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <strong>Meta de piezas OK</strong>
+                            <span>@e.CantidadOKTotal.ToString("N0") / @e.CantidadPlaneada.ToString("N0")</span>
+                        </div>
+
+                        @if(!metaOkCumplida)
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-hourglass-split me-1"></i>
+                                Esta OF todavía no puede terminar normalmente.
+                                Faltan <strong>@faltantesOk.ToString("N0") pieza(s) OK</strong>.
+                                El Scrap no cuenta para completar la meta de la OF.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-success mb-0">
+                                <i class="bi bi-check-circle-fill me-1"></i>
+                                La meta de piezas OK ya fue alcanzada.
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Observaciones
+                        </label>
+
+                        <textarea name="Observaciones"
+                                  rows="2"
+                                  maxlength="500"
+                                  class="form-control"></textarea>
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-danger w-100 btn-strong"
+                            disabled="@(!metaOkCumplida)">
+                        <i class="bi bi-check2-circle me-1"></i>
+                        Terminar producción
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+}
+          
         </div>
 
         <div class="col-12 col-xl-8">
