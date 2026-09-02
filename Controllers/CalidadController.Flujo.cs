@@ -381,16 +381,34 @@ SELECT TOP (1)
                   ISNULL(m.FlujoMonitoreoVersion,1)>=2
                   AND
                   (
+                      -- NSQ_CALIDAD_MONITOREO_AUDITORIA_V3
+                      -- Cada hora requiere disparo + decision del conteo.
                       m.FechaHoraDisparo IS NULL
                       OR ISNULL(m.MuestraDisparoEmbolsada,0)=0
                       OR m.RegistroHoraID IS NULL
-                      OR EXISTS
+                      OR m.FechaHoraRevision IS NULL
+                      OR UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N''))))=@MonitoreoPendiente
+                      OR
                       (
-                          SELECT 1
-                          FROM dbo.Produccion_RegistroHora rh
-                          WHERE rh.RegistroHoraID=m.RegistroHoraID
-                            AND ISNULL(rh.CantidadScrap,0)>0
-                            AND m.CantidadScrapValidadaProduccion IS NULL
+                          -- El ultimo periodo mantiene un bloqueo adicional hasta
+                          -- que exista el unico registro FINAL de scrap acumulado.
+                          m.MonitoreoID =
+                          (
+                              SELECT TOP(1) mf.MonitoreoID
+                              FROM dbo.Calidad_MonitoreosProceso mf
+                              WHERE mf.InspeccionID=m.InspeccionID
+                                AND mf.Activo=1
+                                AND ISNULL(mf.FlujoMonitoreoVersion,1)>=2
+                              ORDER BY mf.NumeroHora DESC,mf.MonitoreoID DESC
+                          )
+                          AND NOT EXISTS
+                          (
+                              SELECT 1
+                              FROM dbo.Calidad_MonitoreosProceso sf
+                              WHERE sf.InspeccionID=m.InspeccionID
+                                AND sf.Activo=1
+                                AND LEFT(LTRIM(ISNULL(sf.ObservacionesScrapProduccion,N'')),16)=N'[SCRAP_FINAL_V3]'
+                          )
                       )
                   )
               )
@@ -3048,6 +3066,733 @@ VALUES
             return RedirectToAction(
                 nameof(Detalle),
                 new { id = model.InspeccionID });
+        }
+        // ================================================================
+        // NSQ_CALIDAD_MONITOREO_AUDITORIA_V3
+        // A) Scrap FINAL acumulado de toda la ejecucion.
+        // ================================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ValidarScrapFinalMonitoreoV3(
+            int InspeccionID,
+            int CantidadScrapValidadaProduccion,
+            string? Observaciones)
+        {
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            Observaciones = Observaciones?.Trim();
+
+            if (InspeccionID <= 0 || CantidadScrapValidadaProduccion < 0)
+            {
+                TempData["Error"] = "La validacion final de scrap no es valida.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            try
+            {
+                const string sqlContexto = @"
+SELECT
+    i.EjecucionProduccionID,
+    i.Estado,
+    ISNULL(i.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada,
+    e.FechaFinReal,
+    ISNULL
+    (
+        (
+            SELECT SUM(CONVERT(BIGINT,ISNULL(rh.CantidadScrap,0)))
+            FROM dbo.Produccion_RegistroHora rh WITH(UPDLOCK,HOLDLOCK)
+            WHERE rh.EjecucionProduccionID=i.EjecucionProduccionID
+              AND rh.Activo=1
+        ),
+        0
+    ) AS ScrapReportado,
+    (
+        SELECT TOP(1) m.MonitoreoID
+        FROM dbo.Calidad_MonitoreosProceso m WITH(UPDLOCK,HOLDLOCK)
+        WHERE m.InspeccionID=i.InspeccionID
+          AND m.Activo=1
+          AND ISNULL(m.FlujoMonitoreoVersion,1)>=2
+        ORDER BY m.NumeroHora DESC,m.MonitoreoID DESC
+    ) AS MonitoreoFinalID,
+    (
+        SELECT TOP(1) m.CantidadScrapValidadaProduccion
+        FROM dbo.Calidad_MonitoreosProceso m WITH(UPDLOCK,HOLDLOCK)
+        WHERE m.InspeccionID=i.InspeccionID
+          AND m.Activo=1
+          AND LEFT(LTRIM(ISNULL(m.ObservacionesScrapProduccion,N'')),16)=N'[SCRAP_FINAL_V3]'
+        ORDER BY m.MonitoreoID DESC
+    ) AS ScrapFinalRegistrado,
+    ISNULL
+    (
+        (
+            SELECT SUM(CONVERT(BIGINT,ISNULL(d.CantidadScrap,0)))
+            FROM dbo.Calidad_DisposicionesMaterial d WITH(UPDLOCK,HOLDLOCK)
+            WHERE d.InspeccionID=i.InspeccionID
+              AND d.Activo=1
+              AND UPPER(LTRIM(RTRIM(ISNULL(d.OrigenHallazgo,N''))))=N'PRODUCCION'
+              AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N''))))=N'SCRAP'
+        ),
+        0
+    ) AS ScrapYaFormalizado
+FROM dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
+    ON e.EjecucionProduccionID=i.EjecucionProduccionID
+WHERE i.InspeccionID=@InspeccionID;";
+
+                int? ejecucionId;
+                string estado;
+                bool configuracionInvalidada;
+                DateTime? fechaFinReal;
+                long scrapReportado;
+                int? monitoreoFinalId;
+                int? scrapFinalRegistrado;
+                long scrapYaFormalizado;
+
+                await using (var cmd = new SqlCommand(sqlContexto, cn, tx))
+                {
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+
+                    ejecucionId = rd["EjecucionProduccionID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["EjecucionProduccionID"]);
+                    estado = rd["Estado"]?.ToString()?.Trim() ?? string.Empty;
+                    configuracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+                    fechaFinReal = rd["FechaFinReal"] == DBNull.Value
+                        ? null
+                        : Convert.ToDateTime(rd["FechaFinReal"]);
+                    scrapReportado = Convert.ToInt64(rd["ScrapReportado"]);
+                    monitoreoFinalId = rd["MonitoreoFinalID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["MonitoreoFinalID"]);
+                    scrapFinalRegistrado = rd["ScrapFinalRegistrado"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["ScrapFinalRegistrado"]);
+                    scrapYaFormalizado = Convert.ToInt64(rd["ScrapYaFormalizado"]);
+                }
+
+                if (!ejecucionId.HasValue || !monitoreoFinalId.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La inspeccion no tiene una ejecucion/periodo final valido para consolidar scrap.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (configuracionInvalidada)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La configuracion de la corrida esta invalidada. No se puede cerrar el scrap final.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (string.Equals(estado, CalidadEstados.Cerrada, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La inspeccion ya esta cerrada.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (!fechaFinReal.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El scrap final solo puede validarse cuando Produccion haya terminado la ejecucion.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (scrapFinalRegistrado.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Mensaje"] = $"El scrap final ya fue validado con {scrapFinalRegistrado.Value:N0} pieza(s).";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (CantidadScrapValidadaProduccion > scrapReportado)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Produccion acumulo {scrapReportado:N0} pieza(s) scrap. Calidad no puede validar una cantidad mayor.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (CantidadScrapValidadaProduccion != scrapReportado &&
+                    string.IsNullOrWhiteSpace(Observaciones))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "La cantidad final validada es distinta al acumulado de Produccion. Indica la diferencia en observaciones.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (scrapYaFormalizado > CantidadScrapValidadaProduccion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Ya existen {scrapYaFormalizado:N0} pieza(s) de scrap formalizadas historicamente para esta inspeccion. No es seguro validar un total menor.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                var ahora = DateTime.Now;
+                var comentarioFinal =
+                    $"[SCRAP_FINAL_V3] Scrap final acumulado. Reportado por Produccion: {scrapReportado:N0}. " +
+                    $"Validado por Calidad: {CantidadScrapValidadaProduccion:N0}.";
+
+                if (!string.IsNullOrWhiteSpace(Observaciones))
+                    comentarioFinal += " " + Observaciones;
+
+                if (comentarioFinal.Length > 850)
+                    comentarioFinal = comentarioFinal[..850];
+
+                const string sqlMarcaFinal = @"
+UPDATE dbo.Calidad_MonitoreosProceso
+SET
+    CantidadScrapValidadaProduccion=@CantidadValidada,
+    ObservacionesScrapProduccion=LEFT
+    (
+        @ComentarioFinal+
+        CASE
+            WHEN CantidadScrapValidadaProduccion IS NOT NULL
+                THEN CONCAT(N' | Validacion horaria anterior: ',CantidadScrapValidadaProduccion,N'.')
+            ELSE N''
+        END+
+        CASE
+            WHEN NULLIF(LTRIM(RTRIM(ISNULL(ObservacionesScrapProduccion,N''))),N'') IS NOT NULL
+                THEN N' | Registro anterior: '+ObservacionesScrapProduccion
+            ELSE N''
+        END,
+        1000
+    ),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE MonitoreoID=@MonitoreoFinalID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND NOT EXISTS
+  (
+      SELECT 1
+      FROM dbo.Calidad_MonitoreosProceso sf
+      WHERE sf.InspeccionID=@InspeccionID
+        AND sf.Activo=1
+        AND LEFT(LTRIM(ISNULL(sf.ObservacionesScrapProduccion,N'')),16)=N'[SCRAP_FINAL_V3]'
+  );
+
+IF @@ROWCOUNT<>1
+    THROW 51930,'El scrap final cambio mientras se guardaba.',1;";
+
+                await using (var cmd = new SqlCommand(sqlMarcaFinal, cn, tx))
+                {
+                    cmd.Parameters.Add("@CantidadValidada", SqlDbType.Int).Value = CantidadScrapValidadaProduccion;
+                    cmd.Parameters.Add("@ComentarioFinal", SqlDbType.NVarChar, 1000).Value = comentarioFinal;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@MonitoreoFinalID", SqlDbType.Int).Value = monitoreoFinalId.Value;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                var diferenciaAFormalizar =
+                    CantidadScrapValidadaProduccion - checked((int)scrapYaFormalizado);
+
+                if (diferenciaAFormalizar > 0)
+                {
+                    const string sqlScrap = @"
+INSERT INTO dbo.Calidad_DisposicionesMaterial
+(
+    InspeccionID,MonitoreoID,RegistroHoraID,OrigenHallazgo,TipoMaterial,
+    CantidadAfectada,Etiqueta,Disposicion,Responsable,FechaInicio,FechaFin,
+    CantidadLiberada,CantidadScrap,ResultadoFinal,Observaciones,
+    UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,
+    Activo,EstadoTratamiento,FechaInicioTratamiento,FechaFinTratamiento
+)
+OUTPUT INSERTED.DisposicionID
+VALUES
+(
+    @InspeccionID,@MonitoreoID,NULL,N'PRODUCCION',@TipoMaterial,
+    @Cantidad,N'ROJA',N'SCRAP_FINAL_ACUMULADO',N'CALIDAD',@Ahora,@Ahora,
+    0,@Cantidad,@ResultadoFinal,@Observaciones,
+    @UsuarioID,@Ahora,@UsuarioID,@Ahora,
+    1,N'CONCLUIDA',@Ahora,@Ahora
+);";
+                    int disposicionId;
+                    await using (var cmd = new SqlCommand(sqlScrap, cn, tx))
+                    {
+                        cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                        cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = monitoreoFinalId.Value;
+                        cmd.Parameters.Add("@TipoMaterial", SqlDbType.NVarChar, 30).Value = CalidadTipoMaterial.NoConforme;
+                        cmd.Parameters.Add("@Cantidad", SqlDbType.Int).Value = diferenciaAFormalizar;
+                        cmd.Parameters.Add("@ResultadoFinal", SqlDbType.NVarChar, 20).Value = CalidadResultadoDisposicion.Scrap;
+                        cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = comentarioFinal;
+                        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                        cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                        var value = await cmd.ExecuteScalarAsync();
+                        if (value == null || value == DBNull.Value)
+                            throw new InvalidOperationException("No fue posible crear la disposicion final de scrap.");
+                        disposicionId = Convert.ToInt32(value);
+                    }
+
+                    await CrearEntregaScrapSqlAsync(
+                        InspeccionID,
+                        disposicionId,
+                        diferenciaAFormalizar,
+                        comentarioFinal,
+                        usuarioId.Value,
+                        ahora,
+                        cn,
+                        tx);
+                }
+
+                const string sqlHistorial = @"
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,
+    Etiqueta,Comentario,UsuarioID,FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,N'MONITOREO_SCRAP_FINAL_VALIDADO',@Estado,@Estado,NULL,
+    N'ROJA',
+    CONCAT(
+        N'Scrap FINAL acumulado. Reportado: ',@Reportado,
+        N'. Validado: ',@Validado,
+        N'. Ya formalizado antes de V3: ',@Formalizado,N'.'
+    ),
+    @UsuarioID,@Ahora
+);";
+                await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
+                {
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                    cmd.Parameters.Add("@Estado", SqlDbType.NVarChar, 50).Value = estado;
+                    cmd.Parameters.Add("@Reportado", SqlDbType.BigInt).Value = scrapReportado;
+                    cmd.Parameters.Add("@Validado", SqlDbType.Int).Value = CantidadScrapValidadaProduccion;
+                    cmd.Parameters.Add("@Formalizado", SqlDbType.BigInt).Value = scrapYaFormalizado;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+                TempData["Mensaje"] =
+                    $"Scrap final validado: {CantidadScrapValidadaProduccion:N0} de {scrapReportado:N0} pieza(s) acumulada(s).";
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "No fue posible validar el scrap final: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+        }
+
+        // ================================================================
+        // B) Disparo auditado V3 con evidencia fotografica obligatoria.
+        // ================================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(10 * 1024 * 1024)]
+        public async Task<IActionResult> RegistrarDisparoMonitoreoV3(
+            int MonitoreoID,
+            int InspeccionID,
+            DateTime FechaHoraDisparo,
+            bool MuestraDisparoEmbolsada,
+            bool ConHallazgo,
+            string? Observaciones,
+            Microsoft.AspNetCore.Http.IFormFile? evidencia)
+        {
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            Observaciones = Observaciones?.Trim();
+
+            if (MonitoreoID <= 0 || InspeccionID <= 0 || FechaHoraDisparo == default)
+            {
+                TempData["Error"] = "La informacion del disparo auditado no es valida.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            if (!MuestraDisparoEmbolsada)
+            {
+                TempData["Error"] = "Confirma que la pieza fue medida y embolsada.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            if (ConHallazgo && string.IsNullOrWhiteSpace(Observaciones))
+            {
+                TempData["Error"] = "Describe el hallazgo detectado en el disparo.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            if (evidencia == null || evidencia.Length <= 0)
+            {
+                TempData["Error"] = "Toma o adjunta una imagen como evidencia del disparo auditado.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            if (evidencia.Length > 10 * 1024 * 1024)
+            {
+                TempData["Error"] = "La evidencia fotografica no puede exceder 10 MB.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            var tiposImagen = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (!tiposImagen.Contains(evidencia.ContentType ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                TempData["Error"] = "La evidencia debe ser una imagen JPG, PNG o WEBP.";
+                return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+            }
+
+            var rutaEvidencia =
+                $"Calidad/Monitoreos/{InspeccionID}/Disparos/Disparo_{MonitoreoID}.img";
+            var storage = new global::SftpStorage(_configuration);
+            var evidenciaSubida = false;
+
+            var observacionesGuardadas =
+                string.IsNullOrWhiteSpace(Observaciones)
+                    ? "[EVIDENCIA_DISPARO_V3]"
+                    : Observaciones.Length > 950
+                        ? Observaciones[..950] + " [EVIDENCIA_DISPARO_V3]"
+                        : Observaciones + " [EVIDENCIA_DISPARO_V3]";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            try
+            {
+                const string sql = @"
+UPDATE m WITH(UPDLOCK,HOLDLOCK)
+SET
+    FechaHoraDisparo=@FechaHoraDisparo,
+    UsuarioDisparoCalidadID=@UsuarioID,
+    MuestraDisparoEmbolsada=1,
+    DisparoConHallazgo=@ConHallazgo,
+    DisparoRetrabajoSolicitado=0,
+    ObservacionesDisparo=@Observaciones,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+FROM dbo.Calidad_MonitoreosProceso m
+INNER JOIN dbo.Calidad_Inspecciones i
+    ON i.InspeccionID=m.InspeccionID
+WHERE m.MonitoreoID=@MonitoreoID
+  AND m.InspeccionID=@InspeccionID
+  AND m.Activo=1
+  AND ISNULL(m.FlujoMonitoreoVersion,1)>=2
+  AND m.RegistroHoraID IS NOT NULL
+  AND m.FechaHoraDisparo IS NULL
+  AND ISNULL(i.ConfiguracionInvalidada,0)=0
+  AND UPPER(LTRIM(RTRIM(ISNULL(i.Estado,N''))))=N'MONITOREO_ACTIVO';
+
+IF @@ROWCOUNT<>1
+    THROW 51931,'El disparo ya fue registrado, Produccion aun no captura el periodo o el monitoreo cambio de estado.',1;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,
+    Etiqueta,Comentario,UsuarioID,FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,N'MONITOREO_DISPARO_AUDITADO_V3',N'MONITOREO_ACTIVO',N'MONITOREO_ACTIVO',
+    CASE WHEN @ConHallazgo=1 THEN N'NO_CONFORME' ELSE N'CONFORME' END,
+    CASE WHEN @ConHallazgo=1 THEN N'AMARILLA' ELSE N'VERDE' END,
+    CONCAT(
+        N'Disparo auditado a las ',CONVERT(NVARCHAR(16),@FechaHoraDisparo,120),
+        N'. Muestra medida y embolsada: SI. Hallazgo: ',
+        CASE WHEN @ConHallazgo=1 THEN N'SI' ELSE N'NO' END,
+        N'. Evidencia fotografica adjunta: SI.'
+    ),
+    @UsuarioID,@Ahora
+);";
+
+                await using (var cmd = new SqlCommand(sql, cn, tx))
+                {
+                    cmd.Parameters.Add("@FechaHoraDisparo", SqlDbType.DateTime2).Value = FechaHoraDisparo;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@ConHallazgo", SqlDbType.Bit).Value = ConHallazgo;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = observacionesGuardadas;
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = DateTime.Now;
+                    cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = MonitoreoID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                using (var stream = evidencia.OpenReadStream())
+                {
+                    storage.SubirStream(stream, rutaEvidencia);
+                    evidenciaSubida = true;
+                }
+
+                await tx.CommitAsync();
+                TempData["Mensaje"] = "Disparo auditado guardado con evidencia fotografica.";
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                if (evidenciaSubida)
+                {
+                    try { storage.EliminarRecursivo(rutaEvidencia); } catch { }
+                }
+                TempData["Error"] = "No fue posible guardar el disparo auditado: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EvidenciaDisparoMonitoreoV3(
+            int inspeccionId,
+            int monitoreoId)
+        {
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            if (inspeccionId <= 0 || monitoreoId <= 0)
+                return NotFound();
+
+            await using (var cn = new SqlConnection(ConnectionString))
+            {
+                await cn.OpenAsync();
+                const string sql = @"
+SELECT COUNT(1)
+FROM dbo.Calidad_MonitoreosProceso
+WHERE MonitoreoID=@MonitoreoID
+  AND InspeccionID=@InspeccionID
+  AND Activo=1
+  AND CHARINDEX(N'[EVIDENCIA_DISPARO_V3]',ISNULL(ObservacionesDisparo,N''))>0;";
+                await using var cmd = new SqlCommand(sql, cn);
+                cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = monitoreoId;
+                cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+                var existe = Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
+                if (!existe) return NotFound();
+            }
+
+            try
+            {
+                var ruta = $"Calidad/Monitoreos/{inspeccionId}/Disparos/Disparo_{monitoreoId}.img";
+                var bytes = new global::SftpStorage(_configuration).DescargarBytes(ruta);
+                if (bytes.Length < 4) return NotFound();
+
+                var contentType = "application/octet-stream";
+                if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+                    contentType = "image/jpeg";
+                else if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+                    contentType = "image/png";
+                else if (bytes.Length >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
+                    contentType = "image/webp";
+
+                return File(bytes, contentType);
+            }
+            catch
+            {
+                return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable,
+                    "No fue posible recuperar la evidencia fotografica.");
+            }
+        }
+
+        // ================================================================
+        // C) Validacion simple del CONTEO acumulado del operador.
+        // ================================================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ValidarConteoOperadorMonitoreoV3(
+            int MonitoreoID,
+            int InspeccionID,
+            bool Validado)
+        {
+            var usuarioId = ObtenerUsuarioIdActual();
+            if (!usuarioId.HasValue || usuarioId.Value <= 0)
+                return Unauthorized();
+
+            if (MonitoreoID <= 0 || InspeccionID <= 0)
+                return NotFound();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            try
+            {
+                const string sqlContexto = @"
+SELECT
+    m.NumeroHora,
+    m.RegistroHoraID,
+    m.FechaHoraRevision,
+    ISNULL(m.FlujoMonitoreoVersion,1) AS FlujoMonitoreoVersion,
+    i.Estado,
+    ISNULL(i.ConfiguracionInvalidada,0) AS ConfiguracionInvalidada,
+    ISNULL
+    (
+        (
+            SELECT SUM
+            (
+                CONVERT
+                (
+                    BIGINT,
+                    ISNULL(rh.CantidadOK,0)+
+                    ISNULL(rh.CantidadSospechosa,0)+
+                    ISNULL(rh.CantidadScrap,0)
+                )
+            )
+            FROM dbo.Calidad_MonitoreosProceso mx WITH(UPDLOCK,HOLDLOCK)
+            INNER JOIN dbo.Produccion_RegistroHora rh WITH(UPDLOCK,HOLDLOCK)
+                ON rh.RegistroHoraID=mx.RegistroHoraID
+               AND rh.Activo=1
+            WHERE mx.InspeccionID=m.InspeccionID
+              AND mx.Activo=1
+              AND mx.NumeroHora<=m.NumeroHora
+        ),
+        0
+    ) AS ConteoAcumulado
+FROM dbo.Calidad_MonitoreosProceso m WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Calidad_Inspecciones i WITH(UPDLOCK,HOLDLOCK)
+    ON i.InspeccionID=m.InspeccionID
+WHERE m.MonitoreoID=@MonitoreoID
+  AND m.InspeccionID=@InspeccionID
+  AND m.Activo=1;";
+
+                int? registroHoraId;
+                DateTime? fechaRevision;
+                int version;
+                string estado;
+                bool configuracionInvalidada;
+                long conteoAcumulado;
+
+                await using (var cmd = new SqlCommand(sqlContexto, cn, tx))
+                {
+                    cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = MonitoreoID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                    await using var rd = await cmd.ExecuteReaderAsync();
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        return NotFound();
+                    }
+                    registroHoraId = rd["RegistroHoraID"] == DBNull.Value ? null : Convert.ToInt32(rd["RegistroHoraID"]);
+                    fechaRevision = rd["FechaHoraRevision"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaHoraRevision"]);
+                    version = Convert.ToInt32(rd["FlujoMonitoreoVersion"]);
+                    estado = rd["Estado"]?.ToString()?.Trim() ?? string.Empty;
+                    configuracionInvalidada = Convert.ToBoolean(rd["ConfiguracionInvalidada"]);
+                    conteoAcumulado = Convert.ToInt64(rd["ConteoAcumulado"]);
+                }
+
+                if (version < 2 || configuracionInvalidada ||
+                    !string.Equals(estado, CalidadEstados.MonitoreoActivo, StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "El monitoreo ya no esta disponible para validar el conteo.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (!registroHoraId.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Produccion aun no ha registrado este periodo. No existe conteo para validar.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (fechaRevision.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Mensaje"] = "El conteo de este periodo ya tiene una decision de Calidad.";
+                    return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+                }
+
+                if (conteoAcumulado < 0 || conteoAcumulado > int.MaxValue)
+                    throw new InvalidOperationException("El conteo acumulado excede el rango permitido.");
+
+                var conteo = Convert.ToInt32(conteoAcumulado);
+                var ahora = DateTime.Now;
+                var resultado = Validado
+                    ? CalidadResultadoMonitoreo.Conforme
+                    : CalidadResultadoMonitoreo.NoConforme;
+                var observacion = Validado
+                    ? $"[CONTEO_OPERADOR_V3] Conteo acumulado del operador validado por Calidad: {conteo:N0}."
+                    : $"[CONTEO_OPERADOR_V3] ALERTA: Calidad NO valido el conteo acumulado del operador: {conteo:N0}.";
+
+                const string sqlUpdate = @"
+UPDATE m WITH(UPDLOCK,HOLDLOCK)
+SET
+    FechaHoraRevision=@Ahora,
+    CantidadRevisadaMuestra=@Conteo,
+    Resultado=@Resultado,
+    DefectoCodigo=NULL,
+    DefectoDescripcion=NULL,
+    CantidadSospechosa=0,
+    CantidadNoRecuperable=0,
+    RequiereSeleccion=0,
+    RequiereRetrabajo=0,
+    ResponsableRetrabajo=NULL,
+    Observaciones=@Observaciones,
+    MuestraCajaPTConfirmada=@Validado,
+    UsuarioCalidadID=@UsuarioID,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+FROM dbo.Calidad_MonitoreosProceso m
+INNER JOIN dbo.Calidad_Inspecciones i
+    ON i.InspeccionID=m.InspeccionID
+WHERE m.MonitoreoID=@MonitoreoID
+  AND m.InspeccionID=@InspeccionID
+  AND m.Activo=1
+  AND ISNULL(m.FlujoMonitoreoVersion,1)>=2
+  AND m.FechaHoraRevision IS NULL
+  AND m.RegistroHoraID IS NOT NULL
+  AND ISNULL(i.ConfiguracionInvalidada,0)=0
+  AND UPPER(LTRIM(RTRIM(ISNULL(i.Estado,N''))))=N'MONITOREO_ACTIVO';
+
+IF @@ROWCOUNT<>1
+    THROW 51932,'La validacion del conteo cambio mientras se guardaba.',1;
+
+INSERT INTO dbo.Calidad_InspeccionHistorial
+(
+    InspeccionID,Movimiento,EstadoAnterior,EstadoNuevo,ResultadoCalidad,
+    Etiqueta,Comentario,UsuarioID,FechaMovimiento
+)
+VALUES
+(
+    @InspeccionID,
+    CASE WHEN @Validado=1 THEN N'MONITOREO_CONTEO_VALIDADO' ELSE N'MONITOREO_CONTEO_NO_VALIDADO' END,
+    N'MONITOREO_ACTIVO',N'MONITOREO_ACTIVO',@Resultado,
+    CASE WHEN @Validado=1 THEN N'VERDE' ELSE N'AMARILLA' END,
+    @Observaciones,@UsuarioID,@Ahora
+);";
+
+                await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
+                {
+                    cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
+                    cmd.Parameters.Add("@Conteo", SqlDbType.Int).Value = conteo;
+                    cmd.Parameters.Add("@Resultado", SqlDbType.NVarChar, 20).Value = resultado;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = observacion;
+                    cmd.Parameters.Add("@Validado", SqlDbType.Bit).Value = Validado;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId.Value;
+                    cmd.Parameters.Add("@MonitoreoID", SqlDbType.Int).Value = MonitoreoID;
+                    cmd.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = InspeccionID;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+                if (Validado)
+                    TempData["Mensaje"] = $"Conteo del operador validado: {conteo:N0}.";
+                else
+                    TempData["Error"] = $"AVISO: el conteo del operador ({conteo:N0}) fue marcado como NO VALIDADO por Calidad.";
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                TempData["Error"] = "No fue posible registrar la validacion del conteo: " + ex.Message;
+            }
+
+            return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
         }
         [HttpPost]
         [ValidateAntiForgeryToken]

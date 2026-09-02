@@ -1,0 +1,262 @@
+﻿@* NSQ_HCC_CREAR_HISTORIAL_V1_2 *@
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCBandejaViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Historial de Control de Calidad";
+}
+<link rel="stylesheet"
+      href="~/css/calidad-hcc-v2.css"
+      asp-append-version="true" />
+
+<style>
+    .hcc-history-summary{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:14px;
+        padding:15px 17px;
+        margin-bottom:20px;
+        border:1px solid #dfe7f0;
+        border-radius:14px;
+        background:#fff
+    }
+    .hcc-history-summary strong{
+        color:#14213d
+    }
+    .hcc-history-summary span{
+        color:#64748b;
+        font-size:.82rem
+    }
+</style>
+
+<div class="hcc-page">
+    <section class="hcc-hero">
+        <div>
+            <div class="hcc-eyebrow">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                CALIDAD · TRAZABILIDAD
+            </div>
+            <h1>Historial de Control de Calidad</h1>
+            <p>
+                Consulta todos los controles HCC finalizados. Cada registro
+                conserva su OF, pieza, máquina, evento, formato utilizado
+                y captura completa.
+            </p>
+            <div class="hcc-hero-actions">
+                <a class="hcc-btn hcc-btn-primary"
+                   asp-action="CrearControlCalidad">
+                    <i class="fa-solid fa-plus"></i>
+                    Crear control
+                </a>
+                <a class="hcc-btn hcc-btn-light"
+                   asp-action="HojasControl">
+                    <i class="fa-solid fa-table-list"></i>
+                    Bandeja
+                </a>
+                <a class="hcc-btn hcc-btn-ghost"
+                   asp-action="HCCPlantillas">
+                    <i class="fa-solid fa-book-open"></i>
+                    Biblioteca
+                </a>
+            </div>
+        </div>
+        <div class="hcc-hero-mark">
+            <span><i class="fa-solid fa-clock-rotate-left"></i></span>
+            <small>historial HCC</small>
+        </div>
+    </section>
+
+    <div class="hcc-history-summary">
+        <div>
+            <strong>@Model.Requerimientos.Count controles encontrados</strong>
+            <div>
+                <span>
+                    @Model.CompletadasHoy completado(s) hoy
+                </span>
+            </div>
+        </div>
+        <span>
+            Los registros son de consulta; no se reescriben desde esta vista.
+        </span>
+    </div>
+
+    <section class="hcc-toolbar-card">
+        <form method="get"
+              asp-action="HistorialControlCalidad"
+              class="hcc-toolbar">
+            <div class="hcc-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input name="busqueda"
+                       value="@Model.Busqueda"
+                       placeholder="Busca OF, parte, cliente, máquina o HCC..." />
+            </div>
+
+            <button class="hcc-btn hcc-btn-primary"
+                    type="submit">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Buscar
+            </button>
+
+            <a class="hcc-btn hcc-btn-light"
+               asp-action="HistorialControlCalidad">
+                <i class="fa-solid fa-eraser"></i>
+                Limpiar
+            </a>
+        </form>
+    </section>
+
+    <section class="hcc-section-head">
+        <div>
+            <span class="hcc-section-kicker">
+                CONTROLES FINALIZADOS
+            </span>
+            <h2>Historial HCC</h2>
+        </div>
+        <span class="hcc-count">
+            @Model.TotalMostrados registro(s)
+        </span>
+    </section>
+
+    @if (!Model.Requerimientos.Any())
+    {
+        <div class="hcc-empty">
+            <i class="fa-regular fa-folder-open"></i>
+            <h3>No hay controles en el historial</h3>
+            <p>
+                Los controles aparecerán aquí en cuanto finalice
+                su primera captura.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="hcc-order-grid">
+            @foreach (var item in Model.Requerimientos)
+            {
+                var cls =
+                    item.TipoOrigen=="RELIBERACION"
+                        ? "relib"
+                        : item.TipoOrigen=="CAMBIO_TURNO"
+                            ? "turn"
+                            : "start";
+
+                <article class="hcc-order-card @cls">
+                    <div class="hcc-order-accent"></div>
+
+                    <div class="hcc-order-head">
+                        <div>
+                            <span class="hcc-event-pill">
+                                <i class="fa-solid fa-check-double"></i>
+                                @item.TipoOrigenTexto
+                            </span>
+                            <h3>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.OrdenFabricacion)
+                                    ? "OF sin folio"
+                                    : item.OrdenFabricacion)
+                            </h3>
+                            <p>
+                                @item.NumeroParte · @item.DescripcionParte
+                            </p>
+                        </div>
+
+                        <span class="hcc-status done">
+                            COMPLETADA
+                        </span>
+                    </div>
+
+                    <div class="hcc-context-grid">
+                        <div>
+                            <small>Cliente</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.ClienteNombre)
+                                    ? "—"
+                                    : item.ClienteNombre)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Máquina</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.MaquinaTexto)
+                                    ? "—"
+                                    : item.MaquinaTexto)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Evento</small>
+                            <strong>@item.EventoTexto</strong>
+                        </div>
+                        <div>
+                            <small>Operador</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.OperadorTexto)
+                                    ? "—"
+                                    : item.OperadorTexto)
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="hcc-format-strip">
+                        <div>
+                            <small>Formato HCC</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(item.NumeroHCC)
+                                    ? "HCC"
+                                    : item.NumeroHCC)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Versión</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.VersionFormato)
+                                    ? "—"
+                                    : item.VersionFormato)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Características</small>
+                            <strong>@item.Caracteristicas</strong>
+                        </div>
+                        <div>
+                            <small>Checklist</small>
+                            <strong>@item.ChecklistItems</strong>
+                        </div>
+                    </div>
+
+                    <div class="hcc-order-foot">
+                        <span>
+                            <i class="fa-regular fa-clock"></i>
+                            Requerido:
+                            @item.FechaHoraRequerida.ToString(
+                                "dd/MM/yyyy HH:mm")
+                        </span>
+
+                        <div class="hcc-actions">
+                            <a class="hcc-btn hcc-btn-light hcc-btn-sm"
+                               asp-action="HojaControl"
+                               asp-route-id="@item.PlantillaHCCID"
+                               asp-route-parteId="@item.ParteID">
+                                <i class="fa-solid fa-file-lines"></i>
+                                Formato
+                            </a>
+
+                            @if (item.RegistroHCCID.HasValue)
+                            {
+                                <a class="hcc-btn hcc-btn-success"
+                                   asp-action="RegistroHCC"
+                                   asp-route-id="@item.RegistroHCCID">
+                                    <i class="fa-solid fa-eye"></i>
+                                    Ver control
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>

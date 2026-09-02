@@ -11,7 +11,10 @@
             <div class="hcc-eyebrow"><i class="fa-solid fa-ruler-combined"></i> CALIDAD · CONTROL DE PROCESO</div>
             <h1>Control de Calidad</h1>
             <p>La bandeja se genera automáticamente desde Producción y Calidad. Cada arranque, cambio de producción, cambio de turno o reliberación queda ligado a su OF, pieza, máquina y formato HCC vigente.</p>
+            @* NSQ_HCC_CREAR_HISTORIAL_V1_2 *@
             <div class="hcc-hero-actions">
+                <a class="hcc-btn hcc-btn-primary" asp-action="CrearControlCalidad"><i class="fa-solid fa-plus"></i> Crear control</a>
+                <a class="hcc-btn hcc-btn-light" asp-action="HistorialControlCalidad"><i class="fa-solid fa-clock-rotate-left"></i> Historial</a>
                 <a class="hcc-btn hcc-btn-light" asp-action="HCCPlantillas"><i class="fa-solid fa-book-open"></i> Biblioteca técnica</a>
                 <a class="hcc-btn hcc-btn-ghost" asp-controller="Calidad" asp-action="Index"><i class="fa-solid fa-arrow-left"></i> Bandeja de Calidad</a>
             </div>
@@ -61,7 +64,7 @@
 
     @if (!Model.Requerimientos.Any())
     {
-        <div class="hcc-empty"><i class="fa-regular fa-clipboard"></i><h3>No hay HCC en este filtro</h3><p>La bandeja se alimenta de los eventos de Producción y Calidad; no necesitas crear órdenes manuales.</p></div>
+        <div class="hcc-empty"><i class="fa-regular fa-clipboard"></i><h3>No hay HCC en este filtro</h3><p>La bandeja se alimenta de Producción y Calidad. Usa Crear control para abrir de forma guiada los requerimientos preparados automáticamente.</p></div>
     }
     else
     {

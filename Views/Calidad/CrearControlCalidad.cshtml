@@ -1,0 +1,320 @@
+﻿@* NSQ_HCC_CREAR_HISTORIAL_V1_2 *@
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCBandejaViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Crear Control de Calidad";
+}
+<link rel="stylesheet"
+      href="~/css/calidad-hcc-v2.css"
+      asp-append-version="true" />
+
+<style>
+    .hcc-create-guide{
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:12px;
+        margin:0 0 22px
+    }
+    .hcc-create-guide>div{
+        padding:16px;
+        border:1px solid #dfe7f0;
+        border-radius:14px;
+        background:#fff
+    }
+    .hcc-create-guide b{
+        display:block;
+        color:#14213d;
+        margin-bottom:5px
+    }
+    .hcc-create-guide span{
+        color:#64748b;
+        font-size:.82rem;
+        line-height:1.45
+    }
+    .hcc-auto-badge{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 10px;
+        border-radius:999px;
+        background:#ecfdf5;
+        color:#047857;
+        font-size:.72rem;
+        font-weight:850
+    }
+    @@media(max-width:850px){
+        .hcc-create-guide{grid-template-columns:1fr}
+    }
+</style>
+
+<div class="hcc-page">
+    <section class="hcc-hero">
+        <div>
+            <div class="hcc-eyebrow">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                CALIDAD · CAPTURA AUTOMATIZADA
+            </div>
+            <h1>Crear Control de Calidad</h1>
+            <p>
+                Selecciona la corrida que vas a revisar. El ERP ya resolvió
+                automáticamente la OF, pieza, cliente, máquina, operador,
+                evento y formato HCC vigente desde la biblioteca.
+            </p>
+            <div class="hcc-hero-actions">
+                <a class="hcc-btn hcc-btn-light"
+                   asp-action="HojasControl">
+                    <i class="fa-solid fa-table-list"></i>
+                    Bandeja
+                </a>
+                <a class="hcc-btn hcc-btn-light"
+                   asp-action="HistorialControlCalidad">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    Historial
+                </a>
+                <a class="hcc-btn hcc-btn-ghost"
+                   asp-action="HCCPlantillas">
+                    <i class="fa-solid fa-book-open"></i>
+                    Biblioteca
+                </a>
+            </div>
+        </div>
+        <div class="hcc-hero-mark">
+            <span>+</span>
+            <small>crear control</small>
+        </div>
+    </section>
+
+    <section class="hcc-create-guide">
+        <div>
+            <b>1 · Elige la corrida</b>
+            <span>
+                Sólo aparecen controles requeridos y vinculados a una
+                corrida real.
+            </span>
+        </div>
+        <div>
+            <b>2 · El ERP carga la HCC</b>
+            <span>
+                Características, límites, checklist, cavidades y datos
+                técnicos salen de la biblioteca.
+            </span>
+        </div>
+        <div>
+            <b>3 · Captura y guarda</b>
+            <span>
+                Al finalizar queda disponible automáticamente en Historial.
+            </span>
+        </div>
+    </section>
+
+    <section class="hcc-toolbar-card">
+        <form method="get"
+              asp-action="CrearControlCalidad"
+              class="hcc-toolbar">
+            <div class="hcc-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input name="busqueda"
+                       value="@Model.Busqueda"
+                       placeholder="Busca OF, parte, cliente, máquina o HCC..." />
+            </div>
+            <button class="hcc-btn hcc-btn-primary"
+                    type="submit">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Buscar
+            </button>
+            <a class="hcc-btn hcc-btn-light"
+               asp-action="CrearControlCalidad">
+                <i class="fa-solid fa-eraser"></i>
+                Limpiar
+            </a>
+        </form>
+    </section>
+
+    <section class="hcc-section-head">
+        <div>
+            <span class="hcc-section-kicker">
+                LISTOS PARA CAPTURA
+            </span>
+            <h2>
+                Controles preparados automáticamente
+            </h2>
+        </div>
+        <span class="hcc-count">
+            @Model.Requerimientos.Count registro(s)
+        </span>
+    </section>
+
+    @if (!Model.Requerimientos.Any())
+    {
+        <div class="hcc-empty">
+            <i class="fa-solid fa-circle-check"></i>
+            <h3>No hay controles pendientes</h3>
+            <p>
+                Cuando Producción o Calidad genere un evento que requiera HCC,
+                aparecerá aquí automáticamente con su plantilla correspondiente.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="hcc-order-grid">
+            @foreach (var item in Model.Requerimientos)
+            {
+                var cls =
+                    item.TipoOrigen=="RELIBERACION"
+                        ? "relib"
+                        : item.TipoOrigen=="CAMBIO_TURNO"
+                            ? "turn"
+                            : "start";
+
+                <article class="hcc-order-card @cls">
+                    <div class="hcc-order-accent"></div>
+
+                    <div class="hcc-order-head">
+                        <div>
+                            <span class="hcc-auto-badge">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                HCC ASIGNADA AUTOMÁTICAMENTE
+                            </span>
+                            <h3 class="mt-2">
+                                @(string.IsNullOrWhiteSpace(
+                                    item.OrdenFabricacion)
+                                    ? "OF sin folio"
+                                    : item.OrdenFabricacion)
+                            </h3>
+                            <p>
+                                @item.NumeroParte · @item.DescripcionParte
+                            </p>
+                        </div>
+
+                        <span class="hcc-status pending">
+                            @(item.Estado=="EN_CAPTURA"
+                                ? "EN CAPTURA"
+                                : "LISTO")
+                        </span>
+                    </div>
+
+                    <div class="hcc-context-grid">
+                        <div>
+                            <small>Cliente</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.ClienteNombre)
+                                    ? "—"
+                                    : item.ClienteNombre)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Máquina</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.MaquinaTexto)
+                                    ? "—"
+                                    : item.MaquinaTexto)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Evento</small>
+                            <strong>@item.EventoTexto</strong>
+                        </div>
+                        <div>
+                            <small>Operador</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.OperadorTexto)
+                                    ? "Pendiente"
+                                    : item.OperadorTexto)
+                            </strong>
+                        </div>
+                    </div>
+
+                    <div class="hcc-format-strip">
+                        <div>
+                            <small>HCC</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(item.NumeroHCC)
+                                    ? "Formato vinculado"
+                                    : item.NumeroHCC)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Versión</small>
+                            <strong>
+                                @(string.IsNullOrWhiteSpace(
+                                    item.VersionFormato)
+                                    ? "—"
+                                    : item.VersionFormato)
+                            </strong>
+                        </div>
+                        <div>
+                            <small>Características</small>
+                            <strong>@item.Caracteristicas</strong>
+                        </div>
+                        <div>
+                            <small>Checklist</small>
+                            <strong>@item.ChecklistItems</strong>
+                        </div>
+                    </div>
+
+                    <div class="hcc-order-foot">
+                        <span>
+                            <i class="fa-regular fa-clock"></i>
+                            @item.FechaHoraRequerida.ToString(
+                                "dd/MM/yyyy HH:mm")
+                        </span>
+
+                        <div class="hcc-actions">
+                            <a class="hcc-btn hcc-btn-light hcc-btn-sm"
+                               asp-action="HojaControl"
+                               asp-route-id="@item.PlantillaHCCID"
+                               asp-route-parteId="@item.ParteID">
+                                <i class="fa-solid fa-file-lines"></i>
+                                Vista previa
+                            </a>
+
+                            <a class="hcc-btn hcc-btn-primary"
+                               asp-action="CapturarHCC"
+                               asp-route-id="@item.RequerimientoHCCID">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                                @(item.Estado=="EN_CAPTURA"
+                                    ? "Continuar control"
+                                    : "Crear control")
+                            </a>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+
+    @if (Model.InspeccionesSinPlantilla.Any())
+    {
+        <section class="hcc-warning-panel">
+            <div class="hcc-warning-title">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div>
+                    <strong>
+                        Corridas que no se pueden preparar automáticamente
+                    </strong>
+                    <span>
+                        Falta vincular una HCC vigente a la pieza.
+                    </span>
+                </div>
+            </div>
+
+            <div class="hcc-warning-list">
+                @foreach (var x in Model.InspeccionesSinPlantilla)
+                {
+                    <div>
+                        <strong>
+                            @x.OrdenFabricacion · @x.NumeroParte
+                        </strong>
+                        <span>
+                            @x.ClienteNombre · @x.Maquina
+                        </span>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
