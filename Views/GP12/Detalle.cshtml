@@ -2477,11 +2477,12 @@
                                             <input type="hidden" name="solicitudGP12ID" value="@Model.SolicitudGP12ID" />
                                             <input type="hidden" name="inspeccionGP12ID" value="@i.InspeccionGP12ID" />
                                             <div class="form-grid">
-                                                <div class="field"><label>Cantidad revisada</label><input type="number" name="cantidadRevisada" min="0.0001" step="0.0001" required data-revisada /></div>
-                                                <div class="field"><label>Cantidad OK</label><input type="number" name="cantidadOK" min="0" step="0.0001" required data-ok /></div>
-                                                <div class="field"><label>Cantidad NOK</label><input type="number" name="cantidadNOK" min="0" step="0.0001" value="0" required data-nok /></div>
-                                                <div class="field"><label>Retrabajada</label><input type="number" name="cantidadRetrabajada" min="0" step="0.0001" value="0" required /></div>
-                                                <div class="field"><label>Scrap</label><input type="number" name="cantidadScrap" min="0" step="0.0001" value="0" required /></div>
+                                                @* NSQ_GP12_INSPECCION_BALANCE_V2 *@
+                                                <div class="field"><label>Cantidad OK</label><input type="number" name="cantidadOK" min="0" step="0.0001" value="0" required data-ok /></div>
+                                                <div class="field"><label>Retrabajo</label><input type="number" name="cantidadRetrabajada" min="0" step="0.0001" value="0" required data-retrabajo /></div>
+                                                <div class="field"><label>NOK / Scrap</label><input type="number" name="cantidadScrap" min="0" step="0.0001" value="0" required data-nok-scrap /></div>
+                                                <input type="hidden" name="cantidadNOK" value="0" data-nok-total />
+                                                <div class="field"><label>Cantidad revisada</label><input type="number" name="cantidadRevisada" min="0" step="0.0001" value="0" readonly data-revisada /><small>OK + Retrabajo + NOK / Scrap</small></div>
                                                 <div class="field span-all"><label>Observaciones</label><textarea name="observaciones" maxlength="2000"></textarea></div>
                                             </div>
                                             <div class="form-grid" style="margin-top:12px;">
@@ -2491,18 +2492,17 @@
                                                 <label class="check-card"><input type="checkbox" name="cantidadBasculaValidada" value="true" /> Cantidad en báscula validada</label>
                                                 <label class="check-card"><input type="checkbox" name="etiquetaInspeccionColocada" value="true" /> Etiqueta de inspección colocada</label>
                                             </div>
-                                            <div class="notice gp12-balance" style="margin-top:12px;">Captura revisadas, OK y NOK. OK + NOK debe ser igual a revisadas.</div>
+                                            <div class="notice gp12-balance" style="margin-top:12px;">La cantidad revisada se calcula automaticamente: OK + Retrabajo + NOK / Scrap.</div>
                                             <div class="actions"><button type="submit" class="btn primary">Finalizar inspección</button></div>
                                         </form>
                                     }
                                     else
                                     {
                                         <div class="inspection-result-grid">
-                                            <div class="inspection-metric"><span>Revisadas</span><strong>@i.CantidadRevisada.ToString("N4")</strong></div>
                                             <div class="inspection-metric"><span>OK</span><strong>@i.CantidadOK.ToString("N4")</strong></div>
-                                            <div class="inspection-metric"><span>NOK</span><strong>@i.CantidadNOK.ToString("N4")</strong></div>
                                             <div class="inspection-metric"><span>Retrabajo</span><strong>@i.CantidadRetrabajada.ToString("N4")</strong></div>
-                                            <div class="inspection-metric"><span>Scrap</span><strong>@i.CantidadScrap.ToString("N4")</strong></div>
+                                            <div class="inspection-metric"><span>NOK / Scrap</span><strong>@i.CantidadScrap.ToString("N4")</strong></div>
+                                            <div class="inspection-metric"><span>Revisadas</span><strong>@i.CantidadRevisada.ToString("N4")</strong></div>
                                         </div>
                                         <div class="inspection-checks">
                                             <div class="inspection-check"><span>Etiqueta</span><b>@(i.ValidacionEtiqueta ? "Sí" : "No")</b></div>
@@ -2637,11 +2637,26 @@
     <script>
         document.querySelectorAll('.gp12-finalizar-form').forEach(function(form){
             form.addEventListener('submit',function(e){
-                const revisada=Number(form.querySelector('[data-revisada]')?.value||0);
-                const ok=Number(form.querySelector('[data-ok]')?.value||0);
-                const nok=Number(form.querySelector('[data-nok]')?.value||0);
-                if(revisada<=0){e.preventDefault();alert('La cantidad revisada debe ser mayor que cero.');return;}
-                if(Math.abs((ok+nok)-revisada)>0.00001){e.preventDefault();alert('Cantidad OK + NOK debe ser igual a la cantidad revisada.');return;}
+                const revisadaInput=form.querySelector('[data-revisada]');
+                const okInput=form.querySelector('[data-ok]');
+                const retrabajoInput=form.querySelector('[data-retrabajo]');
+                const nokScrapInput=form.querySelector('[data-nok-scrap]');
+                const nokTotalInput=form.querySelector('[data-nok-total]');
+                const valor=input=>Number(input?.value||0);
+                const recalcularBalance=()=>{
+                    const ok=valor(okInput);
+                    const retrabajo=valor(retrabajoInput);
+                    const nokScrap=valor(nokScrapInput);
+                    const nokTotal=retrabajo+nokScrap;
+                    const revisada=ok+nokTotal;
+                    if(nokTotalInput) nokTotalInput.value=nokTotal.toFixed(4).replace(/\.0000$/,'');
+                    if(revisadaInput) revisadaInput.value=revisada.toFixed(4).replace(/\.0000$/,'');
+                    return {ok,retrabajo,nokScrap,nokTotal,revisada};
+                };
+                [okInput,retrabajoInput,nokScrapInput].forEach(input=>input?.addEventListener('input',recalcularBalance));
+                const balance=recalcularBalance();
+                if([balance.ok,balance.retrabajo,balance.nokScrap].some(x=>x<0)){e.preventDefault();alert('Las cantidades GP12 no pueden ser negativas.');return;}
+                if(balance.revisada<=0){e.preventDefault();alert('La cantidad revisada debe ser mayor que cero.');return;}
                 if(!confirm('¿Confirmas el cierre de esta inspección GP12?'))e.preventDefault();
             });
         });
@@ -2673,6 +2688,118 @@
             });
         })();
     </script>
+
+    @* NSQ_GP12_DESTINO_CAJA_V1 *@
+    @if (Model.EstatusID == GP12Estatus.InspeccionTerminada && Model.SaldoInventario > 0)
+    {
+        var ultimaInspeccionDestino = Model.Inspecciones
+            .Where(x => x.Activo && x.FechaFin.HasValue)
+            .OrderByDescending(x => x.FechaFin)
+            .ThenByDescending(x => x.InspeccionGP12ID)
+            .FirstOrDefault();
+        var hayScrapDestino = (ultimaInspeccionDestino?.CantidadScrap ?? 0) > 0;
+        var hayNokDestino = (ultimaInspeccionDestino?.CantidadNOK ?? 0) > 0;
+        var puedeVolverCalidad =
+            string.Equals(Model.Origen, GP12Origen.Calidad, StringComparison.OrdinalIgnoreCase) &&
+            Model.CajaProduccionID.HasValue &&
+            Model.CajaLiberadaID.HasValue &&
+            Model.CalidadInspeccionID.HasValue &&
+            !hayScrapDestino;
+        var puedeAlmacen = !hayNokDestino && !hayScrapDestino;
+
+        <section class="gp12-destination-panel" id="gp12-destination-panel">
+            <div class="gp12-destination-head">
+                <div>
+                    <span class="gp12-destination-step">Destino final</span>
+                    <h2>¿A dónde debe continuar esta caja?</h2>
+                    <p>La inspección terminó. Elige una sola ruta para las <strong>@Model.SaldoInventario.ToString("N4")</strong> pieza(s) que GP12 conserva.</p>
+                </div>
+                <span class="gp12-destination-balance">@Model.SaldoInventario.ToString("N4") piezas</span>
+            </div>
+            <div class="gp12-destination-grid">
+                <article class="gp12-destination-card quality @(puedeVolverCalidad ? "enabled" : "disabled")">
+                    <div class="gp12-destination-icon"><span>Q</span></div>
+                    <div class="gp12-destination-copy">
+                        <h3>Regresar a Calidad</h3>
+                        <p>Para piezas retrabajadas o cuando Calidad debe volver a validar físicamente la caja.</p>
+                        @if (hayScrapDestino)
+                        {
+                            <small>Primero debe resolverse el flujo de scrap generado en GP12.</small>
+                        }
+                        else if (!string.Equals(Model.Origen, GP12Origen.Calidad, StringComparison.OrdinalIgnoreCase))
+                        {
+                            <small>Disponible únicamente para cajas que se originaron en Calidad.</small>
+                        }
+                        else
+                        {
+                            <small>Calidad deberá escanear nuevamente la etiqueta antes de liberar o tomar otra decisión.</small>
+                        }
+                    </div>
+                    <form asp-controller="GP12" asp-action="RegresarCajaACalidad" method="post"
+                          onsubmit="return confirm('¿Regresar esta caja a Calidad para una nueva validación física?');">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="solicitudGP12ID" value="@Model.SolicitudGP12ID" />
+                        <input type="hidden" name="observaciones" value="Retorno a Calidad solicitado desde el detalle GP12." />
+                        <button type="submit" class="gp12-destination-btn quality" disabled="@(!puedeVolverCalidad ? "disabled" : null)">Regresar a Calidad</button>
+                    </form>
+                </article>
+
+                <article class="gp12-destination-card warehouse @(puedeAlmacen ? "enabled" : "disabled")">
+                    <div class="gp12-destination-icon"><span>A</span></div>
+                    <div class="gp12-destination-copy">
+                        <h3>Liberar hacia Almacén PT</h3>
+                        <p>Usa la salida que GP12 ya tiene implementada para material completamente conforme.</p>
+                        @if (!puedeAlmacen)
+                        {
+                            <small>La última inspección conserva NOK/retrabajo o scrap; requiere resolución antes de Almacén.</small>
+                        }
+                        else if (string.Equals(Model.Origen, GP12Origen.Calidad, StringComparison.OrdinalIgnoreCase))
+                        {
+                            <small>GP12 libera la caja verde; Producción conserva únicamente el escaneo físico final de entrega a Almacén PT.</small>
+                        }
+                        else
+                        {
+                            <small>La salida descuenta el inventario GP12 y cierra la solicitud cuando el saldo llega a cero.</small>
+                        }
+                    </div>
+                    <form asp-controller="GP12" asp-action="RegistrarSalidaParaAlmacen" method="post" class="gp12-destination-almacen-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="SolicitudGP12ID" value="@Model.SolicitudGP12ID" />
+                        <input type="hidden" name="Cantidad" value="@Model.SaldoInventario.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                        <input type="hidden" name="ReferenciaAlmacen" value="GP12 #@Model.SolicitudGP12ID - liberación final" />
+                        <input type="hidden" name="Observaciones" value="Liberación final desde detalle GP12 hacia Almacén PT." />
+                        <button type="submit" class="gp12-destination-btn warehouse" disabled="@(!puedeAlmacen ? "disabled" : null)">Liberar a Almacén PT</button>
+                    </form>
+                </article>
+            </div>
+        </section>
+
+        <style>
+            .gp12-destination-panel{max-width:1450px;margin:18px auto 28px;padding:20px;border:1px solid #d8e3ef;border-radius:16px;background:linear-gradient(135deg,#fff,#f7faff);box-shadow:0 12px 28px rgba(10,46,82,.08)}
+            .gp12-destination-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:14px}.gp12-destination-step{display:inline-flex;padding:5px 9px;border-radius:999px;background:#eaf3ff;color:#0d5cab;font-size:10px;font-weight:900;text-transform:uppercase}.gp12-destination-head h2{margin:7px 0 3px;color:#0b3558;font-size:20px}.gp12-destination-head p{margin:0;color:#667085;font-size:12px}.gp12-destination-balance{padding:9px 12px;border-radius:11px;background:#0b3558;color:#fff;font-size:12px;font-weight:900;white-space:nowrap}.gp12-destination-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.gp12-destination-card{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:15px;border:1px solid #dce3ea;border-radius:13px;background:#fff}.gp12-destination-card form{grid-column:1/-1}.gp12-destination-card.disabled{opacity:.6;background:#f8fafc}.gp12-destination-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:950}.gp12-destination-card.quality .gp12-destination-icon{background:#fff2e8;color:#d65f00}.gp12-destination-card.warehouse .gp12-destination-icon{background:#eaf3ff;color:#0d5cab}.gp12-destination-copy h3{margin:0 0 4px;font-size:15px;color:#17233b}.gp12-destination-copy p,.gp12-destination-copy small{display:block;margin:0;color:#667085;font-size:11px;line-height:1.4}.gp12-destination-copy small{margin-top:6px;font-weight:700}.gp12-destination-btn{width:100%;min-height:39px;border:0;border-radius:9px;color:#fff;font-weight:850;cursor:pointer}.gp12-destination-btn.quality{background:#ea6b11}.gp12-destination-btn.warehouse{background:#0d5cab}.gp12-destination-btn:disabled{background:#aeb9c6;cursor:not-allowed}.gp12-destination-card.enabled:hover{box-shadow:0 7px 18px rgba(16,33,63,.08)}
+            @@media(max-width:760px){.gp12-destination-grid{grid-template-columns:1fr}.gp12-destination-head{flex-direction:column}.gp12-destination-balance{align-self:flex-start}}
+        </style>
+        <script>
+            document.querySelectorAll('.gp12-destination-almacen-form').forEach(function(form){
+                form.addEventListener('submit', async function(e){
+                    e.preventDefault();
+                    if(!confirm('¿Liberar toda la existencia GP12 hacia Almacén PT?')) return;
+                    const button=form.querySelector('button[type="submit"]');
+                    if(button) button.disabled=true;
+                    try{
+                        const response=await fetch(form.action,{method:'POST',body:new FormData(form),credentials:'same-origin'});
+                        const data=await response.json();
+                        if(!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible registrar la salida.');
+                        alert(data.mensaje || 'Salida registrada correctamente.');
+                        window.location.reload();
+                    }catch(err){
+                        alert(err && err.message ? err.message : 'No fue posible registrar la salida.');
+                        if(button) button.disabled=false;
+                    }
+                });
+            });
+        </script>
+    }
 
 </body>
 </html>

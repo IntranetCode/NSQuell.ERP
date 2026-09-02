@@ -1,0 +1,24 @@
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCPlantillasIndexViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Biblioteca HCC";
+}
+<link rel="stylesheet" href="~/css/calidad-hcc-v2.css" asp-append-version="true" />
+<div class="hcc-page">
+    <section class="hcc-subhero">
+        <div><span class="hcc-section-kicker">CONFIGURACIÓN TÉCNICA</span><h1>Biblioteca de plantillas HCC</h1><p>Consulta las revisiones vinculadas a cada pieza. Esta biblioteca alimenta automáticamente la bandeja operativa.</p></div>
+        <a class="hcc-btn hcc-btn-primary" asp-action="HojasControl"><i class="fa-solid fa-arrow-left"></i> Volver a la bandeja</a>
+    </section>
+    <section class="hcc-toolbar-card"><form method="get" class="hcc-toolbar"><div class="hcc-search"><i class="fa-solid fa-magnifying-glass"></i><input name="busqueda" value="@Model.Busqueda" placeholder="Parte, cliente, designación o número HCC..." /></div><button class="hcc-btn hcc-btn-primary">Buscar</button><a class="hcc-btn hcc-btn-light" asp-action="HCCPlantillas">Limpiar</a></form></section>
+    <div class="hcc-library-grid">
+        @foreach (var x in Model.Plantillas)
+        {
+            <article class="hcc-library-card">
+                <div class="hcc-library-head"><div><span>@x.Cliente</span><h3>@x.NumeroParte</h3><p>@x.DescripcionParte</p></div><span class="hcc-status @(x.EsVigente ? "done" : "neutral")">@(x.EsVigente ? "VIGENTE" : "HISTÓRICA")</span></div>
+                <div class="hcc-library-meta"><div><small>HCC</small><strong>@x.NumeroHCC</strong></div><div><small>Versión</small><strong>@x.VersionFormato</strong></div><div><small>Fecha</small><strong>@(x.FechaRevision?.ToString("dd/MM/yyyy") ?? "—")</strong></div></div>
+                <div class="hcc-library-stats"><span><i class="fa-solid fa-ruler"></i> @x.Caracteristicas características</span><span><i class="fa-solid fa-circle-nodes"></i> @x.Cavidades cav./pos.</span><span><i class="fa-solid fa-list-check"></i> @x.ChecklistItems checks</span></div>
+                <a class="hcc-btn hcc-btn-light hcc-btn-block" asp-action="HojaControl" asp-route-id="@x.PlantillaHCCID" asp-route-parteId="@x.ParteID">Ver información técnica</a>
+            </article>
+        }
+    </div>
+</div>

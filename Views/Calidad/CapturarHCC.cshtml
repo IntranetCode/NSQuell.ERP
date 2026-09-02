@@ -1,8 +1,224 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.CalidadHCCCapturaViewModel
-@{ViewData["Title"]="Captura HCC"; var p=Model.Plantilla!;}
-<div class="container-fluid py-4"><h1 class="h3 fw-bold">Captura HCC · @p.NumeroParte</h1><p class="text-secondary">@p.Designacion · @p.VersionFormato · @p.NumeroHCC</p>
-<form asp-action="GuardarHCC" method="post">@Html.AntiForgeryToken()<input asp-for="PlantillaHCCID" type="hidden"/><input asp-for="ParteID" type="hidden"/><input asp-for="InspeccionID" type="hidden"/>
-<div asp-validation-summary="All" class="text-danger"></div><div class="card card-body mb-3"><div class="row g-3"><div class="col-md-2"><label class="form-label">Fecha</label><input asp-for="Fecha" type="date" class="form-control"/></div><div class="col-md-2"><label class="form-label">Turno</label><input asp-for="Turno" class="form-control"/></div><div class="col-md-2"><label class="form-label">Hora</label><input asp-for="Hora" type="time" class="form-control"/></div><div class="col-md-2"><label class="form-label">Evento</label><select asp-for="TipoEvento" class="form-select"><option value="L">Liberación (L)</option><option value="M">Monitoreo (M)</option><option value="RL">Reliberación (RL)</option></select></div><div class="col-md-4"><label class="form-label">OF</label><input asp-for="OrdenFabricacion" class="form-control"/></div><div class="col-md-4"><label class="form-label">Máquina</label><input asp-for="MaquinaTexto" class="form-control"/></div><div class="col-md-4"><label class="form-label">Operador</label><input asp-for="OperadorTexto" class="form-control"/></div><div class="col-md-4"><label class="form-label">Auditor</label><input asp-for="AuditorTexto" class="form-control"/></div></div></div>
-<div class="card mb-3"><div class="card-header fw-bold">Mediciones por tiro y cavidad</div><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Característica</th><th>Tiro</th><th>Cavidad</th><th>Valor numérico</th><th>Valor / atributo</th><th>Resultado</th></tr></thead><tbody>@for(int i=0;i<Model.Mediciones.Count;i++){var m=Model.Mediciones[i];var c=p.Caracteristicas.First(x=>x.CaracteristicaHCCID==m.CaracteristicaHCCID);<tr><td>@c.Nombre<input asp-for="Mediciones[i].CaracteristicaHCCID" type="hidden"/></td><td>@m.NumeroTiro<input asp-for="Mediciones[i].NumeroTiro" type="hidden"/></td><td>@m.NumeroCavidad<input asp-for="Mediciones[i].NumeroCavidad" type="hidden"/></td><td><input asp-for="Mediciones[i].ValorNumerico" class="form-control form-control-sm"/></td><td><input asp-for="Mediciones[i].ValorTexto" class="form-control form-control-sm"/></td><td><select asp-for="Mediciones[i].Resultado" class="form-select form-select-sm"><option>OK</option><option>NOK</option><option>NA</option></select></td></tr>}</tbody></table></div></div>
-<div class="card mb-3"><div class="card-header fw-bold">Checklist</div><div class="table-responsive"><table class="table table-sm"><tbody>@for(int i=0;i<Model.Checklist.Count;i++){var x=Model.Checklist[i];var def=p.Checklist.First(c=>c.ChecklistHCCID==x.ChecklistHCCID);<tr><td>@def.Descripcion<input asp-for="Checklist[i].ChecklistHCCID" type="hidden"/></td><td style="width:180px"><select asp-for="Checklist[i].Resultado" class="form-select"><option>OK</option><option>NOK</option><option>NA</option></select></td></tr>}</tbody></table></div></div>
-<div class="card card-body mb-3"><label class="form-label">Observaciones / defecto encontrado / solución</label><textarea asp-for="Observaciones" rows="4" class="form-control"></textarea></div><div class="d-flex justify-content-end gap-2"><a asp-action="HojaControl" asp-route-id="@Model.PlantillaHCCID" asp-route-parteId="@Model.ParteID" class="btn btn-outline-secondary">Cancelar</a><button class="btn btn-primary" type="submit">Guardar HCC</button></div></form></div>
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = $"Capturar HCC · {Model.OrdenFabricacion}";
+    var checkIndex = 0;
+}
+<link rel="stylesheet" href="~/css/calidad-hcc-v2.css" asp-append-version="true" />
+
+<div class="hcc-page hcc-capture-page">
+    <section class="hcc-capture-hero">
+        <div>
+            <span class="hcc-event-pill"><i class="fa-solid fa-bolt"></i> @Model.TipoOrigen.Replace("_", " ")</span>
+            <h1>@Model.OrdenFabricacion</h1>
+            <p><strong>@Model.NumeroParte</strong> · @Model.DescripcionParte</p>
+            <div class="hcc-capture-meta"><span><i class="fa-solid fa-industry"></i> @Model.MaquinaTexto</span><span><i class="fa-solid fa-clock"></i> @Model.FechaHoraRequerida.ToString("dd/MM/yyyy HH:mm")</span><span><i class="fa-solid fa-user-gear"></i> @(string.IsNullOrWhiteSpace(Model.OperadorTexto) ? "Operador por confirmar" : Model.OperadorTexto)</span></div>
+        </div>
+        <div class="hcc-capture-auditor"><small>AUDITOR</small><strong>@Model.AuditorTexto</strong><span>Tomado de la sesión</span></div>
+    </section>
+
+    @if (TempData["Error"] is string error)
+    {
+        <div class="hcc-alert hcc-alert-danger"><i class="fa-solid fa-triangle-exclamation"></i><span>@error</span></div>
+    }
+
+    <section class="hcc-mini-doc">
+        <div><small>Cliente</small><strong>@Model.ClienteNombre</strong></div>
+        <div><small>HCC</small><strong>@Model.Plantilla.NumeroHCC</strong></div>
+        <div><small>Versión</small><strong>@Model.Plantilla.VersionFormato</strong></div>
+        <div><small>Dibujo</small><strong>@Model.Plantilla.NumeroDibujo</strong></div>
+        <div><small>Material</small><strong>@Model.Plantilla.MateriaPrima</strong></div>
+        <div><small>Secado</small><strong>@Model.Plantilla.TiempoSecadoTexto</strong></div>
+    </section>
+
+    @* NSQ_HCC_CAPTURA_RAPIDA_V4 *@
+    <form asp-action="GuardarHCC" method="post" id="hccCaptureForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="RequerimientoHCCID" value="@Model.RequerimientoHCCID" />
+        <input type="hidden" name="CavidadesConfiguradas" id="hccCavidadesValue" value="@Model.CavidadesConfiguradas" />
+
+        <section class="hcc-config-card">
+            <div class="hcc-config-head">
+                <div><span class="hcc-step">1</span><div><h2>Configuración real de la máquina</h2><p>Selecciona únicamente las cavidades/posiciones que están habilitadas. El sistema mostrará y exigirá sólo los cuadros correspondientes.</p></div></div>
+                <div class="hcc-cavity-counter"><small>ACTIVAS</small><strong id="hccCavityCount">@Model.CantidadCavidadesConfiguradas</strong></div>
+            </div>
+            @* NSQ_HCC_CAVIDADES_DINAMICAS_V3_VIEW *@
+            <div class="hcc-cavity-selector" id="hccCavitySelector">
+                @foreach (var cav in Model.CavidadesSeleccionadas)
+                {
+                    <label class="hcc-cavity-chip active" data-cavity-chip="@cav"><input type="checkbox" class="hcc-cavity-toggle" value="@cav" checked /><span>@cav</span></label>
+                }
+            </div>
+            <div class="hcc-cavity-add">
+                <div>
+                    <label for="hccNewCavity">Agregar cavidad / posición</label>
+                    <span>Úsalo cuando la configuración real tenga una posición adicional que no venga en el formato maestro.</span>
+                </div>
+                <div class="hcc-cavity-add-controls">
+                    <input id="hccNewCavity" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="Ej. 9" />
+                    <button type="button" class="hcc-btn hcc-btn-light" id="hccAddCavity"><i class="fa-solid fa-plus"></i> Agregar</button>
+                </div>
+            </div>
+            <div class="hcc-event-config"><label><span>Tipo de control</span><select name="TipoEvento" class="hcc-select"><option value="L" selected="@(Model.TipoEvento == "L")">Liberación (L)</option><option value="M" selected="@(Model.TipoEvento == "M")">Monitoreo (M)</option><option value="RL" selected="@(Model.TipoEvento == "RL")">Reliberación (RL)</option></select></label><div class="hcc-three-shots"><i class="fa-solid fa-layer-group"></i><div><strong>3 tiros</strong><span>Inicio de corrida / cambio de turno</span></div></div></div>
+        </section>
+
+        <section class="hcc-section-head"><div><span class="hcc-section-kicker">PASO 2</span><h2>Medición por característica, tiro y cavidad</h2><p>Los límites se evalúan automáticamente cuando la HCC contiene rango dimensional.</p></div></section>
+
+        <div class="hcc-measurement-stack">
+            @foreach (var car in Model.Plantilla.Caracteristicas)
+            {
+                var cavs = car.Cavidades.Any()
+                    ? Model.CavidadesSeleccionadas.Where(x => car.Cavidades.Contains(x)).ToList()
+                    : Model.CavidadesSeleccionadas.ToList();
+                if (!cavs.Any()) { continue; }
+                var valorPredeterminado = car.ValorNominal
+                    ?? (car.LimiteInferior.HasValue && car.LimiteSuperior.HasValue
+                        ? (car.LimiteInferior.Value + car.LimiteSuperior.Value) / 2m
+                        : (decimal?)null);
+                var valorPredeterminadoTexto = valorPredeterminado?.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                <article class="hcc-measure-card"
+                         data-characteristic="@car.CaracteristicaHCCID"
+                         data-numeric="@(car.EsNumerica ? "1" : "0")"
+                         data-has-limits="@(car.TieneLimites ? "1" : "0")"
+                         data-min="@(car.LimiteInferior?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                         data-max="@(car.LimiteSuperior?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                         data-unit="@car.Unidad">
+                    <header>
+                        <div class="hcc-measure-title"><span class="hcc-type">@car.TipoCaracteristica</span><div><h3>@car.Nombre</h3><p>@car.EspecificacionTexto</p></div></div>
+                        <div class="hcc-measure-spec"><small>@(car.EsVisual ? "CRITERIO" : "RANGO")</small><strong>@car.RangoTexto</strong><span><i class="fa-solid fa-screwdriver-wrench"></i> @(string.IsNullOrWhiteSpace(car.Instrumento) ? "Visual / según formato" : car.Instrumento)</span></div>
+                    </header>
+                    <div class="hcc-measure-table-wrap">
+                        <table class="hcc-measure-table">
+                            <thead><tr><th>Cavidad / posición</th><th>Tiro 1</th><th>Tiro 2</th><th>Tiro 3</th></tr></thead>
+                            <tbody data-hcc-cavity-body>
+                                @foreach (var cav in cavs)
+                                {
+                                    <tr class="hcc-cavity-row" data-cavity="@cav">
+                                        <th><span>@cav</span></th>
+                                        @for (var tiro = 1; tiro <= 3; tiro++)
+                                        {
+                                            var token = $"{car.CaracteristicaHCCID}_{cav}_{tiro}";
+                                            <td>
+                                                <input type="hidden" name="Mediciones.Index" value="@token" />
+                                                <input type="hidden" name="Mediciones[@token].CaracteristicaHCCID" value="@car.CaracteristicaHCCID" />
+                                                <input type="hidden" name="Mediciones[@token].NumeroTiro" value="@tiro" />
+                                                <input type="hidden" name="Mediciones[@token].NumeroCavidad" value="@cav" />
+                                                @if (car.EsNumerica)
+                                                {
+                                                    <div class="hcc-value-control" data-min="@(car.LimiteInferior?.ToString(System.Globalization.CultureInfo.InvariantCulture))" data-max="@(car.LimiteSuperior?.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                                        <input class="hcc-value-input" inputmode="decimal" autocomplete="off" name="Mediciones[@token].Valor" value="@valorPredeterminadoTexto" placeholder="Valor" />
+                                                        <span class="hcc-unit">@car.Unidad</span>
+                                                        @if (!car.TieneLimites)
+                                                        {
+                                                            <div class="hcc-tri-state hcc-tri-state-compact" data-hcc-tri>
+                                                                <input type="hidden" class="hcc-tri-result" name="Mediciones[@token].Resultado" value="OK" />
+                                                                <button type="button" class="hcc-tri-option active ok" data-value="OK"><i class="fa-solid fa-check"></i><span>OK</span></button>
+                                                                <button type="button" class="hcc-tri-option nok" data-value="NOK"><i class="fa-solid fa-xmark"></i><span>NOK</span></button>
+                                                                <button type="button" class="hcc-tri-option na" data-value="NA"><span>NA</span></button>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <input type="hidden" class="hcc-auto-result-input" name="Mediciones[@token].Resultado" value="OK" />
+                                                            <span class="hcc-auto-result" aria-live="polite">—</span>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <input type="hidden" name="Mediciones[@token].Valor" value="" />
+                                                    <div class="hcc-tri-state" data-hcc-tri>
+                                                        <input type="hidden" class="hcc-tri-result" name="Mediciones[@token].Resultado" value="OK" />
+                                                        <button type="button" class="hcc-tri-option active ok" data-value="OK"><i class="fa-solid fa-check"></i><span>OK</span></button>
+                                                        <button type="button" class="hcc-tri-option nok" data-value="NOK"><i class="fa-solid fa-xmark"></i><span>NOK</span></button>
+                                                        <button type="button" class="hcc-tri-option na" data-value="NA"><span>NA</span></button>
+                                                    </div>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <template class="hcc-cavity-row-template">
+                        <tr class="hcc-cavity-row hcc-cavity-row-added" data-cavity="__CAV__">
+                            <th><span>__CAV__</span><small>Nueva</small></th>
+                            @for (var tiro = 1; tiro <= 3; tiro++)
+                            {
+                                <td>
+                                    <input type="hidden" name="Mediciones.Index" value="__TOKEN__@tiro" />
+                                    <input type="hidden" name="Mediciones[__TOKEN__@tiro].CaracteristicaHCCID" value="@car.CaracteristicaHCCID" />
+                                    <input type="hidden" name="Mediciones[__TOKEN__@tiro].NumeroTiro" value="@tiro" />
+                                    <input type="hidden" name="Mediciones[__TOKEN__@tiro].NumeroCavidad" value="__CAV__" />
+                                    @if (car.EsNumerica)
+                                    {
+                                        <div class="hcc-value-control" data-min="@(car.LimiteInferior?.ToString(System.Globalization.CultureInfo.InvariantCulture))" data-max="@(car.LimiteSuperior?.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                            <input class="hcc-value-input" inputmode="decimal" autocomplete="off" name="Mediciones[__TOKEN__@tiro].Valor" value="@valorPredeterminadoTexto" placeholder="Valor" />
+                                            <span class="hcc-unit">@car.Unidad</span>
+                                            @if (!car.TieneLimites)
+                                            {
+                                                <div class="hcc-tri-state hcc-tri-state-compact" data-hcc-tri>
+                                                    <input type="hidden" class="hcc-tri-result" name="Mediciones[__TOKEN__@tiro].Resultado" value="OK" />
+                                                    <button type="button" class="hcc-tri-option active ok" data-value="OK"><i class="fa-solid fa-check"></i><span>OK</span></button>
+                                                    <button type="button" class="hcc-tri-option nok" data-value="NOK"><i class="fa-solid fa-xmark"></i><span>NOK</span></button>
+                                                    <button type="button" class="hcc-tri-option na" data-value="NA"><span>NA</span></button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <input type="hidden" class="hcc-auto-result-input" name="Mediciones[__TOKEN__@tiro].Resultado" value="OK" />
+                                                <span class="hcc-auto-result" aria-live="polite">—</span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <input type="hidden" name="Mediciones[__TOKEN__@tiro].Valor" value="" />
+                                        <div class="hcc-tri-state" data-hcc-tri>
+                                            <input type="hidden" class="hcc-tri-result" name="Mediciones[__TOKEN__@tiro].Resultado" value="OK" />
+                                            <button type="button" class="hcc-tri-option active ok" data-value="OK"><i class="fa-solid fa-check"></i><span>OK</span></button>
+                                            <button type="button" class="hcc-tri-option nok" data-value="NOK"><i class="fa-solid fa-xmark"></i><span>NOK</span></button>
+                                            <button type="button" class="hcc-tri-option na" data-value="NA"><span>NA</span></button>
+                                        </div>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    </template>
+                </article>
+            }
+        </div>
+
+        <section class="hcc-check-card">
+            <div class="hcc-config-head"><div><span class="hcc-step">3</span><div><h2>Verificaciones de proceso</h2><p>Todos los controles rápidos inician en OK. Cambia a NOK o NA sólo cuando corresponda.</p></div></div><div class="hcc-check-hint"><i class="fa-solid fa-circle-check"></i> OK por defecto</div></div>
+            <div class="hcc-check-grid">
+                @foreach (var item in Model.Plantilla.Checklist)
+                {
+                    <div class="hcc-check-row hcc-check-row-ok">
+                        <input type="hidden" name="Checklist[@checkIndex].ChecklistHCCID" value="@item.ChecklistHCCID" />
+                        <div class="hcc-check-copy"><span>@item.Orden</span><strong>@item.Descripcion</strong></div>
+                        <div class="hcc-tri-state hcc-tri-state-check" data-hcc-tri data-row-state="1">
+                            <input type="hidden" name="Checklist[@checkIndex].Resultado" value="OK" class="hcc-tri-result" />
+                            <button type="button" class="hcc-tri-option active ok" data-value="OK"><i class="fa-solid fa-check"></i><span>OK</span></button>
+                            <button type="button" class="hcc-tri-option nok" data-value="NOK"><i class="fa-solid fa-xmark"></i><span>NOK</span></button>
+                            <button type="button" class="hcc-tri-option na" data-value="NA"><span>NA</span></button>
+                        </div>
+                    </div>
+                    checkIndex++;
+                }
+            </div>
+        </section>
+
+        <section class="hcc-observation-card">
+            <div><span class="hcc-step">4</span><div><h2>Observaciones</h2><p>Anota cualquier defecto encontrado y cómo se solucionó. Es obligatorio si existe un NOK.</p></div></div>
+            <textarea name="Observaciones" rows="5" maxlength="5000" placeholder="Defecto encontrado, contención, ajuste realizado, evidencia o comentario del auditor..."></textarea>
+        </section>
+
+        <div class="hcc-sticky-save">
+            <a class="hcc-btn hcc-btn-light" asp-action="HojasControl"><i class="fa-solid fa-xmark"></i> Salir sin guardar</a>
+            <div><span id="hccFormSummary">@Model.CantidadCavidadesConfiguradas cavidades/posiciones · 3 tiros</span><button type="submit" class="hcc-btn hcc-btn-primary hcc-btn-lg"><i class="fa-solid fa-floppy-disk"></i> Guardar HCC completa</button></div>
+        </div>
+    </form>
+</div>
+<script src="~/js/calidad-hcc-v2.js" asp-append-version="true"></script>

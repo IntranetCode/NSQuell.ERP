@@ -12,6 +12,73 @@ public sealed record AlmacenPTCodigoBarrasParseado(
 
 public static class AlmacenPTCodigoBarrasService
 {
+    // NSQ_OF_ETIQUETA_CANONICA_V1
+    // En las etiquetas fisicas, apostrofe/acentos tipograficos representan "/".
+    // CodigoOriginal conserva el texto fisico completo para trazabilidad.
+    public static string NormalizarNumeroOFEtiqueta(string? numeroOF)
+    {
+        if (string.IsNullOrWhiteSpace(numeroOF))
+            return string.Empty;
+
+        return numeroOF
+            .Trim()
+            .Replace("'", "/", StringComparison.Ordinal)
+            .Replace("’", "/", StringComparison.Ordinal)
+            .Replace("‘", "/", StringComparison.Ordinal)
+            .Replace("´", "/", StringComparison.Ordinal)
+            .Replace("`", "/", StringComparison.Ordinal);
+    }
+
+    public static string ObtenerClaveNumeroOF(string? numeroOF)
+    {
+        var valor =
+            NormalizarNumeroOFEtiqueta(numeroOF)
+                .Trim()
+                .ToUpperInvariant();
+
+        if (valor.Length == 0)
+            return string.Empty;
+
+        if (valor.StartsWith("OF", StringComparison.Ordinal))
+        {
+            var puedeSerPrefijo =
+                valor.Length == 2 ||
+                (
+                    valor.Length > 2 &&
+                    (
+                        char.IsDigit(valor[2]) ||
+                        valor[2] == '-' ||
+                        valor[2] == '/' ||
+                        valor[2] == '_' ||
+                        char.IsWhiteSpace(valor[2])
+                    )
+                );
+
+            if (puedeSerPrefijo)
+                valor = valor[2..];
+        }
+
+        return new string(
+            valor
+                .Where(char.IsLetterOrDigit)
+                .ToArray());
+    }
+
+    public static bool NumerosOFEquivalentes(
+        string? izquierda,
+        string? derecha)
+    {
+        var a = ObtenerClaveNumeroOF(izquierda);
+        var b = ObtenerClaveNumeroOF(derecha);
+
+        return
+            a.Length > 0 &&
+            b.Length > 0 &&
+            string.Equals(
+                a,
+                b,
+                StringComparison.OrdinalIgnoreCase);
+    }
     public static bool TryParse(
         string? codigo,
         out AlmacenPTCodigoBarrasParseado? resultado,
@@ -58,7 +125,8 @@ public static class AlmacenPTCodigoBarrasService
         }
 
         var numeroOF =
-            valor[..primerGuion].Trim();
+            NormalizarNumeroOFEtiqueta(
+                valor[..primerGuion]);
 
         var numeroParte =
             valor[(primerGuion + 1)..segundoGuion].Trim();

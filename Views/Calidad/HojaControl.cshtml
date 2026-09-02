@@ -1,58 +1,36 @@
-@model ERP.NSQuell.Models.ViewModels.CalidadHCCPlantillaDetalleViewModel
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCPlantillaViewModel
 @{
-    ViewData["Title"] = "Hoja de Control " + Model.NumeroParte;
+    Layout = "_Layout";
+    ViewData["Title"] = $"HCC {Model.NumeroParte}";
 }
-<div class="container-fluid py-4">
-    <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
-        <div>
-            <h1 class="h3 fw-bold mb-1">@Model.NumeroParte</h1>
-            <div class="text-secondary">@Model.Designacion · @Model.Cliente</div>
-            <div class="mt-2">
-                @if (Model.ParteActiva)
-                { <span class="badge text-bg-success">Parte activa</span> }
-                else
-                { <span class="badge text-bg-secondary">Parte histórica/inactiva</span> }
-                @if (Model.EsRelacionPrincipal)
-                { <span class="badge text-bg-primary">Relación principal</span> }
-                <span class="badge text-bg-info">@Model.MetodoMapeo @Model.ConfianzaMapeo?.ToString("0.##")%</span>
-            </div>
-        </div>
-        <div class="d-flex gap-2 align-items-start">
-            <a asp-action="HojasControl" class="btn btn-outline-secondary">Listado</a>
-            <a asp-action="CapturarHCC" asp-route-id="@Model.PlantillaHCCID" asp-route-parteId="@Model.ParteID"
-               class="btn btn-primary">Nueva captura</a>
-        </div>
+<link rel="stylesheet" href="~/css/calidad-hcc-v2.css" asp-append-version="true" />
+<div class="hcc-page">
+    <section class="hcc-document-head">
+        <div class="hcc-doc-brand"><span class="hcc-doc-logo">NS</span><div><small>HOJA DE CONTROL DE CALIDAD</small><h1>@(string.IsNullOrWhiteSpace(Model.CodigoFormato) ? "GQ-F-CA01" : Model.CodigoFormato)</h1></div></div>
+        <div class="hcc-doc-version"><small>Versión</small><strong>@(string.IsNullOrWhiteSpace(Model.VersionFormato) ? "—" : Model.VersionFormato)</strong><span>@(Model.FechaModificacionFormato?.ToString("dd/MM/yyyy") ?? "Sin fecha")</span></div>
+    </section>
+    <div class="hcc-doc-actions"><a class="hcc-btn hcc-btn-light" asp-action="HojasControl"><i class="fa-solid fa-arrow-left"></i> Bandeja operativa</a><a class="hcc-btn hcc-btn-light" asp-action="HCCPlantillas"><i class="fa-solid fa-book-open"></i> Biblioteca</a></div>
+
+    <section class="hcc-tech-grid">
+        <div><small>Cliente</small><strong>@Model.Cliente</strong></div><div><small>No. de dibujo</small><strong>@Model.NumeroDibujo</strong></div><div><small>Proceso</small><strong>@Model.Proceso</strong></div>
+        <div><small>No. de parte</small><strong>@Model.NumeroParte</strong></div><div><small>No. HCC</small><strong>@Model.NumeroHCC</strong></div><div><small>Referencia plan de control</small><strong>@Model.ReferenciaPlanControl</strong></div>
+        <div><small>Descripción</small><strong>@(string.IsNullOrWhiteSpace(Model.Descripcion) ? Model.Designacion : Model.Descripcion)</strong></div><div><small>Código de resina</small><strong>@Model.CodigoResina</strong></div><div><small>Materia prima</small><strong>@Model.MateriaPrima</strong></div>
+        <div><small>Tiempo de secado</small><strong>@Model.TiempoSecadoTexto</strong></div><div><small>Cavidades/posiciones detectadas</small><strong>@(Model.CavidadesDisponibles.Any() ? string.Join(", ", Model.CavidadesDisponibles) : (Model.CavidadesDeclaradas?.ToString() ?? "—"))</strong></div><div><small>Nomenclatura</small><strong>✓ Aceptado · X Rechazado · NA No aplica</strong></div>
+    </section>
+
+    <section class="hcc-section-head"><div><span class="hcc-section-kicker">CARACTERÍSTICAS A VERIFICAR</span><h2>Dimensiones, criterios e instrumentos</h2></div><span class="hcc-count">@Model.Caracteristicas.Count características</span></section>
+    <div class="hcc-character-list">
+        @foreach (var c in Model.Caracteristicas)
+        {
+            <article class="hcc-character-card">
+                <div class="hcc-character-number">@c.Orden</div>
+                <div class="hcc-character-main"><div class="hcc-character-top"><span class="hcc-type">@c.TipoCaracteristica</span><h3>@c.Nombre</h3></div><p>@c.EspecificacionTexto</p><div class="hcc-spec-row"><span><small>Especificación</small><strong>@c.RangoTexto</strong></span><span><small>Instrumento / Gauge</small><strong>@(string.IsNullOrWhiteSpace(c.Instrumento) ? "Visual / según formato" : c.Instrumento)</strong></span><span><small>Cavidad / posición</small><strong>@(c.Cavidades.Any() ? string.Join(", ", c.Cavidades) : "Configuración de máquina")</strong></span></div></div>
+            </article>
+        }
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-md-3"><div class="card card-body h-100"><small>HCC</small><strong>@Model.NumeroHCC</strong><span>Rev. @Model.VersionFormato</span></div></div>
-        <div class="col-md-3"><div class="card card-body h-100"><small>Dibujo / Proceso</small><strong>@Model.NumeroDibujo</strong><span>@Model.Proceso</span></div></div>
-        <div class="col-md-3"><div class="card card-body h-100"><small>Materia prima</small><strong>@Model.CodigoResina</strong><span>@Model.MateriaPrima</span></div></div>
-        <div class="col-md-3"><div class="card card-body h-100"><small>Secado / Cavidades</small><strong>@Model.TiempoSecado</strong><span>@Model.Cavidades cavidades</span></div></div>
-    </div>
+    <section class="hcc-section-head"><div><span class="hcc-section-kicker">CHECKLIST</span><h2>Verificaciones complementarias</h2></div></section>
+    <div class="hcc-check-preview">@foreach(var k in Model.Checklist){<div><span>@k.Orden</span><strong>@k.Descripcion</strong><em>OK / NOK@(k.PermiteNA ? " / NA" : "")</em></div>}</div>
 
-    <div class="card mb-3">
-        <div class="card-header fw-bold">Características a verificar</div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>#</th><th>Tipo</th><th>Característica / especificación</th><th>Instrumento</th><th>Cavidades</th></tr></thead>
-                <tbody>
-                @foreach (var c in Model.Caracteristicas)
-                {
-                    <tr><td>@c.Orden</td><td>@c.TipoCaracteristica</td><td>@c.Nombre</td>
-                        <td>@c.Instrumento @if (!string.IsNullOrWhiteSpace(c.CodigoGauge)) { <span>(@c.CodigoGauge)</span> }</td>
-                        <td>@string.Join(", ", c.Cavidades)</td></tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header fw-bold">Checklist de liberación / monitoreo</div>
-        <div class="list-group list-group-flush">
-            @foreach (var x in Model.Checklist)
-            { <div class="list-group-item">@x.Orden. @x.Descripcion</div> }
-        </div>
-    </div>
+    <div class="hcc-source-note"><i class="fa-solid fa-database"></i><div><strong>Fuente técnica importada</strong><span>@Model.ArchivoOrigen · hoja @Model.HojaOrigen</span></div></div>
 </div>

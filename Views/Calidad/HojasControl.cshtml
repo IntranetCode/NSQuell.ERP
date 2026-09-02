@@ -1,73 +1,125 @@
-@model ERP.NSQuell.Models.ViewModels.CalidadHCCIndexViewModel
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCBandejaViewModel
 @{
+    Layout = "_Layout";
     ViewData["Title"] = "Hojas de Control de Calidad";
 }
-<div class="container-fluid py-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+<link rel="stylesheet" href="~/css/calidad-hcc-v2.css" asp-append-version="true" />
+
+<div class="hcc-page">
+    <section class="hcc-hero">
         <div>
-            <h1 class="h3 fw-bold mb-1">Hojas de Control de Calidad</h1>
-            <div class="text-secondary">Plantillas HCC vinculadas a cada número de parte del ERP.</div>
+            <div class="hcc-eyebrow"><i class="fa-solid fa-ruler-combined"></i> CALIDAD · CONTROL DE PROCESO</div>
+            <h1>Hojas de Control de Calidad</h1>
+            <p>La bandeja se genera automáticamente desde Producción y Calidad. Cada arranque, cambio de producción, cambio de turno o reliberación queda ligado a su OF, pieza, máquina y formato HCC vigente.</p>
+            <div class="hcc-hero-actions">
+                <a class="hcc-btn hcc-btn-light" asp-action="HCCPlantillas"><i class="fa-solid fa-book-open"></i> Biblioteca técnica</a>
+                <a class="hcc-btn hcc-btn-ghost" asp-controller="Calidad" asp-action="Index"><i class="fa-solid fa-arrow-left"></i> Bandeja de Calidad</a>
+            </div>
         </div>
-        <a asp-action="Index" class="btn btn-outline-secondary">Volver a Calidad</a>
-    </div>
+        <div class="hcc-hero-mark">
+            <span>HCC</span>
+            <small>3 tiros · dimensiones · cavidades</small>
+        </div>
+    </section>
 
-    <form method="get" class="card card-body mb-3">
-        <div class="input-group">
-            <input name="busqueda" value="@Model.Busqueda" class="form-control"
-                   placeholder="Número de parte, referencia SAP, designación o cliente" />
-            <button class="btn btn-primary" type="submit">Buscar</button>
-            <a asp-action="HojasControl" class="btn btn-outline-secondary">Limpiar</a>
-        </div>
-    </form>
+    @if (TempData["Error"] is string error)
+    {
+        <div class="hcc-alert hcc-alert-danger"><i class="fa-solid fa-triangle-exclamation"></i><span>@error</span></div>
+    }
+    @if (TempData["Mensaje"] is string mensaje)
+    {
+        <div class="hcc-alert hcc-alert-success"><i class="fa-solid fa-circle-check"></i><span>@mensaje</span></div>
+    }
+    @if (TempData["Info"] is string info)
+    {
+        <div class="hcc-alert hcc-alert-info"><i class="fa-solid fa-circle-info"></i><span>@info</span></div>
+    }
 
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Parte</th><th>Designación</th><th>Cliente</th><th>HCC / Revisión</th>
-                        <th>Contenido</th><th>Vínculo</th><th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                @foreach (var x in Model.Plantillas)
-                {
-                    <tr>
-                        <td>
-                            <strong>@x.NumeroParte</strong><br />
-                            @if (x.ParteActiva)
-                            { <span class="badge text-bg-success">Activa</span> }
-                            else
-                            { <span class="badge text-bg-secondary">Histórica/Inactiva</span> }
-                            @if (x.EsRelacionPrincipal)
-                            { <span class="badge text-bg-primary">Principal</span> }
-                        </td>
-                        <td>@x.Designacion</td>
-                        <td>@x.Cliente</td>
-                        <td>
-                            <strong>@x.NumeroHCC</strong><br />
-                            <small>Rev. @x.VersionFormato @x.FechaModificacionFormato?.ToString("yyyy-MM-dd")</small>
-                        </td>
-                        <td><small>@x.Caracteristicas características · @x.Checklist checklist</small></td>
-                        <td>
-                            <small>@x.MetodoMapeo</small>
-                            @if (x.ConfianzaMapeo.HasValue)
-                            { <div><span class="badge text-bg-info">@x.ConfianzaMapeo.Value.ToString("0.##")%</span></div> }
-                        </td>
-                        <td class="text-end text-nowrap">
-                            <a asp-action="HojaControl" asp-route-id="@x.PlantillaHCCID" asp-route-parteId="@x.ParteID"
-                               class="btn btn-sm btn-outline-primary">Ver</a>
-                            <a asp-action="CapturarHCC" asp-route-id="@x.PlantillaHCCID" asp-route-parteId="@x.ParteID"
-                               class="btn btn-sm btn-primary">Capturar</a>
-                        </td>
-                    </tr>
-                }
-                @if (!Model.Plantillas.Any())
-                {
-                    <tr><td colspan="7" class="text-center text-secondary py-5">No se encontraron HCC vinculadas.</td></tr>
-                }
-                </tbody>
-            </table>
+    <section class="hcc-kpis">
+        <article class="hcc-kpi hcc-kpi-pending"><div class="hcc-kpi-icon"><i class="fa-solid fa-clipboard-list"></i></div><div><small>Pendientes</small><strong>@Model.Pendientes</strong><span>HCC que requieren captura</span></div></article>
+        <article class="hcc-kpi hcc-kpi-ok"><div class="hcc-kpi-icon"><i class="fa-solid fa-check-double"></i></div><div><small>Completadas hoy</small><strong>@Model.CompletadasHoy</strong><span>Registros finalizados</span></div></article>
+        <article class="hcc-kpi hcc-kpi-warning"><div class="hcc-kpi-icon"><i class="fa-solid fa-link-slash"></i></div><div><small>Sin plantilla</small><strong>@Model.SinPlantilla</strong><span>Corridas que requieren vínculo técnico</span></div></article>
+    </section>
+
+    <section class="hcc-toolbar-card">
+        <form method="get" class="hcc-toolbar">
+            <div class="hcc-search"><i class="fa-solid fa-magnifying-glass"></i><input name="busqueda" value="@Model.Busqueda" placeholder="Buscar OF, parte, cliente, máquina o HCC..." /></div>
+            <select name="estado" class="hcc-select">
+                <option value="PENDIENTE" selected="@(Model.Estado == "PENDIENTE")">Pendientes</option>
+                <option value="COMPLETADA" selected="@(Model.Estado == "COMPLETADA")">Completadas</option>
+                <option value="TODOS" selected="@(Model.Estado == "TODOS")">Todos</option>
+            </select>
+            <button class="hcc-btn hcc-btn-primary" type="submit"><i class="fa-solid fa-filter"></i> Aplicar</button>
+            <a class="hcc-btn hcc-btn-light" asp-action="HojasControl"><i class="fa-solid fa-eraser"></i> Limpiar</a>
+        </form>
+    </section>
+
+    <section class="hcc-section-head">
+        <div><span class="hcc-section-kicker">TRABAJO OPERATIVO</span><h2>@(Model.Estado == "COMPLETADA" ? "Hojas completadas" : Model.Estado == "TODOS" ? "Todas las hojas" : "Hojas que debe atender Calidad")</h2></div>
+        <span class="hcc-count">@Model.TotalMostrados registro(s)</span>
+    </section>
+
+    @if (!Model.Requerimientos.Any())
+    {
+        <div class="hcc-empty"><i class="fa-regular fa-clipboard"></i><h3>No hay HCC en este filtro</h3><p>La bandeja se alimenta de los eventos de Producción y Calidad; no necesitas crear órdenes manuales.</p></div>
+    }
+    else
+    {
+        <div class="hcc-order-grid">
+            @foreach (var item in Model.Requerimientos)
+            {
+                var cls = item.TipoOrigen == "RELIBERACION" ? "relib" : item.TipoOrigen == "CAMBIO_TURNO" ? "turn" : "start";
+                <article class="hcc-order-card @cls">
+                    <div class="hcc-order-accent"></div>
+                    <div class="hcc-order-head">
+                        <div>
+                            <span class="hcc-event-pill"><i class="fa-solid @(item.TipoOrigen == "CAMBIO_TURNO" ? "fa-people-arrows-left-right" : item.TipoOrigen == "RELIBERACION" ? "fa-arrows-rotate" : "fa-play")"></i> @item.TipoOrigenTexto</span>
+                            <h3>@(string.IsNullOrWhiteSpace(item.OrdenFabricacion) ? "OF sin folio" : item.OrdenFabricacion)</h3>
+                            <p>@item.NumeroParte · @item.DescripcionParte</p>
+                        </div>
+                        <span class="hcc-status @(item.EstaPendiente ? "pending" : "done")">@(item.EstaPendiente ? "PENDIENTE" : "COMPLETADA")</span>
+                    </div>
+                    <div class="hcc-context-grid">
+                        <div><small>Cliente</small><strong>@(string.IsNullOrWhiteSpace(item.ClienteNombre) ? "—" : item.ClienteNombre)</strong></div>
+                        <div><small>Máquina</small><strong>@(string.IsNullOrWhiteSpace(item.MaquinaTexto) ? "—" : item.MaquinaTexto)</strong></div>
+                        <div><small>Turno</small><strong>@(string.IsNullOrWhiteSpace(item.Turno) ? "Automático / por evento" : item.Turno)</strong></div>
+                        <div><small>Operador</small><strong>@(string.IsNullOrWhiteSpace(item.OperadorTexto) ? "Pendiente de Producción" : item.OperadorTexto)</strong></div>
+                    </div>
+                    <div class="hcc-format-strip">
+                        <div><small>Formato</small><strong>@(string.IsNullOrWhiteSpace(item.NumeroHCC) ? "HCC vinculada" : item.NumeroHCC)</strong></div>
+                        <div><small>Versión</small><strong>@(string.IsNullOrWhiteSpace(item.VersionFormato) ? "—" : item.VersionFormato)</strong></div>
+                        <div><small>Control</small><strong>@item.Caracteristicas caract. · @item.ChecklistItems checks</strong></div>
+                        <div><small>Evento</small><strong>@item.EventoTexto</strong></div>
+                    </div>
+                    <div class="hcc-order-foot">
+                        <span><i class="fa-regular fa-clock"></i> @item.FechaHoraRequerida.ToString("dd/MM/yyyy HH:mm")</span>
+                        <div class="hcc-actions">
+                            <a class="hcc-btn hcc-btn-light hcc-btn-sm" asp-action="HojaControl" asp-route-id="@item.PlantillaHCCID" asp-route-parteId="@item.ParteID"><i class="fa-solid fa-file-lines"></i> Ver formato</a>
+                            @if (item.EstaPendiente)
+                            {
+                                <a class="hcc-btn hcc-btn-primary hcc-btn-sm" asp-action="CapturarHCC" asp-route-id="@item.RequerimientoHCCID"><i class="fa-solid fa-pen-to-square"></i> Capturar HCC</a>
+                            }
+                            else if (item.RegistroHCCID.HasValue)
+                            {
+                                <a class="hcc-btn hcc-btn-success hcc-btn-sm" asp-action="RegistroHCC" asp-route-id="@item.RegistroHCCID"><i class="fa-solid fa-eye"></i> Ver captura</a>
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
         </div>
-    </div>
+    }
+
+    @if (Model.InspeccionesSinPlantilla.Any())
+    {
+        <section class="hcc-warning-panel">
+            <div class="hcc-warning-title"><i class="fa-solid fa-triangle-exclamation"></i><div><strong>Corridas activas sin HCC vinculada</strong><span>No se generan órdenes hasta corregir la relación técnica de la pieza.</span></div></div>
+            <div class="hcc-warning-list">
+                @foreach (var x in Model.InspeccionesSinPlantilla)
+                {
+                    <div><strong>@x.OrdenFabricacion · @x.NumeroParte</strong><span>@x.ClienteNombre · @x.Maquina · @x.DescripcionParte</span></div>
+                }
+            </div>
+        </section>
+    }
 </div>

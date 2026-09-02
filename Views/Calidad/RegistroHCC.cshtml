@@ -1,0 +1,22 @@
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCRegistroDetalleViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = $"HCC #{Model.RegistroHCCID}";
+}
+<link rel="stylesheet" href="~/css/calidad-hcc-v2.css" asp-append-version="true" />
+<div class="hcc-page">
+    <section class="hcc-subhero"><div><span class="hcc-section-kicker">REGISTRO HCC #@Model.RegistroHCCID</span><h1>@Model.OrdenFabricacion · @Model.Plantilla.NumeroParte</h1><p>@Model.Plantilla.Descripcion</p></div><div class="hcc-result-big @(Model.ResultadoGeneral == "NOK" ? "nok" : "ok")"><small>RESULTADO</small><strong>@Model.ResultadoGeneral</strong></div></section>
+    <div class="hcc-doc-actions"><a class="hcc-btn hcc-btn-primary" asp-action="HojasControl"><i class="fa-solid fa-arrow-left"></i> Bandeja HCC</a><a class="hcc-btn hcc-btn-light" asp-action="HojaControl" asp-route-id="@Model.Plantilla.PlantillaHCCID" asp-route-parteId="@Model.Plantilla.ParteID">Ver plantilla</a></div>
+    <section class="hcc-mini-doc"><div><small>Fecha / hora</small><strong>@Model.Fecha.ToString("dd/MM/yyyy") @(Model.Hora?.ToString(@"hh\:mm") ?? "")</strong></div><div><small>Evento</small><strong>@Model.TipoEvento</strong></div><div><small>Máquina</small><strong>@Model.MaquinaTexto</strong></div><div><small>Turno</small><strong>@Model.Turno</strong></div><div><small>Operador</small><strong>@Model.OperadorTexto</strong></div><div><small>Auditor</small><strong>@Model.AuditorTexto</strong></div><div><small>Cavidades</small><strong>@Model.CavidadesConfiguradas</strong></div></section>
+    <section class="hcc-section-head"><div><span class="hcc-section-kicker">MEDICIONES</span><h2>Resultado por característica</h2></div></section>
+    <div class="hcc-measurement-stack">
+        @foreach(var car in Model.Plantilla.Caracteristicas)
+        {
+            var rows=Model.Mediciones.Where(x=>x.CaracteristicaHCCID==car.CaracteristicaHCCID).OrderBy(x=>x.NumeroCavidad).ThenBy(x=>x.NumeroTiro).ToList();
+            if(!rows.Any()){continue;}
+            <article class="hcc-measure-card"><header><div class="hcc-measure-title"><span class="hcc-type">@car.TipoCaracteristica</span><div><h3>@car.Nombre</h3><p>@car.RangoTexto · @car.Instrumento</p></div></div></header><div class="hcc-measure-table-wrap"><table class="hcc-measure-table"><thead><tr><th>Cavidad</th><th>Tiro 1</th><th>Tiro 2</th><th>Tiro 3</th></tr></thead><tbody>@foreach(var cav in rows.Select(x=>x.NumeroCavidad).Distinct()){<tr><th><span>@cav</span></th>@foreach(var tiro in Enumerable.Range(1,3)){var m=rows.FirstOrDefault(x=>x.NumeroCavidad==cav&&x.NumeroTiro==tiro);<td><div class="hcc-saved-value @(m?.Resultado?.ToLowerInvariant())"><strong>@(m?.ValorNumerico?.ToString("0.######") ?? m?.ValorTexto ?? "—")</strong><span>@(m?.Resultado ?? "—")</span></div></td>}</tr>}</tbody></table></div></article>
+        }
+    </div>
+    <section class="hcc-check-card"><div class="hcc-config-head"><div><span class="hcc-step">✓</span><div><h2>Checklist registrado</h2></div></div></div><div class="hcc-check-grid">@foreach(var item in Model.Plantilla.Checklist){var r=Model.Checklist.FirstOrDefault(x=>x.ChecklistHCCID==item.ChecklistHCCID);<div class="hcc-check-row"><div><span>@item.Orden</span><strong>@item.Descripcion</strong></div><span class="hcc-status @((r?.Resultado)=="NOK"?"danger":"done")">@(r?.Resultado ?? "—")</span></div>}</div></section>
+    @if(!string.IsNullOrWhiteSpace(Model.Observaciones)){<section class="hcc-observation-card"><div><span class="hcc-step"><i class="fa-regular fa-note-sticky"></i></span><div><h2>Observaciones</h2><p>@Model.Observaciones</p></div></div></section>}
+</div>

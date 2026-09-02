@@ -1754,10 +1754,10 @@ ORDER BY
                         .Select(char.ToUpperInvariant)
                         .ToArray());
 
-            var numeroOFClave = ClaveAlfanumerica(numeroOF);
-
-            if (numeroOFClave.StartsWith("OF", StringComparison.Ordinal))
-                numeroOFClave = numeroOFClave[2..];
+            // NSQ_CALIDAD_OF_CANONICA_V1
+            var numeroOFClave =
+                AlmacenPTCodigoBarrasService.ObtenerClaveNumeroOF(
+                    numeroOF);
 
             var numeroParteClave =
                 ClaveAlfanumerica(numeroParte);

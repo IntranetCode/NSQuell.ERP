@@ -237,6 +237,19 @@ ORDER BY
 
                 foreach (var controller in controllers)
                 {
+                    // NSQ_NAV_EXACT_OWNER_V5_ENRICH
+                    // Si dos menus del mismo departamento comparten controlador
+                    // (p.ej. Calidad y Hojas de Control), no mezclar sus acciones.
+                    var explicitOwners = group.Menus.Count(candidate =>
+                        candidate.SubMenus.Any(s =>
+                            string.Equals(
+                                ControllerFromUrl(s.Url),
+                                controller,
+                                StringComparison.OrdinalIgnoreCase)));
+
+                    if (explicitOwners > 1)
+                        continue;
+
                     var viewDirectory = Path.Combine(
                         _environment.ContentRootPath,
                         "Views",
@@ -497,21 +510,25 @@ ORDER BY
     }
 
     // NSQ_GLOBAL_NAV_V4_3_HOMEURL
+    // NSQ_NAV_EXACT_OWNER_V5
     private static void ResolveNavigationState(GlobalDepartmentNavigationVm vm)
     {
         var currentPath = PathOnly(vm.CurrentPath);
         var currentController = vm.CurrentController.Trim();
 
-        // NSQ_PRODUCCION_CALENDARIO_NAV_STATE_V1_START
-        // Aunque el action vive en el controlador historico de Planeacion,
-        // /Produccion/Calendario pertenece visual y funcionalmente a Produccion.
-        if (currentPath.Equals(
+        var esCalendarioProduccion = currentPath.Equals(
             "/Produccion/Calendario",
-            StringComparison.OrdinalIgnoreCase))
-        {
+            StringComparison.OrdinalIgnoreCase);
+
+        if (esCalendarioProduccion)
             currentController = "Produccion";
-        }
-        // NSQ_PRODUCCION_CALENDARIO_NAV_STATE_V1_END
+
+        var esRutaHcc =
+            currentPath.Equals("/Calidad/HojasControl", StringComparison.OrdinalIgnoreCase) ||
+            currentPath.Equals("/Calidad/HCCPlantillas", StringComparison.OrdinalIgnoreCase) ||
+            currentPath.StartsWith("/Calidad/HojaControl", StringComparison.OrdinalIgnoreCase) ||
+            currentPath.StartsWith("/Calidad/CapturarHCC", StringComparison.OrdinalIgnoreCase) ||
+            currentPath.StartsWith("/Calidad/RegistroHCC", StringComparison.OrdinalIgnoreCase);
 
         int? currentGroupId = null;
         const string groupPrefix = "/Menu/Grupo/";
@@ -536,12 +553,39 @@ ORDER BY
                     sub.IsActive = !string.IsNullOrWhiteSpace(targetPath) &&
                                    string.Equals(targetPath, currentPath, StringComparison.OrdinalIgnoreCase);
                 }
+            }
 
-                menu.IsActive = menu.SubMenus.Any(x =>
-                    string.Equals(
-                        ControllerFromUrl(x.Url),
-                        currentController,
-                        StringComparison.OrdinalIgnoreCase));
+            var exactMenus = group.Menus
+                .Where(m => m.SubMenus.Any(s => s.IsActive))
+                .ToList();
+
+            var groupToken = NormalizeNavigationToken(group.Nombre);
+
+            foreach (var menu in group.Menus)
+            {
+                var menuToken = NormalizeNavigationToken(menu.Nombre);
+
+                if (esRutaHcc && groupToken.Equals("CALIDAD", StringComparison.OrdinalIgnoreCase))
+                {
+                    menu.IsActive = menuToken.Equals("HOJASDECONTROL", StringComparison.OrdinalIgnoreCase);
+                }
+                else if (esCalendarioProduccion && groupToken.Equals("PRODUCCION", StringComparison.OrdinalIgnoreCase))
+                {
+                    menu.IsActive = menu.SubMenus.Any(s =>
+                        PathOnly(s.Url).Equals("/Produccion/Calendario", StringComparison.OrdinalIgnoreCase));
+                }
+                else if (exactMenus.Count > 0)
+                {
+                    menu.IsActive = exactMenus.Contains(menu);
+                }
+                else
+                {
+                    menu.IsActive = menu.SubMenus.Any(x =>
+                        string.Equals(
+                            ControllerFromUrl(x.Url),
+                            currentController,
+                            StringComparison.OrdinalIgnoreCase));
+                }
 
                 menu.HomeUrl = ResolveLogicalMenuHomeUrl(
                     menu,
@@ -560,7 +604,6 @@ ORDER BY
                 currentGroupId == group.MenuGrupoID;
         }
     }
-
     private static string ResolveLogicalMenuHomeUrl(
         GlobalDepartmentNavigationMenuVm menu,
         GlobalDepartmentNavigationGroupVm group,

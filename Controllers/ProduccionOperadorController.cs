@@ -1479,8 +1479,14 @@ VALUES
                     TempData["Error"] = "Esta etiqueta ya fue escaneada anteriormente. No se generó una caja duplicada.";
                     return RedirectToAction(nameof(Cajas), new { id = vm.EjecucionProduccionID });
                 }
-                var ofEsperada = NormalizarValorEscaneo(contexto.NumeroOF);
-                var ofEscaneada = NormalizarValorEscaneo(parseado.NumeroOF);
+                // NSQ_PRODUCCION_OF_CANONICA_V1
+                var ofEsperada =
+                    AlmacenPTCodigoBarrasService.ObtenerClaveNumeroOF(
+                        contexto.NumeroOF);
+
+                var ofEscaneada =
+                    AlmacenPTCodigoBarrasService.ObtenerClaveNumeroOF(
+                        parseado.NumeroOF);
                 if (string.IsNullOrWhiteSpace(ofEsperada))
                 {
                     await tx.RollbackAsync();

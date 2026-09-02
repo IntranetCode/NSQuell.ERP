@@ -2199,16 +2199,13 @@ ORDER BY ParteID;";
         }
     }
     // ALMACEN_PT_OF_CANONICA_V10_0
+    // ALMACEN_PT_OF_CANONICA_V10_0
+    // NSQ_ALMACEN_PT_OF_COMPARTIDA_V1
     private static string NormalizarNumeroOFPT(string? numeroOF)
     {
-        if (string.IsNullOrWhiteSpace(numeroOF))
-            return string.Empty;
-
-        return numeroOF.Trim()
-            .Replace("'", "/", StringComparison.Ordinal)
-            .Replace("’", "/", StringComparison.Ordinal)
-            .Replace("´", "/", StringComparison.Ordinal)
-            .Replace("`", "/", StringComparison.Ordinal);
+        return
+            AlmacenPTCodigoBarrasService
+                .NormalizarNumeroOFEtiqueta(numeroOF);
     }
     private static string NormalizarNumeroParte(
         string? numeroParte)
