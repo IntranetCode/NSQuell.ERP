@@ -1,0 +1,58 @@
+@model ERP.NSQuell.Models.ViewModels.CalidadHCCPlantillaDetalleViewModel
+@{
+    ViewData["Title"] = "Hoja de Control " + Model.NumeroParte;
+}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+        <div>
+            <h1 class="h3 fw-bold mb-1">@Model.NumeroParte</h1>
+            <div class="text-secondary">@Model.Designacion · @Model.Cliente</div>
+            <div class="mt-2">
+                @if (Model.ParteActiva)
+                { <span class="badge text-bg-success">Parte activa</span> }
+                else
+                { <span class="badge text-bg-secondary">Parte histórica/inactiva</span> }
+                @if (Model.EsRelacionPrincipal)
+                { <span class="badge text-bg-primary">Relación principal</span> }
+                <span class="badge text-bg-info">@Model.MetodoMapeo @Model.ConfianzaMapeo?.ToString("0.##")%</span>
+            </div>
+        </div>
+        <div class="d-flex gap-2 align-items-start">
+            <a asp-action="HojasControl" class="btn btn-outline-secondary">Listado</a>
+            <a asp-action="CapturarHCC" asp-route-id="@Model.PlantillaHCCID" asp-route-parteId="@Model.ParteID"
+               class="btn btn-primary">Nueva captura</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card card-body h-100"><small>HCC</small><strong>@Model.NumeroHCC</strong><span>Rev. @Model.VersionFormato</span></div></div>
+        <div class="col-md-3"><div class="card card-body h-100"><small>Dibujo / Proceso</small><strong>@Model.NumeroDibujo</strong><span>@Model.Proceso</span></div></div>
+        <div class="col-md-3"><div class="card card-body h-100"><small>Materia prima</small><strong>@Model.CodigoResina</strong><span>@Model.MateriaPrima</span></div></div>
+        <div class="col-md-3"><div class="card card-body h-100"><small>Secado / Cavidades</small><strong>@Model.TiempoSecado</strong><span>@Model.Cavidades cavidades</span></div></div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header fw-bold">Características a verificar</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>#</th><th>Tipo</th><th>Característica / especificación</th><th>Instrumento</th><th>Cavidades</th></tr></thead>
+                <tbody>
+                @foreach (var c in Model.Caracteristicas)
+                {
+                    <tr><td>@c.Orden</td><td>@c.TipoCaracteristica</td><td>@c.Nombre</td>
+                        <td>@c.Instrumento @if (!string.IsNullOrWhiteSpace(c.CodigoGauge)) { <span>(@c.CodigoGauge)</span> }</td>
+                        <td>@string.Join(", ", c.Cavidades)</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header fw-bold">Checklist de liberación / monitoreo</div>
+        <div class="list-group list-group-flush">
+            @foreach (var x in Model.Checklist)
+            { <div class="list-group-item">@x.Orden. @x.Descripcion</div> }
+        </div>
+    </div>
+</div>
