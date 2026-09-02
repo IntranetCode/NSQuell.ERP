@@ -987,25 +987,101 @@
                                                     </div>
                                                 </td>
 
-                                                <td>
-                                                    <div class="movement-reason">
-                                                        @(string.IsNullOrWhiteSpace(movimiento.Motivo)
-                                                                                                    ? "-"
-                                                                                                    : movimiento.Motivo)
-                                                                                                                    </div>
-                                                                                                                </td>
+                                                    <td>
+                                                        <div class="movement-reason">
+                                                            @if (movimiento.EsCorreccionProduccion)
+                                                            {
+                                                                <div>
+                                                                    @(string.IsNullOrWhiteSpace(movimiento.AjusteMotivo)
+                                                                                                                    ? movimiento.Motivo
+                                                                                                                    : movimiento.AjusteMotivo)
+                                            </div>
 
-                                                <td>
-                                                    <div class="movement-reference"
-                                                         title="@movimiento.ReferenciaEvento">
-                                                        @(string.IsNullOrWhiteSpace(movimiento.ReferenciaEvento)
-                                                                                                    ? "-"
-                                                                                                    : movimiento.ReferenciaEvento)
-                                        </div>
-                                    </td>
+                                            @if (!string.IsNullOrWhiteSpace(movimiento.UsuarioAjusteNombre) ||
+                                                                                        movimiento.FechaAjuste.HasValue)
+                                                                {
+                                                                    <small class="d-block mt-1 text-secondary">
+                                                                        <i class="bi bi-person-check me-1"></i>
+                                                                        @(string.IsNullOrWhiteSpace(movimiento.UsuarioAjusteNombre)
+                                                                                                                        ? "Producción"
+                                                                                                                        : movimiento.UsuarioAjusteNombre)
+
+                                                @if (movimiento.FechaAjuste.HasValue)
+                                                                        {
+                                                                            <span> · @movimiento.FechaAjuste.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                                                        }
+                                                                    </small>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                @(string.IsNullOrWhiteSpace(movimiento.Motivo)
+                                                                                                            ? "-"
+                                                                                                            : movimiento.Motivo)
+                                                                                        }
+                                                    </div>
+                                                </td>
 
                                                     <td>
-                                        @if (movimiento.RegistroHoraID.HasValue)
+                                                        @if (movimiento.EsCorreccionProduccion &&
+                                                                                                movimiento.AjusteProduccionID.HasValue)
+                                                        {
+                                                            <div class="movement-reference"
+                                                                 title="@movimiento.ReferenciaEvento">
+                                                                Ajuste #@movimiento.AjusteProduccionID.Value
+                                                            </div>
+
+                                                            <small class="d-block text-secondary">
+                                                                Mov. bonus #@movimiento.MovimientoBonusID
+                                                            </small>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="movement-reference"
+                                                                 title="@movimiento.ReferenciaEvento">
+                                                                @(string.IsNullOrWhiteSpace(movimiento.ReferenciaEvento)
+                                                                                                            ? "-"
+                                                                                                            : movimiento.ReferenciaEvento)
+                                        </div>
+                                                                                }
+                                                    </td>
+
+                                                    <td>
+                                                        @if (movimiento.EsCorreccionProduccion &&
+                                                                                                movimiento.AjusteProduccionID.HasValue)
+                                                        {
+                                                            <div class="mb-1">
+                                                                <span class="badge bg-warning text-dark">
+                                                                    <i class="bi bi-pencil-square me-1"></i>
+                                                                    AJUSTE PRODUCCIÓN
+                                                                </span>
+                                                            </div>
+
+                                                            <div class="movement-classification flex-column align-items-start gap-1">
+                                                                @if (movimiento.AjusteOKAntes.HasValue &&
+                                                                                                            movimiento.AjusteOKDespues.HasValue)
+                                                                {
+                                                                    <span class="ok">
+                                                                        OK
+                                                                        @movimiento.AjusteOKAntes.Value.ToString("N0")
+                                                                        →
+                                                                        @movimiento.AjusteOKDespues.Value.ToString("N0")
+                                                                    </span>
+                                                                }
+
+                                                                @if (movimiento.AjusteScrapAntes.HasValue &&
+                                                                                                            movimiento.AjusteScrapDespues.HasValue)
+                                                                {
+                                                                    <span class="scrap">
+                                                                        SCR
+                                                                        @movimiento.AjusteScrapAntes.Value.ToString("N0")
+                                                                        →
+                                                                        @movimiento.AjusteScrapDespues.Value.ToString("N0")
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        else if (movimiento.RegistroHoraID.HasValue)
                                                         {
                                                             <div class="movement-classification">
                                                                 @if (movimiento.CantidadOK.HasValue)

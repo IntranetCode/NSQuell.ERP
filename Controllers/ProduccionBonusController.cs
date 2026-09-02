@@ -391,11 +391,7 @@ ORDER BY
             return lista;
         }
 
-        private static async Task<List<ProduccionBonusMovimientoDetalleVm>> ObtenerMovimientosOperadorSemanaAsync(
-            int operadorId,
-            DateTime semanaInicio,
-            DateTime semanaFinExclusiva,
-            SqlConnection cn)
+        private static async Task<List<ProduccionBonusMovimientoDetalleVm>> ObtenerMovimientosOperadorSemanaAsync(int operadorId, DateTime semanaInicio, DateTime semanaFinExclusiva, SqlConnection cn)
         {
             var lista = new List<ProduccionBonusMovimientoDetalleVm>();
 
@@ -403,13 +399,7 @@ ORDER BY
 SELECT
     m.MovimientoBonusID,
     m.OperadorID,
-    LTRIM(RTRIM(CONCAT(
-        ISNULL(p.Nombre,N''),
-        N' ',
-        ISNULL(p.ApellidoPaterno,N''),
-        N' ',
-        ISNULL(p.ApellidoMaterno,N'')
-    ))) AS OperadorNombre,
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS OperadorNombre,
     m.EjecucionProduccionID,
     m.RegistroHoraID,
     m.MonitoreoID,
@@ -430,13 +420,29 @@ SELECT
     rh.TipoBloque,
     rh.CantidadOK,
     rh.CantidadSospechosa,
-    rh.CantidadScrap
+    rh.CantidadScrap,
+    ap.AjusteProduccionID,
+    ap.OKAntes AS AjusteOKAntes,
+    ap.ScrapAntes AS AjusteScrapAntes,
+    ap.OKDespues AS AjusteOKDespues,
+    ap.ScrapDespues AS AjusteScrapDespues,
+    ap.Motivo AS AjusteMotivo,
+    ap.UsuarioAjusteID,
+    LTRIM(RTRIM(CONCAT(ISNULL(pa.Nombre,N''),N' ',ISNULL(pa.ApellidoPaterno,N''),N' ',ISNULL(pa.ApellidoMaterno,N'')))) AS UsuarioAjusteNombre,
+    ap.FechaAjuste
 FROM dbo.Produccion_BonusOperadorMovimientos m
 INNER JOIN dbo.Persona p
     ON p.PersonaID=m.OperadorID
 LEFT JOIN dbo.Produccion_RegistroHora rh
     ON rh.RegistroHoraID=m.RegistroHoraID
    AND rh.Activo=1
+LEFT JOIN dbo.Produccion_RegistroHoraAjustesProduccion ap
+    ON ap.MovimientoBonusID=m.MovimientoBonusID
+   AND ap.Activo=1
+LEFT JOIN dbo.Usuarios ua
+    ON ua.UsuarioID=ap.UsuarioAjusteID
+LEFT JOIN dbo.Persona pa
+    ON pa.PersonaID=ua.PersonaID
 WHERE m.OperadorID=@OperadorID
   AND m.Activo=1
   AND m.FechaMovimiento>=@SemanaInicio
@@ -454,6 +460,9 @@ ORDER BY
 
             while (await rd.ReadAsync())
             {
+                var usuarioAjusteId = NullableEntero(rd, "UsuarioAjusteID");
+                var usuarioAjusteNombre = TextoNullable(rd, "UsuarioAjusteNombre");
+
                 lista.Add(new ProduccionBonusMovimientoDetalleVm
                 {
                     MovimientoBonusID = Convert.ToInt64(rd["MovimientoBonusID"]),
@@ -479,13 +488,25 @@ ORDER BY
                     TipoBloque = TextoNullable(rd, "TipoBloque"),
                     CantidadOK = NullableEntero(rd, "CantidadOK"),
                     CantidadSospechosa = NullableEntero(rd, "CantidadSospechosa"),
-                    CantidadScrap = NullableEntero(rd, "CantidadScrap")
+                    CantidadScrap = NullableEntero(rd, "CantidadScrap"),
+                    AjusteProduccionID = rd["AjusteProduccionID"] == DBNull.Value ? null : Convert.ToInt64(rd["AjusteProduccionID"]),
+                    AjusteOKAntes = NullableEntero(rd, "AjusteOKAntes"),
+                    AjusteScrapAntes = NullableEntero(rd, "AjusteScrapAntes"),
+                    AjusteOKDespues = NullableEntero(rd, "AjusteOKDespues"),
+                    AjusteScrapDespues = NullableEntero(rd, "AjusteScrapDespues"),
+                    AjusteMotivo = TextoNullable(rd, "AjusteMotivo"),
+                    UsuarioAjusteID = usuarioAjusteId,
+                    UsuarioAjusteNombre = usuarioAjusteId.HasValue
+                        ? string.IsNullOrWhiteSpace(usuarioAjusteNombre)
+                            ? $"Usuario #{usuarioAjusteId.Value}"
+                            : usuarioAjusteNombre
+                        : null,
+                    FechaAjuste = NullableFecha(rd, "FechaAjuste")
                 });
             }
 
             return lista;
         }
-
         private static async Task<string?> ObtenerNombreOperadorAsync(int operadorId, SqlConnection cn)
         {
             if (operadorId <= 0) return null;

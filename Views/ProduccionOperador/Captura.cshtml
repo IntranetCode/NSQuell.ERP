@@ -2,7 +2,7 @@
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     var planeada = Model.CantidadPlaneada ?? 0;
-    var totalCapturado = Model.CantidadOKTotal + Model.CantidadSospechosaTotal + Model.CantidadScrapTotal;
+    var totalCapturado = Model.CantidadOKTotal + Model.CantidadScrapTotal;
     var pendiente = Math.Max(0, planeada - Model.CantidadOKTotal);
     var avance = planeada > 0 ? Math.Min(100m, Math.Round(Model.CantidadOKTotal * 100m / planeada, 2)) : 0m;
     var horas = Model.HorasCaptura?.OrderBy(x => x.NumeroHora).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
@@ -589,7 +589,7 @@
 
         .modal-grid {
             display: grid;
-            grid-template-columns: repeat(3,minmax(0,1fr));
+            grid-template-columns: repeat(2,minmax(0,1fr));
             gap: 10px
         }
 
@@ -650,10 +650,10 @@
             color: #067647
         }
 
-        .ok-mode-badge.manual {
-            background: #fff7ed;
-            color: #b54708
-        }
+            .ok-mode-badge.manual {
+                background: #fff7ed;
+                color: #b54708
+            }
 
         .btn-ok-auto {
             border: 0;
@@ -679,19 +679,19 @@
             text-align: center
         }
 
-        .physical-card .k {
-            color: var(--muted);
-            font-size: .66rem;
-            font-weight: 900;
-            text-transform: uppercase
-        }
+            .physical-card .k {
+                color: var(--muted);
+                font-size: .66rem;
+                font-weight: 900;
+                text-transform: uppercase
+            }
 
-        .physical-card .v {
-            margin-top: 3px;
-            color: var(--blue-dark);
-            font-size: 1.15rem;
-            font-weight: 950
-        }
+            .physical-card .v {
+                margin-top: 3px;
+                color: var(--blue-dark);
+                font-size: 1.15rem;
+                font-weight: 950
+            }
 
         .classification-feedback {
             border-radius: 13px;
@@ -704,17 +704,17 @@
             color: #475467
         }
 
-        .classification-feedback.ok {
-            background: #ecfdf3;
-            border-color: #abefc6;
-            color: #067647
-        }
+            .classification-feedback.ok {
+                background: #ecfdf3;
+                border-color: #abefc6;
+                color: #067647
+            }
 
-        .classification-feedback.warning {
-            background: #fffcf5;
-            border-color: #fedf89;
-            color: #93370d
-        }
+            .classification-feedback.warning {
+                background: #fffcf5;
+                border-color: #fedf89;
+                color: #93370d
+            }
 
         .defect-panel {
             border: 1px solid #fda29b;
@@ -757,11 +757,11 @@
             white-space: nowrap;
         }
 
-        .defect-counter.ok {
-            border-color: #abefc6;
-            background: #ecfdf3;
-            color: #067647;
-        }
+            .defect-counter.ok {
+                border-color: #abefc6;
+                background: #ecfdf3;
+                color: #067647;
+            }
 
         .defect-list {
             display: grid;
@@ -779,19 +779,19 @@
             background: #fff;
         }
 
-        .defect-row .form-label {
-            margin-bottom: 4px;
-            color: #7a271a;
-            font-size: .7rem;
-            font-weight: 900;
-            text-transform: uppercase;
-        }
+            .defect-row .form-label {
+                margin-bottom: 4px;
+                color: #7a271a;
+                font-size: .7rem;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
 
-        .defect-row .form-select,
-        .defect-row .form-control {
-            min-height: 44px;
-            font-weight: 750;
-        }
+            .defect-row .form-select,
+            .defect-row .form-control {
+                min-height: 44px;
+                font-weight: 750;
+            }
 
         .defect-observation {
             grid-column: 1 / -1;
@@ -809,10 +809,10 @@
             justify-content: center;
         }
 
-        .btn-remove-defect:hover {
-            background: #fef3f2;
-            color: #912018;
-        }
+            .btn-remove-defect:hover {
+                background: #fef3f2;
+                color: #912018;
+            }
 
         .defect-footer {
             display: flex;
@@ -833,14 +833,14 @@
             font-weight: 900;
         }
 
-        .btn-add-defect:hover:not(:disabled) {
-            background: #fef3f2;
-        }
+            .btn-add-defect:hover:not(:disabled) {
+                background: #fef3f2;
+            }
 
-        .btn-add-defect:disabled {
-            opacity: .5;
-            cursor: not-allowed;
-        }
+            .btn-add-defect:disabled {
+                opacity: .5;
+                cursor: not-allowed;
+            }
 
         .defect-feedback {
             flex: 1;
@@ -853,15 +853,15 @@
             font-weight: 850;
         }
 
-        .defect-feedback.ok {
-            background: #ecfdf3;
-            color: #067647;
-        }
+            .defect-feedback.ok {
+                background: #ecfdf3;
+                color: #067647;
+            }
 
-        .defect-feedback.warning {
-            background: #fffcf5;
-            color: #93370d;
-        }
+            .defect-feedback.warning {
+                background: #fffcf5;
+                color: #93370d;
+            }
 
         @@media(max-width:650px) {
             .defect-row {
@@ -1432,20 +1432,20 @@
             box-shadow: 0 12px 30px rgba(15,23,42,.07);
         }
 
-        .extra-panel.ready {
-            border-color: #93c5fd;
-            background: linear-gradient(180deg,#f8fbff,#eef6ff);
-        }
+            .extra-panel.ready {
+                border-color: #93c5fd;
+                background: linear-gradient(180deg,#f8fbff,#eef6ff);
+            }
 
-        .extra-panel.active {
-            border-color: #a7f3d0;
-            background: linear-gradient(180deg,#f7fef9,#ecfdf3);
-        }
+            .extra-panel.active {
+                border-color: #a7f3d0;
+                background: linear-gradient(180deg,#f7fef9,#ecfdf3);
+            }
 
-        .extra-panel.waiting {
-            border-color: #e4e7ec;
-            background: #f8fafc;
-        }
+            .extra-panel.waiting {
+                border-color: #e4e7ec;
+                background: #f8fafc;
+            }
 
         .extra-head {
             padding: 17px 18px;
@@ -1485,10 +1485,10 @@
             box-shadow: 0 8px 18px rgba(0,74,173,.18);
         }
 
-        .btn-extra-start:hover {
-            background: #00347a;
-            color: #fff;
-        }
+            .btn-extra-start:hover {
+                background: #00347a;
+                color: #fff;
+            }
 
         .extra-body {
             padding: 17px 18px;
@@ -1509,9 +1509,9 @@
             text-align: center;
         }
 
-        .extra-timer-card.cut {
-            border-color: #bfdbfe;
-        }
+            .extra-timer-card.cut {
+                border-color: #bfdbfe;
+            }
 
         .extra-timer-label {
             color: var(--muted);
@@ -1545,9 +1545,9 @@
             color: #475467;
         }
 
-        .extra-cut-status.overdue {
-            color: #b42318;
-        }
+            .extra-cut-status.overdue {
+                color: #b42318;
+            }
 
         .extra-meta-grid {
             display: grid;
@@ -1562,19 +1562,19 @@
             padding: 10px 11px;
         }
 
-        .extra-meta-card .k {
-            color: var(--muted);
-            font-size: .66rem;
-            text-transform: uppercase;
-            font-weight: 900;
-        }
+            .extra-meta-card .k {
+                color: var(--muted);
+                font-size: .66rem;
+                text-transform: uppercase;
+                font-weight: 900;
+            }
 
-        .extra-meta-card .v {
-            color: var(--blue-dark);
-            margin-top: 3px;
-            font-size: .96rem;
-            font-weight: 950;
-        }
+            .extra-meta-card .v {
+                color: var(--blue-dark);
+                margin-top: 3px;
+                font-size: .96rem;
+                font-weight: 950;
+            }
 
         .extra-running-badge {
             display: inline-flex;
@@ -1625,15 +1625,15 @@
             box-shadow: 0 8px 18px rgba(0,74,173,.18);
         }
 
-        .btn-extra-cut.ready {
-            animation: extraCutPulse 1.4s infinite;
-        }
+            .btn-extra-cut.ready {
+                animation: extraCutPulse 1.4s infinite;
+            }
 
-        .btn-extra-cut:hover:not(:disabled) {
-            color: #fff;
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(0,74,173,.24);
-        }
+            .btn-extra-cut:hover:not(:disabled) {
+                color: #fff;
+                transform: translateY(-1px);
+                box-shadow: 0 10px 22px rgba(0,74,173,.24);
+            }
 
         .btn-extra-finish {
             background: #fff;
@@ -1641,18 +1641,18 @@
             border: 1px solid #fda29b;
         }
 
-        .btn-extra-finish:hover:not(:disabled) {
-            background: #fef3f2;
-            color: #912018;
-            transform: translateY(-1px);
-        }
+            .btn-extra-finish:hover:not(:disabled) {
+                background: #fef3f2;
+                color: #912018;
+                transform: translateY(-1px);
+            }
 
-        .btn-extra-cut:disabled,
-        .btn-extra-finish:disabled {
-            opacity: .5;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
+            .btn-extra-cut:disabled,
+            .btn-extra-finish:disabled {
+                opacity: .5;
+                cursor: not-allowed;
+                box-shadow: none;
+            }
 
         .extra-due-alert {
             margin-top: 14px;
@@ -1673,20 +1673,32 @@
             color: #1d4ed8;
         }
 
-        .extra-mode-help.finish {
-            border-color: #fedf89;
-            background: #fffcf5;
-            color: #93370d;
-        }
+            .extra-mode-help.finish {
+                border-color: #fedf89;
+                background: #fffcf5;
+                color: #93370d;
+            }
 
         @@keyframes extraCutPulse {
-            0%,100% { box-shadow: 0 8px 18px rgba(0,74,173,.18); }
-            50% { box-shadow: 0 0 0 6px rgba(0,74,173,.10),0 10px 24px rgba(0,74,173,.25); }
+            0%, 100% {
+                box-shadow: 0 8px 18px rgba(0,74,173,.18);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(0,74,173,.10),0 10px 24px rgba(0,74,173,.25);
+            }
         }
 
         @@keyframes extraPulse {
-            0%,100% { opacity: .35; transform: scale(.85); }
-            50% { opacity: 1; transform: scale(1.15); }
+            0%, 100% {
+                opacity: .35;
+                transform: scale(.85);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.15);
+            }
         }
 
         .extra-waiting-message {
@@ -1706,26 +1718,26 @@
             border-collapse: collapse;
         }
 
-        .extra-history-table th,
-        .extra-history-table td {
-            padding: 10px;
-            border-bottom: 1px solid var(--border);
-            vertical-align: middle;
-            font-size: .82rem;
-        }
+            .extra-history-table th,
+            .extra-history-table td {
+                padding: 10px;
+                border-bottom: 1px solid var(--border);
+                vertical-align: middle;
+                font-size: .82rem;
+            }
 
-        .extra-history-table th {
-            color: var(--muted);
-            text-transform: uppercase;
-            font-size: .68rem;
-            font-weight: 900;
-            white-space: nowrap;
-        }
+            .extra-history-table th {
+                color: var(--muted);
+                text-transform: uppercase;
+                font-size: .68rem;
+                font-weight: 900;
+                white-space: nowrap;
+            }
 
-        .extra-history-table td {
-            font-weight: 700;
-            color: #344054;
-        }
+            .extra-history-table td {
+                font-weight: 700;
+                color: #344054;
+            }
 
         .modal-extra .modal-header {
             background: linear-gradient(135deg,#00347a,#004aad);
@@ -1745,19 +1757,19 @@
             background: #f8fbff;
         }
 
-        .extra-start-card .k {
-            color: var(--muted);
-            font-size: .68rem;
-            text-transform: uppercase;
-            font-weight: 900;
-        }
+            .extra-start-card .k {
+                color: var(--muted);
+                font-size: .68rem;
+                text-transform: uppercase;
+                font-weight: 900;
+            }
 
-        .extra-start-card .v {
-            margin-top: 3px;
-            color: var(--blue-dark);
-            font-weight: 950;
-            font-size: 1rem;
-        }
+            .extra-start-card .v {
+                margin-top: 3px;
+                color: var(--blue-dark);
+                font-weight: 950;
+                font-size: 1rem;
+            }
 
         @@media(max-width:1100px) {
             .extra-meta-grid {
@@ -1950,7 +1962,7 @@
 
         <div class="summary">
             <div class="k">
-                OK acumulado
+                Verdes / OK acumulado
             </div>
 
             <div class="v text-success">
@@ -1968,32 +1980,21 @@
             </div>
 
             <div class="v @(pendiente > 0
-                                                                       ? "text-primary"
-                                                                       : "text-success")">
+                                                                                        ? "text-primary"
+                                                                                        : "text-success")">
                 @Numero(pendiente)
             </div>
 
             <div class="text-muted small">
                 @(pendiente > 0
-                                ? "Piezas OK por producir"
+                                ? "Piezas verdes / OK por producir"
                                 : "Meta alcanzada")
             </div>
         </div>
 
         <div class="summary">
             <div class="k">
-                Sospechosos
-            </div>
-
-            <div class="v text-warning">
-                @Numero(
-                                Model.CantidadSospechosaTotal)
-            </div>
-        </div>
-
-        <div class="summary">
-            <div class="k">
-                Scrap
+                Rojas / Scrap
             </div>
 
             <div class="v text-danger">
@@ -2061,7 +2062,7 @@
         <div class="summary objective-summary">
             <div class="k">Bonus provisional</div>
             <div class="v text-success">@bonusActual.ToString("N0")</div>
-            <div class="text-muted small">Piezas OK abonadas, sujetas a ajustes de Calidad</div>
+            <div class="text-muted small">Piezas verdes abonadas provisionalmente; cualquier ajuste posterior queda trazado.</div>
         </div>
 
     </section>
@@ -2151,7 +2152,7 @@
             else
             {
 
-                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual</strong>, <strong>Sospechosos</strong> y <strong>Scrap</strong>. El ERP calculará y propondrá automáticamente las piezas <strong>OK</strong>. Si reportas Scrap, aparecerá automáticamente la clasificación de defectos y deberás indicar por qué se retiró cada pieza antes de guardar.</div>
+                <div class="notice"><i class="fa-solid fa-circle-info me-1"></i>Captura el <strong>contador actual</strong> y las <strong>piezas rojas / Scrap</strong>. El ERP calcula automáticamente las <strong>piezas verdes / OK</strong> como producción física menos rojas. El operador no modifica manualmente las verdes. Si reportas rojas, aparecerá la clasificación de defectos antes de guardar.</div>
             }
 
             @if (horas.Count == 0)
@@ -2162,7 +2163,7 @@
             {
                 <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
                     <table class="hour-table">
-                        <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Contador</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Contador</th><th>Verdes / OK</th><th>Rojas / Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
                         <tbody>
                             @foreach (var fila in horasPendientesVisibles)
                             {
@@ -2174,8 +2175,7 @@
                                     <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
                                     <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
                                     <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
-                                    <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
-                                    <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
+                                    <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" inputmode="numeric" data-field="ok" readonly tabindex="-1" /></td>
                                     <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
                                     <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
                                     <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
@@ -2191,7 +2191,7 @@
                     <div class="collapse history-box" id="pendientesAdicionales">
                         <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
                             <table class="hour-table">
-                                <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Contador</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
+                                <thead><tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Contador</th><th>Verdes / OK</th><th>Rojas / Scrap</th><th>Observaciones</th><th>Estado</th><th>Acción</th></tr></thead>
                                 <tbody>
                                     @foreach (var fila in horasPendientesAdicionales)
                                     {
@@ -2203,8 +2203,7 @@
                                             <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
                                             <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">@(fila.ObjetivoBloque.HasValue && fila.ObjetivoHora.HasValue && fila.ObjetivoBloque.Value != fila.ObjetivoHora.Value ? "Ajustado al bloque" : "PZA objetivo")</span></td>
                                             <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
-                                            <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" inputmode="numeric" data-field="ok" @(editable ? "" : "disabled") /></td>
-                                            <td><input class="hour-input yellow empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="yellow" @(editable ? "" : "disabled") /></td>
+                                            <td><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" inputmode="numeric" data-field="ok" readonly tabindex="-1" /></td>
                                             <td><input class="hour-input scrap empty-number" type="number" min="0" value="" placeholder="0" inputmode="numeric" data-field="scrap" @(editable ? "" : "disabled") /></td>
                                             <td><input class="obs-input form-control" maxlength="500" placeholder="Opcional" data-field="obs" @(editable ? "" : "disabled") /></td>
                                             <td><span class="status-pill @EstadoClase(fila)">@EstadoTexto(fila)</span></td>
@@ -2238,9 +2237,8 @@
                                                     <span class="shift-operator">@Txt(turno.OperadorNombre)</span>
                                                     <span class="shift-range">@turno.FechaInicio.ToString("dd/MM/yyyy HH:mm") → @textoFinTurno</span>
                                                     <span class="shift-badges">
-                                                        <span class="shift-badge ok">OK @Numero(turno.CantidadOK)</span>
-                                                        <span class="shift-badge sos">SOS @Numero(turno.CantidadSospechosa)</span>
-                                                        <span class="shift-badge scrap">SCRAP @Numero(turno.CantidadScrap)</span>
+                                                        <span class="shift-badge ok">VERDES @Numero(turno.CantidadOK)</span>
+                                                        <span class="shift-badge scrap">ROJAS @Numero(turno.CantidadScrap)</span>
                                                         <span class="shift-badge goal">@turno.PorcentajeCumplimiento.ToString("0.#")%</span>
                                                     </span>
                                                 </div>
@@ -2258,7 +2256,7 @@
                                                 <div class="table-wrap">
                                                     <table class="hour-table">
                                                         <thead>
-                                                            <tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>OK</th><th>Sospechosos</th><th>Scrap</th><th>Cumplimiento</th><th>Observaciones</th><th>Estado</th></tr>
+                                                            <tr><th>Hora</th><th>Rango</th><th>Objetivo</th><th>Verdes / OK</th><th>Rojas / Scrap</th><th>Cumplimiento</th><th>Observaciones</th><th>Estado</th></tr>
                                                         </thead>
                                                         <tbody>
                                                             @for (var i = 0; i < horasTurno.Count; i++)
@@ -2273,7 +2271,6 @@
                                                                     <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
                                                                     <td class="objective-cell"><div class="objective-main">@((fila.ObjetivoBloque ?? fila.ObjetivoHora)?.ToString("N0") ?? "-")</div><span class="objective-sub">PZA</span></td>
                                                                     <td><span class="status-pill status-complete">@Numero(fila.CantidadOK)</span></td>
-                                                                    <td><span class="status-pill status-ready">@Numero(fila.CantidadSospechosa)</span></td>
                                                                     <td><span class="status-pill status-overdue">@Numero(fila.CantidadScrap)</span></td>
                                                                     <td>
                                                                         @if (!fila.ObjetivoBloque.HasValue || fila.ObjetivoBloque.Value <= 0)
@@ -2350,7 +2347,7 @@
                         <div class="turn-change-meta">
                             <div class="turn-card"><div class="label">Fecha entrega</div><div class="value">@cambio.FechaEntrega.ToString("dd/MM/yyyy HH:mm")</div></div>
                             <div class="turn-card"><div class="label">Fecha recepción</div><div class="value">@(cambio.FechaRecepcion.HasValue? cambio.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</div></div>
-                            <div class="turn-card"><div class="label">Producción entregada</div><div class="value">OK @Numero(cambio.CantidadOK)</div><div class="small text-muted">SOS @Numero(cambio.CantidadSospechosa) · Scrap @Numero(cambio.CantidadScrap)</div></div>
+                            <div class="turn-card"><div class="label">Producción entregada</div><div class="value text-success">Verdes @Numero(cambio.CantidadOK)</div><div class="small text-danger">Rojas @Numero(cambio.CantidadScrap)</div></div>
                             <div class="turn-card"><div class="label">Cajas</div><div class="value">@Numero(cambio.TotalCajasEntregadas) / @Numero(cambio.TotalCajas)</div><div class="small text-muted">Pendientes @Numero(cambio.TotalCajasPendientes)</div></div>
                         </div>
                         <div class="turn-change-obs">
@@ -2444,8 +2441,8 @@
             </div>
             <div class="extra-body">
                 <div class="extra-start-summary mb-0">
-                    <div class="extra-start-card"><div class="k">Último contador</div><div class="v">@(ultimoContador.HasValue ? ultimoContador.Value.ToString("N0") : "-")</div></div>
-                    <div class="extra-start-card"><div class="k">Cavidades en uso</div><div class="v">@(cavidadesEnUso.HasValue ? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
+                    <div class="extra-start-card"><div class="k">Último contador</div><div class="v">@(ultimoContador.HasValue? ultimoContador.Value.ToString("N0") : "-")</div></div>
+                    <div class="extra-start-card"><div class="k">Cavidades en uso</div><div class="v">@(cavidadesEnUso.HasValue? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
                     <div class="extra-start-card"><div class="k">Ciclo vigente</div><div class="v">@(cicloEnUso.HasValue ? $"{cicloEnUso.Value:0.##} s" : "-")</div></div>
                 </div>
             </div>
@@ -2478,7 +2475,7 @@
                                     <td>@Txt(sesion.OperadorInicioNombre)</td>
                                     <td>@sesion.MotivoNombre</td>
                                     <td>@sesion.ContadorInicio.ToString("N0")</td>
-                                    <td>@(sesion.ContadorFin.HasValue ? sesion.ContadorFin.Value.ToString("N0") : "-")</td>
+                                    <td>@(sesion.ContadorFin.HasValue? sesion.ContadorFin.Value.ToString("N0") : "-")</td>
                                     <td>@(sesion.Cortes?.Count ?? 0)</td>
                                     <td><span class="status-pill @claseEstadoExtra">@sesion.EstadoNombre</span></td>
                                 </tr>
@@ -2504,8 +2501,8 @@
                 <div class="modal-body p-4">
                     <div class="alert alert-primary rounded-4 fw-semibold"><i class="fa-solid fa-circle-info me-1"></i>El ERP tomará automáticamente la última lectura del contador como base. No necesitas reiniciar físicamente el contador de la máquina.</div>
                     <div class="extra-start-summary">
-                        <div class="extra-start-card"><div class="k">Contador base</div><div class="v">@(ultimoContador.HasValue ? ultimoContador.Value.ToString("N0") : "-")</div></div>
-                        <div class="extra-start-card"><div class="k">Cavidades</div><div class="v">@(cavidadesEnUso.HasValue ? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
+                        <div class="extra-start-card"><div class="k">Contador base</div><div class="v">@(ultimoContador.HasValue? ultimoContador.Value.ToString("N0") : "-")</div></div>
+                        <div class="extra-start-card"><div class="k">Cavidades</div><div class="v">@(cavidadesEnUso.HasValue? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
                         <div class="extra-start-card"><div class="k">Ciclo</div><div class="v">@(cicloEnUso.HasValue ? $"{cicloEnUso.Value:0.##} s" : "-")</div></div>
                     </div>
                     <div id="mensajeTiempoExtra" class="alert alert-danger rounded-4 fw-bold d-none" role="alert"></div>
@@ -2549,7 +2546,6 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="TiempoExtraID" value="@tiempoExtraActivo.TiempoExtraID" />
                     <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
-                    <input type="hidden" name="OkModificadoManual" id="extraOkModificadoManual" value="false" />
                     <input type="hidden" name="FinalizarTiempoExtra" id="extraFinalizarTiempoExtra" value="false" />
                     <div class="modal-body p-4">
                         <div class="extra-mode-help mb-3" id="extraModoAyuda"><i class="fa-solid fa-circle-info me-1"></i>Este corte se guarda y el siguiente bloque de tiempo extra comienza automáticamente desde la lectura que captures.</div>
@@ -2573,31 +2569,30 @@
                                     <div class="small text-muted mt-1">Último corte: @tiempoExtraActivo.FechaHoraUltimoCorte.ToString("dd/MM/yyyy HH:mm")</div>
                                 </div>
                             </div>
-                            <div class="counter-feedback" id="extraContadorFeedback">Captura el contador actual para obtener producción física, objetivo proporcional y OK sugerido.</div>
+                            <div class="counter-feedback" id="extraContadorFeedback">Captura el contador actual y las piezas rojas. El ERP calculará automáticamente las piezas verdes / OK.</div>
                         </div>
                         <div class="extra-meta-grid mb-3" id="extraResumenPreview">
                             <div class="extra-meta-card"><div class="k">Producción física</div><div class="v" id="extraPiezasFisicas">-</div></div>
-                            <div class="extra-meta-card"><div class="k">OK sugerido</div><div class="v text-success" id="extraOKSugerido">-</div></div>
+                            <div class="extra-meta-card"><div class="k">Verdes / OK</div><div class="v text-success" id="extraOKSugerido">-</div></div>
                             <div class="extra-meta-card"><div class="k">Objetivo bloque</div><div class="v" id="extraObjetivoBloque">-</div></div>
                             <div class="extra-meta-card"><div class="k">Cumplimiento</div><div class="v" id="extraCumplimiento">-</div></div>
                             <div class="extra-meta-card"><div class="k">Bonus provisional</div><div class="v text-success" id="extraBonusInicial">-</div></div>
                         </div>
                         <div class="modal-grid mb-3">
-                            <div class="ok-capture-wrap">
-                                <div class="modal-label text-success">OK</div>
-                                <input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="extraOK" class="modal-qty ok empty-number" inputmode="numeric" autocomplete="off" />
-                                <div class="ok-mode-row">
-                                    <span class="ok-mode-badge" id="extraOKModo"><i class="fa-solid fa-wand-magic-sparkles"></i>Automático</span>
-                                    <button type="button" class="btn-ok-auto d-none" id="btnRestaurarOKAutomaticoExtra"><i class="fa-solid fa-rotate-left me-1"></i>Usar cálculo automático</button>
-                                </div>
+                            <div>
+                                <div class="modal-label text-success">Verdes / OK</div>
+                                <input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="extraOK" class="modal-qty ok empty-number" inputmode="numeric" autocomplete="off" readonly tabindex="-1" />
+                                <div class="ok-mode-row"><span class="ok-mode-badge"><i class="fa-solid fa-wand-magic-sparkles"></i>Calculado automáticamente</span></div>
                             </div>
-                            <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="0" placeholder="0" name="CantidadSospechosa" id="extraYellow" class="modal-qty yellow empty-number" inputmode="numeric" autocomplete="off" /></div>
-                            <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="extraScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div>
+                            <div>
+                                <div class="modal-label text-danger">Rojas / Scrap</div>
+                                <input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="extraScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" />
+                            </div>
                         </div>
                         <div class="defect-panel d-none" id="panelDefectosExtra">
                             <div class="defect-head">
                                 <div>
-                                    <div class="defect-title"><i class="fa-solid fa-bug me-2"></i>Defecto del scrap <span class="text-danger">*</span></div>
+                                    <div class="defect-title"><i class="fa-solid fa-bug me-2"></i>Defecto de las piezas rojas / Scrap <span class="text-danger">*</span></div>
                                     <div class="defect-help">Si retiras piezas como scrap, indica por qué. Debes clasificar exactamente todas las piezas reportadas.</div>
                                 </div>
                                 <div class="defect-counter" id="contadorDefectosExtra">0 / 0 clasificadas</div>
@@ -2615,9 +2610,9 @@
                                 </div>
                             }
                         </div>
-                        <div class="classification-feedback" id="extraClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El ERP propondrá el OK como producción física menos Sospechosos y Scrap. Puedes ajustar el OK manualmente si existe una diferencia real y dejar la explicación en observaciones.</div>
+                        <div class="classification-feedback" id="extraClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El ERP calcula automáticamente: <strong>verdes / OK = producción física - rojas / Scrap</strong>. Las verdes no son editables por el operador.</div>
                         <label class="form-label fw-bold mt-3" for="extraObservaciones">Observaciones</label>
-                        <textarea name="Observaciones" id="extraObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Obligatorio si modificas el OK y la clasificación ya no coincide con la producción física, o si el contador no registra producción."></textarea>
+                        <textarea name="Observaciones" id="extraObservaciones" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Si el contador no registró producción, explica qué ocurrió."></textarea>
                     </div>
                     <div class="modal-footer border-0 px-4 pb-4">
                         <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
@@ -2667,21 +2662,15 @@
                             <div class="turn-person-name" id="turnOperadorSaliente">-</div>
                         </div>
                         <div class="row g-3 mb-3">
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <div class="turn-card h-100">
-                                    <div class="label">Producción OK</div>
+                                    <div class="label">Verdes / OK</div>
                                     <div class="value text-success" id="turnCantidadOK">0</div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <div class="turn-card h-100">
-                                    <div class="label">Sospechoso</div>
-                                    <div class="value text-warning" id="turnCantidadSospechosa">0</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="turn-card h-100">
-                                    <div class="label">Scrap</div>
+                                    <div class="label">Rojas / Scrap</div>
                                     <div class="value text-danger" id="turnCantidadScrap">0</div>
                                 </div>
                             </div>
@@ -2881,7 +2870,7 @@
                     <div class="modal-goal">
                         <div class="goal-label">Objetivo de este bloque</div>
                         <div class="goal-value"><span id="modalObjetivo">-</span> <small>PZA</small></div>
-                        <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura el contador para calcular la producción y sugerir las piezas OK.</div>
+                        <div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura el contador y las piezas rojas para calcular automáticamente las verdes / OK.</div>
                     </div>
 
                     <div class="counter-capture-card">
@@ -2910,22 +2899,21 @@
 
                     <div class="physical-summary" id="resumenFisicoHora">
                         <div class="physical-card"><div class="k">Producción física</div><div class="v" id="modalPiezasFisicas">-</div></div>
-                        <div class="physical-card"><div class="k">OK sugerido</div><div class="v text-success" id="modalOKSugerido">-</div></div>
+                        <div class="physical-card"><div class="k">Verdes / OK</div><div class="v text-success" id="modalOKSugerido">-</div></div>
                         <div class="physical-card"><div class="k">Min. productivos</div><div class="v" id="modalMinutosProductivos">-</div></div>
                         <div class="physical-card"><div class="k">Segmentos</div><div class="v" id="modalSegmentos">-</div></div>
                     </div>
 
                     <div class="modal-grid mb-3">
-                        <div class="ok-capture-wrap">
-                            <div class="modal-label text-success">OK</div>
-                            <input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" autocomplete="off" />
-                            <div class="ok-mode-row">
-                                <span class="ok-mode-badge" id="modalOKModo"><i class="fa-solid fa-wand-magic-sparkles"></i>Automático</span>
-                                <button type="button" class="btn-ok-auto d-none" id="btnRestaurarOKAutomatico"><i class="fa-solid fa-rotate-left me-1"></i>Usar cálculo automático</button>
-                            </div>
+                        <div>
+                            <div class="modal-label text-success">Verdes / OK</div>
+                            <input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" inputmode="numeric" autocomplete="off" readonly tabindex="-1" />
+                            <div class="ok-mode-row"><span class="ok-mode-badge"><i class="fa-solid fa-wand-magic-sparkles"></i>Calculado automáticamente</span></div>
                         </div>
-                        <div><div class="modal-label text-warning">Sospechosos</div><input type="number" min="0" value="0" placeholder="0" name="CantidadSospechosa" id="modalYellow" class="modal-qty yellow empty-number" inputmode="numeric" autocomplete="off" /></div>
-                        <div><div class="modal-label text-danger">Scrap</div><input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div>
+                        <div>
+                            <div class="modal-label text-danger">Rojas / Scrap</div>
+                            <input type="number" min="0" value="0" placeholder="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" />
+                        </div>
                     </div>
 
                     <div class="defect-panel d-none" id="panelDefectosNormal">
@@ -2950,10 +2938,10 @@
                         }
                     </div>
 
-                    <div class="classification-feedback" id="modalClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El OK se propondrá automáticamente como producción física menos Sospechosos y Scrap. Si el operador necesita corregirlo, puede borrar el valor y capturar otro.</div>
+                    <div class="classification-feedback" id="modalClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>El ERP calcula automáticamente: <strong>verdes / OK = producción física - rojas / Scrap</strong>. El operador únicamente registra el contador y las piezas rojas.</div>
 
-                    <label class="form-label fw-bold mt-3">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Recomendado cuando se modifica manualmente el OK o existe una diferencia contra el contador."></textarea>
-                    <div class="alert alert-warning mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i><strong>Ayuda automática:</strong> el ERP propone el OK para reducir captura. <strong>El campo OK sigue editable</strong>; si el operador lo modifica, la pantalla marcará la diferencia contra la producción física antes de guardar.</div>
+                    <label class="form-label fw-bold mt-3">Observaciones</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Opcional. Si el contador no registró producción, explica qué ocurrió."></textarea>
+                    <div class="alert alert-success mt-3 mb-0"><i class="fa-solid fa-calculator me-1"></i><strong>Cálculo automático:</strong> las piezas verdes no se capturan manualmente. El ERP las obtiene restando las piezas rojas a la producción física calculada desde el contador.</div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100" id="btnGuardarHora"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar Hora</button></div>
             </form>
@@ -2991,15 +2979,13 @@
             const modalElement=document.getElementById('modalCapturaHora');
             const modal=modalElement?bootstrap.Modal.getOrCreateInstance(modalElement):null;
             const form=document.getElementById('formModalHora');
-            const urlPrevisualizar='@Url.Action("PrevisualizarProduccionHora","ProduccionOperador")';
+            const urlPrevisualizar='@Url.Action("PrevisualizarProduccionHora", "ProduccionOperador")';
             const capturaHabilitada=@capturaHabilitada.ToString().ToLowerInvariant();
             const tieneParoAbierto=@Model.TieneParoAbierto.ToString().ToLowerInvariant();
             const tieneTiempoExtraActivo=@tieneTiempoExtraActivo.ToString().ToLowerInvariant();
             const ejecucionEnProduccion=@(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ? "true" : "false");
             const formIniciarTiempoExtra=document.getElementById('formIniciarTiempoExtra');
             let filaActiva=null;
-            let okManual=false;
-            let actualizandoOKAutomatico=false;
             let previewTimer=null;
             let previewSecuencia=0;
             let ultimaPrevisualizacion=null;
@@ -3189,27 +3175,19 @@
                 document.getElementById('modalOKSugerido').textContent='-';
                 document.getElementById('modalMinutosProductivos').textContent='-';
                 document.getElementById('modalSegmentos').textContent='-';
-            }
-
-            function cambiarModoOK(manual){
-                okManual=manual;
-                const badge=document.getElementById('modalOKModo');
-                const boton=document.getElementById('btnRestaurarOKAutomatico');
-                if(badge){
-                    badge.classList.toggle('manual',manual);
-                    badge.innerHTML=manual
-                        ?'<i class="fa-solid fa-pen"></i>Manual'
-                        :'<i class="fa-solid fa-wand-magic-sparkles"></i>Automático';
+                const ok=document.getElementById('modalOK');
+                if(ok)ok.value='';
+                if(filaActiva){
+                    const campo=filaActiva.querySelector('[data-field="ok"]');
+                    if(campo)campo.value='';
                 }
-                boton?.classList.toggle('d-none',!manual);
+                actualizarComparacionObjetivo();
             }
 
             function establecerOKAutomatico(valor){
                 const input=document.getElementById('modalOK');
                 if(!input)return;
-                actualizandoOKAutomatico=true;
                 input.value=Number(valor||0).toString();
-                actualizandoOKAutomatico=false;
                 if(filaActiva){
                     const campo=filaActiva.querySelector('[data-field="ok"]');
                     if(campo)campo.value=input.value;
@@ -3229,7 +3207,7 @@
                 }
                 if(valorRaw===''){
                     feedback.className='modal-goal-feedback text-muted';
-                    feedback.textContent='El OK se propondrá automáticamente después de calcular la producción física.';
+                    feedback.textContent='Las verdes / OK se calcularán automáticamente después de leer el contador y descontar las piezas rojas.';
                     return;
                 }
                 const ok=Number(valorRaw||0);
@@ -3253,26 +3231,21 @@
                 const feedback=document.getElementById('modalClasificacionFeedback');
                 if(!feedback)return;
                 const ok=numeroSeguro(document.getElementById('modalOK'));
-                const yellow=numeroSeguro(document.getElementById('modalYellow'));
                 const scrap=numeroSeguro(document.getElementById('modalScrap'));
-                const total=ok+yellow+scrap;
                 if(!ultimaPrevisualizacion){
                     feedback.className='classification-feedback';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Clasificación actual: <strong>'+total.toLocaleString('es-MX')+'</strong> pieza(s). Captura el contador para obtener la producción física real.';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Rojas capturadas: <strong>'+scrap.toLocaleString('es-MX')+'</strong>. Captura el contador para calcular automáticamente las verdes.';
                     return;
                 }
                 const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);
-                const diferencia=total-fisicas;
-                if(diferencia===0){
+                const total=ok+scrap;
+                if(total===fisicas){
                     feedback.className='classification-feedback ok';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>La clasificación cuadra con las <strong>'+fisicas.toLocaleString('es-MX')+'</strong> piezas físicas. OK '+ok.toLocaleString('es-MX')+' + Sospechosos '+yellow.toLocaleString('es-MX')+' + Scrap '+scrap.toLocaleString('es-MX')+'.';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Producción física: <strong>'+fisicas.toLocaleString('es-MX')+'</strong> · Verdes/OK: <strong>'+ok.toLocaleString('es-MX')+'</strong> · Rojas/Scrap: <strong>'+scrap.toLocaleString('es-MX')+'</strong>.';
                     return;
                 }
                 feedback.className='classification-feedback warning';
-                const textoDiferencia=diferencia>0
-                    ?'La clasificación excede la producción física por <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s).'
-                    :'Faltan por clasificar <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s) contra el contador.';
-                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+textoDiferencia+(okManual?' <strong>El OK está en modo manual.</strong>':'');
+                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>El cálculo cambió. Espera a que el ERP actualice las verdes antes de guardar.';
             }
 
             function pintarPrevisualizacion(data,forzarAuto){
@@ -3285,10 +3258,7 @@
                 document.getElementById('modalOKSugerido').textContent=sugerido.toLocaleString('es-MX');
                 document.getElementById('modalMinutosProductivos').textContent=minutos.toLocaleString('es-MX',{maximumFractionDigits:2});
                 document.getElementById('modalSegmentos').textContent=segmentos.toLocaleString('es-MX');
-                if(!okManual||forzarAuto){
-                    cambiarModoOK(false);
-                    establecerOKAutomatico(sugerido);
-                }
+                establecerOKAutomatico(sugerido);
                 const contadorInicial=data.contadorInicial??data.ContadorInicial;
                 const contadorFinal=data.contadorFinal??data.ContadorFinal;
                 const feedback=document.getElementById('modalContadorFeedback');
@@ -3312,7 +3282,7 @@
                     const feedback=document.getElementById('modalContadorFeedback');
                     if(feedback){
                         feedback.className='counter-feedback';
-                        feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura un contador válido para calcular automáticamente la producción física y el OK sugerido.';
+                        feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura un contador válido para calcular automáticamente la producción física y las verdes / OK.';
                     }
                     actualizarClasificacion();
                     return;
@@ -3329,7 +3299,6 @@
                 datos.append('horaInicio',document.getElementById('modalInicio')?.value||'');
                 datos.append('horaFin',document.getElementById('modalFin')?.value||'');
                 datos.append('contadorMaquinaActual',raw);
-                datos.append('cantidadSospechosa',String(numeroSeguro(document.getElementById('modalYellow'))));
                 datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('modalScrap'))));
                 try{
                     const response=await fetch(urlPrevisualizar,{method:'POST',body:datos,headers:{'X-Requested-With':'XMLHttpRequest'}});
@@ -3371,7 +3340,6 @@
                     reiniciarDefectos('normal');
                     claveFilaDefectosNormal=claveActual;
                 }
-                cambiarModoOK(false);
                 limpiarPrevisualizacion();
                 limpiarMensajeCaptura();
                 document.getElementById('modalFecha').value=row.dataset.fecha||'';
@@ -3383,7 +3351,6 @@
                 document.getElementById('modalOK').dataset.objetivo=row.dataset.objetivo||'0';
                 document.getElementById('modalContador').value=row.querySelector('[data-field="counter"]')?.value||'';
                 document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
-                document.getElementById('modalYellow').value=row.querySelector('[data-field="yellow"]')?.value||'0';
                 document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'0';
                 document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
                 sincronizarDefectosConScrap('normal');
@@ -3397,41 +3364,20 @@
                 programarPrevisualizacion(false);
             });
 
-            ['modalYellow','modalScrap'].forEach(function(id){
-                document.getElementById(id)?.addEventListener('input',function(){
-                    if(filaActiva){
-                        const selector=id==='modalYellow'?'[data-field="yellow"]':'[data-field="scrap"]';
-                        const campo=filaActiva.querySelector(selector);
-                        if(campo)campo.value=this.value;
-                    }
-                    if(id==='modalScrap')sincronizarDefectosConScrap('normal');
-                    actualizarClasificacion();
-                    programarPrevisualizacion(false);
-                });
-            });
-
-            document.getElementById('modalOK')?.addEventListener('input',function(){
-                if(!actualizandoOKAutomatico)cambiarModoOK(true);
-                if(filaActiva){const campo=filaActiva.querySelector('[data-field="ok"]');if(campo)campo.value=this.value;}
-                actualizarComparacionObjetivo();
+            document.getElementById('modalScrap')?.addEventListener('input',function(){
+                if(filaActiva){
+                    const campo=filaActiva.querySelector('[data-field="scrap"]');
+                    if(campo)campo.value=this.value;
+                }
+                sincronizarDefectosConScrap('normal');
                 actualizarClasificacion();
+                programarPrevisualizacion(false);
             });
 
             document.getElementById('modalObs')?.addEventListener('input',function(){
                 if(filaActiva){const campo=filaActiva.querySelector('[data-field="obs"]');if(campo)campo.value=this.value;}
             });
 
-            document.getElementById('btnRestaurarOKAutomatico')?.addEventListener('click',function(){
-                cambiarModoOK(false);
-                if(ultimaPrevisualizacion){
-                    const sugerido=Number(ultimaPrevisualizacion.cantidadOK??ultimaPrevisualizacion.CantidadOK??0);
-                    establecerOKAutomatico(sugerido);
-                    actualizarComparacionObjetivo();
-                    actualizarClasificacion();
-                }else{
-                    programarPrevisualizacion(true);
-                }
-            });
 
             document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){
                 if(!capturaHabilitada||tieneParoAbierto)return;
@@ -3460,7 +3406,6 @@
                 const contador=Number(contadorRaw);
                 const okRaw=(document.getElementById('modalOK')?.value||'').trim();
                 const ok=Number(okRaw||0);
-                const yellow=numeroSeguro(document.getElementById('modalYellow'));
                 const scrap=numeroSeguro(document.getElementById('modalScrap'));
                 const obs=(document.getElementById('modalObs')?.value||'').trim();
                 if(contadorRaw===''||!Number.isFinite(contador)||contador<0){
@@ -3469,9 +3414,15 @@
                     document.getElementById('modalContador')?.focus();
                     return;
                 }
-                if(okRaw===''||!Number.isFinite(ok)||ok<0||yellow<0||scrap<0){
+                if(okRaw===''||!Number.isFinite(ok)||ok<0||scrap<0){
                     e.preventDefault();
-                    mostrarMensajeCaptura('Revisa las cantidades. OK, Sospechosos y Scrap deben ser números mayores o iguales a cero.');
+                    mostrarMensajeCaptura('Revisa las cantidades. Las piezas rojas deben ser un número mayor o igual a cero y las verdes deben haber sido calculadas por el ERP.');
+                    return;
+                }
+                if(!ultimaPrevisualizacion){
+                    e.preventDefault();
+                    mostrarMensajeCaptura('Espera a que el ERP termine de calcular las piezas físicas y las verdes antes de guardar.');
+                    programarPrevisualizacion(true);
                     return;
                 }
                 const estadoDefectos=evaluarDefectos('normal');
@@ -3483,18 +3434,18 @@
                     return;
                 }
                 reindexarDefectos('normal');
-                if(ok===0&&yellow===0&&scrap===0&&!obs){
+                if(ok===0&&scrap===0&&!obs){
                     e.preventDefault();
                     mostrarMensajeCaptura('No existe producción clasificada. Explica en observaciones por qué no hubo producción durante este bloque.');
                     return;
                 }
                 if(ultimaPrevisualizacion){
                     const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);
-                    const total=ok+yellow+scrap;
-                    if(total!==fisicas&&!obs){
+                    const total=ok+scrap;
+                    if(total!==fisicas){
                         e.preventDefault();
-                        mostrarMensajeCaptura('La clasificación suma '+total.toLocaleString('es-MX')+' pieza(s), pero el contador indica '+fisicas.toLocaleString('es-MX')+'. Puedes conservar el OK manual, pero agrega una observación explicando la diferencia.');
-                        document.getElementById('modalObs')?.focus();
+                        mostrarMensajeCaptura('El cálculo automático cambió. Espera a que el ERP recalcule las verdes antes de guardar.');
+                        programarPrevisualizacion(true);
                         return;
                     }
                 }
@@ -3656,7 +3607,6 @@
             document.getElementById('turnUltimaHora').textContent=textoSeguro(propiedad(resumen,'ultimaHoraTexto','UltimaHoraTexto'),'Sin captura registrada');
             document.getElementById('turnOperadorSaliente').textContent=textoSeguro(propiedad(resumen,'operadorSalienteNombre','OperadorSalienteNombre'));
             document.getElementById('turnCantidadOK').textContent=numeroCambioTurno(propiedad(resumen,'cantidadOK','CantidadOK'));
-            document.getElementById('turnCantidadSospechosa').textContent=numeroCambioTurno(propiedad(resumen,'cantidadSospechosa','CantidadSospechosa'));
             document.getElementById('turnCantidadScrap').textContent=numeroCambioTurno(propiedad(resumen,'cantidadScrap','CantidadScrap'));
             document.getElementById('turnTotalCajas').textContent=numeroCambioTurno(propiedad(resumen,'totalCajas','TotalCajas'));
             document.getElementById('turnCajasEntregadas').textContent=numeroCambioTurno(propiedad(resumen,'totalCajasEntregadas','TotalCajasEntregadas'));
@@ -3868,13 +3818,11 @@
             const modalCorteTiempoExtraElemento=document.getElementById('modalCorteTiempoExtra');
             const modalCorteTiempoExtra=modalCorteTiempoExtraElemento?bootstrap.Modal.getOrCreateInstance(modalCorteTiempoExtraElemento):null;
             const formCorteTiempoExtra=document.getElementById('formCorteTiempoExtra');
-            const urlPrevisualizarCorteTiempoExtra='@Url.Action("PrevisualizarCorteTiempoExtra","ProduccionOperador")';
-            const urlCapturarCorteTiempoExtra='@Url.Action("CapturarCorteTiempoExtra","ProduccionOperador")';
-            const urlFinalizarTiempoExtra='@Url.Action("FinalizarTiempoExtra","ProduccionOperador")';
+            const urlPrevisualizarCorteTiempoExtra='@Url.Action("PrevisualizarCorteTiempoExtra", "ProduccionOperador")';
+            const urlCapturarCorteTiempoExtra='@Url.Action("CapturarCorteTiempoExtra", "ProduccionOperador")';
+            const urlFinalizarTiempoExtra='@Url.Action("FinalizarTiempoExtra", "ProduccionOperador")';
             let modoRegistroTiempoExtra='CORTE';
             let segundosCorteActual=panelTiempoExtra?Number(panelTiempoExtra.dataset.segundosCorte||0):0;
-            let extraOkManual=false;
-            let extraActualizandoOK=false;
             let extraPreviewTimer=null;
             let extraPreviewSecuencia=0;
             let ultimaPrevisualizacionExtra=null;
@@ -3907,30 +3855,15 @@
                 extraPreviewValida=false;
                 const ids=['extraPiezasFisicas','extraOKSugerido','extraObjetivoBloque','extraCumplimiento','extraBonusInicial'];
                 ids.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='-';});
+                const ok=document.getElementById('extraOK');
+                if(ok)ok.value='';
                 actualizarBotonConfirmarExtra();
-            }
-
-            function cambiarModoOKExtra(manual){
-                extraOkManual=manual;
-                const hidden=document.getElementById('extraOkModificadoManual');
-                if(hidden)hidden.value=manual?'true':'false';
-                const badge=document.getElementById('extraOKModo');
-                const restaurar=document.getElementById('btnRestaurarOKAutomaticoExtra');
-                if(badge){
-                    badge.classList.toggle('manual',manual);
-                    badge.innerHTML=manual
-                        ?'<i class="fa-solid fa-pen"></i>Manual'
-                        :'<i class="fa-solid fa-wand-magic-sparkles"></i>Automático';
-                }
-                restaurar?.classList.toggle('d-none',!manual);
             }
 
             function establecerOKAutomaticoExtra(valor){
                 const input=document.getElementById('extraOK');
                 if(!input)return;
-                extraActualizandoOK=true;
                 input.value=Number(valor||0).toString();
-                extraActualizandoOK=false;
             }
 
             function actualizarComparacionExtra(){
@@ -3959,27 +3892,22 @@
                 const feedback=document.getElementById('extraClasificacionFeedback');
                 if(!feedback)return;
                 const ok=numeroSeguro(document.getElementById('extraOK'));
-                const sospechoso=numeroSeguro(document.getElementById('extraYellow'));
                 const scrap=numeroSeguro(document.getElementById('extraScrap'));
-                const total=ok+sospechoso+scrap;
                 actualizarComparacionExtra();
                 if(!ultimaPrevisualizacionExtra){
                     feedback.className='classification-feedback';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura el contador para calcular la producción física del periodo.';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura el contador y las piezas rojas para calcular automáticamente las verdes de este periodo.';
                     return;
                 }
                 const fisicas=Number(ultimaPrevisualizacionExtra.piezasFisicas??ultimaPrevisualizacionExtra.PiezasFisicas??0);
-                const diferencia=total-fisicas;
-                if(diferencia===0){
+                const total=ok+scrap;
+                if(total===fisicas){
                     feedback.className='classification-feedback ok';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>La clasificación cuadra con las <strong>'+fisicas.toLocaleString('es-MX')+'</strong> piezas físicas. OK '+ok.toLocaleString('es-MX')+' + Sospechosos '+sospechoso.toLocaleString('es-MX')+' + Scrap '+scrap.toLocaleString('es-MX')+'.';
+                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Producción física: <strong>'+fisicas.toLocaleString('es-MX')+'</strong> · Verdes/OK: <strong>'+ok.toLocaleString('es-MX')+'</strong> · Rojas/Scrap: <strong>'+scrap.toLocaleString('es-MX')+'</strong>.';
                     return;
                 }
                 feedback.className='classification-feedback warning';
-                const texto=diferencia>0
-                    ?'La clasificación excede la producción física por <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s).'
-                    :'Faltan por clasificar <strong>'+Math.abs(diferencia).toLocaleString('es-MX')+'</strong> pieza(s) respecto al contador.';
-                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+texto+(extraOkManual?' <strong>El OK está en modo manual.</strong>':'');
+                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>El cálculo cambió. Espera a que el ERP actualice las verdes antes de guardar.';
             }
 
             function pintarPrevisualizacionExtra(data,forzarAutomatico=false){
@@ -3997,10 +3925,7 @@
                 if(pFisicas)pFisicas.textContent=fisicas.toLocaleString('es-MX');
                 if(pSugerido)pSugerido.textContent=sugerido.toLocaleString('es-MX');
                 if(pObjetivo)pObjetivo.textContent=objetivo>0?objetivo.toLocaleString('es-MX'):'-';
-                if(!extraOkManual||forzarAutomatico){
-                    cambiarModoOKExtra(false);
-                    establecerOKAutomaticoExtra(sugerido);
-                }
+                establecerOKAutomaticoExtra(sugerido);
                 const contadorInicial=data.contadorInicial??data.ContadorInicial;
                 const contadorFinal=data.contadorFinal??data.ContadorFinal;
                 const feedback=document.getElementById('extraContadorFeedback');
@@ -4050,7 +3975,6 @@
                 datos.append('__RequestVerificationToken',token);
                 datos.append('tiempoExtraId',tiempoExtraId);
                 datos.append('contadorMaquinaActual',raw);
-                datos.append('cantidadSospechosa',String(numeroSeguro(document.getElementById('extraYellow'))));
                 datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('extraScrap'))));
                 try{
                     const response=await fetch(urlPrevisualizarCorteTiempoExtra,{method:'POST',body:datos,headers:{'X-Requested-With':'XMLHttpRequest'}});
@@ -4101,15 +4025,12 @@
                 modoRegistroTiempoExtra=modo;
                 limpiarMensajeCorteExtra();
                 limpiarPrevisualizacionExtra();
-                cambiarModoOKExtra(false);
                 const contador=document.getElementById('extraContador');
                 const ok=document.getElementById('extraOK');
-                const sospechoso=document.getElementById('extraYellow');
                 const scrap=document.getElementById('extraScrap');
                 const observaciones=document.getElementById('extraObservaciones');
                 if(contador)contador.value='';
                 if(ok)ok.value='';
-                if(sospechoso)sospechoso.value='0';
                 if(scrap)scrap.value='0';
                 if(observaciones)observaciones.value='';
                 reiniciarDefectos('extra');
@@ -4158,30 +4079,12 @@
                 programarPrevisualizacionExtra(false);
             });
 
-            ['extraYellow','extraScrap'].forEach(function(id){
-                document.getElementById(id)?.addEventListener('input',function(){
-                    extraPreviewValida=false;
-                    if(id==='extraScrap')sincronizarDefectosConScrap('extra');
-                    actualizarBotonConfirmarExtra();
-                    actualizarClasificacionExtra();
-                    programarPrevisualizacionExtra(false);
-                });
-            });
-
-            document.getElementById('extraOK')?.addEventListener('input',function(){
-                if(!extraActualizandoOK)cambiarModoOKExtra(true);
+            document.getElementById('extraScrap')?.addEventListener('input',function(){
+                extraPreviewValida=false;
+                sincronizarDefectosConScrap('extra');
+                actualizarBotonConfirmarExtra();
                 actualizarClasificacionExtra();
-            });
-
-            document.getElementById('btnRestaurarOKAutomaticoExtra')?.addEventListener('click',function(){
-                cambiarModoOKExtra(false);
-                if(ultimaPrevisualizacionExtra){
-                    const sugerido=Number(ultimaPrevisualizacionExtra.cantidadOK??ultimaPrevisualizacionExtra.CantidadOK??0);
-                    establecerOKAutomaticoExtra(sugerido);
-                    actualizarClasificacionExtra();
-                }else{
-                    programarPrevisualizacionExtra(true);
-                }
+                programarPrevisualizacionExtra(false);
             });
 
             formCorteTiempoExtra?.addEventListener('submit',function(e){
@@ -4190,7 +4093,6 @@
                 const contador=Number(contadorRaw);
                 const okRaw=(document.getElementById('extraOK')?.value||'').trim();
                 const ok=Number(okRaw||0);
-                const sospechoso=numeroSeguro(document.getElementById('extraYellow'));
                 const scrap=numeroSeguro(document.getElementById('extraScrap'));
                 const observaciones=(document.getElementById('extraObservaciones')?.value||'').trim();
 
@@ -4207,9 +4109,9 @@
                     return;
                 }
 
-                if(okRaw===''||!Number.isFinite(ok)||ok<0||sospechoso<0||scrap<0){
+                if(okRaw===''||!Number.isFinite(ok)||ok<0||scrap<0){
                     e.preventDefault();
-                    mostrarMensajeCorteExtra('Revisa las cantidades. OK, Sospechosos y Scrap deben ser números mayores o iguales a cero.');
+                    mostrarMensajeCorteExtra('Revisa las cantidades. Las piezas rojas deben ser un número mayor o igual a cero y las verdes deben haber sido calculadas por el ERP.');
                     return;
                 }
 
@@ -4231,7 +4133,7 @@
                 }
 
                 const fisicas=Number(ultimaPrevisualizacionExtra.piezasFisicas??ultimaPrevisualizacionExtra.PiezasFisicas??0);
-                const total=ok+sospechoso+scrap;
+                const total=ok+scrap;
 
                 if(fisicas===0&&total===0&&!observaciones){
                     e.preventDefault();
@@ -4240,10 +4142,10 @@
                     return;
                 }
 
-                if(total!==fisicas&&!observaciones){
+                if(total!==fisicas){
                     e.preventDefault();
-                    mostrarMensajeCorteExtra('La clasificación suma '+total.toLocaleString('es-MX')+' pieza(s), pero el contador indica '+fisicas.toLocaleString('es-MX')+'. Agrega una observación explicando la diferencia.');
-                    document.getElementById('extraObservaciones')?.focus();
+                    mostrarMensajeCorteExtra('El cálculo automático cambió. Espera a que el ERP recalcule las verdes antes de guardar.');
+                    programarPrevisualizacionExtra(true);
                     return;
                 }
 
@@ -4261,7 +4163,6 @@
                 extraPreviewSecuencia++;
                 limpiarMensajeCorteExtra();
                 limpiarPrevisualizacionExtra();
-                cambiarModoOKExtra(false);
                 reiniciarDefectos('extra');
                 const boton=document.getElementById('btnConfirmarCorteTiempoExtra');
                 if(boton)boton.innerHTML='<i class="fa-solid fa-floppy-disk me-1"></i>Guardar corte';

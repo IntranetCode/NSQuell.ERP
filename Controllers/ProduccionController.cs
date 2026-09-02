@@ -45,6 +45,7 @@ namespace ERP.NSQuell.Controllers
             public bool PuedeVerCapturasHora => PuedeVerTodo || EsAuxiliarProduccion || EsOperadorProduccion;
             public bool PuedeCapturarHora => PuedeVerTodo || EsOperadorProduccion;
             public bool PuedeGestionarSugerenciaCambioTurno => PuedeVerTodo || EsAuxiliarProduccion;
+            public bool PuedeCorregirCapturasHora => PuedeVerTodo || EsAuxiliarProduccion;
         }
 
 
@@ -165,10 +166,7 @@ namespace ERP.NSQuell.Controllers
             if (ejecucion == null)
                 return NotFound();
 
-            var permisos =
-                await ObtenerPermisosProduccionUsuarioAsync(
-                    usuarioId,
-                    cn);
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
 
             ViewBag.UsuarioProduccionID = permisos.UsuarioID;
             ViewBag.PersonaProduccionID = permisos.PersonaID;
@@ -189,39 +187,47 @@ namespace ERP.NSQuell.Controllers
             ViewBag.PuedeCapturarHora = permisos.PuedeCapturarHora;
             ViewBag.PuedeGestionarSugerenciaCambioTurno = permisos.PuedeGestionarSugerenciaCambioTurno;
 
-            ViewBag.OperadoresProduccion =
-                await CargarOperadoresProduccionAsync(cn);
+            ViewBag.PuedeCorregirCapturasHora = permisos.PuedeCorregirCapturasHora;
+
+            var autorizacionTerminacionParcial = await ObtenerAutorizacionTerminacionParcialAsync(id, cn);
+
+            ViewBag.TerminarParcialAutorizado = autorizacionTerminacionParcial.ParoID.HasValue;
+            ViewBag.TerminarParcialParoID = autorizacionTerminacionParcial.ParoID;
+            ViewBag.TerminarParcialMotivo = autorizacionTerminacionParcial.Motivo;
+            ViewBag.TerminarParcialFechaAutorizacion = autorizacionTerminacionParcial.FechaAutorizacion;
+            ViewBag.PuedeEjecutarTerminacionParcial =
+                autorizacionTerminacionParcial.ParoID.HasValue
+                && (permisos.EsTecnicoProduccion || permisos.EsAuxiliarProduccion);
+
+            ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
 
             ProduccionMonitoreoTurnoAvisoVm? monitoreoTurnoActual = null;
 
             var ejecucionActivaParaMonitoreo =
-                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion ||
-                ejecucion.EstatusID == ProduccionEstatus.EnProduccion ||
-                ejecucion.EstatusID == ProduccionEstatus.Pausado;
+                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion
+                || ejecucion.EstatusID == ProduccionEstatus.EnProduccion
+                || ejecucion.EstatusID == ProduccionEstatus.Pausado;
 
-            if (ejecucionActivaParaMonitoreo &&
-                ejecucion.SolicitudProduccionID.HasValue &&
-                ejecucion.SolicitudProduccionID.Value > 0)
+            if (ejecucionActivaParaMonitoreo
+                && ejecucion.SolicitudProduccionID.HasValue
+                && ejecucion.SolicitudProduccionID.Value > 0)
             {
-                await using var tx =
-                    (SqlTransaction)await cn.BeginTransactionAsync();
+                await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
 
                 try
                 {
-                    var checklistPerifericosId =
-                        await ObtenerOCrearChecklistPerifericosTurnoAsync(
-                            ejecucion,
-                            DateTime.Now,
-                            usuarioId,
-                            cn,
-                            tx);
+                    var checklistPerifericosId = await ObtenerOCrearChecklistPerifericosTurnoAsync(
+                        ejecucion,
+                        DateTime.Now,
+                        usuarioId,
+                        cn,
+                        tx);
 
                     await tx.CommitAsync();
 
-                    monitoreoTurnoActual =
-                        await ObtenerAvisoMonitoreoTurnoAsync(
-                            checklistPerifericosId,
-                            cn);
+                    monitoreoTurnoActual = await ObtenerAvisoMonitoreoTurnoAsync(
+                        checklistPerifericosId,
+                        cn);
                 }
                 catch (Exception ex)
                 {
@@ -239,10 +245,7 @@ namespace ERP.NSQuell.Controllers
                 }
             }
 
-            var calidadResumen =
-                await ObtenerResumenCalidadAsync(
-                    id,
-                    cn);
+            var calidadResumen = await ObtenerResumenCalidadAsync(id, cn);
 
             var vm = new ProduccionDetalleVm
             {
@@ -257,54 +260,39 @@ namespace ERP.NSQuell.Controllers
                 CambioTurnoTecnico = await ConstruirCambioTurnoTecnicoAsync(ejecucion, cn)
             };
 
-           
-            var contextoConfiguracion =
-                await ObtenerContextoConfiguracionCorridaAsync(
-                    id,
-                    cn);
+            var contextoConfiguracion = await ObtenerContextoConfiguracionCorridaAsync(id, cn);
 
             if (contextoConfiguracion != null)
             {
-                vm.ConfiguracionTiempoReal =
-                    await ConstruirConfiguracionTecnicoAsync(
-                        contextoConfiguracion,
-                        cn);
+                vm.ConfiguracionTiempoReal = await ConstruirConfiguracionTecnicoAsync(
+                    contextoConfiguracion,
+                    cn);
 
                 ViewBag.PuedeGestionarConfiguracionCorrida =
-                    PuedeModificarConfiguracionCorrida(
-                        permisos,
-                        contextoConfiguracion)
-                    &&
-                    EjecucionPermiteConfiguracionCorrida(
-                        contextoConfiguracion);
+                    PuedeModificarConfiguracionCorrida(permisos, contextoConfiguracion)
+                    && EjecucionPermiteConfiguracionCorrida(contextoConfiguracion);
             }
             else
             {
                 vm.ConfiguracionTiempoReal = null;
-
                 ViewBag.PuedeGestionarConfiguracionCorrida = false;
             }
 
-            // Esta bandera nos servirá en la vista para avisar
-            // que falta la configuración del técnico.
             ViewBag.FaltaConfiguracionCorrida =
-                ejecucionActivaParaMonitoreo &&
-                (
-                    vm.ConfiguracionTiempoReal == null ||
-                    !vm.ConfiguracionTiempoReal.TieneConfiguracionActual
+                ejecucionActivaParaMonitoreo
+                && (
+                    vm.ConfiguracionTiempoReal == null
+                    || !vm.ConfiguracionTiempoReal.TieneConfiguracionActual
                 );
 
-            vm.RecepcionesOF =
-                await ObtenerEntregasAlmacenOFAsync(
-                    ejecucion,
-                    cn,
-                    null);
+            vm.RecepcionesOF = await ObtenerEntregasAlmacenOFAsync(
+                ejecucion,
+                cn,
+                null);
 
             ViewBag.EsReinicioSerie =
-                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion &&
-                await EsReinicioSeriePendienteAsync(
-                    id,
-                    cn);
+                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion
+                && await EsReinicioSeriePendienteAsync(id, cn);
 
             return View(vm);
         }
@@ -3223,8 +3211,16 @@ ORDER BY p.FechaFinParo DESC,p.ParoID DESC;";
             }
 
             var usuarioId = ObtenerUsuarioID();
+
+            if (usuarioId <= 0)
+            {
+                TempData["Error"] = "No fue posible identificar al usuario.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+            }
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
@@ -3247,6 +3243,28 @@ ORDER BY p.FechaFinParo DESC,p.ParoID DESC;";
                     return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
                 }
 
+                var permisos = await ObtenerPermisosProduccionUsuarioAsync(
+                    usuarioId,
+                    cn,
+                    tx);
+
+                if (vm.TerminarParcial)
+                {
+                    if (!permisos.EsTecnicoProduccion && !permisos.EsAuxiliarProduccion)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La terminación parcial autorizada por Planeación solo puede ser ejecutada por un Auxiliar o Técnico de Producción.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    if (ejecucion.EstatusID != ProduccionEstatus.Pausado)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La terminación parcial autorizada por Planeación solo puede ejecutarse sobre la OF que quedó pausada por la interrupción.";
+                        return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                    }
+                }
+
                 await RecalcularTotalesEjecucionAsync(
                     vm.EjecucionProduccionID,
                     usuarioId,
@@ -3255,6 +3273,7 @@ ORDER BY p.FechaFinParo DESC,p.ParoID DESC;";
 
                 var validacion = await ValidarTerminarProduccionAsync(
                     vm.EjecucionProduccionID,
+                    vm.TerminarParcial,
                     cn,
                     tx);
 
@@ -3265,13 +3284,17 @@ ORDER BY p.FechaFinParo DESC,p.ParoID DESC;";
                     return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
                 }
 
+                if (vm.TerminarParcial && !validacion.ParoAutorizacionTerminacionParcialID.HasValue)
+                    throw new InvalidOperationException("La autorización de Planeación para terminar parcialmente ya no está disponible.");
+
                 var estatusProduccion = vm.TerminarParcial
                     ? ProduccionEstatus.TerminadoParcial
                     : ProduccionEstatus.Terminado;
 
                 const string sqlCerrar = @"
 UPDATE dbo.Produccion_Ejecucion
-SET FechaFinReal=GETDATE(),
+SET
+    FechaFinReal=GETDATE(),
     EstatusID=@EstatusID,
     Observaciones=
         CASE
@@ -3302,7 +3325,18 @@ IF @@ROWCOUNT<>1
                             ? DBNull.Value
                             : vm.Observaciones.Trim();
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
                     await cmd.ExecuteNonQueryAsync();
+                }
+
+                if (vm.TerminarParcial)
+                {
+                    await MarcarTerminacionParcialAutorizadaEjecutadaAsync(
+                        validacion.ParoAutorizacionTerminacionParcialID!.Value,
+                        vm.EjecucionProduccionID,
+                        usuarioId,
+                        cn,
+                        tx);
                 }
 
                 await MarcarProgramaTerminadoAsync(
@@ -3314,8 +3348,8 @@ IF @@ROWCOUNT<>1
                 await tx.CommitAsync();
 
                 TempData["Success"] = vm.TerminarParcial
-                    ? "Producción terminada parcialmente. No existen pendientes de cajas ni de Calidad."
-                    : "Producción terminada correctamente. Todas las piezas fueron asignadas a cajas y no existen pendientes de Calidad.";
+                    ? "Terminación parcial ejecutada correctamente conforme a la autorización de Planeación. La OF no regresará después de la producción urgente."
+                    : "Producción terminada correctamente. Se alcanzó la cantidad planeada de piezas OK y no existen pendientes de cajas ni de Calidad.";
 
                 return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
@@ -3715,12 +3749,10 @@ FROM dbo.Produccion_RegistroHora
 WHERE EjecucionProduccionID=@EjecucionProduccionID
   AND Activo=1
 ORDER BY FechaProduccion DESC,HoraInicio DESC,RegistroHoraID DESC;";
-
             await using (var cmd = new SqlCommand(sql, cn))
             {
                 cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
                 await using var rd = await cmd.ExecuteReaderAsync();
-
                 while (await rd.ReadAsync())
                 {
                     lista.Add(new ProduccionRegistroHoraVm
@@ -3759,13 +3791,14 @@ ORDER BY FechaProduccion DESC,HoraInicio DESC,RegistroHoraID DESC;";
                     });
                 }
             }
-
             foreach (var registro in lista)
+            {
                 registro.Segmentos = await ObtenerSegmentosRegistroHoraAsync(registro.RegistroHoraID, cn);
-
+                registro.AjustesProduccion = await ObtenerAjustesProduccionRegistroHoraAsync(registro.RegistroHoraID, cn);
+                registro.AjustadoPorProduccion = registro.AjustesProduccion.Count > 0;
+            }
             return lista;
         }
-
         private async Task<List<ProduccionRegistroHoraSegmentoVm>> ObtenerSegmentosRegistroHoraAsync(int registroHoraId, SqlConnection cn)
         {
             var lista = new List<ProduccionRegistroHoraSegmentoVm>();
@@ -6045,25 +6078,29 @@ ORDER BY
         private sealed class ValidacionTerminarProduccionResultado
         {
             public bool Permitido { get; set; }
-
-            public List<string> Bloqueos { get; set; } =
-                new List<string>();
-
-            public string Mensaje =>
-                Permitido
-                    ? "La producción puede terminarse."
-                    : string.Join(" ", Bloqueos);
+            public int? ParoAutorizacionTerminacionParcialID { get; set; }
+            public string? MotivoAutorizacionTerminacionParcial { get; set; }
+            public DateTime? FechaAutorizacionTerminacionParcial { get; set; }
+            public List<string> Bloqueos { get; set; } = new List<string>();
+            public string Mensaje => Permitido ? "La producción puede terminarse." : string.Join(" ", Bloqueos);
         }
 
-        private async Task<ValidacionTerminarProduccionResultado> ValidarTerminarProduccionAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction tx)
+        private async Task<ValidacionTerminarProduccionResultado> ValidarTerminarProduccionAsync(
+     int ejecucionProduccionId,
+     bool terminarParcial,
+     SqlConnection cn,
+     SqlTransaction tx)
         {
             var resultado = new ValidacionTerminarProduccionResultado();
+
             if (ejecucionProduccionId <= 0)
             {
                 resultado.Bloqueos.Add("La ejecución de Producción no es válida.");
                 return resultado;
             }
+
             const string sql = @"
+DECLARE @CantidadPlaneada INT=0;
 DECLARE @CantidadOK INT=0;
 DECLARE @CantidadSospechosa INT=0;
 DECLARE @CantidadScrap INT=0;
@@ -6083,23 +6120,49 @@ DECLARE @RequiereReliberacion BIT=0;
 DECLARE @MonitoreosPendientes INT=0;
 DECLARE @DisposicionesPendientes INT=0;
 DECLARE @ReliberacionesPendientes INT=0;
+DECLARE @ParoAutorizacionTerminacionParcialID INT=NULL;
+DECLARE @MotivoAutorizacionTerminacionParcial NVARCHAR(500)=NULL;
+DECLARE @FechaAutorizacionTerminacionParcial DATETIME=NULL;
 
 SELECT
+    @CantidadPlaneada=ISNULL(e.CantidadPlaneada,0),
     @CantidadOK=ISNULL(e.CantidadOKTotal,0),
     @CantidadSospechosa=ISNULL(e.CantidadSospechosaTotal,0),
     @CantidadScrap=ISNULL(e.CantidadScrapTotal,0)
-FROM dbo.Produccion_Ejecucion e WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_Ejecucion e WITH(UPDLOCK,HOLDLOCK)
 WHERE e.EjecucionProduccionID=@EjecucionProduccionID
   AND e.Activo=1;
 
+IF @TerminarParcial=1
+BEGIN
+    SELECT TOP(1)
+        @ParoAutorizacionTerminacionParcialID=p.ParoID,
+        @MotivoAutorizacionTerminacionParcial=p.MotivoTerminacionParcial,
+        @FechaAutorizacionTerminacionParcial=p.FechaAutorizacionTerminacionParcial
+    FROM dbo.Produccion_Paros p WITH(UPDLOCK,HOLDLOCK)
+    WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+      AND p.Activo=1
+      AND p.FechaFinParo IS NULL
+      AND ISNULL(p.EsInterrupcionUrgente,0)=1
+      AND ISNULL(p.EsParoLhRh,0)=0
+      AND ISNULL(p.AutorizaTerminacionParcial,0)=1
+      AND ISNULL(p.TerminacionParcialEjecutada,0)=0
+    ORDER BY p.FechaAutorizacionTerminacionParcial DESC,p.ParoID DESC;
+END;
+
 SELECT @ParosAbiertos=COUNT(1)
-FROM dbo.Produccion_Paros p WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_Paros p WITH(UPDLOCK,HOLDLOCK)
 WHERE p.EjecucionProduccionID=@EjecucionProduccionID
   AND p.Activo=1
-  AND p.FechaFinParo IS NULL;
+  AND p.FechaFinParo IS NULL
+  AND
+  (
+      @TerminarParcial=0
+      OR p.ParoID<>ISNULL(@ParoAutorizacionTerminacionParcialID,-1)
+  );
 
 SELECT @TiempoExtraActivo=COUNT(1)
-FROM dbo.Produccion_TiempoExtra te WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_TiempoExtra te WITH(UPDLOCK,HOLDLOCK)
 WHERE te.EjecucionProduccionID=@EjecucionProduccionID
   AND te.Activo=1
   AND te.FechaHoraFin IS NULL
@@ -6110,7 +6173,7 @@ SELECT
     @SospechosoEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SOSPECHOSO' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0),
     @RetencionEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'RETENCION' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0),
     @ScrapEnCajas=ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SCRAP' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END),0)
-FROM dbo.Produccion_Cajas c WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
 WHERE c.EjecucionProduccionID=@EjecucionProduccionID
   AND c.Activo=1
   AND NOT EXISTS
@@ -6122,7 +6185,7 @@ WHERE c.EjecucionProduccionID=@EjecucionProduccionID
   );
 
 SELECT @DetalleOk=ISNULL(SUM(od.CantidadPiezas),0)
-FROM dbo.Produccion_CajaOrigenDetalle od WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_CajaOrigenDetalle od WITH(UPDLOCK,HOLDLOCK)
 WHERE od.EjecucionProduccionID=@EjecucionProduccionID
   AND od.Activo=1;
 
@@ -6131,44 +6194,45 @@ SET @OkEnCajas=@OkEnCajas+@DetalleOk;
 SELECT
     @CajasFormadasPendientes=SUM(CASE WHEN c.EstadoCajaID=@CajaFormadaProduccion THEN 1 ELSE 0 END),
     @CajasPendientesCalidad=SUM(CASE WHEN c.EstadoCajaID=@CajaPendienteCalidad THEN 1 ELSE 0 END)
-FROM dbo.Produccion_Cajas c WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
 WHERE c.EjecucionProduccionID=@EjecucionProduccionID
   AND c.Activo=1;
 
 SET @CajasFormadasPendientes=ISNULL(@CajasFormadasPendientes,0);
 SET @CajasPendientesCalidad=ISNULL(@CajasPendientesCalidad,0);
 
-SELECT TOP (1)
+SELECT TOP(1)
     @InspeccionID=ci.InspeccionID,
     @EstadoCalidad=UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N'')))),
     @ConfiguracionInvalidada=ISNULL(ci.ConfiguracionInvalidada,0),
     @RequiereReliberacion=ISNULL(ci.RequiereReliberacion,0)
-FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Calidad_Inspecciones ci WITH(UPDLOCK,HOLDLOCK)
 WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
 ORDER BY ci.InspeccionID DESC;
 
 IF @InspeccionID IS NOT NULL
 BEGIN
     SELECT @MonitoreosPendientes=COUNT(1)
-    FROM dbo.Calidad_MonitoreosProceso m WITH (UPDLOCK,HOLDLOCK)
+    FROM dbo.Calidad_MonitoreosProceso m WITH(UPDLOCK,HOLDLOCK)
     WHERE m.InspeccionID=@InspeccionID
       AND m.Activo=1
       AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N'PENDIENTE'))))=N'PENDIENTE';
 
     SELECT @DisposicionesPendientes=COUNT(1)
-    FROM dbo.Calidad_DisposicionesMaterial d WITH (UPDLOCK,HOLDLOCK)
+    FROM dbo.Calidad_DisposicionesMaterial d WITH(UPDLOCK,HOLDLOCK)
     WHERE d.InspeccionID=@InspeccionID
       AND d.Activo=1
       AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N'PENDIENTE'))))=N'PENDIENTE';
 
     SELECT @ReliberacionesPendientes=COUNT(1)
-    FROM dbo.Calidad_Reliberaciones r WITH (UPDLOCK,HOLDLOCK)
+    FROM dbo.Calidad_Reliberaciones r WITH(UPDLOCK,HOLDLOCK)
     WHERE r.InspeccionID=@InspeccionID
       AND r.Activo=1
       AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N'PENDIENTE'))))<>N'AUTORIZADA';
 END;
 
 SELECT
+    @CantidadPlaneada AS CantidadPlaneada,
     @CantidadOK AS CantidadOK,
     @CantidadSospechosa AS CantidadSospechosa,
     @CantidadScrap AS CantidadScrap,
@@ -6186,17 +6250,27 @@ SELECT
     @RequiereReliberacion AS RequiereReliberacion,
     @MonitoreosPendientes AS MonitoreosPendientes,
     @DisposicionesPendientes AS DisposicionesPendientes,
-    @ReliberacionesPendientes AS ReliberacionesPendientes;";
+    @ReliberacionesPendientes AS ReliberacionesPendientes,
+    @ParoAutorizacionTerminacionParcialID AS ParoAutorizacionTerminacionParcialID,
+    @MotivoAutorizacionTerminacionParcial AS MotivoAutorizacionTerminacionParcial,
+    @FechaAutorizacionTerminacionParcial AS FechaAutorizacionTerminacionParcial;";
+
             await using var cmd = new SqlCommand(sql, cn, tx);
+
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            cmd.Parameters.Add("@TerminarParcial", SqlDbType.Bit).Value = terminarParcial;
             cmd.Parameters.Add("@CajaFormadaProduccion", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
             cmd.Parameters.Add("@CajaPendienteCalidad", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
+
             await using var rd = await cmd.ExecuteReaderAsync();
+
             if (!await rd.ReadAsync())
             {
                 resultado.Bloqueos.Add("No fue posible validar los pendientes de la producción.");
                 return resultado;
             }
+
+            var cantidadPlaneada = Convert.ToInt32(rd["CantidadPlaneada"]);
             var cantidadOk = Convert.ToInt32(rd["CantidadOK"]);
             var cantidadSospechosa = Convert.ToInt32(rd["CantidadSospechosa"]);
             var cantidadScrap = Convert.ToInt32(rd["CantidadScrap"]);
@@ -6213,37 +6287,77 @@ SELECT
             var monitoreosPendientes = Convert.ToInt32(rd["MonitoreosPendientes"]);
             var disposicionesPendientes = Convert.ToInt32(rd["DisposicionesPendientes"]);
             var reliberacionesPendientes = Convert.ToInt32(rd["ReliberacionesPendientes"]);
+
+            resultado.ParoAutorizacionTerminacionParcialID =
+                rd["ParoAutorizacionTerminacionParcialID"] == DBNull.Value
+                    ? null
+                    : Convert.ToInt32(rd["ParoAutorizacionTerminacionParcialID"]);
+
+            resultado.MotivoAutorizacionTerminacionParcial =
+                rd["MotivoAutorizacionTerminacionParcial"] == DBNull.Value
+                    ? null
+                    : rd["MotivoAutorizacionTerminacionParcial"]?.ToString()?.Trim();
+
+            resultado.FechaAutorizacionTerminacionParcial =
+                rd["FechaAutorizacionTerminacionParcial"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaAutorizacionTerminacionParcial"]);
+
+            if (cantidadPlaneada <= 0)
+                resultado.Bloqueos.Add("La ejecución no tiene una cantidad planeada válida.");
+
+            if (!terminarParcial && cantidadOk < cantidadPlaneada)
+            {
+                var faltantes = Math.Max(0, cantidadPlaneada - cantidadOk);
+                resultado.Bloqueos.Add($"La OF todavía no alcanza su meta. Tiene {cantidadOk:N0} pieza(s) OK de {cantidadPlaneada:N0}; faltan {faltantes:N0} pieza(s) OK.");
+            }
+
+            if (terminarParcial && !resultado.ParoAutorizacionTerminacionParcialID.HasValue)
+                resultado.Bloqueos.Add("Planeación no ha autorizado la terminación parcial de esta OF.");
+
+            if (parosAbiertos > 0)
+                resultado.Bloqueos.Add("Existe otro paro abierto que debe resolverse antes de terminar la producción.");
+
+            if (tiempoExtraActivo > 0)
+                resultado.Bloqueos.Add("Existe una sesión de tiempo extra en curso. Debe finalizarse y registrar su último corte antes de terminar la producción.");
+
             var pendienteOk = Math.Max(0, cantidadOk - okEnCajas);
             var pendienteSospechoso = Math.Max(0, cantidadSospechosa - sospechosoEnCajas - retencionEnCajas);
             var pendienteScrap = Math.Max(0, cantidadScrap - scrapEnCajas);
-            if (parosAbiertos > 0)
-                resultado.Bloqueos.Add("Existe un paro abierto.");
-            if (tiempoExtraActivo > 0)
-                resultado.Bloqueos.Add("Existe una sesión de tiempo extra en curso. Debe finalizarse y registrar su último corte antes de terminar la producción.");
+
             if (pendienteOk > 0)
                 resultado.Bloqueos.Add($"Faltan {pendienteOk:N0} pieza(s) OK por asignar a caja.");
+
             if (pendienteSospechoso > 0)
                 resultado.Bloqueos.Add($"Faltan {pendienteSospechoso:N0} pieza(s) sospechosas/retención por asignar a caja.");
+
             if (pendienteScrap > 0)
                 resultado.Bloqueos.Add($"Faltan {pendienteScrap:N0} pieza(s) scrap por asignar a caja.");
+
             if (cajasFormadasPendientes > 0)
                 resultado.Bloqueos.Add($"Existen {cajasFormadasPendientes:N0} caja(s) todavía sin enviar a Calidad.");
+
             if (cajasPendientesCalidad > 0)
                 resultado.Bloqueos.Add($"Existen {cajasPendientesCalidad:N0} caja(s) pendientes de decisión de Calidad.");
+
             if (configuracionInvalidada)
                 resultado.Bloqueos.Add("La configuración de Calidad se encuentra invalidada.");
+
             if (requiereReliberacion)
                 resultado.Bloqueos.Add("Existe una reliberación de Calidad pendiente.");
+
             if (monitoreosPendientes > 0)
                 resultado.Bloqueos.Add($"Calidad tiene {monitoreosPendientes:N0} monitoreo(s) pendiente(s).");
+
             if (disposicionesPendientes > 0)
                 resultado.Bloqueos.Add($"Calidad tiene {disposicionesPendientes:N0} disposición(es) pendiente(s).");
+
             if (reliberacionesPendientes > 0)
                 resultado.Bloqueos.Add($"Existen {reliberacionesPendientes:N0} reliberación(es) sin concluir.");
+
             resultado.Permitido = resultado.Bloqueos.Count == 0;
             return resultado;
         }
-
         private sealed class ProduccionTurnoActual
         {
             public int TurnoID { get; set; }
@@ -11013,7 +11127,60 @@ ORDER BY
             });
         }
 
-       
+        private async Task MarcarTerminacionParcialAutorizadaEjecutadaAsync(
+    int paroId,
+    int ejecucionProduccionId,
+    int usuarioId,
+    SqlConnection cn,
+    SqlTransaction tx)
+        {
+            const string sql = @"
+DECLARE @Ahora DATETIME=GETDATE();
+
+UPDATE dbo.Produccion_Paros
+SET
+    FechaFinParo=@Ahora,
+    DuracionMinutos=DATEDIFF(MINUTE,FechaInicioParo,@Ahora),
+    EsMayorA15Minutos=
+        CASE
+            WHEN DATEDIFF(MINUTE,FechaInicioParo,@Ahora)>15 THEN 1
+            ELSE 0
+        END,
+    TerminacionParcialEjecutada=1,
+    UsuarioTerminacionParcialID=@UsuarioID,
+    FechaTerminacionParcial=@Ahora,
+    Descripcion=
+        CASE
+            WHEN Descripcion IS NULL OR LTRIM(RTRIM(Descripcion))=N''
+                THEN N'Terminación parcial ejecutada por Producción conforme a autorización de Planeación.'
+            ELSE
+                Descripcion
+                +CHAR(13)+CHAR(10)
+                +N'Cierre: terminación parcial ejecutada por Producción conforme a autorización de Planeación.'
+        END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=@Ahora
+WHERE ParoID=@ParoID
+  AND EjecucionProduccionID=@EjecucionProduccionID
+  AND Activo=1
+  AND FechaFinParo IS NULL
+  AND ISNULL(EsInterrupcionUrgente,0)=1
+  AND ISNULL(EsParoLhRh,0)=0
+  AND ISNULL(AutorizaTerminacionParcial,0)=1
+  AND ISNULL(TerminacionParcialEjecutada,0)=0;
+
+IF @@ROWCOUNT<>1
+    THROW 51680,'La autorización de terminación parcial cambió o ya fue utilizada.',1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@ParoID", SqlDbType.Int).Value = paroId;
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
         private static async Task<bool>
             PersonaEsTecnicoProduccionActivoAsync(
                 int personaId,
@@ -11097,6 +11264,53 @@ WHERE p.PersonaID=@PersonaID
                 ? null
                 : nombre;
         }
+
+        private async Task<(int? ParoID, string? Motivo, DateTime? FechaAutorizacion)> ObtenerAutorizacionTerminacionParcialAsync(
+    int ejecucionProduccionId,
+    SqlConnection cn,
+    SqlTransaction? tx = null)
+        {
+            if (ejecucionProduccionId <= 0)
+                return (null, null, null);
+
+            const string sql = @"
+SELECT TOP(1)
+    p.ParoID,
+    p.MotivoTerminacionParcial,
+    p.FechaAutorizacionTerminacionParcial
+FROM dbo.Produccion_Paros p
+WHERE p.EjecucionProduccionID=@EjecucionProduccionID
+  AND p.Activo=1
+  AND p.FechaFinParo IS NULL
+  AND ISNULL(p.EsInterrupcionUrgente,0)=1
+  AND ISNULL(p.EsParoLhRh,0)=0
+  AND ISNULL(p.AutorizaTerminacionParcial,0)=1
+  AND ISNULL(p.TerminacionParcialEjecutada,0)=0
+ORDER BY p.FechaAutorizacionTerminacionParcial DESC,p.ParoID DESC;";
+
+            await using var cmd = tx == null
+                ? new SqlCommand(sql, cn)
+                : new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return (null, null, null);
+
+            return
+            (
+                Convert.ToInt32(rd["ParoID"]),
+                rd["MotivoTerminacionParcial"] == DBNull.Value
+                    ? null
+                    : rd["MotivoTerminacionParcial"]?.ToString()?.Trim(),
+                rd["FechaAutorizacionTerminacionParcial"] == DBNull.Value
+                    ? null
+                    : Convert.ToDateTime(rd["FechaAutorizacionTerminacionParcial"])
+            );
+        }
+
         private static async Task<string?> ObtenerNombrePersonaActivaProduccionAsync(int personaId, SqlConnection cn, SqlTransaction tx)
         {
             if (personaId <= 0) return null;

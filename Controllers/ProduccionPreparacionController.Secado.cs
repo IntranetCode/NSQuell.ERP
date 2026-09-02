@@ -1061,24 +1061,43 @@ IF @@ROWCOUNT<>1
         public async Task<IActionResult> FinalizarSecado(ProduccionFinalizarSecadoVm vm)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
             if (vm.SecadoCargaID <= 0)
             {
                 TempData["Error"] = "No se recibió correctamente la carga de secado.";
                 return RedirectToAction(nameof(Secado));
             }
 
-            var observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? null : vm.Observaciones.Trim();
+            var observaciones = string.IsNullOrWhiteSpace(vm.Observaciones)
+                ? null
+                : vm.Observaciones.Trim();
+
+            var motivoFinalizacionAnticipada = string.IsNullOrWhiteSpace(vm.MotivoFinalizacionAnticipada)
+                ? null
+                : vm.MotivoFinalizacionAnticipada.Trim();
+
             if (observaciones?.Length > 1000)
             {
                 TempData["Error"] = "Las observaciones no pueden superar 1000 caracteres.";
                 return RedirectToAction(nameof(Secado));
             }
 
+            if (motivoFinalizacionAnticipada?.Length > 500)
+            {
+                TempData["Error"] = "El motivo de interrupción anticipada no puede superar 500 caracteres.";
+                return RedirectToAction(nameof(Secado));
+            }
+
             var usuarioId = ObtenerUsuarioID();
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             var permisos = await ObtenerPermisosPreparacionUsuarioAsync(usuarioId, cn);
-            if (!permisos.PuedeGestionarSecado) return StatusCode(StatusCodes.Status403Forbidden);
+
+            if (!permisos.PuedeGestionarSecado)
+                return StatusCode(StatusCodes.Status403Forbidden);
+
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
@@ -1117,7 +1136,9 @@ WHERE c.SecadoCargaID=@SecadoCargaID
                 await using (var cmd = new SqlCommand(sqlCarga, cn, tx))
                 {
                     cmd.Parameters.Add("@SecadoCargaID", SqlDbType.BigInt).Value = vm.SecadoCargaID;
+
                     await using var rd = await cmd.ExecuteReaderAsync();
+
                     if (!await rd.ReadAsync())
                     {
                         await tx.RollbackAsync();
@@ -1135,13 +1156,19 @@ WHERE c.SecadoCargaID=@SecadoCargaID
 
                     fechaInicio = Convert.ToDateTime(rd["FechaInicioReal"]);
                     fechaFinEsperada = Convert.ToDateTime(rd["FechaFinEsperada"]);
-                    programaProduccionId = rd["ProgramaProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["ProgramaProduccionID"]);
+                    programaProduccionId = rd["ProgramaProduccionID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(rd["ProgramaProduccionID"]);
                     cantidadRecibida = Convert.ToDecimal(rd["CantidadRecibidaKg"]);
                     cantidadFinalizadaAnterior = Convert.ToDecimal(rd["CantidadFinalizadaKg"]);
-                    estadoMaterialAnterior = rd["EstadoMaterial"]?.ToString()?.Trim() ?? ProduccionSecadoEstadoMaterial.EnProceso;
+                    estadoMaterialAnterior = rd["EstadoMaterial"]?.ToString()?.Trim()
+                        ?? ProduccionSecadoEstadoMaterial.EnProceso;
                 }
 
-                if (!string.Equals(estadoCarga, ProduccionSecadoEstadoCarga.EnProceso, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(
+                    estadoCarga,
+                    ProduccionSecadoEstadoCarga.EnProceso,
+                    StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
                     TempData["Warning"] = "Esta carga ya no se encuentra en proceso.";
@@ -1149,46 +1176,46 @@ WHERE c.SecadoCargaID=@SecadoCargaID
                 }
 
                 var ahora = await ObtenerFechaServidorSecadoAsync(cn, tx);
-
-                // NSQ_SECADO_OF_MATERIAL_V1_FIN_LOGIC_START
                 var rangoSecado = await ObtenerRangoSecadoCargaV1Async(vm.SecadoCargaID, cn, tx);
-                var finalizoAntesTiempo = ahora < fechaFinEsperada;
-                var motivoFinalizacionAnticipada = string.IsNullOrWhiteSpace(vm.MotivoFinalizacionAnticipada)
-                    ? null
-                    : vm.MotivoFinalizacionAnticipada.Trim();
 
-                if (motivoFinalizacionAnticipada?.Length > 500)
+                var interrumpioAntesTiempo = ahora < fechaFinEsperada;
+
+                var minutosFaltantes = interrumpioAntesTiempo
+                    ? Math.Max(1, (int)Math.Ceiling((fechaFinEsperada - ahora).TotalMinutes))
+                    : 0;
+
+                if (interrumpioAntesTiempo && !vm.ConfirmarFinalizacionAnticipada)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "El motivo de finalización anticipada no puede superar 500 caracteres.";
+                    TempData["Warning"] = $"La carga todavía no cumple el tiempo objetivo. Faltan aproximadamente {minutosFaltantes} minuto(s). Para retirarla debes confirmar expresamente la interrupción anticipada.";
                     return RedirectToAction(nameof(Secado));
                 }
 
-                if (finalizoAntesTiempo && !vm.ConfirmarFinalizacionAnticipada)
-                {
-                    var minutosFaltantes = Math.Max(1, (int)Math.Ceiling((fechaFinEsperada - ahora).TotalMinutes));
-                    await tx.RollbackAsync();
-                    TempData["Warning"] = $"La carga aún no cumple el tiempo objetivo. Faltan aproximadamente {minutosFaltantes} minuto(s). Confirma expresamente la finalización anticipada.";
-                    return RedirectToAction(nameof(Secado));
-                }
-
-                if (finalizoAntesTiempo && string.IsNullOrWhiteSpace(motivoFinalizacionAnticipada))
+                if (interrumpioAntesTiempo && string.IsNullOrWhiteSpace(motivoFinalizacionAnticipada))
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "Para finalizar antes del tiempo objetivo debes indicar un motivo obligatorio.";
+                    TempData["Error"] = "Para interrumpir el secado antes del tiempo objetivo debes registrar el motivo.";
                     return RedirectToAction(nameof(Secado));
                 }
 
                 var fechaFinMaxima = fechaInicio.AddMinutes(rangoSecado.MinutosMaximos);
-                var duracionRealMinutos = Math.Max(0, (int)Math.Floor((ahora - fechaInicio).TotalMinutes));
-                var minutosExceso = Math.Max(0, (int)Math.Floor((ahora - fechaFinMaxima).TotalMinutes));
-                // NSQ_SECADO_OF_MATERIAL_V1_FIN_LOGIC_END
+                var duracionRealMinutos = Math.Max(
+                    0,
+                    (int)Math.Floor((ahora - fechaInicio).TotalMinutes));
+
+                var minutosExceso = Math.Max(
+                    0,
+                    (int)Math.Floor((ahora - fechaFinMaxima).TotalMinutes));
 
                 const string sqlCerrarSegmento = @"
 UPDATE dbo.Produccion_SecadoCargaSegmentos
 SET
     FechaFin=@Ahora,
-    MinutosSegmento=CASE WHEN DATEDIFF(MINUTE,FechaInicio,@Ahora)<0 THEN 0 ELSE DATEDIFF(MINUTE,FechaInicio,@Ahora) END,
+    MinutosSegmento=
+        CASE
+            WHEN DATEDIFF(MINUTE,FechaInicio,@Ahora)<0 THEN 0
+            ELSE DATEDIFF(MINUTE,FechaInicio,@Ahora)
+        END,
     UsuarioFinID=@UsuarioID
 WHERE SecadoCargaID=@SecadoCargaID
   AND TolvaID=@TolvaID
@@ -1204,6 +1231,7 @@ IF @@ROWCOUNT<>1
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
                     cmd.Parameters.Add("@SecadoCargaID", SqlDbType.BigInt).Value = vm.SecadoCargaID;
                     cmd.Parameters.Add("@TolvaID", SqlDbType.Int).Value = tolvaId;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -1215,16 +1243,16 @@ SET
     DuracionRealMinutos=@DuracionRealMinutos,
     MinutosExcesoSecado=@MinutosExceso,
     ExcedioTiempo=CASE WHEN @MinutosExceso>0 THEN 1 ELSE 0 END,
-    -- NSQ_SECADO_OF_MATERIAL_V1_FIN_SQL_START
     FinalizoAntesTiempo=@FinalizoAntesTiempo,
     MotivoFinalizacionAnticipada=@MotivoFinalizacionAnticipada,
-    -- NSQ_SECADO_OF_MATERIAL_V1_FIN_SQL_END
     UsuarioFinID=@UsuarioID,
-    Observaciones=CASE
-        WHEN @Observaciones IS NULL THEN Observaciones
-        WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones
-        ELSE LEFT(Observaciones+CHAR(13)+CHAR(10)+@Observaciones,1000)
-    END,
+    Observaciones=
+        CASE
+            WHEN @Observaciones IS NULL THEN Observaciones
+            WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N''
+                THEN @Observaciones
+            ELSE LEFT(Observaciones+CHAR(13)+CHAR(10)+@Observaciones,1000)
+        END,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=@Ahora
 WHERE SecadoCargaID=@SecadoCargaID
@@ -1239,32 +1267,54 @@ IF @@ROWCOUNT<>1
                     cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
                     cmd.Parameters.Add("@DuracionRealMinutos", SqlDbType.Int).Value = duracionRealMinutos;
                     cmd.Parameters.Add("@MinutosExceso", SqlDbType.Int).Value = minutosExceso;
-                    // NSQ_SECADO_OF_MATERIAL_V1_FIN_PARAMS_START
-                    cmd.Parameters.Add("@FinalizoAntesTiempo", SqlDbType.Bit).Value = finalizoAntesTiempo;
-                    cmd.Parameters.Add("@MotivoFinalizacionAnticipada", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(motivoFinalizacionAnticipada) ? DBNull.Value : motivoFinalizacionAnticipada;
-                    // NSQ_SECADO_OF_MATERIAL_V1_FIN_PARAMS_END
+                    cmd.Parameters.Add("@FinalizoAntesTiempo", SqlDbType.Bit).Value = interrumpioAntesTiempo;
+                    cmd.Parameters.Add("@MotivoFinalizacionAnticipada", SqlDbType.NVarChar, 500).Value =
+                        interrumpioAntesTiempo && !string.IsNullOrWhiteSpace(motivoFinalizacionAnticipada)
+                            ? motivoFinalizacionAnticipada
+                            : DBNull.Value;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = string.IsNullOrWhiteSpace(observaciones) ? DBNull.Value : observaciones;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value =
+                        string.IsNullOrWhiteSpace(observaciones)
+                            ? DBNull.Value
+                            : observaciones;
                     cmd.Parameters.Add("@SecadoCargaID", SqlDbType.BigInt).Value = vm.SecadoCargaID;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                var nuevaCantidadFinalizada = Math.Min(cantidadRecibida, cantidadFinalizadaAnterior + cantidadKg);
-                var materialCompleto = nuevaCantidadFinalizada + ProduccionSecadoReglas.ToleranciaCantidad >= cantidadRecibida;
-                var nuevoEstadoMaterial = materialCompleto ? ProduccionSecadoEstadoMaterial.Finalizado : ProduccionSecadoEstadoMaterial.Parcial;
+                var nuevaCantidadFinalizada = Math.Min(
+                    cantidadRecibida,
+                    cantidadFinalizadaAnterior + cantidadKg);
+
+                var materialCompleto =
+                    nuevaCantidadFinalizada + ProduccionSecadoReglas.ToleranciaCantidad
+                    >= cantidadRecibida;
+
+                var nuevoEstadoMaterial = materialCompleto
+                    ? ProduccionSecadoEstadoMaterial.Finalizado
+                    : ProduccionSecadoEstadoMaterial.Parcial;
 
                 const string sqlActualizarMaterial = @"
 UPDATE dbo.Produccion_SecadoMaterial
 SET
-    CantidadFinalizadaKg=CASE WHEN CantidadFinalizadaKg+@CantidadKg>CantidadRecibidaKg THEN CantidadRecibidaKg ELSE CantidadFinalizadaKg+@CantidadKg END,
+    CantidadFinalizadaKg=
+        CASE
+            WHEN CantidadFinalizadaKg+@CantidadKg>CantidadRecibidaKg
+                THEN CantidadRecibidaKg
+            ELSE CantidadFinalizadaKg+@CantidadKg
+        END,
     FechaUltimoFinSecado=@Ahora,
     Estado=@Estado,
-    MinutosRetrasoFinal=CASE
-        WHEN @Estado=N'FINALIZADO' AND FechaObjetivoFinSecado IS NOT NULL AND @Ahora>FechaObjetivoFinSecado
-            THEN DATEDIFF(MINUTE,FechaObjetivoFinSecado,@Ahora)
-        WHEN @Estado=N'FINALIZADO' THEN 0
-        ELSE NULL
-    END,
+    MinutosRetrasoFinal=
+        CASE
+            WHEN @Estado=N'FINALIZADO'
+             AND FechaObjetivoFinSecado IS NOT NULL
+             AND @Ahora>FechaObjetivoFinSecado
+                THEN DATEDIFF(MINUTE,FechaObjetivoFinSecado,@Ahora)
+            WHEN @Estado=N'FINALIZADO'
+                THEN 0
+            ELSE NULL
+        END,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=@Ahora
 WHERE SecadoMaterialID=@SecadoMaterialID
@@ -1285,33 +1335,106 @@ IF @@ROWCOUNT<>1
                     cmd.Parameters.Add("@Estado", SqlDbType.NVarChar, 30).Value = nuevoEstadoMaterial;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
                     cmd.Parameters.Add("@SecadoMaterialID", SqlDbType.BigInt).Value = secadoMaterialId;
+
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                await AgregarHistorialSecadoAsync(secadoMaterialId, vm.SecadoCargaID, "FIN_SECADO", estadoMaterialAnterior, nuevoEstadoMaterial, tolvaId, tolvaId, cantidadKg, minutosExceso > 0 ? $"Carga finalizada con {minutosExceso} minuto(s) adicionales al tiempo requerido." : "Carga finalizada al cumplir el tiempo requerido.", usuarioId, ahora, cn, tx);
+                var eventoHistorial = interrumpioAntesTiempo
+                    ? "INTERRUPCION_SECADO_ANTICIPADA"
+                    : "FIN_SECADO";
 
-                if (programaProduccionId.HasValue && programaProduccionId.Value > 0)
-                    await ActualizarPreparacionSecadoFinalAsync(programaProduccionId.Value, usuarioId, ahora, cn, tx);
+                string comentarioHistorial;
 
-                await tx.CommitAsync();
-
-                if (materialCompleto)
+                if (interrumpioAntesTiempo)
                 {
-                    TempData["Success"] = $"Secado finalizado. Se completaron {nuevaCantidadFinalizada:0.####} KG del material.";
-                    if (minutosExceso > 0) TempData["Warning"] = $"La carga terminó {minutosExceso} minuto(s) después del tiempo requerido.";
+                    comentarioHistorial =
+                        $"Producción interrumpió el secado {minutosFaltantes} minuto(s) antes del tiempo objetivo. " +
+                        $"Motivo: {motivoFinalizacionAnticipada}. " +
+                        $"Duración real: {duracionRealMinutos} minuto(s).";
+                }
+                else if (minutosExceso > 0)
+                {
+                    comentarioHistorial =
+                        $"Carga finalizada con {minutosExceso} minuto(s) adicionales al tiempo máximo configurado.";
                 }
                 else
                 {
-                    var restante = Math.Max(0m, cantidadRecibida - nuevaCantidadFinalizada);
-                    TempData["Success"] = $"Carga finalizada correctamente. Quedan {restante:0.####} KG por completar en una nueva carga.";
-                    if (minutosExceso > 0) TempData["Warning"] = $"La carga terminó {minutosExceso} minuto(s) después del tiempo requerido.";
+                    comentarioHistorial = "Carga finalizada al cumplir el tiempo requerido.";
+                }
+
+                await AgregarHistorialSecadoAsync(
+                    secadoMaterialId,
+                    vm.SecadoCargaID,
+                    eventoHistorial,
+                    estadoMaterialAnterior,
+                    nuevoEstadoMaterial,
+                    tolvaId,
+                    tolvaId,
+                    cantidadKg,
+                    comentarioHistorial,
+                    usuarioId,
+                    ahora,
+                    cn,
+                    tx);
+
+                if (programaProduccionId.HasValue && programaProduccionId.Value > 0)
+                {
+                    await ActualizarPreparacionSecadoFinalAsync(
+                        programaProduccionId.Value,
+                        usuarioId,
+                        ahora,
+                        cn,
+                        tx);
+                }
+
+                await tx.CommitAsync();
+
+                if (interrumpioAntesTiempo)
+                {
+                    TempData["Warning"] =
+                        $"Secado interrumpido anticipadamente por Producción. " +
+                        $"La carga se cerró {minutosFaltantes} minuto(s) antes del tiempo objetivo. " +
+                        $"Motivo registrado: {motivoFinalizacionAnticipada}.";
+                }
+                else if (materialCompleto)
+                {
+                    TempData["Success"] =
+                        $"Secado finalizado. Se completaron {nuevaCantidadFinalizada:0.####} KG del material.";
+
+                    if (minutosExceso > 0)
+                    {
+                        TempData["Warning"] =
+                            $"La carga terminó {minutosExceso} minuto(s) después del tiempo máximo configurado.";
+                    }
+                }
+                else
+                {
+                    var restante = Math.Max(
+                        0m,
+                        cantidadRecibida - nuevaCantidadFinalizada);
+
+                    TempData["Success"] =
+                        $"Carga finalizada correctamente. Quedan {restante:0.####} KG por completar en una nueva carga.";
+
+                    if (minutosExceso > 0)
+                    {
+                        TempData["Warning"] =
+                            $"La carga terminó {minutosExceso} minuto(s) después del tiempo máximo configurado.";
+                    }
                 }
 
                 return RedirectToAction(nameof(Secado));
             }
             catch (Exception ex)
             {
-                try { await tx.RollbackAsync(); } catch { }
+                try
+                {
+                    await tx.RollbackAsync();
+                }
+                catch
+                {
+                }
+
                 TempData["Error"] = "No fue posible finalizar el secado: " + ex.Message;
                 return RedirectToAction(nameof(Secado));
             }

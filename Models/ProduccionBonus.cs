@@ -151,9 +151,34 @@ public sealed class ProduccionBonusMovimientoDetalleVm
     public int? CantidadSospechosa { get; set; }
     public int? CantidadScrap { get; set; }
 
+    public long? AjusteProduccionID { get; set; }
+    public int? AjusteOKAntes { get; set; }
+    public int? AjusteScrapAntes { get; set; }
+    public int? AjusteOKDespues { get; set; }
+    public int? AjusteScrapDespues { get; set; }
+    public string? AjusteMotivo { get; set; }
+    public int? UsuarioAjusteID { get; set; }
+    public string? UsuarioAjusteNombre { get; set; }
+    public DateTime? FechaAjuste { get; set; }
+
     public bool EsAbono => PiezasMovimiento > 0;
     public bool EsDescuento => PiezasMovimiento < 0;
     public long PiezasAbsolutas => Math.Abs((long)PiezasMovimiento);
+
+    public bool EsCorreccionProduccion =>
+        AjusteProduccionID.HasValue ||
+        string.Equals(TipoMovimiento, ProduccionTipoMovimientoBonus.CorreccionPositiva, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(TipoMovimiento, ProduccionTipoMovimientoBonus.CorreccionNegativa, StringComparison.OrdinalIgnoreCase);
+
+    public int? DiferenciaOKAjuste =>
+        AjusteOKAntes.HasValue && AjusteOKDespues.HasValue
+            ? AjusteOKDespues.Value - AjusteOKAntes.Value
+            : null;
+
+    public int? DiferenciaScrapAjuste =>
+        AjusteScrapAntes.HasValue && AjusteScrapDespues.HasValue
+            ? AjusteScrapDespues.Value - AjusteScrapAntes.Value
+            : null;
 
     public string Signo => PiezasMovimiento > 0
         ? "+"
@@ -163,13 +188,15 @@ public sealed class ProduccionBonusMovimientoDetalleVm
 
     public string TipoMovimientoNombre => ProduccionTipoMovimientoBonus.Nombre(TipoMovimiento);
 
-    public string TipoRegistroTexto => EsTiempoExtra
-        ? NumeroCorteTiempoExtra.HasValue
-            ? $"Tiempo extra · corte #{NumeroCorteTiempoExtra.Value}"
-            : "Tiempo extra"
-        : RegistroHoraID.HasValue
-            ? "Captura normal"
-            : "Ajuste";
+    public string TipoRegistroTexto => EsCorreccionProduccion
+        ? "Corrección de Producción"
+        : EsTiempoExtra
+            ? NumeroCorteTiempoExtra.HasValue
+                ? $"Tiempo extra · corte #{NumeroCorteTiempoExtra.Value}"
+                : "Tiempo extra"
+            : RegistroHoraID.HasValue
+                ? "Captura normal"
+                : "Ajuste";
 
     public string RangoHoraTexto
     {
@@ -180,7 +207,6 @@ public sealed class ProduccionBonusMovimientoDetalleVm
         }
     }
 }
-
 public sealed class ProduccionBonusHistorialVm
 {
     public DateTime FechaReferencia { get; set; }

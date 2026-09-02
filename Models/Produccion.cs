@@ -696,104 +696,93 @@ public sealed class ProduccionEjecucionVm
             ? "Sin operador"
             : OperadorNombre;
 }
+
 public sealed class ProduccionRegistroHoraVm
 {
     public int RegistroHoraID { get; set; }
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
     public int? SolicitudProduccionID { get; set; }
-
     public int? MaquinaID { get; set; }
     public int? OperadorID { get; set; }
-
     public DateTime FechaProduccion { get; set; } = DateTime.Today;
     public TimeSpan HoraInicio { get; set; }
     public TimeSpan HoraFin { get; set; }
-
     public int CantidadOK { get; set; }
     public int CantidadSospechosa { get; set; }
     public int CantidadScrap { get; set; }
-
+    public int CantidadOKOriginal { get; set; }
+    public int CantidadSospechosaOriginal { get; set; }
+    public int CantidadScrapOriginal { get; set; }
+    public bool AjustadoPorProduccion { get; set; }
+    public DateTime? FechaUltimoAjusteProduccion { get; set; }
+    public int? UsuarioUltimoAjusteProduccionID { get; set; }
     public string? Observaciones { get; set; }
-
     public int? UsuarioCreacionID { get; set; }
     public DateTime FechaCreacion { get; set; }
     public int? UsuarioModificacionID { get; set; }
     public DateTime? FechaModificacion { get; set; }
     public bool Activo { get; set; } = true;
-
     public int? ObjetivoHora { get; set; }
     public int? ObjetivoBloque { get; set; }
     public bool? CumplioObjetivo { get; set; }
     public int? DiferenciaObjetivo { get; set; }
     public decimal? PorcentajeCumplimiento { get; set; }
-
-    // =========================================================
-    // PRODUCCIÓN REAL MEDIANTE CONTADOR DE MÁQUINA
-    // =========================================================
     public int? PiezasCalculadasContador { get; set; }
     public decimal? MinutosProductivos { get; set; }
-
-    // =========================================================
-    // TIEMPO EXTRA
-    // =========================================================
     public bool EsTiempoExtra { get; set; }
     public string? TipoBloque { get; set; }
     public int? TiempoExtraID { get; set; }
     public int? NumeroCorteTiempoExtra { get; set; }
-
     public bool TieneCambioConfiguracion { get; set; }
     public bool TieneReinicioContador { get; set; }
-
     public List<ProduccionRegistroHoraSegmentoVm> Segmentos { get; set; } = new();
+    public List<ProduccionRegistroHoraAjusteProduccionVm> AjustesProduccion { get; set; } = new();
+    public long? ContadorInicial => Segmentos.Count > 0 ? Segmentos.OrderBy(x => x.NumeroSegmento).First().ContadorInicial : null;
+    public long? ContadorFinal => Segmentos.Count > 0 ? Segmentos.OrderByDescending(x => x.NumeroSegmento).First().ContadorFinal : null;
+    public long CiclosCalculados => Segmentos.Where(x => x.Activo).Sum(x => x.CiclosPeriodo);
+    public int TotalCapturado => CantidadOK + CantidadSospechosa + CantidadScrap;
+    public string RangoHora => $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
+    public bool TieneCaptura => CantidadOK > 0 || CantidadSospechosa > 0 || CantidadScrap > 0 || !string.IsNullOrWhiteSpace(Observaciones);
+    public bool EsCorteTiempoExtra => EsTiempoExtra && TiempoExtraID.HasValue && NumeroCorteTiempoExtra.HasValue;
+ 
+    public int DiferenciaOKRespectoOriginal => CantidadOK - CantidadOKOriginal;
+    public int DiferenciaScrapRespectoOriginal => CantidadScrap - CantidadScrapOriginal;
+    public string TipoBloqueTexto => EsCorteTiempoExtra ? $"Tiempo extra · corte #{NumeroCorteTiempoExtra}" : EsTiempoExtra ? "Tiempo extra" : "Producción normal";
 
-    public long? ContadorInicial =>
-        Segmentos.Count > 0
-            ? Segmentos
-                .OrderBy(x => x.NumeroSegmento)
-                .First()
-                .ContadorInicial
-            : null;
 
-    public long? ContadorFinal =>
-        Segmentos.Count > 0
-            ? Segmentos
-                .OrderByDescending(x => x.NumeroSegmento)
-                .First()
-                .ContadorFinal
-            : null;
-
-    public long CiclosCalculados =>
-        Segmentos
-            .Where(x => x.Activo)
-            .Sum(x => x.CiclosPeriodo);
-
-    public int TotalCapturado =>
-        CantidadOK +
-        CantidadSospechosa +
-        CantidadScrap;
-
-    public string RangoHora =>
-        $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
-
-    public bool TieneCaptura =>
-        CantidadOK > 0 ||
-        CantidadSospechosa > 0 ||
-        CantidadScrap > 0 ||
-        !string.IsNullOrWhiteSpace(Observaciones);
-
-    public bool EsCorteTiempoExtra =>
-        EsTiempoExtra &&
-        TiempoExtraID.HasValue &&
-        NumeroCorteTiempoExtra.HasValue;
-
-    public string TipoBloqueTexto =>
-        EsCorteTiempoExtra
-            ? $"Tiempo extra · corte #{NumeroCorteTiempoExtra}"
-            : EsTiempoExtra
-                ? "Tiempo extra"
-                : "Producción normal";
+    public bool TieneAjustesProduccion => AjustadoPorProduccion || AjustesProduccion.Count > 0;
 }
+
+public sealed class ProduccionAjustarRegistroHoraPostVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public int RegistroHoraID { get; set; }
+    public int CantidadOK { get; set; }
+    public int CantidadScrap { get; set; }
+    public string? Motivo { get; set; }
+}
+
+public sealed class ProduccionRegistroHoraAjusteProduccionVm
+{
+    public long AjusteProduccionID { get; set; }
+    public int RegistroHoraID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int? OperadorID { get; set; }
+    public int OKAntes { get; set; }
+    public int ScrapAntes { get; set; }
+    public int OKDespues { get; set; }
+    public int ScrapDespues { get; set; }
+    public long? MovimientoBonusID { get; set; }
+    public string Motivo { get; set; } = string.Empty;
+    public int UsuarioAjusteID { get; set; }
+    public string UsuarioAjusteNombre { get; set; } = string.Empty;
+    public DateTime FechaAjuste { get; set; }
+    public bool Activo { get; set; } = true;
+    public int DiferenciaOK => OKDespues - OKAntes;
+    public int DiferenciaScrap => ScrapDespues - ScrapAntes;
+}
+
 public sealed class ProduccionParoVm
 {
     public int ParoID { get; set; }
@@ -833,6 +822,8 @@ public sealed class ProduccionParoVm
         }
     }
 }
+
+
 public sealed class ProduccionMotivoParoVm
 {
     public int MotivoParoID { get; set; }
@@ -1374,6 +1365,7 @@ public sealed class ProduccionTerminarPostVm
     public bool TerminarParcial { get; set; }
     public string? Observaciones { get; set; }
 }
+
 
 public sealed class ProduccionOperadorTabletVm
 {
@@ -3053,5 +3045,34 @@ public sealed class ProduccionOperadorCajasVm
     {
         public int EjecucionProduccionID { get; set; }
         public string CodigoBarras { get; set; } = string.Empty;
+    }
+
+    public sealed class ProduccionAjustarRegistroHoraPostVm
+    {
+        public int EjecucionProduccionID { get; set; }
+        public int RegistroHoraID { get; set; }
+        public int CantidadOK { get; set; }
+        public int CantidadScrap { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    public sealed class ProduccionRegistroHoraAjusteProduccionVm
+    {
+        public long AjusteProduccionID { get; set; }
+        public int RegistroHoraID { get; set; }
+        public int EjecucionProduccionID { get; set; }
+        public int? OperadorID { get; set; }
+        public int OKAntes { get; set; }
+        public int ScrapAntes { get; set; }
+        public int OKDespues { get; set; }
+        public int ScrapDespues { get; set; }
+        public long? MovimientoBonusID { get; set; }
+        public string Motivo { get; set; } = string.Empty;
+        public int UsuarioAjusteID { get; set; }
+        public string UsuarioAjusteNombre { get; set; } = string.Empty;
+        public DateTime FechaAjuste { get; set; }
+        public bool Activo { get; set; }
+        public int DiferenciaOK => OKDespues - OKAntes;
+        public int DiferenciaScrap => ScrapDespues - ScrapAntes;
     }
 }

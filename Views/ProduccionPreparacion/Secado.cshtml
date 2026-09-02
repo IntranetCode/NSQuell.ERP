@@ -2559,11 +2559,18 @@
                                     </button>
 
                                     <button type="button"
-                                            class="btnx btnx-success js-toggle-panel js-open-finish"
-                                            data-target="finalizar-@carga.SecadoCargaID"
-                                            @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_BUTTON *@>
-                                        <i class="bi bi-check-circle"></i>
-                                        Finalizar carga
+                                            class="btnx @(carga.TiempoRequeridoCumplido ? "btnx-success" : "btnx-danger") js-toggle-panel js-open-finish"
+                                            data-target="finalizar-@carga.SecadoCargaID">
+                                        @if (carga.TiempoRequeridoCumplido)
+                                        {
+                                            <i class="bi bi-check-circle"></i>
+                                            <span>Finalizar carga</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-stop-circle"></i>
+                                            <span>Interrumpir secado</span>
+                                        }
                                     </button>
                                 }
 
@@ -2657,63 +2664,89 @@
                                 <div class="action-panel"
                                      id="finalizar-@carga.SecadoCargaID">
 
-                                    <div class="panel-title">
-                                        <i class="bi bi-check-circle"></i>
-                                        Finalizar carga de secado
+                                    <div class="panel-title js-finish-panel-title">
+                                        @if (carga.TiempoRequeridoCumplido)
+                                        {
+                                            <i class="bi bi-check-circle"></i>
+                                            <span>Finalizar carga de secado</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                            <span>Interrumpir secado antes de tiempo</span>
+                                        }
                                     </div>
 
                                     <form asp-controller="ProduccionPreparacion"
                                           asp-action="FinalizarSecado"
                                           method="post"
-                                          class="action-form js-post-form"
-                                          data-confirm="¿Confirmas que la carga terminó físicamente su proceso de secado?">
+                                          class="action-form js-post-form js-finish-form"
+                                          data-confirm="@(carga.TiempoRequeridoCumplido
+                                                        ? "¿Confirmas que la carga terminó físicamente su proceso de secado?"
+                                                        : "¿Confirmas interrumpir el secado antes del tiempo objetivo? Esta acción cerrará la carga.")">
 
-                                        @Html.AntiForgeryToken()
+                            @Html.AntiForgeryToken()
 
                                         <input type="hidden"
                                                name="SecadoCargaID"
                                                value="@carga.SecadoCargaID" />
 
-                                        @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_WARNING_START *@
-                                        @if (!carga.TiempoRequeridoCumplido)
-                                        {
-                                            <div class="nsq-early-finish-v1" role="alert">
-                                                <strong><i class="bi bi-exclamation-triangle-fill"></i> Finalización anticipada</strong>
-                                                <span>Esta carga todavía no cumple la hora esperada. Puedes finalizarla, pero debes confirmar y escribir el motivo.</span>
+                                        <input type="hidden"
+                                               name="ConfirmarFinalizacionAnticipada"
+                                               class="js-early-confirm"
+                                               value="@(carga.TiempoRequeridoCumplido ? "false" : "true")" />
+
+                                        <div class="js-early-fields @(carga.TiempoRequeridoCumplido ? "d-none" : "")">
+                                            <div class="load-alert warning mb-3">
+                                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                                <strong>Interrupción anticipada.</strong>
+                                                Todavía faltan aproximadamente
+                                                <strong>@carga.MinutosRestantes minuto(s)</strong>
+                                                para cumplir el tiempo objetivo.
+                                                Esta acción quedará registrada como decisión de Producción.
                                             </div>
 
-                                            <input type="hidden"
-                                                   name="ConfirmarFinalizacionAnticipada"
-                                                   value="true" />
+                                            <div class="field">
+                                                <label>Motivo de la interrupción *</label>
 
-                                            <div class="field nsq-early-reason-v1">
-                                                <label>Motivo obligatorio de finalización anticipada</label>
                                                 <textarea name="MotivoFinalizacionAnticipada"
-                                                          maxlength="500"
-                                                          required
-                                                          placeholder="Indica por qué se termina el secado antes del tiempo esperado."></textarea>
+                                              class="js-early-reason"
+                                              maxlength="500"
+                                              @(carga.TiempoRequeridoCumplido ? null : "required")
+                                              placeholder="Ej. Se requiere iniciar la OF de manera anticipada por prioridad de Producción."></textarea>
+
+                                                <span class="field-help">
+                                                    Este dato solo se solicita cuando el secado se interrumpe antes del tiempo objetivo.
+                                                    No genera ningún flujo de Calidad.
+                                                </span>
                                             </div>
-                                        }
-                                        @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_WARNING_END *@
+                                        </div>
 
                                         <div class="field">
                                             <label>Observaciones</label>
 
                                             <textarea name="Observaciones"
                                           maxlength="1000"
-                                          placeholder="Condición final del material, temperatura, observaciones del proceso, etc."></textarea>
+                                          placeholder="Condición del material, temperatura, observaciones del proceso, etc."></textarea>
                                         </div>
 
                                         <div class="actions">
-                                            <button class="btnx btnx-success js-finish-submit"
-                                                    type="submit"
-                                                    @* NSQ_SECADO_OF_MATERIAL_V1_EARLY_BUTTON *@>
-                                                <i class="bi bi-check2-circle"></i>
-                                                Confirmar finalización
+                                            <button class="btnx @(carga.TiempoRequeridoCumplido ? "btnx-success" : "btnx-danger") js-finish-submit"
+                                                    type="submit">
+                                    @if (carga.TiempoRequeridoCumplido)
+                                                {
+                                                    <i class="bi bi-check2-circle"></i>
+                                                    <span>Confirmar finalización</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-stop-circle"></i>
+                                                    <span>Confirmar interrupción anticipada</span>
+                                                }
                                             </button>
                                         </div>
                                     </form>
-                                </div>
+                                </div> 
                             }
                         </div>
                     </article>
@@ -3077,144 +3110,225 @@
                    String(seconds).padStart(2, '0');
         }
 
-        function updateLoadCard(card) {
-            const start = Date.parse(card.dataset.start || '');
-            const end = Date.parse(card.dataset.end || '');
+            function updateLoadCard(card) {
+        const start=Date.parse(card.dataset.start||'');
+        const end=Date.parse(card.dataset.end||'');
 
-            if (!Number.isFinite(start) || !Number.isFinite(end))
-                return;
+        if(!Number.isFinite(start)||!Number.isFinite(end))
+            return;
 
-            const now = nowServer();
-            const remaining = end - now;
-            const elapsed = Math.max(0, now - start);
-            const total = Math.max(1, end - start);
+        const now=nowServer();
+        const remaining=end-now;
+        const elapsed=Math.max(0,now-start);
+        const total=Math.max(1,end-start);
 
-            const percent = Math.min(
-                100,
-                Math.max(
-                    0,
-                    Math.round((elapsed * 100) / total)));
+        const percent=Math.min(
+            100,
+            Math.max(
+                0,
+                Math.round((elapsed*100)/total)));
 
-            const countdown = card.querySelector('.js-countdown');
-            const subtitle = card.querySelector('.js-countdown-sub');
-            const progress = card.querySelector('.js-progress');
-            const status = card.querySelector('.js-load-status');
-            const stateAlert = card.querySelector('.js-state-alert');
-            const finishOpen = card.querySelector('.js-open-finish');
-            const finishSubmit = card.querySelector('.js-finish-submit');
+        const countdown=card.querySelector('.js-countdown');
+        const subtitle=card.querySelector('.js-countdown-sub');
+        const progress=card.querySelector('.js-progress');
+        const status=card.querySelector('.js-load-status');
+        const stateAlert=card.querySelector('.js-state-alert');
+        const finishOpen=card.querySelector('.js-open-finish');
+        const finishSubmit=card.querySelector('.js-finish-submit');
+        const finishForm=card.querySelector('.js-finish-form');
+        const finishPanelTitle=card.querySelector('.js-finish-panel-title');
+        const earlyConfirm=card.querySelector('.js-early-confirm');
+        const earlyFields=card.querySelector('.js-early-fields');
+        const earlyReason=card.querySelector('.js-early-reason');
 
-            if (progress) {
-                progress.style.width = percent + '%';
+        if(progress)
+            progress.style.width=percent+'%';
+
+        if(remaining>0)
+        {
+            const remainingMinutes=Math.ceil(remaining/60000);
+
+            if(countdown)
+                countdown.textContent=formatDuration(remaining);
+
+            if(subtitle)
+                subtitle.textContent='El proceso continúa. Producción puede interrumpirlo anticipadamente si es necesario.';
+
+            if(finishOpen)
+            {
+                finishOpen.disabled=false;
+                finishOpen.classList.remove('btnx-success');
+                finishOpen.classList.add('btnx-danger');
+                finishOpen.innerHTML=
+                    '<i class="bi bi-stop-circle"></i>'+
+                    '<span>Interrumpir secado</span>';
             }
 
-            if (remaining > 0) {
-                if (countdown) {
-                    countdown.textContent = formatDuration(remaining);
-                }
-
-                if (subtitle) {
-                    subtitle.textContent =
-                        'El proceso continúa hasta cumplir el tiempo requerido.';
-                }
-
-                if (finishOpen) {
-                    finishOpen.disabled = true;
-                }
-
-                if (finishSubmit) {
-                    finishSubmit.disabled = true;
-                }
-
-                const remainingMinutes =
-                    Math.ceil(remaining / 60000);
-
-                if (status) {
-                    status.classList.remove(
-                        'success',
-                        'danger',
-                        'warning');
-
-                    if (remainingMinutes <= 15) {
-                        status.classList.add('warning');
-                        status.textContent = 'Próxima a terminar';
-                    } else {
-                        status.classList.add('primary');
-                        status.textContent = 'En secado';
-                    }
-                }
-
-                return;
+            if(finishSubmit)
+            {
+                finishSubmit.disabled=false;
+                finishSubmit.classList.remove('btnx-success');
+                finishSubmit.classList.add('btnx-danger');
+                finishSubmit.innerHTML=
+                    '<i class="bi bi-stop-circle"></i>'+
+                    '<span>Confirmar interrupción anticipada</span>';
             }
 
-            const overdueMilliseconds =
-                Math.max(0, now - end);
-
-            const overdueMinutes =
-                Math.floor(overdueMilliseconds / 60000);
-
-            if (countdown) {
-                if (overdueMilliseconds < 60000) {
-                    countdown.textContent = 'TIEMPO CUMPLIDO';
-                } else {
-                    countdown.textContent =
-                        '+' + formatDuration(overdueMilliseconds);
-                }
+            if(finishPanelTitle)
+            {
+                finishPanelTitle.innerHTML=
+                    '<i class="bi bi-exclamation-triangle"></i>'+
+                    '<span>Interrumpir secado antes de tiempo</span>';
             }
 
-            if (subtitle) {
-                subtitle.textContent =
-                    overdueMinutes > 0
-                        ? 'Tiempo adicional después del fin esperado.'
-                        : 'La carga ya puede finalizarse.';
+            if(finishForm)
+            {
+                finishForm.dataset.confirm=
+                    '¿Confirmas interrumpir el secado antes del tiempo objetivo? Esta acción cerrará la carga.';
             }
 
-            if (finishOpen) {
-                finishOpen.disabled = false;
-            }
+            if(earlyConfirm)
+                earlyConfirm.value='true';
 
-            if (finishSubmit) {
-                finishSubmit.disabled = false;
-            }
+            if(earlyFields)
+                earlyFields.classList.remove('d-none');
 
-            card.classList.add('is-ready');
+            if(earlyReason)
+                earlyReason.required=true;
 
-            if (status) {
+            if(status)
+            {
                 status.classList.remove(
-                    'primary',
-                    'warning',
                     'success',
-                    'danger');
+                    'danger',
+                    'warning',
+                    'primary');
 
-                if (overdueMinutes > toleranciaFinMinutos) {
-                    status.classList.add('danger');
-                    status.textContent = 'Retrasada';
-                    card.classList.add('is-danger');
-                } else {
-                    status.classList.add('success');
-                    status.textContent = 'Tiempo cumplido';
-                    card.classList.remove('is-danger');
+                if(remainingMinutes<=15)
+                {
+                    status.classList.add('warning');
+                    status.textContent='Próxima a terminar';
+                }
+                else
+                {
+                    status.classList.add('primary');
+                    status.textContent='En secado';
                 }
             }
 
-            if (stateAlert) {
-                if (overdueMinutes > toleranciaFinMinutos) {
-                    stateAlert.innerHTML =
-                        '<div class="load-alert danger">' +
-                        '<i class="bi bi-exclamation-octagon-fill me-1"></i>' +
-                        'La carga lleva <strong>' +
-                        overdueMinutes +
-                        ' minuto(s)</strong> después de su fin esperado.' +
-                        '</div>';
-                } else {
-                    stateAlert.innerHTML =
-                        '<div class="load-alert success">' +
-                        '<i class="bi bi-check-circle-fill me-1"></i>' +
-                        'El tiempo requerido ya se cumplió. ' +
-                        'La carga puede finalizarse.' +
-                        '</div>';
-                }
+            return;
+        }
+
+        const overdueMilliseconds=Math.max(0,now-end);
+        const overdueMinutes=Math.floor(overdueMilliseconds/60000);
+
+        if(countdown)
+        {
+            countdown.textContent=
+                overdueMilliseconds<60000
+                    ?'TIEMPO CUMPLIDO'
+                    :'+'+formatDuration(overdueMilliseconds);
+        }
+
+        if(subtitle)
+        {
+            subtitle.textContent=
+                overdueMinutes>0
+                    ?'Tiempo adicional después del fin esperado.'
+                    :'La carga ya puede finalizarse.';
+        }
+
+        if(finishOpen)
+        {
+            finishOpen.disabled=false;
+            finishOpen.classList.remove('btnx-danger');
+            finishOpen.classList.add('btnx-success');
+            finishOpen.innerHTML=
+                '<i class="bi bi-check-circle"></i>'+
+                '<span>Finalizar carga</span>';
+        }
+
+        if(finishSubmit)
+        {
+            finishSubmit.disabled=false;
+            finishSubmit.classList.remove('btnx-danger');
+            finishSubmit.classList.add('btnx-success');
+            finishSubmit.innerHTML=
+                '<i class="bi bi-check2-circle"></i>'+
+                '<span>Confirmar finalización</span>';
+        }
+
+        if(finishPanelTitle)
+        {
+            finishPanelTitle.innerHTML=
+                '<i class="bi bi-check-circle"></i>'+
+                '<span>Finalizar carga de secado</span>';
+        }
+
+        if(finishForm)
+        {
+            finishForm.dataset.confirm=
+                '¿Confirmas que la carga terminó físicamente su proceso de secado?';
+        }
+
+        if(earlyConfirm)
+            earlyConfirm.value='false';
+
+        if(earlyFields)
+            earlyFields.classList.add('d-none');
+
+        if(earlyReason)
+        {
+            earlyReason.required=false;
+            earlyReason.value='';
+        }
+
+        card.classList.add('is-ready');
+
+        if(status)
+        {
+            status.classList.remove(
+                'primary',
+                'warning',
+                'success',
+                'danger');
+
+            if(overdueMinutes>toleranciaFinMinutos)
+            {
+                status.classList.add('danger');
+                status.textContent='Retrasada';
+                card.classList.add('is-danger');
+            }
+            else
+            {
+                status.classList.add('success');
+                status.textContent='Tiempo cumplido';
+                card.classList.remove('is-danger');
             }
         }
+
+        if(stateAlert)
+        {
+            if(overdueMinutes>toleranciaFinMinutos)
+            {
+                stateAlert.innerHTML=
+                    '<div class="load-alert danger">'+
+                    '<i class="bi bi-exclamation-octagon-fill me-1"></i>'+
+                    'La carga lleva <strong>'+
+                    overdueMinutes+
+                    ' minuto(s)</strong> después de su fin esperado.'+
+                    '</div>';
+            }
+            else
+            {
+                stateAlert.innerHTML=
+                    '<div class="load-alert success">'+
+                    '<i class="bi bi-check-circle-fill me-1"></i>'+
+                    'El tiempo requerido ya se cumplió. La carga puede finalizarse.'+
+                    '</div>';
+            }
+        }
+    }
 
         function updateAllLoads() {
             document

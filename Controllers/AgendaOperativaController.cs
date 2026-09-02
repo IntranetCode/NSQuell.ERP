@@ -53,6 +53,43 @@ public sealed class AgendaOperativaController : Controller
         }
     }
 
+    [HttpGet("Calendario")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> Calendario(int? maquinaId = null, string? busqueda = null, string? area = null, string? estado = null, bool soloAtencion = false, bool soloBloqueadas = false, bool incluirProduciendo = true, int ventanaHoras = 24)
+    {
+        if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
+        var usuarioId = ObtenerUsuarioID();
+        if (usuarioId <= 0) return RedirectToAction("Login", "Login");
+
+        if (string.Equals(area, AgendaOperativaArea.Calidad, StringComparison.OrdinalIgnoreCase))
+            area = null;
+
+        var filtros = ConstruirFiltros(maquinaId, busqueda, area, estado, soloAtencion, soloBloqueadas, incluirProduciendo, ventanaHoras);
+
+        try
+        {
+            var vm = await _agendaOperativaService.ObtenerAgendaAsync(filtros, usuarioId);
+            return View(vm);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al cargar Calendario Operativo. UsuarioID: {UsuarioID}", usuarioId);
+
+            TempData["Error"] = "No fue posible cargar el Calendario Operativo: " + ex.Message;
+
+            return View(new AgendaOperativaVm
+            {
+                FechaConsulta = DateTime.Now,
+                Filtros = filtros,
+                Resumen = new AgendaOperativaResumenVm(),
+                Items = new List<AgendaOperativaItemVm>(),
+                Maquinas = new List<AgendaOperativaOpcionVm>(),
+                Areas = ConstruirAreasRespaldo(area)
+            });
+        }
+    }
+
     [HttpGet("Datos")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> Datos(int? maquinaId = null, string? busqueda = null, string? area = null, string? estado = null, bool soloAtencion = false, bool soloBloqueadas = false, bool incluirProduciendo = true, int ventanaHoras = 8)

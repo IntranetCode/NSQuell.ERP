@@ -1,0 +1,2182 @@
+﻿@using System
+@using System.Collections.Generic
+@using System.Globalization
+@using System.Linq
+@using ERP.NSQuell.Models
+@using Microsoft.AspNetCore.Routing
+@model AgendaOperativaVm
+
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Calendario Operativo";
+
+    var ahora = Model.FechaConsulta;
+    var ventanaHoras = Math.Clamp(Model.Filtros.VentanaHoras <= 0 ? 24 : Model.Filtros.VentanaHoras, 4, 72);
+    var horasPrevias = ventanaHoras <= 12 ? 2 : 4;
+
+    var inicioVentana = new DateTime(
+        ahora.Year,
+        ahora.Month,
+        ahora.Day,
+        ahora.Hour,
+        0,
+        0).AddHours(-horasPrevias);
+
+    var finBase = ahora.AddHours(ventanaHoras);
+
+    var finVentana = new DateTime(
+        finBase.Year,
+        finBase.Month,
+        finBase.Day,
+        finBase.Hour,
+        0,
+        0).AddHours(1);
+
+    var minutosTotales = Math.Max(
+        60d,
+        (finVentana - inicioVentana).TotalMinutes);
+
+    var pasoHoras = ventanaHoras switch
+    {
+        <= 12 => 1,
+        <= 24 => 2,
+        <= 48 => 4,
+        _ => 6
+    };
+
+    var marcasTiempo = new List<DateTime>();
+
+    for (var fecha = inicioVentana; fecha <= finVentana; fecha = fecha.AddHours(pasoHoras))
+        marcasTiempo.Add(fecha);
+
+    bool EsAccionCalidad(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null) return false;
+
+        if (string.Equals(
+            accion.Controlador,
+            "Calidad",
+            StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.Equals(
+            accion.AreaResponsable,
+            AgendaOperativaArea.Calidad,
+            StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return accion.Clave == AgendaOperativaPasoClave.Calidad
+            || accion.Clave == AgendaOperativaPasoClave.PrimerasPiezas
+            || accion.Clave == AgendaOperativaPasoClave.CalidadFinal;
+    }
+
+    bool EsPasoCalidad(AgendaOperativaPasoVm paso)
+    {
+        if (string.Equals(
+            paso.AreaResponsable,
+            AgendaOperativaArea.Calidad,
+            StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return paso.Clave == AgendaOperativaPasoClave.Calidad
+            || paso.Clave == AgendaOperativaPasoClave.PrimerasPiezas
+            || paso.Clave == AgendaOperativaPasoClave.CalidadFinal;
+    }
+
+    bool EsEjecucionActiva(AgendaOperativaItemVm item)
+    {
+        return item.EjecucionProduccionID.HasValue
+            && !string.Equals(
+                item.EstadoGeneral,
+                AgendaOperativaEstadoGeneral.Terminada,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    AgendaOperativaItemVm ObtenerPrincipal(
+        List<AgendaOperativaItemVm> items)
+    {
+        return items
+            .Where(EsEjecucionActiva)
+            .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+            .FirstOrDefault()
+            ?? items
+                .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+                .ThenBy(x => x.ProgramaProduccionID)
+                .First();
+    }
+
+    (DateTime Inicio, DateTime Fin) ObtenerRango(
+        AgendaOperativaItemVm item)
+    {
+        var inicio =
+            item.FechaInicioProgramada
+            ?? item.FechaInicioReal
+            ?? ahora;
+
+        var fin =
+            item.FechaFinProgramada
+            ?? item.FechaFinReal
+            ?? inicio.AddHours(1);
+
+        if (EsEjecucionActiva(item) && fin < ahora)
+            fin = ahora;
+
+        if (fin <= inicio)
+            fin = inicio.AddMinutes(30);
+
+        return (inicio, fin);
+    }
+
+    List<AgendaOperativaItemVm> ObtenerOperacionesMaquina(
+        IEnumerable<AgendaOperativaItemVm> origen)
+    {
+        var resultado = new List<AgendaOperativaItemVm>();
+        var usados = new HashSet<int>();
+
+        foreach (var item in origen
+            .OrderBy(x => x.FechaInicioProgramada ?? DateTime.MaxValue)
+            .ThenBy(x => x.ProgramaProduccionID))
+        {
+            if (usados.Contains(item.ProgramaProduccionID))
+                continue;
+
+            resultado.Add(item);
+            usados.Add(item.ProgramaProduccionID);
+
+            if (item.ProduccionLhRh?.EsPareja == true
+                && item.ProduccionLhRh.ProgramaParejaID > 0)
+            {
+                usados.Add(
+                    item.ProduccionLhRh.ProgramaParejaID);
+            }
+        }
+
+        return resultado;
+    }
+
+    List<(AgendaOperativaItemVm Item, int Carril)> ObtenerOperacionesConCarril(
+        IEnumerable<AgendaOperativaItemVm> origen)
+    {
+        var operaciones = ObtenerOperacionesMaquina(origen);
+        var resultado = new List<(AgendaOperativaItemVm Item, int Carril)>();
+        var finCarriles = new List<DateTime>();
+
+        foreach (var item in operaciones)
+        {
+            var rango = ObtenerRango(item);
+            var carril = -1;
+
+            for (var i = 0; i < finCarriles.Count; i++)
+            {
+                if (rango.Inicio >= finCarriles[i])
+                {
+                    carril = i;
+                    break;
+                }
+            }
+
+            if (carril < 0)
+            {
+                carril = finCarriles.Count;
+                finCarriles.Add(rango.Fin);
+            }
+            else
+            {
+                finCarriles[carril] = rango.Fin;
+            }
+
+            resultado.Add((item, carril));
+        }
+
+        return resultado;
+    }
+
+    double Posicion(DateTime fecha)
+    {
+        var minutos = (fecha - inicioVentana).TotalMinutes;
+        var porcentaje = minutos / minutosTotales * 100d;
+
+        return Math.Max(
+            0d,
+            Math.Min(100d, porcentaje));
+    }
+
+    string Pct(double valor)
+    {
+        return valor.ToString(
+            "0.###",
+            CultureInfo.InvariantCulture) + "%";
+    }
+
+    string ClaseBarra(AgendaOperativaItemVm item)
+    {
+        if (item.EstadoGeneral == AgendaOperativaEstadoGeneral.InterrumpidaUrgente
+            || item.EstadoGeneral == AgendaOperativaEstadoGeneral.Pausada
+            || item.EstadoGeneral == AgendaOperativaEstadoGeneral.Bloqueada)
+        {
+            return "cal-bar-danger";
+        }
+
+        if (EsAccionCalidad(item.AccionActual)
+            || item.EstadoGeneral == AgendaOperativaEstadoGeneral.EsperandoCalidad
+            || item.EstadoGeneral == AgendaOperativaEstadoGeneral.Reliberacion)
+        {
+            return "cal-bar-quality";
+        }
+
+        if (item.RequiereAtencionInmediata)
+            return "cal-bar-attention";
+
+        if (item.EstaProduciendo)
+            return "cal-bar-running";
+
+        if (item.EstadoGeneral == AgendaOperativaEstadoGeneral.Preparacion)
+            return "cal-bar-preparing";
+
+        if (item.EstadoGeneral == AgendaOperativaEstadoGeneral.ListaParaSerie)
+            return "cal-bar-ready";
+
+        return "cal-bar-scheduled";
+    }
+
+    string TextoEstado(AgendaOperativaItemVm item)
+    {
+        if (EsAccionCalidad(item.AccionActual)
+            || item.EstadoGeneral == AgendaOperativaEstadoGeneral.EsperandoCalidad
+            || item.EstadoGeneral == AgendaOperativaEstadoGeneral.Reliberacion)
+        {
+            return "Esperando a Calidad";
+        }
+
+        return item.EstadoGeneralTexto;
+    }
+
+    string TextoAhora(AgendaOperativaItemVm item)
+    {
+        if (EsAccionCalidad(item.AccionActual))
+            return "Esperando a Calidad";
+
+        if (item.AccionActual != null)
+            return item.AccionActual.Titulo;
+
+        if (item.EstaProduciendo)
+            return "Producción en serie";
+
+        return TextoEstado(item);
+    }
+
+    string DescripcionAhora(AgendaOperativaItemVm item)
+    {
+        if (EsAccionCalidad(item.AccionActual))
+        {
+            return !string.IsNullOrWhiteSpace(item.AccionActual?.Descripcion)
+                ? item.AccionActual!.Descripcion!
+                : "La OF se encuentra esperando la validación correspondiente de Calidad.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.AccionActual?.Descripcion))
+            return item.AccionActual!.Descripcion!;
+
+        if (item.EstaProduciendo)
+            return "La máquina está ejecutando actualmente esta OF.";
+
+        return "La operación continúa dentro de su flujo programado.";
+    }
+
+    string TextoSiguiente(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null)
+            return "Sin siguiente actividad pendiente";
+
+        if (EsAccionCalidad(accion))
+            return "Esperando a Calidad";
+
+        return accion.Titulo;
+    }
+
+    string DescripcionSiguiente(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null)
+            return "La siguiente actividad se determinará conforme avance la OF.";
+
+        if (EsAccionCalidad(accion))
+            return "Después de la actividad actual, la OF quedará esperando a Calidad.";
+
+        if (!string.IsNullOrWhiteSpace(accion.Descripcion))
+            return accion.Descripcion!;
+
+        return $"Responsable: {accion.AreaResponsableTexto}.";
+    }
+
+    string TextoFecha(DateTime? fecha)
+    {
+        return fecha.HasValue
+            ? fecha.Value.ToString("dd/MM/yyyy HH:mm")
+            : "—";
+    }
+
+    string TextoFechaCorta(DateTime? fecha)
+    {
+        return fecha.HasValue
+            ? fecha.Value.ToString("dd/MM HH:mm")
+            : "—";
+    }
+
+    string UrlDetalle(AgendaOperativaItemVm item)
+    {
+        if (item.EjecucionProduccionID.HasValue)
+        {
+            return Url.Action(
+                "Detalle",
+                "Produccion",
+                new
+                {
+                    id = item.EjecucionProduccionID.Value,
+                    returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}"
+                }) ?? "#";
+        }
+
+        return Url.Action(
+            "Index",
+            "Produccion",
+            new
+            {
+                maquinaId = item.MaquinaID,
+                busqueda = item.OFTexto
+            }) ?? "#";
+    }
+
+    string? UrlAccion(
+        AgendaOperativaItemVm item,
+        AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null || EsAccionCalidad(accion))
+            return null;
+
+        if (accion.Clave == "LHRH_INCONSISTENTE")
+        {
+            return Url.Action(
+                "Index",
+                "PlaneacionCalendarioMaquinas",
+                new
+                {
+                    programaProduccionId = item.ProgramaProduccionID,
+                    returnUrl = $"{Context.Request.Path}{Context.Request.QueryString}"
+                });
+        }
+
+        if (string.IsNullOrWhiteSpace(accion.Controlador)
+            || string.IsNullOrWhiteSpace(accion.Accion))
+        {
+            return UrlDetalle(item);
+        }
+
+        var valores = new RouteValueDictionary();
+
+        foreach (var parametro in accion.ParametrosRuta)
+        {
+            if (!string.IsNullOrWhiteSpace(parametro.Value))
+                valores[parametro.Key] = parametro.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(accion.ParametroId)
+            && accion.IdDestino.HasValue)
+        {
+            valores[accion.ParametroId] = accion.IdDestino.Value;
+        }
+        else if (accion.Controlador == "ProduccionPersonal"
+            && accion.IdDestino.HasValue)
+        {
+            valores["programaProduccionId"] = accion.IdDestino.Value;
+        }
+        else if (accion.Controlador == "PlaneacionCalendarioMaquinas"
+            && accion.IdDestino.HasValue)
+        {
+            valores["programaProduccionId"] = accion.IdDestino.Value;
+        }
+
+        valores["returnUrl"] =
+            $"{Context.Request.Path}{Context.Request.QueryString}";
+
+        return Url.Action(
+            accion.Accion,
+            accion.Controlador,
+            valores);
+    }
+
+    string EtiquetaTiempo(DateTime fecha)
+    {
+        if (fecha.Hour == 0)
+            return fecha.ToString("dd/MM HH:mm");
+
+        return fecha.ToString("HH:mm");
+    }
+
+    var gruposMaquina = Model.Items
+        .Where(x => x.MaquinaID.HasValue)
+        .GroupBy(x => x.MaquinaID!.Value)
+        .OrderBy(x => x.First().MaquinaCodigo)
+        .ToList();
+
+    var ahoraPosicion = Posicion(ahora);
+}
+
+<style>
+    .cal-page {
+        --cal-bg: #f5f7fb;
+        --cal-surface: #fff;
+        --cal-line: #e2e8f0;
+        --cal-line-strong: #cbd5e1;
+        --cal-text: #172033;
+        --cal-muted: #667085;
+        --cal-blue: #2563eb;
+        --cal-blue-soft: #eff6ff;
+        --cal-green: #067647;
+        --cal-green-bg: #dcfce7;
+        --cal-purple: #6d28d9;
+        --cal-purple-bg: #ede9fe;
+        --cal-orange: #c2410c;
+        --cal-orange-bg: #ffedd5;
+        --cal-red: #b42318;
+        --cal-red-bg: #fee2e2;
+        --cal-gray: #64748b;
+        --cal-gray-bg: #e2e8f0;
+        min-height: calc(100vh - 100px);
+        padding: 18px;
+        background: radial-gradient(circle at 100% 0,rgba(37,99,235,.06),transparent 28rem), var(--cal-bg);
+        color: var(--cal-text);
+    }
+
+    .cal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        margin-bottom: 12px;
+    }
+
+    .cal-title {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 950;
+        letter-spacing: -.035em;
+    }
+
+    .cal-subtitle {
+        margin-top: 3px;
+        color: var(--cal-muted);
+        font-size: .74rem;
+    }
+
+    .cal-updated {
+        margin-top: 5px;
+        color: var(--cal-muted);
+        font-size: .61rem;
+    }
+
+    .cal-view-switch {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px;
+        border: 1px solid var(--cal-line);
+        border-radius: 10px;
+        background: #fff;
+    }
+
+    .cal-view-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 34px;
+        padding: 6px 11px;
+        border-radius: 7px;
+        color: var(--cal-muted);
+        text-decoration: none;
+        font-size: .63rem;
+        font-weight: 850;
+    }
+
+        .cal-view-link:hover {
+            background: #f8fafc;
+            color: var(--cal-blue);
+        }
+
+        .cal-view-link.active {
+            background: var(--cal-blue);
+            color: #fff;
+        }
+
+    .cal-summary {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        overflow-x: auto;
+        margin-bottom: 10px;
+        padding: 8px 12px;
+        border: 1px solid var(--cal-line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--cal-muted);
+        font-size: .62rem;
+    }
+
+        .cal-summary strong {
+            color: var(--cal-text);
+            font-size: .72rem;
+        }
+
+    .cal-summary-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .cal-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+    }
+
+        .cal-dot.running {
+            background: #16a34a;
+        }
+
+        .cal-dot.preparing {
+            background: #2563eb;
+        }
+
+        .cal-dot.quality {
+            background: #7c3aed;
+        }
+
+        .cal-dot.attention {
+            background: #f97316;
+        }
+
+        .cal-dot.danger {
+            background: #dc2626;
+        }
+
+        .cal-dot.scheduled {
+            background: #94a3b8;
+        }
+
+    .cal-filters {
+        margin-bottom: 14px;
+        padding: 10px;
+        border: 1px solid var(--cal-line);
+        border-radius: 10px;
+        background: #fff;
+    }
+
+    .cal-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(220px,1.5fr) repeat(3,minmax(145px,1fr)) auto;
+        gap: 8px;
+        align-items: end;
+    }
+
+    .cal-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--cal-muted);
+        font-size: .54rem;
+        font-weight: 900;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+    }
+
+    .cal-page .form-control,
+    .cal-page .form-select {
+        min-height: 38px;
+        border-color: var(--cal-line-strong);
+        border-radius: 8px;
+        font-size: .69rem;
+        box-shadow: none;
+    }
+
+    .cal-flags {
+        display: flex;
+        gap: 13px;
+        margin-top: 8px;
+        color: var(--cal-muted);
+        font-size: .61rem;
+    }
+
+    .cal-check {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .cal-range {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 7px;
+    }
+
+    .cal-range-title {
+        font-size: .7rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .cal-range-text {
+        color: var(--cal-muted);
+        font-size: .59rem;
+    }
+
+    .cal-board {
+        overflow: auto;
+        border: 1px solid var(--cal-line);
+        border-radius: 11px;
+        background: #fff;
+    }
+
+    .cal-board-inner {
+        min-width: 1180px;
+    }
+
+    .cal-grid {
+        display: grid;
+        grid-template-columns: 195px minmax(980px,1fr);
+    }
+
+    .cal-time-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        min-height: 52px;
+        border-bottom: 1px solid var(--cal-line);
+        background: #f8fafc;
+    }
+
+    .cal-machine-header {
+        position: sticky;
+        left: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        border-right: 1px solid var(--cal-line);
+        border-bottom: 1px solid var(--cal-line);
+        background: #f8fafc;
+        font-size: .58rem;
+        font-weight: 900;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+    }
+
+    .cal-scale {
+        position: relative;
+        min-height: 52px;
+    }
+
+    .cal-time-marker {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: #e4e9f1;
+    }
+
+    .cal-time-label {
+        position: absolute;
+        top: 9px;
+        transform: translateX(-50%);
+        color: #64748b;
+        font-size: .55rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .cal-now-header {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        z-index: 4;
+        background: #ef4444;
+    }
+
+    .cal-now-label {
+        position: absolute;
+        top: 30px;
+        transform: translateX(-50%);
+        padding: 2px 5px;
+        border-radius: 999px;
+        background: #ef4444;
+        color: #fff;
+        font-size: .49rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .cal-row {
+        border-bottom: 1px solid var(--cal-line);
+    }
+
+        .cal-row:last-child {
+            border-bottom: 0;
+        }
+
+    .cal-machine {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 12px 10px;
+        border-right: 1px solid var(--cal-line);
+        background: #fff;
+    }
+
+    .cal-machine-icon {
+        width: 31px;
+        height: 31px;
+        flex: 0 0 auto;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #eff6ff;
+        color: #2563eb;
+        font-size: .74rem;
+    }
+
+    .cal-machine-name {
+        font-size: .66rem;
+        font-weight: 950;
+        line-height: 1.25;
+    }
+
+    .cal-machine-sub {
+        margin-top: 3px;
+        color: var(--cal-muted);
+        font-size: .52rem;
+        line-height: 1.3;
+    }
+
+    .cal-track {
+        position: relative;
+        min-height: 64px;
+        overflow: hidden;
+        background: repeating-linear-gradient( 90deg, rgba(226,232,240,.22) 0, rgba(226,232,240,.22) 1px, transparent 1px, transparent 8.333% );
+    }
+
+    .cal-track-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: #edf0f4;
+        pointer-events: none;
+    }
+
+    .cal-now-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        z-index: 3;
+        background: rgba(239,68,68,.65);
+        pointer-events: none;
+    }
+
+    .cal-bar {
+        position: absolute;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow: hidden;
+        padding: 0 9px;
+        border: 0;
+        border-radius: 7px;
+        color: #fff;
+        text-align: left;
+        cursor: pointer;
+        transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+    }
+
+        .cal-bar:hover {
+            z-index: 8;
+            transform: translateY(-1px);
+            filter: brightness(1.02);
+            box-shadow: 0 5px 12px rgba(15,23,42,.18);
+        }
+
+    .cal-bar-running {
+        background: linear-gradient(135deg,#16a34a,#059669);
+    }
+
+    .cal-bar-preparing {
+        background: linear-gradient(135deg,#2563eb,#3b82f6);
+    }
+
+    .cal-bar-quality {
+        background: linear-gradient(135deg,#7c3aed,#8b5cf6);
+    }
+
+    .cal-bar-attention {
+        background: linear-gradient(135deg,#ea580c,#f97316);
+    }
+
+    .cal-bar-danger {
+        background: linear-gradient(135deg,#b91c1c,#ef4444);
+    }
+
+    .cal-bar-ready {
+        background: linear-gradient(135deg,#0f766e,#14b8a6);
+    }
+
+    .cal-bar-scheduled {
+        background: linear-gradient(135deg,#64748b,#94a3b8);
+    }
+
+    .cal-bar-icon {
+        flex: 0 0 auto;
+        font-size: .66rem;
+    }
+
+    .cal-bar-copy {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .cal-bar-of {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: .59rem;
+        font-weight: 950;
+    }
+
+    .cal-bar-state {
+        margin-top: 1px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: rgba(255,255,255,.82);
+        font-size: .48rem;
+    }
+
+    .cal-bar-alert {
+        width: 6px;
+        height: 6px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(255,255,255,.18);
+    }
+
+    .cal-empty {
+        padding: 40px 20px;
+        text-align: center;
+        color: var(--cal-muted);
+        font-size: .7rem;
+    }
+
+    .cal-drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1088;
+        display: none;
+        background: rgba(15,23,42,.25);
+        backdrop-filter: blur(1px);
+    }
+
+        .cal-drawer-backdrop.open {
+            display: block;
+        }
+
+    .cal-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1089;
+        width: min(460px,92vw);
+        overflow: auto;
+        transform: translateX(102%);
+        border-left: 1px solid #dbe3ee;
+        background: #fff;
+        box-shadow: -18px 0 45px rgba(15,23,42,.18);
+        transition: transform .2s ease;
+    }
+
+        .cal-drawer.open {
+            transform: translateX(0);
+        }
+
+    .cal-drawer-head {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 13px 15px;
+        border-bottom: 1px solid var(--cal-line);
+        background: rgba(255,255,255,.96);
+        backdrop-filter: blur(8px);
+    }
+
+    .cal-drawer-title {
+        font-size: .68rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .cal-close {
+        width: 31px;
+        height: 31px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 8px;
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+    .cal-detail {
+        padding: 16px;
+    }
+
+    .cd-machine {
+        color: #2563eb;
+        font-size: .57rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+    .cd-of {
+        margin-top: 3px;
+        font-size: 1.3rem;
+        line-height: 1.1;
+        font-weight: 950;
+        letter-spacing: -.03em;
+    }
+
+    .cd-part {
+        margin-top: 4px;
+        color: #475569;
+        font-size: .67rem;
+        line-height: 1.35;
+    }
+
+    .cd-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        margin-top: 13px;
+        border-top: 1px solid var(--cal-line);
+        border-bottom: 1px solid var(--cal-line);
+    }
+
+    .cd-meta-item {
+        padding: 10px 0;
+    }
+
+        .cd-meta-item:nth-child(even) {
+            padding-left: 14px;
+            border-left: 1px solid var(--cal-line);
+        }
+
+    .cd-label {
+        color: #64748b;
+        font-size: .49rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .cd-value {
+        margin-top: 3px;
+        font-size: .65rem;
+        font-weight: 850;
+    }
+
+    .cd-section {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--cal-line);
+    }
+
+        .cd-section:last-child {
+            border-bottom: 0;
+        }
+
+    .cd-section-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #64748b;
+        font-size: .51rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+    }
+
+    .cd-now {
+        margin-top: 8px;
+        padding: 11px 12px;
+        border-left: 4px solid #2563eb;
+        border-radius: 0 8px 8px 0;
+        background: #eff6ff;
+    }
+
+        .cd-now.quality {
+            border-left-color: #7c3aed;
+            background: #f5f3ff;
+        }
+
+    .cd-next {
+        margin-top: 8px;
+        padding: 11px 12px;
+        border-left: 4px solid #16a34a;
+        border-radius: 0 8px 8px 0;
+        background: #f0fdf4;
+    }
+
+    .cd-action-title {
+        font-size: .75rem;
+        font-weight: 950;
+    }
+
+    .cd-action-desc {
+        margin-top: 3px;
+        color: #536177;
+        font-size: .59rem;
+        line-height: 1.4;
+    }
+
+    .cd-action-meta {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+    }
+
+    .cd-action-meta-item {
+        font-size: .56rem;
+    }
+
+        .cd-action-meta-item span {
+            display: block;
+            color: #64748b;
+            font-size: .46rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+    .cd-action-buttons {
+        display: flex;
+        gap: 6px;
+        margin-top: 9px;
+    }
+
+    .cd-btn-primary,
+    .cd-btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-height: 34px;
+        padding: 6px 11px;
+        border-radius: 8px;
+        font-size: .6rem;
+        font-weight: 900;
+        text-decoration: none;
+    }
+
+    .cd-btn-primary {
+        background: #2563eb;
+        color: #fff;
+    }
+
+        .cd-btn-primary:hover {
+            background: #1d4ed8;
+            color: #fff;
+        }
+
+    .cd-btn-secondary {
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #172033;
+    }
+
+    .cd-quality {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 8px;
+        padding: 5px 8px;
+        border-radius: 7px;
+        background: #ede9fe;
+        color: #6d28d9;
+        font-size: .55rem;
+        font-weight: 850;
+    }
+
+    .cd-lhrh {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 11px;
+        overflow: hidden;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+    }
+
+    .cd-lhrh-side {
+        padding: 9px;
+        background: #f8fbff;
+    }
+
+        .cd-lhrh-side + .cd-lhrh-side {
+            border-left: 1px solid #bfdbfe;
+        }
+
+    .cd-lhrh-title {
+        color: #2563eb;
+        font-size: .48rem;
+        font-weight: 950;
+        text-transform: uppercase;
+    }
+
+    .cd-lhrh-of {
+        margin-top: 2px;
+        font-size: .61rem;
+        font-weight: 900;
+    }
+
+    .cd-lhrh-part {
+        margin-top: 1px;
+        color: #64748b;
+        font-size: .52rem;
+    }
+
+    .cd-lhrh-qty {
+        margin-top: 4px;
+        font-size: .54rem;
+        font-weight: 850;
+    }
+
+    .cd-flow {
+        display: grid;
+        gap: 6px;
+        margin-top: 9px;
+    }
+
+    .cd-flow-row {
+        display: grid;
+        grid-template-columns: 23px minmax(0,1fr) auto;
+        gap: 7px;
+        align-items: center;
+    }
+
+    .cd-flow-icon {
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        border: 2px solid #d7dee8;
+        color: #94a3b8;
+        font-size: .5rem;
+    }
+
+    .cd-flow-row.done .cd-flow-icon {
+        border-color: #16a34a;
+        background: #16a34a;
+        color: #fff;
+    }
+
+    .cd-flow-row.current .cd-flow-icon {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .cd-flow-row.danger .cd-flow-icon {
+        border-color: #dc2626;
+        background: #dc2626;
+        color: #fff;
+    }
+
+    .cd-flow-row.wait .cd-flow-icon {
+        border-color: #f97316;
+        color: #c2410c;
+        background: #fff7ed;
+    }
+
+    .cd-flow-name {
+        font-size: .58rem;
+        font-weight: 750;
+    }
+
+    .cd-flow-state {
+        color: #64748b;
+        font-size: .49rem;
+    }
+
+    @@media(max-width:900px) {
+        .cal-filter-grid {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+    }
+
+    @@media(max-width:650px) {
+        .cal-page {
+            padding: 10px;
+        }
+
+        .cal-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .cal-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .cd-meta {
+            grid-template-columns: 1fr;
+        }
+
+        .cd-meta-item:nth-child(even) {
+            padding-left: 0;
+            border-left: 0;
+        }
+
+        .cd-lhrh {
+            grid-template-columns: 1fr;
+        }
+
+        .cd-lhrh-side + .cd-lhrh-side {
+            border-left: 0;
+            border-top: 1px solid #bfdbfe;
+        }
+    }
+</style>
+
+<div class="cal-page">
+
+    <div class="cal-header">
+        <div>
+            <h1 class="cal-title">Calendario Operativo</h1>
+
+            <div class="cal-subtitle">
+                Línea de tiempo de las OF por máquina y estado actual de la operación.
+            </div>
+
+            <div class="cal-updated">
+                <i class="bi bi-clock me-1"></i>
+                Actualizado:
+                <span id="calendarLastUpdate">
+                    @Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss")
+                </span>
+            </div>
+        </div>
+
+        <div class="cal-view-switch">
+            <a class="cal-view-link"
+               href="@Url.Action("Index","AgendaOperativa",new
+               {
+                   maquinaId = Model.Filtros.MaquinaID,
+                   busqueda = Model.Filtros.Busqueda,
+                   area = Model.Filtros.Area,
+                   soloAtencion = Model.Filtros.SoloAtencion,
+                   soloBloqueadas = Model.Filtros.SoloBloqueadas,
+                   incluirProduciendo = Model.Filtros.IncluirProduciendo,
+                   ventanaHoras = Model.Filtros.VentanaHoras
+               })">
+                <i class="bi bi-list-ul"></i>
+                Por máquina
+            </a>
+
+            <span class="cal-view-link active">
+                <i class="bi bi-calendar3"></i>
+                Calendario
+            </span>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger py-2 small">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="cal-summary">
+        <div class="cal-summary-item">
+            <strong>@gruposMaquina.Count</strong>
+            máquinas
+        </div>
+
+        <div class="cal-summary-item">
+            <span class="cal-dot running"></span>
+            Produciendo
+        </div>
+
+        <div class="cal-summary-item">
+            <span class="cal-dot preparing"></span>
+            Preparación
+        </div>
+
+        <div class="cal-summary-item">
+            <span class="cal-dot quality"></span>
+            Esperando a Calidad
+        </div>
+
+        <div class="cal-summary-item">
+            <span class="cal-dot attention"></span>
+            Requiere atención
+        </div>
+
+        <div class="cal-summary-item">
+            <span class="cal-dot danger"></span>
+            Paro / bloqueo
+        </div>
+
+        <div class="cal-summary-item">
+            <span class="cal-dot scheduled"></span>
+            Programada
+        </div>
+    </div>
+
+    <div class="cal-filters">
+        <form method="get"
+              action="@Url.Action("Calendario","AgendaOperativa")">
+
+            <div class="cal-filter-grid">
+
+                <div>
+                    <label class="cal-label" for="busqueda">
+                        Buscar
+                    </label>
+
+                    <input id="busqueda"
+                           name="busqueda"
+                           class="form-control"
+                           value="@Model.Filtros.Busqueda"
+                           placeholder="OF, parte, máquina o molde..." />
+                </div>
+
+                <div>
+                    <label class="cal-label" for="maquinaId">
+                        Máquina
+                    </label>
+
+                    <select id="maquinaId"
+                            name="maquinaId"
+                            class="form-select">
+
+                        <option value="">Todas</option>
+
+                        @foreach (var maquina in Model.Maquinas)
+                        {
+                            if (maquina.Seleccionado)
+                            {
+                                <option value="@maquina.Valor" selected>
+                                    @maquina.Texto
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@maquina.Valor">
+                                    @maquina.Texto
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="cal-label" for="area">
+                        Área operativa
+                    </label>
+
+                    <select id="area"
+                            name="area"
+                            class="form-select">
+
+                        <option value="">Todas</option>
+
+                        @foreach (var area in Model.Areas.Where(x =>
+                                                !string.Equals(
+                                                x.Valor,
+                                                AgendaOperativaArea.Calidad,
+                                                StringComparison.OrdinalIgnoreCase)))
+                        {
+                            if (area.Seleccionado)
+                            {
+                                <option value="@area.Valor" selected>
+                                    @area.Texto
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@area.Valor">
+                                    @area.Texto
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="cal-label" for="ventanaHoras">
+                        Ventana
+                    </label>
+
+                    <select id="ventanaHoras"
+                            name="ventanaHoras"
+                            class="form-select">
+
+                        @foreach (var horas in new[] { 8, 12, 24, 48, 72 })
+                        {
+                            if (Model.Filtros.VentanaHoras == horas)
+                            {
+                                <option value="@horas" selected>
+                                    @horas horas
+                                </option>
+                            }
+                            else
+                            {
+                                <option value="@horas">
+                                    @horas horas
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <button type="submit"
+                            class="btn btn-primary fw-bold w-100"
+                            style="min-height:38px;border-radius:8px;font-size:.68rem;">
+                        <i class="bi bi-funnel-fill me-1"></i>
+                        Aplicar
+                    </button>
+                </div>
+            </div>
+
+            <div class="cal-flags">
+                <label class="cal-check">
+                    <input type="checkbox"
+                           class="form-check-input m-0"
+                           name="soloAtencion"
+                           value="true"
+                           @(Model.Filtros.SoloAtencion ? "checked" : null) />
+                    Solo atención
+                </label>
+
+                <label class="cal-check">
+                    <input type="checkbox"
+                           class="form-check-input m-0"
+                           name="soloBloqueadas"
+                           value="true"
+                           @(Model.Filtros.SoloBloqueadas ? "checked" : null) />
+                    Solo bloqueadas
+                </label>
+
+                <label class="cal-check">
+                    <input type="checkbox"
+                           class="form-check-input m-0"
+                           name="incluirProduciendo"
+                           value="true"
+                           @(Model.Filtros.IncluirProduciendo ? "checked" : null) />
+                    Mostrar produciendo
+                </label>
+            </div>
+        </form>
+    </div>
+
+    <div class="cal-range">
+        <div class="cal-range-title">
+            Línea de tiempo por máquina
+        </div>
+
+        <div class="cal-range-text">
+            @inicioVentana.ToString("dd/MM HH:mm")
+            →
+            @finVentana.ToString("dd/MM HH:mm")
+        </div>
+    </div>
+
+    @if (!gruposMaquina.Any())
+    {
+        <div class="cal-board">
+            <div class="cal-empty">
+                <i class="bi bi-calendar-x fs-4 d-block mb-2"></i>
+                No existen operaciones dentro de los filtros seleccionados.
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="cal-board">
+            <div class="cal-board-inner">
+
+                <div class="cal-grid">
+                    <div class="cal-machine-header">
+                        Máquina
+                    </div>
+
+                    <div class="cal-time-header">
+                        <div class="cal-scale">
+
+                            @foreach (var marca in marcasTiempo)
+                            {
+                                var izquierda = Posicion(marca);
+
+                                <div class="cal-time-marker"
+                                     style="left:@Pct(izquierda)">
+                                </div>
+
+                                <div class="cal-time-label"
+                                     style="left:@Pct(izquierda)">
+                                    @EtiquetaTiempo(marca)
+                                </div>
+                            }
+
+                            @if (ahora >= inicioVentana && ahora <= finVentana)
+                            {
+                                <div class="cal-now-header"
+                                     style="left:@Pct(ahoraPosicion)">
+                                </div>
+
+                                <div class="cal-now-label"
+                                     style="left:@Pct(ahoraPosicion)">
+                                    AHORA
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @foreach (var grupo in gruposMaquina)
+                {
+                    var itemsMaquina = grupo.ToList();
+                    var principal = ObtenerPrincipal(itemsMaquina);
+                    var operaciones = ObtenerOperacionesConCarril(itemsMaquina);
+                    var maxCarril = operaciones.Any()
+                    ? operaciones.Max(x => x.Carril)
+                    : 0;
+
+                    var alto = Math.Max(
+                    64,
+                    54 + (maxCarril * 43));
+
+                    <div class="cal-grid cal-row">
+
+                        <div class="cal-machine"
+                             style="min-height:@(alto)px">
+
+                            <div class="cal-machine-icon">
+                                <i class="bi bi-cpu-fill"></i>
+                            </div>
+
+                            <div>
+                                <div class="cal-machine-name">
+                                    @principal.MaquinaTexto
+                                </div>
+
+                                <div class="cal-machine-sub">
+                                    @operaciones.Count operación(es)
+
+                                    @if (principal.EsLhRh)
+                                    {
+                                        <span> · LH/RH</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="cal-track"
+                             style="height:@(alto)px">
+
+                            @foreach (var marca in marcasTiempo)
+                            {
+                                <div class="cal-track-line"
+                                     style="left:@Pct(Posicion(marca))">
+                                </div>
+                            }
+
+                            @if (ahora >= inicioVentana && ahora <= finVentana)
+                            {
+                                <div class="cal-now-line"
+                                     style="left:@Pct(ahoraPosicion)">
+                                </div>
+                            }
+
+                            @foreach (var operacion in operaciones)
+                            {
+                                var item = operacion.Item;
+                                var rango = ObtenerRango(item);
+
+                                if (rango.Fin < inicioVentana || rango.Inicio > finVentana)
+                                {
+                                    continue;
+                                }
+
+                                var inicioVisible =
+                                rango.Inicio < inicioVentana
+                                ? inicioVentana
+                                : rango.Inicio;
+
+                                var finVisible =
+                                rango.Fin > finVentana
+                                ? finVentana
+                                : rango.Fin;
+
+                                var izquierda = Posicion(inicioVisible);
+                                var derecha = Posicion(finVisible);
+
+                                var ancho = Math.Max(
+                                1.4d,
+                                derecha - izquierda);
+
+                                var top = 9 + (operacion.Carril * 43);
+
+                                var templateId =
+                                $"cal-template-{item.ProgramaProduccionID}";
+
+                                <button type="button"
+                                        class="cal-bar @ClaseBarra(item)"
+                                        style="
+                                                        left:@Pct(izquierda);
+                                                        width:@Pct(ancho);
+                                                        top:@(top)px;"
+                                        data-cal-detail="@templateId"
+                                        title="@($"{item.OFTexto} · {TextoEstado(item)}")">
+
+                                    <i class="bi bi-gear-fill cal-bar-icon"></i>
+
+                                    <span class="cal-bar-copy">
+                                        <span class="cal-bar-of">
+                                            @item.OFTexto
+
+                                            @if (item.EsLhRh)
+                                            {
+                                                <span>
+                                                    + @item.ProduccionLhRh?.OFPareja
+                                                </span>
+                                            }
+                                        </span>
+
+                                        <span class="cal-bar-state">
+                                            @TextoEstado(item)
+                                        </span>
+                                    </span>
+
+                                    @if (item.RequiereAtencionInmediata
+                                                            && !EsAccionCalidad(item.AccionActual))
+                                    {
+                                        <span class="cal-bar-alert"></span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@foreach (var grupo in gruposMaquina)
+{
+    foreach (var item in ObtenerOperacionesMaquina(grupo))
+    {
+        var templateId =
+            $"cal-template-{item.ProgramaProduccionID}";
+
+        var accionActual = item.AccionActual;
+        var actualEsCalidad = EsAccionCalidad(accionActual);
+
+        var siguiente = item.SiguienteAccion;
+        var siguienteEsCalidad = EsAccionCalidad(siguiente);
+
+        var urlAccion = UrlAccion(item, accionActual);
+        var urlDetalle = UrlDetalle(item);
+
+        var pasos = item.Pasos
+            .Where(x => x.Aplica && !EsPasoCalidad(x))
+            .OrderBy(x => x.Orden)
+            .ToList();
+
+        <template id="@templateId">
+            <div class="cal-detail">
+
+                <div class="cd-machine">
+                    <i class="bi bi-cpu me-1"></i>
+                    @item.MaquinaTexto
+                </div>
+
+                <div class="cd-of">
+                    @item.OFTexto
+
+                    @if (item.EsLhRh)
+                    {
+                        <span>
+                            + @item.ProduccionLhRh?.OFPareja
+                        </span>
+                    }
+                </div>
+
+                <div class="cd-part">
+                    <strong>@item.ParteTexto</strong>
+
+                    @if (!string.IsNullOrWhiteSpace(item.DescripcionParte))
+                    {
+                        <span> · @item.DescripcionParte</span>
+                    }
+        </div>
+
+        <div class="cd-meta">
+            <div class="cd-meta-item">
+                <div class="cd-label">
+                    Estado
+                </div>
+
+                <div class="cd-value">
+                    @TextoEstado(item)
+                </div>
+            </div>
+
+            <div class="cd-meta-item">
+                <div class="cd-label">
+                    Molde
+                </div>
+
+                <div class="cd-value">
+                    @(string.IsNullOrWhiteSpace(item.MoldeCodigo)
+                                        ? "—"
+                                        : item.MoldeCodigo)
+                </div>
+            </div>
+
+                    <div class="cd-meta-item">
+                        <div class="cd-label">
+                            Inicio programado
+                        </div>
+
+                        <div class="cd-value">
+                            @TextoFechaCorta(item.FechaInicioProgramada)
+                        </div>
+                    </div>
+
+                    <div class="cd-meta-item">
+                        <div class="cd-label">
+                            Fin programado
+                        </div>
+
+                        <div class="cd-value">
+                            @TextoFechaCorta(item.FechaFinProgramada)
+                        </div>
+                    </div>
+                </div>
+
+        @if (item.EsLhRh && item.ProduccionLhRh != null)
+                {
+                    <div class="cd-lhrh">
+
+                        <div class="cd-lhrh-side">
+                            <div class="cd-lhrh-title">
+                                OF LH/RH
+                            </div>
+
+                            <div class="cd-lhrh-of">
+                                @item.OFTexto
+                            </div>
+
+                            <div class="cd-lhrh-part">
+                                @item.ParteTexto
+                            </div>
+
+                            <div class="cd-lhrh-qty">
+                                @item.CantidadProducida.ToString("N0")
+                                /
+                                @item.CantidadProgramada.ToString("N0")
+                                ·
+                                @item.PorcentajeAvance.ToString("0.#")%
+                            </div>
+                        </div>
+
+                        <div class="cd-lhrh-side">
+                            <div class="cd-lhrh-title">
+                                OF pareja
+                            </div>
+
+                            <div class="cd-lhrh-of">
+                                @(item.ProduccionLhRh.OFPareja
+                                                    ?? $"Programa {item.ProduccionLhRh.ProgramaParejaID}")
+                </div>
+
+                            <div class="cd-lhrh-part">
+                                @item.ProduccionLhRh.ParteParejaTexto
+                            </div>
+
+                            <div class="cd-lhrh-qty">
+                                @item.ProduccionLhRh.CantidadProducidaPareja.ToString("N0")
+                                /
+                                @item.ProduccionLhRh.CantidadProgramadaPareja.ToString("N0")
+                                ·
+                                @item.ProduccionLhRh.PorcentajeAvancePareja.ToString("0.#")%
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="cd-section">
+                    <div class="cd-section-label">
+                        <i class="bi bi-record-circle"></i>
+                        Ahora
+                    </div>
+
+                    <div class="cd-now @(actualEsCalidad ? "quality" : "")">
+                        <div class="cd-action-title">
+                            @TextoAhora(item)
+                        </div>
+
+                        <div class="cd-action-desc">
+                            @DescripcionAhora(item)
+                        </div>
+
+                        @if (actualEsCalidad)
+                        {
+                            <div class="cd-quality">
+                                <i class="bi bi-hourglass-split"></i>
+                                Esperando a Calidad
+                            </div>
+                        }
+                        else if (accionActual != null)
+                        {
+                            <div class="cd-action-meta">
+
+                                <div class="cd-action-meta-item">
+                                    <span>Responsable</span>
+                                    @accionActual.AreaResponsableTexto
+                                </div>
+
+                                @if (accionActual.FechaObjetivo.HasValue)
+                                {
+                                    <div class="cd-action-meta-item">
+                                        <span>Objetivo</span>
+                                        @TextoFecha(accionActual.FechaObjetivo)
+                                    </div>
+                                }
+
+                                @if (accionActual.MinutosDesfase > 0)
+                                {
+                                    <div class="cd-action-meta-item">
+                                        <span>Retraso</span>
+                                        @accionActual.MinutosDesfase min
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="cd-action-buttons">
+
+                                @if (!string.IsNullOrWhiteSpace(urlAccion))
+                                {
+                                    <a href="@urlAccion"
+                                       class="cd-btn-primary">
+                                        <i class="bi bi-arrow-up-right-circle"></i>
+                                        @accionActual.TextoBoton
+                                    </a>
+                                }
+
+                                <a href="@urlDetalle"
+                                   class="cd-btn-secondary">
+                                    <i class="bi bi-eye"></i>
+                                    Ver OF
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="cd-action-buttons">
+                                <a href="@urlDetalle"
+                                   class="cd-btn-secondary">
+                                    <i class="bi bi-eye"></i>
+                                    Ver OF
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="cd-section">
+                    <div class="cd-section-label">
+                        <i class="bi bi-skip-forward-fill"></i>
+                        Después sigue
+                    </div>
+
+                    <div class="cd-next">
+                        <div class="cd-action-title">
+                            @TextoSiguiente(siguiente)
+                        </div>
+
+                        <div class="cd-action-desc">
+                            @DescripcionSiguiente(siguiente)
+                        </div>
+
+                        @if (siguienteEsCalidad)
+                        {
+                            <div class="cd-quality">
+                                <i class="bi bi-hourglass-split"></i>
+                                Esperando a Calidad
+                            </div>
+                        }
+                        else if (siguiente != null)
+                        {
+                            <div class="cd-action-meta">
+
+                                <div class="cd-action-meta-item">
+                                    <span>Responsable</span>
+                                    @siguiente.AreaResponsableTexto
+                                </div>
+
+                                @if (siguiente.FechaObjetivo.HasValue)
+                                {
+                                    <div class="cd-action-meta-item">
+                                        <span>Programado</span>
+                                        @TextoFecha(siguiente.FechaObjetivo)
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @if (pasos.Any())
+                {
+                    <div class="cd-section">
+                        <div class="cd-section-label">
+                            <i class="bi bi-diagram-3"></i>
+                            Flujo operativo
+                        </div>
+
+                        <div class="cd-flow">
+
+                            @foreach (var paso in pasos)
+                            {
+                                var clase =
+                                paso.Completado
+                                ? "done"
+                                : paso.Bloqueado || paso.EstaVencido
+                                ? "danger"
+                                : paso.EnProceso || paso.Estado == AgendaOperativaEstadoPaso.Listo
+                                ? "current"
+                                : paso.Estado == AgendaOperativaEstadoPaso.Esperando
+                                ? "wait"
+                                : "";
+
+                                <div class="cd-flow-row @clase">
+
+                                    <div class="cd-flow-icon">
+                                        @if (paso.Completado)
+                                        {
+                                            <i class="bi bi-check-lg"></i>
+                                        }
+                                        else if (paso.Bloqueado || paso.EstaVencido)
+                                        {
+                                            <i class="bi bi-exclamation-lg"></i>
+                                        }
+                                        else if (paso.EnProceso || paso.Estado == AgendaOperativaEstadoPaso.Listo)
+                                        {
+                                            <i class="bi bi-arrow-right"></i>
+                                        }
+                                        else if (paso.Estado == AgendaOperativaEstadoPaso.Esperando)
+                                        {
+                                            <i class="bi bi-hourglass-split"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-circle-fill"></i>
+                                        }
+                                    </div>
+
+                                    <div class="cd-flow-name">
+                                        @paso.Nombre
+                                    </div>
+
+                                    <div class="cd-flow-state">
+                                        @paso.EstadoTexto
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </template>
+    }
+}
+
+<div class="cal-drawer-backdrop"
+     id="calendarDrawerBackdrop">
+</div>
+
+<aside class="cal-drawer"
+       id="calendarDrawer"
+       aria-hidden="true">
+
+    <div class="cal-drawer-head">
+        <div class="cal-drawer-title">
+            Detalle de operación
+        </div>
+
+        <button type="button"
+                class="cal-close"
+                id="calendarDrawerClose"
+                aria-label="Cerrar">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+
+    <div id="calendarDrawerContent"></div>
+</aside>
+
+<script>
+    (() => {
+        const drawer=document.getElementById('calendarDrawer');
+        const backdrop=document.getElementById('calendarDrawerBackdrop');
+        const content=document.getElementById('calendarDrawerContent');
+        const closeButton=document.getElementById('calendarDrawerClose');
+
+        function abrirDetalle(templateId){
+            const template=document.getElementById(templateId);
+
+            if(!template||!content)
+                return;
+
+            content.innerHTML='';
+            content.appendChild(
+                template.content.cloneNode(true)
+            );
+
+            drawer?.classList.add('open');
+            backdrop?.classList.add('open');
+
+            drawer?.setAttribute(
+                'aria-hidden',
+                'false'
+            );
+
+            document.body.style.overflow='hidden';
+        }
+
+        function cerrarDetalle(){
+            drawer?.classList.remove('open');
+            backdrop?.classList.remove('open');
+
+            drawer?.setAttribute(
+                'aria-hidden',
+                'true'
+            );
+
+            document.body.style.overflow='';
+        }
+
+        document
+            .querySelectorAll('[data-cal-detail]')
+            .forEach(button=>{
+                button.addEventListener('click',()=>{
+                    abrirDetalle(
+                        button.dataset.calDetail
+                    );
+                });
+            });
+
+        closeButton?.addEventListener(
+            'click',
+            cerrarDetalle
+        );
+
+        backdrop?.addEventListener(
+            'click',
+            cerrarDetalle
+        );
+
+        document.addEventListener('keydown',event=>{
+            if(event.key==='Escape')
+                cerrarDetalle();
+        });
+
+        const datosUrl=
+            '@Url.Action("Datos", "AgendaOperativa")';
+
+        const lastUpdate=
+            document.getElementById('calendarLastUpdate');
+
+        async function revisarCambios(){
+            if(document.hidden)
+                return;
+
+            try{
+                const query=window.location.search||'';
+                const separador=query?'&':'?';
+
+                const response=await fetch(
+                    datosUrl+
+                    query+
+                    separador+
+                    '_='+
+                    Date.now(),
+                    {
+                        method:'GET',
+                        headers:{
+                            'X-Requested-With':'XMLHttpRequest'
+                        },
+                        cache:'no-store'
+                    }
+                );
+
+                if(response.status===401){
+                    window.location.href=
+                        '@Url.Action("Login", "Login")';
+
+                    return;
+                }
+
+                if(!response.ok)
+                    return;
+
+                const data=await response.json();
+
+                if(!data?.ok)
+                    return;
+
+                if(data.fechaConsulta&&lastUpdate){
+                    const fecha=
+                        new Date(data.fechaConsulta);
+
+                    if(!Number.isNaN(fecha.getTime())){
+                        lastUpdate.textContent=
+                            fecha.toLocaleString('es-MX');
+                    }
+                }
+            }
+            catch{
+            }
+        }
+
+        window.setInterval(
+            revisarCambios,
+            30000
+        );
+    })();
+</script>

@@ -368,41 +368,25 @@ ORDER BY te.TiempoExtraID DESC;";
             return vm;
         }
 
-
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PrevisualizarProduccionHora(int ejecucionProduccionId, DateTime fechaProduccion, string horaInicio, string horaFin, long? contadorMaquinaActual, int cantidadSospechosa = 0, int cantidadScrap = 0)
+        public async Task<IActionResult> PrevisualizarProduccionHora(int ejecucionProduccionId, DateTime fechaProduccion, string horaInicio, string horaFin, long? contadorMaquinaActual, int cantidadScrap = 0)
         {
-            if (!UsuarioEnSesion())
-                return Unauthorized(new { ok = false, mensaje = "La sesión ha expirado." });
-            if (ejecucionProduccionId <= 0)
-                return Json(new { ok = false, mensaje = "La ejecución de Producción no es válida." });
-            if (!contadorMaquinaActual.HasValue)
-                return Json(new { ok = false, mensaje = "Captura el contador actual de la máquina." });
-            if (contadorMaquinaActual.Value < 0)
-                return Json(new { ok = false, mensaje = "El contador de la máquina no puede ser negativo." });
-            if (cantidadSospechosa < 0 || cantidadScrap < 0)
-                return Json(new { ok = false, mensaje = "Sospechosos y scrap no pueden ser negativos." });
-            if (!TimeSpan.TryParse(horaInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(horaFin, out var horaFinEnviada))
-                return Json(new { ok = false, mensaje = "El rango de hora no es válido." });
-
+            if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, mensaje = "La sesión ha expirado." });
+            if (ejecucionProduccionId <= 0) return Json(new { ok = false, mensaje = "La ejecución de Producción no es válida." });
+            if (!contadorMaquinaActual.HasValue) return Json(new { ok = false, mensaje = "Captura el contador actual de la máquina." });
+            if (contadorMaquinaActual.Value < 0) return Json(new { ok = false, mensaje = "El contador de la máquina no puede ser negativo." });
+            if (cantidadScrap < 0) return Json(new { ok = false, mensaje = "La cantidad de piezas rojas no puede ser negativa." });
+            if (!TimeSpan.TryParse(horaInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(horaFin, out var horaFinEnviada)) return Json(new { ok = false, mensaje = "El rango de hora no es válido." });
             var horaInicioNormalizada = new TimeSpan(horaInicioEnviada.Hours, horaInicioEnviada.Minutes, 0);
             var horaFinNormalizada = new TimeSpan(horaFinEnviada.Hours, horaFinEnviada.Minutes, 0);
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var usuarioId = ObtenerUsuarioID();
-
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn))
-                return Unauthorized(new { ok = false, mensaje = "El usuario no tiene permisos de operador." });
-
+            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return Unauthorized(new { ok = false, mensaje = "El usuario no tiene permisos de operador." });
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
-            if (!personaId.HasValue || personaId.Value <= 0)
-                return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al operador." });
-
+            if (!personaId.HasValue || personaId.Value <= 0) return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al operador." });
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-
             try
             {
                 var ejecucion = await ObtenerEjecucionOperadorAsync(ejecucionProduccionId, cn, tx);
@@ -411,104 +395,82 @@ ORDER BY te.TiempoExtraID DESC;";
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
                 }
-
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionProduccionId, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La ejecución ya no está asignada al operador conectado." });
                 }
-
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La corrida no se encuentra en Producción." });
                 }
-
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La máquina ya fue liberada. No pueden registrarse nuevas horas." });
                 }
-
                 if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Existe un paro abierto. Finalízalo antes de capturar producción." });
                 }
-
                 var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(ejecucionProduccionId, cn, tx);
                 if (configuracionActual == null)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La corrida no tiene configuración técnica vigente." });
                 }
-
                 var filas = await ObtenerFilasCapturaHoraAsync(ejecucionProduccionId, ejecucion.ProgramaProduccionID, cn, tx);
-                var fila = filas.FirstOrDefault(x =>
-                    x.FechaProduccion.Date == fechaProduccion.Date &&
-                    x.HoraInicio.Hours == horaInicioNormalizada.Hours &&
-                    x.HoraInicio.Minutes == horaInicioNormalizada.Minutes &&
-                    x.HoraFin.Hours == horaFinNormalizada.Hours &&
-                    x.HoraFin.Minutes == horaFinNormalizada.Minutes);
-
+                var fila = filas.FirstOrDefault(x => x.FechaProduccion.Date == fechaProduccion.Date && x.HoraInicio.Hours == horaInicioNormalizada.Hours && x.HoraInicio.Minutes == horaInicioNormalizada.Minutes && x.HoraFin.Hours == horaFinNormalizada.Hours && x.HoraFin.Minutes == horaFinNormalizada.Minutes);
                 if (fila == null)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "El bloque solicitado ya no corresponde a la captura disponible." });
                 }
-
                 if (fila.Capturada)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Este bloque ya fue capturado." });
                 }
-
                 if (!fila.Disponible)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Este bloque todavía no está disponible para captura." });
                 }
-
                 var fechaInicioFila = fila.FechaProduccion.Date.Add(fila.HoraInicio);
                 var fechaFinFila = fila.FechaProduccion.Date.Add(fila.HoraFin);
-                if (fechaFinFila <= fechaInicioFila)
-                    fechaFinFila = fechaFinFila.AddDays(1);
-
+                if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
                 if (DateTime.Now < fechaFinFila)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = $"El bloque todavía no termina. Podrás capturarlo a partir de las {fechaFinFila:HH:mm}." });
                 }
-
                 var calculo = await CalcularProduccionContadorHoraAsync(ejecucionProduccionId, fechaInicioFila, fechaFinFila, contadorMaquinaActual.Value, cn, tx);
-                var piezasNoOk = (long)cantidadSospechosa + cantidadScrap;
-
-                if (piezasNoOk > calculo.PiezasCalculadas)
+                if ((long)cantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
                     return Json(new
                     {
                         ok = false,
-                        mensaje = $"Sospechosos + Scrap suman {piezasNoOk:N0}, pero el contador solamente indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.",
+                        mensaje = $"Capturaste {cantidadScrap:N0} pieza(s) rojas, pero el contador solamente indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.",
                         piezasFisicas = calculo.PiezasCalculadas,
-                        cantidadOK = 0
+                        cantidadOK = 0,
+                        cantidadSospechosa = 0,
+                        cantidadScrap
                     });
                 }
-
-                var cantidadOK = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
+                var cantidadOK = calculo.PiezasCalculadas - cantidadScrap;
                 decimal? porcentajeCumplimiento = null;
                 int? diferenciaObjetivo = null;
                 bool? cumplioObjetivo = null;
-
                 if (calculo.ObjetivoBloque > 0)
                 {
                     diferenciaObjetivo = cantidadOK - calculo.ObjetivoBloque;
                     cumplioObjetivo = cantidadOK >= calculo.ObjetivoBloque;
                     porcentajeCumplimiento = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 2);
                 }
-
                 await tx.RollbackAsync();
-
                 return Json(new
                 {
                     ok = true,
@@ -516,7 +478,7 @@ ORDER BY te.TiempoExtraID DESC;";
                     contadorFinal = contadorMaquinaActual.Value,
                     piezasFisicas = calculo.PiezasCalculadas,
                     cantidadOK,
-                    cantidadSospechosa,
+                    cantidadSospechosa = 0,
                     cantidadScrap,
                     objetivoHora = calculo.ObjetivoHora,
                     objetivoBloque = calculo.ObjetivoBloque,
@@ -546,61 +508,49 @@ ORDER BY te.TiempoExtraID DESC;";
                 TempData["Error"] = "No se recibió la ejecución de producción.";
                 return RedirectToAction(nameof(Index));
             }
-
             if (!TimeSpan.TryParse(vm.HoraInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(vm.HoraFin, out var horaFinEnviada))
             {
                 TempData["Error"] = "El rango de hora no es válido.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-
             var horaInicio = new TimeSpan(horaInicioEnviada.Hours, horaInicioEnviada.Minutes, 0);
             var horaFin = new TimeSpan(horaFinEnviada.Hours, horaFinEnviada.Minutes, 0);
             var fechaInicioSolicitada = vm.FechaProduccion.Date.Add(horaInicio);
             var fechaFinSolicitada = vm.FechaProduccion.Date.Add(horaFin);
             if (fechaFinSolicitada <= fechaInicioSolicitada) fechaFinSolicitada = fechaFinSolicitada.AddDays(1);
-
             if (DateTime.Now < fechaFinSolicitada)
             {
                 TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar este bloque a partir de {fechaFinSolicitada:HH:mm}.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-
             if (!vm.ContadorMaquinaActual.HasValue)
             {
                 TempData["Error"] = "Captura el contador de la máquina correspondiente al cierre de este bloque.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-
             if (vm.ContadorMaquinaActual.Value < 0)
             {
                 TempData["Error"] = "El contador de la máquina no puede ser negativo.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-
-            if (vm.CantidadOK < 0 || vm.CantidadSospechosa < 0 || vm.CantidadScrap < 0)
+            if (vm.CantidadScrap < 0)
             {
-                TempData["Error"] = "Las cantidades OK, sospechosas y scrap no pueden ser negativas.";
+                TempData["Error"] = "La cantidad de piezas rojas no puede ser negativa.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-
             vm.Observaciones = vm.Observaciones?.Trim();
             if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Length > 500)
             {
                 TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
-
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
-
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-
             try
             {
                 var ejecucion = await ObtenerEjecucionOperadorAsync(vm.EjecucionProduccionID, cn, tx);
@@ -609,35 +559,30 @@ ORDER BY te.TiempoExtraID DESC;";
                     await tx.RollbackAsync();
                     return NotFound();
                 }
-
                 if (!await PersonaAsignadaAEjecucionAsync(vm.EjecucionProduccionID, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La ejecución ya no se encuentra asignada al operador conectado.";
                     return RedirectToAction(nameof(Index));
                 }
-
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Solo puedes capturar producción cuando la corrida se encuentra en serie.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = $"La máquina fue liberada por el técnico el {ejecucion.FechaLiberacionMaquina.Value:dd/MM/yyyy HH:mm}. Ya no se pueden registrar nuevas horas.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "No puedes capturar producción mientras exista un paro abierto.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(vm.EjecucionProduccionID, cn, tx);
                 if (configuracionActual == null || !configuracionActual.EstaVigente)
                 {
@@ -645,82 +590,63 @@ ORDER BY te.TiempoExtraID DESC;";
                     TempData["Error"] = "La corrida no tiene configuración técnica vigente. El Técnico de Producción debe confirmar cavidades y ciclo.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 var filasPermitidas = await ObtenerFilasCapturaHoraAsync(ejecucion.EjecucionProduccionID, ejecucion.ProgramaProduccionID, cn, tx);
-                var filaSolicitada = filasPermitidas.FirstOrDefault(x =>
-                    x.FechaProduccion.Date == vm.FechaProduccion.Date &&
-                    x.HoraInicio.Hours == horaInicio.Hours &&
-                    x.HoraInicio.Minutes == horaInicio.Minutes);
-
+                var filaSolicitada = filasPermitidas.FirstOrDefault(x => x.FechaProduccion.Date == vm.FechaProduccion.Date && x.HoraInicio.Hours == horaInicio.Hours && x.HoraInicio.Minutes == horaInicio.Minutes);
                 if (filaSolicitada == null)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La hora enviada no pertenece a los bloques generados para esta producción.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 if (filaSolicitada.Capturada)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Esta hora ya fue capturada.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 if (!filaSolicitada.Disponible)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Debes capturar primero la hora pendiente anterior.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 var fechaInicioFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraInicio);
                 var fechaFinFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraFin);
                 if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
-
-                var diferenciaInicioSegundos = Math.Abs((fechaInicioFila - fechaInicioSolicitada).TotalSeconds);
-                if (diferenciaInicioSegundos >= 60)
+                if (Math.Abs((fechaInicioFila - fechaInicioSolicitada).TotalSeconds) >= 60)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La hora inicial enviada no coincide con el bloque de producción.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
-                var diferenciaFinSegundos = Math.Abs((fechaFinFila - fechaFinSolicitada).TotalSeconds);
-                if (diferenciaFinSegundos >= 60)
+                if (Math.Abs((fechaFinFila - fechaFinSolicitada).TotalSeconds) >= 60)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "El rango enviado no coincide con el bloque de producción.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 if (DateTime.Now < fechaFinFila)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar a partir de {fechaFinFila:HH:mm}.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 var fechaProduccionReal = filaSolicitada.FechaProduccion.Date;
                 var horaInicioReal = new TimeSpan(filaSolicitada.HoraInicio.Hours, filaSolicitada.HoraInicio.Minutes, 0);
                 var horaFinReal = new TimeSpan(filaSolicitada.HoraFin.Hours, filaSolicitada.HoraFin.Minutes, 0);
-
                 if (await ExisteRegistroHoraAsync(vm.EjecucionProduccionID, fechaProduccionReal, horaInicioReal, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La hora seleccionada ya fue capturada. Actualiza la pantalla.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 var calculo = await CalcularProduccionContadorHoraAsync(vm.EjecucionProduccionID, fechaInicioFila, fechaFinFila, vm.ContadorMaquinaActual.Value, cn, tx);
-                var piezasNoOk = (long)vm.CantidadSospechosa + vm.CantidadScrap;
-
-                if (piezasNoOk > calculo.PiezasCalculadas)
+                if ((long)vm.CantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero capturaste {piezasNoOk:N0} entre sospechosos y scrap. Esas cantidades no pueden superar la producción física.";
+                    TempData["Error"] = $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero capturaste {vm.CantidadScrap:N0} pieza(s) rojas. Las piezas rojas no pueden superar la producción física.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
                 var validacionDefectos = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrap, vm.DefectosScrap, cn, tx);
                 if (!validacionDefectos.Valido)
                 {
@@ -729,38 +655,16 @@ ORDER BY te.TiempoExtraID DESC;";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
                 vm.DefectosScrap = validacionDefectos.Defectos;
-
-                var okSugerido = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
-                var okCapturado = vm.CantidadOK;
-                var okModificadoManual = okCapturado != okSugerido;
-                var totalClasificado = (long)okCapturado + vm.CantidadSospechosa + vm.CantidadScrap;
-
-                if (totalClasificado > int.MaxValue)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "La cantidad total clasificada excede el máximo permitido.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
-                }
-
-                if (totalClasificado != calculo.PiezasCalculadas && string.IsNullOrWhiteSpace(vm.Observaciones))
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = $"La clasificación suma {totalClasificado:N0} pieza(s), mientras que el contador indica {calculo.PiezasCalculadas:N0}. Puedes conservar el OK capturado, pero debes agregar una observación explicando la diferencia.";
-                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
-                }
-
-                if (calculo.PiezasCalculadas == 0 && totalClasificado == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+                var cantidadOK = calculo.PiezasCalculadas - vm.CantidadScrap;
+                if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "El contador no registró producción durante este bloque. Indica en observaciones qué ocurrió.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-
-                vm.CantidadOK = okCapturado;
-                vm.OkModificadoManual = okModificadoManual;
-                if (okModificadoManual)
-                    vm.Observaciones = ConstruirObservacionAuditoriaOkManual(okSugerido, okCapturado, calculo.PiezasCalculadas, totalClasificado, vm.Observaciones);
-
+                vm.CantidadOK = cantidadOK;
+                vm.CantidadSospechosa = 0;
+                vm.OkModificadoManual = false;
                 vm.EsTiempoExtra = false;
                 vm.MinutosTiempoExtra = null;
                 vm.TiempoExtraID = null;
@@ -769,25 +673,15 @@ ORDER BY te.TiempoExtraID DESC;";
                 vm.FechaProduccion = fechaProduccionReal;
                 vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
                 vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
-
                 var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
                 await GuardarDefectosScrapAsync(registroHoraId, vm.DefectosScrap, usuarioId, cn, tx);
                 await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
                 await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
-                await RegistrarBonusProduccionHoraAsync(     personaId.Value,     ejecucion.EjecucionProduccionID,   registroHoraId,    vm.CantidadOK,    calculo.PiezasCalculadas,    fechaFinFila,    usuarioId,     cn,    tx);
+                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
                 await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
                 await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
                 await tx.CommitAsync();
-
-                TempData["Success"] = ConstruirMensajeCumplimientoHora(
-                    filaSolicitada.NumeroHora,
-                    vm.CantidadOK,
-                    vm.CantidadSospechosa,
-                    vm.CantidadScrap,
-                    vm.ContadorMaquinaActual.Value,
-                    calculo,
-                    vm.OkModificadoManual);
-
+                TempData["Success"] = ConstruirMensajeCumplimientoHora(filaSolicitada.NumeroHora, vm.CantidadOK, vm.CantidadScrap, vm.ContadorMaquinaActual.Value, calculo);
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
             catch (Exception ex)
@@ -3814,39 +3708,20 @@ VALUES
 
             return Convert.ToInt32(resultado);
         }
-        private static string ConstruirMensajeCumplimientoHora(int numeroHora, int cantidadOK, int cantidadSospechosa, int cantidadScrap, long contadorActual, CalculoProduccionContadorHora calculo, bool okModificadoManual)
+        private static string ConstruirMensajeCumplimientoHora(int numeroHora, int cantidadOK, int cantidadScrap, long contadorActual, CalculoProduccionContadorHora calculo)
         {
-            var textoOk = okModificadoManual
-                ? $"OK registradas manualmente: {cantidadOK:N0}"
-                : $"OK sugeridas por el ERP: {cantidadOK:N0}";
-
-            var mensaje = $"Hora {numeroHora} guardada. Contador: {contadorActual:N0}. Producción física: {calculo.PiezasCalculadas:N0} pieza(s). {textoOk}; sospechosas: {cantidadSospechosa:N0}; posible scrap: {cantidadScrap:N0}.";
-
-            if (okModificadoManual)
-                mensaje += " El operador modificó el OK sugerido y la corrección quedó registrada para trazabilidad.";
-
+            var mensaje = $"Hora {numeroHora} guardada. Contador: {contadorActual:N0}. Producción física: {calculo.PiezasCalculadas:N0} pieza(s). Verdes/OK calculadas: {cantidadOK:N0}. Rojas/Scrap: {cantidadScrap:N0}.";
             if (calculo.ObjetivoBloque > 0)
             {
                 var porcentaje = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 1);
                 var diferencia = cantidadOK - calculo.ObjetivoBloque;
-
-                if (diferencia > 0)
-                    mensaje += $" Objetivo: {calculo.ObjetivoBloque:N0}. Cumplimiento {porcentaje:0.#}%. Superaste el objetivo por {diferencia:N0} pieza(s) OK.";
-                else if (diferencia == 0)
-                    mensaje += $" Objetivo: {calculo.ObjetivoBloque:N0}. Cumplimiento 100%.";
-                else
-                    mensaje += $" Objetivo: {calculo.ObjetivoBloque:N0}. Cumplimiento {porcentaje:0.#}%. Faltaron {Math.Abs(diferencia):N0} pieza(s) OK.";
+                if (diferencia > 0) mensaje += $" Objetivo: {calculo.ObjetivoBloque:N0}. Cumplimiento {porcentaje:0.#}%. Superaste el objetivo por {diferencia:N0} pieza(s) OK.";
+                else if (diferencia == 0) mensaje += $" Objetivo: {calculo.ObjetivoBloque:N0}. Cumplimiento 100%.";
+                else mensaje += $" Objetivo: {calculo.ObjetivoBloque:N0}. Cumplimiento {porcentaje:0.#}%. Faltaron {Math.Abs(diferencia):N0} pieza(s) OK.";
             }
-
-            if (cantidadOK > 0)
-                mensaje += $" Se abonaron provisionalmente +{cantidadOK:N0} pieza(s) OK al bonus del operador.";
-
-            if (cantidadSospechosa > 0 || cantidadScrap > 0)
-                mensaje += " El material sospechoso o posible scrap queda pendiente de resolución por Calidad.";
-
-            if (calculo.TieneReinicioContador)
-                mensaje += " Se detectó un reinicio del contador de máquina.";
-
+            if (cantidadOK > 0) mensaje += $" Se abonaron provisionalmente +{cantidadOK:N0} pieza(s) OK al bonus del operador.";
+            if (cantidadScrap > 0) mensaje += " Las piezas rojas fueron descontadas automáticamente de las piezas verdes calculadas.";
+            if (calculo.TieneReinicioContador) mensaje += " Se detectó un reinicio del contador de máquina.";
             return mensaje;
         }
         private static async Task VincularRegistroHoraConCalidadAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int registroHoraId, int usuarioId, SqlConnection cn, SqlTransaction tx)
@@ -9933,25 +9808,20 @@ WHERE TiempoExtraID=@TiempoExtraID
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PrevisualizarCorteTiempoExtra(int tiempoExtraId, long? contadorMaquinaActual, int cantidadSospechosa = 0, int cantidadScrap = 0)
+        public async Task<IActionResult> PrevisualizarCorteTiempoExtra(int tiempoExtraId, long? contadorMaquinaActual, int cantidadScrap = 0)
         {
             if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, mensaje = "La sesión ha expirado." });
             if (tiempoExtraId <= 0) return Json(new { ok = false, mensaje = "La sesión de tiempo extra no es válida." });
             if (!contadorMaquinaActual.HasValue) return Json(new { ok = false, mensaje = "Captura el contador actual de la máquina." });
             if (contadorMaquinaActual.Value < 0) return Json(new { ok = false, mensaje = "El contador no puede ser negativo." });
-            if (cantidadSospechosa < 0 || cantidadScrap < 0) return Json(new { ok = false, mensaje = "Sospechosos y scrap no pueden ser negativos." });
-
+            if (cantidadScrap < 0) return Json(new { ok = false, mensaje = "La cantidad de piezas rojas no puede ser negativa." });
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
             var usuarioId = ObtenerUsuarioID();
-
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return Unauthorized(new { ok = false, mensaje = "El usuario no tiene permisos de operador." });
-
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al operador." });
-
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-
             try
             {
                 var sesion = await ObtenerTiempoExtraPorIdAsync(tiempoExtraId, cn, tx, true);
@@ -9960,95 +9830,80 @@ WHERE TiempoExtraID=@TiempoExtraID
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "No se encontró la sesión de tiempo extra." });
                 }
-
                 if (sesion.FechaHoraFin.HasValue || !string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.EnCurso, StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La sesión de tiempo extra ya no se encuentra en curso." });
                 }
-
                 if (!await PersonaAsignadaAEjecucionAsync(sesion.EjecucionProduccionID, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La ejecución ya no está asignada al operador conectado." });
                 }
-
                 var ejecucion = await ObtenerEjecucionOperadorAsync(sesion.EjecucionProduccionID, cn, tx);
                 if (ejecucion == null)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
                 }
-
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La corrida no se encuentra actualmente en Producción." });
                 }
-
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La máquina ya fue liberada." });
                 }
-
                 if (await TieneParoAbiertoAsync(sesion.EjecucionProduccionID, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Existe un paro abierto. Finalízalo antes de capturar el corte." });
                 }
-
                 var configuracion = await ObtenerConfiguracionActualOperadorAsync(sesion.EjecucionProduccionID, cn, tx);
                 if (configuracion == null || !configuracion.EstaVigente)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La corrida no tiene una configuración técnica vigente." });
                 }
-
                 var fechaInicio = sesion.FechaHoraUltimoCorte;
                 var fechaFin = DateTime.Now;
-
                 if (fechaFin <= fechaInicio)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Todavía no existe tiempo transcurrido para calcular este corte." });
                 }
-
                 var calculo = await CalcularProduccionContadorHoraAsync(sesion.EjecucionProduccionID, fechaInicio, fechaFin, contadorMaquinaActual.Value, cn, tx);
-                var piezasNoOk = (long)cantidadSospechosa + cantidadScrap;
-
-                if (piezasNoOk > calculo.PiezasCalculadas)
+                if ((long)cantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
                     return Json(new
                     {
                         ok = false,
-                        mensaje = $"Sospechosos + Scrap suman {piezasNoOk:N0}, pero el contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.",
+                        mensaje = $"Capturaste {cantidadScrap:N0} pieza(s) rojas, pero el contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.",
                         piezasFisicas = calculo.PiezasCalculadas,
-                        cantidadOK = 0
+                        cantidadOK = 0,
+                        cantidadSospechosa = 0,
+                        cantidadScrap
                     });
                 }
-
-                var cantidadOK = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
+                var cantidadOK = calculo.PiezasCalculadas - cantidadScrap;
                 var siguienteCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(tiempoExtraId, cn, tx);
                 var fechaCorte60 = fechaInicio.AddMinutes(60);
                 var corteDisponible = fechaFin >= fechaCorte60;
                 var segundosTranscurridos = Math.Max(0, (long)Math.Floor((fechaFin - fechaInicio).TotalSeconds));
                 var segundosParaCorte = Math.Max(0, (long)Math.Ceiling((fechaCorte60 - fechaFin).TotalSeconds));
-
                 decimal? porcentajeCumplimiento = null;
                 int? diferenciaObjetivo = null;
                 bool? cumplioObjetivo = null;
-
                 if (calculo.ObjetivoBloque > 0)
                 {
                     diferenciaObjetivo = cantidadOK - calculo.ObjetivoBloque;
                     cumplioObjetivo = cantidadOK >= calculo.ObjetivoBloque;
                     porcentajeCumplimiento = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 2);
                 }
-
                 await tx.RollbackAsync();
-
                 return Json(new
                 {
                     ok = true,
@@ -10064,7 +9919,7 @@ WHERE TiempoExtraID=@TiempoExtraID
                     contadorFinal = contadorMaquinaActual.Value,
                     piezasFisicas = calculo.PiezasCalculadas,
                     cantidadOK,
-                    cantidadSospechosa,
+                    cantidadSospechosa = 0,
                     cantidadScrap,
                     objetivoHora = calculo.ObjetivoHora,
                     objetivoBloque = calculo.ObjetivoBloque,
@@ -10103,50 +9958,40 @@ WHERE TiempoExtraID=@TiempoExtraID
         private async Task<IActionResult> ProcesarCorteTiempoExtraAsync(ProduccionTiempoExtraCortePostVm vm, bool finalizar, bool exigirSesentaMinutos)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-
             if (vm.TiempoExtraID <= 0)
             {
                 TempData["Error"] = "No se recibió una sesión de tiempo extra válida.";
                 return RedirectToAction(nameof(Index));
             }
-
             if (!vm.ContadorMaquinaActual.HasValue)
             {
                 TempData["Error"] = "Captura el contador actual de la máquina.";
                 return RedirectToAction(nameof(Index));
             }
-
             if (vm.ContadorMaquinaActual.Value < 0)
             {
                 TempData["Error"] = "El contador de la máquina no puede ser negativo.";
                 return RedirectToAction(nameof(Index));
             }
-
-            if (vm.CantidadOK < 0 || vm.CantidadSospechosa < 0 || vm.CantidadScrap < 0)
+            if (vm.CantidadScrap < 0)
             {
-                TempData["Error"] = "Las cantidades capturadas no pueden ser negativas.";
+                TempData["Error"] = "La cantidad de piezas rojas no puede ser negativa.";
                 return RedirectToAction(nameof(Index));
             }
-
             vm.Observaciones = vm.Observaciones?.Trim();
             if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Length > 500)
             {
                 TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
                 return RedirectToAction(nameof(Index));
             }
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
-
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
-
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
             var ejecucionProduccionId = vm.EjecucionProduccionID;
-
             try
             {
                 var sesion = await ObtenerTiempoExtraPorIdAsync(vm.TiempoExtraID, cn, tx, true);
@@ -10156,65 +10001,55 @@ WHERE TiempoExtraID=@TiempoExtraID
                     TempData["Error"] = "No se encontró la sesión de tiempo extra.";
                     return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
                 }
-
                 ejecucionProduccionId = sesion.EjecucionProduccionID;
-
                 if (vm.EjecucionProduccionID > 0 && vm.EjecucionProduccionID != ejecucionProduccionId)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La sesión de tiempo extra no corresponde a esta ejecución.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 if (sesion.FechaHoraFin.HasValue)
                 {
                     await tx.RollbackAsync();
                     TempData["Info"] = "La sesión de tiempo extra ya fue finalizada.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 if (!string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.EnCurso, StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = $"La sesión se encuentra en estado {ProduccionTiempoExtraEstado.Nombre(sesion.Estado)} y no puede capturarse.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionProduccionId, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La ejecución ya no está asignada al operador conectado.";
                     return RedirectToAction(nameof(Index));
                 }
-
                 var ejecucion = await ObtenerEjecucionOperadorAsync(ejecucionProduccionId, cn, tx);
                 if (ejecucion == null)
                 {
                     await tx.RollbackAsync();
                     return NotFound();
                 }
-
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La corrida debe encontrarse en Producción para capturar tiempo extra.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La máquina ya fue liberada. No se pueden registrar nuevos cortes.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Existe un paro abierto. Finalízalo antes de capturar el corte de tiempo extra.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(ejecucionProduccionId, cn, tx);
                 if (configuracionActual == null || !configuracionActual.EstaVigente)
                 {
@@ -10222,17 +10057,14 @@ WHERE TiempoExtraID=@TiempoExtraID
                     TempData["Error"] = "La corrida no tiene configuración técnica vigente.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 var fechaInicioCorte = sesion.FechaHoraUltimoCorte;
                 var fechaFinCorte = DateTime.Now;
-
                 if (fechaFinCorte <= fechaInicioCorte)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Todavía no existe tiempo transcurrido para registrar el corte.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 if (exigirSesentaMinutos && fechaFinCorte < fechaInicioCorte.AddMinutes(60))
                 {
                     var faltan = fechaInicioCorte.AddMinutes(60) - fechaFinCorte;
@@ -10240,17 +10072,13 @@ WHERE TiempoExtraID=@TiempoExtraID
                     TempData["Error"] = $"El corte todavía no cumple 60 minutos. Faltan aproximadamente {Math.Max(1, (int)Math.Ceiling(faltan.TotalMinutes))} minuto(s). Si la máquina dejará de producir antes, utiliza Finalizar tiempo extra.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 var calculo = await CalcularProduccionContadorHoraAsync(ejecucionProduccionId, fechaInicioCorte, fechaFinCorte, vm.ContadorMaquinaActual.Value, cn, tx);
-                var piezasNoOk = (long)vm.CantidadSospechosa + vm.CantidadScrap;
-
-                if (piezasNoOk > calculo.PiezasCalculadas)
+                if ((long)vm.CantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero Sospechosos + Scrap suman {piezasNoOk:N0}.";
+                    TempData["Error"] = $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero capturaste {vm.CantidadScrap:N0} pieza(s) rojas.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 var validacionDefectos = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrap, vm.DefectosScrap, cn, tx);
                 if (!validacionDefectos.Valido)
                 {
@@ -10259,43 +10087,19 @@ WHERE TiempoExtraID=@TiempoExtraID
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
                 vm.DefectosScrap = validacionDefectos.Defectos;
-
-                var okSugerido = calculo.PiezasCalculadas - Convert.ToInt32(piezasNoOk);
-                var okCapturado = vm.CantidadOK;
-                var okModificadoManual = okCapturado != okSugerido;
-                var okFinal = okCapturado;
-                var totalClasificado = (long)okFinal + vm.CantidadSospechosa + vm.CantidadScrap;
-
-                if (totalClasificado > int.MaxValue)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "La cantidad total clasificada excede el máximo permitido.";
-                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
-                }
-
-                if (totalClasificado != calculo.PiezasCalculadas && string.IsNullOrWhiteSpace(vm.Observaciones))
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = $"La clasificación suma {totalClasificado:N0} pieza(s), mientras el contador indica {calculo.PiezasCalculadas:N0}. Puedes conservar el OK capturado, pero debes agregar una observación explicando la diferencia.";
-                    return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
-                }
-
-                if (calculo.PiezasCalculadas == 0 && totalClasificado == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+                var okFinal = calculo.PiezasCalculadas - vm.CantidadScrap;
+                if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "No se detectó producción durante este periodo. Indica en observaciones qué ocurrió.";
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
-                vm.OkModificadoManual = okModificadoManual;
-                var observacionesRegistro = okModificadoManual
-                    ? ConstruirObservacionAuditoriaOkManual(okSugerido, okFinal, calculo.PiezasCalculadas, totalClasificado, vm.Observaciones)
-                    : vm.Observaciones;
-
+                vm.CantidadOK = okFinal;
+                vm.CantidadSospechosa = 0;
+                vm.OkModificadoManual = false;
                 var numeroCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(vm.TiempoExtraID, cn, tx);
                 var horaInicioReal = fechaInicioCorte.TimeOfDay;
                 var horaFinReal = fechaFinCorte.TimeOfDay;
-
                 var registroVm = new ProduccionRegistroHoraPostVm
                 {
                     EjecucionProduccionID = ejecucionProduccionId,
@@ -10304,8 +10108,8 @@ WHERE TiempoExtraID=@TiempoExtraID
                     HoraFin = horaFinReal.ToString(@"hh\:mm\:ss"),
                     ContadorMaquinaActual = vm.ContadorMaquinaActual,
                     CantidadOK = okFinal,
-                    OkModificadoManual = okModificadoManual,
-                    CantidadSospechosa = vm.CantidadSospechosa,
+                    OkModificadoManual = false,
+                    CantidadSospechosa = 0,
                     CantidadScrap = vm.CantidadScrap,
                     DefectosScrap = vm.DefectosScrap,
                     EsTiempoExtra = true,
@@ -10313,21 +10117,17 @@ WHERE TiempoExtraID=@TiempoExtraID
                     TiempoExtraID = vm.TiempoExtraID,
                     NumeroCorteTiempoExtra = numeroCorte,
                     FinalizarTiempoExtra = finalizar,
-                    Observaciones = observacionesRegistro
+                    Observaciones = vm.Observaciones
                 };
-
                 var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
                 await GuardarDefectosScrapAsync(registroHoraId, registroVm.DefectosScrap, usuarioId, cn, tx);
                 await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucionProduccionId, calculo, usuarioId, cn, tx);
                 await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinCorte, vm.ContadorMaquinaActual.Value, calculo, cn, tx, true);
-                await RegistrarBonusProduccionHoraAsync(     personaId.Value,      ejecucionProduccionId,      registroHoraId,      okFinal,      calculo.PiezasCalculadas,      fechaFinCorte,     usuarioId,     cn,  tx);
-                if (totalClasificado > 0)
-                    await VincularRegistroHoraConCalidadAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
-
+                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucionProduccionId, registroHoraId, okFinal, calculo.PiezasCalculadas, fechaFinCorte, usuarioId, cn, tx);
+                if (calculo.PiezasCalculadas > 0) await VincularRegistroHoraConCalidadAsync(ejecucion, registroVm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
                 const string sqlActualizarSesion = @"
 UPDATE dbo.Produccion_TiempoExtra
-SET
-    FechaHoraUltimoCorte=@FechaHoraFin,
+SET FechaHoraUltimoCorte=@FechaHoraFin,
     ContadorUltimoCorte=@ContadorFinal,
     FechaHoraFin=CASE WHEN @Finalizar=1 THEN @FechaHoraFin ELSE FechaHoraFin END,
     ContadorFin=CASE WHEN @Finalizar=1 THEN @ContadorFinal ELSE ContadorFin END,
@@ -10340,7 +10140,6 @@ WHERE TiempoExtraID=@TiempoExtraID
   AND Activo=1
   AND FechaHoraFin IS NULL
   AND UPPER(LTRIM(RTRIM(Estado)))=N'EN_CURSO';";
-
                 await using (var cmd = new SqlCommand(sqlActualizarSesion, cn, tx))
                 {
                     cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = vm.TiempoExtraID;
@@ -10351,22 +10150,13 @@ WHERE TiempoExtraID=@TiempoExtraID
                     cmd.Parameters.Add("@Finalizar", SqlDbType.Bit).Value = finalizar;
                     cmd.Parameters.Add("@EstadoFinalizado", SqlDbType.NVarChar, 20).Value = ProduccionTiempoExtraEstado.Finalizado;
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-
-                    if (await cmd.ExecuteNonQueryAsync() != 1)
-                        throw new InvalidOperationException("La sesión de tiempo extra cambió de estado mientras se guardaba el corte.");
+                    if (await cmd.ExecuteNonQueryAsync() != 1) throw new InvalidOperationException("La sesión de tiempo extra cambió de estado mientras se guardaba el corte.");
                 }
-
                 await RecalcularTotalesEjecucionAsync(ejecucionProduccionId, usuarioId, cn, tx);
                 await tx.CommitAsync();
-
-                var textoModoOk = okModificadoManual
-                    ? $" OK manual: {okFinal:N0}."
-                    : $" OK calculado: {okFinal:N0}.";
-
                 TempData["Success"] = finalizar
-                    ? $"Tiempo extra finalizado correctamente. Corte #{numeroCorte}: {calculo.MinutosProductivos:0.##} min productivos, {calculo.PiezasCalculadas:N0} pieza(s) físicas.{textoModoOk}"
-                    : $"Corte #{numeroCorte} de tiempo extra guardado. {calculo.MinutosProductivos:0.##} min productivos, {calculo.PiezasCalculadas:N0} pieza(s) físicas.{textoModoOk} El siguiente bloque de tiempo extra comenzó automáticamente.";
-
+                    ? $"Tiempo extra finalizado correctamente. Corte #{numeroCorte}: {calculo.MinutosProductivos:0.##} min productivos, {calculo.PiezasCalculadas:N0} pieza(s) físicas, {okFinal:N0} verdes/OK y {vm.CantidadScrap:N0} rojas/Scrap."
+                    : $"Corte #{numeroCorte} de tiempo extra guardado. {calculo.MinutosProductivos:0.##} min productivos, {calculo.PiezasCalculadas:N0} pieza(s) físicas, {okFinal:N0} verdes/OK y {vm.CantidadScrap:N0} rojas/Scrap. El siguiente bloque de tiempo extra comenzó automáticamente.";
                 return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
             }
             catch (SqlException ex) when (ex.Number is 2601 or 2627)
@@ -10382,7 +10172,6 @@ WHERE TiempoExtraID=@TiempoExtraID
                 return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
             }
         }
-
 
         private static async Task<bool> PersonaAsignadaAEjecucionAsync(
     int ejecucionProduccionId,

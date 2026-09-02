@@ -546,6 +546,7 @@ public sealed class PlaneacionSecuenciaService : IPlaneacionSecuenciaService
 
         return resultado;
     }
+
     private static async Task<List<InterrupcionActivaProyeccion>> CargarInterrupcionesActivasProyeccionAsync(SqlConnection cn)
     {
         var lista = new List<InterrupcionActivaProyeccion>();
@@ -578,6 +579,7 @@ INNER JOIN dbo.Produccion_Ejecucion e
     ON e.EjecucionProduccionID=p.EjecucionProduccionID
 WHERE p.Activo=1
   AND e.Activo=1
+  AND ISNULL(p.TerminacionParcialEjecutada,0)=0
   AND
   (
       p.FechaFinParo IS NULL

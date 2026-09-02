@@ -408,6 +408,36 @@
         font-size: .61rem;
     }
 
+    .ao-header-actions{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    flex-wrap:wrap;
+}
+
+.ao-calendar-button{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    min-height:37px;
+    padding:7px 13px;
+    border:1px solid #2563eb;
+    border-radius:9px;
+    background:linear-gradient(135deg,#2563eb,#1d4ed8);
+    color:#fff;
+    font-size:.68rem;
+    font-weight:900;
+    text-decoration:none;
+    box-shadow:0 3px 9px rgba(37,99,235,.16);
+}
+
+.ao-calendar-button:hover{
+    color:#fff;
+    background:#1d4ed8;
+    border-color:#1d4ed8;
+}
+
     .ao-refresh {
         display: inline-flex;
         align-items: center;
@@ -1374,21 +1404,40 @@
                 </div>
             </div>
 
-            <a class="ao-refresh"
-               href="@Url.Action("Index","AgendaOperativa",new
-               {
-                   maquinaId = Model.Filtros.MaquinaID,
-                   busqueda = Model.Filtros.Busqueda,
-                   area = Model.Filtros.Area,
-                   estado = Model.Filtros.Estado,
-                   soloAtencion = Model.Filtros.SoloAtencion,
-                   soloBloqueadas = Model.Filtros.SoloBloqueadas,
-                   incluirProduciendo = Model.Filtros.IncluirProduciendo,
-                   ventanaHoras = Model.Filtros.VentanaHoras
-               })">
-                <i class="bi bi-arrow-clockwise"></i>
-                Actualizar
-            </a>
+           <div class="ao-header-actions">
+    <a class="ao-calendar-button"
+       href="@Url.Action("Calendario","AgendaOperativa",new
+       {
+           maquinaId=Model.Filtros.MaquinaID,
+           busqueda=Model.Filtros.Busqueda,
+           area=Model.Filtros.Area,
+           estado=Model.Filtros.Estado,
+           soloAtencion=Model.Filtros.SoloAtencion,
+           soloBloqueadas=Model.Filtros.SoloBloqueadas,
+           incluirProduciendo=Model.Filtros.IncluirProduciendo,
+           ventanaHoras=Model.Filtros.VentanaHoras
+       })">
+        <i class="bi bi-calendar3"></i>
+        Calendario
+    </a>
+
+    <a class="ao-refresh"
+       href="@Url.Action("Index","AgendaOperativa",new
+       {
+           maquinaId=Model.Filtros.MaquinaID,
+           busqueda=Model.Filtros.Busqueda,
+           area=Model.Filtros.Area,
+           estado=Model.Filtros.Estado,
+           soloAtencion=Model.Filtros.SoloAtencion,
+           soloBloqueadas=Model.Filtros.SoloBloqueadas,
+           incluirProduciendo=Model.Filtros.IncluirProduciendo,
+           ventanaHoras=Model.Filtros.VentanaHoras
+       })">
+        <i class="bi bi-arrow-clockwise"></i>
+        Actualizar
+    </a>
+</div>
+
         </div>
 
         @if (TempData["Error"] != null)
