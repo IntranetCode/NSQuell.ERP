@@ -1,0 +1,806 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@functions {
+    private static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "-"
+            : value.Trim();
+    }
+}
+
+@{
+    var e = Model.Ejecucion;
+
+    var workspaceProduccion =
+        (ViewBag.WorkspaceProduccion as string
+         ?? "CONSULTA")
+        .Trim()
+        .ToUpperInvariant();
+
+    var workspacePuedeVerCapturas =
+        workspaceProduccion == "AUXILIAR"
+        || workspaceProduccion == "SUPERVISION";
+
+    var puedeVerCapturasHora =
+        workspacePuedeVerCapturas
+        && ViewBag.PuedeVerCapturasHora is bool verCapturas
+        && verCapturas;
+
+    var puedeCorregirCapturasHora =
+        ViewBag.PuedeCorregirCapturasHora is bool corregirCapturas
+        && corregirCapturas;
+
+    var ejecucionPermiteCorregirCapturas =
+        e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion
+        || e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pausado
+        || e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.TerminadoParcial;
+
+    var puedeCorregirCapturasAhora =
+        puedeVerCapturasHora
+        && puedeCorregirCapturasHora
+        && ejecucionPermiteCorregirCapturas;
+
+    var accionActual =
+        ViewData["AccionActualProduccion"] as string
+        ?? string.Empty;
+
+    var cortesTiempoExtra =
+        Model.RegistrosHora.Count(x => x.EsTiempoExtra);
+}
+
+@if (puedeVerCapturasHora)
+{
+    var registrosOrdenados = Model.RegistrosHora
+        .OrderByDescending(x => x.FechaProduccion)
+        .ThenByDescending(x => x.HoraInicio)
+        .ThenByDescending(x => x.RegistroHoraID)
+        .ToList();
+
+    var indiceCaptura = 0;
+
+    <div class="panel mb-4"
+         id="panelCapturas"
+         data-collapsible
+         data-default-open="@(accionActual == "SEGUIMIENTO" ? "true" : "false")">
+
+        <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+            <span>
+                <i class="bi bi-clock-history me-1"></i>
+                Capturas de producción
+            </span>
+
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-primary">
+                    @registrosOrdenados.Count registro(s)
+                </span>
+
+                @if (cortesTiempoExtra > 0)
+                {
+                    <span class="badge bg-purple text-white"
+                          style="background:#7c3aed!important;">
+                        @cortesTiempoExtra tiempo extra
+                    </span>
+                }
+
+                @if (registrosOrdenados.Any(x => x.TieneAjustesProduccion))
+                {
+                    <span class="badge bg-warning text-dark">
+                        @registrosOrdenados.Count(x => x.TieneAjustesProduccion)
+                        ajustada(s)
+                    </span>
+                }
+            </div>
+
+        </div>
+
+        <div class="capture-list">
+
+            @if (!registrosOrdenados.Any())
+            {
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                    Sin capturas registradas.
+                </div>
+            }
+            else
+            {
+                @if (puedeCorregirCapturasHora &&
+                        !ejecucionPermiteCorregirCapturas)
+                {
+                    <div class="alert alert-secondary mb-0">
+                        <i class="bi bi-lock me-1"></i>
+                        Las capturas conservan su historial, pero esta ejecución
+                        ya no está en un estado que permita correcciones operativas.
+                    </div>
+                }
+
+                foreach (var r in registrosOrdenados)
+                {
+                    indiceCaptura++;
+
+                    var objetivoRegistro = r.ObjetivoBloque ?? r.ObjetivoHora;
+                    var piezasFisicas = r.PiezasCalculadasContador ?? r.TotalCapturado;
+                    var minutosRegistro = r.MinutosProductivos;
+
+                    if (!minutosRegistro.HasValue)
+                    {
+                        var duracion = r.HoraFin >= r.HoraInicio
+                        ? r.HoraFin - r.HoraInicio
+                        : (TimeSpan.FromDays(1) - r.HoraInicio) + r.HoraFin;
+
+                        minutosRegistro =
+                        Convert.ToDecimal(duracion.TotalMinutes);
+                    }
+
+                    var ocultarInicial = indiceCaptura > 8;
+                    var idSegmentos = $"segmentosRegistro_{r.RegistroHoraID}";
+                    var idAjustes = $"ajustesRegistro_{r.RegistroHoraID}";
+
+                    var ajustes = r.AjustesProduccion?
+                    .Where(x => x.Activo)
+                    .OrderByDescending(x => x.FechaAjuste)
+                    .ThenByDescending(x => x.AjusteProduccionID)
+                    .ToList()
+                    ?? new List<ERP.NSQuell.Models.ProduccionRegistroHoraAjusteProduccionVm>();
+
+                    var primerAjuste = ajustes
+                    .OrderBy(x => x.FechaAjuste)
+                    .ThenBy(x => x.AjusteProduccionID)
+                    .FirstOrDefault();
+
+                    var tieneOriginalCapturado =
+                    r.CantidadOKOriginal != 0
+                    || r.CantidadScrapOriginal != 0
+                    || (r.CantidadOK == 0 && r.CantidadScrap == 0);
+
+                    var verdesOriginales = tieneOriginalCapturado
+                    ? r.CantidadOKOriginal
+                    : primerAjuste?.OKAntes ?? r.CantidadOK;
+
+                    var rojasOriginales = tieneOriginalCapturado
+                    ? r.CantidadScrapOriginal
+                    : primerAjuste?.ScrapAntes ?? r.CantidadScrap;
+
+                    var diferenciaNoLocalizada =
+                    Math.Max(
+                    0,
+                    piezasFisicas - r.CantidadOK - r.CantidadScrap);
+
+                    <article class="capture-card @(r.EsTiempoExtra ? "is-extra" : "is-normal") @(ocultarInicial ? "capture-hidden" : "")"
+                             data-capture-card>
+
+                        <div class="capture-heading">
+
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+
+                                <span class="capture-type @(r.EsTiempoExtra ? "extra" : "")">
+                                    <i class="bi @(r.EsTiempoExtra ? "bi-stopwatch" : "bi-clock")"></i>
+
+                                    @if (r.EsTiempoExtra)
+                                    {
+                                        <text>
+                                            @(string.IsNullOrWhiteSpace(r.TipoBloque)
+                                                                        ? "TIEMPO EXTRA"
+                                                                        : r.TipoBloque.Replace("_", " "))
+                        </text>
+                                                }
+                                    else
+                                    {
+                                        <text>CAPTURA NORMAL</text>
+                                    }
+                                </span>
+
+                                <span class="capture-time">
+                                    @r.FechaProduccion.ToString("dd/MM/yyyy")
+                                    · @r.RangoHora
+                                </span>
+
+                                @if (ajustes.Any())
+                                {
+                                    <span class="capture-adjusted-badge">
+                                        <i class="bi bi-pencil-square"></i>
+                                        Ajustada por Producción
+                                    </span>
+                                }
+
+                            </div>
+
+                            <div class="capture-adjust-actions">
+
+                                @if (!objetivoRegistro.HasValue ||
+                                                    objetivoRegistro.Value <= 0)
+                                {
+                                    <span class="objective-result neutral">
+                                        <span>Sin objetivo</span>
+                                        <small>No evaluable</small>
+                                    </span>
+                                }
+                                else if (r.CumplioObjetivo == true)
+                                {
+                                    <span class="objective-result ok">
+                                        <span>
+                                            <i class="bi bi-check-circle me-1"></i>
+                                            Cumplió
+                                        </span>
+                                        <small>
+                                            @(r.PorcentajeCumplimiento?.ToString("0.#") ?? "-")%
+                                        </small>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="objective-result fail">
+                                        <span>
+                                            <i class="bi bi-x-circle me-1"></i>
+                                            No cumplió
+                                        </span>
+                                        <small>
+                                            @(r.PorcentajeCumplimiento?.ToString("0.#") ?? "-")%
+                                        </small>
+                                    </span>
+                                }
+
+                                @if (puedeCorregirCapturasAhora)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-warning fw-bold"
+                                            data-ajustar-captura
+                                            data-registro-id="@r.RegistroHoraID"
+                                            data-ejecucion-id="@r.EjecucionProduccionID"
+                                            data-fecha="@r.FechaProduccion.ToString("dd/MM/yyyy")"
+                                            data-rango="@r.RangoHora"
+                                            data-fisicas="@piezasFisicas"
+                                            data-ok="@r.CantidadOK"
+                                            data-scrap="@r.CantidadScrap"
+                                            data-original-ok="@verdesOriginales"
+                                            data-original-scrap="@rojasOriginales"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalCorregirCapturaHora">
+
+                                        <i class="bi bi-pencil-square me-1"></i>
+                                        Corregir cantidades
+
+                                    </button>
+                                }
+
+                            </div>
+
+                        </div>
+
+                        <div class="capture-grid">
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    Físicas máquina
+                                </div>
+                                <div class="capture-stat-value">
+                                    @piezasFisicas.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    Verdes / OK
+                                </div>
+                                <div class="capture-stat-value text-success">
+                                    @r.CantidadOK.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    Rojas / Scrap
+                                </div>
+                                <div class="capture-stat-value text-danger">
+                                    @r.CantidadScrap.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    No localizadas
+                                </div>
+                                <div class="capture-stat-value @(diferenciaNoLocalizada > 0 ? "text-warning" : "")">
+                                    @diferenciaNoLocalizada.ToString("N0")
+                                </div>
+                            </div>
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    Min. productivos
+                                </div>
+                                <div class="capture-stat-value">
+                                    @minutosRegistro.Value.ToString("0.##")
+                                </div>
+                            </div>
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    Contador
+                                </div>
+                                <div class="capture-stat-value">
+                                    @(r.ContadorInicial?.ToString("N0") ?? "-")
+                                    →
+                                    @(r.ContadorFinal?.ToString("N0") ?? "-")
+                                </div>
+                            </div>
+
+                            <div class="capture-stat">
+                                <div class="capture-stat-label">
+                                    Objetivo
+                                </div>
+                                <div class="capture-stat-value">
+                                    @(objetivoRegistro?.ToString("N0") ?? "-")
+                                </div>
+                            </div>
+
+                        </div>
+
+                        @if (diferenciaNoLocalizada > 0)
+                        {
+                            <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                La máquina registró @piezasFisicas.ToString("N0")
+                                pieza(s), pero el dato operativo vigente conserva
+                                @(r.CantidadOK + r.CantidadScrap).ToString("N0").
+                                La diferencia de @diferenciaNoLocalizada.ToString("N0")
+                                pieza(s) quedó como pérdida/no localizada sin
+                                alterar el contador físico.
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(r.Observaciones))
+                        {
+                            <div class="capture-observation">
+                                <i class="bi bi-chat-left-text me-1"></i>
+                                @r.Observaciones
+                            </div>
+                        }
+
+                        @if (r.TieneCambioConfiguracion ||
+                                    r.TieneReinicioContador ||
+                                    (r.Segmentos?.Count ?? 0) > 1)
+                        {
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+
+                                @if (r.TieneCambioConfiguracion)
+                                {
+                                    <span class="badge bg-info text-dark">
+                                        <i class="bi bi-sliders me-1"></i>
+                                        Cambio de configuración
+                                    </span>
+                                }
+
+                                @if (r.TieneReinicioContador)
+                                {
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>
+                                        Reinicio de contador
+                                    </span>
+                                }
+
+                                @if ((r.Segmentos?.Count ?? 0) > 1)
+                                {
+                                    <span class="badge bg-secondary">
+                                        @r.Segmentos.Count segmentos
+                                    </span>
+                                }
+
+                            </div>
+                        }
+
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+
+                            @if (r.Segmentos != null && r.Segmentos.Any())
+                            {
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary fw-bold"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#@idSegmentos"
+                                        aria-expanded="false">
+                                    <i class="bi bi-diagram-3 me-1"></i>
+                                    Ver detalle técnico
+                                </button>
+                            }
+
+                            @if (ajustes.Any())
+                            {
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-warning fw-bold"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#@idAjustes"
+                                        aria-expanded="false">
+                                    <i class="bi bi-clock-history me-1"></i>
+                                    Historial de ajustes (@ajustes.Count)
+                                </button>
+                            }
+
+                        </div>
+
+                        @if (r.Segmentos != null && r.Segmentos.Any())
+                        {
+                            <div class="capture-segments collapse"
+                                 id="@idSegmentos">
+
+                                <div class="segment-grid">
+
+                                    @foreach (var s in r.Segmentos.OrderBy(x => x.NumeroSegmento))
+                                    {
+                                        <div class="segment-card">
+
+                                            <div class="d-flex justify-content-between gap-2">
+                                                <strong>Segmento @s.NumeroSegmento</strong>
+                                                <span>@s.Rango</span>
+                                            </div>
+
+                                            <div class="mt-1">
+                                                Contador:
+                                                <strong>
+                                                    @s.ContadorInicial.ToString("N0")
+                                                    →
+                                                    @s.ContadorFinal.ToString("N0")
+                                                </strong>
+                                            </div>
+
+                                            <div>
+                                                Cavidades:
+                                                <strong>@s.CavidadesUsadas</strong>
+                                                · Ciclo:
+                                                <strong>
+                                                    @s.TiempoCicloSegundos.ToString("0.####") s
+                                                </strong>
+                                            </div>
+
+                                            <div>
+                                                Piezas:
+                                                <strong>
+                                                    @s.PiezasCalculadas.ToString("N0")
+                                                </strong>
+                                                · Min:
+                                                <strong>
+                                                    @s.MinutosProductivos.ToString("0.##")
+                                                </strong>
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(s.Observaciones))
+                                            {
+                                                <div class="mt-1 text-warning">
+                                                    @s.Observaciones
+                                                </div>
+                                            }
+
+                                        </div>
+                                    }
+
+                                </div>
+                            </div>
+                        }
+
+                        @if (ajustes.Any())
+                        {
+                            <div class="collapse"
+                                 id="@idAjustes">
+
+                                <div class="capture-history">
+
+                                    @foreach (var ajuste in ajustes)
+                                    {
+                                        <div class="capture-history-item">
+
+                                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+
+                                                <div>
+                                                    <div class="fw-bold">
+                                                        <i class="bi bi-pencil-square me-1"></i>
+                                                        Ajuste de Producción
+                                                    </div>
+
+                                                    <div class="muted-small">
+                                                        @ajuste.FechaAjuste.ToString("dd/MM/yyyy HH:mm")
+                                                        · @Txt(ajuste.UsuarioAjusteNombre)
+                                                    </div>
+                                                </div>
+
+                                                <div class="d-flex flex-wrap gap-1">
+
+                                                    @if (ajuste.DiferenciaOK != 0)
+                                                    {
+                                                        <span class="badge @(ajuste.DiferenciaOK > 0 ? "bg-success" : "bg-danger")">
+                                                            Bonus
+                                                            @(ajuste.DiferenciaOK > 0 ? "+" : "")
+                                                            @ajuste.DiferenciaOK.ToString("N0")
+                                                        </span>
+                                                    }
+
+                                                    @if (ajuste.MovimientoBonusID.HasValue)
+                                                    {
+                                                        <span class="badge bg-secondary">
+                                                            Mov. #@ajuste.MovimientoBonusID.Value
+                                                        </span>
+                                                    }
+
+                                                </div>
+
+                                            </div>
+
+                                            <div class="capture-history-values">
+
+                                                <div class="capture-history-value">
+                                                    <div class="data-label">
+                                                        Verdes / OK
+                                                    </div>
+                                                    <div class="fw-bold text-success">
+                                                        @ajuste.OKAntes.ToString("N0")
+                                                        →
+                                                        @ajuste.OKDespues.ToString("N0")
+                                                    </div>
+                                                </div>
+
+                                                <div class="capture-history-value">
+                                                    <div class="data-label">
+                                                        Rojas / Scrap
+                                                    </div>
+                                                    <div class="fw-bold text-danger">
+                                                        @ajuste.ScrapAntes.ToString("N0")
+                                                        →
+                                                        @ajuste.ScrapDespues.ToString("N0")
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
+                                            <div class="capture-history-motive">
+                                                <strong>Motivo:</strong>
+                                                @ajuste.Motivo
+                                            </div>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            </div>
+                        }
+
+                    </article>
+                }
+
+                @if (registrosOrdenados.Count > 8)
+                {
+                    <button type="button"
+                            class="btn btn-outline-primary btn-strong"
+                            data-capture-show-all>
+                        <i class="bi bi-chevron-down me-1"></i>
+                        Mostrar @(registrosOrdenados.Count - 8)
+                        captura(s) anteriores
+                    </button>
+                }
+            }
+
+        </div>
+    </div>
+
+    @if (puedeCorregirCapturasAhora)
+    {
+        <div class="modal fade"
+             id="modalCorregirCapturaHora"
+             tabindex="-1"
+             aria-labelledby="modalCorregirCapturaHoraLabel"
+             aria-hidden="true">
+
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+
+                    <form method="post"
+                          action="@Url.Action("CorregirCapturaHora","Produccion")"
+                          id="formCorregirCapturaHora">
+
+                        @Html.AntiForgeryToken()
+
+                        <div class="modal-header">
+
+                            <div>
+                                <h5 class="modal-title fw-bold"
+                                    id="modalCorregirCapturaHoraLabel">
+                                    <i class="bi bi-pencil-square me-1"></i>
+                                    Corregir cantidades de producción
+                                </h5>
+
+                                <div class="text-muted small mt-1">
+                                    El contador de máquina no se modifica.
+                                    Cada corrección conserva antes/después,
+                                    motivo, usuario, fecha y movimiento de bonus.
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Cerrar">
+                            </button>
+
+                        </div>
+
+                        <div class="modal-body">
+
+                            <input type="hidden"
+                                   name="EjecucionProduccionID"
+                                   id="ajusteEjecucionProduccionID"
+                                   value="@e.EjecucionProduccionID" />
+
+                            <input type="hidden"
+                                   name="RegistroHoraID"
+                                   id="ajusteRegistroHoraID" />
+
+                            <div class="adjust-summary mb-3">
+
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <div>
+                                        <div class="data-label">
+                                            Captura seleccionada
+                                        </div>
+                                        <div class="data-value"
+                                             id="ajusteCapturaTexto">
+                                            -
+                                        </div>
+                                    </div>
+
+                                    <span class="badge bg-secondary"
+                                          id="ajusteRegistroBadge">
+                                        Registro -
+                                    </span>
+                                </div>
+
+                                <div class="adjust-summary-grid">
+
+                                    <div class="adjust-summary-item">
+                                        <div class="adjust-summary-label">
+                                            Físicas máquina
+                                        </div>
+                                        <div class="adjust-summary-value"
+                                             id="ajusteFisicas">
+                                            0
+                                        </div>
+                                    </div>
+
+                                    <div class="adjust-summary-item">
+                                        <div class="adjust-summary-label">
+                                            Verdes originales
+                                        </div>
+                                        <div class="adjust-summary-value text-success"
+                                             id="ajusteOriginalOK">
+                                            0
+                                        </div>
+                                    </div>
+
+                                    <div class="adjust-summary-item">
+                                        <div class="adjust-summary-label">
+                                            Rojas originales
+                                        </div>
+                                        <div class="adjust-summary-value text-danger"
+                                             id="ajusteOriginalScrap">
+                                            0
+                                        </div>
+                                    </div>
+
+                                    <div class="adjust-summary-item">
+                                        <div class="adjust-summary-label">
+                                            No localizadas actuales
+                                        </div>
+                                        <div class="adjust-summary-value text-warning"
+                                             id="ajusteNoLocalizadasActual">
+                                            0
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info py-2 px-3 small">
+                                <i class="bi bi-speedometer2 me-1"></i>
+                                El valor de <strong>piezas físicas</strong>
+                                proviene del contador de máquina y queda como
+                                referencia histórica. Puedes reducir verdes o
+                                rojas cuando físicamente faltaron piezas; la
+                                diferencia quedará visible como no localizada/pérdida.
+                            </div>
+
+                            <div class="row g-3">
+
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label"
+                                           for="ajusteCantidadOK">
+                                        Verdes / OK vigentes *
+                                    </label>
+
+                                    <input type="number"
+                                           min="0"
+                                           step="1"
+                                           class="form-control form-control-lg fw-bold"
+                                           id="ajusteCantidadOK"
+                                           name="CantidadOK"
+                                           required />
+
+                                    <div class="form-text">
+                                        El cambio en verdes ajustará el bonus
+                                        del operador con un movimiento +/-,
+                                        sin borrar el movimiento original.
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label"
+                                           for="ajusteCantidadScrap">
+                                        Rojas / Scrap vigentes *
+                                    </label>
+
+                                    <input type="number"
+                                           min="0"
+                                           step="1"
+                                           class="form-control form-control-lg fw-bold"
+                                           id="ajusteCantidadScrap"
+                                           name="CantidadScrap"
+                                           required />
+
+                                    <div class="form-text">
+                                        Si el Scrap ya tiene defectos clasificados,
+                                        el backend protegerá esa clasificación y no
+                                        permitirá inconsistencias.
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="adjust-preview"
+                                         id="ajustePreview">
+                                        Modifica una cantidad para ver el impacto.
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label"
+                                           for="ajusteMotivo">
+                                        Motivo de la corrección *
+                                    </label>
+
+                                    <textarea class="form-control"
+                                      id="ajusteMotivo"
+                                      name="Motivo"
+                                      rows="3"
+                                      minlength="5"
+                                      maxlength="1000"
+                                      required
+                                      placeholder="Ej. se detectaron 12 piezas caídas durante traslado; el conteo físico real fue menor al dato reportado por máquina."></textarea>
+
+                                    <div class="form-text">
+                                        Mínimo 5 caracteres. El motivo quedará
+                                        permanentemente en el historial.
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button"
+                                    class="btn btn-light fw-bold"
+                                    data-bs-dismiss="modal">
+                                Cancelar
+                            </button>
+
+                            <button type="submit"
+                                    class="btn btn-warning fw-bold"
+                                    id="btnGuardarAjusteCaptura"
+                                    disabled>
+                                <i class="bi bi-check2-circle me-1"></i>
+                                Guardar corrección
+                            </button>
+                        </div>
+
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    }
+}

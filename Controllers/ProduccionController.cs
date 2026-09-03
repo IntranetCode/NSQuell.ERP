@@ -48,6 +48,46 @@ namespace ERP.NSQuell.Controllers
             public bool PuedeCorregirCapturasHora => PuedeVerTodo || EsAuxiliarProduccion;
         }
 
+        private static class ProduccionWorkspaceDetalle
+        {
+            public const string Supervision = "SUPERVISION";
+            public const string Tecnico = "TECNICO";
+            public const string SMED = "SMED";
+            public const string Auxiliar = "AUXILIAR";
+            public const string Operador = "OPERADOR";
+            public const string Consulta = "CONSULTA";
+        }
+
+        private static string ResolverWorkspaceDetalle(
+            ProduccionPermisosUsuario permisos)
+        {
+            if (permisos == null)
+                return ProduccionWorkspaceDetalle.Consulta;
+
+            /*
+             * Administrador y Encargado tienen prioridad.
+             *
+             * Aunque por alguna combinación de datos también coincidan
+             * con otro puesto/capacidad, visualmente deben entrar como
+             * Supervisión y no aparentar ser Técnico u Operador.
+             */
+            if (permisos.PuedeVerTodo)
+                return ProduccionWorkspaceDetalle.Supervision;
+
+            if (permisos.EsTecnicoProduccion)
+                return ProduccionWorkspaceDetalle.Tecnico;
+
+            if (permisos.EsSMED)
+                return ProduccionWorkspaceDetalle.SMED;
+
+            if (permisos.EsAuxiliarProduccion)
+                return ProduccionWorkspaceDetalle.Auxiliar;
+
+            if (permisos.EsOperadorProduccion)
+                return ProduccionWorkspaceDetalle.Operador;
+
+            return ProduccionWorkspaceDetalle.Consulta;
+        }
 
         private string ConnectionString =>
             _configuration.GetConnectionString("DefaultConnection")
@@ -167,6 +207,12 @@ namespace ERP.NSQuell.Controllers
                 return NotFound();
 
             var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
+            var workspaceProduccion =
+    ResolverWorkspaceDetalle(permisos);
+
+            ViewBag.WorkspaceProduccion =
+                workspaceProduccion;
+
 
             ViewBag.UsuarioProduccionID = permisos.UsuarioID;
             ViewBag.PersonaProduccionID = permisos.PersonaID;
@@ -198,6 +244,8 @@ namespace ERP.NSQuell.Controllers
             ViewBag.PuedeEjecutarTerminacionParcial =
                 autorizacionTerminacionParcial.ParoID.HasValue
                 && (permisos.EsTecnicoProduccion || permisos.EsAuxiliarProduccion);
+
+
 
             ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
 

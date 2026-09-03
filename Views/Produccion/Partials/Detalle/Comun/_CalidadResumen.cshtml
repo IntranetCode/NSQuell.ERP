@@ -1,0 +1,73 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var accionActual =
+        ViewData["AccionActualProduccion"] as string
+        ?? string.Empty;
+}
+
+<div class="panel mb-4"
+     id="panelCalidad"
+     data-collapsible
+     data-default-open="@(accionActual == "ESPERAR_CALIDAD" ? "true" : "false")">
+
+    <div class="panel-header">
+        <i class="bi bi-patch-check me-1"></i>
+        Liberación de Calidad
+    </div>
+
+    <div class="panel-body">
+
+        @if (Model.CalidadResumen == null)
+        {
+            <div class="alert alert-secondary mb-0">
+                El checklist todavía no ha sido enviado a Calidad.
+            </div>
+        }
+        else
+        {
+            var calidad = Model.CalidadResumen;
+
+            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+
+                <div>
+                    <div class="data-label">Estado de Calidad</div>
+                    <span class="badge @calidad.ClaseBadge fs-6 mt-1">
+                        @calidad.EstadoTexto
+                    </span>
+                </div>
+
+                <div>
+                    <div class="data-label">Notificación</div>
+                    <div class="data-value">
+                        @(calidad.FechaNotificacionCalidad?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                    </div>
+                </div>
+
+                <div>
+                    <div class="data-label">Etiqueta verde</div>
+                    <div class="data-value">
+                        @(calidad.FechaLiberacionProduccion?.ToString("dd/MM/yyyy HH:mm") ?? "-")
+                    </div>
+                </div>
+
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(calidad.MotivoDevolucion))
+            {
+                <div class="alert alert-danger mb-3">
+                    <strong>Corrección solicitada por Calidad:</strong><br />
+                    @calidad.MotivoDevolucion
+                </div>
+            }
+
+            @if (calidad.ConfiguracionInvalidada)
+            {
+                <div class="alert alert-danger mb-3">
+                    La configuración de la corrida fue invalidada por cambios en Planeación.
+                </div>
+            }
+        }
+
+    </div>
+</div>

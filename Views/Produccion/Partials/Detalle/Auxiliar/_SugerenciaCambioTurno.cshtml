@@ -1,0 +1,266 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var e = Model.Ejecucion;
+
+    var cambioTurno =
+        Model.CambioTurnoTecnico;
+
+    var puedeGestionarSugerenciaCambioTurno =
+        ViewBag.PuedeGestionarSugerenciaCambioTurno
+            is bool puedeSugerencia
+        && puedeSugerencia;
+}
+
+@if (cambioTurno != null &&
+     puedeGestionarSugerenciaCambioTurno)
+{
+    <div class="panel mb-4"
+         id="panelCambioTurnoTecnico"
+         data-collapsible
+         data-default-open="true">
+
+        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+
+            <span>
+                <i class="bi bi-person-badge me-1"></i>
+                Sugerencia para cambio de turno
+            </span>
+
+            @if (cambioTurno.TieneSugerencia)
+            {
+                <span class="badge bg-primary">
+                    Sugerencia activa
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-secondary">
+                    Sin sugerencia
+                </span>
+            }
+
+        </div>
+
+        <div class="panel-body">
+
+            <div class="turn-tech-card mb-3">
+
+                <div class="data-label">
+                    Operador actual
+                </div>
+
+                <div class="data-value fs-5">
+                    @cambioTurno.TextoOperadorActual
+                </div>
+
+                <div class="muted-small mt-1">
+                    @cambioTurno.TextoMaquina
+                    ·
+                    @cambioTurno.TextoParte
+                </div>
+
+            </div>
+
+            @if (cambioTurno.SugerenciaActual != null &&
+                    cambioTurno.SugerenciaActual.EstaVigente)
+            {
+                var sugerencia =
+                cambioTurno.SugerenciaActual;
+
+                <div class="turn-tech-current mb-3">
+
+                    <div class="data-label">
+                        Sugerencia vigente
+                    </div>
+
+                    <div class="data-value fs-5">
+                        @sugerencia.TextoOperador
+                    </div>
+
+                    <div class="muted-small mt-1">
+
+                        @if (!string.IsNullOrWhiteSpace(
+                                        sugerencia.TurnoNombre))
+                        {
+                            <span>
+                                Turno @sugerencia.TurnoNombre
+                            </span>
+                        }
+
+                        @if (sugerencia.NivelPolivalencia.HasValue)
+                        {
+                            <span>
+                                · Nivel N@sugerencia.NivelPolivalencia.Value
+                            </span>
+                        }
+
+                        <span>
+                            · @(sugerencia.EnEscala
+                                                ? "Programado en escala"
+                                                : "Fuera de escala actual")
+                </span>
+
+                    </div>
+
+                    <div class="muted-small mt-1">
+                        Sugerida el @sugerencia.TextoFecha
+                    </div>
+
+            @if (!string.IsNullOrWhiteSpace(
+                        sugerencia.Observaciones))
+                    {
+                        <div class="small mt-2">
+                            @sugerencia.Observaciones
+                        </div>
+                    }
+
+                </div>
+            }
+
+            @if (cambioTurno.Operadores != null &&
+                    cambioTurno.Operadores.Any())
+            {
+                <form method="post"
+                      action="@Url.Action(
+                                                "GuardarSugerenciaCambioTurno",
+                                                "Produccion")">
+
+            @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="EjecucionProduccionID"
+                           value="@e.EjecucionProduccionID" />
+
+                    <div class="mb-3">
+
+                        <label class="form-label"
+                               for="OperadorSugeridoID">
+                            Operador recomendado para el siguiente turno
+                        </label>
+
+                        <select class="form-select"
+                                id="OperadorSugeridoID"
+                                name="OperadorSugeridoID"
+                                required>
+
+                            <option value="">
+                                -- Seleccionar operador --
+                            </option>
+
+                    @foreach (var operador in
+                                        cambioTurno.Operadores)
+                            {
+                                var seleccionado =
+                                cambioTurno
+                                .SugerenciaActual?
+                                .OperadorSugeridoID
+                                == operador.PersonaID;
+
+                                <option value="@operador.PersonaID"
+                                        selected="@seleccionado">
+
+                                    @operador.Nombre
+
+                                    @if (operador.Nivel.HasValue)
+                                    {
+                                        @($" · N{operador.Nivel.Value}")
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                                            operador.TurnoNombre))
+                                    {
+                                        @($" · {operador.TurnoNombre}")
+                                    }
+
+                                    @if (operador.EnEscala)
+                                    {
+                                        @(" · ESCALA")
+                                    }
+
+                                </option>
+                            }
+
+                    </select>
+
+                    <div class="form-text">
+                        Esta selección es una sugerencia para el
+                        operador saliente. El operador podrá cambiarla
+                        al momento real de entregar el turno.
+                    </div>
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label class="form-label"
+                           for="ObservacionesSugerenciaTurno">
+                        Observaciones
+                    </label>
+
+                    <textarea class="form-control"
+                          id="ObservacionesSugerenciaTurno"
+                          name="Observaciones"
+                          rows="3"
+                          maxlength="500"
+                          placeholder="Ej. dejar a este operador por experiencia en la pieza, continuidad de máquina, cobertura del siguiente turno, etc.">@cambioTurno.SugerenciaActual?.Observaciones</textarea>
+
+                </div>
+
+                <div class="d-grid gap-2">
+
+                    <button type="submit"
+                            class="btn btn-primary btn-strong">
+
+                        <i class="bi bi-person-check me-1"></i>
+
+                        @(cambioTurno.TieneSugerencia
+                                            ? "Actualizar sugerencia"
+                                            : "Guardar sugerencia")
+
+                </button>
+
+                    </div>
+
+                </form>
+
+        @if (cambioTurno.TieneSugerencia)
+                {
+                    <form method="post"
+                          action="@Url.Action(
+                                                        "CancelarSugerenciaCambioTurno",
+                                                        "Produccion")"
+              class="mt-2">
+
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden"
+                               name="ejecucionProduccionId"
+                               value="@e.EjecucionProduccionID" />
+
+                        <button type="submit"
+                                class="btn btn-outline-secondary w-100 btn-strong">
+
+                            <i class="bi bi-x-circle me-1"></i>
+                            Retirar sugerencia
+
+                        </button>
+
+                    </form>
+                }
+            }
+            else
+            {
+                <div class="alert alert-warning mb-0">
+
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+
+                    No existen operadores candidatos disponibles
+                    para sugerir en este momento.
+
+                </div>
+            }
+
+        </div>
+    </div>
+}

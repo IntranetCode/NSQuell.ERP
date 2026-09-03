@@ -1,0 +1,195 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@functions {
+    private static string Txt(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "-"
+            : value.Trim();
+    }
+
+    private static string Dec4(decimal? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("N4")
+            : "-";
+    }
+
+    private static string TipoClase(string? tipo)
+    {
+        if (string.Equals(tipo, "MP", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-primary";
+
+        if (string.Equals(tipo, "COMPONENTE", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-info text-dark";
+
+        if (string.Equals(tipo, "EMBALAJE", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-success";
+
+        if (string.Equals(tipo, "ETIQUETA", StringComparison.OrdinalIgnoreCase))
+            return "badge bg-warning text-dark";
+
+        return "badge bg-secondary";
+    }
+}
+
+<div class="panel mb-4"
+     id="panelMateriales"
+     data-collapsible
+     data-default-open="false">
+
+    <div class="panel-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+        <span>
+            <i class="bi bi-box-seam me-1"></i>
+            Entregas de Almacén contra OF
+        </span>
+
+        <span class="badge bg-primary">
+            @(Model.RecepcionesOF?.Count ?? 0) movimiento(s)
+        </span>
+
+    </div>
+
+    <div class="panel-body">
+
+        <div class="almacen-note mb-3">
+            <i class="bi bi-arrow-repeat me-1"></i>
+            Esta información se obtiene automáticamente de los movimientos
+            de Almacén. Las salidas y consumos representan entregas a
+            Producción; los retornos se muestran con cantidad negativa.
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Movimiento</th>
+                        <th>Código / descripción</th>
+                        <th>Lote / tipo MP</th>
+                        <th class="text-end">Cantidad</th>
+                        <th>Entregó / recibió</th>
+                        <th>Fecha</th>
+                        <th>OF / referencia</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @if (Model.RecepcionesOF == null ||
+                                        !Model.RecepcionesOF.Any())
+                    {
+                        <tr>
+                            <td colspan="9"
+                                class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                Almacén todavía no registra entregas para esta OF.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        foreach (var r in Model.RecepcionesOF)
+                        {
+                            var esRetorno =
+                            string.Equals(
+                            r.TipoMovimiento,
+                            "Retorno",
+                            StringComparison.OrdinalIgnoreCase);
+
+                            var claseMovimiento =
+                            esRetorno
+                            ? "badge bg-warning text-dark"
+                            : string.Equals(
+                            r.TipoMovimiento,
+                            "Consumo",
+                            StringComparison.OrdinalIgnoreCase)
+                            ? "badge bg-info text-dark"
+                            : "badge bg-success";
+
+                            <tr class="@(esRetorno ? "movimiento-retorno" : "")">
+
+                                <td>
+                                    <span class="@TipoClase(r.TipoRecepcion)">
+                                        @r.TextoTipo
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="@claseMovimiento">
+                                        @Txt(r.TipoMovimiento)
+                                    </span>
+                                    <div class="text-muted small mt-1">
+                                        Movimiento #@r.MovimientoID
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div class="fw-bold">@Txt(r.Codigo)</div>
+                                    <div class="text-muted small">
+                                        @Txt(r.Descripcion)
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div>
+                                        <strong>Lote:</strong>
+                                        @Txt(r.Lote)
+                                    </div>
+                                    <div class="text-muted small">
+                                        <strong>Tipo MP:</strong>
+                                        @Txt(r.NumeroUI)
+                                    </div>
+                                </td>
+
+                                <td class="text-end fw-bold @(esRetorno ? "text-danger" : "text-success")">
+                                    @Dec4(r.Cantidad)
+                                    <div class="text-muted small">
+                                        @Txt(r.Unidad)
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <div>
+                                        <strong>Entregó:</strong>
+                                        @Txt(r.EntregadoPor)
+                                    </div>
+                                    <div class="text-muted small">
+                                        <strong>Recibió:</strong>
+                                        @Txt(r.RecibidoPor)
+                                    </div>
+                                </td>
+
+                                <td>
+                                    @r.FechaRecepcion.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+
+                                <td>
+                                    <div>
+                                        <strong>OF:</strong>
+                                        @Txt(r.NumeroOF)
+                                    </div>
+                                    <div class="text-muted small text-break">
+                                        <strong>Ref.:</strong>
+                                        @Txt(r.ReferenciaOperacion)
+                                    </div>
+                                </td>
+
+                                <td>
+                                    @Txt(r.Observaciones)
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+        </div>
+
+    </div>
+</div>
