@@ -19,6 +19,7 @@ namespace ERP.NSQuell.Controllers
         private const int PreparacionMinutosAnticipacionEmbalaje = 120;
         private const int PreparacionDiasHorizonte = 7;
         private const int PreparacionDiasHistorial = 30;
+        private const int PreparacionMinutosAnticipacionMateriaPrima = 120;
 
         public ProduccionPreparacionController(IConfiguration configuration)
         {
@@ -61,28 +62,16 @@ namespace ERP.NSQuell.Controllers
             return await ConstruirVistaAsync("Historial", null, filtro, maquinaId, true);
         }
 
-        private async Task<IActionResult> ConstruirVistaAsync(
-            string vista,
-            string? tipoTarea,
-            string? filtro,
-            int? maquinaId,
-            bool soloHistorial)
+        private async Task<IActionResult> ConstruirVistaAsync(string vista, string? tipoTarea, string? filtro, int? maquinaId, bool soloHistorial)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
             filtro = string.IsNullOrWhiteSpace(filtro) ? null : filtro.Trim();
-            if (maquinaId.HasValue && maquinaId.Value <= 0)
-                maquinaId = null;
-
+            if (maquinaId.HasValue && maquinaId.Value <= 0) maquinaId = null;
             var usuarioId = ObtenerUsuarioID();
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var permisos = await ObtenerPermisosPreparacionUsuarioAsync(usuarioId, cn);
-            if (!permisos.PuedeVerModulo)
-                return StatusCode(StatusCodes.Status403Forbidden);
+            if (!permisos.PuedeVerModulo) return StatusCode(StatusCodes.Status403Forbidden);
 
             if (!soloHistorial)
             {
@@ -100,6 +89,14 @@ namespace ERP.NSQuell.Controllers
             }
 
             var ahora = DateTime.Now;
+            var tareas = await CargarPreparacionAnticipadaAsync(tipoTarea, filtro, maquinaId, ahora, soloHistorial, cn);
+
+            if (!soloHistorial && string.IsNullOrWhiteSpace(tipoTarea))
+            {
+                var tareasMateriaPrima = await CargarTareasMateriaPrimaIndexAsync(filtro, maquinaId, ahora, cn);
+                tareas.AddRange(tareasMateriaPrima);
+            }
+
             var vm = new ProduccionPreparacionIndexVm
             {
                 FechaConsulta = ahora,
@@ -111,20 +108,11 @@ namespace ERP.NSQuell.Controllers
                 PuedeGestionarEmbalaje = permisos.PuedeGestionarEmbalaje,
                 PuedeGestionarSecado = permisos.PuedeGestionarSecado,
                 Maquinas = await CargarMaquinasPreparacionAsync(cn),
-                Tareas = await CargarPreparacionAnticipadaAsync(
-                    tipoTarea,
-                    filtro,
-                    maquinaId,
-                    ahora,
-                    soloHistorial,
-                    cn)
+                Tareas = tareas
             };
 
             return View(vista, vm);
         }
-
-        // ============================================================
-        // CAMBIO DE MOLDE - INICIO
         // ============================================================
 
         [HttpPost]
@@ -623,7 +611,168 @@ WHERE PreparacionAnticipadaID=@PreparacionAnticipadaID
                 return RedirectToAction(nameof(Index));
             }
         }
+        private async Task<List<ProduccionPreparacionTareaVm>> CargarTareasMateriaPrimaIndexAsync(string? filtro, int? maquinaId, DateTime ahora, SqlConnection cn)
+        {
+            var lista = new List<ProduccionPreparacionTareaVm>();
+            var desde = ahora.Date.AddDays(-1);
+            var hasta = ahora.Date.AddDays(PreparacionDiasHorizonte + 1);
 
+            const string sql = @"
+SELECT
+    pp.ProgramaProduccionID,
+    pp.SolicitudProduccionID,
+    pp.SolicitudProduccionDetalleID,
+    ejecucion.EjecucionProduccionID,
+    COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),N'') AS NumeroOF,
+    pp.MaquinaID,
+    COALESCE(NULLIF(LTRIM(RTRIM(pp.MaquinaCodigo)),N''),maq.Codigo) AS MaquinaCodigo,
+    COALESCE(NULLIF(LTRIM(RTRIM(pp.MaquinaNombre)),N''),maq.Nombre) AS MaquinaNombre,
+    pp.ParteID,
+    pp.NumeroParte,
+    pp.ReferenciaSAP,
+    pp.DesignacionDescripcionSAP AS DescripcionParte,
+    CONVERT(INT,ISNULL(pp.CantidadProgramada,0)) AS CantidadProgramada,
+    pp.FechaInicioProgramada,
+    pp.FechaFinProgramada,
+    pp.Arranque,
+    d.TipoSecado,
+    d.HorasSecado,
+    d.MaterialCodigo,
+    d.MaterialDescripcion,
+    CONVERT(DECIMAL(18,4),ISNULL(d.CantidadMpKg,0)) AS CantidadMpKg,
+    CONVERT(DECIMAL(18,4),ISNULL(recepcion.CantidadRecibidaProduccionKg,0)) AS CantidadMpRecibidaProduccionKg
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=pp.SolicitudProduccionID
+LEFT JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+   AND d.Activo=1
+LEFT JOIN dbo.ERP_Maquinas maq
+    ON maq.MaquinaID=pp.MaquinaID
+OUTER APPLY
+(
+    SELECT TOP(1) e.EjecucionProduccionID
+    FROM dbo.Produccion_Ejecucion e
+    WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
+      AND e.Activo=1
+    ORDER BY e.EjecucionProduccionID DESC
+) ejecucion
+OUTER APPLY
+(
+    SELECT
+        CONVERT
+        (
+            DECIMAL(18,4),
+            ISNULL(SUM(ISNULL(r.CantidadRecibidaProduccion,0)),0)
+        ) AS CantidadRecibidaProduccionKg
+    FROM dbo.Produccion_RecepcionMateriales r
+    WHERE r.Activo=1
+      AND r.TipoOrigen=N'MP'
+      AND r.EstadoRecepcion IN(N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL')
+      AND r.SolicitudProduccionID=pp.SolicitudProduccionID
+      AND
+      (
+          r.ProgramaProduccionID=pp.ProgramaProduccionID
+          OR
+          (
+              r.ProgramaProduccionID IS NULL
+              AND r.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+          )
+          OR
+          (
+              r.ProgramaProduccionID IS NULL
+              AND r.SolicitudProduccionDetalleID IS NULL
+              AND
+              (
+                  r.MaterialSolicitadoID=d.MaterialID
+                  OR
+                  (
+                      d.MaterialID IS NULL
+                      AND UPPER(LTRIM(RTRIM(ISNULL(r.CodigoSolicitadoSnapshot,N''))))=
+                          UPPER(LTRIM(RTRIM(ISNULL(d.MaterialCodigo,N''))))
+                  )
+              )
+          )
+      )
+) recepcion
+WHERE pp.Activo=1
+  AND pp.MaquinaID IS NOT NULL
+  AND pp.FechaInicioProgramada IS NOT NULL
+  AND pp.FechaInicioProgramada>=@Desde
+  AND pp.FechaInicioProgramada<@Hasta
+  AND ISNULL(pp.EstatusID,1) NOT IN(5,6,9,99)
+  AND ISNULL(d.CantidadMpKg,0)>0.0005
+  AND ISNULL(recepcion.CantidadRecibidaProduccionKg,0)+0.0005<ISNULL(d.CantidadMpKg,0)
+  AND (@MaquinaID IS NULL OR pp.MaquinaID=@MaquinaID)
+  AND
+  (
+      @Filtro IS NULL
+      OR s.NumeroOFRecibida LIKE N'%'+@Filtro+N'%'
+      OR s.FolioSolicitud LIKE N'%'+@Filtro+N'%'
+      OR pp.NumeroParte LIKE N'%'+@Filtro+N'%'
+      OR pp.ReferenciaSAP LIKE N'%'+@Filtro+N'%'
+      OR pp.DesignacionDescripcionSAP LIKE N'%'+@Filtro+N'%'
+      OR pp.MaquinaCodigo LIKE N'%'+@Filtro+N'%'
+      OR pp.MaquinaNombre LIKE N'%'+@Filtro+N'%'
+      OR d.MaterialCodigo LIKE N'%'+@Filtro+N'%'
+      OR d.MaterialDescripcion LIKE N'%'+@Filtro+N'%'
+  )
+ORDER BY pp.FechaInicioProgramada,pp.ProgramaProduccionID;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@Desde", SqlDbType.DateTime).Value = desde;
+            cmd.Parameters.Add("@Hasta", SqlDbType.DateTime).Value = hasta;
+            cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId.HasValue && maquinaId.Value > 0 ? maquinaId.Value : DBNull.Value;
+            cmd.Parameters.Add("@Filtro", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(filtro) ? DBNull.Value : filtro.Trim();
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                var inicio = Convert.ToDateTime(rd["FechaInicioProgramada"]);
+                var arranque = PreparacionNullableTimeSpan(rd, "Arranque");
+                var fechaArranque = ConstruirFechaPreparacion(inicio, arranque);
+                var horasSecado = PreparacionNullableDecimal(rd, "HorasSecado");
+                var fechaObjetivo = horasSecado.HasValue && horasSecado.Value > 0
+                    ? fechaArranque.AddHours(-Convert.ToDouble(horasSecado.Value))
+                    : fechaArranque;
+                var fechaAviso = fechaObjetivo.AddMinutes(-PreparacionMinutosAnticipacionMateriaPrima);
+
+                lista.Add(new ProduccionPreparacionTareaVm
+                {
+                    PreparacionAnticipadaID = 0,
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    EjecucionProduccionID = PreparacionNullableInt(rd, "EjecucionProduccionID"),
+                    TipoTarea = ProduccionPreparacionTipo.MateriaPrima,
+                    Estado = ProduccionPreparacionEstado.Pendiente,
+                    FechaObjetivo = fechaObjetivo,
+                    FechaAviso = fechaAviso,
+                    SolicitudProduccionID = PreparacionNullableInt(rd, "SolicitudProduccionID"),
+                    SolicitudProduccionDetalleID = PreparacionNullableInt(rd, "SolicitudProduccionDetalleID"),
+                    NumeroOF = PreparacionTexto(rd, "NumeroOF"),
+                    MaquinaID = PreparacionNullableInt(rd, "MaquinaID"),
+                    MaquinaCodigo = PreparacionTexto(rd, "MaquinaCodigo"),
+                    MaquinaNombre = PreparacionTexto(rd, "MaquinaNombre"),
+                    ParteID = PreparacionNullableInt(rd, "ParteID"),
+                    NumeroParte = PreparacionTexto(rd, "NumeroParte"),
+                    ReferenciaSAP = PreparacionTexto(rd, "ReferenciaSAP"),
+                    DescripcionParte = PreparacionTexto(rd, "DescripcionParte"),
+                    CantidadProgramada = rd["CantidadProgramada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadProgramada"]),
+                    FechaInicioProgramada = inicio,
+                    FechaFinProgramada = PreparacionNullableDateTime(rd, "FechaFinProgramada"),
+                    FechaArranque = fechaArranque,
+                    TipoSecado = PreparacionTexto(rd, "TipoSecado"),
+                    HorasSecado = horasSecado,
+                    MaterialCodigo = PreparacionTexto(rd, "MaterialCodigo"),
+                    MaterialDescripcion = PreparacionTexto(rd, "MaterialDescripcion"),
+                    CantidadMpKg = PreparacionNullableDecimal(rd, "CantidadMpKg"),
+                    CantidadMpRecibidaProduccionKg = rd["CantidadMpRecibidaProduccionKg"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadMpRecibidaProduccionKg"]),
+                    Ahora = ahora
+                });
+            }
+
+            return lista;
+        }
         private IActionResult RedirigirSegunTipo(string? tipoTarea)
         {
             if (string.Equals(tipoTarea, ProduccionPreparacionTipo.CambioMolde, StringComparison.OrdinalIgnoreCase))
