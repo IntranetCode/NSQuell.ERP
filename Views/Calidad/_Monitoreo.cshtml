@@ -6,6 +6,21 @@
     var porcentajeMonitoreoCss = Model.PorcentajeMonitoreosAtendidos.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
     var ahora = DateTime.Now;
     var monitoreosOrdenados = Model.Monitoreos.OrderBy(x => x.FechaHoraProgramada).ToList();
+    // NSQ_CALIDAD_MONITOREO_AUDITORIA_V3
+    var monitoreosV3 = monitoreosOrdenados.Where(x => x.EsFlujoAuditoriaV2).ToList();
+    var conteoOperadorActual = monitoreosV3
+        .Where(x => x.TieneRegistroProduccion)
+        .Sum(x => x.CantidadProducidaPeriodo);
+    var scrapReportadoAcumulado = monitoreosV3
+        .Where(x => x.TieneRegistroProduccion)
+        .Sum(x => x.CantidadScrapProduccion);
+    var scrapFinalV3 = monitoreosV3.FirstOrDefault(x =>
+        (x.ObservacionesScrapProduccion ?? string.Empty)
+            .TrimStart()
+            .StartsWith("[SCRAP_FINAL_V3]", StringComparison.Ordinal));
+    int ConteoOperadorHasta(int numeroHora) => monitoreosV3
+        .Where(x => x.TieneRegistroProduccion && x.NumeroHora <= numeroHora)
+        .Sum(x => x.CantidadProducidaPeriodo);
     // NSQ_CALIDAD_MONITOREO_V2_1_VIEW
     // Todas las horas se muestran como cards colapsables.
     // Solo se abre automaticamente la primera hora pendiente cuya hora ya llego.
@@ -477,7 +492,7 @@
             <div class="quality-card-header">
                 <div>
                     <h2><i class="fa-solid fa-clock"></i>Monitoreo de Calidad por periodo</h2>
-                    <div class="quality-help">Cada periodo registra el scrap reportado por Producción, un disparo auditado y una revisión aleatoria de piezas de caja.</div>
+                    <div class="quality-help">Cada periodo requiere un disparo auditado y la validación del conteo del operador. El scrap de Producción se consolida una sola vez al finalizar la corrida.</div>
                 </div>
                 @if (estado == CalidadEstados.MonitoreoActivo)
                 {
@@ -557,8 +572,8 @@
                         </div>
                         <div class="col-md-3">
                             <div class="border rounded-3 p-3 h-100">
-                                <div class="quality-data-label">Muestra revisada acumulada</div>
-                                <div class="fs-4 fw-bold">@Model.TotalMuestraRevisada</div>
+                                <div class="quality-data-label">Conteo operador actual</div>
+                                <div class="fs-4 fw-bold">@conteoOperadorActual</div>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -571,6 +586,84 @@
                             <div class="border rounded-3 p-3 h-100">
                                 <div class="quality-data-label">Próximo</div>
                                 <div class="fw-bold">@(Model.ProximoMonitoreo?.ToString("dd/MM HH:mm") ?? "Sin pendiente")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="qm-step qm-step-a mb-4">
+                        <div class="qm-step-header">
+                            <div class="qm-step-icon">♻</div>
+                            <div>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <div class="qm-step-title">A) Scrap final acumulado de Producción</div>
+                                    <span class="badge bg-dark">REGISTRO ÚNICO FINAL</span>
+                                </div>
+                                <div class="quality-help">
+                                    El scrap ya no se valida hora por hora. Aquí se acumula todo lo reportado por el operador durante la corrida y Calidad lo confirma una sola vez al final.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="qm-step-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <div class="quality-data-label">Scrap acumulado reportado</div>
+                                    <div class="fs-4 fw-bold text-danger">@scrapReportadoAcumulado</div>
+                                </div>
+                                @if (scrapFinalV3 != null && scrapFinalV3.CantidadScrapValidadaProduccion.HasValue)
+                                {
+                                    <div class="col-md-3">
+                                        <div class="quality-data-label">Scrap final validado</div>
+                                        <div class="fs-4 fw-bold text-success">@scrapFinalV3.CantidadScrapValidadaProduccion.Value</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="alert alert-success mb-0">
+                                            Registro final confirmado por Calidad.
+                                        </div>
+                                    </div>
+                                }
+                                else if (!Model.Cierre.FechaFinProduccionRegistrada)
+                                {
+                                    <div class="col-md-9">
+                                        <div class="alert alert-info mb-0">
+                                            El acumulado sigue abierto. La validación final se habilita cuando Producción registre el fin de la corrida.
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="col-md-9">
+                                        <form asp-controller="Calidad"
+                                              asp-action="ValidarScrapFinalMonitoreoV3"
+                                              method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
+                                            <div class="row g-3 align-items-end">
+                                                <div class="col-md-3">
+                                                    <label class="form-label fw-semibold">Scrap validado final</label>
+                                                    <input type="number"
+                                                           name="CantidadScrapValidadaProduccion"
+                                                           min="0"
+                                                           value="@scrapReportadoAcumulado"
+                                                           class="form-control"
+                                                           required />
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold">Observaciones</label>
+                                                    <input type="text"
+                                                           name="Observaciones"
+                                                           maxlength="800"
+                                                           class="form-control"
+                                                           placeholder="Obligatorio únicamente si el físico difiere del acumulado reportado." />
+                                                </div>
+                                                <div class="col-md-3 d-grid">
+                                                    <button type="submit" class="quality-btn quality-btn-primary">
+                                                        Validar scrap final
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                }
                             </div>
                         </div>
                     </div>
@@ -667,10 +760,13 @@
                                             <div class="fw-bold text-warning">@monitor.CantidadSospechosaProduccion</div>
                                         </div>
                                     }
-                                    <div class="col-md-2">
-                                        <div class="quality-data-label">Scrap reportado</div>
-                                        <div class="fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
-                                    </div>
+                                    @if (!monitor.EsFlujoAuditoriaV2)
+                                    {
+                                        <div class="col-md-2">
+                                            <div class="quality-data-label">Scrap reportado</div>
+                                            <div class="fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
+                                        </div>
+                                    }
                                     <div class="col-md-3">
                                         <div class="quality-data-label">Total del periodo</div>
                                         <div class="fw-bold">@monitor.CantidadProducidaPeriodo</div>
@@ -685,103 +781,19 @@
                                     </div>
                                 }
 
-                                @if (monitor.PuedeCapturar && estado == CalidadEstados.MonitoreoActivo)
+                                @if (
+                                    (
+                                        monitor.EsFlujoAuditoriaV2
+                                            ? monitor.TieneRegistroProduccion && monitor.FechaHoraProgramada <= ahora
+                                            : monitor.PuedeCapturar
+                                    ) &&
+                                    estado == CalidadEstados.MonitoreoActivo)
                                 {
                                     @* NSQ_CALIDAD_MONITOREO_AUDITORIA_V2_VIEW *@
                                     @if (monitor.EsFlujoAuditoriaV2)
                                     {
                                         <div class="d-grid gap-3">
-                                            <div class="qm-step qm-step-a">
-                                                <div class="qm-step-header">
-                                                    <div class="qm-step-icon">♻</div>
-                                                    <div>
-                                                        <div class="qm-step-title">A) Scrap reportado por Producción</div>
-                                                        <div class="quality-help">
-                                                            Producción reporta únicamente scrap. Calidad valida físicamente cuántas piezas están presentes.
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div class="qm-step-body">
-                                                    @if (!monitor.TieneRegistroProduccion)
-                                                    {
-                                                        <div class="alert alert-secondary mb-0">
-                                                            Esperando la captura del periodo de Producción para conocer el scrap reportado.
-                                                        </div>
-                                                    }
-                                                    else if (monitor.CantidadScrapProduccion <= 0)
-                                                    {
-                                                        <div class="alert alert-success mb-0">
-                                                            Producción no reportó scrap en este periodo. No hay piezas de scrap por validar.
-                                                        </div>
-                                                    }
-                                                    else if (monitor.CantidadScrapValidadaProduccion.HasValue)
-                                                    {
-                                                        <div class="row g-3">
-                                                            <div class="col-md-3">
-                                                                <div class="quality-data-label">Scrap reportado</div>
-                                                                <div class="fs-5 fw-bold text-danger">@monitor.CantidadScrapProduccion</div>
-                                                            </div>
-                                                            <div class="col-md-3">
-                                                                <div class="quality-data-label">Scrap validado</div>
-                                                                <div class="fs-5 fw-bold">@monitor.CantidadScrapValidadaProduccion.Value</div>
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <div class="quality-data-label">Observaciones</div>
-                                                                <div>@Mostrar(monitor.ObservacionesScrapProduccion)</div>
-                                                            </div>
-                                                        </div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <form asp-controller="Calidad"
-                                                              asp-action="ValidarScrapMonitoreoV2"
-                                                              method="post">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
-                                                            <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
-
-                                                            <div class="row g-3">
-                                                                <div class="col-md-3">
-                                                                    <label class="form-label fw-semibold">Scrap reportado</label>
-                                                                    <div class="form-control bg-light fw-bold text-danger">
-                                                                        @monitor.CantidadScrapProduccion
-                                                                    </div>
-                                                                </div>
-                                                                <div class="col-md-3">
-                                                                    <label class="form-label fw-semibold">
-                                                                        Cantidad de scrap validada
-                                                                    </label>
-                                                                    <input type="number"
-                                                                           name="CantidadScrapValidadaProduccion"
-                                                                           min="0"
-                                                                           max="@monitor.CantidadScrapProduccion"
-                                                                           value="@monitor.CantidadScrapProduccion"
-                                                                           class="form-control"
-                                                                           required />
-                                                                </div>
-                                                                <div class="col-md-6">
-                                                                    <label class="form-label fw-semibold">Observaciones</label>
-                                                                    <textarea name="Observaciones"
-                                                                              rows="2"
-                                                                              maxlength="1000"
-                                                                              class="form-control"
-                                                                              placeholder="Obligatorio si la cantidad física no coincide con lo reportado."></textarea>
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="mt-3 text-end">
-                                                                <button type="submit"
-                                                                        class="quality-btn quality-btn-primary">
-                                                                    Validar scrap
-                                                                </button>
-                                                            </div>
-                                                        </form>
-                                                    }
-                                                </div>
-                                            </div>
-
-                                            <div class="qm-step qm-step-b">
+                                            @* NSQ_CALIDAD_MONITOREO_AUDITORIA_V3: A se consolida una sola vez fuera de las horas. *@                                            <div class="qm-step qm-step-b">
                                                 <div class="qm-step-header">
                                                     <div class="qm-step-icon">🔬</div>
                                                     <div>
@@ -813,15 +825,34 @@
 
                                                             <div class="col-md-3">
                                                                 <div class="quality-data-label">Observaciones</div>
-                                                                <div>@Mostrar(monitor.ObservacionesDisparo)</div>
+                                                                <div>@Mostrar(monitor.ObservacionesDisparo?.Replace("[EVIDENCIA_DISPARO_V3]", string.Empty).Trim())</div>
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <div class="quality-data-label">Evidencia</div>
+                                                                @if ((monitor.ObservacionesDisparo ?? string.Empty).Contains("[EVIDENCIA_DISPARO_V3]", StringComparison.Ordinal))
+                                                                {
+                                                                    <a asp-controller="Calidad"
+                                                                       asp-action="EvidenciaDisparoMonitoreoV3"
+                                                                       asp-route-inspeccionId="@Model.InspeccionID"
+                                                                       asp-route-monitoreoId="@monitor.MonitoreoID"
+                                                                       target="_blank"
+                                                                       class="quality-btn quality-btn-light">
+                                                                        Ver imagen
+                                                                    </a>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">Registro anterior sin foto</span>
+                                                                }
                                                             </div>
                                                         </div>
                                                     }
                                                     else
                                                     {
                                                         <form asp-controller="Calidad"
-                                                              asp-action="RegistrarDisparoMonitoreoV2"
-                                                              method="post">
+                                                              asp-action="RegistrarDisparoMonitoreoV3"
+                                                              method="post"
+                                                              enctype="multipart/form-data">
                                                             @Html.AntiForgeryToken()
                                                             <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
                                                             <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
@@ -854,7 +885,17 @@
                                                                     </label>
                                                                 </div>
 
-                                                                <div class="col-12">
+                                                                <div class="col-12 col-md-6">
+                                                                    <label class="form-label fw-semibold">Evidencia fotográfica</label>
+                                                                    <input type="file"
+                                                                           name="evidencia"
+                                                                           accept="image/jpeg,image/png,image/webp"
+                                                                           capture="environment"
+                                                                           class="form-control"
+                                                                           required />
+                                                                    <div class="quality-help">Toma una foto o adjunta JPG, PNG o WEBP. Máximo 10 MB.</div>
+                                                                </div>
+                                                                <div class="col-12 col-md-6">
                                                                     <label class="form-label fw-semibold">Observaciones del auditor</label>
                                                                     <textarea name="Observaciones"
                                                                               rows="2"
@@ -877,105 +918,72 @@
 
                                             <div class="qm-step qm-step-b">
                                                 <div class="qm-step-header">
-                                                    <div class="qm-step-icon">📦</div>
+                                                    <div class="qm-step-icon">✓</div>
                                                     <div>
-                                                        <div class="d-flex flex-wrap align-items-center gap-2">
-                                                            <div class="qm-step-title">C) Monitoreo 2 · Revisión aleatoria de caja</div>
-                                                            <span class="badge bg-secondary">OPCIONAL</span>
-                                                        </div>
+                                                        <div class="qm-step-title">C) Validación del conteo del operador</div>
                                                         <div class="quality-help">
-                                                            Se registra únicamente cuando el auditor decide tomar una muestra aleatoria de la caja de Producción.
-                                                            No bloquea el avance a la siguiente hora ni el cierre del monitoreo.
-                                                            Si las piezas son conformes, se confirma que se colocaron en la caja de PT.
+                                                            Calidad únicamente confirma si el conteo acumulado reportado por el operador coincide con lo observado en ese momento.
                                                         </div>
                                                     </div>
                                                 </div>
-
                                                 <div class="qm-step-body">
                                                     @if (monitor.RevisionCajaCompleta)
                                                     {
-                                                        <div class="row g-3">
-                                                            <div class="col-md-3">
-                                                                <div class="quality-data-label">Piezas revisadas</div>
-                                                                <div class="fs-5 fw-bold">@monitor.CantidadRevisadaMuestra</div>
+                                                        <div class="row g-3 align-items-center">
+                                                            <div class="col-md-4">
+                                                                <div class="quality-data-label">Conteo registrado al validar</div>
+                                                                <div class="fs-4 fw-bold">@monitor.CantidadRevisadaMuestra</div>
                                                             </div>
-                                                            <div class="col-md-3">
-                                                                <div class="quality-data-label">Resultado</div>
-                                                                <div class="fw-bold">@monitor.ResultadoTexto</div>
-                                                            </div>
-                                                            <div class="col-md-3">
-                                                                <div class="quality-data-label">Caja PT</div>
-                                                                <div class="fw-bold">
-                                                                    @(monitor.MuestraCajaPTConfirmada == true ? "Colocadas en PT" : "No aplica")
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-md-3">
-                                                                <div class="quality-data-label">Observaciones</div>
-                                                                <div>@Mostrar(monitor.Observaciones)</div>
+                                                            <div class="col-md-8">
+                                                                @if (monitor.Resultado == CalidadResultadoMonitoreo.Conforme)
+                                                                {
+                                                                    <div class="alert alert-success mb-0">
+                                                                        <strong>VALIDADO.</strong> Calidad confirmó el conteo del operador.
+                                                                    </div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <div class="alert alert-danger mb-0">
+                                                                        <strong>NO VALIDADO.</strong> Existe una alerta registrada sobre el conteo del operador.
+                                                                    </div>
+                                                                }
                                                             </div>
                                                         </div>
                                                     }
                                                     else
                                                     {
+                                                        var conteoAcumuladoOperador = ConteoOperadorHasta(monitor.NumeroHora);
                                                         <form asp-controller="Calidad"
-                                                              asp-action="RegistrarRevisionCajaMonitoreoV2"
+                                                              asp-action="ValidarConteoOperadorMonitoreoV3"
                                                               method="post">
                                                             @Html.AntiForgeryToken()
                                                             <input type="hidden" name="MonitoreoID" value="@monitor.MonitoreoID" />
                                                             <input type="hidden" name="InspeccionID" value="@Model.InspeccionID" />
-
-                                                            <div class="row g-3">
-                                                                <div class="col-md-3">
-                                                                    <label class="form-label fw-semibold">¿Cuántas piezas revisaste?</label>
-                                                                    <input type="number"
-                                                                           name="CantidadRevisada"
-                                                                           min="1"
-                                                                           class="form-control"
-                                                                           required />
+                                                            <div class="row g-3 align-items-center">
+                                                                <div class="col-md-5">
+                                                                    <div class="quality-data-label">Conteo acumulado del operador</div>
+                                                                    <div class="display-6 fw-bold text-primary">@conteoAcumuladoOperador</div>
                                                                 </div>
-                                                                <div class="col-md-3">
-                                                                    <label class="form-label fw-semibold">Resultado</label>
-                                                                    <select name="Resultado"
-                                                                            class="form-select"
-                                                                            required>
-                                                                        <option value="" selected>Selecciona si realizaste la revisión</option>
-                                                                        <option value="@CalidadResultadoMonitoreo.Conforme">Conforme</option>
-                                                                        <option value="@CalidadResultadoMonitoreo.NoConforme">No conforme</option>
-                                                                    </select>
+                                                                <div class="col-md-7 d-flex flex-wrap justify-content-md-end gap-2">
+                                                                    <button type="submit"
+                                                                            name="Validado"
+                                                                            value="true"
+                                                                            class="quality-btn quality-btn-primary">
+                                                                        Validar conteo
+                                                                    </button>
+                                                                    <button type="submit"
+                                                                            name="Validado"
+                                                                            value="false"
+                                                                            class="quality-btn quality-btn-light border-danger text-danger"
+                                                                            onclick="return confirm('El conteo quedará marcado como NO VALIDADO y se generará un aviso. ¿Continuar?');">
+                                                                        No validar
+                                                                    </button>
                                                                 </div>
-                                                                <div class="col-md-3 d-flex align-items-end">
-                                                                    <label class="form-check">
-                                                                        <input type="checkbox"
-                                                                               class="form-check-input"
-                                                                               name="MuestraCajaPTConfirmada"
-                                                                               value="true" />
-                                                                        <span class="form-check-label fw-semibold">
-                                                                            Piezas conformes colocadas en caja PT
-                                                                        </span>
-                                                                    </label>
-                                                                </div>
-
-                                                                <div class="col-12">
-                                                                    <label class="form-label fw-semibold">Observaciones</label>
-                                                                    <textarea name="Observaciones"
-                                                                              rows="2"
-                                                                              maxlength="1000"
-                                                                              class="form-control"
-                                                                              placeholder="Describe el hallazgo si la revisión no es conforme."></textarea>
-                                                                </div>
-                                                            </div>
-
-                                                            <div class="mt-3 text-end">
-                                                                <button type="submit"
-                                                                        class="quality-btn quality-btn-primary">
-                                                                    Guardar revisión de caja
-                                                                </button>
                                                             </div>
                                                         </form>
                                                     }
                                                 </div>
-                                            </div>
-                                        </div>
+                                            </div>                                        </div>
                                     }
                                     else
                                     {

@@ -112,6 +112,20 @@ builder.Services.AddSingleton<ISftpStorage, SftpStorage>();
 // Registrar el servicio de notificacionesa
 builder.Services.AddScoped<ServicioNotificaciones>();
 
+// NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
+// Todo POST/PUT/PATCH/DELETE exitoso de un módulo departamental
+// crea aviso en el navbar; el correo se redirige a Sistemas durante pruebas.
+builder.Services.AddScoped<NotificacionDepartamentalService>();
+builder.Services.AddScoped<
+    ERP.NSQuell.Filtros.NotificacionDepartamentoActionFilter>();
+
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(
+    options =>
+    {
+        options.Filters.AddService<
+            ERP.NSQuell.Filtros.NotificacionDepartamentoActionFilter>();
+    });
+
 
 
 

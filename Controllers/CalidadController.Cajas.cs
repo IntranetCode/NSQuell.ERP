@@ -2534,7 +2534,8 @@ SELECT
             SELECT MAX(ISNULL(c.NumeroCaja,0))
             FROM dbo.Produccion_Cajas c WITH(UPDLOCK,HOLDLOCK)
             WHERE c.EjecucionProduccionID=@EjecucionProduccionID
-              AND c.Activo=1
+              -- NSQ_CALIDAD_CAJAS_FOLIO_UNICO_V2_CORREGIDO
+              -- La numeracion debe considerar cajas historicas porque las restricciones UNIQUE no filtran Activo.
         ),
         0
     )+1 AS SiguienteNumero;";

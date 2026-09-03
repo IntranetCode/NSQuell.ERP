@@ -26,8 +26,21 @@ namespace ERP.NSQuell.Servicios
         {
             _context = context;
             _correoOpt = correoOpt.Value;
-            _correoOpt.Usuario = cfg["CorreoNotificaciones:Usuario"] ?? _correoOpt.Usuario;
-            _correoOpt.Contrasena = cfg["CorreoNotificaciones:Contrasena"] ?? _correoOpt.Contrasena;
+                        // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
+            // Las credenciales pueden venir de entorno/secrets o de la
+            // configuración local. Nunca se escriben contraseñas desde este parche.
+            _correoOpt.Usuario =
+                Environment.GetEnvironmentVariable("NSQ_SMTP_USUARIO")
+                ?? cfg["CorreoNotificaciones:Usuario"]
+                ?? _correoOpt.Usuario;
+
+            _correoOpt.Contrasena =
+                Environment.GetEnvironmentVariable("NSQ_SMTP_PASSWORD")
+                ?? cfg["CorreoNotificaciones:Contrasena"]
+                ?? _correoOpt.Contrasena;
+
+            if (string.IsNullOrWhiteSpace(_correoOpt.Usuario))
+                _correoOpt.Usuario = _correoOpt.Remitente;
             _cs = cfg.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection");
             _env = env;
@@ -82,13 +95,12 @@ namespace ERP.NSQuell.Servicios
 
             using var smtp = new SmtpClient
             {
-                Timeout = 20000,
-                ServerCertificateValidationCallback = (s, c, h, e) => true
+                Timeout = 20000
             };
 
             try
             {
-                smtp.LocalDomain = "mail.nutriservicios.com.mx";
+                // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1: usar HELO automático de MailKit.
 
 
                 await smtp.ConnectAsync(_correoOpt.SmtpHost, _correoOpt.SmtpPort, ToSecureOption(_correoOpt.Security));
@@ -178,11 +190,10 @@ namespace ERP.NSQuell.Servicios
 
                 using var smtp = new SmtpClient
                 {
-                    Timeout = 20000,
-                    ServerCertificateValidationCallback = (s, c, h, e) => true
+                    Timeout = 20000
                 };
 
-                smtp.LocalDomain = "mail.nutriservicios.com.mx";
+                // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1: usar HELO automático de MailKit.
 
 
                 await smtp.ConnectAsync(_correoOpt.SmtpHost, _correoOpt.SmtpPort, ToSecureOption(_correoOpt.Security));
@@ -410,6 +421,17 @@ WHERE u.UsuarioID IN ({string.Join(",", paramNames)})
             if (string.IsNullOrWhiteSpace(email)) return false;
             try { return MimeKit.MailboxAddress.TryParse(email, out _); }
             catch { return false; }
+        }
+
+        // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
+        // Permite a servicios internos enviar asunto/cuerpo personalizados.
+        // El candado PuedeEnviarA sigue aplicándose dentro del método privado.
+        public Task EnviarCorreoDirectoAsync(
+            string para,
+            string asunto,
+            string html)
+        {
+            return EnviarCorreoAsync(para, asunto, html);
         }
 
         public Task EnviarCorreoAsync(string para) =>

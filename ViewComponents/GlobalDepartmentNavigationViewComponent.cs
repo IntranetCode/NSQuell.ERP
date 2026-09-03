@@ -528,7 +528,10 @@ ORDER BY
             currentPath.Equals("/Calidad/HCCPlantillas", StringComparison.OrdinalIgnoreCase) ||
             currentPath.StartsWith("/Calidad/HojaControl", StringComparison.OrdinalIgnoreCase) ||
             currentPath.StartsWith("/Calidad/CapturarHCC", StringComparison.OrdinalIgnoreCase) ||
-            currentPath.StartsWith("/Calidad/RegistroHCC", StringComparison.OrdinalIgnoreCase);
+            currentPath.StartsWith("/Calidad/RegistroHCC", StringComparison.OrdinalIgnoreCase) ||
+            // NSQ_HCC_CREAR_HISTORIAL_V1_2
+            currentPath.StartsWith("/Calidad/CrearControlCalidad", StringComparison.OrdinalIgnoreCase) ||
+            currentPath.StartsWith("/Calidad/HistorialControlCalidad", StringComparison.OrdinalIgnoreCase);
 
         int? currentGroupId = null;
         const string groupPrefix = "/Menu/Grupo/";

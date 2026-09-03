@@ -1075,22 +1075,21 @@ namespace ERP.NSQuell.Models.ViewModels
                 )
             );
 
-        // NSQ_CALIDAD_MONITOREO_V2_1_LOGICA
-        // En V2.1 el flujo obligatorio de cada periodo es:
-        // A) scrap de Produccion resuelto + B) disparo auditado.
-        // C) la revision aleatoria de caja es opcional y no bloquea
-        // el avance al siguiente periodo ni el cierre del monitoreo.
+        // NSQ_CALIDAD_MONITOREO_AUDITORIA_V3
+        // V3 por hora: B) disparo auditado + C) validacion del conteo del operador.
+        // El scrap de Produccion ya NO se resuelve hora por hora: se consolida una
+        // sola vez al terminar la ejecucion mediante el registro final acumulado.
         public bool EsPendiente =>
             EsFlujoAuditoriaV2
-                ? !(ScrapValidacionCompleta &&
-                    DisparoCompleto)
+                ? !(DisparoCompleto &&
+                    RevisionCajaCompleta)
                 : Resultado == CalidadResultadoMonitoreo.Pendiente;
 
         public bool PuedeCapturar =>
             EsFlujoAuditoriaV2
                 ? FechaHoraProgramada <= DateTime.Now &&
+                  TieneRegistroProduccion &&
                   (
-                      !ScrapValidacionCompleta ||
                       !DisparoCompleto ||
                       !RevisionCajaCompleta
                   )
