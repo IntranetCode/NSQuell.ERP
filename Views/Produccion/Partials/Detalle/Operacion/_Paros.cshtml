@@ -1,0 +1,162 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var e = Model.Ejecucion;
+}
+
+@if (Model.TieneParoAbierto)
+{
+    var paroAbierto = Model.ParoAbierto;
+
+    <div class="panel mb-4 @(paroAbierto?.EsInterrupcionUrgente == true ? "border-warning" : "border-danger")"
+         id="panelParo">
+
+        <div class="panel-header @(paroAbierto?.EsInterrupcionUrgente == true ? "text-warning" : "text-danger")">
+            <i class="bi @(paroAbierto?.EsInterrupcionUrgente == true ? "bi-lightning-charge-fill" : "bi-pause-circle") me-1"></i>
+            @(paroAbierto?.EsInterrupcionUrgente == true
+                    ? "Interrupción urgente de Planeación"
+                    : "Paro abierto")
+    </div>
+
+        <div class="panel-body">
+
+            <p class="mb-1">
+                <strong>Motivo:</strong>
+                @(paroAbierto?.MotivoParoTexto ?? "Sin motivo")
+            </p>
+
+            <p class="mb-3">
+                <strong>Duración:</strong>
+                @(paroAbierto?.DuracionTexto ?? "-")
+            </p>
+
+        @if (paroAbierto?.EsInterrupcionUrgente == true)
+            {
+                <div class="alert alert-warning border-0 mb-0">
+
+                    <div class="fw-bold mb-2">
+                        <i class="bi bi-lightning-charge-fill me-1"></i>
+                        Esta OF fue pausada automáticamente por una prioridad urgente
+                    </div>
+
+                    @if (paroAbierto.SolicitudUrgenteID.HasValue)
+                    {
+                        <div class="mb-2">
+                            La máquina está siendo utilizada temporalmente por la
+                            <strong>OF @paroAbierto.SolicitudUrgenteID.Value</strong>.
+                        </div>
+                    }
+                    else if (paroAbierto.ProgramaUrgenteID.HasValue)
+                    {
+                        <div class="mb-2">
+                            La máquina está siendo utilizada temporalmente por el
+                            <strong>Programa @paroAbierto.ProgramaUrgenteID.Value</strong>.
+                        </div>
+                    }
+
+                    <div class="small">
+                        Este paro no puede cerrarse manualmente. Cuando finalice
+                        la producción urgente, el ERP cerrará automáticamente la
+                        interrupción y determinará si esta OF puede continuar
+                        directamente o debe regresar a preparación y Calidad.
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <form method="post"
+                      action="@Url.Action("CerrarParo", "Produccion")">
+
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="ParoID"
+                           value="@paroAbierto?.ParoID" />
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Observaciones de cierre
+                        </label>
+
+                        <textarea name="ObservacionesCierre"
+                          rows="2"
+                          maxlength="500"
+                          class="form-control"></textarea>
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-primary w-100 btn-strong">
+                        <i class="bi bi-play-circle me-1"></i>
+                        Cerrar paro y reanudar
+                    </button>
+
+                </form>
+            }
+
+        </div>
+    </div>
+}
+else if (e.PuedePausar)
+{
+    <div class="panel mb-4"
+         id="panelParo"
+         data-collapsible
+         data-default-open="false">
+
+        <div class="panel-header">
+            <i class="bi bi-pause-circle me-1"></i>
+            Registrar paro
+        </div>
+
+        <div class="panel-body">
+
+            <form method="post"
+                  action="@Url.Action("IniciarParo", "Produccion")">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="EjecucionProduccionID"
+                       value="@e.EjecucionProduccionID" />
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        Motivo
+                    </label>
+
+                    <select name="MotivoParoID"
+                            class="form-select">
+
+                        @foreach (var item in Model.MotivosParo)
+                        {
+                            <option value="@item.Value">
+                                @item.Text
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        Descripción
+                    </label>
+
+                    <textarea name="Descripcion"
+                          rows="2"
+                          maxlength="500"
+                          class="form-control"></textarea>
+                </div>
+
+                <button type="submit"
+                        class="btn btn-warning w-100 btn-strong">
+                    <i class="bi bi-pause-fill me-1"></i>
+                    Iniciar paro
+                </button>
+
+            </form>
+
+        </div>
+    </div>
+}

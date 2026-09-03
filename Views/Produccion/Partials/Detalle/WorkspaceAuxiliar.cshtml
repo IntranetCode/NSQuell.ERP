@@ -1,0 +1,107 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var workspaceProduccion =
+        (ViewBag.WorkspaceProduccion as string
+         ?? "CONSULTA")
+        .Trim()
+        .ToUpperInvariant();
+
+    var esWorkspaceAuxiliar =
+        workspaceProduccion == "AUXILIAR";
+
+    var puedeGestionarSugerenciaCambioTurno =
+        ViewBag.PuedeGestionarSugerenciaCambioTurno
+            is bool puedeSugerencia
+        && puedeSugerencia;
+
+    var puedeGestionarCajas =
+        ViewBag.PuedeGestionarCajas
+            is bool puedeCajas
+        && puedeCajas;
+
+    var puedeVerCapturasHora =
+        ViewBag.PuedeVerCapturasHora
+            is bool puedeCapturas
+        && puedeCapturas;
+}
+
+@if (esWorkspaceAuxiliar)
+{
+    <div data-produccion-workspace="AUXILIAR">
+
+        @if (puedeGestionarSugerenciaCambioTurno)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Auxiliar/_SugerenciaCambioTurno.cshtml"
+                     model="Model" />
+        }
+
+        @*
+            CAPTURAS:
+            todavía permanecen en Detalle.cshtml.
+
+            En el siguiente paso se moverán a:
+            Operacion/_CapturasHora.cshtml
+
+            porque son compartidas por:
+            - Auxiliar
+            - Operador
+            - Supervisión
+        *@
+
+        @if (puedeGestionarCajas)
+        {
+            <div class="panel mb-4"
+                 data-collapsible
+                 data-default-open="false">
+
+                <div class="panel-header">
+                    <i class="bi bi-boxes me-1"></i>
+                    Gestión de cajas
+                </div>
+
+                <div class="panel-body">
+
+                    <div class="soft-box mb-3">
+                        <div class="data-label">
+                            Operación de cajas
+                        </div>
+
+                        <div class="data-value mt-1">
+                            Consulta, administra y entrega las cajas
+                            correspondientes a esta ejecución.
+                        </div>
+                    </div>
+
+                    <a href="@Url.Action(
+                                                       "Cajas",
+                                                       "Produccion",
+                                                       new
+                                                       {
+                                                           id = Model
+                                                               .Ejecucion
+                                                               .EjecucionProduccionID
+                                                       })"
+               class="btn btn-warning w-100 btn-strong">
+
+                        <i class="bi bi-box-seam me-1"></i>
+                        Abrir gestión de cajas
+
+                    </a>
+
+                </div>
+            </div>
+        }
+
+        @if (puedeVerCapturasHora)
+        {
+            <div class="alert alert-light border mb-4">
+                <i class="bi bi-info-circle me-1"></i>
+                Las capturas horarias aparecen temporalmente en la
+                sección operativa general. En el siguiente paso se
+                integrarán directamente a este workspace.
+            </div>
+        }
+
+    </div>
+}

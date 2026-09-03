@@ -1,0 +1,52 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var workspaceProduccion =
+        (ViewBag.WorkspaceProduccion as string
+         ?? "CONSULTA")
+        .Trim()
+        .ToUpperInvariant();
+
+    var esWorkspaceTecnico =
+        workspaceProduccion == "TECNICO";
+
+    var puedeGestionarConfiguracionCorrida =
+        ViewBag.PuedeGestionarConfiguracionCorrida
+            is bool puedeConfiguracion
+        && puedeConfiguracion;
+
+    var puedeGestionarChecklistArranque =
+        ViewBag.PuedeGestionarChecklistArranque
+            is bool puedeChecklist
+        && puedeChecklist;
+
+    var puedeGestionarMonitoreoPerifericos =
+        ViewBag.PuedeGestionarMonitoreoPerifericos
+            is bool puedeMonitoreo
+        && puedeMonitoreo;
+}
+
+@if (esWorkspaceTecnico)
+{
+    <div data-produccion-workspace="TECNICO">
+
+        @if (puedeGestionarConfiguracionCorrida)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Tecnico/_ConfiguracionCorrida.cshtml"
+                     model="Model" />
+        }
+
+        @if (puedeGestionarChecklistArranque)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Preparacion/_ChecklistArranque.cshtml"
+                     model="Model" />
+        }
+
+        @if (puedeGestionarMonitoreoPerifericos)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Preparacion/_MonitoreoPerifericos.cshtml"
+                     model="Model" />
+        }
+
+    </div>
+}

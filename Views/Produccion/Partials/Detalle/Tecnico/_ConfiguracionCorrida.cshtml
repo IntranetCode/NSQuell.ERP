@@ -1,0 +1,1506 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+@using System.Globalization
+
+@{
+    var e = Model.Ejecucion;
+    var configuracionTiempoReal = Model.ConfiguracionTiempoReal;
+    var configuracionActual = configuracionTiempoReal?.ConfiguracionActual;
+    var tieneConfiguracionCorrida = configuracionActual?.EstaVigente == true;
+
+    var puedeGestionarConfiguracionCorrida =
+        ViewBag.PuedeGestionarConfiguracionCorrida is bool puedeGestionar &&
+        puedeGestionar;
+
+    var cavidadesBD = configuracionTiempoReal?.CavidadesBD;
+    var cicloBD = configuracionTiempoReal?.TiempoCicloBD;
+
+    decimal? objetivoReferencia = null;
+
+    if (cavidadesBD.HasValue &&
+        cavidadesBD.Value > 0 &&
+        cicloBD.HasValue &&
+        cicloBD.Value > 0)
+    {
+        objetivoReferencia =
+            (3600m / cicloBD.Value) *
+            cavidadesBD.Value;
+    }
+}
+
+@if (configuracionTiempoReal != null)
+{
+    var cfg = configuracionTiempoReal.ConfiguracionActual;
+
+    var accionConfiguracion =
+        tieneConfiguracionCorrida
+            ? Url.Action("CambiarConfiguracionCorrida", "Produccion")
+            : Url.Action("GuardarConfiguracionCorrida", "Produccion");
+
+    var cicloDefaultFormulario =
+        tieneConfiguracionCorrida
+            ? cfg?.TiempoCicloSegundos
+            : configuracionTiempoReal.TiempoCicloBD;
+
+    var cavidadesDisponibles =
+        configuracionTiempoReal.CavidadesDisponibles?
+            .Where(x => x > 0)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList()
+        ?? new List<int>();
+
+    if (!cavidadesDisponibles.Any() &&
+        configuracionTiempoReal.CavidadesBD.HasValue &&
+        configuracionTiempoReal.CavidadesBD.Value > 0)
+    {
+        var cantidadDisponible =
+            Math.Min(
+                configuracionTiempoReal.CavidadesBD.Value,
+                64);
+
+        cavidadesDisponibles =
+            Enumerable.Range(
+                1,
+                cantidadDisponible)
+            .ToList();
+    }
+
+    var cavidadesSeleccionadas =
+        new SortedSet<int>();
+
+    if (!string.IsNullOrWhiteSpace(
+        cfg?.CavidadesConfiguradas))
+    {
+        var tokens =
+            cfg.CavidadesConfiguradas!
+                .Split(
+                    new[] { ',', ';', '|', ' ' },
+                    StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var token in tokens)
+        {
+            if (int.TryParse(
+                    token.Trim(),
+                    out var numero) &&
+                numero > 0)
+            {
+                cavidadesSeleccionadas.Add(numero);
+            }
+        }
+    }
+
+    var tieneNumeracionActual =
+        cavidadesSeleccionadas.Count > 0;
+
+    var cavidadesInicialesCantidad =
+        tieneNumeracionActual
+            ? cavidadesSeleccionadas.Count
+            : tieneConfiguracionCorrida
+                ? cfg?.CavidadesUsadas ?? 0
+                : 0;
+
+    var cavidadesInicialesCsv =
+        tieneNumeracionActual
+            ? string.Join(
+                ",",
+                cavidadesSeleccionadas)
+            : string.Empty;
+
+    var objetivoFormularioInicial =
+        cicloDefaultFormulario.HasValue &&
+        cicloDefaultFormulario.Value > 0 &&
+        cavidadesInicialesCantidad > 0
+            ? (3600m /
+               cicloDefaultFormulario.Value) *
+              cavidadesInicialesCantidad
+            : (decimal?)null;
+
+    <style>
+        .config-cavity-box {
+            border: 1px solid #d7e2f1;
+            border-radius: 14px;
+            background: #f8fafc;
+            padding: 14px;
+        }
+
+        .config-cavity-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .config-cavity-title {
+            color: #102a56;
+            font-size: .82rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .config-cavity-subtitle {
+            color: #667085;
+            font-size: .78rem;
+            margin-top: 3px;
+        }
+
+        .config-cavity-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 7px;
+        }
+
+            .config-cavity-actions .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 5px;
+                min-height: 34px;
+                padding: 7px 12px;
+                border-radius: 999px;
+                font-size: .72rem;
+                font-weight: 800 !important;
+                line-height: 1;
+                box-shadow: none !important;
+                transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+            }
+
+                .config-cavity-actions .btn i {
+                    margin-right: 0 !important;
+                    font-size: .78rem;
+                }
+
+            .config-cavity-actions .btn-outline-success {
+                background: #ffffff !important;
+                border: 1px solid #a9dcc0 !important;
+                color: #157347 !important;
+            }
+
+                .config-cavity-actions .btn-outline-success:hover,
+                .config-cavity-actions .btn-outline-success:focus {
+                    background: #edf9f2 !important;
+                    border-color: #198754 !important;
+                    color: #146c43 !important;
+                    transform: translateY(-1px);
+                }
+
+            .config-cavity-actions .btn-outline-secondary {
+                background: #ffffff !important;
+                border: 1px solid #d0d5dd !important;
+                color: #475467 !important;
+            }
+
+                .config-cavity-actions .btn-outline-secondary:hover,
+                .config-cavity-actions .btn-outline-secondary:focus {
+                    background: #f2f4f7 !important;
+                    border-color: #98a2b3 !important;
+                    color: #344054 !important;
+                    transform: translateY(-1px);
+                }
+
+        .config-cavity-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+            gap: 8px;
+        }
+
+        .config-cavity-button {
+            position: relative;
+            min-height: 44px;
+            padding: 6px 8px;
+            border: 1px solid #d0d5dd;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #344054;
+            font-size: .86rem;
+            font-weight: 900;
+            line-height: 1;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+            transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease, box-shadow .15s ease;
+        }
+
+            .config-cavity-button:hover {
+                background: #f8fbff;
+                border-color: #84adf2;
+                color: #175cd3;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 10px rgba(16, 24, 40, .07);
+            }
+
+            .config-cavity-button.is-selected {
+                background: #ecfdf3;
+                border-color: #32b46c;
+                color: #067647;
+                box-shadow: 0 0 0 2px rgba(18, 183, 106, .08);
+            }
+
+                .config-cavity-button.is-selected::after {
+                    content: "\F26A";
+                    position: absolute;
+                    top: 4px;
+                    right: 5px;
+                    font-family: "bootstrap-icons";
+                    font-size: .58rem;
+                    color: #198754;
+                }
+
+        .config-cavity-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .config-cavity-summary-item {
+            flex: 1 1 150px;
+            border: 1px solid #e5eaf3;
+            border-radius: 11px;
+            background: #fff;
+            padding: 8px 10px;
+        }
+
+        .config-cavity-summary-label {
+            color: #667085;
+            font-size: .65rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .config-cavity-summary-value {
+            color: #102a56;
+            font-weight: 900;
+            margin-top: 2px;
+            word-break: break-word;
+        }
+
+        .config-cavity-legacy {
+            margin-top: 10px;
+            border: 1px solid #ffe69c;
+            border-radius: 11px;
+            background: #fff9e8;
+            color: #7a5b00;
+            padding: 9px 11px;
+            font-size: .78rem;
+        }
+
+        .config-current-detail {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0,1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .config-current-detail-item {
+            border: 1px solid #e5eaf3;
+            border-radius: 11px;
+            background: rgba(255,255,255,.72);
+            padding: 9px 10px;
+        }
+
+        .config-current-detail-label {
+            color: #667085;
+            font-size: .65rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .config-current-detail-value {
+            color: #102a56;
+            font-weight: 900;
+            margin-top: 2px;
+        }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-box,
+        html[data-nsq-theme="dark"]
+        .config-cavity-summary-item,
+        html[data-nsq-theme="dark"]
+        .config-current-detail-item {
+            background: #101a2b;
+            border-color: #2d3e55;
+        }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-button {
+            background: #111b2d;
+            border-color: #354961;
+            color: #dce7f6;
+        }
+
+            html[data-nsq-theme="dark"]
+            .config-cavity-button:hover {
+                background: #152238;
+                border-color: #5d8fca;
+                color: #a9d0ff;
+            }
+
+            html[data-nsq-theme="dark"]
+            .config-cavity-button.is-selected {
+                background: #102a20;
+                border-color: #286446;
+                color: #79e3a8;
+            }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-actions .btn-outline-success {
+            background: #111b2d !important;
+            border-color: #286446 !important;
+            color: #79e3a8 !important;
+        }
+
+            html[data-nsq-theme="dark"]
+            .config-cavity-actions .btn-outline-success:hover,
+            html[data-nsq-theme="dark"]
+            .config-cavity-actions .btn-outline-success:focus {
+                background: #102a20 !important;
+                border-color: #3c8b62 !important;
+                color: #9aefbd !important;
+            }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-actions .btn-outline-secondary {
+            background: #111b2d !important;
+            border-color: #354961 !important;
+            color: #c2cfdf !important;
+        }
+
+            html[data-nsq-theme="dark"]
+            .config-cavity-actions .btn-outline-secondary:hover,
+            html[data-nsq-theme="dark"]
+            .config-cavity-actions .btn-outline-secondary:focus {
+                background: #172337 !important;
+                border-color: #5c708a !important;
+                color: #edf4ff !important;
+            }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-title,
+        html[data-nsq-theme="dark"]
+        .config-cavity-summary-value,
+        html[data-nsq-theme="dark"]
+        .config-current-detail-value {
+            color: #eaf2ff;
+        }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-subtitle,
+        html[data-nsq-theme="dark"]
+        .config-cavity-summary-label,
+        html[data-nsq-theme="dark"]
+        .config-current-detail-label {
+            color: #9aa9bd;
+        }
+
+        html[data-nsq-theme="dark"]
+        .config-cavity-legacy {
+            background: #2b2313;
+            border-color: #76571e;
+            color: #f6cc6d;
+        }
+
+        @@media (max-width: 576px) {
+            .config-cavity-grid {
+                grid-template-columns: repeat(4,minmax(0,1fr));
+            }
+
+            .config-current-detail {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <div class="panel mb-4"
+         id="panelConfiguracionCorrida"
+         data-collapsible
+         data-default-open="@(!tieneConfiguracionCorrida ? "true" : "false")">
+
+        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+
+            <span>
+                <i class="bi bi-sliders me-1"></i>
+                Configuración real de la corrida
+            </span>
+
+            @if (tieneConfiguracionCorrida)
+            {
+                <span class="badge bg-success">
+                    Configuración activa
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-warning text-dark">
+                    Pendiente técnico
+                </span>
+            }
+
+    </div>
+
+    <div class="panel-body">
+
+        <div class="config-run-card mb-3 @(tieneConfiguracionCorrida ? "is-active" : "is-pending")">
+
+            <div class="d-flex align-items-start justify-content-between gap-2">
+
+                <div class="flex-grow-1">
+
+                    <div class="data-label">
+                        @(tieneConfiguracionCorrida
+                                                ? "Configuración vigente"
+                                                : "Configuración requerida")
+                    </div>
+
+                        <div class="data-value fs-5 mt-1">
+                        @if (tieneConfiguracionCorrida &&
+                                                cfg != null)
+                            {
+                                <text>
+                                    @cfg.CavidadesUsadas.ToString("N0")
+                                    cavidad(es)
+                                    ·
+                                    @cfg.TiempoCicloSegundos.ToString("0.####")
+                                    s
+                                    ·
+                                    @cfg.ObjetivoHoraOperativo.ToString("N0")
+                                    pzas/h
+                                </text>
+                            }
+                            else
+                            {
+                                <text>
+                                    El técnico debe confirmar la corrida
+                                </text>
+                            }
+                        </div>
+
+                        @if (tieneConfiguracionCorrida &&
+                                            cfg != null)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(
+                                                cfg.CavidadesConfiguradas))
+                            {
+                                <div class="muted-small mt-1">
+                                    <strong>Cavidades activas:</strong>
+                                    @cfg.CavidadesConfiguradas
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="muted-small mt-1">
+                                    <i class="bi bi-clock-history me-1"></i>
+                                    La configuración vigente registra la
+                                    cantidad de cavidades, pero no su
+                                    numeración específica.
+                                </div>
+                            }
+
+                        <div class="config-current-detail">
+
+                            <div class="config-current-detail-item">
+
+                                <div class="config-current-detail-label">
+                                    Contador base
+                                </div>
+
+                                <div class="config-current-detail-value">
+                                    @(cfg.ContadorInicioVigencia?
+                                                                    .ToString("N0")
+                                                                    ?? "-")
+                                                                       </div>
+
+                            </div>
+
+                            <div class="config-current-detail-item">
+
+                                <div class="config-current-detail-label">
+                                    Última lectura
+                                </div>
+
+                                <div class="config-current-detail-value">
+                                    @(configuracionTiempoReal
+                                                                    .UltimoContadorMaquina?
+                                                                    .ToString("N0")
+                                                                    ?? "Sin lectura")
+                            </div>
+
+                                </div>
+
+                            </div>
+                                        }
+                    </div>
+
+                    <i class="bi @(tieneConfiguracionCorrida
+                                                                      ? "bi-check-circle-fill text-success"
+                                                                      : "bi-exclamation-triangle-fill text-warning") fs-4">
+                                                                                                                 </i>
+
+                </div>
+
+            </div>
+
+            <div class="data-label mb-2">
+                Referencia técnica de BD
+            </div>
+
+            <div class="config-reference-grid mb-3"
+                 style="grid-template-columns:repeat(2,minmax(0,1fr));">
+
+                <div class="config-reference-item">
+
+                    <div class="data-label">
+                        Cavidades disponibles
+                    </div>
+
+                    <div class="config-reference-value">
+                        @(configuracionTiempoReal.CavidadesBD?
+                                            .ToString("N0")
+                                            ?? "Sin dato")
+                                                      </div>
+
+                    <div class="muted-small">
+                        Referencia maestra de la parte.
+                    </div>
+
+                </div>
+
+                <div class="config-reference-item">
+
+                    <div class="data-label">
+                        Ciclo de referencia
+                    </div>
+
+                    <div class="config-reference-value">
+                        @(configuracionTiempoReal.TiempoCicloBD.HasValue
+                                            ? configuracionTiempoReal
+                                            .TiempoCicloBD
+                                            .Value
+                                            .ToString("0.####") + " s"
+                                            : "Sin dato")
+                </div>
+
+                    <div class="muted-small">
+                        Valor técnico registrado en BD.
+                    </div>
+
+                </div>
+
+            </div>
+
+        @if (puedeGestionarConfiguracionCorrida)
+            {
+                <div class="config-form-box mb-3">
+
+                    <div class="fw-bold mb-1">
+
+                        <i class="bi bi-person-badge me-1"></i>
+
+                        @(tieneConfiguracionCorrida
+                                        ? "Cambiar configuración técnica"
+                                        : "Confirmar configuración inicial")
+
+            </div>
+
+                    <div class="muted-small mb-3">
+
+                        Selecciona las cavidades que realmente están
+                        activas. La cantidad se calculará
+                        automáticamente.
+
+                @if (tieneConfiguracionCorrida)
+                        {
+                            <text>
+                                Si solo cambia el ciclo, conserva la
+                                selección actual.
+                            </text>
+                        }
+
+                    </div>
+
+                    <form method="post"
+                          action="@accionConfiguracion"
+                          data-config-form
+                          novalidate>
+
+                        @Html.AntiForgeryToken()
+
+                        <input type="hidden"
+                               name="EjecucionProduccionID"
+                               value="@e.EjecucionProduccionID" />
+
+                        <div class="row g-3">
+
+                            <div class="col-12">
+
+                                <div class="config-cavity-box"
+                                     data-config-cavity-selector
+                                     data-existing-count="@(cfg?.CavidadesUsadas ?? 0)"
+                                     data-existing-numbered="@(tieneNumeracionActual ? "true" : "false")">
+
+                                    <input type="hidden"
+                                           id="CavidadesUsadasConfig"
+                                           name="CavidadesUsadas"
+                                           value="@(cavidadesInicialesCantidad > 0
+                                                                                                                                     ? cavidadesInicialesCantidad.ToString(
+                                                                                                                                         CultureInfo.InvariantCulture)
+                                                                                                                                     : "")"
+                                   data-config-cavidades
+                                   data-default-value="@(cavidadesInicialesCantidad > 0
+                                                                                                                     ? cavidadesInicialesCantidad.ToString(
+                                                                                                                         CultureInfo.InvariantCulture)
+                                                                                                                     : "")" />
+
+                            <input type="hidden"
+                                   id="CavidadesConfiguradasConfig"
+                                   name="CavidadesConfiguradas"
+                                   value="@cavidadesInicialesCsv"
+                                   data-config-cavidades-csv />
+
+                                    <div class="config-cavity-header">
+
+                                        <div>
+
+                                            <div class="config-cavity-title">
+                                                <i class="bi bi-grid-3x3-gap me-1"></i>
+                                                Cavidades activas
+                                            </div>
+
+                                            <div class="config-cavity-subtitle">
+                                                Marca únicamente las posiciones
+                                                que están trabajando físicamente
+                                                en esta corrida.
+                                            </div>
+
+                                        </div>
+
+                                @if (cavidadesDisponibles.Any())
+                                        {
+                                            <div class="config-cavity-actions">
+
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-success fw-bold"
+                                                        data-config-cavity-all>
+
+                                                    <i class="bi bi-check2-square me-1"></i>
+                                                    Todas
+
+                                                </button>
+
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-secondary fw-bold"
+                                                        data-config-cavity-clear>
+
+                                                    <i class="bi bi-square me-1"></i>
+                                                    Limpiar
+
+                                                </button>
+
+                                            </div>
+                                        }
+
+                                    </div>
+
+                                    @if (!cavidadesDisponibles.Any())
+                                    {
+                                        <div class="alert alert-warning mb-0">
+
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+
+                                            No fue posible determinar las
+                                            cavidades disponibles para esta
+                                            parte.
+
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="config-cavity-grid">
+
+                                            @foreach (var cavidad in
+                                                                            cavidadesDisponibles)
+                                            {
+                                                var seleccionada =
+                                                cavidadesSeleccionadas
+                                                .Contains(cavidad);
+
+                                                <button type="button"
+                                                        class="config-cavity-button @(seleccionada ? "is-selected" : "")"
+                                                        data-config-cavity-number="@cavidad"
+                                                        aria-pressed="@(seleccionada ? "true" : "false")">
+
+                                                    @cavidad
+
+                                                </button>
+                                            }
+
+                            </div>
+
+                            <div class="config-cavity-summary">
+
+                                <div class="config-cavity-summary-item">
+
+                                    <div class="config-cavity-summary-label">
+                                        Seleccionadas
+                                    </div>
+
+                                    <div class="config-cavity-summary-value">
+
+                                        <span data-config-cavity-count>
+                                            @cavidadesSeleccionadas.Count
+                                        </span>
+
+                                        de
+
+                                        @cavidadesDisponibles.Count
+
+                                    </div>
+
+                                </div>
+
+                                <div class="config-cavity-summary-item">
+
+                                    <div class="config-cavity-summary-label">
+                                        Cavidades activas
+                                    </div>
+
+                                    <div class="config-cavity-summary-value"
+                                         data-config-cavity-text>
+
+                                        @(tieneNumeracionActual
+                                                                                ? string.Join(
+                                                                                ", ",
+                                                                                cavidadesSeleccionadas)
+                                                                                : "Ninguna seleccionada")
+
+                                    </div>
+
+                                            </div>
+
+                                        </div>
+                                                        }
+
+                                    @if (tieneConfiguracionCorrida &&
+                                                                cfg != null &&
+                                                                !tieneNumeracionActual &&
+                                                                cfg.CavidadesUsadas > 0)
+                                    {
+                                        <div class="config-cavity-legacy">
+
+                                            <i class="bi bi-clock-history me-1"></i>
+
+                                            La configuración vigente registra
+                                            <strong>
+                                                @cfg.CavidadesUsadas
+                                                cavidad(es)
+                                            </strong>,
+                                            pero fue creada antes de guardar
+                                            su numeración específica.
+
+                                            Si solamente vas a cambiar el ciclo,
+                                            puedes conservar esa cantidad.
+                                            Si cambias cavidades, selecciona
+                                            ahora las posiciones reales.
+
+                                        </div>
+                                    }
+
+                                    @if (!tieneConfiguracionCorrida)
+                                    {
+                                        <div class="form-text mt-2">
+
+                                            <i class="bi bi-info-circle me-1"></i>
+
+                                            En la configuración inicial no se
+                                            seleccionan cavidades
+                                            automáticamente. El Técnico debe
+                                            confirmar cuáles están activas.
+
+                                        </div>
+                                    }
+
+                                </div>
+
+                            </div>
+
+                            <div class="col-12 col-md-6">
+
+                                <label class="form-label"
+                                       for="TiempoCicloSegundosConfig">
+                                    Tiempo de ciclo real (segundos)
+                                </label>
+
+                                <input type="number"
+                                       min="0.0001"
+                                       step="0.0001"
+                                       class="form-control"
+                                       id="TiempoCicloSegundosConfig"
+                                       name="TiempoCicloSegundos"
+                                       value="@(cicloDefaultFormulario?.ToString(
+                                                                                                                         "0.####",
+                                                                                                                         CultureInfo.InvariantCulture)
+                                                                                                                         ?? "")"
+                               data-config-ciclo
+                               data-default-value="@(cicloDefaultFormulario?.ToString(
+                                                                                                         "0.####",
+                                                                                                         CultureInfo.InvariantCulture)
+                                                                                                         ?? "")"
+                               placeholder="@(configuracionTiempoReal
+                                                                                                         .TiempoCicloBD?
+                                                                                                         .ToString("0.####")
+                                                                                                         ?? "Capturar ciclo")" />
+
+                        <div class="form-text">
+                            Captura únicamente el número.
+                            El ERP lo guarda en segundos.
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-6">
+
+                        <label class="form-label"
+                               for="ContadorMaquinaActualConfig">
+                            Contador actual de la máquina *
+                        </label>
+
+                        <input type="number"
+                               min="0"
+                               step="1"
+                               class="form-control"
+                               id="ContadorMaquinaActualConfig"
+                               name="ContadorMaquinaActual"
+                               data-config-contador
+                               placeholder="Ej. 12850" />
+
+                        <div class="form-text">
+                            Captura el valor físico actual.
+                        </div>
+
+                    </div>
+
+                    <div class="col-12">
+
+                        <div class="config-formula"
+                             data-config-objetivo>
+
+                            Objetivo estimado:
+
+                            @(objetivoFormularioInicial.HasValue
+                                                        ? Math.Round(
+                                                        objetivoFormularioInicial.Value,
+                                                        0,
+                                                        MidpointRounding.AwayFromZero)
+                                                        .ToString("N0") + " pzas/h"
+                                                        : "pendiente de cavidades y ciclo")
+
+                        </div>
+
+                            </div>
+
+                    @if (tieneConfiguracionCorrida)
+                            {
+                                <div class="col-12">
+
+                                    <div class="config-preview-loading"
+                                         data-config-preview-loading>
+
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+
+                                        Calculando impacto en la programación...
+
+                                    </div>
+
+                                    <div class="config-preview"
+                                         data-config-preview>
+
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+
+                                            <div>
+
+                                                <div class="data-label">
+                                                    Vista previa del cambio
+                                                </div>
+
+                                                <div class="fw-bold mt-1"
+                                                     data-config-preview-title>
+                                                    Impacto estimado en la OF
+                                                </div>
+
+                                            </div>
+
+                                            <span class="badge bg-secondary"
+                                                  data-config-preview-badge>
+                                                Sin cambios
+                                            </span>
+
+                                        </div>
+
+                                        <div class="config-preview-grid">
+
+                                            <div class="config-preview-item">
+
+                                                <div class="config-preview-label">
+                                                    Objetivo
+                                                </div>
+
+                                                <div class="config-preview-value"
+                                                     data-config-preview-objetivo>
+                                                    -
+                                                </div>
+
+                                            </div>
+
+                                            <div class="config-preview-item">
+
+                                                <div class="config-preview-label">
+                                                    Piezas pendientes
+                                                </div>
+
+                                                <div class="config-preview-value"
+                                                     data-config-preview-pendiente>
+                                                    -
+                                                </div>
+
+                                            </div>
+
+                                            <div class="config-preview-item">
+
+                                                <div class="config-preview-label">
+                                                    Tiempo restante
+                                                </div>
+
+                                                <div class="config-preview-value"
+                                                     data-config-preview-tiempo>
+                                                    -
+                                                </div>
+
+                                            </div>
+
+                                            <div class="config-preview-item">
+
+                                                <div class="config-preview-label">
+                                                    Fin programado
+                                                </div>
+
+                                                <div class="config-preview-value"
+                                                     data-config-preview-fin>
+                                                    -
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                        <div class="config-preview-impact"
+                                             data-config-preview-impact>
+                                            -
+                                        </div>
+
+                                        <div class="muted-small mt-2">
+
+                                            <i class="bi bi-info-circle me-1"></i>
+
+                                            Esta es solo una simulación.
+                                            El calendario no cambia hasta
+                                            aplicar la nueva configuración.
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+                            }
+
+                    <div class="col-12">
+
+                        <label class="form-label"
+                               for="MotivoCambioConfiguracion">
+
+                            @(tieneConfiguracionCorrida
+                                                        ? "Motivo del cambio *"
+                                                        : "Observaciones")
+
+                        </label>
+
+                                <textarea class="form-control"
+                                  id="MotivoCambioConfiguracion"
+                                  name="MotivoCambio"
+                                  rows="2"
+                                  maxlength="500"
+                                  placeholder="@(tieneConfiguracionCorrida
+                                              ? "Ej. se bloqueó una cavidad, ajuste de proceso, cambio real de ciclo, etc."
+                                              : "Opcional: condición inicial de la corrida")"></textarea>
+
+                            </div>
+
+                            <div class="col-12">
+
+                                <div class="config-validation"
+                                     data-config-validation>
+                                </div>
+
+                            </div>
+
+                            <div class="col-12 d-grid">
+
+                                <button type="submit"
+                                        class="btn @(tieneConfiguracionCorrida
+                                                                                                            ? "btn-primary"
+                                                                                                            : "btn-warning") btn-strong">
+
+                            <i class="bi @(tieneConfiguracionCorrida
+                                                                                                      ? "bi-arrow-repeat"
+                                                                                                      : "bi-check2-circle") me-1">
+                                                                                                                        </i>
+
+                            @(tieneConfiguracionCorrida
+                                                        ? "Aplicar nueva configuración"
+                                                        : "Confirmar configuración técnica")
+
+                        </button>
+
+                            </div>
+
+                        </div>
+
+                    </form>
+
+                </div>
+                }
+            else
+            {
+                <div class="alert alert-secondary mb-3">
+
+                    <i class="bi bi-lock me-1"></i>
+
+                    Solo el Técnico de Producción asignado,
+                    el Encargado de Producción o un Administrador
+                    pueden modificar cavidades y ciclo.
+
+                </div>
+            }
+
+            @if (configuracionTiempoReal.HistorialConfiguraciones != null &&
+                    configuracionTiempoReal.HistorialConfiguraciones.Any())
+            {
+                <div class="data-label mb-2">
+                    Historial técnico
+                </div>
+
+                <div class="config-history">
+
+                    @foreach (var h in
+                                configuracionTiempoReal
+                                .HistorialConfiguraciones)
+                    {
+                        <div class="config-history-item">
+
+                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+
+                                <div>
+
+                                    <div class="fw-bold">
+
+                                        @h.CavidadesUsadas.ToString("N0")
+                                        cav.
+
+                                        ·
+
+                                        @h.TiempoCicloSegundos.ToString("0.####")
+                                        s
+
+                                        ·
+
+                                        @h.ObjetivoHoraOperativo.ToString("N0")
+                                        pzas/h
+
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                                            h.CavidadesConfiguradas))
+                                    {
+                                        <div class="muted-small mt-1">
+
+                                            <strong>
+                                                Cavidades:
+                                            </strong>
+
+                                            @h.CavidadesConfiguradas
+
+                                        </div>
+                                    }
+
+                                <div class="muted-small">
+
+                                    @h.FechaInicioVigencia
+                                    .ToString("dd/MM/yyyy HH:mm")
+
+                                    →
+
+                                    @(h.FechaFinVigencia?
+                                                                .ToString("dd/MM/yyyy HH:mm")
+                                                                ?? "Vigente")
+
+                        </div>
+
+                                </div>
+
+                                <span class="badge @(h.EstaVigente
+                                                                                        ? "bg-success"
+                                                                                        : "bg-secondary")">
+
+                        @(h.EstaVigente
+                                                ? "Actual"
+                                                : "Cerrada")
+
+                    </span>
+
+                </div>
+
+                <div class="muted-small mt-1">
+
+                    Contador:
+
+                    @(h.ContadorInicioVigencia?
+                                        .ToString("N0")
+                                        ?? "-")
+
+                    →
+
+                    @(h.ContadorFinVigencia?
+                                        .ToString("N0")
+                                        ?? "-")
+
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(
+                                h.TecnicoProduccionNombre))
+                            {
+                                <div class="muted-small mt-1">
+
+                                    <strong>Técnico:</strong>
+
+                                    @h.TecnicoProduccionNombre
+
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(
+                                            h.MotivoCambio))
+                            {
+                                <div class="small mt-1">
+
+                                    <strong>Motivo:</strong>
+
+                                    @h.MotivoCambio
+
+                                </div>
+                            }
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener(
+            'DOMContentLoaded',
+            function () {
+
+                document
+                    .querySelectorAll(
+                        '[data-config-cavity-selector]'
+                    )
+                    .forEach(function (root) {
+
+                        const botones =
+                            Array.from(
+                                root.querySelectorAll(
+                                    '[data-config-cavity-number]'
+                                )
+                            );
+
+                        const inputCantidad =
+                            root.querySelector(
+                                '[data-config-cavidades]'
+                            );
+
+                        const inputCsv =
+                            root.querySelector(
+                                '[data-config-cavidades-csv]'
+                            );
+
+                        const textoCantidad =
+                            root.querySelector(
+                                '[data-config-cavity-count]'
+                            );
+
+                        const textoCavidades =
+                            root.querySelector(
+                                '[data-config-cavity-text]'
+                            );
+
+                        const botonTodas =
+                            root.querySelector(
+                                '[data-config-cavity-all]'
+                            );
+
+                        const botonLimpiar =
+                            root.querySelector(
+                                '[data-config-cavity-clear]'
+                            );
+
+                        const cantidadExistente =
+                            Number.parseInt(
+                                root.dataset.existingCount || '0',
+                                10
+                            ) || 0;
+
+                        const tieneNumeracionExistente =
+                            root.dataset.existingNumbered ===
+                            'true';
+
+                        const seleccionadas =
+                            new Set();
+
+                        function numeroCavidad(value) {
+
+                            const numero =
+                                Number.parseInt(
+                                    value || '0',
+                                    10
+                                );
+
+                            return Number.isFinite(numero) &&
+                                numero > 0
+                                ? numero
+                                : 0;
+                        }
+
+                        function cargarSeleccionInicial() {
+
+                            const csv =
+                                (inputCsv?.value || '')
+                                    .trim();
+
+                            if (!csv)
+                                return;
+
+                            csv.split(',')
+                                .forEach(function (valor) {
+
+                                    const numero =
+                                        numeroCavidad(valor);
+
+                                    if (numero > 0)
+                                        seleccionadas.add(
+                                            numero
+                                        );
+                                });
+                        }
+
+                        function obtenerSeleccion() {
+
+                            return Array
+                                .from(seleccionadas)
+                                .sort(function (a, b) {
+                                    return a - b;
+                                });
+                        }
+
+                        function emitirCambio(input) {
+
+                            if (!input)
+                                return;
+
+                            input.dispatchEvent(
+                                new Event(
+                                    'input',
+                                    {
+                                        bubbles: true
+                                    }
+                                )
+                            );
+
+                            input.dispatchEvent(
+                                new Event(
+                                    'change',
+                                    {
+                                        bubbles: true
+                                    }
+                                )
+                            );
+                        }
+
+                        function sincronizar(
+                            huboInteraccion
+                        ) {
+
+                            const lista =
+                                obtenerSeleccion();
+
+                            botones.forEach(
+                                function (boton) {
+
+                                    const numero =
+                                        numeroCavidad(
+                                            boton.dataset
+                                                .configCavityNumber
+                                        );
+
+                                    const seleccionada =
+                                        seleccionadas
+                                            .has(numero);
+
+                                    boton.classList.toggle(
+                                        'is-selected',
+                                        seleccionada
+                                    );
+
+                                    boton.setAttribute(
+                                        'aria-pressed',
+                                        seleccionada
+                                            ? 'true'
+                                            : 'false'
+                                    );
+                                }
+                            );
+
+                            if (inputCsv) {
+                                inputCsv.value =
+                                    lista.join(',');
+                            }
+
+                            if (inputCantidad) {
+
+                                if (lista.length > 0) {
+
+                                    inputCantidad.value =
+                                        lista.length
+                                            .toString();
+                                }
+                                else if (
+                                    !huboInteraccion &&
+                                    !tieneNumeracionExistente &&
+                                    cantidadExistente > 0
+                                ) {
+
+                                    inputCantidad.value =
+                                        cantidadExistente
+                                            .toString();
+                                }
+                                else {
+
+                                    inputCantidad.value = '';
+                                }
+                            }
+
+                            if (textoCantidad) {
+                                textoCantidad.textContent =
+                                    lista.length
+                                        .toLocaleString(
+                                            'es-MX'
+                                        );
+                            }
+
+                            if (textoCavidades) {
+
+                                textoCavidades.textContent =
+                                    lista.length > 0
+                                        ? lista.join(', ')
+                                        : 'Ninguna seleccionada';
+                            }
+
+                            emitirCambio(
+                                inputCantidad
+                            );
+
+                            emitirCambio(
+                                inputCsv
+                            );
+                        }
+
+                        cargarSeleccionInicial();
+
+                        botones.forEach(
+                            function (boton) {
+
+                                boton.addEventListener(
+                                    'click',
+                                    function () {
+
+                                        const numero =
+                                            numeroCavidad(
+                                                boton.dataset
+                                                    .configCavityNumber
+                                            );
+
+                                        if (numero <= 0)
+                                            return;
+
+                                        if (
+                                            seleccionadas
+                                                .has(numero)
+                                        ) {
+                                            seleccionadas
+                                                .delete(numero);
+                                        }
+                                        else {
+                                            seleccionadas
+                                                .add(numero);
+                                        }
+
+                                        sincronizar(true);
+                                    }
+                                );
+                            }
+                        );
+
+                        botonTodas?.addEventListener(
+                            'click',
+                            function () {
+
+                                seleccionadas.clear();
+
+                                botones.forEach(
+                                    function (boton) {
+
+                                        const numero =
+                                            numeroCavidad(
+                                                boton.dataset
+                                                    .configCavityNumber
+                                            );
+
+                                        if (numero > 0) {
+                                            seleccionadas
+                                                .add(numero);
+                                        }
+                                    }
+                                );
+
+                                sincronizar(true);
+                            }
+                        );
+
+                        botonLimpiar?.addEventListener(
+                            'click',
+                            function () {
+
+                                seleccionadas.clear();
+                                sincronizar(true);
+                            }
+                        );
+
+                        sincronizar(false);
+                    });
+            }
+        );
+    </script>
+}

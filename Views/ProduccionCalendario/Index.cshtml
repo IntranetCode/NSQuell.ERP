@@ -1,0 +1,2438 @@
+﻿@model ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm
+@using ERP.NSQuell.Models
+@using Microsoft.AspNetCore.Routing
+@using System.Collections.Generic
+@using System.Linq
+@using System.Globalization
+
+@functions {
+    public static string Pct(double value)
+    {
+        return value.ToString("0.####", CultureInfo.InvariantCulture);
+    }
+
+    public static string ClaseVista(string vistaActual, string vista)
+    {
+        return string.Equals(vistaActual, vista, StringComparison.OrdinalIgnoreCase)
+            ? "btn btn-primary fw-bold"
+            : "btn btn-outline-primary fw-bold";
+    }
+
+    public static string BadgeProduccion(int? estatusProduccionId)
+    {
+        return estatusProduccionId switch
+        {
+            1 => "badge bg-secondary",
+            2 => "badge bg-info text-dark",
+            3 => "badge bg-warning text-dark",
+            4 => "badge bg-danger",
+            5 => "badge bg-primary",
+            6 => "badge bg-success",
+            9 => "badge bg-dark",
+            99 => "badge bg-secondary",
+            _ => "badge bg-light text-dark border"
+        };
+    }
+
+    public static string TextoProduccion(int? estatusProduccionId, string? estatusProduccionNombre)
+    {
+        if (!string.IsNullOrWhiteSpace(estatusProduccionNombre))
+            return estatusProduccionNombre;
+
+        return estatusProduccionId switch
+        {
+            1 => "Pendiente",
+            2 => "En preparación",
+            3 => "En producción",
+            4 => "Pausado",
+            5 => "Terminado parcial",
+            6 => "Terminado",
+            9 => "Cerrado",
+            99 => "Cancelado",
+            _ => "Sin ejecución"
+        };
+    }
+
+    public static string TextoPeriodoAnterior(ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm model)
+    {
+        if (model.EsVistaDia) return "Día anterior";
+        if (model.EsVistaMes) return "Mes anterior";
+        if (model.EsVistaRango) return "Rango anterior";
+        return "Semana anterior";
+    }
+
+    public static string TextoPeriodoSiguiente(ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm model)
+    {
+        if (model.EsVistaDia) return "Día siguiente";
+        if (model.EsVistaMes) return "Mes siguiente";
+        if (model.EsVistaRango) return "Rango siguiente";
+        return "Semana siguiente";
+    }
+}
+
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Calendario Operativo de Producción";
+
+    var cultura = new CultureInfo("es-MX");
+    var inicioPeriodo = Model.InicioPeriodo;
+    var finPeriodo = Model.FinPeriodo;
+
+    if (finPeriodo <= inicioPeriodo)
+    {
+        finPeriodo = inicioPeriodo.AddDays(7);
+    }
+
+    var totalMinutos = Math.Max(1, (finPeriodo - inicioPeriodo).TotalMinutes);
+    var totalDias = Math.Max(1, Model.TotalDiasPeriodo);
+    var totalHorasPeriodo = Math.Max(24, totalDias * 24);
+    var vistaActual = (Model.VistaNormalizada ?? "semana").Trim().ToLowerInvariant();
+    var mostrarReglaHoras = vistaActual == "dia"
+        || vistaActual == "semana"
+        || (vistaActual == "rango" && totalDias <= 7);
+    var fechaBaseFiltros = Model.Ahora.Date;
+
+    var ahoraVisible = Model.Ahora >= inicioPeriodo && Model.Ahora < finPeriodo;
+    var ahoraLeft = ahoraVisible
+        ? (Model.Ahora - inicioPeriodo).TotalMinutes / totalMinutos * 100
+        : 0;
+
+    var periodoAnterior = Model.PeriodoAnterior;
+    var periodoSiguiente = Model.PeriodoSiguiente;
+
+    var rangoInicioVisible = Model.RangoInicio.HasValue
+        ? Model.RangoInicio.Value.ToString("yyyy-MM-dd")
+        : Model.InicioPeriodo.ToString("yyyy-MM-dd");
+
+    var rangoFinVisible = Model.RangoFin.HasValue
+        ? Model.RangoFin.Value.ToString("yyyy-MM-dd")
+        : Model.FinPeriodo.AddDays(-1).ToString("yyyy-MM-dd");
+
+    var operativaPorPrograma =
+        ViewBag.OperativaPorPrograma as Dictionary<int, AgendaOperativaItemVm>
+        ?? new Dictionary<int, AgendaOperativaItemVm>();
+
+    var resumenOperativo =
+        ViewBag.ResumenOperativo as AgendaOperativaResumenVm
+        ?? new AgendaOperativaResumenVm();
+
+    var fechaConsultaOperativa =
+        ViewBag.FechaConsultaOperativa is DateTime fechaConsulta
+            ? fechaConsulta
+            : Model.Ahora;
+
+    var returnUrlActual = $"{Context.Request.Path}{Context.Request.QueryString}";
+
+    bool EsAccionCalidad(AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null) return false;
+
+        if (string.Equals(
+            accion.Controlador,
+            "Calidad",
+            StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.Equals(
+            accion.AreaResponsable,
+            AgendaOperativaArea.Calidad,
+            StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return accion.Clave == AgendaOperativaPasoClave.Calidad
+            || accion.Clave == AgendaOperativaPasoClave.PrimerasPiezas
+            || accion.Clave == AgendaOperativaPasoClave.CalidadFinal;
+    }
+
+    string ClasePrioridad(string? prioridad)
+    {
+        return (prioridad ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            AgendaOperativaPrioridad.Critica => "operativa-prioridad-critica",
+            AgendaOperativaPrioridad.Alta => "operativa-prioridad-alta",
+            AgendaOperativaPrioridad.Media => "operativa-prioridad-media",
+            _ => "operativa-prioridad-normal"
+        };
+    }
+
+    string ClaseEstadoOperativo(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            AgendaOperativaEstadoGeneral.Produciendo => "estado-produciendo",
+            AgendaOperativaEstadoGeneral.Preparacion => "estado-preparacion",
+            AgendaOperativaEstadoGeneral.ListaParaSerie => "estado-listo",
+            AgendaOperativaEstadoGeneral.EsperandoCalidad => "estado-calidad",
+            AgendaOperativaEstadoGeneral.Reliberacion => "estado-reliberacion",
+            AgendaOperativaEstadoGeneral.Pausada => "estado-pausado",
+            AgendaOperativaEstadoGeneral.InterrumpidaUrgente => "estado-pausado",
+            AgendaOperativaEstadoGeneral.Bloqueada => "estado-bloqueado",
+            AgendaOperativaEstadoGeneral.MaquinaLiberada => "estado-liberado",
+            AgendaOperativaEstadoGeneral.Terminada => "estado-terminado",
+            _ => "estado-programado"
+        };
+    }
+
+    string IconoEstadoOperativo(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            AgendaOperativaEstadoGeneral.Produciendo => "fa-gears",
+            AgendaOperativaEstadoGeneral.Preparacion => "fa-screwdriver-wrench",
+            AgendaOperativaEstadoGeneral.ListaParaSerie => "fa-circle-play",
+            AgendaOperativaEstadoGeneral.EsperandoCalidad => "fa-shield-halved",
+            AgendaOperativaEstadoGeneral.Reliberacion => "fa-arrows-rotate",
+            AgendaOperativaEstadoGeneral.Pausada => "fa-circle-pause",
+            AgendaOperativaEstadoGeneral.InterrumpidaUrgente => "fa-bolt",
+            AgendaOperativaEstadoGeneral.Bloqueada => "fa-lock",
+            AgendaOperativaEstadoGeneral.MaquinaLiberada => "fa-lock-open",
+            AgendaOperativaEstadoGeneral.Terminada => "fa-circle-check",
+            _ => "fa-clock"
+        };
+    }
+
+    string TextoFecha(DateTime? fecha)
+    {
+        return fecha.HasValue
+            ? fecha.Value.ToString("dd/MM/yyyy HH:mm")
+            : "—";
+    }
+
+    string TextoRetraso(int minutos)
+    {
+        if (minutos <= 0) return "En tiempo";
+        if (minutos < 60) return $"{minutos} min";
+
+        var horas = minutos / 60;
+        var mins = minutos % 60;
+
+        if (horas < 24)
+            return mins == 0 ? $"{horas} h" : $"{horas} h {mins} min";
+
+        var dias = horas / 24;
+        var horasRestantes = horas % 24;
+
+        return horasRestantes == 0
+            ? $"{dias} d"
+            : $"{dias} d {horasRestantes} h";
+    }
+
+    string UrlDetalle(AgendaOperativaItemVm item)
+    {
+        var returnUrl = returnUrlActual;
+
+        if (item.EjecucionProduccionID.HasValue)
+        {
+            return Url.Action(
+                "Detalle",
+                "Produccion",
+                new
+                {
+                    id = item.EjecucionProduccionID.Value,
+                    returnUrl
+                }) ?? "#";
+        }
+
+        return Url.Action(
+            "Index",
+            "ProduccionCalendario",
+            new
+            {
+                vista = Model.VistaNormalizada,
+                fecha = Model.FechaReferencia?.ToString("yyyy-MM-dd"),
+                rangoInicio = Model.RangoInicio?.ToString("yyyy-MM-dd"),
+                rangoFin = Model.RangoFin?.ToString("yyyy-MM-dd")
+            }) ?? "#";
+    }
+
+    string UrlAccion(AgendaOperativaItemVm item, AgendaOperativaAccionVm? accion)
+    {
+        if (accion == null || EsAccionCalidad(accion))
+            return UrlDetalle(item);
+
+        var returnUrl = returnUrlActual;
+
+        if (string.Equals(
+            accion.Clave,
+            "INICIAR_PREPARACION",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return Url.Action(
+                "Index",
+                "Produccion",
+                new
+                {
+                    prepararProgramaId = item.ProgramaProduccionID,
+                    returnUrl
+                }) ?? "#";
+        }
+
+        if (string.Equals(
+            accion.Clave,
+            "LHRH_INCONSISTENTE",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return Url.Action(
+                "Index",
+                "PlaneacionCalendarioMaquinas",
+                new
+                {
+                    programaProduccionId = item.ProgramaProduccionID,
+                    returnUrl
+                }) ?? "#";
+        }
+
+        if (string.IsNullOrWhiteSpace(accion.Controlador)
+            || string.IsNullOrWhiteSpace(accion.Accion))
+            return UrlDetalle(item);
+
+        var valores = new RouteValueDictionary();
+
+        foreach (var parametro in accion.ParametrosRuta)
+        {
+            if (!string.IsNullOrWhiteSpace(parametro.Value))
+                valores[parametro.Key] = parametro.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(accion.ParametroId)
+            && accion.IdDestino.HasValue)
+        {
+            valores[accion.ParametroId] = accion.IdDestino.Value;
+        }
+        else if (string.Equals(
+            accion.Controlador,
+            "ProduccionPersonal",
+            StringComparison.OrdinalIgnoreCase)
+            && accion.IdDestino.HasValue)
+        {
+            valores["programaProduccionId"] = accion.IdDestino.Value;
+        }
+        else if (string.Equals(
+            accion.Controlador,
+            "PlaneacionCalendarioMaquinas",
+            StringComparison.OrdinalIgnoreCase)
+            && accion.IdDestino.HasValue)
+        {
+            valores["programaProduccionId"] = accion.IdDestino.Value;
+        }
+
+        valores["returnUrl"] = returnUrl;
+
+        return Url.Action(
+            accion.Accion,
+            accion.Controlador,
+            valores) ?? UrlDetalle(item);
+    }
+
+    Func<DateTime, string> UrlPeriodo = fecha =>
+    {
+        if (Model.EsVistaRango)
+        {
+            var finRango = fecha.AddDays(totalDias - 1).ToString("yyyy-MM-dd");
+
+            return Url.Action(
+                "Index",
+                "ProduccionCalendario",
+                new
+                {
+                    vista = "rango",
+                    rangoInicio = fecha.ToString("yyyy-MM-dd"),
+                    rangoFin = finRango
+                }) ?? "#";
+        }
+
+        return Url.Action(
+            "Index",
+            "ProduccionCalendario",
+            new
+            {
+                vista = Model.VistaNormalizada,
+                fecha = fecha.ToString("yyyy-MM-dd")
+            }) ?? "#";
+    };
+}
+
+@section Styles {
+    @* Reutilizamos el mismo CSS del calendario de Planeación para conservar exactamente la base visual. *@
+    <link rel="stylesheet"
+          href="~/css/PlaneacionCalendarioMaquinas/index.css"
+          asp-append-version="true" />
+
+    <style>
+        .production-calendar-readonly .block {
+            cursor: pointer !important;
+        }
+
+            .production-calendar-readonly .block.no-drag {
+                opacity: 1 !important;
+            }
+
+        .production-calendar-readonly .track {
+            cursor: default !important;
+        }
+
+        .production-calendar-readonly .block {
+            user-select: none;
+        }
+
+        .operativa-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .operativa-summary-card {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 16px;
+            background: var(--bs-body-bg);
+            padding: 14px 16px;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, .05);
+        }
+
+            .operativa-summary-card small {
+                display: block;
+                color: var(--bs-secondary-color);
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                margin-bottom: 4px;
+                font-size: .68rem;
+            }
+
+            .operativa-summary-card strong {
+                display: block;
+                font-size: 1.45rem;
+                line-height: 1;
+            }
+
+        .operational-attention-indicator {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            z-index: 8;
+            width: 19px;
+            height: 19px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #dc3545;
+            color: #fff;
+            font-size: .62rem;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .22);
+        }
+
+        .operational-blocked-indicator {
+            position: absolute;
+            top: 4px;
+            right: 27px;
+            z-index: 8;
+            width: 19px;
+            height: 19px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #111827;
+            color: #fff;
+            font-size: .60rem;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .22);
+        }
+
+        .operativa-modal-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: .76rem;
+            font-weight: 900;
+            border: 1px solid transparent;
+        }
+
+        .estado-programado {
+            background: #f1f5f9;
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        .estado-preparacion {
+            background: #e0f2fe;
+            color: #075985;
+            border-color: #7dd3fc;
+        }
+
+        .estado-listo {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #86efac;
+        }
+
+        .estado-calidad {
+            background: #fef3c7;
+            color: #92400e;
+            border-color: #fde68a;
+        }
+
+        .estado-reliberacion {
+            background: #f3e8ff;
+            color: #6b21a8;
+            border-color: #d8b4fe;
+        }
+
+        .estado-produciendo {
+            background: #ffedd5;
+            color: #9a3412;
+            border-color: #fdba74;
+        }
+
+        .estado-pausado,
+        .estado-bloqueado {
+            background: #fee2e2;
+            color: #991b1b;
+            border-color: #fca5a5;
+        }
+
+        .estado-liberado,
+        .estado-terminado {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #86efac;
+        }
+
+        .operativa-action-card {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 18px;
+            padding: 18px;
+            background: var(--bs-body-bg);
+            position: relative;
+            overflow: hidden;
+        }
+
+            .operativa-action-card::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 5px;
+                background: #2563eb;
+            }
+
+        .operativa-prioridad-critica::before {
+            background: #dc2626;
+        }
+
+        .operativa-prioridad-alta::before {
+            background: #ea580c;
+        }
+
+        .operativa-prioridad-media::before {
+            background: #d97706;
+        }
+
+        .operativa-prioridad-normal::before {
+            background: #2563eb;
+        }
+
+        .operativa-action-label {
+            color: var(--bs-secondary-color);
+            text-transform: uppercase;
+            font-weight: 900;
+            letter-spacing: .06em;
+            font-size: .69rem;
+            margin-bottom: 8px;
+        }
+
+        .operativa-action-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 900;
+            font-size: 1.02rem;
+            margin-bottom: 6px;
+        }
+
+        .operativa-action-title-icon {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            border-radius: 12px;
+            background: rgba(37, 99, 235, .10);
+            color: #2563eb;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .operativa-action-description {
+            color: var(--bs-secondary-color);
+            line-height: 1.45;
+            margin-bottom: 12px;
+        }
+
+        .operativa-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .operativa-meta-item {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
+            padding: 7px 9px;
+            min-width: 120px;
+            background: var(--bs-tertiary-bg);
+        }
+
+            .operativa-meta-item small {
+                display: block;
+                color: var(--bs-secondary-color);
+                font-weight: 800;
+                font-size: .64rem;
+                text-transform: uppercase;
+                margin-bottom: 2px;
+            }
+
+            .operativa-meta-item strong {
+                display: block;
+                font-size: .82rem;
+            }
+
+        .operativa-next-card {
+            border: 1px dashed var(--bs-border-color);
+            border-radius: 16px;
+            padding: 14px 16px;
+            background: var(--bs-tertiary-bg);
+        }
+
+        .operativa-quality-wait {
+            border: 1px solid #fde68a;
+            background: #fffbeb;
+            color: #92400e;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-weight: 800;
+        }
+
+        .operativa-no-action {
+            border: 1px solid #bbf7d0;
+            background: #f0fdf4;
+            color: #166534;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-weight: 800;
+        }
+
+        .operativa-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .operativa-detail-card {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 13px;
+            padding: 11px 12px;
+            background: var(--bs-tertiary-bg);
+            min-width: 0;
+        }
+
+            .operativa-detail-card small {
+                display: block;
+                color: var(--bs-secondary-color);
+                font-size: .67rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                margin-bottom: 3px;
+            }
+
+            .operativa-detail-card strong {
+                display: block;
+                overflow-wrap: anywhere;
+            }
+
+        .operativa-progress-track {
+            width: 100%;
+            height: 9px;
+            border-radius: 999px;
+            background: var(--bs-secondary-bg);
+            overflow: hidden;
+        }
+
+        .operativa-progress-bar {
+            height: 100%;
+            border-radius: inherit;
+            background: #2563eb;
+        }
+
+        .calendar-status.operational {
+            border-color: rgba(37, 99, 235, .28);
+            background: rgba(37, 99, 235, .06);
+        }
+
+        .modal-operativa .modal-dialog {
+            max-width: 980px;
+        }
+
+        html[data-bs-theme="dark"] .operativa-quality-wait,
+        body.dark-mode .operativa-quality-wait {
+            background: rgba(146, 64, 14, .18);
+            border-color: rgba(253, 230, 138, .32);
+            color: #fde68a;
+        }
+
+        html[data-bs-theme="dark"] .operativa-no-action,
+        body.dark-mode .operativa-no-action {
+            background: rgba(22, 101, 52, .18);
+            border-color: rgba(134, 239, 172, .28);
+            color: #bbf7d0;
+        }
+
+        html[data-bs-theme="dark"] .estado-programado,
+        body.dark-mode .estado-programado {
+            background: rgba(71, 85, 105, .22);
+            color: #e2e8f0;
+            border-color: #475569;
+        }
+
+        @@media (max-width: 992px) {
+            .operativa-summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .operativa-detail-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @@media (max-width: 576px) {
+            .operativa-summary,
+            .operativa-detail-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+
+        /* =========================================================
+                                   MODAL OPERATIVO COMPACTO
+                                   Aprovecha el ancho para evitar scroll vertical en escritorio.
+                                   ========================================================= */
+        .modal-operativa .modal-dialog {
+            width: calc(100vw - 28px);
+            max-width: 1480px;
+            margin: 14px auto;
+        }
+
+        .modal-operativa .modal-content {
+            max-height: calc(100vh - 28px);
+            overflow: hidden;
+        }
+
+        .modal-operativa .modal-header {
+            position: relative;
+            padding: 12px 18px 10px;
+            background: var(--bs-tertiary-bg);
+        }
+
+        .modal-operativa .modal-body {
+            padding: 9px 18px 14px;
+            overflow: visible;
+        }
+
+        .modal-operativa .btn-close {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            z-index: 5;
+        }
+
+        .operativa-modal-head {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(225px, .78fr) minmax(0, 2.25fr) auto;
+            align-items: center;
+            gap: 16px;
+            padding-right: 42px;
+        }
+
+        .operativa-of-kicker {
+            font-size: .66rem;
+            font-weight: 900;
+            letter-spacing: .055em;
+            text-transform: uppercase;
+            color: var(--bs-secondary-color);
+            margin-bottom: 1px;
+        }
+
+        .operativa-of-number {
+            margin: 0;
+            font-size: clamp(1.55rem, 2.1vw, 2.15rem);
+            line-height: 1;
+            font-weight: 950;
+            color: var(--bs-emphasis-color);
+        }
+
+        .operativa-of-part {
+            margin-top: 5px;
+            color: var(--bs-secondary-color);
+            font-size: .82rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 330px;
+        }
+
+        .operativa-head-facts {
+            display: grid;
+            grid-template-columns: .75fr .75fr 1.35fr 1fr 1fr .8fr;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .operativa-head-fact {
+            min-width: 0;
+            border-left: 1px solid var(--bs-border-color);
+            padding: 3px 8px;
+        }
+
+            .operativa-head-fact small {
+                display: block;
+                margin-bottom: 1px;
+                color: var(--bs-secondary-color);
+                font-size: .58rem;
+                font-weight: 900;
+                letter-spacing: .035em;
+                text-transform: uppercase;
+            }
+
+            .operativa-head-fact strong {
+                display: block;
+                min-width: 0;
+                font-size: .78rem;
+                line-height: 1.15;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+        .operativa-head-state {
+            min-width: 145px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 5px;
+        }
+
+            .operativa-head-state .operativa-modal-state {
+                padding: 5px 9px;
+                font-size: .7rem;
+            }
+
+        .operativa-head-link {
+            font-size: .68rem;
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        .operativa-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
+            padding: 7px 10px;
+            margin-bottom: 7px;
+            background: var(--bs-tertiary-bg);
+            font-size: .78rem;
+            line-height: 1.25;
+        }
+
+            .operativa-notice > div {
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                overflow: hidden;
+            }
+
+        .operativa-notice-danger {
+            border-color: rgba(220, 38, 38, .35);
+            background: rgba(220, 38, 38, .07);
+            color: var(--bs-danger-text-emphasis);
+        }
+
+        .operativa-status-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 6px;
+            margin-bottom: 7px;
+        }
+
+        .operativa-status-item {
+            min-width: 0;
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
+            padding: 7px 9px;
+            background: var(--bs-body-bg);
+        }
+
+            .operativa-status-item small {
+                display: block;
+                color: var(--bs-secondary-color);
+                font-size: .59rem;
+                line-height: 1;
+                font-weight: 900;
+                text-transform: uppercase;
+                margin-bottom: 4px;
+            }
+
+            .operativa-status-item strong,
+            .operativa-status-item .badge {
+                max-width: 100%;
+                font-size: .76rem;
+                line-height: 1.15;
+            }
+
+            .operativa-status-item strong {
+                display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+        .operativa-progress-compact {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
+            padding: 7px 10px;
+            margin-bottom: 8px;
+            background: var(--bs-tertiary-bg);
+        }
+
+        .operativa-progress-head {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: .74rem;
+        }
+
+            .operativa-progress-head span {
+                color: var(--bs-secondary-color);
+                font-weight: 900;
+                text-transform: uppercase;
+                font-size: .6rem;
+            }
+
+            .operativa-progress-head strong {
+                font-size: .78rem;
+            }
+
+            .operativa-progress-head b {
+                color: #2563eb;
+                font-size: .82rem;
+            }
+
+        .operativa-action-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr);
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .operativa-action-card,
+        .operativa-next-card {
+            padding: 10px 12px;
+            border-radius: 12px;
+        }
+
+        .operativa-action-card {
+            min-height: 0;
+        }
+
+        .operativa-action-label {
+            margin-bottom: 4px;
+            font-size: .6rem;
+        }
+
+        .operativa-action-title {
+            gap: 7px;
+            margin-bottom: 3px;
+            font-size: .9rem;
+            line-height: 1.15;
+        }
+
+        .operativa-action-title-icon {
+            width: 29px;
+            height: 29px;
+            flex: 0 0 29px;
+            border-radius: 8px;
+            font-size: .8rem;
+        }
+
+        .operativa-action-description {
+            margin-bottom: 5px;
+            font-size: .75rem;
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+        }
+
+        .operativa-meta {
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .operativa-meta-item {
+            min-width: 102px;
+            padding: 5px 7px;
+            border-radius: 8px;
+        }
+
+            .operativa-meta-item small {
+                margin-bottom: 1px;
+                font-size: .56rem;
+            }
+
+            .operativa-meta-item strong {
+                font-size: .71rem;
+                line-height: 1.1;
+            }
+
+        .operativa-action-buttons-compact {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 7px;
+        }
+
+            .operativa-action-buttons-compact .btn {
+                padding: .33rem .62rem;
+                font-size: .72rem;
+            }
+
+        .operativa-next-card .small.text-muted {
+            line-height: 1.25;
+            margin-bottom: 6px !important;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+        }
+
+        .operativa-quality-wait,
+        .operativa-no-action {
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-size: .78rem;
+            line-height: 1.25;
+        }
+
+            .operativa-quality-wait .fs-5 {
+                font-size: .95rem !important;
+            }
+
+        @@media (max-width: 1180px) {
+            .operativa-modal-head {
+                grid-template-columns: minmax(205px, .9fr) minmax(0, 2fr) auto;
+            }
+
+            .operativa-head-facts {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .operativa-status-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @@media (max-height: 760px) and (min-width: 992px) {
+            .modal-operativa .modal-dialog {
+                margin: 7px auto;
+            }
+
+            .modal-operativa .modal-content {
+                max-height: calc(100vh - 14px);
+            }
+
+            .modal-operativa .modal-header {
+                padding-top: 8px;
+                padding-bottom: 7px;
+            }
+
+            .modal-operativa .modal-body {
+                padding-top: 6px;
+                padding-bottom: 8px;
+            }
+
+            .operativa-of-number {
+                font-size: 1.55rem;
+            }
+
+            .operativa-head-fact {
+                padding-top: 1px;
+                padding-bottom: 1px;
+            }
+
+            .operativa-status-item {
+                padding-top: 5px;
+                padding-bottom: 5px;
+            }
+
+            .operativa-action-card,
+            .operativa-next-card,
+            .operativa-quality-wait,
+            .operativa-no-action {
+                padding-top: 8px;
+                padding-bottom: 8px;
+            }
+
+                .operativa-action-description,
+                .operativa-next-card .small.text-muted,
+                .operativa-notice > div {
+                    -webkit-line-clamp: 1;
+                }
+        }
+
+        @@media (max-width: 991.98px) {
+            .modal-operativa .modal-content {
+                max-height: calc(100vh - 18px);
+                overflow-y: auto;
+            }
+
+            .operativa-modal-head {
+                grid-template-columns: 1fr;
+                gap: 9px;
+            }
+
+            .operativa-head-state {
+                align-items: flex-start;
+            }
+
+            .operativa-action-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* =========================================================
+                           TIMELINE OPERATIVO V3
+                           Conserva la geometría del calendario de Planeación.
+                           ========================================================= */
+        .production-calendar-readonly .timeline-scroll {
+            overflow-x: auto;
+            overflow-y: visible;
+        }
+
+        .timeline-header .days .nsq-hour-ruler-v31 {
+            grid-column: 1 / -1;
+            display: grid;
+            background: #eef4fb;
+            border-top: 1px solid #d7e1ee;
+            overflow: hidden;
+        }
+
+        .timeline-header .days .nsq-hour-cell-v31 {
+            min-width: 0;
+            padding: 2px 0;
+            border-left: 1px solid #d7e1ee;
+            text-align: center;
+            color: #344054;
+            font-size: .48rem;
+            font-weight: 900;
+            line-height: 1;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+            .timeline-header .days .nsq-hour-cell-v31.day-start {
+                border-left: 2px solid #7d8da6;
+                color: #004aad;
+                background: #e4efff;
+            }
+
+            .timeline-header .days .nsq-hour-cell-v31.is-current-hour {
+                color: #b91c1c !important;
+                background: #fee2e2 !important;
+                box-shadow: inset 0 -3px 0 #dc2626;
+                font-weight: 950;
+            }
+
+        .production-calendar-readonly .day.is-today-live {
+            background: rgba(220, 38, 38, .06);
+            box-shadow: inset 0 -2px 0 #dc2626;
+        }
+
+            .production-calendar-readonly .day.is-today-live strong {
+                color: #b91c1c;
+            }
+
+        .production-calendar-readonly .calendar-live-clock {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 8px;
+            padding: 2px 7px;
+            border: 1px solid rgba(220, 38, 38, .24);
+            border-radius: 999px;
+            background: rgba(220, 38, 38, .06);
+            color: #b91c1c;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .production-calendar-readonly.compact-mode .machine-info,
+        .production-calendar-readonly.compact-mode .track {
+            min-height: 44px !important;
+        }
+
+        .production-calendar-readonly.compact-mode .block {
+            height: 34px;
+            padding: 3px 6px;
+            font-size: .68rem;
+        }
+
+    </style>
+}
+
+<div class="page production-calendar-readonly vista-@vistaActual @(mostrarReglaHoras ? "calendar-with-hours" : "calendar-days-only")"
+     data-calendar-view="@vistaActual"
+     data-total-dias="@totalDias"
+     data-total-horas="@totalHorasPeriodo"
+     data-nsq-style="--dias-periodo:@totalDias;--horas-periodo:@totalHorasPeriodo;">
+
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="small fw-bold text-uppercase opacity-75 mb-2">
+                    Producción / Centro operativo
+                </div>
+
+                <h1>
+                    <i class="fa-solid fa-calendar-days me-2"></i>
+                    CALENDARIO OPERATIVO DE PRODUCCIÓN
+                </h1>
+
+                <p>
+                    Consulta la programación de las máquinas y selecciona una OF para ver qué actividad corresponde realizar ahora. Este calendario es de solo lectura y no permite mover ni reprogramar bloques.
+                </p>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="@Url.Action("Index", "Produccion")"
+                   class="btn btn-light fw-bold">
+                    <i class="fa-solid fa-arrow-left me-1"></i>
+                    Producción
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="metrics">
+        <div class="metric">
+            <span>Máquinas</span>
+            <strong>@Model.TotalMaquinas</strong>
+        </div>
+
+        <div class="metric">
+            <span>OF / programas visibles</span>
+            <strong>@Model.TotalBloques</strong>
+        </div>
+
+        <div class="metric">
+            <span>Trabajando ahora</span>
+            <strong>@Model.TrabajandoAhora</strong>
+        </div>
+    </section>
+
+    <section class="operativa-summary">
+        <div class="operativa-summary-card">
+            <small>Atención inmediata</small>
+            <strong class="text-danger">@resumenOperativo.AtencionInmediata</strong>
+        </div>
+
+        <div class="operativa-summary-card">
+            <small>Bloqueadas</small>
+            <strong>@resumenOperativo.Bloqueadas</strong>
+        </div>
+
+        <div class="operativa-summary-card">
+            <small>En preparación</small>
+            <strong>@resumenOperativo.EnPreparacion</strong>
+        </div>
+
+        <div class="operativa-summary-card">
+            <small>Produciendo</small>
+            <strong>@resumenOperativo.Produciendo</strong>
+        </div>
+    </section>
+
+    <section class="toolbar">
+        <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="@UrlPeriodo(periodoAnterior)"
+                   class="btn btn-outline-primary fw-bold">
+                    <i class="fa-solid fa-chevron-left"></i>
+                    @TextoPeriodoAnterior(Model)
+                </a>
+
+                <a asp-controller="ProduccionCalendario"
+                   asp-action="Index"
+                   asp-route-vista="@Model.VistaNormalizada"
+                   asp-route-fecha="@DateTime.Today.ToString("yyyy-MM-dd")"
+                   class="btn btn-primary fw-bold">
+                    Hoy
+                </a>
+
+                <a href="@UrlPeriodo(periodoSiguiente)"
+                   class="btn btn-outline-primary fw-bold">
+                    @TextoPeriodoSiguiente(Model)
+                    <i class="fa-solid fa-chevron-right"></i>
+                </a>
+            </div>
+
+            <div data-nsq-style-id="nsq-si-e581e86b44">
+                <label class="form-label fw-bold mb-1">
+                    Buscar máquina, OF, cliente, parte, operador o turno
+                </label>
+
+                <input id="calendarSearch"
+                       class="form-control"
+                       type="search"
+                       autocomplete="off"
+                       placeholder="Ej. 500-T, OF 24, GOLDE, operador, turno..." />
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap mt-3">
+            <a asp-controller="ProduccionCalendario"
+               asp-action="Index"
+               asp-route-vista="dia"
+               asp-route-fecha="@fechaBaseFiltros.ToString("yyyy-MM-dd")"
+               class="@ClaseVista(Model.VistaNormalizada, "dia")">
+                Día
+            </a>
+
+            <a asp-controller="ProduccionCalendario"
+               asp-action="Index"
+               asp-route-vista="semana"
+               asp-route-fecha="@fechaBaseFiltros.ToString("yyyy-MM-dd")"
+               class="@ClaseVista(Model.VistaNormalizada, "semana")">
+                Semana
+            </a>
+
+            <a asp-controller="ProduccionCalendario"
+               asp-action="Index"
+               asp-route-vista="mes"
+               asp-route-fecha="@fechaBaseFiltros.ToString("yyyy-MM-dd")"
+               class="@ClaseVista(Model.VistaNormalizada, "mes")">
+                Mes
+            </a>
+
+            <button type="button"
+                    id="btnMostrarRango"
+                    class="@ClaseVista(Model.VistaNormalizada, "rango")">
+                Rango
+            </button>
+        </div>
+
+        <form id="formRangoCalendario"
+              class="range-panel @(Model.EsVistaRango ? "active" : "")"
+              asp-controller="ProduccionCalendario"
+              asp-action="Index"
+              method="get">
+            <input type="hidden" name="vista" value="rango" />
+
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Fecha inicio</label>
+                    <input id="rangoInicio"
+                           name="rangoInicio"
+                           class="form-control"
+                           type="date"
+                           value="@rangoInicioVisible" />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Fecha fin</label>
+                    <input id="rangoFin"
+                           name="rangoFin"
+                           class="form-control"
+                           type="date"
+                           value="@rangoFinVisible" />
+                </div>
+
+                <div class="col-md-4">
+                    <button type="submit"
+                            class="btn btn-primary fw-bold w-100">
+                        Aplicar rango
+                    </button>
+                </div>
+
+                <div class="col-12">
+                    <small class="text-muted fw-bold">
+                        El rango no puede ser mayor a 31 días.
+                    </small>
+                </div>
+            </div>
+        </form>
+    </section>
+
+    @{
+        var errorCalendario = TempData["Error"] as string
+        ?? TempData["CalendarioError"] as string;
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorCalendario))
+    {
+        <div class="calendar-status error">
+            <i class="fa-solid fa-circle-exclamation me-1"></i>
+            @errorCalendario
+        </div>
+    }
+
+    <div id="calendarStatus" class="calendar-status operational">
+        <i class="fa-solid fa-circle-info me-1"></i>
+        Selecciona una OF. El modal mostrará la actividad actual, el responsable, el bloqueo si existe y el botón para continuar el flujo.
+        <span class="ms-2 text-muted">
+            Datos actualizados: @fechaConsultaOperativa.ToString("dd/MM/yyyy HH:mm")
+        </span>
+        <span class="calendar-live-clock" title="Hora local de este equipo">
+            <i class="fa-regular fa-clock"></i>
+            Ahora <span id="calendarLiveClock">--:--</span>
+        </span>
+    </div>
+
+    <section class="calendar-card" id="calendarKiosk">
+        <div class="calendar-card-header p-2 border-bottom d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <strong class="text-primary">
+                    @Model.TituloPeriodo
+                </strong>
+
+                <div class="small text-muted">
+                    Vista: @Model.TextoVista. El calendario es exclusivamente de consulta operativa; no permite arrastrar bloques ni modificar la programación.
+                </div>
+            </div>
+
+            <div class="calendar-actions">
+                <button type="button"
+                        id="btnCompactarCalendario"
+                        class="btn-calendar-action"
+                        title="Reduce textos y espacios para mostrar más máquinas">
+                    <i class="fa-solid fa-compress"></i>
+                    <span>Compactar</span>
+                </button>
+
+                <button type="button"
+                        id="btnPantallaCompletaCalendario"
+                        class="btn-calendar-action"
+                        title="Abrir calendario en modo kiosco a pantalla completa">
+                    <i class="fa-solid fa-expand"></i>
+                    <span class="fullscreen-label">Pantalla completa</span>
+                </button>
+
+                <span class="fullscreen-help">Esc para salir</span>
+                <span id="fitScaleLabel" class="fit-scale-label"></span>
+            </div>
+
+            <div class="legend">
+                <span><i data-nsq-style-id="nsq-si-93d879e3cf"></i>Programado</span>
+                <span><i data-nsq-style-id="nsq-si-1c4b44484e"></i>Produciendo / en línea</span>
+                <span><i data-nsq-style-id="nsq-si-31a65355ef"></i>Paro</span>
+                <span><i data-nsq-style-id="nsq-si-b64b5184b1"></i>Calidad</span>
+                <span><i data-nsq-style-id="nsq-si-147df738d9"></i>Reliberación</span>
+                <span><i data-nsq-style-id="nsq-si-31d8aa2278"></i>Ya producido</span>
+                <span><i data-nsq-style-id="nsq-si-e71927bd00"></i>Cerrado / cancelado</span>
+            </div>
+        </div>
+
+        <div class="timeline-scroll">
+            <div class="timeline">
+                <div class="timeline-header">
+                    <div class="machine-head">MÁQUINA / BLOQUES</div>
+
+                    <div class="days">
+                        @for (var day = 0; day < totalDias; day++)
+                        {
+                            var fecha = inicioPeriodo.AddDays(day);
+                            <div class="day" data-calendar-date="@fecha.ToString("yyyy-MM-dd")">
+                                <strong>@fecha.ToString("ddd", cultura).ToUpperInvariant()</strong>
+                                <span>@fecha.ToString("dd/MM")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @foreach (var maquina in Model.Maquinas)
+                {
+                    var rowHeight = Math.Max(56, 8 + maquina.Carriles * 48);
+
+                    var searchText = string.Join(
+                    " ",
+                    maquina.Codigo,
+                    maquina.Nombre,
+                    string.Join(
+                    " ",
+                    maquina.Bloques.Select(x =>
+                    $"{x.OFTexto} {x.ClienteNombre} {x.ParteTexto} {x.Descripcion} {x.MoldeCodigo} {x.MaquinaSugeridaTexto} {x.EstadoSemaforoTexto} {x.OperadorProgramadoNombre} {x.OperadorRealNombre} {x.TurnoProgramadoNombre} {x.EstatusProduccionNombre} {x.EstadoCalidad}")))
+                    .ToLowerInvariant();
+
+                    <div class="machine-row calendar-machine-row"
+                         data-search="@searchText">
+
+                        <div class="machine-info"
+                             data-nsq-style="height:@(rowHeight)px">
+                            <div class="machine-inline"
+                                 title="@maquina.Codigo - @maquina.Nombre">
+                                <span class="machine-code">@maquina.Codigo</span>
+                                <span class="machine-name">@maquina.Nombre</span>
+                                <span class="machine-count">@maquina.Bloques.Count</span>
+                            </div>
+                        </div>
+
+                        <div class="track"
+                             data-maquina-id="@maquina.MaquinaID"
+                             data-nsq-style="height:@(rowHeight)px">
+
+                            <div class="now-line d-none"
+                                 data-now-line-operativo
+                                 title="Hora actual"></div>
+
+                            @if (!maquina.Bloques.Any())
+                            {
+                                <div class="empty-row">
+                                    Sin OF programada durante este periodo.
+                                </div>
+                            }
+
+                            @foreach (var bloque in maquina.Bloques)
+                            {
+                                var inicioVisualBloque = bloque.InicioVisual;
+                                var finVisualBloque = bloque.FinVisual;
+                                var visibleInicio = inicioVisualBloque < inicioPeriodo ? inicioPeriodo : inicioVisualBloque;
+                                var visibleFin = finVisualBloque > finPeriodo ? finPeriodo : finVisualBloque;
+
+                                var left =
+                                (visibleInicio - inicioPeriodo).TotalMinutes
+                                / totalMinutos * 100;
+
+                                var width = Math.Max(
+                                .35,
+                                (visibleFin - visibleInicio).TotalMinutes
+                                / totalMinutos * 100);
+
+                                var top = 8 + bloque.Carril * 48;
+
+                                operativaPorPrograma.TryGetValue(
+                                bloque.ProgramaProduccionID,
+                                out var operativa);
+
+                                var textoOperador = bloque.TextoOperadorVisible;
+                                var origenOperador = bloque.TieneOperadorReal
+                                ? "Real"
+                                : "Planeado";
+
+                                var textoTurno = bloque.TextoTurnoProgramado;
+                                var textoCalidad = bloque.EstadoCalidadTexto;
+
+                                var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
+                                ? Math.Max(
+                                0,
+                                (int)Math.Floor(
+                                (Model.Ahora - bloque.Inicio).TotalMinutes))
+                                : 0;
+
+                                var mostrarAlertaNoInicio =
+                                bloque.EstatusID == 1
+                                && minutosAtrasoInicio >= 10
+                                && bloque.EstatusProduccionID != 3;
+
+                                var textoAlertaNoInicio = mostrarAlertaNoInicio
+                                ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
+                                : string.Empty;
+
+                                var claseColorBloque = bloque.ClaseSemaforoCalendario;
+
+                                if (operativa != null)
+                                {
+                                    if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Pausada
+                                    || operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.InterrumpidaUrgente
+                                    || operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Bloqueada)
+                                    {
+                                        claseColorBloque = "bloque-paro";
+                                    }
+                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Reliberacion)
+                                    {
+                                        claseColorBloque = "bloque-reliberacion";
+                                    }
+                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.EsperandoCalidad)
+                                    {
+                                        claseColorBloque = "bloque-calidad";
+                                    }
+                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Produciendo)
+                                    {
+                                        claseColorBloque = "bloque-produciendo";
+                                    }
+                                    else if (operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.MaquinaLiberada
+                                    || operativa.EstadoGeneral == AgendaOperativaEstadoGeneral.Terminada)
+                                    {
+                                        claseColorBloque = "bloque-producido";
+                                    }
+                                }
+                                else
+                                {
+                                    var estadoCalidadNormalizado =
+                                    (bloque.EstadoCalidad ?? string.Empty)
+                                    .Trim()
+                                    .ToUpperInvariant();
+
+                                    if (bloque.EstatusProduccionID == 4)
+                                    {
+                                        claseColorBloque = "bloque-paro";
+                                    }
+                                    else if (bloque.RequiereReliberacion
+                                    || bloque.ConfiguracionCalidadInvalidada)
+                                    {
+                                        claseColorBloque = "bloque-reliberacion";
+                                    }
+                                    else if (bloque.InspeccionCalidadID.HasValue
+                                    && !string.IsNullOrWhiteSpace(estadoCalidadNormalizado)
+                                    && estadoCalidadNormalizado != "CERRADA")
+                                    {
+                                        claseColorBloque = "bloque-calidad";
+                                    }
+                                    else if (bloque.EstatusProduccionID == 3)
+                                    {
+                                        claseColorBloque = "bloque-produciendo";
+                                    }
+                                }
+
+                                var estadoOperativoTexto = operativa?.EstadoGeneralTexto
+                                ?? bloque.EstadoSemaforoTexto;
+
+                                <button type="button"
+                                        class="block @claseColorBloque no-drag @(mostrarAlertaNoInicio ? "has-start-delay" : "")"
+                                        draggable="false"
+                                        data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
+                                        data-programa-id="@bloque.ProgramaProduccionID"
+                                        data-maquina-id="@bloque.MaquinaID"
+                                        data-inicio-oficial="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-fin-oficial="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-inicio-proyectado="@(bloque.InicioProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                        data-fin-proyectado="@(bloque.FinProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                        title="@bloque.OFTexto · @bloque.ParteTexto · @estadoOperativoTexto · @bloque.InicioVisual.ToString("dd/MM HH:mm") - @bloque.FinVisual.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad">
+
+                                    @if (mostrarAlertaNoInicio)
+                                    {
+                                        <span class="start-delay-alert"
+                                              title="@textoAlertaNoInicio">
+                                            <i class="fa-solid fa-bell"></i>
+                                        </span>
+                                    }
+
+                                    @if (operativa?.EstaBloqueada == true)
+                                    {
+                                        <span class="operational-blocked-indicator"
+                                              title="@(operativa.MotivoBloqueo ?? "Flujo bloqueado")">
+                                            <i class="fa-solid fa-lock"></i>
+                                        </span>
+                                    }
+
+                                    @if (operativa?.RequiereAtencionInmediata == true)
+                                    {
+                                        <span class="operational-attention-indicator"
+                                              title="Requiere atención inmediata">
+                                            <i class="fa-solid fa-exclamation"></i>
+                                        </span>
+                                    }
+
+                                    <strong>
+                                        @bloque.OFTexto · @bloque.ParteTexto
+                                    </strong>
+
+                                    <span>
+                                        @(bloque.ClienteNombre ?? "Sin cliente") ·
+                                        @estadoOperativoTexto
+                                    </span>
+
+                                    <span class="operator-line">
+                                        <i class="fa-solid fa-user-gear"></i>
+                                        @origenOperador: @textoOperador · @textoTurno
+                                    </span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+</div>
+
+@foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
+{
+    operativaPorPrograma.TryGetValue(
+        bloque.ProgramaProduccionID,
+        out var operativa);
+
+    var accionActual = operativa?.AccionActual;
+    var siguienteAccion = operativa?.SiguienteAccion;
+    var accionActualEsCalidad = EsAccionCalidad(accionActual);
+
+    var textoOperadorModal = bloque.TextoOperadorProgramado;
+    var textoOperadorRealModal = bloque.TextoOperadorReal;
+    var textoAuxiliarModal = bloque.TextoOperadorAuxiliarProgramado;
+    var textoTurnoModal = bloque.TextoTurnoProgramado;
+    var textoCalidadModal = bloque.EstadoCalidadTexto;
+
+    var textoEstatusProduccion = TextoProduccion(
+        bloque.EstatusProduccionID,
+        bloque.EstatusProduccionNombre);
+
+    var porcentajeAvance = bloque.CantidadProgramada <= 0
+        ? 0m
+        : Math.Min(
+            100m,
+            Math.Round(
+                (decimal)bloque.CantidadProducida
+                / bloque.CantidadProgramada * 100m,
+                2));
+
+    var porcentajeCss = porcentajeAvance.ToString(
+        "0.##",
+        CultureInfo.InvariantCulture);
+
+    var urlDetalleBloque = bloque.EjecucionProduccionID.HasValue
+        ? Url.Action(
+            "Detalle",
+            "Produccion",
+            new
+            {
+                id = bloque.EjecucionProduccionID.Value,
+                returnUrl = returnUrlActual
+            }) ?? "#"
+        : "#";
+
+    var estadoOperativoTexto = operativa?.EstadoGeneralTexto
+        ?? textoEstatusProduccion;
+
+    var estadoOperativoDetalle = operativa?.EstadoGeneralDetalle;
+
+    <div class="modal fade modal-operativa"
+         id="ofModal_@bloque.ProgramaProduccionID"
+         tabindex="-1"
+         aria-hidden="true">
+
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+
+                <div class="modal-header border-0">
+                    <div class="operativa-modal-head">
+                        <div class="operativa-of-block">
+                            <div class="operativa-of-kicker">
+                                Producción / Programa @bloque.ProgramaProduccionID
+                            </div>
+
+                            <h2 class="operativa-of-number">
+                                @bloque.OFTexto
+                            </h2>
+
+                            <div class="operativa-of-part"
+                                 title="@bloque.ParteTexto @(string.IsNullOrWhiteSpace(bloque.Descripcion) ? string.Empty : " · " + bloque.Descripcion)">
+                                @bloque.ParteTexto
+                                @if (!string.IsNullOrWhiteSpace(bloque.Descripcion))
+                                {
+                                    <span> · @bloque.Descripcion</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="operativa-head-facts">
+                            <div class="operativa-head-fact">
+                                <small>Máquina</small>
+                                <strong>@bloque.MaquinaCodigo</strong>
+                            </div>
+
+                            <div class="operativa-head-fact">
+                                <small>Molde</small>
+                                <strong>@(string.IsNullOrWhiteSpace(bloque.MoldeCodigo) ? "—" : bloque.MoldeCodigo)</strong>
+                            </div>
+
+                            <div class="operativa-head-fact">
+                                <small>Cliente</small>
+                                <strong title="@bloque.ClienteNombre">
+                                    @(string.IsNullOrWhiteSpace(bloque.ClienteNombre) ? "—" : bloque.ClienteNombre)
+                                </strong>
+                            </div>
+
+                            <div class="operativa-head-fact">
+                                <small>Inicio</small>
+                                <strong>@bloque.Inicio.ToString("dd/MM/yyyy HH:mm")</strong>
+                            </div>
+
+                            <div class="operativa-head-fact">
+                                <small>Fin</small>
+                                <strong>@bloque.Fin.ToString("dd/MM/yyyy HH:mm")</strong>
+                            </div>
+
+                            <div class="operativa-head-fact">
+                                <small>Turno</small>
+                                <strong title="@textoTurnoModal">@textoTurnoModal</strong>
+                            </div>
+                        </div>
+
+                        <div class="operativa-head-state">
+                            <span class="operativa-modal-state @ClaseEstadoOperativo(operativa?.EstadoGeneral)">
+                                <i class="fa-solid @IconoEstadoOperativo(operativa?.EstadoGeneral)"></i>
+                                @estadoOperativoTexto
+                            </span>
+
+                            @if (bloque.EjecucionProduccionID.HasValue)
+                            {
+                                <a href="@urlDetalleBloque"
+                                   class="operativa-head-link text-primary">
+                                    <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>
+                                    Ver OF completa
+                                </a>
+                            }
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(estadoOperativoDetalle))
+                    {
+                        <div class="operativa-notice">
+                            <i class="fa-solid fa-circle-info text-primary mt-1"></i>
+                            <div>@estadoOperativoDetalle</div>
+                        </div>
+                    }
+
+                    @if (operativa?.EstaBloqueada == true)
+                    {
+                        <div class="operativa-notice operativa-notice-danger">
+                            <i class="fa-solid fa-lock mt-1"></i>
+                            <div>
+                                <strong>Flujo bloqueado:</strong>
+                                @(operativa.MotivoBloqueo ?? "Existe un bloqueo pendiente que debe resolverse antes de continuar.")
+                            </div>
+                        </div>
+                    }
+
+                <div class="operativa-status-grid">
+                    <div class="operativa-status-item">
+                        <small>Operador planeado</small>
+                        <strong title="@textoOperadorModal">@textoOperadorModal</strong>
+                    </div>
+
+                    <div class="operativa-status-item">
+                        <small>Operador real</small>
+                        <strong title="@textoOperadorRealModal">@textoOperadorRealModal</strong>
+                    </div>
+
+                    <div class="operativa-status-item">
+                        <small>Auxiliar</small>
+                        <strong title="@textoAuxiliarModal">@textoAuxiliarModal</strong>
+                    </div>
+
+                    <div class="operativa-status-item">
+                        <small>Producción</small>
+                        <span class="@BadgeProduccion(bloque.EstatusProduccionID)">
+                            @textoEstatusProduccion
+                        </span>
+                    </div>
+
+                    <div class="operativa-status-item">
+                        <small>Calidad</small>
+                        <strong title="@textoCalidadModal">@textoCalidadModal</strong>
+                    </div>
+
+                    <div class="operativa-status-item">
+                        <small>Ejecución</small>
+                        <strong>
+                            @(bloque.EjecucionProduccionID.HasValue
+                                                        ? bloque.EjecucionProduccionID.Value.ToString()
+                                                        : "Sin ejecución")
+                        </strong>
+                    </div>
+                </div>
+
+                    <div class="operativa-progress-compact">
+                        <div class="operativa-progress-head">
+                            <span>Avance registrado</span>
+                            <strong>
+                                @bloque.CantidadProducida.ToString("N0") / @bloque.CantidadProgramada.ToString("N0") piezas
+                            </strong>
+                            <b>@porcentajeAvance.ToString("0.#")%</b>
+                        </div>
+
+                        <div class="operativa-progress-track">
+                            <div class="operativa-progress-bar"
+                                 data-nsq-style="width:@porcentajeCss%"></div>
+                        </div>
+                    </div>
+
+                    <div class="operativa-action-layout">
+                        <div>
+                        @if (accionActualEsCalidad)
+                            {
+                                <div class="operativa-quality-wait h-100">
+                                    <div class="d-flex gap-2 align-items-start">
+                                        <i class="fa-solid fa-shield-halved fs-5 mt-1"></i>
+                                        <div class="flex-grow-1">
+                                            <div class="operativa-action-label mb-1">
+                                                Acción actual
+                                            </div>
+                                            <div class="fw-bold">
+                                                Esperando a Calidad
+                                            </div>
+                                            <div class="mt-1 fw-normal">
+                                                @(accionActual?.Descripcion
+                                                                                        ?? "La OF se encuentra a la espera de la validación correspondiente de Calidad.")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                                                }
+                            else if (accionActual != null)
+                            {
+                                <div class="operativa-action-card @ClasePrioridad(operativa?.Prioridad)">
+                                    <div class="operativa-action-label">
+                                        <i class="fa-solid fa-record-vinyl me-1"></i>
+                                        Acción actual
+                                    </div>
+
+                                    <div class="operativa-action-title">
+                                        <span class="operativa-action-title-icon">
+                                            <i class="bi @accionActual.Icono"></i>
+                                        </span>
+                                        <span>@accionActual.Titulo</span>
+                                    </div>
+
+                                    <div class="operativa-action-description"
+                                         title="@(accionActual.Descripcion ?? "Continúa con la siguiente actividad requerida para esta OF.")">
+                                        @(accionActual.Descripcion
+                                                                        ?? "Continúa con la siguiente actividad requerida para esta OF.")
+                                                                                                                                     </div>
+
+                                    <div class="operativa-meta">
+                                        <div class="operativa-meta-item">
+                                            <small>Área</small>
+                                            <strong>@accionActual.AreaResponsableTexto</strong>
+                                        </div>
+
+                                        <div class="operativa-meta-item">
+                                            <small>Responsable</small>
+                                            <strong>
+                                                @(string.IsNullOrWhiteSpace(accionActual.ResponsableNombre)
+                                                                                        ? "Sin asignar"
+                                                                                        : accionActual.ResponsableNombre)
+                                    </strong>
+                                </div>
+
+                                        <div class="operativa-meta-item">
+                                            <small>Prioridad</small>
+                                            <strong>@(operativa?.PrioridadTexto ?? accionActual.PrioridadTexto)</strong>
+                                        </div>
+
+                                @if (accionActual.FechaObjetivo.HasValue)
+                                        {
+                                            <div class="operativa-meta-item">
+                                                <small>Objetivo</small>
+                                                <strong>@TextoFecha(accionActual.FechaObjetivo)</strong>
+                                            </div>
+                                        }
+
+                                        @if (accionActual.MinutosDesfase > 0)
+                                        {
+                                            <div class="operativa-meta-item">
+                                                <small>Retraso</small>
+                                                <strong class="text-danger">
+                                                    @TextoRetraso(accionActual.MinutosDesfase)
+                                                </strong>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (accionActual.EsEjecutable)
+                                    {
+                                        <div class="operativa-action-buttons-compact">
+                                            <a href="@UrlAccion(operativa!, accionActual)"
+                                               class="btn btn-primary fw-bold">
+                                                <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>
+                                                @accionActual.TextoBoton
+                                            </a>
+
+                                            @if (bloque.EjecucionProduccionID.HasValue)
+                                            {
+                                                <a href="@UrlDetalle(operativa!)"
+                                                   class="btn btn-outline-primary fw-bold">
+                                                    <i class="fa-solid fa-eye me-1"></i>
+                                                    Ver ejecución
+                                                </a>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="operativa-no-action h-100">
+                                    <div class="d-flex gap-2 align-items-start">
+                                        <i class="fa-solid fa-circle-check fs-5 mt-1"></i>
+                                        <div class="flex-grow-1">
+                                            <div class="fw-bold">
+                                                Sin acción operativa pendiente detectada
+                                            </div>
+                                            <div class="fw-normal mt-1">
+                                                La OF no tiene una actividad inmediata calculada dentro de la Agenda Operativa.
+                                            </div>
+
+                                            @if (bloque.EjecucionProduccionID.HasValue)
+                                            {
+                                                <a href="@urlDetalleBloque"
+                                                   class="btn btn-outline-success btn-sm fw-bold mt-2">
+                                                    <i class="fa-solid fa-eye me-1"></i>
+                                                    Consultar ejecución
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div>
+                            <div class="operativa-next-card h-100">
+                                <div class="operativa-action-label">
+                                    <i class="fa-solid fa-forward-step me-1"></i>
+                                    Después sigue
+                                </div>
+
+                                @if (siguienteAccion != null)
+                                {
+                                    <div class="operativa-action-title mb-1">
+                                        <span class="operativa-action-title-icon">
+                                            @if (EsAccionCalidad(siguienteAccion))
+                                            {
+                                                <i class="fa-solid fa-shield-halved"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi @siguienteAccion.Icono"></i>
+                                            }
+                                    </span>
+
+                                    <span>
+                                        @(EsAccionCalidad(siguienteAccion)
+                                                                            ? "Esperando a Calidad"
+                                                                            : siguienteAccion.Titulo)
+                                                                                                 </span>
+                                                                                             </div>
+
+                                <div class="small text-muted"
+                                     title="@(siguienteAccion.Descripcion ?? $"Responsable: {siguienteAccion.AreaResponsableTexto}.")">
+                                    @(siguienteAccion.Descripcion
+                                                                    ?? $"Responsable: {siguienteAccion.AreaResponsableTexto}.")
+                            </div>
+
+                                    <div class="operativa-meta">
+                                        <div class="operativa-meta-item">
+                                            <small>Área</small>
+                                            <strong>@siguienteAccion.AreaResponsableTexto</strong>
+                                        </div>
+
+                                @if (siguienteAccion.FechaObjetivo.HasValue)
+                                        {
+                                            <div class="operativa-meta-item">
+                                                <small>Objetivo</small>
+                                                <strong>@TextoFecha(siguienteAccion.FechaObjetivo)</strong>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-muted small">
+                                        <i class="fa-solid fa-flag-checkered me-1"></i>
+                                        No existe una siguiente actividad pendiente calculada.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            'use strict';
+
+            const search = document.getElementById('calendarSearch');
+            const btnMostrarRango = document.getElementById('btnMostrarRango');
+            const formRango = document.getElementById('formRangoCalendario');
+            const rangoInicio = document.getElementById('rangoInicio');
+            const rangoFin = document.getElementById('rangoFin');
+            const calendarKiosk = document.getElementById('calendarKiosk');
+            const btnPantallaCompleta = document.getElementById('btnPantallaCompletaCalendario');
+            const btnCompactar = document.getElementById('btnCompactarCalendario');
+            const timelineScroll = calendarKiosk?.querySelector('.timeline-scroll');
+            const timelineElement = calendarKiosk?.querySelector('.timeline');
+            const fitScaleLabel = document.getElementById('fitScaleLabel');
+            const calendarPage = document.querySelector('.production-calendar-readonly');
+
+            if (calendarPage) {
+                calendarPage.style.setProperty('--dias-periodo', '@totalDias');
+                calendarPage.style.setProperty('--horas-periodo', '@totalHorasPeriodo');
+            }
+
+            const periodoInicioLive = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+            const periodoFinLive = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+            const vistaLive = '@Model.VistaNormalizada'.toLowerCase();
+            const mostrarHorasLive = @(mostrarReglaHoras ? "true" : "false");
+            const liveClock = document.getElementById('calendarLiveClock');
+            let centradoInicialRealizado = false;
+
+            function pad2(value) {
+                return String(value).padStart(2, '0');
+            }
+
+            function claveFechaLocal(fecha) {
+                return `${fecha.getFullYear()}-${pad2(fecha.getMonth() + 1)}-${pad2(fecha.getDate())}`;
+            }
+
+            function textoFechaHoraLocal(fecha) {
+                return `${pad2(fecha.getDate())}/${pad2(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad2(fecha.getHours())}:${pad2(fecha.getMinutes())}`;
+            }
+
+            function configurarReglaHorariaComoPlaneacion() {
+                const days = document.querySelector('.timeline-header .days');
+                const machineHead = document.querySelector('.timeline-header .machine-head');
+                if (!days) return;
+                days.querySelectorAll('.nsq-hour-ruler-v31').forEach(x => x.remove());
+                const mostrar = vistaLive === 'dia' || vistaLive === 'semana' || (vistaLive === 'rango' && @totalDias <= 7);
+                if (!mostrar) return;
+                const totalHoras = Math.max(24, @totalDias * 24);
+                const ruler = document.createElement('div');
+                ruler.className = 'nsq-hour-ruler-v31';
+                ruler.style.gridTemplateColumns = `repeat(${totalHoras}, minmax(0, 1fr))`;
+                for (let i = 0; i < totalHoras; i++) {
+                    const h = i % 24;
+                    const cell = document.createElement('span');
+                    cell.className = 'nsq-hour-cell-v31' + (h === 0 ? ' day-start' : '');
+                    cell.dataset.hourIndex = String(i);
+                    cell.textContent = String(h).padStart(2, '0');
+                    cell.title = String(h).padStart(2, '0') + ':00';
+                    ruler.appendChild(cell);
+                }
+                days.appendChild(ruler);
+                if (timelineElement) {
+                    if (vistaLive === 'dia' && machineHead) {
+                        const machineWidth = Math.max(150, Math.ceil(machineHead.getBoundingClientRect().width));
+                        timelineElement.style.minWidth = `${machineWidth + (24 * 48)}px`;
+                    } else {
+                        timelineElement.style.minWidth = '';
+                    }
+                }
+            }
+
+            function centrarHoraActual(porcentaje) {
+                if (centradoInicialRealizado || !timelineScroll || calendarioEnPantallaCompleta()) return;
+                if (!(vistaLive === 'dia' || vistaLive === 'semana' || (vistaLive === 'rango' && mostrarHorasLive))) return;
+
+                const primerTrack = calendarKiosk?.querySelector('.track');
+                if (!primerTrack || primerTrack.clientWidth <= 0) return;
+
+                const xEnTimeline = primerTrack.offsetLeft + (primerTrack.clientWidth * porcentaje / 100);
+                const destino = Math.max(0, xEnTimeline - (timelineScroll.clientWidth * .58));
+
+                timelineScroll.scrollTo({
+                    left: destino,
+                    behavior: 'smooth'
+                });
+
+                centradoInicialRealizado = true;
+            }
+
+            function actualizarTiempoReal() {
+                const ahora = new Date();
+
+                if (liveClock) {
+                    liveClock.textContent = `${pad2(ahora.getHours())}:${pad2(ahora.getMinutes())}`;
+                    liveClock.title = textoFechaHoraLocal(ahora);
+                }
+
+                const hoy = claveFechaLocal(ahora);
+                document.querySelectorAll('[data-calendar-date]').forEach(day => {
+                    day.classList.toggle('is-today-live', day.dataset.calendarDate === hoy);
+                });
+
+                document.querySelectorAll('.nsq-hour-cell-v31.is-current-hour').forEach(cell => {
+                    cell.classList.remove('is-current-hour');
+                });
+
+                const dentroPeriodo = ahora >= periodoInicioLive && ahora < periodoFinLive;
+                const totalMs = periodoFinLive.getTime() - periodoInicioLive.getTime();
+                const porcentaje = dentroPeriodo && totalMs > 0
+                    ? Math.max(0, Math.min(100, ((ahora.getTime() - periodoInicioLive.getTime()) / totalMs) * 100))
+                    : 0;
+
+                document.querySelectorAll('[data-now-line-operativo]').forEach(line => {
+                    line.classList.toggle('d-none', !dentroPeriodo);
+
+                    if (dentroPeriodo) {
+                        line.style.left = `${porcentaje}%`;
+                        line.title = `Ahora: ${textoFechaHoraLocal(ahora)}`;
+                    }
+                });
+
+                if (dentroPeriodo && mostrarHorasLive) {
+                    const horasDesdeInicio = Math.floor((ahora.getTime() - periodoInicioLive.getTime()) / 3600000);
+                    const celdaActual = document.querySelector(`[data-hour-index="${horasDesdeInicio}"]`);
+
+                    if (celdaActual) {
+                        celdaActual.classList.add('is-current-hour');
+                        celdaActual.title = `Hora actual: ${pad2(ahora.getHours())}:${pad2(ahora.getMinutes())}`;
+                    }
+
+                    centrarHoraActual(porcentaje);
+                }
+            }
+
+            function iniciarRelojTiempoReal() {
+                actualizarTiempoReal();
+
+                const msHastaSiguienteMinuto = 60000 - (Date.now() % 60000) + 50;
+
+                window.setTimeout(() => {
+                    actualizarTiempoReal();
+                    window.setInterval(actualizarTiempoReal, 60000);
+                }, msHastaSiguienteMinuto);
+            }
+
+            function normalizar(value) {
+                return (value || '')
+                    .toString()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .trim();
+            }
+
+            function aplicarBusqueda() {
+                const term = normalizar(search?.value);
+
+                document
+                    .querySelectorAll('.calendar-machine-row')
+                    .forEach(row => {
+                        const hayCoincidencia =
+                            !term || normalizar(row.dataset.search).includes(term);
+
+                        row.classList.toggle('d-none', !hayCoincidencia);
+                    });
+            }
+
+            search?.addEventListener('input', aplicarBusqueda);
+
+            btnMostrarRango?.addEventListener('click', () => {
+                formRango?.classList.toggle('active');
+
+                if (formRango?.classList.contains('active')) {
+                    rangoInicio?.focus();
+                }
+            });
+
+            formRango?.addEventListener('submit', event => {
+                if (!rangoInicio?.value || !rangoFin?.value) {
+                    event.preventDefault();
+                    alert('Selecciona la fecha de inicio y la fecha de fin.');
+                    return;
+                }
+
+                const inicio = new Date(`${rangoInicio.value}T00:00:00`);
+                const fin = new Date(`${rangoFin.value}T00:00:00`);
+
+                if (fin < inicio) {
+                    event.preventDefault();
+                    alert('La fecha final no puede ser anterior a la fecha inicial.');
+                    return;
+                }
+
+                const dias = Math.floor((fin - inicio) / 86400000);
+
+                if (dias > 30) {
+                    event.preventDefault();
+                    alert('El rango no puede ser mayor a 31 días.');
+                }
+            });
+
+            function calendarioEnPantallaCompleta() {
+                return document.fullscreenElement === calendarKiosk
+                    || calendarKiosk?.classList.contains('fullscreen-fallback');
+            }
+
+            function actualizarBotonPantallaCompleta() {
+                if (!btnPantallaCompleta) return;
+
+                const activo = calendarioEnPantallaCompleta();
+                const icon = btnPantallaCompleta.querySelector('i');
+                const label = btnPantallaCompleta.querySelector('.fullscreen-label');
+
+                if (icon) {
+                    icon.className = activo
+                        ? 'fa-solid fa-compress'
+                        : 'fa-solid fa-expand';
+                }
+
+                if (label) {
+                    label.textContent = activo
+                        ? 'Salir pantalla completa'
+                        : 'Pantalla completa';
+                }
+            }
+
+            function ajustarCalendarioAlViewport() {
+                if (!calendarKiosk || !timelineScroll || !timelineElement) return;
+
+                timelineElement.style.transform = '';
+                timelineElement.style.width = '100%';
+                timelineElement.style.height = 'auto';
+                calendarKiosk.classList.remove('fit-screen');
+
+                if (!calendarioEnPantallaCompleta()) {
+                    timelineScroll.style.overflowX = 'auto';
+                    if (fitScaleLabel) fitScaleLabel.textContent = '';
+                    return;
+                }
+
+                const viewportWidth = Math.max(
+                    320,
+                    calendarKiosk.clientWidth - 16);
+
+                const contentWidth = Math.max(
+                    timelineElement.scrollWidth,
+                    timelineElement.getBoundingClientRect().width);
+
+                if (contentWidth <= viewportWidth) {
+                    timelineScroll.style.overflowX = 'auto';
+                    if (fitScaleLabel) fitScaleLabel.textContent = '100%';
+                    return;
+                }
+
+                const scale = Math.max(
+                    .45,
+                    Math.min(1, viewportWidth / contentWidth));
+
+                timelineElement.style.transformOrigin = 'top left';
+                timelineElement.style.transform = `scale(${scale})`;
+                timelineElement.style.width = `${100 / scale}%`;
+                timelineElement.style.height = `${timelineElement.scrollHeight * scale}px`;
+
+                calendarKiosk.classList.add('fit-screen');
+                timelineScroll.style.overflowX = 'hidden';
+
+                if (fitScaleLabel) {
+                    fitScaleLabel.textContent = `${Math.round(scale * 100)}%`;
+                }
+            }
+
+            async function alternarPantallaCompleta() {
+                if (!calendarKiosk) return;
+
+                try {
+                    if (document.fullscreenElement) {
+                        await document.exitFullscreen();
+                    }
+                    else if (calendarKiosk.requestFullscreen) {
+                        await calendarKiosk.requestFullscreen();
+                    }
+                    else {
+                        calendarKiosk.classList.toggle('fullscreen-fallback');
+                    }
+                }
+                catch {
+                    calendarKiosk.classList.toggle('fullscreen-fallback');
+                }
+
+                setTimeout(() => {
+                    actualizarBotonPantallaCompleta();
+                    ajustarCalendarioAlViewport();
+                }, 80);
+            }
+
+            btnPantallaCompleta?.addEventListener(
+                'click',
+                alternarPantallaCompleta);
+
+            document.addEventListener('fullscreenchange', () => {
+                actualizarBotonPantallaCompleta();
+                setTimeout(() => {
+                    ajustarCalendarioAlViewport();
+                    actualizarTiempoReal();
+                }, 80);
+            });
+
+            window.addEventListener('resize', () => {
+                if (calendarioEnPantallaCompleta()) {
+                    ajustarCalendarioAlViewport();
+                }
+                actualizarTiempoReal();
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) actualizarTiempoReal();
+            });
+
+            btnCompactar?.addEventListener('click', () => {
+                if (!calendarKiosk) return;
+
+                calendarKiosk.classList.toggle('compact-mode');
+
+                const activo = calendarKiosk.classList.contains('compact-mode');
+                const icon = btnCompactar.querySelector('i');
+                const label = btnCompactar.querySelector('span');
+
+                if (icon) {
+                    icon.className = activo
+                        ? 'fa-solid fa-expand'
+                        : 'fa-solid fa-compress';
+                }
+
+                if (label) {
+                    label.textContent = activo
+                        ? 'Expandir'
+                        : 'Compactar';
+                }
+
+                setTimeout(ajustarCalendarioAlViewport, 60);
+            });
+
+            /*
+             * IMPORTANTE:
+             * Esta vista NO registra dragstart, dragover, drop ni dragend.
+             * Todos los bloques tienen draggable="false".
+             * El calendario operativo jamás modifica Planeación.
+             */
+
+            configurarReglaHorariaComoPlaneacion();
+            actualizarBotonPantallaCompleta();
+            iniciarRelojTiempoReal();
+        })();
+    </script>
+}

@@ -1,0 +1,63 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var workspaceProduccion =
+        (ViewBag.WorkspaceProduccion as string
+         ?? "CONSULTA")
+        .Trim()
+        .ToUpperInvariant();
+
+    var esWorkspaceSupervision =
+        workspaceProduccion == "SUPERVISION";
+
+    var puedeGestionarConfiguracionCorrida =
+        ViewBag.PuedeGestionarConfiguracionCorrida
+            is bool puedeConfiguracion
+        && puedeConfiguracion;
+
+    var puedeGestionarChecklistArranque =
+        ViewBag.PuedeGestionarChecklistArranque
+            is bool puedeChecklist
+        && puedeChecklist;
+
+    var puedeGestionarMonitoreoPerifericos =
+        ViewBag.PuedeGestionarMonitoreoPerifericos
+            is bool puedeMonitoreo
+        && puedeMonitoreo;
+
+    var puedeGestionarSugerenciaCambioTurno =
+        ViewBag.PuedeGestionarSugerenciaCambioTurno
+            is bool puedeSugerencia
+        && puedeSugerencia;
+}
+
+@if (esWorkspaceSupervision)
+{
+    <div data-produccion-workspace="SUPERVISION">
+
+        @if (puedeGestionarConfiguracionCorrida)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Tecnico/_ConfiguracionCorrida.cshtml"
+                     model="Model" />
+        }
+
+        @if (puedeGestionarChecklistArranque)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Preparacion/_ChecklistArranque.cshtml"
+                     model="Model" />
+        }
+
+        @if (puedeGestionarMonitoreoPerifericos)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Preparacion/_MonitoreoPerifericos.cshtml"
+                     model="Model" />
+        }
+
+        @if (puedeGestionarSugerenciaCambioTurno)
+        {
+            <partial name="~/Views/Produccion/Partials/Detalle/Auxiliar/_SugerenciaCambioTurno.cshtml"
+                     model="Model" />
+        }
+
+    </div>
+}

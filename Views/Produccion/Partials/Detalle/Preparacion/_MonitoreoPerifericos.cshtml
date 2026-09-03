@@ -1,0 +1,171 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@functions {
+    private static string TextoSeguro(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "-"
+            : value.Trim();
+    }
+}
+
+@{
+    var monitoreoTurno =
+        Model.MonitoreoTurnoActual;
+
+    var puedeGestionarMonitoreoPerifericos =
+        ViewBag.PuedeGestionarMonitoreoPerifericos
+            is bool puedeMonitoreo
+        && puedeMonitoreo;
+}
+
+@if (puedeGestionarMonitoreoPerifericos
+    && monitoreoTurno != null)
+{
+    var porcentajeMonitoreo =
+        monitoreoTurno.PorcentajeAvance;
+
+    if (porcentajeMonitoreo < 0)
+    {
+        porcentajeMonitoreo = 0;
+    }
+
+    if (porcentajeMonitoreo > 100)
+    {
+        porcentajeMonitoreo = 100;
+    }
+
+    var monitoreoPendiente =
+        Model.MostrarAvisoMonitoreoTurno;
+
+    <div class="panel mb-4 @(monitoreoPendiente ? "turno-monitor-card" : "")"
+         id="panelMonitoreoTurno"
+         data-collapsible
+         data-default-open="@(monitoreoPendiente ? "true" : "false")">
+
+        <div class="panel-header d-flex justify-content-between align-items-center gap-2">
+
+            <span>
+                <i class="bi bi-cpu me-1"></i>
+                Monitoreo de periféricos
+            </span>
+
+            <span class="badge @(monitoreoPendiente
+                                  ? "bg-warning text-dark"
+                                  : "bg-success")">
+
+                @(monitoreoPendiente
+                            ? "Pendiente"
+                            : "Completo")
+        </span>
+
+                            </div>
+
+                            <div class="panel-body">
+
+                                <div class="d-flex align-items-start gap-3 mb-3">
+
+                                    <div class="turno-monitor-icon">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </div>
+
+                                    <div class="flex-grow-1">
+
+                                        <div class="data-label">
+                                            Turno actual
+                                        </div>
+
+                                        <div class="data-value fs-5">
+                                            @TextoSeguro(
+                                            monitoreoTurno.TurnoNombre)
+                </div>
+
+                    <div class="muted-small">
+                        Fecha operativa:
+                        @monitoreoTurno
+                        .FechaOperacion
+                        .ToString("dd/MM/yyyy")
+                    </div>
+
+                    <div class="muted-small">
+                        Máquina:
+                        @TextoSeguro(
+                                        monitoreoTurno.MaquinaCodigo)
+                    ·
+                    @TextoSeguro(
+                                        monitoreoTurno.MaquinaNombre)
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="d-flex justify-content-between small mb-1">
+
+            <span class="fw-bold text-primary">
+                Verificaciones
+            </span>
+
+            <span>
+                @monitoreoTurno.TotalConfirmadas
+                /
+                @monitoreoTurno.TotalPreguntas
+            </span>
+
+        </div>
+
+        <div class="progress turno-monitor-progress mb-3">
+
+            <div class="progress-bar"
+                 style="width:@porcentajeMonitoreo.ToString(
+                                          "0.##",
+                                          System.Globalization.CultureInfo.InvariantCulture)%">
+            </div>
+
+            </div>
+
+            <div class="soft-box mb-3">
+
+                <div class="d-flex justify-content-between align-items-center gap-2">
+
+                    <span class="fw-bold">
+                        <i class="bi bi-people me-1"></i>
+                        Entrega y recepción
+                    </span>
+
+                    <span class="badge @(monitoreoTurno.EntregaTurnoRegistrada
+                                              ? "bg-success"
+                                              : "bg-warning text-dark")">
+
+                    @(monitoreoTurno.EntregaTurnoRegistrada
+                                        ? "Registrada"
+                                        : "Pendiente")
+                </span>
+
+            </div>
+
+        </div>
+
+        <a href="@Url.Action(
+                                   "ChecklistFormato",
+                                   "Produccion",
+                                   new
+                                   {
+                                       id =
+                                           monitoreoTurno
+                                               .ChecklistArranqueID
+                                   })"
+           class="btn @(monitoreoPendiente
+                              ? "btn-warning"
+                              : "btn-outline-primary") w-100 btn-strong">
+
+            <i class="bi bi-clipboard-check me-1"></i>
+
+            @(monitoreoPendiente
+                        ? "Realizar monitoreo del turno"
+                        : "Consultar monitoreo del turno")
+        </a>
+
+        </div>
+    </div>
+}

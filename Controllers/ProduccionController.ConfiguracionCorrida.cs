@@ -113,150 +113,97 @@ public sealed partial class ProduccionController
         });
     }
 
-    // ============================================================
-    // CONFIGURACIÓN INICIAL
-    //
-    // IMPORTANTE:
-    // Los valores de ERP_ParteDatosTecnicos son solamente sugerencia.
-    // El técnico DEBE confirmar:
-    //
-    // - Cavidades realmente utilizadas.
-    // - Ciclo realmente utilizado.
-    // - Contador actual de la máquina.
-    //
-    // No se crea automáticamente desde Planeación.
-    // ============================================================
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> GuardarConfiguracionCorrida(
-        ProduccionConfiguracionTecnicoPostVm vm)
+    public async Task<IActionResult> GuardarConfiguracionCorrida(ProduccionConfiguracionTecnicoPostVm vm)
     {
         if (!UsuarioEnSesion())
             return RedirectToAction("Login", "Login");
 
         if (vm.EjecucionProduccionID <= 0)
         {
-            TempData["Error"] =
-                "No se recibió correctamente la ejecución de Producción.";
-
+            TempData["Error"] = "No se recibió correctamente la ejecución de Producción.";
             return RedirectToAction(nameof(Index));
         }
 
-        var errorValidacion =
-            ValidarDatosConfiguracionCorrida(
-                vm,
-                requiereMotivo: false);
-
+        var errorValidacion = ValidarDatosConfiguracionCorrida(vm, requiereMotivo: false);
         if (!string.IsNullOrWhiteSpace(errorValidacion))
         {
             TempData["Error"] = errorValidacion;
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = vm.EjecucionProduccionID });
+            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
 
-        await using var cn =
-            new SqlConnection(ConnectionString);
-
+        await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
-
-        await using var tx =
-            (SqlTransaction)await cn.BeginTransactionAsync(
-                IsolationLevel.Serializable);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
         try
         {
-            var contexto =
-                await ObtenerContextoConfiguracionCorridaAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
-
+            var contexto = await ObtenerContextoConfiguracionCorridaAsync(vm.EjecucionProduccionID, cn, tx);
             if (contexto == null)
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "No se encontró la ejecución de Producción.";
-
+                TempData["Error"] = "No se encontró la ejecución de Producción.";
                 return RedirectToAction(nameof(Index));
             }
 
-            var usuarioId =
-                ObtenerUsuarioID();
+            var usuarioId = ObtenerUsuarioID();
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);
 
-            var permisos =
-                await ObtenerPermisosProduccionUsuarioAsync(
-                    usuarioId,
-                    cn,
-                    tx);
-
-            if (!PuedeModificarConfiguracionCorrida(
-                    permisos,
-                    contexto))
+            if (!PuedeModificarConfiguracionCorrida(permisos, contexto))
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "Solo el Técnico de Producción asignado, el Encargado de Producción o un Administrador pueden definir las cavidades y el ciclo real.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Error"] = "Solo el Técnico de Producción asignado, el Encargado de Producción o un Administrador pueden definir las cavidades y el ciclo real.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
             if (!EjecucionPermiteConfiguracionCorrida(contexto))
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "La configuración de cavidades y ciclo solo puede modificarse mientras la ejecución esté activa.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Error"] = "La configuración de cavidades y ciclo solo puede modificarse mientras la ejecución esté activa.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
-            var configuracionActual =
-                await ObtenerConfiguracionActualAsync(
-                    vm.EjecucionProduccionID,
-                    cn,
-                    tx);
-
+            var configuracionActual = await ObtenerConfiguracionActualAsync(vm.EjecucionProduccionID, cn, tx);
             if (configuracionActual != null)
             {
                 await tx.RollbackAsync();
-
-                TempData["Error"] =
-                    "Esta ejecución ya tiene una configuración real activa. Utiliza la opción Cambiar configuración.";
-
-                return RedirectToAction(
-                    nameof(Detalle),
-                    new { id = vm.EjecucionProduccionID });
+                TempData["Error"] = "Esta ejecución ya tiene una configuración real activa. Utiliza la opción Cambiar configuración.";
+                return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
-            var fechaRegistro =
-                DateTime.Now;
+            var cavidadesSeleccionadas = ParsearCavidadesConfiguracion(vm.CavidadesConfiguradas);
+            if (cavidadesSeleccionadas.Count > 0)
+            {
+                var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, null, cn, tx);
+                var errorCavidades = ValidarCavidadesContraDisponibles(cavidadesSeleccionadas, disponibles);
+                if (!string.IsNullOrWhiteSpace(errorCavidades))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = errorCavidades;
+                    return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                }
 
-            var tecnicoRegistroId =
-                ResolverTecnicoConfiguracion(
-                    permisos,
-                    contexto);
+                vm.CavidadesUsadas = cavidadesSeleccionadas.Count;
+                vm.CavidadesConfiguradas = NormalizarCavidadesConfiguracion(cavidadesSeleccionadas);
+            }
 
-            var configuracionCorridaId =
-                await InsertarConfiguracionCorridaAsync(
-                    vm.EjecucionProduccionID,
-                    vm.CavidadesUsadas,
-                    vm.TiempoCicloSegundos,
-                    vm.ContadorMaquinaActual!.Value,
-                    fechaRegistro,
-                    esConfiguracionInicial: true,
-                    vm.MotivoCambio,
-                    tecnicoRegistroId,
-                    usuarioId,
-                    cn,
-                    tx);
+            var fechaRegistro = DateTime.Now;
+            var tecnicoRegistroId = ResolverTecnicoConfiguracion(permisos, contexto);
+
+            var configuracionCorridaId = await InsertarConfiguracionCorridaAsync(
+                vm.EjecucionProduccionID,
+                vm.CavidadesUsadas,
+                vm.CavidadesConfiguradas,
+                vm.TiempoCicloSegundos,
+                vm.ContadorMaquinaActual!.Value,
+                fechaRegistro,
+                true,
+                vm.MotivoCambio,
+                tecnicoRegistroId,
+                usuarioId,
+                cn,
+                tx);
 
             await RegistrarLecturaContadorConfiguracionAsync(
                 vm.EjecucionProduccionID,
@@ -265,200 +212,139 @@ public sealed partial class ProduccionController
                 ProduccionTipoLecturaContador.InicioCorrida,
                 vm.ContadorMaquinaActual.Value,
                 fechaRegistro,
-                esReinicioContador: false,
-                motivoReinicio: null,
-                observaciones:
-                    "Contador base confirmado al registrar la configuración inicial de Producción.",
+                false,
+                null,
+                "Contador base confirmado al registrar la configuración inicial de Producción.",
                 usuarioId,
                 cn,
                 tx);
 
             await tx.CommitAsync();
 
-            var objetivoHora =
-                CalcularObjetivoHoraConfiguracion(
-                    vm.TiempoCicloSegundos,
-                    vm.CavidadesUsadas);
-
-            TempData["Success"] =
-                $"Configuración inicial confirmada: " +
-                $"{vm.CavidadesUsadas:N0} cavidad(es), " +
-                $"{vm.TiempoCicloSegundos:0.####} s de ciclo, " +
-                $"objetivo aproximado {objetivoHora:N0} pzas/h. " +
-                $"Contador base: {vm.ContadorMaquinaActual.Value:N0}.";
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = vm.EjecucionProduccionID });
+            var objetivoHora = CalcularObjetivoHoraConfiguracion(vm.TiempoCicloSegundos, vm.CavidadesUsadas);
+            TempData["Success"] = $"Configuración inicial confirmada: {vm.CavidadesUsadas:N0} cavidad(es), {vm.TiempoCicloSegundos:0.####} s de ciclo, objetivo aproximado {objetivoHora:N0} pzas/h. Contador base: {vm.ContadorMaquinaActual.Value:N0}.";
+            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
         catch (Exception ex)
         {
-            try
-            {
-                await tx.RollbackAsync();
-            }
-            catch
-            {
-            }
-
-            TempData["Error"] =
-                "No fue posible guardar la configuración real de Producción: " +
-                ex.Message;
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = vm.EjecucionProduccionID });
+            try { await tx.RollbackAsync(); } catch { }
+            TempData["Error"] = "No fue posible guardar la configuración real de Producción: " + ex.Message;
+            return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
     }
 
     [HttpGet]
-    public async Task<IActionResult> PrevisualizarCambioConfiguracion(int ejecucionProduccionId, int cavidadesUsadas, string? tiempoCicloSegundos)
+    public async Task<IActionResult> PrevisualizarCambioConfiguracion(int ejecucionProduccionId, int cavidadesUsadas, string? tiempoCicloSegundos, string? cavidadesConfiguradas = null)
     {
         if (!UsuarioEnSesion())
         {
             Response.StatusCode = 401;
-            return Json(new
-            {
-                ok = false,
-                mensaje = "La sesión terminó. Vuelve a iniciar sesión."
-            });
+            return Json(new { ok = false, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
         }
 
         if (ejecucionProduccionId <= 0)
+            return BadRequest(new { ok = false, mensaje = "La ejecución de Producción no es válida." });
+
+        var nuevasCavidades = ParsearCavidadesConfiguracion(cavidadesConfiguradas);
+        if (!string.IsNullOrWhiteSpace(cavidadesConfiguradas))
         {
-            return BadRequest(new
-            {
-                ok = false,
-                mensaje = "La ejecución de Producción no es válida."
-            });
+            if (nuevasCavidades.Count == 0)
+                return BadRequest(new { ok = false, mensaje = "La selección de cavidades no es válida." });
+
+            cavidadesUsadas = nuevasCavidades.Count;
+            cavidadesConfiguradas = NormalizarCavidadesConfiguracion(nuevasCavidades);
         }
 
         if (cavidadesUsadas <= 0)
-        {
-            return BadRequest(new
-            {
-                ok = false,
-                mensaje = "Las cavidades utilizadas deben ser mayores a cero."
-            });
-        }
+            return BadRequest(new { ok = false, mensaje = "Las cavidades utilizadas deben ser mayores a cero." });
 
         var cicloNuevo = ConvertirDecimalFlexibleConfiguracion(tiempoCicloSegundos);
-
         if (!cicloNuevo.HasValue || cicloNuevo.Value <= 0)
-        {
-            return BadRequest(new
-            {
-                ok = false,
-                mensaje = "El tiempo de ciclo debe ser mayor a cero."
-            });
-        }
+            return BadRequest(new { ok = false, mensaje = "El tiempo de ciclo debe ser mayor a cero." });
 
         try
         {
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-            var contexto = await ObtenerContextoConfiguracionCorridaAsync(
-                ejecucionProduccionId,
-                cn);
-
+            var contexto = await ObtenerContextoConfiguracionCorridaAsync(ejecucionProduccionId, cn);
             if (contexto == null)
-            {
-                return NotFound(new
-                {
-                    ok = false,
-                    mensaje = "No se encontró la ejecución de Producción."
-                });
-            }
+                return NotFound(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
 
             var usuarioId = ObtenerUsuarioID();
-
-            var permisos = await ObtenerPermisosProduccionUsuarioAsync(
-                usuarioId,
-                cn);
+            var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
 
             if (!PuedeModificarConfiguracionCorrida(permisos, contexto))
             {
                 Response.StatusCode = 403;
-
-                return Json(new
-                {
-                    ok = false,
-                    mensaje = "No tienes permiso para modificar la configuración real de esta ejecución."
-                });
+                return Json(new { ok = false, mensaje = "No tienes permiso para modificar la configuración real de esta ejecución." });
             }
 
             if (!EjecucionPermiteConfiguracionCorrida(contexto))
-            {
-                return BadRequest(new
-                {
-                    ok = false,
-                    mensaje = "La configuración ya no puede modificarse porque la ejecución no está activa."
-                });
-            }
+                return BadRequest(new { ok = false, mensaje = "La configuración ya no puede modificarse porque la ejecución no está activa." });
 
-            var configuracionActual = await ObtenerConfiguracionActualAsync(
-                ejecucionProduccionId,
-                cn);
-
+            var configuracionActual = await ObtenerConfiguracionActualAsync(ejecucionProduccionId, cn);
             if (configuracionActual == null)
+                return BadRequest(new { ok = false, mensaje = "La ejecución todavía no tiene una configuración inicial activa." });
+
+            var cavidadesActuales = ParsearCavidadesConfiguracion(configuracionActual.CavidadesConfiguradas);
+
+            if (nuevasCavidades.Count == 0 && cavidadesActuales.Count > 0)
             {
-                return BadRequest(new
-                {
-                    ok = false,
-                    mensaje = "La ejecución todavía no tiene una configuración inicial activa."
-                });
+                if (cavidadesUsadas != configuracionActual.CavidadesUsadas)
+                    return BadRequest(new { ok = false, mensaje = "Para cambiar la cantidad de cavidades debes indicar específicamente cuáles cavidades quedarán activas." });
+
+                nuevasCavidades = cavidadesActuales;
+                cavidadesConfiguradas = configuracionActual.CavidadesConfiguradas;
             }
 
-            var planeacion = await ObtenerContextoRecalculoConfiguracionLecturaAsync(
-                contexto.ProgramaProduccionID,
-                ejecucionProduccionId,
-                cn);
+            if (nuevasCavidades.Count > 0)
+            {
+                var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, configuracionActual.CavidadesConfiguradas, cn);
+                var errorCavidades = ValidarCavidadesContraDisponibles(nuevasCavidades, disponibles);
+                if (!string.IsNullOrWhiteSpace(errorCavidades))
+                    return BadRequest(new { ok = false, mensaje = errorCavidades });
 
+                cavidadesUsadas = nuevasCavidades.Count;
+                cavidadesConfiguradas = NormalizarCavidadesConfiguracion(nuevasCavidades);
+            }
+
+            var comparaDetalleCavidades = cavidadesActuales.Count > 0 || nuevasCavidades.Count > 0;
+            var mismasCavidades = comparaDetalleCavidades
+                ? string.Equals(NormalizarCavidadesConfiguracion(cavidadesActuales), NormalizarCavidadesConfiguracion(nuevasCavidades), StringComparison.Ordinal)
+                : configuracionActual.CavidadesUsadas == cavidadesUsadas;
+
+            var mismoCiclo = Math.Abs(configuracionActual.TiempoCicloSegundos - cicloNuevo.Value) < 0.0001m;
+            var hayCambioConfiguracion = !mismasCavidades || !mismoCiclo;
+
+            var planeacion = await ObtenerContextoRecalculoConfiguracionLecturaAsync(contexto.ProgramaProduccionID, ejecucionProduccionId, cn);
             if (planeacion == null)
-            {
-                return NotFound(new
-                {
-                    ok = false,
-                    mensaje = "No fue posible recuperar la programación relacionada con esta ejecución."
-                });
-            }
+                return NotFound(new { ok = false, mensaje = "No fue posible recuperar la programación relacionada con esta ejecución." });
 
             var objetivoAnterior = configuracionActual.ObjetivoHoraOperativo;
-            var objetivoNuevo = CalcularObjetivoHoraConfiguracion(
-                cicloNuevo.Value,
-                cavidadesUsadas);
-
-            var cantidadPendiente = Math.Max(
-                0,
-                planeacion.CantidadProgramada - planeacion.CantidadProducida);
-
-            var mismasCavidades =
-                configuracionActual.CavidadesUsadas == cavidadesUsadas;
-
-            var mismoCiclo =
-                Math.Abs(
-                    configuracionActual.TiempoCicloSegundos -
-                    cicloNuevo.Value) < 0.0001m;
+            var objetivoNuevo = CalcularObjetivoHoraConfiguracion(cicloNuevo.Value, cavidadesUsadas);
+            var cantidadPendiente = Math.Max(0, planeacion.CantidadProgramada - planeacion.CantidadProducida);
 
             if (cantidadPendiente <= 0)
             {
                 return Json(new
                 {
                     ok = true,
-                    hayCambioConfiguracion = !mismasCavidades || !mismoCiclo,
+                    hayCambioConfiguracion,
                     modificaCalendario = false,
                     extiendeProgramacion = false,
                     reduceProgramacion = false,
                     configuracionActual = new
                     {
                         cavidades = configuracionActual.CavidadesUsadas,
+                        cavidadesConfiguradas = configuracionActual.CavidadesConfiguradas,
                         cicloSegundos = configuracionActual.TiempoCicloSegundos,
                         objetivoHora = objetivoAnterior
                     },
                     configuracionNueva = new
                     {
                         cavidades = cavidadesUsadas,
+                        cavidadesConfiguradas,
                         cicloSegundos = cicloNuevo.Value,
                         objetivoHora = objetivoNuevo
                     },
@@ -477,108 +363,53 @@ public sealed partial class ProduccionController
             }
 
             if (objetivoAnterior <= 0)
-            {
-                return BadRequest(new
-                {
-                    ok = false,
-                    mensaje = "La configuración actual no tiene un objetivo por hora válido."
-                });
-            }
+                return BadRequest(new { ok = false, mensaje = "La configuración actual no tiene un objetivo por hora válido." });
 
             if (objetivoNuevo <= 0)
-            {
-                return BadRequest(new
-                {
-                    ok = false,
-                    mensaje = "La nueva configuración no genera un objetivo por hora válido."
-                });
-            }
+                return BadRequest(new { ok = false, mensaje = "La nueva configuración no genera un objetivo por hora válido." });
 
-            var horasRestantesActuales =
-                cantidadPendiente /
-                (decimal)objetivoAnterior;
+            var horasRestantesActuales = cantidadPendiente / (decimal)objetivoAnterior;
+            var horasRestantesNuevas = cantidadPendiente / (decimal)objetivoNuevo;
+            var deltaHoras = horasRestantesNuevas - horasRestantesActuales;
+            var deltaMinutos = (int)Math.Round(deltaHoras * 60m, 0, MidpointRounding.AwayFromZero);
+            var horasBase = planeacion.HorasProgramadas > 0 ? planeacion.HorasProgramadas : horasRestantesActuales;
+            var horasProgramadasNuevas = Math.Max(0.0167m, Math.Round(horasBase + deltaHoras, 4, MidpointRounding.AwayFromZero));
+            var fechaFinProyectada = Math.Abs(deltaHoras) < 0.0001m
+                ? planeacion.FechaFinProgramada
+                : _planeacionSecuenciaService.AjustarFechaFinOperativa(planeacion.FechaFinProgramada, deltaHoras, false);
 
-            var horasRestantesNuevas =
-                cantidadPendiente /
-                (decimal)objetivoNuevo;
-
-            var deltaHoras =
-                horasRestantesNuevas -
-                horasRestantesActuales;
-
-            var deltaMinutos =
-                (int)Math.Round(
-                    deltaHoras * 60m,
-                    0,
-                    MidpointRounding.AwayFromZero);
-
-            var horasBase =
-                planeacion.HorasProgramadas > 0
-                    ? planeacion.HorasProgramadas
-                    : horasRestantesActuales;
-
-            var horasProgramadasNuevas =
-                Math.Max(
-                    0.0167m,
-                    Math.Round(
-                        horasBase + deltaHoras,
-                        4,
-                        MidpointRounding.AwayFromZero));
-
-            var fechaFinProyectada =
-                Math.Abs(deltaHoras) < 0.0001m
-                    ? planeacion.FechaFinProgramada
-                    : _planeacionSecuenciaService.AjustarFechaFinOperativa(
-                        planeacion.FechaFinProgramada,
-                        deltaHoras,
-                        trabajarDomingo: false);
-
-            var extiendeProgramacion =
-                deltaHoras > 0.0001m;
-
-            var reduceProgramacion =
-                deltaHoras < -0.0001m;
-
-            var modificaCalendario =
-                Math.Abs(deltaHoras) >= 0.0001m;
+            var extiendeProgramacion = deltaHoras > 0.0001m;
+            var reduceProgramacion = deltaHoras < -0.0001m;
+            var modificaCalendario = Math.Abs(deltaHoras) >= 0.0001m;
 
             string mensaje;
-
             if (!modificaCalendario)
-            {
-                mensaje =
-                    "La nueva configuración conserva prácticamente el mismo rendimiento. " +
-                    "No se proyecta un cambio en el calendario.";
-            }
+                mensaje = hayCambioConfiguracion
+                    ? "La configuración física cambia, pero conserva el mismo rendimiento por hora. No se proyecta un cambio en el calendario."
+                    : "La nueva configuración es equivalente a la configuración vigente. No se proyecta un cambio en el calendario.";
             else if (extiendeProgramacion)
-            {
-                mensaje =
-                    $"La nueva configuración agregará aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) a la OF. " +
-                    "Al confirmar el cambio, la programación posterior podrá recorrerse automáticamente.";
-            }
+                mensaje = $"La nueva configuración agregará aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) a la OF. Al confirmar el cambio, la programación posterior podrá recorrerse automáticamente.";
             else
-            {
-                mensaje =
-                    $"La nueva configuración reduce aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) de la OF. " +
-                    "Las órdenes posteriores no se adelantarán automáticamente; el espacio quedará disponible para Planeación.";
-            }
+                mensaje = $"La nueva configuración reduce aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) de la OF. Las órdenes posteriores no se adelantarán automáticamente; el espacio quedará disponible para Planeación.";
 
             return Json(new
             {
                 ok = true,
-                hayCambioConfiguracion = !mismasCavidades || !mismoCiclo,
+                hayCambioConfiguracion,
                 modificaCalendario,
                 extiendeProgramacion,
                 reduceProgramacion,
                 configuracionActual = new
                 {
                     cavidades = configuracionActual.CavidadesUsadas,
+                    cavidadesConfiguradas = configuracionActual.CavidadesConfiguradas,
                     cicloSegundos = configuracionActual.TiempoCicloSegundos,
                     objetivoHora = objetivoAnterior
                 },
                 configuracionNueva = new
                 {
                     cavidades = cavidadesUsadas,
+                    cavidadesConfiguradas,
                     cicloSegundos = cicloNuevo.Value,
                     objetivoHora = objetivoNuevo
                 },
@@ -599,14 +430,7 @@ public sealed partial class ProduccionController
         catch (Exception ex)
         {
             Response.StatusCode = 500;
-
-            return Json(new
-            {
-                ok = false,
-                mensaje =
-                    "No fue posible calcular la vista previa del cambio de configuración: " +
-                    ex.Message
-            });
+            return Json(new { ok = false, mensaje = "No fue posible calcular la vista previa del cambio de configuración: " + ex.Message });
         }
     }
 
@@ -669,13 +493,48 @@ public sealed partial class ProduccionController
                 return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
-            var mismasCavidades = configuracionActual.CavidadesUsadas == vm.CavidadesUsadas;
+            var cavidadesActuales = ParsearCavidadesConfiguracion(configuracionActual.CavidadesConfiguradas);
+            var nuevasCavidades = ParsearCavidadesConfiguracion(vm.CavidadesConfiguradas);
+
+            if (nuevasCavidades.Count == 0 && cavidadesActuales.Count > 0)
+            {
+                if (vm.CavidadesUsadas != configuracionActual.CavidadesUsadas)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Para cambiar la cantidad de cavidades debes indicar específicamente cuáles cavidades quedarán activas.";
+                    return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                }
+
+                nuevasCavidades = cavidadesActuales;
+                vm.CavidadesConfiguradas = configuracionActual.CavidadesConfiguradas;
+            }
+
+            if (nuevasCavidades.Count > 0)
+            {
+                var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, configuracionActual.CavidadesConfiguradas, cn, tx);
+                var errorCavidades = ValidarCavidadesContraDisponibles(nuevasCavidades, disponibles);
+                if (!string.IsNullOrWhiteSpace(errorCavidades))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = errorCavidades;
+                    return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
+                }
+
+                vm.CavidadesUsadas = nuevasCavidades.Count;
+                vm.CavidadesConfiguradas = NormalizarCavidadesConfiguracion(nuevasCavidades);
+            }
+
+            var comparaDetalleCavidades = cavidadesActuales.Count > 0 || nuevasCavidades.Count > 0;
+            var mismasCavidades = comparaDetalleCavidades
+                ? string.Equals(NormalizarCavidadesConfiguracion(cavidadesActuales), NormalizarCavidadesConfiguracion(nuevasCavidades), StringComparison.Ordinal)
+                : configuracionActual.CavidadesUsadas == vm.CavidadesUsadas;
+
             var mismoCiclo = Math.Abs(configuracionActual.TiempoCicloSegundos - vm.TiempoCicloSegundos) < 0.0001m;
 
             if (mismasCavidades && mismoCiclo)
             {
                 await tx.RollbackAsync();
-                TempData["Info"] = "Las cavidades y el tiempo de ciclo capturados son iguales a la configuración actual.";
+                TempData["Info"] = "Las cavidades activas y el tiempo de ciclo capturados son iguales a la configuración actual.";
                 return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
             }
 
@@ -693,23 +552,18 @@ public sealed partial class ProduccionController
             var fechaCambio = DateTime.Now;
             long? contadorFinConfiguracionAnterior = huboReinicioContador ? null : contadorActual;
 
-            await CerrarConfiguracionActualAsync(
-                configuracionActual.ConfiguracionCorridaID,
-                contadorFinConfiguracionAnterior,
-                fechaCambio,
-                usuarioId,
-                cn,
-                tx);
+            await CerrarConfiguracionActualAsync(configuracionActual.ConfiguracionCorridaID, contadorFinConfiguracionAnterior, fechaCambio, usuarioId, cn, tx);
 
             var tecnicoRegistroId = ResolverTecnicoConfiguracion(permisos, contexto);
 
             var nuevaConfiguracionId = await InsertarConfiguracionCorridaAsync(
                 vm.EjecucionProduccionID,
                 vm.CavidadesUsadas,
+                vm.CavidadesConfiguradas,
                 vm.TiempoCicloSegundos,
                 contadorActual,
                 fechaCambio,
-                esConfiguracionInicial: false,
+                false,
                 vm.MotivoCambio,
                 tecnicoRegistroId,
                 usuarioId,
@@ -761,22 +615,26 @@ public sealed partial class ProduccionController
 
                 if (Math.Abs(deltaHoras) >= 0.0001m)
                 {
-                    var horasBase = planeacion.HorasProgramadas > 0
-                        ? planeacion.HorasProgramadas
-                        : horasRestantesAnteriores;
-
-                    var horasProgramadasNuevas = Math.Max(
-                        0.0167m,
-                        Math.Round(horasBase + deltaHoras, 4, MidpointRounding.AwayFromZero));
+                    var horasBase = planeacion.HorasProgramadas > 0 ? planeacion.HorasProgramadas : horasRestantesAnteriores;
+                    var horasProgramadasNuevas = Math.Max(0.0167m, Math.Round(horasBase + deltaHoras, 4, MidpointRounding.AwayFromZero));
 
                     nuevoFinProgramado = _planeacionSecuenciaService.AjustarFechaFinOperativa(
                         planeacion.FechaFinProgramada,
                         deltaHoras,
-                        trabajarDomingo: false);
+                        false);
+
+                    var cavidadesAnteriorTexto = string.IsNullOrWhiteSpace(configuracionActual.CavidadesConfiguradas)
+                        ? configuracionActual.CavidadesUsadas.ToString()
+                        : configuracionActual.CavidadesConfiguradas;
+
+                    var cavidadesNuevaTexto = string.IsNullOrWhiteSpace(vm.CavidadesConfiguradas)
+                        ? vm.CavidadesUsadas.ToString()
+                        : vm.CavidadesConfiguradas;
 
                     var motivoRecalculo =
                         $"Recalculo automático por cambio de configuración real. " +
-                        $"Cavidades {configuracionActual.CavidadesUsadas} → {vm.CavidadesUsadas}. " +
+                        $"Cavidades {cavidadesAnteriorTexto} → {cavidadesNuevaTexto}. " +
+                        $"Cantidad de cavidades {configuracionActual.CavidadesUsadas} → {vm.CavidadesUsadas}. " +
                         $"Ciclo {configuracionActual.TiempoCicloSegundos:0.####} → {vm.TiempoCicloSegundos:0.####} s. " +
                         $"Objetivo {objetivoAnterior} → {objetivoNuevo} pzas/h. " +
                         $"Cantidad programada {planeacion.CantidadProgramada:N0}. " +
@@ -801,33 +659,31 @@ public sealed partial class ProduccionController
 
             await tx.CommitAsync();
 
+            var detalleAnterior = string.IsNullOrWhiteSpace(configuracionActual.CavidadesConfiguradas)
+                ? configuracionActual.CavidadesUsadas.ToString()
+                : configuracionActual.CavidadesConfiguradas;
+
+            var detalleNuevo = string.IsNullOrWhiteSpace(vm.CavidadesConfiguradas)
+                ? vm.CavidadesUsadas.ToString()
+                : vm.CavidadesConfiguradas;
+
             var mensaje =
-                $"Configuración actualizada. " +
-                $"{configuracionActual.CavidadesUsadas:N0} → {vm.CavidadesUsadas:N0} cavidad(es), " +
-                $"{configuracionActual.TiempoCicloSegundos:0.####} → {vm.TiempoCicloSegundos:0.####} s. " +
+                $"Configuración actualizada. Cavidades activas: {detalleAnterior} → {detalleNuevo}. " +
+                $"Cantidad: {configuracionActual.CavidadesUsadas:N0} → {vm.CavidadesUsadas:N0}. " +
+                $"Ciclo: {configuracionActual.TiempoCicloSegundos:0.####} → {vm.TiempoCicloSegundos:0.####} s. " +
                 $"Objetivo: {objetivoAnterior:N0} → {objetivoNuevo:N0} pzas/h.";
 
             if (cantidadPendiente > 0)
             {
-                mensaje +=
-                    $" Pendientes: {cantidadPendiente:N0} pzas. " +
-                    $"Tiempo restante estimado: {horasRestantesAnteriores:0.##} → {horasRestantesNuevas:0.##} h.";
+                mensaje += $" Pendientes: {cantidadPendiente:N0} pzas. Tiempo restante estimado: {horasRestantesAnteriores:0.##} → {horasRestantesNuevas:0.##} h.";
 
                 if (nuevoFinProgramado.HasValue)
-                {
-                    mensaje +=
-                        $" Fin programado: {planeacion.FechaFinProgramada:dd/MM/yyyy HH:mm} → {nuevoFinProgramado.Value:dd/MM/yyyy HH:mm}. " +
-                        $"Programas posteriores recorridos: {programasRecorridos}.";
-                }
+                    mensaje += $" Fin programado: {planeacion.FechaFinProgramada:dd/MM/yyyy HH:mm} → {nuevoFinProgramado.Value:dd/MM/yyyy HH:mm}. Programas posteriores recorridos: {programasRecorridos}.";
                 else
-                {
                     mensaje += " El rendimiento por hora no cambió, por lo que el calendario permanece igual.";
-                }
             }
             else
-            {
                 mensaje += " La OF ya no tiene cantidad pendiente, por lo que no fue necesario modificar el calendario.";
-            }
 
             if (huboReinicioContador)
                 mensaje += $" Se detectó reinicio del contador; la nueva base quedó en {contadorActual:N0}.";
@@ -835,23 +691,12 @@ public sealed partial class ProduccionController
                 mensaje += $" Contador al cambio: {contadorActual:N0}.";
 
             TempData["Success"] = mensaje;
-
             return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
         catch (Exception ex)
         {
-            try
-            {
-                await tx.RollbackAsync();
-            }
-            catch
-            {
-            }
-
-            TempData["Error"] =
-                "No fue posible cambiar la configuración real de Producción: " +
-                ex.Message;
-
+            try { await tx.RollbackAsync(); } catch { }
+            TempData["Error"] = "No fue posible cambiar la configuración real de Producción: " + ex.Message;
             return RedirectToAction(nameof(Detalle), new { id = vm.EjecucionProduccionID });
         }
     }
@@ -902,10 +747,10 @@ public sealed partial class ProduccionController
     }
 
     private async Task<ProduccionConfiguracionTecnicoVm>
-        ConstruirConfiguracionTecnicoAsync(
-            ProduccionConfiguracionCorridaContexto contexto,
-            SqlConnection cn,
-            SqlTransaction? tx = null)
+     ConstruirConfiguracionTecnicoAsync(
+         ProduccionConfiguracionCorridaContexto contexto,
+         SqlConnection cn,
+         SqlTransaction? tx = null)
     {
         var vm =
             new ProduccionConfiguracionTecnicoVm
@@ -947,6 +792,15 @@ public sealed partial class ProduccionController
                 cn,
                 tx);
 
+        vm.CavidadesDisponibles =
+            await ObtenerCavidadesDisponiblesConfiguracionAsync(
+                contexto.ParteID,
+                contexto.CavidadesBD,
+                vm.ConfiguracionActual?
+                    .CavidadesConfiguradas,
+                cn,
+                tx);
+
         vm.HistorialConfiguraciones =
             await ObtenerHistorialConfiguracionesAsync(
                 contexto.EjecucionProduccionID,
@@ -964,10 +818,6 @@ public sealed partial class ProduccionController
 
         return vm;
     }
-
-    // ============================================================
-    // CONTEXTO DE EJECUCIÓN + DATOS TÉCNICOS DE REFERENCIA
-    // ============================================================
     private static async Task<ProduccionConfiguracionCorridaContexto?>
         ObtenerContextoConfiguracionCorridaAsync(
             int ejecucionProduccionId,
@@ -1106,22 +956,16 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
         };
     }
 
-    // ============================================================
-    // CONFIGURACIÓN ACTUAL
-    // ============================================================
-    private static async Task<ProduccionConfiguracionCorridaVm?>
-        ObtenerConfiguracionActualAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn,
-            SqlTransaction? tx = null)
+
+    private static async Task<ProduccionConfiguracionCorridaVm?> ObtenerConfiguracionActualAsync(int ejecucionProduccionId, SqlConnection cn, SqlTransaction? tx = null)
     {
-        var sql =
-            tx == null
-                ? @"
+        var sql = tx == null
+            ? @"
 SELECT TOP(1)
     c.ConfiguracionCorridaID,
     c.EjecucionProduccionID,
     c.CavidadesUsadas,
+    c.CavidadesConfiguradas,
     c.TiempoCicloSegundos,
     c.ObjetivoHoraCalculado,
     c.ContadorInicioVigencia,
@@ -1131,35 +975,24 @@ SELECT TOP(1)
     c.EsConfiguracionInicial,
     c.MotivoCambio,
     c.TecnicoProduccionID,
-    NULLIF(
-        LTRIM(RTRIM(
-            CONCAT(
-                ISNULL(p.Nombre,N''),
-                N' ',
-                ISNULL(p.ApellidoPaterno,N''),
-                N' ',
-                ISNULL(p.ApellidoMaterno,N'')
-            )
-        )),
-        N''
-    ) AS TecnicoProduccionNombre,
+    NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))),N'') AS TecnicoProduccionNombre,
     c.UsuarioCreacionID,
     c.FechaCreacion,
     c.UsuarioModificacionID,
     c.FechaModificacion,
     c.Activo
 FROM dbo.Produccion_ConfiguracionCorrida c
-LEFT JOIN dbo.Persona p
-    ON p.PersonaID=c.TecnicoProduccionID
+LEFT JOIN dbo.Persona p ON p.PersonaID=c.TecnicoProduccionID
 WHERE c.EjecucionProduccionID=@EjecucionProduccionID
   AND c.Activo=1
   AND c.FechaFinVigencia IS NULL
 ORDER BY c.ConfiguracionCorridaID DESC;"
-                : @"
+            : @"
 SELECT TOP(1)
     c.ConfiguracionCorridaID,
     c.EjecucionProduccionID,
     c.CavidadesUsadas,
+    c.CavidadesConfiguradas,
     c.TiempoCicloSegundos,
     c.ObjetivoHoraCalculado,
     c.ContadorInicioVigencia,
@@ -1169,63 +1002,33 @@ SELECT TOP(1)
     c.EsConfiguracionInicial,
     c.MotivoCambio,
     c.TecnicoProduccionID,
-    NULLIF(
-        LTRIM(RTRIM(
-            CONCAT(
-                ISNULL(p.Nombre,N''),
-                N' ',
-                ISNULL(p.ApellidoPaterno,N''),
-                N' ',
-                ISNULL(p.ApellidoMaterno,N'')
-            )
-        )),
-        N''
-    ) AS TecnicoProduccionNombre,
+    NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))),N'') AS TecnicoProduccionNombre,
     c.UsuarioCreacionID,
     c.FechaCreacion,
     c.UsuarioModificacionID,
     c.FechaModificacion,
     c.Activo
 FROM dbo.Produccion_ConfiguracionCorrida c WITH(UPDLOCK,HOLDLOCK)
-LEFT JOIN dbo.Persona p
-    ON p.PersonaID=c.TecnicoProduccionID
+LEFT JOIN dbo.Persona p ON p.PersonaID=c.TecnicoProduccionID
 WHERE c.EjecucionProduccionID=@EjecucionProduccionID
   AND c.Activo=1
   AND c.FechaFinVigencia IS NULL
 ORDER BY c.ConfiguracionCorridaID DESC;";
 
-        await using var cmd =
-            tx == null
-                ? new SqlCommand(sql, cn)
-                : new SqlCommand(sql, cn, tx);
+        await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
 
-        cmd.Parameters.Add(
-            "@EjecucionProduccionID",
-            SqlDbType.Int).Value =
-            ejecucionProduccionId;
-
-        await using var rd =
-            await cmd.ExecuteReaderAsync();
-
-        return await rd.ReadAsync()
-            ? MapearConfiguracionCorrida(rd)
-            : null;
+        await using var rd = await cmd.ExecuteReaderAsync();
+        return await rd.ReadAsync() ? MapearConfiguracionCorrida(rd) : null;
     }
-
-    // ============================================================
-    // HISTORIAL DE CONFIGURACIONES
-    // ============================================================
-    private static async Task<List<ProduccionConfiguracionCorridaVm>>
-        ObtenerHistorialConfiguracionesAsync(
-            int ejecucionProduccionId,
-            SqlConnection cn,
-            SqlTransaction? tx = null)
+    private static async Task<List<ProduccionConfiguracionCorridaVm>>       ObtenerHistorialConfiguracionesAsync(           int ejecucionProduccionId,            SqlConnection cn,            SqlTransaction? tx = null)
     {
         const string sql = @"
 SELECT
     c.ConfiguracionCorridaID,
     c.EjecucionProduccionID,
     c.CavidadesUsadas,
+c.CavidadesConfiguradas,
     c.TiempoCicloSegundos,
     c.ObjetivoHoraCalculado,
     c.ContadorInicioVigencia,
@@ -1286,53 +1089,33 @@ ORDER BY
         return lista;
     }
 
-    private static ProduccionConfiguracionCorridaVm
-        MapearConfiguracionCorrida(
-            SqlDataReader rd)
+    private static ProduccionConfiguracionCorridaVm       MapearConfiguracionCorrida(           SqlDataReader rd)
     {
         return new ProduccionConfiguracionCorridaVm
         {
-            ConfiguracionCorridaID =
-                Convert.ToInt32(
-                    rd["ConfiguracionCorridaID"]),
+            ConfiguracionCorridaID =               Convert.ToInt32(                   rd["ConfiguracionCorridaID"]),
 
-            EjecucionProduccionID =
-                Convert.ToInt32(
-                    rd["EjecucionProduccionID"]),
+            EjecucionProduccionID =               Convert.ToInt32(                    rd["EjecucionProduccionID"]),
 
-            CavidadesUsadas =
-                Convert.ToInt32(
-                    rd["CavidadesUsadas"]),
+            CavidadesUsadas =                Convert.ToInt32(                    rd["CavidadesUsadas"]),
+            CavidadesConfiguradas =
+    rd["CavidadesConfiguradas"] == DBNull.Value
+        ? null
+        : rd["CavidadesConfiguradas"]?
+            .ToString()?
+            .Trim(),
 
-            TiempoCicloSegundos =
-                Convert.ToDecimal(
-                    rd["TiempoCicloSegundos"]),
+            TiempoCicloSegundos =               Convert.ToDecimal(                   rd["TiempoCicloSegundos"]),
 
-            ObjetivoHoraCalculado =
-                Convert.ToDecimal(
-                    rd["ObjetivoHoraCalculado"]),
+            ObjetivoHoraCalculado =               Convert.ToDecimal(                   rd["ObjetivoHoraCalculado"]),
 
-            ContadorInicioVigencia =
-                rd["ContadorInicioVigencia"] == DBNull.Value
-                    ? null
-                    : Convert.ToInt64(
-                        rd["ContadorInicioVigencia"]),
+            ContadorInicioVigencia =               rd["ContadorInicioVigencia"] == DBNull.Value                    ? null                   : Convert.ToInt64(                        rd["ContadorInicioVigencia"]),
 
-            ContadorFinVigencia =
-                rd["ContadorFinVigencia"] == DBNull.Value
-                    ? null
-                    : Convert.ToInt64(
-                        rd["ContadorFinVigencia"]),
+            ContadorFinVigencia =                rd["ContadorFinVigencia"] == DBNull.Value                    ? null                    : Convert.ToInt64(                        rd["ContadorFinVigencia"]),
 
-            FechaInicioVigencia =
-                Convert.ToDateTime(
-                    rd["FechaInicioVigencia"]),
+            FechaInicioVigencia =                Convert.ToDateTime(                    rd["FechaInicioVigencia"]),
 
-            FechaFinVigencia =
-                rd["FechaFinVigencia"] == DBNull.Value
-                    ? null
-                    : Convert.ToDateTime(
-                        rd["FechaFinVigencia"]),
+            FechaFinVigencia =               rd["FechaFinVigencia"] == DBNull.Value                    ? null                    : Convert.ToDateTime(                        rd["FechaFinVigencia"]),
 
             EsConfiguracionInicial =
                 Convert.ToBoolean(
@@ -1381,29 +1164,14 @@ ORDER BY
                     rd["Activo"])
         };
     }
-
-    // ============================================================
-    // INSERTAR CONFIGURACIÓN
-    // ============================================================
-    private static async Task<int>
-        InsertarConfiguracionCorridaAsync(
-            int ejecucionProduccionId,
-            int cavidadesUsadas,
-            decimal tiempoCicloSegundos,
-            long contadorInicio,
-            DateTime fechaInicio,
-            bool esConfiguracionInicial,
-            string? motivoCambio,
-            int? tecnicoProduccionId,
-            int usuarioId,
-            SqlConnection cn,
-            SqlTransaction tx)
+    private static async Task<int> InsertarConfiguracionCorridaAsync(int ejecucionProduccionId, int cavidadesUsadas, string? cavidadesConfiguradas, decimal tiempoCicloSegundos, long contadorInicio, DateTime fechaInicio, bool esConfiguracionInicial, string? motivoCambio, int? tecnicoProduccionId, int usuarioId, SqlConnection cn, SqlTransaction tx)
     {
         const string sql = @"
 INSERT INTO dbo.Produccion_ConfiguracionCorrida
 (
     EjecucionProduccionID,
     CavidadesUsadas,
+    CavidadesConfiguradas,
     TiempoCicloSegundos,
     ContadorInicioVigencia,
     ContadorFinVigencia,
@@ -1421,6 +1189,7 @@ VALUES
 (
     @EjecucionProduccionID,
     @CavidadesUsadas,
+    @CavidadesConfiguradas,
     @TiempoCicloSegundos,
     @ContadorInicioVigencia,
     NULL,
@@ -1434,81 +1203,30 @@ VALUES
     1
 );";
 
-        await using var cmd =
-            new SqlCommand(
-                sql,
-                cn,
-                tx);
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucionProduccionId;
+        cmd.Parameters.Add("@CavidadesUsadas", SqlDbType.Int).Value = cavidadesUsadas;
+        cmd.Parameters.Add("@CavidadesConfiguradas", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(cavidadesConfiguradas) ? DBNull.Value : cavidadesConfiguradas.Trim();
 
-        cmd.Parameters.Add(
-            "@EjecucionProduccionID",
-            SqlDbType.Int).Value =
-            ejecucionProduccionId;
-
-        cmd.Parameters.Add(
-            "@CavidadesUsadas",
-            SqlDbType.Int).Value =
-            cavidadesUsadas;
-
-        var pCiclo =
-            cmd.Parameters.Add(
-                "@TiempoCicloSegundos",
-                SqlDbType.Decimal);
-
+        var pCiclo = cmd.Parameters.Add("@TiempoCicloSegundos", SqlDbType.Decimal);
         pCiclo.Precision = 18;
         pCiclo.Scale = 4;
         pCiclo.Value = tiempoCicloSegundos;
 
-        cmd.Parameters.Add(
-            "@ContadorInicioVigencia",
-            SqlDbType.BigInt).Value =
-            contadorInicio;
+        cmd.Parameters.Add("@ContadorInicioVigencia", SqlDbType.BigInt).Value = contadorInicio;
+        cmd.Parameters.Add("@FechaInicioVigencia", SqlDbType.DateTime2).Value = fechaInicio;
+        cmd.Parameters.Add("@EsConfiguracionInicial", SqlDbType.Bit).Value = esConfiguracionInicial;
+        cmd.Parameters.Add("@MotivoCambio", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(motivoCambio) ? DBNull.Value : motivoCambio.Trim();
+        cmd.Parameters.Add("@TecnicoProduccionID", SqlDbType.Int).Value = (object?)tecnicoProduccionId ?? DBNull.Value;
+        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
 
-        cmd.Parameters.Add(
-            "@FechaInicioVigencia",
-            SqlDbType.DateTime2).Value =
-            fechaInicio;
-
-        cmd.Parameters.Add(
-            "@EsConfiguracionInicial",
-            SqlDbType.Bit).Value =
-            esConfiguracionInicial;
-
-        cmd.Parameters.Add(
-            "@MotivoCambio",
-            SqlDbType.NVarChar,
-            500).Value =
-            string.IsNullOrWhiteSpace(motivoCambio)
-                ? DBNull.Value
-                : motivoCambio.Trim();
-
-        cmd.Parameters.Add(
-            "@TecnicoProduccionID",
-            SqlDbType.Int).Value =
-            (object?)tecnicoProduccionId ??
-            DBNull.Value;
-
-        cmd.Parameters.Add(
-            "@UsuarioID",
-            SqlDbType.Int).Value =
-            usuarioId;
-
-        var resultado =
-            await cmd.ExecuteScalarAsync();
-
-        if (resultado == null ||
-            resultado == DBNull.Value)
-        {
-            throw new InvalidOperationException(
-                "No fue posible recuperar el identificador de la configuración creada.");
-        }
+        var resultado = await cmd.ExecuteScalarAsync();
+        if (resultado == null || resultado == DBNull.Value)
+            throw new InvalidOperationException("No fue posible recuperar el identificador de la configuración creada.");
 
         return Convert.ToInt32(resultado);
     }
 
-    // ============================================================
-    // CERRAR CONFIGURACIÓN VIGENTE
-    // ============================================================
     private static async Task
         CerrarConfiguracionActualAsync(
             int configuracionCorridaId,
@@ -1955,59 +1673,37 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                     rd["FechaFinProgramada"])
         };
     }
-
-    private static string?
-        ValidarDatosConfiguracionCorrida(
-            ProduccionConfiguracionTecnicoPostVm vm,
-            bool requiereMotivo)
+    private static string? ValidarDatosConfiguracionCorrida(ProduccionConfiguracionTecnicoPostVm vm, bool requiereMotivo)
     {
-        if (vm.CavidadesUsadas <= 0)
+        if (!string.IsNullOrWhiteSpace(vm.CavidadesConfiguradas))
         {
-            return
-                "El técnico debe indicar cuántas cavidades se están utilizando realmente.";
+            var cavidades = ParsearCavidadesConfiguracion(vm.CavidadesConfiguradas);
+            if (cavidades.Count == 0)
+                return "La selección de cavidades activas no es válida.";
+
+            vm.CavidadesUsadas = cavidades.Count;
+            vm.CavidadesConfiguradas = NormalizarCavidadesConfiguracion(cavidades);
         }
+        else if (vm.CavidadesUsadas <= 0)
+            return "El técnico debe indicar cuántas cavidades se están utilizando realmente.";
 
         if (vm.TiempoCicloSegundos <= 0)
-        {
-            return
-                "El técnico debe indicar el tiempo de ciclo real en segundos.";
-        }
+            return "El técnico debe indicar el tiempo de ciclo real en segundos.";
 
         if (!vm.ContadorMaquinaActual.HasValue)
-        {
-            return
-                "El técnico debe indicar el contador actual de la máquina para establecer el punto de inicio de la configuración.";
-        }
+            return "El técnico debe indicar el contador actual de la máquina para establecer el punto de inicio de la configuración.";
 
         if (vm.ContadorMaquinaActual.Value < 0)
-        {
-            return
-                "El contador de la máquina no puede ser negativo.";
-        }
+            return "El contador de la máquina no puede ser negativo.";
 
-        if (!string.IsNullOrWhiteSpace(vm.MotivoCambio) &&
-            vm.MotivoCambio.Trim().Length > 500)
-        {
-            return
-                "El motivo u observaciones no pueden superar 500 caracteres.";
-        }
+        if (!string.IsNullOrWhiteSpace(vm.MotivoCambio) && vm.MotivoCambio.Trim().Length > 500)
+            return "El motivo u observaciones no pueden superar 500 caracteres.";
 
-        if (requiereMotivo &&
-            string.IsNullOrWhiteSpace(vm.MotivoCambio))
-        {
-            return
-                "Debes indicar el motivo por el que cambian las cavidades o el ciclo.";
-        }
+        if (requiereMotivo && string.IsNullOrWhiteSpace(vm.MotivoCambio))
+            return "Debes indicar el motivo por el que cambia la configuración técnica.";
 
         return null;
     }
-
-    // ============================================================
-    // FÓRMULA DE OBJETIVO
-    //
-    // Objetivo por hora =
-    // (3600 / ciclo segundos) * cavidades reales
-    // ============================================================
     private static int CalcularObjetivoHoraConfiguracion(
         decimal tiempoCicloSegundos,
         int cavidadesUsadas)
@@ -2028,7 +1724,251 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
             MidpointRounding.AwayFromZero);
     }
 
-   
+    private const int MaximoCavidadesConfigurablesProduccion = 64;
+
+    private static List<int> ParsearCavidadesConfiguracion(
+        string? cavidadesConfiguradas)
+    {
+        var resultado = new SortedSet<int>();
+
+        if (string.IsNullOrWhiteSpace(cavidadesConfiguradas))
+            return resultado.ToList();
+
+        var tokens = Regex.Split(
+            cavidadesConfiguradas.Trim(),
+            @"[\s,;|]+");
+
+        foreach (var token in tokens)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                continue;
+
+            if (!int.TryParse(
+                    token,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var cavidad))
+            {
+                return new List<int>();
+            }
+
+            if (cavidad <= 0 ||
+                cavidad > MaximoCavidadesConfigurablesProduccion)
+            {
+                return new List<int>();
+            }
+
+            resultado.Add(cavidad);
+        }
+
+        return resultado.ToList();
+    }
+
+    private static string NormalizarCavidadesConfiguracion(
+        IEnumerable<int> cavidades)
+    {
+        return string.Join(
+            ",",
+            cavidades
+                .Where(x => x > 0)
+                .Distinct()
+                .OrderBy(x => x));
+    }
+
+    private static string? ValidarCavidadesContraDisponibles(
+        IReadOnlyCollection<int> seleccionadas,
+        IReadOnlyCollection<int> disponibles)
+    {
+        if (seleccionadas.Count == 0)
+        {
+            return
+                "Selecciona al menos una cavidad activa para la corrida.";
+        }
+
+        if (disponibles.Count == 0)
+        {
+            return
+                "No fue posible determinar las cavidades disponibles para esta parte. Revisa los datos técnicos de la parte.";
+        }
+
+        var noPermitidas =
+            seleccionadas
+                .Where(x => !disponibles.Contains(x))
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+        if (noPermitidas.Count > 0)
+        {
+            return
+                "Las siguientes cavidades no están disponibles para esta parte: " +
+                string.Join(", ", noPermitidas) +
+                ".";
+        }
+
+        return null;
+    }
+
+    private static async Task<List<int>>
+        ObtenerCavidadesDisponiblesConfiguracionAsync(
+            int? parteId,
+            int? cavidadesBD,
+            string? cavidadesConfiguradasActuales,
+            SqlConnection cn,
+            SqlTransaction? tx = null)
+    {
+        var resultado = new SortedSet<int>();
+
+        static void AgregarRango(
+            SortedSet<int> destino,
+            int? cantidad)
+        {
+            if (!cantidad.HasValue ||
+                cantidad.Value <= 0)
+            {
+                return;
+            }
+
+            var limite =
+                Math.Min(
+                    cantidad.Value,
+                    MaximoCavidadesConfigurablesProduccion);
+
+            for (var numero = 1;
+                 numero <= limite;
+                 numero++)
+            {
+                destino.Add(numero);
+            }
+        }
+
+       
+        AgregarRango(
+            resultado,
+            cavidadesBD);
+
+        
+        foreach (var cavidad in
+            ParsearCavidadesConfiguracion(
+                cavidadesConfiguradasActuales))
+        {
+            resultado.Add(cavidad);
+        }
+
+        if (!parteId.HasValue ||
+            parteId.Value <= 0)
+        {
+            return resultado.ToList();
+        }
+
+       
+        const string sqlPlantilla = @"
+SELECT TOP(1)
+    h.PlantillaHCCID,
+    h.CavidadesDeclaradas
+FROM dbo.Calidad_HCC_PlantillaPartes pp
+INNER JOIN dbo.Calidad_HCC_Plantillas h
+    ON h.PlantillaHCCID=pp.PlantillaHCCID
+   AND h.Activo=1
+WHERE pp.ParteID=@ParteID
+  AND pp.Activo=1
+ORDER BY
+    h.EsVigente DESC,
+    pp.EsPrincipal DESC,
+    h.FechaModificacionFormato DESC,
+    h.PlantillaHCCID DESC;";
+
+        int? plantillaId = null;
+        int? cavidadesDeclaradas = null;
+
+        await using (var cmd =
+            tx == null
+                ? new SqlCommand(
+                    sqlPlantilla,
+                    cn)
+                : new SqlCommand(
+                    sqlPlantilla,
+                    cn,
+                    tx))
+        {
+            cmd.Parameters.Add(
+                "@ParteID",
+                SqlDbType.Int).Value =
+                parteId.Value;
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            if (await rd.ReadAsync())
+            {
+                plantillaId =
+                    Convert.ToInt32(
+                        rd["PlantillaHCCID"]);
+
+                cavidadesDeclaradas =
+                    rd["CavidadesDeclaradas"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["CavidadesDeclaradas"]);
+            }
+        }
+
+        AgregarRango(
+            resultado,
+            cavidadesDeclaradas);
+
+        if (!plantillaId.HasValue)
+            return resultado.ToList();
+
+        const string sqlCavidades = @"
+SELECT DISTINCT
+    cc.NumeroCavidad
+FROM dbo.Calidad_HCC_CaracteristicaCavidades cc
+INNER JOIN dbo.Calidad_HCC_Caracteristicas c
+    ON c.CaracteristicaHCCID=cc.CaracteristicaHCCID
+WHERE c.PlantillaHCCID=@PlantillaHCCID
+  AND c.Activo=1
+  AND cc.Activo=1
+  AND cc.NumeroCavidad>0
+ORDER BY
+    cc.NumeroCavidad;";
+
+        await using (var cmd =
+            tx == null
+                ? new SqlCommand(
+                    sqlCavidades,
+                    cn)
+                : new SqlCommand(
+                    sqlCavidades,
+                    cn,
+                    tx))
+        {
+            cmd.Parameters.Add(
+                "@PlantillaHCCID",
+                SqlDbType.Int).Value =
+                plantillaId.Value;
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                var numero =
+                    Convert.ToInt32(
+                        rd["NumeroCavidad"]);
+
+                if (numero > 0 &&
+                    numero <=
+                    MaximoCavidadesConfigurablesProduccion)
+                {
+                    resultado.Add(numero);
+                }
+            }
+        }
+
+        return resultado.ToList();
+    }
+
     private static decimal?
         ConvertirDecimalFlexibleConfiguracion(
             string? valor)

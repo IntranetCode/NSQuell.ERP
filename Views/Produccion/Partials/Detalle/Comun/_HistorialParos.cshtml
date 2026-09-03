@@ -1,0 +1,85 @@
+﻿@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+<div class="panel mb-4"
+     id="panelHistorialParos"
+     data-collapsible
+     data-default-open="false">
+
+    <div class="panel-header">
+        <i class="bi bi-pause-circle me-1"></i>
+        Historial de paros
+    </div>
+
+    <div class="table-responsive">
+
+        <table class="table table-hover mb-0 align-middle">
+
+            <thead>
+                <tr>
+                    <th>Inicio</th>
+                    <th>Fin</th>
+                    <th>Duración</th>
+                    <th>Motivo</th>
+                    <th>Mayor a 15 min</th>
+                    <th>Descripción</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                @if (!Model.Paros.Any())
+                {
+                    <tr>
+                        <td colspan="6"
+                            class="text-center text-muted py-4">
+                            Sin paros registrados.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var p in Model.Paros)
+                    {
+                        <tr>
+                            <td>
+                                @p.FechaInicioParo.ToString("dd/MM/yyyy HH:mm")
+                            </td>
+
+                            <td>
+                                @(p.FechaFinParo?.ToString("dd/MM/yyyy HH:mm")
+                                                        ?? "Abierto")
+                    </td>
+
+                            <td class="fw-bold">
+                                @p.DuracionTexto
+                            </td>
+
+                            <td>
+                                @p.MotivoParoTexto
+                            </td>
+
+                            <td>
+                        @if (p.EsMayorA15Minutos)
+                                {
+                                    <span class="badge bg-danger">Sí</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">No</span>
+                                }
+                            </td>
+
+                            <td>
+                                @p.Descripcion
+                            </td>
+                        </tr>
+                    }
+                }
+
+            </tbody>
+
+        </table>
+
+    </div>
+</div>
+s

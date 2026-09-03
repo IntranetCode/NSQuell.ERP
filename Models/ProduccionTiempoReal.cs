@@ -80,6 +80,7 @@ namespace ERP.NSQuell.Models
         public int? UsuarioModificacionID { get; set; }
         public DateTime? FechaModificacion { get; set; }
 
+        public string? CavidadesConfiguradas { get; set; }
         public bool Activo { get; set; } = true;
 
         public bool EstaVigente =>
@@ -111,6 +112,7 @@ namespace ERP.NSQuell.Models
         public long? ContadorMaquinaActual { get; set; }
 
         public string? MotivoCambio { get; set; }
+        public string? CavidadesConfiguradas { get; set; }
     }
 
     public sealed class ProduccionConfiguracionTecnicoVm
@@ -129,6 +131,8 @@ namespace ERP.NSQuell.Models
         // Datos maestros. Solo referencia/sugerencia.
         public int? CavidadesBD { get; set; }
         public decimal? TiempoCicloBD { get; set; }
+
+        public List<int> CavidadesDisponibles { get; set; } = new();
 
         // Datos reales confirmados por el técnico.
         public ProduccionConfiguracionCorridaVm? ConfiguracionActual { get; set; }

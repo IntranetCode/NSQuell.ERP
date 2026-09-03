@@ -15,7 +15,9 @@ namespace ERP.NSQuell.Servicios.Produccion
         private readonly IConfiguration _configuration;
         public AgendaOperativaService(IConfiguration configuration) { _configuration = configuration; }
         private string ConnectionString => _configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection.");
-        public async Task<AgendaOperativaVm> ObtenerAgendaAsync(AgendaOperativaFiltroVm? filtros, int usuarioId)
+        public async Task<AgendaOperativaVm> ObtenerAgendaAsync( AgendaOperativaFiltroVm? filtros,    int usuarioId,
+    DateTime? desdeForzado = null,
+    DateTime? hastaForzado = null)
         {
             _ = usuarioId;
             filtros ??= new AgendaOperativaFiltroVm();
@@ -27,7 +29,7 @@ namespace ERP.NSQuell.Servicios.Produccion
             var ahora = DateTime.Now;
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-            var programas = await CargarProgramasBaseAsync(filtros, ahora, cn);
+            var programas = await CargarProgramasBaseAsync(    filtros,   ahora,    cn,    desdeForzado,    hastaForzado);
             var vm = new AgendaOperativaVm { FechaConsulta = ahora, Filtros = filtros };
             if (programas.Count == 0) { vm.Areas = ConstruirOpcionesAreas(filtros.Area); return vm; }
             await CrearTablaTemporalProgramasAsync(programas, cn);
@@ -61,10 +63,19 @@ namespace ERP.NSQuell.Servicios.Produccion
             vm.Areas = ConstruirOpcionesAreas(filtros.Area);
             return vm;
         }
-        private static async Task<List<ProgramaBaseDto>> CargarProgramasBaseAsync(AgendaOperativaFiltroVm filtros, DateTime ahora, SqlConnection cn)
+        private static async Task<List<ProgramaBaseDto>> CargarProgramasBaseAsync(
+    AgendaOperativaFiltroVm filtros,
+    DateTime ahora,
+    SqlConnection cn,
+    DateTime? desdeForzado = null,
+    DateTime? hastaForzado = null)
         {
-            var desde = ahora.AddHours(-24);
-            var hasta = ahora.AddHours(filtros.VentanaHoras);
+            var desde = desdeForzado ?? ahora.AddHours(-24);
+            var hasta = hastaForzado ?? ahora.AddHours(filtros.VentanaHoras);
+
+            if (hasta <= desde)
+                hasta = desde.AddDays(1);
+
             const string sql = @"
 SELECT TOP(500)
     pp.ProgramaProduccionID,pp.SolicitudProduccionID,pp.SolicitudProduccionDetalleID,pp.ReleaseDetalleID,
