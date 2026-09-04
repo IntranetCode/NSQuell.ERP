@@ -105,14 +105,19 @@ namespace ERP.NSQuell.Models
     {
         public int EjecucionProduccionID { get; set; }
 
+        // Cavidades de la ejecución desde la cual se abrió la pantalla.
         public int CavidadesUsadas { get; set; }
+        public string? CavidadesConfiguradas { get; set; }
 
+        public int? CavidadesUsadasPareja { get; set; }
+        public string? CavidadesConfiguradasPareja { get; set; }
+
+        // Datos físicos compartidos por LH/RH.
         public decimal TiempoCicloSegundos { get; set; }
-
         public long? ContadorMaquinaActual { get; set; }
 
+        // Un solo motivo porque el cambio es una intervención física conjunta.
         public string? MotivoCambio { get; set; }
-        public string? CavidadesConfiguradas { get; set; }
     }
 
     public sealed class ProduccionConfiguracionTecnicoVm
@@ -128,13 +133,11 @@ namespace ERP.NSQuell.Models
         public string? NumeroParte { get; set; }
         public string? ReferenciaSAP { get; set; }
 
-        // Datos maestros. Solo referencia/sugerencia.
         public int? CavidadesBD { get; set; }
         public decimal? TiempoCicloBD { get; set; }
 
         public List<int> CavidadesDisponibles { get; set; } = new();
 
-        // Datos reales confirmados por el técnico.
         public ProduccionConfiguracionCorridaVm? ConfiguracionActual { get; set; }
 
         public long? UltimoContadorMaquina { get; set; }
@@ -143,12 +146,36 @@ namespace ERP.NSQuell.Models
             HistorialConfiguraciones
         { get; set; } = new();
 
+        public ProduccionParejaLhRhVm? ParejaLhRh { get; set; }
+
+        public string? LadoLhRh { get; set; }
+        public string? LadoParejaLhRh { get; set; }
+
+       
+        public int? CavidadesBDPareja { get; set; }
+        public decimal? TiempoCicloBDPareja { get; set; }
+
+        public List<int> CavidadesDisponiblesPareja { get; set; } = new();
+
+     
+        public ProduccionConfiguracionCorridaVm? ConfiguracionActualPareja { get; set; }
+
+        public long? UltimoContadorMaquinaPareja { get; set; }
+
+        public List<ProduccionConfiguracionCorridaVm>
+            HistorialConfiguracionesPareja
+        { get; set; } = new();
+
+       
         public bool TieneConfiguracionActual =>
             ConfiguracionActual != null &&
             ConfiguracionActual.EstaVigente;
 
         public int? CavidadesActuales =>
             ConfiguracionActual?.CavidadesUsadas;
+
+        public string? CavidadesConfiguradasActuales =>
+            ConfiguracionActual?.CavidadesConfiguradas;
 
         public decimal? CicloActual =>
             ConfiguracionActual?.TiempoCicloSegundos;
@@ -158,6 +185,88 @@ namespace ERP.NSQuell.Models
                 ? ConfiguracionActual.ObjetivoHoraOperativo
                 : null;
 
+        public long? ContadorBaseActual =>
+            ConfiguracionActual?.ContadorInicioVigencia;
+
+       
+        public bool EsParejaLhRh =>
+            ParejaLhRh != null &&
+            ParejaLhRh.TieneEjecucionPareja;
+
+        public int? GrupoLhRh =>
+            ParejaLhRh?.GrupoLhRh;
+
+        public int? EjecucionParejaID =>
+            ParejaLhRh?.EjecucionParejaID;
+
+        public int? ProgramaParejaID =>
+            ParejaLhRh?.ProgramaParejaID;
+
+        public bool TieneConfiguracionActualPareja =>
+            ConfiguracionActualPareja != null &&
+            ConfiguracionActualPareja.EstaVigente;
+
+        public int? CavidadesActualesPareja =>
+            ConfiguracionActualPareja?.CavidadesUsadas;
+
+        public string? CavidadesConfiguradasActualesPareja =>
+            ConfiguracionActualPareja?.CavidadesConfiguradas;
+
+        public decimal? CicloActualPareja =>
+            ConfiguracionActualPareja?.TiempoCicloSegundos;
+
+        public int? ObjetivoHoraActualPareja =>
+            ConfiguracionActualPareja != null
+                ? ConfiguracionActualPareja.ObjetivoHoraOperativo
+                : null;
+
+        public long? ContadorBasePareja =>
+            ConfiguracionActualPareja?.ContadorInicioVigencia;
+
+        public bool CicloCompartidoSincronizado
+        {
+            get
+            {
+                if (!EsParejaLhRh)
+                    return true;
+
+                if (!TieneConfiguracionActual ||
+                    !TieneConfiguracionActualPareja)
+                {
+                    return false;
+                }
+
+                return Math.Abs(
+                    ConfiguracionActual!.TiempoCicloSegundos -
+                    ConfiguracionActualPareja!.TiempoCicloSegundos) < 0.0001m;
+            }
+        }
+
+        public bool ContadorCompartidoSincronizado
+        {
+            get
+            {
+                if (!EsParejaLhRh)
+                    return true;
+
+                if (!TieneConfiguracionActual ||
+                    !TieneConfiguracionActualPareja)
+                {
+                    return false;
+                }
+
+                return ConfiguracionActual!.ContadorInicioVigencia.HasValue &&
+                       ConfiguracionActualPareja!.ContadorInicioVigencia.HasValue &&
+                       ConfiguracionActual.ContadorInicioVigencia.Value ==
+                       ConfiguracionActualPareja.ContadorInicioVigencia.Value;
+            }
+        }
+
+        public bool ConfiguracionFisicaSincronizada =>
+            CicloCompartidoSincronizado &&
+            ContadorCompartidoSincronizado;
+
+       
         public string TextoParte =>
             !string.IsNullOrWhiteSpace(ReferenciaSAP)
                 ? ReferenciaSAP
@@ -171,6 +280,14 @@ namespace ERP.NSQuell.Models
                 : string.IsNullOrWhiteSpace(MaquinaNombre)
                     ? MaquinaCodigo
                     : $"{MaquinaCodigo} - {MaquinaNombre}";
+
+        public string TextoOFPareja =>
+            ParejaLhRh?.OFParejaTexto ??
+            "Sin OF pareja";
+
+        public string TextoPartePareja =>
+            ParejaLhRh?.ParteParejaTexto ??
+            "Sin parte pareja";
     }
 
     public sealed class ProduccionContadorMaquinaLecturaVm
@@ -485,6 +602,11 @@ namespace ERP.NSQuell.Models
 
         public string? Observaciones { get; set; }
 
+        public int CantidadScrapPareja { get; set; }
+        public string? ObservacionesPareja { get; set; }
+        public List<ProduccionRegistroDefectoPostVm> DefectosScrapPareja { get; set; } = new();
+        public bool ConfirmarCapturaLhRh { get; set; }
+
         public int TotalClasificado =>
             CantidadOK +
             CantidadSospechosa +
@@ -508,20 +630,19 @@ namespace ERP.NSQuell.Models
     {
         public int TiempoExtraID { get; set; }
         public int EjecucionProduccionID { get; set; }
-
         public long? ContadorMaquinaActual { get; set; }
-
         public int CantidadOK { get; set; }
         public bool OkModificadoManual { get; set; }
-
         public int CantidadSospechosa { get; set; }
         public int CantidadScrap { get; set; }
-
         public string? Observaciones { get; set; }
-
         public bool FinalizarTiempoExtra { get; set; }
-
         public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
+
+        public int CantidadScrapPareja { get; set; }
+        public string? ObservacionesPareja { get; set; }
+        public List<ProduccionRegistroDefectoPostVm> DefectosScrapPareja { get; set; } = new();
+        public bool ConfirmarCapturaLhRh { get; set; }
     }
 
 

@@ -122,10 +122,7 @@ namespace ERP.NSQuell.Controllers
 
             vm.ProgramasDisponibles = await ObtenerProgramasDisponiblesAsync(busqueda, maquinaId, fechaDesde, fechaHasta, cn);
 
-            // NSQ_PRODUCCION_INDEX_OPERADOR_PROGRAMADO_V1_START
-            // La tarjeta de Produccion debe mostrar primero el operador realmente
-            // programado para la OF/turno. Solo usamos la sugerencia antigua de
-            // RRHH como respaldo cuando no existe programacion operativa.
+      
             foreach (var programa in vm.ProgramasDisponibles)
             {
                 if (programa.ProgramaProduccionID <= 0)
@@ -155,7 +152,7 @@ namespace ERP.NSQuell.Controllers
 
                 }
             }
-            // NSQ_PRODUCCION_INDEX_OPERADOR_PROGRAMADO_V1_END
+      
 
             var ahora = DateTime.Now;
             var limiteProximos = ahora.AddMinutes(15);
@@ -172,6 +169,8 @@ namespace ERP.NSQuell.Controllers
                 .ThenBy(x => x.ProgramaProduccionID)
                 .ToList();
 
+            await EnriquecerProximosLhRhAsync(vm.ProximosAIniciar, cn);
+
             try
             {
                 vm.AlertasReprogramacion = await ObtenerAlertasReprogramacionProduccionAsync(maquinaId, cn);
@@ -186,34 +185,23 @@ namespace ERP.NSQuell.Controllers
 
             return View(vm);
         }
-
         [HttpGet]
         public async Task<IActionResult> Detalle(int id)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
-            if (id <= 0)
-                return NotFound();
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+            if (id <= 0) return NotFound();
 
             var usuarioId = ObtenerUsuarioID();
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
             var ejecucion = await ObtenerEjecucionAsync(id, cn);
-
-            if (ejecucion == null)
-                return NotFound();
+            if (ejecucion == null) return NotFound();
 
             var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
-            var workspaceProduccion =
-    ResolverWorkspaceDetalle(permisos);
+            var workspaceProduccion = ResolverWorkspaceDetalle(permisos);
 
-            ViewBag.WorkspaceProduccion =
-                workspaceProduccion;
-
-
+            ViewBag.WorkspaceProduccion = workspaceProduccion;
             ViewBag.UsuarioProduccionID = permisos.UsuarioID;
             ViewBag.PersonaProduccionID = permisos.PersonaID;
             ViewBag.NombreProduccionUsuario = permisos.Nombre;
@@ -232,117 +220,171 @@ namespace ERP.NSQuell.Controllers
             ViewBag.PuedeVerCapturasHora = permisos.PuedeVerCapturasHora;
             ViewBag.PuedeCapturarHora = permisos.PuedeCapturarHora;
             ViewBag.PuedeGestionarSugerenciaCambioTurno = permisos.PuedeGestionarSugerenciaCambioTurno;
-
             ViewBag.PuedeCorregirCapturasHora = permisos.PuedeCorregirCapturasHora;
 
-            var autorizacionTerminacionParcial = await ObtenerAutorizacionTerminacionParcialAsync(id, cn);
+            var erroresDetalle = new List<string>();
+            var parejaLhRh = await ObtenerParejaLhRhProduccionAsync(ejecucion.ProgramaProduccionID, cn);
+            ProduccionEjecucionVm? ejecucionPareja = null;
 
+            if (parejaLhRh?.EjecucionParejaID is int ejecucionParejaId && ejecucionParejaId > 0)
+            {
+                ejecucionPareja = await ObtenerEjecucionAsync(ejecucionParejaId, cn);
+                if (ejecucionPareja != null && ejecucionPareja.ProgramaProduccionID != parejaLhRh.ProgramaParejaID)
+                {
+                    erroresDetalle.Add($"La ejecución {ejecucionPareja.EjecucionProduccionID} indicada como pareja no corresponde al Programa {parejaLhRh.ProgramaParejaID}. Se mostrará únicamente la OF actual hasta corregir la relación.");
+                    ejecucionPareja = null;
+                }
+            }
+
+            var lados = ResolverLadosLhRhDetalle(ejecucion, parejaLhRh);
+            ViewBag.EsProduccionLhRh = parejaLhRh != null;
+            ViewBag.GrupoLhRh = parejaLhRh?.GrupoLhRh;
+            ViewBag.EjecucionParejaID = ejecucionPareja?.EjecucionProduccionID;
+            ViewBag.LadoLhRh = lados.LadoActual;
+            ViewBag.LadoParejaLhRh = lados.LadoPareja;
+
+            var autorizacionTerminacionParcial = await ObtenerAutorizacionTerminacionParcialAsync(id, cn);
             ViewBag.TerminarParcialAutorizado = autorizacionTerminacionParcial.ParoID.HasValue;
             ViewBag.TerminarParcialParoID = autorizacionTerminacionParcial.ParoID;
             ViewBag.TerminarParcialMotivo = autorizacionTerminacionParcial.Motivo;
             ViewBag.TerminarParcialFechaAutorizacion = autorizacionTerminacionParcial.FechaAutorizacion;
-            ViewBag.PuedeEjecutarTerminacionParcial =
-                autorizacionTerminacionParcial.ParoID.HasValue
-                && (permisos.EsTecnicoProduccion || permisos.EsAuxiliarProduccion);
-
-
+            ViewBag.PuedeEjecutarTerminacionParcial = autorizacionTerminacionParcial.ParoID.HasValue && (permisos.EsTecnicoProduccion || permisos.EsAuxiliarProduccion);
 
             ViewBag.OperadoresProduccion = await CargarOperadoresProduccionAsync(cn);
 
             ProduccionMonitoreoTurnoAvisoVm? monitoreoTurnoActual = null;
+            ProduccionMonitoreoTurnoAvisoVm? monitoreoTurnoPareja = null;
 
-            var ejecucionActivaParaMonitoreo =
-                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion
-                || ejecucion.EstatusID == ProduccionEstatus.EnProduccion
-                || ejecucion.EstatusID == ProduccionEstatus.Pausado;
-
-            if (ejecucionActivaParaMonitoreo
-                && ejecucion.SolicitudProduccionID.HasValue
-                && ejecucion.SolicitudProduccionID.Value > 0)
+            try
             {
-                await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+                monitoreoTurnoActual = await PrepararMonitoreoTurnoDetalleAsync(ejecucion, usuarioId, cn);
+            }
+            catch (Exception ex)
+            {
+                erroresDetalle.Add("No fue posible preparar el monitoreo de periféricos de la OF actual: " + ex.Message);
+            }
 
+            if (ejecucionPareja != null)
+            {
                 try
                 {
-                    var checklistPerifericosId = await ObtenerOCrearChecklistPerifericosTurnoAsync(
-                        ejecucion,
-                        DateTime.Now,
-                        usuarioId,
-                        cn,
-                        tx);
-
-                    await tx.CommitAsync();
-
-                    monitoreoTurnoActual = await ObtenerAvisoMonitoreoTurnoAsync(
-                        checklistPerifericosId,
-                        cn);
+                    monitoreoTurnoPareja = await PrepararMonitoreoTurnoDetalleAsync(ejecucionPareja, usuarioId, cn);
                 }
                 catch (Exception ex)
                 {
-                    try
-                    {
-                        await tx.RollbackAsync();
-                    }
-                    catch
-                    {
-                    }
-
-                    TempData["Error"] =
-                        "No fue posible preparar el monitoreo de periféricos del turno actual: " +
-                        ex.Message;
+                    erroresDetalle.Add($"No fue posible preparar el monitoreo de periféricos de {parejaLhRh!.OFParejaTexto}: {ex.Message}");
                 }
             }
-
-            var calidadResumen = await ObtenerResumenCalidadAsync(id, cn);
 
             var vm = new ProduccionDetalleVm
             {
                 Ejecucion = ejecucion,
-                ParejaLhRh = await ObtenerParejaLhRhProduccionAsync(ejecucion.ProgramaProduccionID, cn),
+                ParejaLhRh = parejaLhRh,
+                EjecucionPareja = ejecucionPareja,
+                LadoLhRh = lados.LadoActual,
+                LadoParejaLhRh = lados.LadoPareja,
                 RegistrosHora = await ObtenerRegistrosHoraAsync(id, cn),
+                RegistrosHoraPareja = ejecucionPareja != null ? await ObtenerRegistrosHoraAsync(ejecucionPareja.EjecucionProduccionID, cn) : new List<ProduccionRegistroHoraVm>(),
                 Paros = await ObtenerParosAsync(id, cn),
+                ParosPareja = ejecucionPareja != null ? await ObtenerParosAsync(ejecucionPareja.EjecucionProduccionID, cn) : new List<ProduccionParoVm>(),
                 MotivosParo = await CargarMotivosParoAsync(cn),
                 ChecklistResumen = await ObtenerResumenChecklistArranqueAsync(id, cn),
-                CalidadResumen = calidadResumen,
+                ChecklistResumenPareja = ejecucionPareja != null ? await ObtenerResumenChecklistArranqueAsync(ejecucionPareja.EjecucionProduccionID, cn) : null,
+                CalidadResumen = await ObtenerResumenCalidadAsync(id, cn),
+                CalidadResumenPareja = ejecucionPareja != null ? await ObtenerResumenCalidadAsync(ejecucionPareja.EjecucionProduccionID, cn) : null,
                 MonitoreoTurnoActual = monitoreoTurnoActual,
-                CambioTurnoTecnico = await ConstruirCambioTurnoTecnicoAsync(ejecucion, cn)
+                MonitoreoTurnoActualPareja = monitoreoTurnoPareja,
+                CambioTurnoTecnico = await ConstruirCambioTurnoTecnicoAsync(ejecucion, cn),
+                CambioTurnoTecnicoPareja = ejecucionPareja != null ? await ConstruirCambioTurnoTecnicoAsync(ejecucionPareja, cn) : null
             };
 
             var contextoConfiguracion = await ObtenerContextoConfiguracionCorridaAsync(id, cn);
+            var puedeGestionarConfiguracion = false;
 
             if (contextoConfiguracion != null)
             {
-                vm.ConfiguracionTiempoReal = await ConstruirConfiguracionTecnicoAsync(
-                    contextoConfiguracion,
-                    cn);
+                vm.ConfiguracionTiempoReal = await ConstruirConfiguracionTecnicoAsync(contextoConfiguracion, cn);
+                puedeGestionarConfiguracion = PuedeModificarConfiguracionCorrida(permisos, contextoConfiguracion) && EjecucionPermiteConfiguracionCorrida(contextoConfiguracion);
 
-                ViewBag.PuedeGestionarConfiguracionCorrida =
-                    PuedeModificarConfiguracionCorrida(permisos, contextoConfiguracion)
-                    && EjecucionPermiteConfiguracionCorrida(contextoConfiguracion);
+                if (parejaLhRh != null)
+                {
+                    if (ejecucionPareja == null)
+                    {
+                        puedeGestionarConfiguracion = false;
+                    }
+                    else
+                    {
+                        var contextoConfiguracionPareja = await ObtenerContextoConfiguracionCorridaAsync(ejecucionPareja.EjecucionProduccionID, cn);
+                        puedeGestionarConfiguracion = puedeGestionarConfiguracion && contextoConfiguracionPareja != null && PuedeModificarConfiguracionCorrida(permisos, contextoConfiguracionPareja) && EjecucionPermiteConfiguracionCorrida(contextoConfiguracionPareja);
+                    }
+                }
             }
             else
             {
                 vm.ConfiguracionTiempoReal = null;
-                ViewBag.PuedeGestionarConfiguracionCorrida = false;
             }
 
-            ViewBag.FaltaConfiguracionCorrida =
-                ejecucionActivaParaMonitoreo
-                && (
-                    vm.ConfiguracionTiempoReal == null
-                    || !vm.ConfiguracionTiempoReal.TieneConfiguracionActual
-                );
+            ViewBag.PuedeGestionarConfiguracionCorrida = puedeGestionarConfiguracion;
 
-            vm.RecepcionesOF = await ObtenerEntregasAlmacenOFAsync(
-                ejecucion,
-                cn,
-                null);
+            var ejecucionActivaParaConfiguracion = ejecucion.EstatusID == ProduccionEstatus.EnPreparacion || ejecucion.EstatusID == ProduccionEstatus.EnProduccion || ejecucion.EstatusID == ProduccionEstatus.Pausado;
+            var faltaConfiguracionActual = vm.ConfiguracionTiempoReal?.TieneConfiguracionActual != true;
+            var faltaConfiguracionPareja = parejaLhRh != null && (ejecucionPareja == null || vm.ConfiguracionTiempoReal?.TieneConfiguracionActualPareja != true);
+            ViewBag.FaltaConfiguracionCorrida = ejecucionActivaParaConfiguracion && (faltaConfiguracionActual || faltaConfiguracionPareja);
 
-            ViewBag.EsReinicioSerie =
-                ejecucion.EstatusID == ProduccionEstatus.EnPreparacion
-                && await EsReinicioSeriePendienteAsync(id, cn);
+            vm.RecepcionesOF = await ObtenerEntregasAlmacenOFAsync(ejecucion, cn, null);
+            vm.RecepcionesOFPareja = ejecucionPareja != null ? await ObtenerEntregasAlmacenOFAsync(ejecucionPareja, cn, null) : new List<ProduccionRecepcionOFVm>();
+
+            var esReinicioActual = ejecucion.EstatusID == ProduccionEstatus.EnPreparacion && await EsReinicioSeriePendienteAsync(id, cn);
+            var esReinicioPareja = ejecucionPareja != null && ejecucionPareja.EstatusID == ProduccionEstatus.EnPreparacion && await EsReinicioSeriePendienteAsync(ejecucionPareja.EjecucionProduccionID, cn);
+
+            ViewBag.EsReinicioSerie = esReinicioActual || esReinicioPareja;
+            ViewBag.EsReinicioSerieActual = esReinicioActual;
+            ViewBag.EsReinicioSeriePareja = esReinicioPareja;
+
+            if (parejaLhRh != null && !parejaLhRh.EsCompatibleFisicamente)
+                erroresDetalle.Add($"La pareja LH/RH grupo {parejaLhRh.GrupoLhRh} ya no conserva la misma máquina, molde y ventana programada.");
+
+            if (erroresDetalle.Count > 0)
+                ViewBag.ErrorParejaLhRh = string.Join(" ", erroresDetalle);
 
             return View(vm);
+        }
+
+        private async Task<ProduccionMonitoreoTurnoAvisoVm?> PrepararMonitoreoTurnoDetalleAsync(ProduccionEjecucionVm ejecucion, int usuarioId, SqlConnection cn)
+        {
+            if (ejecucion == null || ejecucion.EjecucionProduccionID <= 0) return null;
+
+            var ejecucionActiva = ejecucion.EstatusID == ProduccionEstatus.EnPreparacion || ejecucion.EstatusID == ProduccionEstatus.EnProduccion || ejecucion.EstatusID == ProduccionEstatus.Pausado;
+            if (!ejecucionActiva || !ejecucion.SolicitudProduccionID.HasValue || ejecucion.SolicitudProduccionID.Value <= 0) return null;
+
+            await using var tx = (SqlTransaction)await cn.BeginTransactionAsync();
+            try
+            {
+                var checklistPerifericosId = await ObtenerOCrearChecklistPerifericosTurnoAsync(ejecucion, DateTime.Now, usuarioId, cn, tx);
+                await tx.CommitAsync();
+                return await ObtenerAvisoMonitoreoTurnoAsync(checklistPerifericosId, cn);
+            }
+            catch
+            {
+                try { await tx.RollbackAsync(); } catch { }
+                throw;
+            }
+        }
+
+        private static (string? LadoActual, string? LadoPareja) ResolverLadosLhRhDetalle(ProduccionEjecucionVm ejecucion, ProduccionParejaLhRhVm? pareja)
+        {
+            if (pareja == null) return (null, null);
+
+            var ladoActual = DeterminarLadoLhRhConfiguracion(ejecucion.ReferenciaSAP, ejecucion.NumeroParte, ejecucion.DescripcionParte);
+            var ladoPareja = DeterminarLadoLhRhConfiguracion(pareja.ReferenciaSAPPareja, pareja.NumeroPartePareja, pareja.DescripcionPartePareja);
+
+            if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "LH", StringComparison.OrdinalIgnoreCase)) ladoActual = "RH";
+            else if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "RH", StringComparison.OrdinalIgnoreCase)) ladoActual = "LH";
+
+            if (string.IsNullOrWhiteSpace(ladoPareja) && string.Equals(ladoActual, "LH", StringComparison.OrdinalIgnoreCase)) ladoPareja = "RH";
+            else if (string.IsNullOrWhiteSpace(ladoPareja) && string.Equals(ladoActual, "RH", StringComparison.OrdinalIgnoreCase)) ladoPareja = "LH";
+
+            return (ladoActual, ladoPareja);
         }
 
         private async Task<List<ProduccionRecepcionOFVm>>
@@ -11022,6 +11064,22 @@ END;";
                 new { id = ejecucionProduccionId });
         }
 
+        private async Task EnriquecerProximosLhRhAsync(List<ProduccionProgramaDisponibleVm> programas, SqlConnection cn)
+        {
+            if (programas == null || programas.Count == 0) return;
+            foreach (var item in programas)
+            {
+                if (item.ProgramaProduccionID <= 0) continue;
+                var pareja = await ObtenerParejaLhRhProduccionAsync(item.ProgramaProduccionID, cn);
+                if (pareja == null) continue;
+                item.ParejaLhRh = pareja;
+                var ladoActual = DeterminarLadoLhRhConfiguracion(item.ReferenciaSAP, item.NumeroParte, item.DescripcionParte);
+                var ladoPareja = DeterminarLadoLhRhConfiguracion(pareja.ReferenciaSAPPareja, pareja.NumeroPartePareja, pareja.DescripcionPartePareja);
+                if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "LH", StringComparison.OrdinalIgnoreCase)) ladoActual = "RH";
+                else if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "RH", StringComparison.OrdinalIgnoreCase)) ladoActual = "LH";
+                item.LadoLhRh = ladoActual;
+            }
+        }
         private static async Task SincronizarOperadorProgramaAsync(int programaProduccionId, int? personaId, string rolOperador, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             if (programaProduccionId <= 0) throw new ArgumentException("El programa de Producción no es válido.", nameof(programaProduccionId));
