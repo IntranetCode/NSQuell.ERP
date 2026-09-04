@@ -3,7 +3,6 @@
 @{
     Layout = "_Layout";
     var puedeEditar = ERP.NSQuell.Models.ProduccionChecklistEstatus.PuedeEditarProduccion(Model.EstatusID);
-    var esArranqueLiberacion = string.Equals(Model.TipoChecklist, "ARRANQUE_LIBERACION", StringComparison.OrdinalIgnoreCase);
     var esMonitoreoPerifericos = string.Equals(Model.TipoChecklist, "MONITOREO_PERIFERICOS", StringComparison.OrdinalIgnoreCase);
     var tecnicosProduccion = ViewBag.TecnicosProduccion as IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> ?? Enumerable.Empty<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>();
     var seccionesProduccion = Model.Secciones.Where(x => !x.EsSeccionCalidad && !(x.Seccion ?? "").Contains("PARO", StringComparison.OrdinalIgnoreCase)).OrderBy(x => x.OrdenSeccion).ToList();
@@ -780,10 +779,7 @@
                             {
                                 <div class="d-flex gap-2 flex-wrap">
                                     <button type="button" id="btnGuardar" class="btn btn-primary btn-strong"><i class="bi bi-save me-1"></i>Guardar checklist</button>
-                                    @if (esArranqueLiberacion)
-                                    {
-                                        <button type="button" id="btnEnviarCalidad" class="btn btn-success btn-strong"><i class="bi bi-send-check me-1"></i>Enviar a Calidad</button>
-                                    }
+                                    <button type="button" id="btnEnviarCalidad" class="btn btn-success btn-strong"><i class="bi bi-send-check me-1"></i>Enviar a Calidad</button>
                                 </div>
                             }
                             else
