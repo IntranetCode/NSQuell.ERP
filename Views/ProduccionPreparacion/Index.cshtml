@@ -2354,6 +2354,7 @@
                                         var of = OfPrograma(programa);
                                         var parte = PartePrograma(programa);
                                         var tareasVisualesPrograma = ConsolidarTareasVisuales(programa);
+
                                         var referenciaPareja = programa.FirstOrDefault(x => x.EsParejaLhRh);
                                         var esParejaPrograma = referenciaPareja != null && referenciaPareja.EsParejaLhRh;
                                         var programasIds = programa.Select(x => x.ProgramaProduccionID).Distinct().OrderBy(x => x).ToList();

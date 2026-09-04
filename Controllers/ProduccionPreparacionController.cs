@@ -100,6 +100,7 @@ namespace ERP.NSQuell.Controllers
             }
             await EnriquecerTareasParejaLhRhAsync(tareas, cn);
             if (!soloHistorial) tareas = ConsolidarCambiosMoldeLhRhVisuales(tareas);
+            await EnriquecerChecklistCambioMoldeAsync(tareas, cn);
             var vm = new ProduccionPreparacionIndexVm
             {
                 FechaConsulta = ahora,
@@ -115,6 +116,7 @@ namespace ERP.NSQuell.Controllers
             };
             return View(vista, vm);
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> IniciarCambioMolde(ProduccionPreparacionIniciarCambioVm vm)
@@ -155,16 +157,17 @@ namespace ERP.NSQuell.Controllers
                     TempData["Error"] = errorGrupo;
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
-                if (tareas.All(x => string.Equals(x.Estado, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase)))
-                {
-                    await tx.RollbackAsync();
-                    TempData["Warning"] = esPareja ? "El cambio de molde LH/RH ya se encuentra en proceso para ambas OF." : "El cambio de molde ya se encuentra en proceso.";
-                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
-                }
                 if (tareas.Any(x => !string.Equals(x.Estado, ProduccionPreparacionEstado.Pendiente, StringComparison.OrdinalIgnoreCase) && !string.Equals(x.Estado, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase)))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = esPareja ? "Las dos tareas LH/RH deben estar pendientes o en proceso. Se detectó un estado inconsistente y no se realizará un inicio parcial." : "La tarea de cambio de molde ya fue atendida o ya no está pendiente.";
+                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
+                }
+                await ObtenerOCrearChecklistCambioMoldeAsync(vm.PreparacionAnticipadaID, usuarioId, cn, tx);
+                if (tareas.All(x => string.Equals(x.Estado, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase)))
+                {
+                    await tx.CommitAsync();
+                    TempData["Warning"] = esPareja ? "El cambio de molde LH/RH ya se encuentra en proceso para ambas OF." : "El cambio de molde ya se encuentra en proceso.";
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
                 var maquinaId = origen.MaquinaID;
@@ -239,7 +242,7 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                 await tx.CommitAsync();
                 TempData["Success"] = esPareja
                     ? $"Cambio de molde LH/RH iniciado como una sola operación física. Las dos OF quedaron sincronizadas. Límite operativo: {limiteMinutos} minutos."
-                    : $"Cambio de molde iniciado. Esta máquina tiene un límite operativo de {limiteMinutos} minutos.";
+                    : $"Cambio de molde iniciado. Límite operativo: {limiteMinutos} minutos.";
                 return RedirectToAction(nameof(CambioMolde), new { maquinaId });
             }
             catch (Exception ex)
@@ -249,6 +252,7 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                 return RedirectToAction(nameof(CambioMolde));
             }
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> FinalizarCambioMolde(ProduccionPreparacionFinalizarCambioVm vm)
@@ -311,6 +315,19 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = esPareja ? "Las dos tareas LH/RH deben estar EN PROCESO para finalizar el cambio de molde. No se realizará un cierre parcial." : "Solo puedes finalizar un cambio de molde que esté EN PROCESO.";
+                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
+                }
+                var checklist = await ObtenerChecklistCambioMoldePorPreparacionAsync(vm.PreparacionAnticipadaID, cn, tx);
+                if (checklist == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No existe el checklist GQ-F-PR01-03 para este cambio de molde. Debes completar el checklist antes de finalizar el cambio.";
+                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
+                }
+                if (!checklist.EstaCompleto)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El checklist GQ-F-PR01-03 todavía no está completo. Avance actual: {checklist.TextoAvance}. Completa y finaliza el checklist antes de cerrar el cambio de molde.";
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
                 var fechasInicio = tareas.Where(x => x.FechaInicioReal.HasValue).Select(x => x.FechaInicioReal!.Value).OrderBy(x => x).ToList();
