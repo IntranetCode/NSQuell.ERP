@@ -134,162 +134,132 @@ namespace ERP.NSQuell.Controllers
 
         private static void AplicarProyeccionInterrupcionesCalendario(List<PlaneacionCalendarioMaquinaVm> maquinas, PlaneacionProyeccionInterrupcionesResultado proyeccion)
         {
-            if (maquinas == null || maquinas.Count == 0 || proyeccion.Programas == null || proyeccion.Programas.Count == 0) return;
-            var proyecciones = proyeccion.Programas.GroupBy(x => x.ProgramaProduccionID).ToDictionary(x => x.Key, x => x.First());
-            foreach (var maquina in maquinas)
+            if (maquinas == null || maquinas.Count == 0) return;
+            if (proyeccion.Programas != null && proyeccion.Programas.Count > 0)
             {
-                foreach (var bloque in maquina.Bloques)
+                var proyecciones = proyeccion.Programas
+                    .GroupBy(x => x.ProgramaProduccionID)
+                    .ToDictionary(x => x.Key, x => x.First());
+                foreach (var maquina in maquinas)
                 {
-                    if (!proyecciones.TryGetValue(bloque.ProgramaProduccionID, out var programa)) continue;
-                    bloque.InicioProyectado = programa.InicioProyectado;
-                    bloque.FinProyectado = programa.FinProyectado;
-                    bloque.EsProgramaRaizInterrupcion = programa.EsProgramaRaizInterrupcion;
-                    bloque.ParoProyeccionID = programa.ParoID;
-                    bloque.TipoInterrupcionProyectada = programa.TipoInterrupcion ?? string.Empty;
-                    bloque.MotivoInterrupcionProyectada = programa.MotivoParo ?? string.Empty;
-                    bloque.MinutosImpactoInterrupcion = programa.MinutosImpactoInterrupcion;
-                    bloque.MinutosDesplazamientoProyectado = programa.MinutosDesplazamiento;
+                    foreach (var bloque in maquina.Bloques)
+                    {
+                        if (!proyecciones.TryGetValue(bloque.ProgramaProduccionID, out var programa)) continue;
+                        bloque.InicioProyectado = programa.InicioProyectado;
+                        bloque.FinProyectado = programa.FinProyectado;
+                        bloque.EsProgramaRaizInterrupcion = programa.EsProgramaRaizInterrupcion;
+                        bloque.ParoProyeccionID = programa.ParoID;
+                        bloque.TipoInterrupcionProyectada = programa.TipoInterrupcion ?? string.Empty;
+                        bloque.MotivoInterrupcionProyectada = programa.MotivoParo ?? string.Empty;
+                        bloque.MinutosImpactoInterrupcion = programa.MinutosImpactoInterrupcion;
+                        bloque.MinutosDesplazamientoProyectado = programa.MinutosDesplazamiento;
+                    }
                 }
             }
+            foreach (var maquina in maquinas) AsignarCarriles(maquina);
         }
 
-        private async Task<List<PlaneacionCalendarioMaquinaVm>>
-            ObtenerMaquinasCalendarioAsync(
-                DateTime inicio,
-                DateTime fin,
-                SqlConnection cn)
+        private async Task<List<PlaneacionCalendarioMaquinaVm>> ObtenerMaquinasCalendarioAsync(DateTime inicio, DateTime fin, SqlConnection cn)
         {
-            var maquinas =
-                new List<PlaneacionCalendarioMaquinaVm>();
-
+            var maquinas = new List<PlaneacionCalendarioMaquinaVm>();
             const string sqlMaquinas = @"
-SELECT
-    MaquinaID,
-    Codigo,
-    Nombre
+SELECT MaquinaID,Codigo,Nombre
 FROM dbo.ERP_Maquinas
 WHERE Activo=1
   AND UPPER(REPLACE(ISNULL(Codigo,N''),N' ',N''))<>N'1200T'
   AND UPPER(REPLACE(ISNULL(Nombre,N''),N' ',N'')) NOT LIKE N'%1200T%'
 ORDER BY Codigo,Nombre;";
-
             await using (var cmd = new SqlCommand(sqlMaquinas, cn))
             await using (var rd = await cmd.ExecuteReaderAsync())
             {
                 while (await rd.ReadAsync())
                 {
-                    maquinas.Add(
-                        new PlaneacionCalendarioMaquinaVm
-                        {
-                            MaquinaID = Entero(rd, "MaquinaID"),
-                            Codigo = Texto(rd, "Codigo") ?? "-",
-                            Nombre = Texto(rd, "Nombre") ?? "-",
-                            Carriles = 1,
-                            Bloques =
-                                new List<PlaneacionCalendarioBloqueVm>()
-                        });
+                    maquinas.Add(new PlaneacionCalendarioMaquinaVm
+                    {
+                        MaquinaID = Entero(rd, "MaquinaID"),
+                        Codigo = Texto(rd, "Codigo") ?? "-",
+                        Nombre = Texto(rd, "Nombre") ?? "-",
+                        Carriles = 1,
+                        Bloques = new List<PlaneacionCalendarioBloqueVm>()
+                    });
                 }
             }
-
             const string sqlProgramas = @"
 SELECT
     pp.ProgramaProduccionID,
     pp.MaquinaID,
     pp.MaquinaCodigo,
     pp.MaquinaNombre,
-
     pp.ParteID,
     pp.NumeroParte,
     pp.ReferenciaSAP,
     pp.DesignacionDescripcionSAP AS DescripcionParte,
-
     pp.MoldeID,
     pp.MoldeCodigo,
-
     pp.ReleaseDetalleID,
     pp.SolicitudProduccionID,
     pp.SolicitudProduccionDetalleID,
-
     pp.FechaInicioProgramada,
-
-    ISNULL
+    fechas.FechaFinProgramada,
+    ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
+    pp.Cambio,
+    pp.Arranque,
+    ISNULL(pp.CantidadProgramada,0) AS CantidadProgramada,
+    ISNULL(pe.CantidadOKTotal,ISNULL(pp.CantidadProducida,0)) AS CantidadProducida,
+    ISNULL(pp.EstatusID,1) AS EstatusID,
+    ISNULL(c.Nombre,r.ClienteNombre) AS ClienteNombre,
+    ISNULL(NULLIF(r.FolioRelease,''),'Programa') AS FolioRelease,
+    t.MaquinaPrincipalID,
+    mp.Codigo AS MaquinaPrincipalCodigo,
+    mp.Nombre AS MaquinaPrincipalNombre,
+    t.MaquinaSustitutaID,
+    ms.Codigo AS MaquinaSustitutaCodigo,
+    ms.Nombre AS MaquinaSustitutaNombre,
+    pe.EjecucionProduccionID,
+    pe.EstatusID AS EstatusProduccionID,
+    pe.OperadorID AS OperadorRealID,
+    pe.OperadorNombre AS OperadorRealNombre,
+    operativo.FechaInicioRealOperativa,
+    COALESCE(pp.FechaFinReal,pe.FechaFinReal) AS FechaFinRealOperativa,
+    pe.FechaLiberacionMaquina,
+    opPrincipal.PersonaID AS OperadorProgramadoID,
+    opPrincipal.NombreCompleto AS OperadorProgramadoNombre,
+    opAuxiliar.PersonaID AS OperadorAuxiliarProgramadoID,
+    opAuxiliar.NombreCompleto AS OperadorAuxiliarProgramadoNombre,
+    turno.EscalaAsignacionID,
+    turno.TurnoProgramadoNombre,
+    turno.TurnoProgramadoColor,
+    ci.InspeccionID AS InspeccionCalidadID,
+    ci.Estado AS EstadoCalidad,
+    ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionCalidadInvalidada,
+    ISNULL(ci.RequiereReliberacion,0) AS RequiereReliberacion
+FROM dbo.Planeacion_ProgramaProduccion pp
+CROSS APPLY
+(
+    SELECT ISNULL
     (
         pp.FechaFinProgramada,
         DATEADD
         (
             MINUTE,
-            CAST
-            (
-                CEILING(ISNULL(pp.HorasProgramadas,1)*60)
-                AS INT
-            ),
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),
             pp.FechaInicioProgramada
         )
-    ) AS FechaFinProgramada,
-
-    ISNULL(pp.HorasProgramadas,0) AS HorasProgramadas,
-    pp.Cambio,
-    pp.Arranque,
-
-    ISNULL(pp.CantidadProgramada,0) AS CantidadProgramada,
-    ISNULL(pp.CantidadProducida,0) AS CantidadProducida,
-    ISNULL(pp.EstatusID,1) AS EstatusID,
-
-    ISNULL(c.Nombre,r.ClienteNombre) AS ClienteNombre,
-    ISNULL(NULLIF(r.FolioRelease,''),'Programa') AS FolioRelease,
-
-    t.MaquinaPrincipalID,
-    mp.Codigo AS MaquinaPrincipalCodigo,
-    mp.Nombre AS MaquinaPrincipalNombre,
-
-    t.MaquinaSustitutaID,
-    ms.Codigo AS MaquinaSustitutaCodigo,
-    ms.Nombre AS MaquinaSustitutaNombre,
-
-    pe.EjecucionProduccionID,
-    pe.EstatusID AS EstatusProduccionID,
-    pe.OperadorID AS OperadorRealID,
-    pe.OperadorNombre AS OperadorRealNombre,
-    pe.FechaInicioReal,
-
-    opPrincipal.PersonaID AS OperadorProgramadoID,
-    opPrincipal.NombreCompleto AS OperadorProgramadoNombre,
-
-    opAuxiliar.PersonaID AS OperadorAuxiliarProgramadoID,
-    opAuxiliar.NombreCompleto AS OperadorAuxiliarProgramadoNombre,
-
-    turno.EscalaAsignacionID,
-    turno.TurnoProgramadoNombre,
-    turno.TurnoProgramadoColor,
-
-    ci.InspeccionID AS InspeccionCalidadID,
-    ci.Estado AS EstadoCalidad,
-    ISNULL(ci.ConfiguracionInvalidada,0)
-        AS ConfiguracionCalidadInvalidada,
-    ISNULL(ci.RequiereReliberacion,0)
-        AS RequiereReliberacion
-
-FROM dbo.Planeacion_ProgramaProduccion pp
-
+    ) AS FechaFinProgramada
+) fechas
 LEFT JOIN dbo.Planeacion_ReleaseDetalle rd
     ON rd.ReleaseDetalleID=pp.ReleaseDetalleID
-
 LEFT JOIN dbo.Planeacion_Releases r
     ON r.ReleaseID=rd.ReleaseID
-
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID=r.ClienteID
-
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID=pp.ParteID
    AND t.Activo=1
-
 LEFT JOIN dbo.ERP_Maquinas mp
     ON mp.MaquinaID=t.MaquinaPrincipalID
-
 LEFT JOIN dbo.ERP_Maquinas ms
     ON ms.MaquinaID=t.MaquinaSustitutaID
-
 OUTER APPLY
 (
     SELECT TOP(1)
@@ -297,26 +267,47 @@ OUTER APPLY
         e.EstatusID,
         e.OperadorID,
         e.OperadorNombre,
-        e.FechaInicioReal
+        e.FechaInicioReal,
+        e.FechaFinReal,
+        e.FechaLiberacionMaquina,
+        e.CantidadOKTotal
     FROM dbo.Produccion_Ejecucion e
     WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID
       AND e.Activo=1
     ORDER BY e.EjecucionProduccionID DESC
 ) pe
-
+CROSS APPLY
+(
+    SELECT
+        CASE
+            WHEN pp.FechaInicioReal IS NOT NULL
+                THEN pp.FechaInicioReal
+            WHEN pe.EstatusID IN(@EnProduccion,@Pausado)
+             AND pe.FechaInicioReal IS NOT NULL
+                THEN pe.FechaInicioReal
+            ELSE NULL
+        END AS FechaInicioRealOperativa,
+        COALESCE
+        (
+            pe.FechaLiberacionMaquina,
+            pp.FechaFinReal,
+            pe.FechaFinReal,
+            CASE
+                WHEN pe.EstatusID IN(@EnPreparacion,@EnProduccion,@Pausado)
+                    THEN CASE
+                        WHEN fechas.FechaFinProgramada>@Ahora
+                            THEN fechas.FechaFinProgramada
+                        ELSE @Ahora
+                    END
+                ELSE fechas.FechaFinProgramada
+            END
+        ) AS FechaFinOperativa
+) operativo
 OUTER APPLY
 (
     SELECT TOP(1)
         po.PersonaID,
-        LTRIM
-        (
-            RTRIM
-            (
-                ISNULL(p.Nombre,'')+' '+
-                ISNULL(p.ApellidoPaterno,'')+' '+
-                ISNULL(p.ApellidoMaterno,'')
-            )
-        ) AS NombreCompleto
+        LTRIM(RTRIM(ISNULL(p.Nombre,'')+' '+ISNULL(p.ApellidoPaterno,'')+' '+ISNULL(p.ApellidoMaterno,''))) AS NombreCompleto
     FROM dbo.Planeacion_ProgramaOperadores po
     LEFT JOIN dbo.Persona p
         ON p.PersonaID=po.PersonaID
@@ -325,20 +316,11 @@ OUTER APPLY
       AND UPPER(ISNULL(po.RolOperador,''))='PRINCIPAL'
     ORDER BY po.ProgramaOperadorID
 ) opPrincipal
-
 OUTER APPLY
 (
     SELECT TOP(1)
         po.PersonaID,
-        LTRIM
-        (
-            RTRIM
-            (
-                ISNULL(p.Nombre,'')+' '+
-                ISNULL(p.ApellidoPaterno,'')+' '+
-                ISNULL(p.ApellidoMaterno,'')
-            )
-        ) AS NombreCompleto
+        LTRIM(RTRIM(ISNULL(p.Nombre,'')+' '+ISNULL(p.ApellidoPaterno,'')+' '+ISNULL(p.ApellidoMaterno,''))) AS NombreCompleto
     FROM dbo.Planeacion_ProgramaOperadores po
     LEFT JOIN dbo.Persona p
         ON p.PersonaID=po.PersonaID
@@ -347,7 +329,6 @@ OUTER APPLY
       AND UPPER(ISNULL(po.RolOperador,''))='AUXILIAR'
     ORDER BY po.ProgramaOperadorID
 ) opAuxiliar
-
 OUTER APPLY
 (
     SELECT TOP(1)
@@ -365,40 +346,31 @@ OUTER APPLY
     WHERE a.Activo=1
       AND a.PersonalID=opPrincipal.PersonaID
       AND a.MaquinaID=pp.MaquinaID
-      AND CAST(pp.FechaInicioProgramada AS date)
-            >=CAST(a.FechaInicio AS date)
-      AND CAST(pp.FechaInicioProgramada AS date)
-            <=CAST(a.FechaFin AS date)
+      AND CAST(pp.FechaInicioProgramada AS date)>=CAST(a.FechaInicio AS date)
+      AND CAST(pp.FechaInicioProgramada AS date)<=CAST(a.FechaFin AS date)
       AND
       (
            ISNULL(et.EsFlexible,0)=1
         OR et.HoraInicio IS NULL
         OR et.HoraFin IS NULL
-
         OR
         (
             ISNULL(et.CruzaDiaSiguiente,0)=0
-            AND CAST(pp.FechaInicioProgramada AS time)
-                >=et.HoraInicio
-            AND CAST(pp.FechaInicioProgramada AS time)
-                <et.HoraFin
+            AND CAST(pp.FechaInicioProgramada AS time)>=et.HoraInicio
+            AND CAST(pp.FechaInicioProgramada AS time)<et.HoraFin
         )
-
         OR
         (
             ISNULL(et.CruzaDiaSiguiente,0)=1
             AND
             (
-                CAST(pp.FechaInicioProgramada AS time)
-                    >=et.HoraInicio
-                OR CAST(pp.FechaInicioProgramada AS time)
-                    <et.HoraFin
+                CAST(pp.FechaInicioProgramada AS time)>=et.HoraInicio
+                OR CAST(pp.FechaInicioProgramada AS time)<et.HoraFin
             )
         )
       )
     ORDER BY et.Orden,a.AsignacionID DESC
 ) turno
-
 OUTER APPLY
 (
     SELECT TOP(1)
@@ -407,443 +379,172 @@ OUTER APPLY
         cins.ConfiguracionInvalidada,
         cins.RequiereReliberacion
     FROM dbo.Calidad_Inspecciones cins
-    WHERE cins.ProgramaProduccionID=
-        pp.ProgramaProduccionID
+    WHERE cins.ProgramaProduccionID=pp.ProgramaProduccionID
     ORDER BY cins.InspeccionID DESC
 ) ci
-
 WHERE pp.Activo=1
   AND pp.SolicitudProduccionID IS NOT NULL
   AND pp.SolicitudProduccionDetalleID IS NOT NULL
   AND ISNULL(pp.EstatusID,1)<>@EstatusCancelado
   AND pp.MaquinaID IS NOT NULL
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND pp.FechaInicioProgramada<@Fin
-
-  AND ISNULL
+  AND
   (
-      pp.FechaFinProgramada,
-      DATEADD
       (
-          MINUTE,
-          CAST
-          (
-              CEILING(ISNULL(pp.HorasProgramadas,1)*60)
-              AS INT
-          ),
-          pp.FechaInicioProgramada
+          operativo.FechaInicioRealOperativa IS NULL
+          AND pp.FechaInicioProgramada<@Fin
+          AND fechas.FechaFinProgramada>@Inicio
       )
-  )>@Inicio
-
+      OR
+      (
+          operativo.FechaInicioRealOperativa IS NOT NULL
+          AND operativo.FechaInicioRealOperativa<@Fin
+          AND operativo.FechaFinOperativa>@Inicio
+      )
+  )
 ORDER BY
     pp.MaquinaID,
-    pp.FechaInicioProgramada,
+    CASE WHEN operativo.FechaInicioRealOperativa IS NULL THEN pp.FechaInicioProgramada ELSE operativo.FechaInicioRealOperativa END,
     pp.SecuenciaMaquina,
     pp.ProgramaProduccionID;";
-
-            var bloques =
-                new List<PlaneacionCalendarioBloqueVm>();
-
+            var bloques = new List<PlaneacionCalendarioBloqueVm>();
             var ahora = DateTime.Now;
-
-            await using (var cmd =
-                new SqlCommand(sqlProgramas, cn))
+            await using (var cmd = new SqlCommand(sqlProgramas, cn))
             {
-                cmd.Parameters.Add(
-                    "@Inicio",
-                    SqlDbType.DateTime).Value = inicio;
-
-                cmd.Parameters.Add(
-                    "@Fin",
-                    SqlDbType.DateTime).Value = fin;
-
-                cmd.Parameters.Add(
-                    "@EstatusCancelado",
-                    SqlDbType.Int).Value =
-                    EstatusPrograma.Cancelado;
-
-                await using var rd =
-                    await cmd.ExecuteReaderAsync();
-
+                cmd.Parameters.Add("@Inicio", SqlDbType.DateTime).Value = inicio;
+                cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
+                cmd.Parameters.Add("@Ahora", SqlDbType.DateTime).Value = ahora;
+                cmd.Parameters.Add("@EstatusCancelado", SqlDbType.Int).Value = EstatusPrograma.Cancelado;
+                cmd.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = EstatusPrograma.EnPreparacion;
+                cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = EstatusPrograma.EnProduccion;
+                cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = EstatusPrograma.Pausado;
+                await using var rd = await cmd.ExecuteReaderAsync();
                 while (await rd.ReadAsync())
                 {
-                    var programaProduccionId =
-                        Entero(
-                            rd,
-                            "ProgramaProduccionID");
-
-                    var estatusId =
-                        Entero(
-                            rd,
-                            "EstatusID");
-
-                    var estatusProduccionId =
-                        NullableEntero(
-                            rd,
-                            "EstatusProduccionID");
-
-                    var inicioPrograma =
-                        Fecha(
-                            rd,
-                            "FechaInicioProgramada");
-
-                    var finPrograma =
-                        Fecha(
-                            rd,
-                            "FechaFinProgramada");
-
-                    var cantidadProgramada =
-                        Entero(
-                            rd,
-                            "CantidadProgramada");
-
-                    var cantidadProducida =
-                        Entero(
-                            rd,
-                            "CantidadProducida");
-
-                    var ordinalFechaInicioReal =
-                        rd.GetOrdinal(
-                            "FechaInicioReal");
-
-                    var fechaInicioReal =
-                        rd.IsDBNull(ordinalFechaInicioReal)
-                            ? (DateTime?)null
-                            : Convert.ToDateTime(
-                                rd.GetValue(
-                                    ordinalFechaInicioReal));
-
+                    var programaProduccionId = Entero(rd, "ProgramaProduccionID");
+                    var estatusId = Entero(rd, "EstatusID");
+                    var estatusProduccionId = NullableEntero(rd, "EstatusProduccionID");
+                    var inicioPrograma = Fecha(rd, "FechaInicioProgramada");
+                    var finPrograma = Fecha(rd, "FechaFinProgramada");
+                    var cantidadProgramada = Entero(rd, "CantidadProgramada");
+                    var cantidadProducida = Entero(rd, "CantidadProducida");
+                    var fechaInicioReal = NullableFecha(rd, "FechaInicioRealOperativa");
+                    var fechaFinReal = NullableFecha(rd, "FechaFinRealOperativa");
+                    var fechaLiberacionMaquina = NullableFecha(rd, "FechaLiberacionMaquina");
                     var mostrarAlertaNoInicio = false;
                     var alertaNoInicioCritica = false;
                     var minutosAtrasoInicio = 0;
-                    var textoAlertaNoInicio =
-                        string.Empty;
-
-                    var programaCerrado =
-                        estatusId == EstatusPrograma.Terminado ||
-                        estatusId == EstatusPrograma.Cerrado ||
-                        estatusId == EstatusPrograma.Cancelado;
-
-                    if (!programaCerrado &&
-                        inicioPrograma <= ahora &&
-                        !fechaInicioReal.HasValue)
+                    var textoAlertaNoInicio = string.Empty;
+                    var programaCerrado = estatusId == EstatusPrograma.Terminado || estatusId == EstatusPrograma.Cerrado || estatusId == EstatusPrograma.Cancelado;
+                    if (!programaCerrado && inicioPrograma <= ahora && !fechaInicioReal.HasValue)
                     {
-                        var sigueSinIniciar =
-                            !estatusProduccionId.HasValue ||
-                            estatusProduccionId ==
-                                EstatusPrograma.Programado ||
-                            estatusProduccionId ==
-                                EstatusPrograma.EnPreparacion;
-
+                        var sigueSinIniciar = !estatusProduccionId.HasValue || estatusProduccionId == EstatusPrograma.Programado || estatusProduccionId == EstatusPrograma.EnPreparacion;
                         if (sigueSinIniciar)
                         {
-                            minutosAtrasoInicio =
-                                Math.Max(
-                                    1,
-                                    (int)Math.Floor(
-                                        (ahora -
-                                         inicioPrograma)
-                                        .TotalMinutes));
-
+                            minutosAtrasoInicio = Math.Max(1, (int)Math.Floor((ahora - inicioPrograma).TotalMinutes));
                             mostrarAlertaNoInicio = true;
-
-                            alertaNoInicioCritica =
-                                minutosAtrasoInicio >= 15;
-
-                            textoAlertaNoInicio =
-                                alertaNoInicioCritica
-                                    ? $"Producción no inició. Atraso: {minutosAtrasoInicio} min."
-                                    : $"Producción pendiente de iniciar. Atraso: {minutosAtrasoInicio} min.";
+                            alertaNoInicioCritica = minutosAtrasoInicio >= 15;
+                            textoAlertaNoInicio = alertaNoInicioCritica
+                                ? $"Producción no inició. Atraso: {minutosAtrasoInicio} min."
+                                : $"Producción pendiente de iniciar. Atraso: {minutosAtrasoInicio} min.";
                         }
                     }
-
-                    bloques.Add(
-                        new PlaneacionCalendarioBloqueVm
-                        {
-                            ProgramaProduccionID =
-                                programaProduccionId,
-
-                            SolicitudProduccionID =
-                                NullableEntero(
-                                    rd,
-                                    "SolicitudProduccionID"),
-
-                            MaquinaID =
-                                NullableEntero(
-                                    rd,
-                                    "MaquinaID") ?? 0,
-
-                            MaquinaCodigo =
-                                Texto(
-                                    rd,
-                                    "MaquinaCodigo")
-                                ?? string.Empty,
-
-                            ClienteNombre =
-                                Texto(
-                                    rd,
-                                    "ClienteNombre")
-                                ?? string.Empty,
-
-                            NumeroParte =
-                                Texto(
-                                    rd,
-                                    "NumeroParte")
-                                ?? string.Empty,
-
-                            ReferenciaSAP =
-                                Texto(
-                                    rd,
-                                    "ReferenciaSAP")
-                                ?? string.Empty,
-
-                            Descripcion =
-                                Texto(
-                                    rd,
-                                    "DescripcionParte")
-                                ?? string.Empty,
-
-                            MoldeCodigo =
-                                Texto(
-                                    rd,
-                                    "MoldeCodigo")
-                                ?? string.Empty,
-
-                            CantidadProgramada =
-                                cantidadProgramada,
-
-                            CantidadProducida =
-                                cantidadProducida,
-
-                            Inicio =
-                                inicioPrograma,
-
-                            Fin =
-                                finPrograma,
-
-                            HorasProgramadas =
-                                Decimal(
-                                    rd,
-                                    "HorasProgramadas"),
-
-                            Cambio =
-                                NullableTiempo(
-                                    rd,
-                                    "Cambio"),
-
-                            Arranque =
-                                NullableTiempo(
-                                    rd,
-                                    "Arranque"),
-
-                            EstatusID =
-                                estatusId,
-
-                            EstaEnLinea =
-                                estatusProduccionId ==
-                                EstatusPrograma.EnProduccion,
-
-                            DentroHorarioProgramado =
-                                ahora >= inicioPrograma &&
-                                ahora < finPrograma,
-
-                            MaquinaPrincipalID =
-                                NullableEntero(
-                                    rd,
-                                    "MaquinaPrincipalID"),
-
-                            MaquinaPrincipalCodigo =
-                                Texto(
-                                    rd,
-                                    "MaquinaPrincipalCodigo")
-                                ?? string.Empty,
-
-                            MaquinaPrincipalNombre =
-                                Texto(
-                                    rd,
-                                    "MaquinaPrincipalNombre")
-                                ?? string.Empty,
-
-                            MaquinaSustitutaID =
-                                NullableEntero(
-                                    rd,
-                                    "MaquinaSustitutaID"),
-
-                            MaquinaSustitutaCodigo =
-                                Texto(
-                                    rd,
-                                    "MaquinaSustitutaCodigo")
-                                ?? string.Empty,
-
-                            MaquinaSustitutaNombre =
-                                Texto(
-                                    rd,
-                                    "MaquinaSustitutaNombre")
-                                ?? string.Empty,
-
-                            EstatusProduccionID =
-                                estatusProduccionId,
-
-                            EstatusProduccionNombre =
-                                NombreEstatusProduccion(
-                                    estatusProduccionId),
-
-                            EjecucionProduccionID =
-                                NullableEntero(
-                                    rd,
-                                    "EjecucionProduccionID"),
-
-                            OperadorProgramadoID =
-                                NullableEntero(
-                                    rd,
-                                    "OperadorProgramadoID"),
-
-                            OperadorProgramadoNombre =
-                                Texto(
-                                    rd,
-                                    "OperadorProgramadoNombre")
-                                ?? string.Empty,
-
-                            OperadorAuxiliarProgramadoID =
-                                NullableEntero(
-                                    rd,
-                                    "OperadorAuxiliarProgramadoID"),
-
-                            OperadorAuxiliarProgramadoNombre =
-                                Texto(
-                                    rd,
-                                    "OperadorAuxiliarProgramadoNombre")
-                                ?? string.Empty,
-
-                            OperadorRealID =
-                                NullableEntero(
-                                    rd,
-                                    "OperadorRealID"),
-
-                            OperadorRealNombre =
-                                Texto(
-                                    rd,
-                                    "OperadorRealNombre")
-                                ?? string.Empty,
-
-                            TurnoProgramadoNombre =
-                                Texto(
-                                    rd,
-                                    "TurnoProgramadoNombre")
-                                ?? string.Empty,
-
-                            TurnoProgramadoColor =
-                                Texto(
-                                    rd,
-                                    "TurnoProgramadoColor")
-                                ?? string.Empty,
-
-                            EscalaAsignacionID =
-                                NullableEntero(
-                                    rd,
-                                    "EscalaAsignacionID"),
-
-                            InspeccionCalidadID =
-                                NullableEntero(
-                                    rd,
-                                    "InspeccionCalidadID"),
-
-                            EstadoCalidad =
-                                Texto(
-                                    rd,
-                                    "EstadoCalidad")
-                                ?? string.Empty,
-
-                            ConfiguracionCalidadInvalidada =
-                                Booleano(
-                                    rd,
-                                    "ConfiguracionCalidadInvalidada"),
-
-                            RequiereReliberacion =
-                                Booleano(
-                                    rd,
-                                    "RequiereReliberacion"),
-
-                            MostrarAlertaNoInicio =
-                                mostrarAlertaNoInicio,
-
-                            AlertaNoInicioCritica =
-                                alertaNoInicioCritica,
-
-                            MinutosAtrasoInicio =
-                                minutosAtrasoInicio,
-
-                            TextoAlertaNoInicio =
-                                textoAlertaNoInicio
-                        });
+                    bloques.Add(new PlaneacionCalendarioBloqueVm
+                    {
+                        ProgramaProduccionID = programaProduccionId,
+                        SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
+                        MaquinaID = NullableEntero(rd, "MaquinaID") ?? 0,
+                        MaquinaCodigo = Texto(rd, "MaquinaCodigo") ?? string.Empty,
+                        ClienteNombre = Texto(rd, "ClienteNombre") ?? string.Empty,
+                        NumeroParte = Texto(rd, "NumeroParte") ?? string.Empty,
+                        ReferenciaSAP = Texto(rd, "ReferenciaSAP") ?? string.Empty,
+                        Descripcion = Texto(rd, "DescripcionParte") ?? string.Empty,
+                        MoldeCodigo = Texto(rd, "MoldeCodigo") ?? string.Empty,
+                        CantidadProgramada = cantidadProgramada,
+                        CantidadProducida = cantidadProducida,
+                        Inicio = inicioPrograma,
+                        Fin = finPrograma,
+                        FechaInicioRealProduccion = fechaInicioReal,
+                        FechaFinRealProduccion = fechaFinReal,
+                        FechaLiberacionMaquina = fechaLiberacionMaquina,
+                        HorasProgramadas = Decimal(rd, "HorasProgramadas"),
+                        Cambio = NullableTiempo(rd, "Cambio"),
+                        Arranque = NullableTiempo(rd, "Arranque"),
+                        EstatusID = estatusId,
+                        EstaEnLinea = estatusProduccionId == EstatusPrograma.EnProduccion && !fechaFinReal.HasValue && !fechaLiberacionMaquina.HasValue,
+                        DentroHorarioProgramado = ahora >= inicioPrograma && ahora < finPrograma,
+                        MaquinaPrincipalID = NullableEntero(rd, "MaquinaPrincipalID"),
+                        MaquinaPrincipalCodigo = Texto(rd, "MaquinaPrincipalCodigo") ?? string.Empty,
+                        MaquinaPrincipalNombre = Texto(rd, "MaquinaPrincipalNombre") ?? string.Empty,
+                        MaquinaSustitutaID = NullableEntero(rd, "MaquinaSustitutaID"),
+                        MaquinaSustitutaCodigo = Texto(rd, "MaquinaSustitutaCodigo") ?? string.Empty,
+                        MaquinaSustitutaNombre = Texto(rd, "MaquinaSustitutaNombre") ?? string.Empty,
+                        EstatusProduccionID = estatusProduccionId,
+                        EstatusProduccionNombre = NombreEstatusProduccion(estatusProduccionId),
+                        EjecucionProduccionID = NullableEntero(rd, "EjecucionProduccionID"),
+                        OperadorProgramadoID = NullableEntero(rd, "OperadorProgramadoID"),
+                        OperadorProgramadoNombre = Texto(rd, "OperadorProgramadoNombre") ?? string.Empty,
+                        OperadorAuxiliarProgramadoID = NullableEntero(rd, "OperadorAuxiliarProgramadoID"),
+                        OperadorAuxiliarProgramadoNombre = Texto(rd, "OperadorAuxiliarProgramadoNombre") ?? string.Empty,
+                        OperadorRealID = NullableEntero(rd, "OperadorRealID"),
+                        OperadorRealNombre = Texto(rd, "OperadorRealNombre") ?? string.Empty,
+                        TurnoProgramadoNombre = Texto(rd, "TurnoProgramadoNombre") ?? string.Empty,
+                        TurnoProgramadoColor = Texto(rd, "TurnoProgramadoColor") ?? string.Empty,
+                        EscalaAsignacionID = NullableEntero(rd, "EscalaAsignacionID"),
+                        InspeccionCalidadID = NullableEntero(rd, "InspeccionCalidadID"),
+                        EstadoCalidad = Texto(rd, "EstadoCalidad") ?? string.Empty,
+                        ConfiguracionCalidadInvalidada = Booleano(rd, "ConfiguracionCalidadInvalidada"),
+                        RequiereReliberacion = Booleano(rd, "RequiereReliberacion"),
+                        MostrarAlertaNoInicio = mostrarAlertaNoInicio,
+                        AlertaNoInicioCritica = alertaNoInicioCritica,
+                        MinutosAtrasoInicio = minutosAtrasoInicio,
+                        TextoAlertaNoInicio = textoAlertaNoInicio
+                    });
                 }
             }
-
             foreach (var maquina in maquinas)
             {
-                maquina.Bloques =
-                    bloques
-                    .Where(
-                        x =>
-                        x.MaquinaID ==
-                        maquina.MaquinaID)
-                    .OrderBy(x => x.Inicio)
-                    .ThenBy(
-                        x =>
-                        x.ProgramaProduccionID)
+                maquina.Bloques = bloques
+                    .Where(x => x.MaquinaID == maquina.MaquinaID)
+                    .OrderBy(x => x.InicioVisual)
+                    .ThenBy(x => x.ProgramaProduccionID)
                     .ToList();
-
-                AsignarCarriles(maquina);
             }
-
             return maquinas;
         }
-
-        private static void AsignarCarriles(
-            PlaneacionCalendarioMaquinaVm maquina)
+        private static void AsignarCarriles(PlaneacionCalendarioMaquinaVm maquina)
         {
-            var finPorCarril =
-                new List<DateTime>();
-
-            foreach (var bloque in
-                maquina.Bloques
-                    .OrderBy(x => x.Inicio))
+            maquina.Bloques = maquina.Bloques
+                .OrderBy(x => x.InicioVisual)
+                .ThenBy(x => x.ProgramaProduccionID)
+                .ToList();
+            var finPorCarril = new List<DateTime>();
+            foreach (var bloque in maquina.Bloques)
             {
+                var inicio = bloque.InicioVisual;
+                var fin = bloque.FinVisual;
+                if (fin <= inicio) fin = inicio.AddMinutes(1);
                 var carril = -1;
-
-                for (var i = 0;
-                     i < finPorCarril.Count;
-                     i++)
+                for (var i = 0; i < finPorCarril.Count; i++)
                 {
-                    if (finPorCarril[i] <=
-                        bloque.Inicio)
+                    if (finPorCarril[i] <= inicio)
                     {
                         carril = i;
                         break;
                     }
                 }
-
                 if (carril < 0)
                 {
-                    carril =
-                        finPorCarril.Count;
-
-                    finPorCarril.Add(
-                        bloque.Fin);
+                    carril = finPorCarril.Count;
+                    finPorCarril.Add(fin);
                 }
                 else
                 {
-                    finPorCarril[carril] =
-                        bloque.Fin;
+                    finPorCarril[carril] = fin;
                 }
-
                 bloque.Carril = carril;
             }
-
-            maquina.Carriles =
-                Math.Max(
-                    1,
-                    finPorCarril.Count);
+            maquina.Carriles = Math.Max(1, finPorCarril.Count);
         }
 
         private static PeriodoCalendario ResolverPeriodo(
@@ -853,9 +554,9 @@ ORDER BY
             DateTime? rangoFin)
         {
             var vistaNormalizada =
-                (vista ?? "semana")
-                .Trim()
-                .ToLowerInvariant();
+     (vista ?? "dia")
+     .Trim()
+     .ToLowerInvariant();
 
             var fechaBase =
                 (fecha ?? DateTime.Today).Date;
@@ -1081,6 +782,11 @@ ORDER BY
                     ?.Trim();
         }
 
+        private static DateTime? NullableFecha(SqlDataReader rd, string columna)
+        {
+            var ordinal = rd.GetOrdinal(columna);
+            return rd.IsDBNull(ordinal) ? null : Convert.ToDateTime(rd.GetValue(ordinal));
+        }
         private static bool Booleano(
             SqlDataReader rd,
             string columna)

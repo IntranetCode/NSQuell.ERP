@@ -173,7 +173,14 @@ namespace ERP.NSQuell.Models
             TurnoProgramadoNombre = string.Empty;
             TurnoProgramadoColor = string.Empty;
             EstadoCalidad = string.Empty;
+
+
+
         }
+
+        public DateTime? FechaInicioRealProduccion { get; set; }
+        public DateTime? FechaFinRealProduccion { get; set; }
+        public DateTime? FechaLiberacionMaquina { get; set; }
 
         public int ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
@@ -254,6 +261,7 @@ namespace ERP.NSQuell.Models
         public int MinutosAtrasoInicio { get; set; }
         public string TextoAlertaNoInicio { get; set; } = string.Empty;
 
+     
         public bool TieneOperadorProgramado =>
             OperadorProgramadoID.HasValue &&
             !string.IsNullOrWhiteSpace(OperadorProgramadoNombre);
