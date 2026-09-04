@@ -717,9 +717,9 @@
 
 
         /* =========================================================
-                                   MODAL OPERATIVO COMPACTO
-                                   Aprovecha el ancho para evitar scroll vertical en escritorio.
-                                   ========================================================= */
+                                           MODAL OPERATIVO COMPACTO
+                                           Aprovecha el ancho para evitar scroll vertical en escritorio.
+                                           ========================================================= */
         .modal-operativa .modal-dialog {
             width: calc(100vw - 28px);
             max-width: 1480px;
@@ -1120,9 +1120,9 @@
         }
 
         /* =========================================================
-                           TIMELINE OPERATIVO V3
-                           Conserva la geometría del calendario de Planeación.
-                           ========================================================= */
+                                   TIMELINE OPERATIVO V3
+                                   Conserva la geometría del calendario de Planeación.
+                                   ========================================================= */
         .production-calendar-readonly .timeline-scroll {
             overflow-x: auto;
             overflow-y: visible;
@@ -1194,6 +1194,103 @@
             height: 34px;
             padding: 3px 6px;
             font-size: .68rem;
+        }
+
+        .calendar-realtime-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(22, 163, 74, .28);
+            background: rgba(22, 163, 74, .08);
+            color: #15803d;
+            font-size: .7rem;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        /* =========================================================
+                   VISTA DIA SIN SCROLL HORIZONTAL
+                   Las 24 horas se reparten dentro del ancho disponible.
+                   El ancho de cada OF sigue siendo proporcional a su horario.
+                   ========================================================= */
+        .production-calendar-readonly.vista-dia .timeline-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden !important;
+        }
+
+        .production-calendar-readonly.vista-dia .timeline {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        .production-calendar-readonly.vista-dia .timeline-header,
+        .production-calendar-readonly.vista-dia .calendar-machine-row {
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        .production-calendar-readonly.vista-dia .days,
+        .production-calendar-readonly.vista-dia .track {
+            min-width: 0 !important;
+        }
+
+        .production-calendar-readonly.vista-dia .nsq-hour-ruler-v31 {
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        .production-calendar-readonly.vista-dia .nsq-hour-cell-v31 {
+            min-width: 0 !important;
+            font-size: .56rem;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        .production-calendar-readonly.vista-dia .block {
+            min-width: 0 !important;
+            overflow: hidden;
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+
+            .production-calendar-readonly.vista-dia .block > strong,
+            .production-calendar-readonly.vista-dia .block > span {
+                display: block;
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .production-calendar-readonly.vista-dia .block > strong {
+                font-size: .69rem;
+                line-height: 1.08;
+            }
+
+            .production-calendar-readonly.vista-dia .block > span {
+                font-size: .61rem;
+                line-height: 1.08;
+            }
+
+        #calendarKiosk.realtime-refreshing::after {
+            content: "Actualizando Producción...";
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            z-index: 1090;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, .88);
+            color: #fff;
+            font-size: .72rem;
+            font-weight: 900;
+            box-shadow: 0 5px 18px rgba(15, 23, 42, .22);
+            pointer-events: none;
         }
 
     </style>
@@ -1398,8 +1495,12 @@
     <div id="calendarStatus" class="calendar-status operational">
         <i class="fa-solid fa-circle-info me-1"></i>
         Selecciona una OF. El modal mostrará la actividad actual, el responsable, el bloqueo si existe y el botón para continuar el flujo.
-        <span class="ms-2 text-muted">
+        <span id="calendarDataUpdatedAt" class="ms-2 text-muted">
             Datos actualizados: @fechaConsultaOperativa.ToString("dd/MM/yyyy HH:mm")
+        </span>
+        <span class="calendar-realtime-badge" title="El calendario vuelve a consultar Producción automáticamente">
+            <i class="fa-solid fa-signal"></i>
+            Producción en vivo · 20 s
         </span>
         <span class="calendar-live-clock" title="Hora local de este equipo">
             <i class="fa-regular fa-clock"></i>
@@ -1514,6 +1615,17 @@
                             {
                                 var inicioVisualBloque = bloque.InicioVisual;
                                 var finVisualBloque = bloque.FinVisual;
+
+                                if (finVisualBloque <= inicioVisualBloque)
+                                {
+                                    finVisualBloque = inicioVisualBloque.AddMinutes(1);
+                                }
+
+                                if (finVisualBloque <= inicioPeriodo || inicioVisualBloque >= finPeriodo)
+                                {
+                                    continue;
+                                }
+
                                 var visibleInicio = inicioVisualBloque < inicioPeriodo ? inicioPeriodo : inicioVisualBloque;
                                 var visibleFin = finVisualBloque > finPeriodo ? finPeriodo : finVisualBloque;
 
@@ -1540,21 +1652,9 @@
                                 var textoTurno = bloque.TextoTurnoProgramado;
                                 var textoCalidad = bloque.EstadoCalidadTexto;
 
-                                var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
-                                ? Math.Max(
-                                0,
-                                (int)Math.Floor(
-                                (Model.Ahora - bloque.Inicio).TotalMinutes))
-                                : 0;
-
-                                var mostrarAlertaNoInicio =
-                                bloque.EstatusID == 1
-                                && minutosAtrasoInicio >= 10
-                                && bloque.EstatusProduccionID != 3;
-
-                                var textoAlertaNoInicio = mostrarAlertaNoInicio
-                                ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
-                                : string.Empty;
+                                var minutosAtrasoInicio = bloque.MinutosAtrasoInicio;
+                                var mostrarAlertaNoInicio = bloque.MostrarAlertaNoInicio;
+                                var textoAlertaNoInicio = bloque.TextoAlertaNoInicio ?? string.Empty;
 
                                 var claseColorBloque = bloque.ClaseSemaforoCalendario;
 
@@ -2093,7 +2193,7 @@
             const btnPantallaCompleta = document.getElementById('btnPantallaCompletaCalendario');
             const btnCompactar = document.getElementById('btnCompactarCalendario');
             const timelineScroll = calendarKiosk?.querySelector('.timeline-scroll');
-            const timelineElement = calendarKiosk?.querySelector('.timeline');
+            let timelineElement = calendarKiosk?.querySelector('.timeline');
             const fitScaleLabel = document.getElementById('fitScaleLabel');
             const calendarPage = document.querySelector('.production-calendar-readonly');
 
@@ -2123,15 +2223,21 @@
 
             function configurarReglaHorariaComoPlaneacion() {
                 const days = document.querySelector('.timeline-header .days');
-                const machineHead = document.querySelector('.timeline-header .machine-head');
                 if (!days) return;
+
                 days.querySelectorAll('.nsq-hour-ruler-v31').forEach(x => x.remove());
-                const mostrar = vistaLive === 'dia' || vistaLive === 'semana' || (vistaLive === 'rango' && @totalDias <= 7);
+
+                const mostrar = vistaLive === 'dia'
+                    || vistaLive === 'semana'
+                    || (vistaLive === 'rango' && @totalDias <= 7);
+
                 if (!mostrar) return;
+
                 const totalHoras = Math.max(24, @totalDias * 24);
                 const ruler = document.createElement('div');
                 ruler.className = 'nsq-hour-ruler-v31';
                 ruler.style.gridTemplateColumns = `repeat(${totalHoras}, minmax(0, 1fr))`;
+
                 for (let i = 0; i < totalHoras; i++) {
                     const h = i % 24;
                     const cell = document.createElement('span');
@@ -2141,20 +2247,30 @@
                     cell.title = String(h).padStart(2, '0') + ':00';
                     ruler.appendChild(cell);
                 }
+
                 days.appendChild(ruler);
-                if (timelineElement) {
-                    if (vistaLive === 'dia' && machineHead) {
-                        const machineWidth = Math.max(150, Math.ceil(machineHead.getBoundingClientRect().width));
-                        timelineElement.style.minWidth = `${machineWidth + (24 * 48)}px`;
-                    } else {
-                        timelineElement.style.minWidth = '';
-                    }
+
+                if (!timelineElement) return;
+
+                if (vistaLive === 'dia') {
+                    timelineElement.style.minWidth = '0';
+                    timelineElement.style.width = '100%';
+                    timelineElement.style.maxWidth = '100%';
+                    if (timelineScroll) timelineScroll.scrollLeft = 0;
+                } else {
+                    timelineElement.style.minWidth = '';
+                    timelineElement.style.maxWidth = '';
                 }
             }
 
             function centrarHoraActual(porcentaje) {
+                if (vistaLive === 'dia') {
+                    centradoInicialRealizado = true;
+                    return;
+                }
+
                 if (centradoInicialRealizado || !timelineScroll || calendarioEnPantallaCompleta()) return;
-                if (!(vistaLive === 'dia' || vistaLive === 'semana' || (vistaLive === 'rango' && mostrarHorasLive))) return;
+                if (!(vistaLive === 'semana' || (vistaLive === 'rango' && mostrarHorasLive))) return;
 
                 const primerTrack = calendarKiosk?.querySelector('.track');
                 if (!primerTrack || primerTrack.clientWidth <= 0) return;
@@ -2224,6 +2340,158 @@
                     actualizarTiempoReal();
                     window.setInterval(actualizarTiempoReal, 60000);
                 }, msHastaSiguienteMinuto);
+            }
+
+            let actualizandoDatosOperativos = false;
+            let ultimoRefrescoDatos = 0;
+            const intervaloRefrescoDatosMs = 20000;
+
+            function aplicarEstilosDinamicosCalendario(root) {
+                if (!root) return;
+                root.querySelectorAll('[data-nsq-style]').forEach(elemento => {
+                    const estilo = elemento.getAttribute('data-nsq-style');
+                    if (estilo) elemento.style.cssText = estilo;
+                });
+            }
+
+            function hayInteraccionActivaCalendario() {
+                if (document.querySelector('.modal.show')) return true;
+                if (formRango?.classList.contains('active')) return true;
+
+                const activo = document.activeElement;
+                if (!activo) return false;
+
+                return activo.tagName === 'INPUT'
+                    || activo.tagName === 'TEXTAREA'
+                    || activo.tagName === 'SELECT';
+            }
+
+            function actualizarResumenesDesdeDocumento(documento) {
+                const metricsActual = document.querySelector('.metrics');
+                const metricsNueva = documento.querySelector('.metrics');
+                if (metricsActual && metricsNueva) {
+                    metricsActual.innerHTML = metricsNueva.innerHTML;
+                }
+
+                const resumenActual = document.querySelector('.operativa-summary');
+                const resumenNuevo = documento.querySelector('.operativa-summary');
+                if (resumenActual && resumenNuevo) {
+                    resumenActual.innerHTML = resumenNuevo.innerHTML;
+                }
+
+                const fechaActual = document.getElementById('calendarDataUpdatedAt');
+                const fechaNueva = documento.getElementById('calendarDataUpdatedAt');
+                if (fechaActual && fechaNueva) {
+                    fechaActual.textContent = fechaNueva.textContent;
+                }
+            }
+
+            function reemplazarModalesOperativos(documento) {
+                document.querySelectorAll('.modal-operativa').forEach(modal => {
+                    const instancia = window.bootstrap?.Modal?.getInstance(modal);
+                    instancia?.dispose();
+                    modal.remove();
+                });
+
+                documento.querySelectorAll('.modal-operativa').forEach(modal => {
+                    document.body.appendChild(document.importNode(modal, true));
+                });
+            }
+
+            async function refrescarDatosOperativos(forzar = false) {
+                const ahoraMs = Date.now();
+
+                if (actualizandoDatosOperativos) return;
+                if (!forzar && ahoraMs - ultimoRefrescoDatos < intervaloRefrescoDatosMs - 500) return;
+                if (document.hidden && !forzar) return;
+                if (hayInteraccionActivaCalendario() && !forzar) return;
+                if (!timelineElement) return;
+
+                actualizandoDatosOperativos = true;
+                ultimoRefrescoDatos = ahoraMs;
+                calendarKiosk?.classList.add('realtime-refreshing');
+
+                const scrollAnterior = timelineScroll?.scrollLeft ?? 0;
+                const estabaCompacto = calendarKiosk?.classList.contains('compact-mode') === true;
+
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_rt', String(Date.now()));
+
+                    const respuesta = await fetch(url.toString(), {
+                        method: 'GET',
+                        cache: 'no-store',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+
+                    if (respuesta.redirected && respuesta.url) {
+                        const destino = new URL(respuesta.url, window.location.origin);
+                        if (destino.pathname !== window.location.pathname) {
+                            window.location.href = respuesta.url;
+                            return;
+                        }
+                    }
+
+                    if (!respuesta.ok) {
+                        console.warn(`Calendario operativo: refresco HTTP ${respuesta.status}.`);
+                        return;
+                    }
+
+                    const html = await respuesta.text();
+                    const documento = new DOMParser().parseFromString(html, 'text/html');
+                    const timelineNuevo = documento.querySelector('#calendarKiosk .timeline');
+
+                    if (!timelineNuevo) {
+                        console.warn('Calendario operativo: la respuesta no contiene un timeline válido.');
+                        return;
+                    }
+
+                    const timelineImportado = document.importNode(timelineNuevo, true);
+                    timelineElement.replaceWith(timelineImportado);
+                    timelineElement = timelineImportado;
+
+                    actualizarResumenesDesdeDocumento(documento);
+                    reemplazarModalesOperativos(documento);
+
+                    if (estabaCompacto) {
+                        calendarKiosk?.classList.add('compact-mode');
+                    }
+
+                    aplicarEstilosDinamicosCalendario(timelineElement);
+                    configurarReglaHorariaComoPlaneacion();
+                    aplicarBusqueda();
+                    actualizarTiempoReal();
+
+                    window.requestAnimationFrame(() => {
+                        if (timelineScroll) {
+                            timelineScroll.scrollLeft = scrollAnterior;
+                        }
+
+                        if (calendarioEnPantallaCompleta()) {
+                            ajustarCalendarioAlViewport();
+                        }
+                    });
+                } catch (error) {
+                    console.warn('No fue posible actualizar el calendario operativo.', error);
+                } finally {
+                    actualizandoDatosOperativos = false;
+                    calendarKiosk?.classList.remove('realtime-refreshing');
+                }
+            }
+
+            function iniciarActualizacionDatosOperativos() {
+                const ahora = new Date();
+                const periodoActual = ahora >= periodoInicioLive && ahora < periodoFinLive;
+
+                if (!periodoActual) return;
+
+                window.setInterval(() => {
+                    refrescarDatosOperativos(false);
+                }, intervaloRefrescoDatosMs);
             }
 
             function normalizar(value) {
@@ -2316,8 +2584,22 @@
                 calendarKiosk.classList.remove('fit-screen');
 
                 if (!calendarioEnPantallaCompleta()) {
-                    timelineScroll.style.overflowX = 'auto';
+                    timelineScroll.style.overflowX = vistaLive === 'dia' ? 'hidden' : 'auto';
+                    if (vistaLive === 'dia') timelineScroll.scrollLeft = 0;
                     if (fitScaleLabel) fitScaleLabel.textContent = '';
+                    return;
+                }
+
+                if (vistaLive === 'dia') {
+                    timelineScroll.style.overflowX = 'hidden';
+                    timelineScroll.scrollLeft = 0;
+                    calendarKiosk.classList.remove('fit-screen');
+                    timelineElement.style.transform = '';
+                    timelineElement.style.width = '100%';
+                    timelineElement.style.maxWidth = '100%';
+                    timelineElement.style.minWidth = '0';
+                    timelineElement.style.height = 'auto';
+                    if (fitScaleLabel) fitScaleLabel.textContent = '100%';
                     return;
                 }
 
@@ -2396,7 +2678,10 @@
             });
 
             document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) actualizarTiempoReal();
+                if (!document.hidden) {
+                    actualizarTiempoReal();
+                    refrescarDatosOperativos(true);
+                }
             });
 
             btnCompactar?.addEventListener('click', () => {
@@ -2430,9 +2715,11 @@
              * El calendario operativo jamás modifica Planeación.
              */
 
+            aplicarEstilosDinamicosCalendario(document);
             configurarReglaHorariaComoPlaneacion();
             actualizarBotonPantallaCompleta();
             iniciarRelojTiempoReal();
+            iniciarActualizacionDatosOperativos();
         })();
     </script>
 }

@@ -543,9 +543,15 @@
             @if (esParejaLhRh)
             {
                 <div class="config-pair-banner">
-                    <div class="config-pair-banner-head">
-                        <div class="config-pair-title"><i class="bi bi-link-45deg me-1"></i>Operación física conjunta LH / RH</div>
-                        <span class="config-pair-group"><i class="bi bi-diagram-3"></i>Grupo @(parejaLhRh?.GrupoLhRh.ToString() ?? "-")</span>
+                    <div class="config-pair-banner">
+                        <div class="config-pair-banner-head">
+                            <div class="config-pair-title">
+                                <i class="bi bi-link-45deg me-1"></i>Operación física conjunta LH / RH
+                            </div>
+                            <span class="config-pair-group">
+                                <i class="bi bi-diagram-3"></i>Grupo @(parejaLhRh?.GrupoLhRh.ToString() ?? "-")
+                            </span>
+                        </div>
                     </div>
                     <div class="config-pair-grid">
                         <div class="config-pair-side">
@@ -1009,4 +1015,3 @@
     });
 </script>
 }
-
