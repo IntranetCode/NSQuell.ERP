@@ -102,25 +102,133 @@ namespace ERP.NSQuell.Controllers
             var vm = await ObtenerTabletVmAsync(id, cn);
             if (vm == null) return NotFound();
 
-            vm.ConfiguracionActual = await ObtenerConfiguracionActualOperadorAsync(id, cn);
-            vm.UltimoContadorMaquina = await ObtenerUltimaLecturaContadorMaquinaAsync(id, cn);
-            vm.BonusOperadorActual = await ObtenerBonusOperadorActualAsync(personaId.Value, cn);
-            vm.MotivosParo = await CargarMotivosParoAsync(cn);
-            vm.CatalogoDefectos = await CargarCatalogoDefectosAsync(cn);
-            vm.HorasCaptura = await ObtenerFilasCapturaHoraAsync(vm.EjecucionProduccionID, vm.ProgramaProduccionID, cn);
-            vm.HistorialCambiosTurno = await ObtenerHistorialCambiosTurnoAsync(vm.EjecucionProduccionID, cn);
-            vm.HistorialTurnos = ConstruirHistorialTurnos(vm.HorasCaptura, vm.HistorialCambiosTurno);
-            vm.FechaHoraServidor = DateTime.Now;
-            vm.TiempoExtraActivo = await ObtenerTiempoExtraActivoAsync(vm.EjecucionProduccionID, cn);
-            vm.HistorialTiempoExtra = await ObtenerHistorialTiempoExtraAsync(vm.EjecucionProduccionID, cn);
-            vm.PuedeIniciarTiempoExtra = vm.TiempoExtraActivo == null && await PuedeIniciarTiempoExtraAsync(vm.EjecucionProduccionID, cn);
+            await CargarDatosComplementariosTabletAsync(vm, personaId.Value, cn, true);
 
-            var primeraPendiente = vm.HorasCaptura.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).FirstOrDefault();
-            if (primeraPendiente != null)
+            var pareja = await ObtenerParejaLhRhOperadorAsync(vm.ProgramaProduccionID, cn);
+
+            if (pareja != null)
             {
-                vm.FechaProduccion = primeraPendiente.FechaProduccion;
-                vm.HoraInicioSugerida = primeraPendiente.HoraInicio;
-                vm.HoraFinSugerida = primeraPendiente.HoraFin;
+                try
+                {
+                    ValidarParejaLhRhOperador(pareja);
+                }
+                catch (Exception ex)
+                {
+                    TempData["Error"] = ex.Message;
+                    return RedirectToAction(nameof(Index));
+                }
+
+                if (!pareja.EjecucionParejaID.HasValue || pareja.EjecucionParejaID.Value <= 0)
+                {
+                    TempData["Error"] = $"La producción pertenece al grupo LH/RH {pareja.GrupoLhRh}, pero todavía no existe una ejecución activa para {pareja.OFParejaTexto}. No se permitirá operar solamente una de las dos OF.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var ejecucionParejaId = pareja.EjecucionParejaID.Value;
+
+                if (!await PersonaAsignadaAEjecucionAsync(ejecucionParejaId, personaId.Value, cn))
+                {
+                    TempData["Error"] = $"La producción es una pareja LH/RH, pero el operador conectado no está asignado también a {pareja.OFParejaTexto}. Corrige la asignación antes de continuar.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var vmPareja = await ObtenerTabletVmAsync(ejecucionParejaId, cn);
+                if (vmPareja == null)
+                {
+                    TempData["Error"] = $"No fue posible recuperar la ejecución activa de {pareja.OFParejaTexto}.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                await CargarDatosComplementariosTabletAsync(vmPareja, personaId.Value, cn, false);
+                vmPareja.MotivosParo = vm.MotivosParo;
+                vmPareja.CatalogoDefectos = vm.CatalogoDefectos;
+
+                var lados = ResolverLadosLhRhOperador(vm.ReferenciaSAP, vm.NumeroParte, vm.DescripcionParte, pareja);
+                vm.ParejaLhRh = pareja;
+                vm.ProduccionPareja = vmPareja;
+                vm.LadoLhRh = lados.LadoActual;
+                vm.LadoParejaLhRh = lados.LadoPareja;
+                vmPareja.LadoLhRh = lados.LadoPareja;
+                vmPareja.LadoParejaLhRh = lados.LadoActual;
+
+                ViewBag.EsProduccionLhRh = true;
+                ViewBag.GrupoLhRh = pareja.GrupoLhRh;
+                ViewBag.RequiereConfirmacionCapturaLhRh = true;
+
+                var errores = new List<string>();
+
+                if (vm.ConfiguracionActual == null || !vm.ConfiguracionActual.EstaVigente)
+                    errores.Add($"{lados.LadoActual} no tiene configuración técnica vigente.");
+
+                if (vmPareja.ConfiguracionActual == null || !vmPareja.ConfiguracionActual.EstaVigente)
+                    errores.Add($"{lados.LadoPareja} no tiene configuración técnica vigente.");
+
+                if (vm.ConfiguracionActual != null && vmPareja.ConfiguracionActual != null &&
+                    Math.Abs(vm.ConfiguracionActual.TiempoCicloSegundos - vmPareja.ConfiguracionActual.TiempoCicloSegundos) > 0.0001m)
+                {
+                    errores.Add($"Las dos OF tienen tiempos de ciclo diferentes ({vm.ConfiguracionActual.TiempoCicloSegundos:0.####} s y {vmPareja.ConfiguracionActual.TiempoCicloSegundos:0.####} s). El ciclo físico debe ser compartido.");
+                }
+
+                if (vm.UltimoContadorMaquina.HasValue && vmPareja.UltimoContadorMaquina.HasValue &&
+                    vm.UltimoContadorMaquina.Value != vmPareja.UltimoContadorMaquina.Value)
+                {
+                    errores.Add($"Los contadores lógicos están desincronizados: {lados.LadoActual}={vm.UltimoContadorMaquina.Value:N0}, {lados.LadoPareja}={vmPareja.UltimoContadorMaquina.Value:N0}.");
+                }
+
+                var primeraActual = vm.HorasCaptura.Where(x => !x.Capturada).OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).FirstOrDefault();
+                var primeraPareja = vmPareja.HorasCaptura.Where(x => !x.Capturada).OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).FirstOrDefault();
+
+                if (primeraActual == null ^ primeraPareja == null)
+                {
+                    errores.Add("Las dos OF no tienen el mismo número de bloques pendientes. No se permitirá una captura parcial LH/RH.");
+                }
+                else if (primeraActual != null && primeraPareja != null)
+                {
+                    if (!MismoBloqueCaptura(primeraActual, primeraPareja))
+                    {
+                        errores.Add($"Los siguientes bloques de LH y RH no coinciden. {lados.LadoActual}: {primeraActual.FechaProduccion:dd/MM/yyyy} {primeraActual.RangoHora}. {lados.LadoPareja}: {primeraPareja.FechaProduccion:dd/MM/yyyy} {primeraPareja.RangoHora}.");
+                    }
+                    else
+                    {
+                        vm.FechaProduccion = primeraActual.FechaProduccion;
+                        vm.HoraInicioSugerida = primeraActual.HoraInicio;
+                        vm.HoraFinSugerida = primeraActual.HoraFin;
+                        vmPareja.FechaProduccion = primeraPareja.FechaProduccion;
+                        vmPareja.HoraInicioSugerida = primeraPareja.HoraInicio;
+                        vmPareja.HoraFinSugerida = primeraPareja.HoraFin;
+
+                        if (primeraActual.Disponible != primeraPareja.Disponible)
+                            errores.Add("El siguiente bloque está disponible solamente para una de las dos OF. Revisa el historial horario antes de continuar.");
+                    }
+                }
+
+                if (vm.TiempoExtraActivo != null || vmPareja.TiempoExtraActivo != null)
+                    errores.Add("Existe tiempo extra activo en una de las OF. El tiempo extra LH/RH debe manejarse de forma conjunta.");
+
+                vm.PuedeIniciarTiempoExtra = false;
+                vmPareja.PuedeIniciarTiempoExtra = false;
+
+                if (errores.Count > 0)
+                {
+                    ViewBag.CapturaLhRhBloqueada = true;
+                    ViewBag.ErrorLhRh = string.Join(" ", errores);
+                }
+                else
+                {
+                    ViewBag.CapturaLhRhBloqueada = false;
+                }
+            }
+            else
+            {
+                ViewBag.EsProduccionLhRh = false;
+                ViewBag.CapturaLhRhBloqueada = false;
+                var primeraPendiente = vm.HorasCaptura.Where(x => !x.Capturada).OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).FirstOrDefault();
+                if (primeraPendiente != null)
+                {
+                    vm.FechaProduccion = primeraPendiente.FechaProduccion;
+                    vm.HoraInicioSugerida = primeraPendiente.HoraInicio;
+                    vm.HoraFinSugerida = primeraPendiente.HoraFin;
+                }
             }
 
             return View(vm);
@@ -370,23 +478,30 @@ ORDER BY te.TiempoExtraID DESC;";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PrevisualizarProduccionHora(int ejecucionProduccionId, DateTime fechaProduccion, string horaInicio, string horaFin, long? contadorMaquinaActual, int cantidadScrap = 0)
+        public async Task<IActionResult> PrevisualizarProduccionHora(int ejecucionProduccionId, DateTime fechaProduccion, string horaInicio, string horaFin, long? contadorMaquinaActual, int cantidadScrap = 0, int cantidadScrapPareja = 0)
         {
             if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, mensaje = "La sesión ha expirado." });
             if (ejecucionProduccionId <= 0) return Json(new { ok = false, mensaje = "La ejecución de Producción no es válida." });
             if (!contadorMaquinaActual.HasValue) return Json(new { ok = false, mensaje = "Captura el contador actual de la máquina." });
             if (contadorMaquinaActual.Value < 0) return Json(new { ok = false, mensaje = "El contador de la máquina no puede ser negativo." });
-            if (cantidadScrap < 0) return Json(new { ok = false, mensaje = "La cantidad de piezas rojas no puede ser negativa." });
-            if (!TimeSpan.TryParse(horaInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(horaFin, out var horaFinEnviada)) return Json(new { ok = false, mensaje = "El rango de hora no es válido." });
+            if (cantidadScrap < 0 || cantidadScrapPareja < 0) return Json(new { ok = false, mensaje = "La cantidad de piezas rojas no puede ser negativa." });
+            if (!TimeSpan.TryParse(horaInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(horaFin, out var horaFinEnviada))
+                return Json(new { ok = false, mensaje = "El rango de hora no es válido." });
+
             var horaInicioNormalizada = new TimeSpan(horaInicioEnviada.Hours, horaInicioEnviada.Minutes, 0);
             var horaFinNormalizada = new TimeSpan(horaFinEnviada.Hours, horaFinEnviada.Minutes, 0);
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return Unauthorized(new { ok = false, mensaje = "El usuario no tiene permisos de operador." });
+
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al operador." });
+
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
             try
             {
                 var ejecucion = await ObtenerEjecucionOperadorAsync(ejecucionProduccionId, cn, tx);
@@ -395,85 +510,217 @@ ORDER BY te.TiempoExtraID DESC;";
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
                 }
+
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionProduccionId, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La ejecución ya no está asignada al operador conectado." });
                 }
+
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La corrida no se encuentra en Producción." });
                 }
+
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La máquina ya fue liberada. No pueden registrarse nuevas horas." });
                 }
+
                 if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Existe un paro abierto. Finalízalo antes de capturar producción." });
                 }
+
                 var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(ejecucionProduccionId, cn, tx);
-                if (configuracionActual == null)
+                if (configuracionActual == null || !configuracionActual.EstaVigente)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La corrida no tiene configuración técnica vigente." });
                 }
+
                 var filas = await ObtenerFilasCapturaHoraAsync(ejecucionProduccionId, ejecucion.ProgramaProduccionID, cn, tx);
-                var fila = filas.FirstOrDefault(x => x.FechaProduccion.Date == fechaProduccion.Date && x.HoraInicio.Hours == horaInicioNormalizada.Hours && x.HoraInicio.Minutes == horaInicioNormalizada.Minutes && x.HoraFin.Hours == horaFinNormalizada.Hours && x.HoraFin.Minutes == horaFinNormalizada.Minutes);
+                var fila = BuscarFilaCaptura(filas, fechaProduccion, horaInicioNormalizada, horaFinNormalizada);
                 if (fila == null)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "El bloque solicitado ya no corresponde a la captura disponible." });
                 }
+
                 if (fila.Capturada)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Este bloque ya fue capturado." });
                 }
+
                 if (!fila.Disponible)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "Este bloque todavía no está disponible para captura." });
                 }
+
                 var fechaInicioFila = fila.FechaProduccion.Date.Add(fila.HoraInicio);
                 var fechaFinFila = fila.FechaProduccion.Date.Add(fila.HoraFin);
                 if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
+
                 if (DateTime.Now < fechaFinFila)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = $"El bloque todavía no termina. Podrás capturarlo a partir de las {fechaFinFila:HH:mm}." });
                 }
+
                 var calculo = await CalcularProduccionContadorHoraAsync(ejecucionProduccionId, fechaInicioFila, fechaFinFila, contadorMaquinaActual.Value, cn, tx);
                 if ((long)cantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"Capturaste {cantidadScrap:N0} pieza(s) rojas, pero el contador solamente indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.", piezasFisicas = calculo.PiezasCalculadas, cantidadOK = 0, cantidadSospechosa = 0, cantidadScrap });
+                }
+
+                var cantidadOK = calculo.PiezasCalculadas - cantidadScrap;
+                var pareja = await ObtenerParejaLhRhOperadorAsync(ejecucion.ProgramaProduccionID, cn, tx);
+
+                if (pareja == null)
+                {
+                    decimal? porcentajeCumplimiento = null;
+                    int? diferenciaObjetivo = null;
+                    bool? cumplioObjetivo = null;
+
+                    if (calculo.ObjetivoBloque > 0)
+                    {
+                        diferenciaObjetivo = cantidadOK - calculo.ObjetivoBloque;
+                        cumplioObjetivo = cantidadOK >= calculo.ObjetivoBloque;
+                        porcentajeCumplimiento = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 2);
+                    }
+
+                    await tx.RollbackAsync();
                     return Json(new
                     {
-                        ok = false,
-                        mensaje = $"Capturaste {cantidadScrap:N0} pieza(s) rojas, pero el contador solamente indica {calculo.PiezasCalculadas:N0} pieza(s) físicas.",
+                        ok = true,
+                        esLhRh = false,
+                        contadorInicial = calculo.ContadorInicialReferencia,
+                        contadorFinal = contadorMaquinaActual.Value,
                         piezasFisicas = calculo.PiezasCalculadas,
-                        cantidadOK = 0,
+                        cantidadOK,
                         cantidadSospechosa = 0,
-                        cantidadScrap
+                        cantidadScrap,
+                        objetivoHora = calculo.ObjetivoHora,
+                        objetivoBloque = calculo.ObjetivoBloque,
+                        porcentajeCumplimiento,
+                        diferenciaObjetivo,
+                        cumplioObjetivo,
+                        minutosProductivos = calculo.MinutosProductivos,
+                        tieneCambioConfiguracion = calculo.TieneCambioConfiguracion,
+                        tieneReinicioContador = calculo.TieneReinicioContador,
+                        numeroSegmentos = calculo.Segmentos.Count
                     });
                 }
-                var cantidadOK = calculo.PiezasCalculadas - cantidadScrap;
-                decimal? porcentajeCumplimiento = null;
-                int? diferenciaObjetivo = null;
-                bool? cumplioObjetivo = null;
+
+                ValidarParejaLhRhOperador(pareja);
+
+                if (!pareja.EjecucionParejaID.HasValue || pareja.EjecucionParejaID.Value <= 0)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"No existe una ejecución activa para {pareja.OFParejaTexto}." });
+                }
+
+                var ejecucionPareja = await ObtenerEjecucionOperadorAsync(pareja.EjecucionParejaID.Value, cn, tx);
+                if (ejecucionPareja == null)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"No fue posible recuperar la ejecución de {pareja.OFParejaTexto}." });
+                }
+
+                if (!await PersonaAsignadaAEjecucionAsync(ejecucionPareja.EjecucionProduccionID, personaId.Value, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"El operador conectado no se encuentra asignado también a {pareja.OFParejaTexto}." });
+                }
+
+                if (ejecucionPareja.EstatusID != ProduccionEstatus.EnProduccion)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"{pareja.OFParejaTexto} ya no se encuentra en Producción. No se permitirá una captura parcial LH/RH." });
+                }
+
+                if (ejecucionPareja.FechaLiberacionMaquina.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"{pareja.OFParejaTexto} ya liberó la máquina. Revisa la producción conjunta antes de continuar." });
+                }
+
+                if (await TieneParoAbiertoAsync(ejecucionPareja.EjecucionProduccionID, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"{pareja.OFParejaTexto} tiene un paro abierto. Las dos OF deben conservar el mismo estado físico." });
+                }
+
+                var configuracionPareja = await ObtenerConfiguracionActualOperadorAsync(ejecucionPareja.EjecucionProduccionID, cn, tx);
+                if (configuracionPareja == null || !configuracionPareja.EstaVigente)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"{pareja.OFParejaTexto} no tiene configuración técnica vigente." });
+                }
+
+                if (Math.Abs(configuracionActual.TiempoCicloSegundos - configuracionPareja.TiempoCicloSegundos) > 0.0001m)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"Las OF LH/RH tienen tiempos de ciclo diferentes ({configuracionActual.TiempoCicloSegundos:0.####} s y {configuracionPareja.TiempoCicloSegundos:0.####} s)." });
+                }
+
+                var filasPareja = await ObtenerFilasCapturaHoraAsync(ejecucionPareja.EjecucionProduccionID, ejecucionPareja.ProgramaProduccionID, cn, tx);
+                var filaPareja = BuscarFilaCaptura(filasPareja, fila.FechaProduccion, fila.HoraInicio, fila.HoraFin);
+
+                if (filaPareja == null || filaPareja.Capturada || !filaPareja.Disponible)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"El mismo bloque no está disponible para {pareja.OFParejaTexto}. No se permitirá desfasar LH y RH." });
+                }
+
+                var calculoPareja = await CalcularProduccionContadorHoraAsync(ejecucionPareja.EjecucionProduccionID, fechaInicioFila, fechaFinFila, contadorMaquinaActual.Value, cn, tx);
+                ValidarSincronizacionCalculosLhRh(calculo, calculoPareja);
+
+                if ((long)cantidadScrapPareja > calculoPareja.PiezasCalculadas)
+                {
+                    await tx.RollbackAsync();
+                    return Json(new { ok = false, mensaje = $"En {pareja.OFParejaTexto} capturaste {cantidadScrapPareja:N0} pieza(s) rojas, pero el mismo contador físico representa {calculoPareja.PiezasCalculadas:N0} pieza(s) para esa OF." });
+                }
+
+                var cantidadOKPareja = calculoPareja.PiezasCalculadas - cantidadScrapPareja;
+                var lados = ResolverLadosLhRhOperador(ejecucion.ReferenciaSAP, ejecucion.NumeroParte, ejecucion.DescripcionParte, pareja);
+
+                decimal? porcentajeActual = null;
+                decimal? porcentajePareja = null;
+                int? diferenciaActual = null;
+                int? diferenciaPareja = null;
+                bool? cumplioActual = null;
+                bool? cumplioPareja = null;
+
                 if (calculo.ObjetivoBloque > 0)
                 {
-                    diferenciaObjetivo = cantidadOK - calculo.ObjetivoBloque;
-                    cumplioObjetivo = cantidadOK >= calculo.ObjetivoBloque;
-                    porcentajeCumplimiento = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 2);
+                    diferenciaActual = cantidadOK - calculo.ObjetivoBloque;
+                    cumplioActual = cantidadOK >= calculo.ObjetivoBloque;
+                    porcentajeActual = Math.Round((decimal)cantidadOK * 100m / calculo.ObjetivoBloque, 2);
                 }
+
+                if (calculoPareja.ObjetivoBloque > 0)
+                {
+                    diferenciaPareja = cantidadOKPareja - calculoPareja.ObjetivoBloque;
+                    cumplioPareja = cantidadOKPareja >= calculoPareja.ObjetivoBloque;
+                    porcentajePareja = Math.Round((decimal)cantidadOKPareja * 100m / calculoPareja.ObjetivoBloque, 2);
+                }
+
                 await tx.RollbackAsync();
+
                 return Json(new
                 {
                     ok = true,
+                    esLhRh = true,
+                    grupoLhRh = pareja.GrupoLhRh,
+                    ladoActual = lados.LadoActual,
+                    ladoPareja = lados.LadoPareja,
                     contadorInicial = calculo.ContadorInicialReferencia,
                     contadorFinal = contadorMaquinaActual.Value,
                     piezasFisicas = calculo.PiezasCalculadas,
@@ -482,13 +729,33 @@ ORDER BY te.TiempoExtraID DESC;";
                     cantidadScrap,
                     objetivoHora = calculo.ObjetivoHora,
                     objetivoBloque = calculo.ObjetivoBloque,
-                    porcentajeCumplimiento,
-                    diferenciaObjetivo,
-                    cumplioObjetivo,
+                    porcentajeCumplimiento = porcentajeActual,
+                    diferenciaObjetivo = diferenciaActual,
+                    cumplioObjetivo = cumplioActual,
                     minutosProductivos = calculo.MinutosProductivos,
                     tieneCambioConfiguracion = calculo.TieneCambioConfiguracion,
                     tieneReinicioContador = calculo.TieneReinicioContador,
-                    numeroSegmentos = calculo.Segmentos.Count
+                    numeroSegmentos = calculo.Segmentos.Count,
+                    pareja = new
+                    {
+                        ejecucionProduccionId = ejecucionPareja.EjecucionProduccionID,
+                        programaProduccionId = ejecucionPareja.ProgramaProduccionID,
+                        numeroOF = pareja.OFParejaTexto,
+                        lado = lados.LadoPareja,
+                        piezasFisicas = calculoPareja.PiezasCalculadas,
+                        cantidadOK = cantidadOKPareja,
+                        cantidadSospechosa = 0,
+                        cantidadScrap = cantidadScrapPareja,
+                        objetivoHora = calculoPareja.ObjetivoHora,
+                        objetivoBloque = calculoPareja.ObjetivoBloque,
+                        porcentajeCumplimiento = porcentajePareja,
+                        diferenciaObjetivo = diferenciaPareja,
+                        cumplioObjetivo = cumplioPareja,
+                        minutosProductivos = calculoPareja.MinutosProductivos,
+                        tieneCambioConfiguracion = calculoPareja.TieneCambioConfiguracion,
+                        tieneReinicioContador = calculoPareja.TieneReinicioContador,
+                        numeroSegmentos = calculoPareja.Segmentos.Count
+                    }
                 });
             }
             catch (Exception ex)
@@ -503,54 +770,75 @@ ORDER BY te.TiempoExtraID DESC;";
         public async Task<IActionResult> RegistrarHora(ProduccionRegistroHoraPostVm vm)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
+
             if (vm.EjecucionProduccionID <= 0)
             {
                 TempData["Error"] = "No se recibió la ejecución de producción.";
                 return RedirectToAction(nameof(Index));
             }
+
             if (!TimeSpan.TryParse(vm.HoraInicio, out var horaInicioEnviada) || !TimeSpan.TryParse(vm.HoraFin, out var horaFinEnviada))
             {
                 TempData["Error"] = "El rango de hora no es válido.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
+
             var horaInicio = new TimeSpan(horaInicioEnviada.Hours, horaInicioEnviada.Minutes, 0);
             var horaFin = new TimeSpan(horaFinEnviada.Hours, horaFinEnviada.Minutes, 0);
             var fechaInicioSolicitada = vm.FechaProduccion.Date.Add(horaInicio);
             var fechaFinSolicitada = vm.FechaProduccion.Date.Add(horaFin);
             if (fechaFinSolicitada <= fechaInicioSolicitada) fechaFinSolicitada = fechaFinSolicitada.AddDays(1);
+
             if (DateTime.Now < fechaFinSolicitada)
             {
                 TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar este bloque a partir de {fechaFinSolicitada:HH:mm}.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
+
             if (!vm.ContadorMaquinaActual.HasValue)
             {
                 TempData["Error"] = "Captura el contador de la máquina correspondiente al cierre de este bloque.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
+
             if (vm.ContadorMaquinaActual.Value < 0)
             {
                 TempData["Error"] = "El contador de la máquina no puede ser negativo.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
-            if (vm.CantidadScrap < 0)
+
+            if (vm.CantidadScrap < 0 || vm.CantidadScrapPareja < 0)
             {
                 TempData["Error"] = "La cantidad de piezas rojas no puede ser negativa.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
+
             vm.Observaciones = vm.Observaciones?.Trim();
+            vm.ObservacionesPareja = vm.ObservacionesPareja?.Trim();
+
             if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Length > 500)
             {
                 TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
+
+            if (!string.IsNullOrWhiteSpace(vm.ObservacionesPareja) && vm.ObservacionesPareja.Length > 500)
+            {
+                TempData["Error"] = "Las observaciones de la OF pareja no pueden superar 500 caracteres.";
+                return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+            }
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
+
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
+
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
             try
             {
                 var ejecucion = await ObtenerEjecucionOperadorAsync(vm.EjecucionProduccionID, cn, tx);
@@ -559,30 +847,35 @@ ORDER BY te.TiempoExtraID DESC;";
                     await tx.RollbackAsync();
                     return NotFound();
                 }
+
                 if (!await PersonaAsignadaAEjecucionAsync(vm.EjecucionProduccionID, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La ejecución ya no se encuentra asignada al operador conectado.";
                     return RedirectToAction(nameof(Index));
                 }
+
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Solo puedes capturar producción cuando la corrida se encuentra en serie.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = $"La máquina fue liberada por el técnico el {ejecucion.FechaLiberacionMaquina.Value:dd/MM/yyyy HH:mm}. Ya no se pueden registrar nuevas horas.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 if (await TieneParoAbiertoAsync(vm.EjecucionProduccionID, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "No puedes capturar producción mientras exista un paro abierto.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 var configuracionActual = await ObtenerConfiguracionActualOperadorAsync(vm.EjecucionProduccionID, cn, tx);
                 if (configuracionActual == null || !configuracionActual.EstaVigente)
                 {
@@ -590,63 +883,85 @@ ORDER BY te.TiempoExtraID DESC;";
                     TempData["Error"] = "La corrida no tiene configuración técnica vigente. El Técnico de Producción debe confirmar cavidades y ciclo.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 var filasPermitidas = await ObtenerFilasCapturaHoraAsync(ejecucion.EjecucionProduccionID, ejecucion.ProgramaProduccionID, cn, tx);
-                var filaSolicitada = filasPermitidas.FirstOrDefault(x => x.FechaProduccion.Date == vm.FechaProduccion.Date && x.HoraInicio.Hours == horaInicio.Hours && x.HoraInicio.Minutes == horaInicio.Minutes);
+                var filaSolicitada = BuscarFilaCaptura(filasPermitidas, vm.FechaProduccion, horaInicio, horaFin);
+
                 if (filaSolicitada == null)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La hora enviada no pertenece a los bloques generados para esta producción.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 if (filaSolicitada.Capturada)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Esta hora ya fue capturada.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 if (!filaSolicitada.Disponible)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Debes capturar primero la hora pendiente anterior.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 var fechaInicioFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraInicio);
                 var fechaFinFila = filaSolicitada.FechaProduccion.Date.Add(filaSolicitada.HoraFin);
                 if (fechaFinFila <= fechaInicioFila) fechaFinFila = fechaFinFila.AddDays(1);
+
                 if (Math.Abs((fechaInicioFila - fechaInicioSolicitada).TotalSeconds) >= 60)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La hora inicial enviada no coincide con el bloque de producción.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 if (Math.Abs((fechaFinFila - fechaFinSolicitada).TotalSeconds) >= 60)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "El rango enviado no coincide con el bloque de producción.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 if (DateTime.Now < fechaFinFila)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = $"La hora todavía no ha terminado. Podrás capturar a partir de {fechaFinFila:HH:mm}.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 var fechaProduccionReal = filaSolicitada.FechaProduccion.Date;
                 var horaInicioReal = new TimeSpan(filaSolicitada.HoraInicio.Hours, filaSolicitada.HoraInicio.Minutes, 0);
                 var horaFinReal = new TimeSpan(filaSolicitada.HoraFin.Hours, filaSolicitada.HoraFin.Minutes, 0);
+
                 if (await ExisteRegistroHoraAsync(vm.EjecucionProduccionID, fechaProduccionReal, horaInicioReal, cn, tx))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "La hora seleccionada ya fue capturada. Actualiza la pantalla.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
+                var pareja = await ObtenerParejaLhRhOperadorAsync(ejecucion.ProgramaProduccionID, cn, tx);
+
+                if (pareja != null && !vm.ConfirmarCapturaLhRh)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "Esta corrida pertenece a una pareja LH/RH. La captura debe incluir ambos lados. Actualiza la vista de operador antes de registrar producción.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
                 var calculo = await CalcularProduccionContadorHoraAsync(vm.EjecucionProduccionID, fechaInicioFila, fechaFinFila, vm.ContadorMaquinaActual.Value, cn, tx);
+
                 if ((long)vm.CantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = $"El contador indica {calculo.PiezasCalculadas:N0} pieza(s) físicas, pero capturaste {vm.CantidadScrap:N0} pieza(s) rojas. Las piezas rojas no pueden superar la producción física.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 var validacionDefectos = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrap, vm.DefectosScrap, cn, tx);
                 if (!validacionDefectos.Valido)
                 {
@@ -654,15 +969,168 @@ ORDER BY te.TiempoExtraID DESC;";
                     TempData["Error"] = validacionDefectos.Mensaje;
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
+
                 vm.DefectosScrap = validacionDefectos.Defectos;
-                var cantidadOK = calculo.PiezasCalculadas - vm.CantidadScrap;
-                if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+
+                if (pareja == null)
+                {
+                    var cantidadOK = calculo.PiezasCalculadas - vm.CantidadScrap;
+
+                    if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El contador no registró producción durante este bloque. Indica en observaciones qué ocurrió.";
+                        return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                    }
+
+                    vm.CantidadOK = cantidadOK;
+                    vm.CantidadSospechosa = 0;
+                    vm.OkModificadoManual = false;
+                    vm.EsTiempoExtra = false;
+                    vm.MinutosTiempoExtra = null;
+                    vm.TiempoExtraID = null;
+                    vm.NumeroCorteTiempoExtra = null;
+                    vm.FinalizarTiempoExtra = false;
+                    vm.FechaProduccion = fechaProduccionReal;
+                    vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
+                    vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
+
+                    var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                    await GuardarDefectosScrapAsync(registroHoraId, vm.DefectosScrap, usuarioId, cn, tx);
+                    await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
+                    await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
+                    await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
+                    await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
+                    await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
+                    await tx.CommitAsync();
+
+                    TempData["Success"] = ConstruirMensajeCumplimientoHora(filaSolicitada.NumeroHora, vm.CantidadOK, vm.CantidadScrap, vm.ContadorMaquinaActual.Value, calculo);
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                ValidarParejaLhRhOperador(pareja);
+
+                if (!pareja.EjecucionParejaID.HasValue || pareja.EjecucionParejaID.Value <= 0)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"No se encontró la ejecución activa de {pareja.OFParejaTexto}. Una captura LH/RH no puede registrar solamente una OF.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                var ejecucionPareja = await ObtenerEjecucionOperadorAsync(pareja.EjecucionParejaID.Value, cn, tx);
+                if (ejecucionPareja == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"No fue posible recuperar la ejecución de {pareja.OFParejaTexto}.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (!await PersonaAsignadaAEjecucionAsync(ejecucionPareja.EjecucionProduccionID, personaId.Value, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El operador conectado no está asignado también a {pareja.OFParejaTexto}. No se permitirá registrar una producción física parcial.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (ejecucionPareja.EstatusID != ProduccionEstatus.EnProduccion)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{pareja.OFParejaTexto} ya no se encuentra en Producción. Ambas OF deben estar en serie para capturar el mismo contador.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (ejecucionPareja.FechaLiberacionMaquina.HasValue)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{pareja.OFParejaTexto} ya liberó la máquina. No se permitirá continuar solamente con una OF.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (await TieneParoAbiertoAsync(ejecucionPareja.EjecucionProduccionID, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{pareja.OFParejaTexto} tiene un paro abierto. LH y RH deben conservar el mismo estado físico.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                var configuracionPareja = await ObtenerConfiguracionActualOperadorAsync(ejecucionPareja.EjecucionProduccionID, cn, tx);
+                if (configuracionPareja == null || !configuracionPareja.EstaVigente)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{pareja.OFParejaTexto} no tiene configuración técnica vigente.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (Math.Abs(configuracionActual.TiempoCicloSegundos - configuracionPareja.TiempoCicloSegundos) > 0.0001m)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"Las OF LH/RH tienen tiempos de ciclo diferentes ({configuracionActual.TiempoCicloSegundos:0.####} s y {configuracionPareja.TiempoCicloSegundos:0.####} s). Ambas utilizan el mismo ciclo físico.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                var filasPareja = await ObtenerFilasCapturaHoraAsync(ejecucionPareja.EjecucionProduccionID, ejecucionPareja.ProgramaProduccionID, cn, tx);
+                var filaPareja = BuscarFilaCaptura(filasPareja, fechaProduccionReal, horaInicioReal, horaFinReal);
+
+                if (filaPareja == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{pareja.OFParejaTexto} no tiene el mismo bloque horario disponible.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (filaPareja.Capturada)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El bloque de {pareja.OFParejaTexto} ya fue capturado. No se permitirá duplicarlo.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (!filaPareja.Disponible)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El mismo bloque todavía no está disponible para {pareja.OFParejaTexto}.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                if (await ExisteRegistroHoraAsync(ejecucionPareja.EjecucionProduccionID, fechaProduccionReal, horaInicioReal, cn, tx))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El bloque de {pareja.OFParejaTexto} ya tiene un registro horario. Actualiza la pantalla.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                var calculoPareja = await CalcularProduccionContadorHoraAsync(ejecucionPareja.EjecucionProduccionID, fechaInicioFila, fechaFinFila, vm.ContadorMaquinaActual.Value, cn, tx);
+                ValidarSincronizacionCalculosLhRh(calculo, calculoPareja);
+
+                if ((long)vm.CantidadScrapPareja > calculoPareja.PiezasCalculadas)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"El mismo contador representa {calculoPareja.PiezasCalculadas:N0} pieza(s) para {pareja.OFParejaTexto}, pero capturaste {vm.CantidadScrapPareja:N0} pieza(s) rojas.";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                var validacionDefectosPareja = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrapPareja, vm.DefectosScrapPareja, cn, tx);
+                if (!validacionDefectosPareja.Valido)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = $"{pareja.OFParejaTexto}: {validacionDefectosPareja.Mensaje}";
+                    return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
+                }
+
+                vm.DefectosScrapPareja = validacionDefectosPareja.Defectos;
+
+                var cantidadOKActual = calculo.PiezasCalculadas - vm.CantidadScrap;
+                var cantidadOKPareja = calculoPareja.PiezasCalculadas - vm.CantidadScrapPareja;
+
+                if (calculo.PiezasCalculadas == 0 && calculoPareja.PiezasCalculadas == 0 &&
+                    string.IsNullOrWhiteSpace(vm.Observaciones) && string.IsNullOrWhiteSpace(vm.ObservacionesPareja))
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "El contador no registró producción durante este bloque. Indica en observaciones qué ocurrió.";
                     return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
                 }
-                vm.CantidadOK = cantidadOK;
+
+                vm.CantidadOK = cantidadOKActual;
                 vm.CantidadSospechosa = 0;
                 vm.OkModificadoManual = false;
                 vm.EsTiempoExtra = false;
@@ -673,15 +1141,54 @@ ORDER BY te.TiempoExtraID DESC;";
                 vm.FechaProduccion = fechaProduccionReal;
                 vm.HoraInicio = horaInicioReal.ToString(@"hh\:mm");
                 vm.HoraFin = horaFinReal.ToString(@"hh\:mm");
-                var registroHoraId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
-                await GuardarDefectosScrapAsync(registroHoraId, vm.DefectosScrap, usuarioId, cn, tx);
-                await InsertarSegmentosRegistroHoraAsync(registroHoraId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
-                await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
-                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraId, vm.CantidadOK, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
-                await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraId, usuarioId, cn, tx);
-                await RecalcularTotalesEjecucionAsync(vm.EjecucionProduccionID, usuarioId, cn, tx);
+
+                var registroHoraActualId = await InsertarRegistroHoraAsync(ejecucion, vm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculo, cn, tx);
+                await GuardarDefectosScrapAsync(registroHoraActualId, vm.DefectosScrap, usuarioId, cn, tx);
+                await InsertarSegmentosRegistroHoraAsync(registroHoraActualId, ejecucion.EjecucionProduccionID, calculo, usuarioId, cn, tx);
+                await RegistrarLecturaContadorHoraAsync(ejecucion, registroHoraActualId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculo, cn, tx);
+                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucion.EjecucionProduccionID, registroHoraActualId, cantidadOKActual, calculo.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
+                await VincularRegistroHoraConCalidadAsync(ejecucion, vm, horaInicioReal, horaFinReal, registroHoraActualId, usuarioId, cn, tx);
+
+                var registroParejaVm = new ProduccionRegistroHoraPostVm
+                {
+                    EjecucionProduccionID = ejecucionPareja.EjecucionProduccionID,
+                    FechaProduccion = fechaProduccionReal,
+                    HoraInicio = horaInicioReal.ToString(@"hh\:mm"),
+                    HoraFin = horaFinReal.ToString(@"hh\:mm"),
+                    ContadorMaquinaActual = vm.ContadorMaquinaActual,
+                    CantidadOK = cantidadOKPareja,
+                    OkModificadoManual = false,
+                    CantidadSospechosa = 0,
+                    CantidadScrap = vm.CantidadScrapPareja,
+                    EsTiempoExtra = false,
+                    MinutosTiempoExtra = null,
+                    TiempoExtraID = null,
+                    NumeroCorteTiempoExtra = null,
+                    FinalizarTiempoExtra = false,
+                    Observaciones = string.IsNullOrWhiteSpace(vm.ObservacionesPareja) ? vm.Observaciones : vm.ObservacionesPareja,
+                    DefectosScrap = vm.DefectosScrapPareja
+                };
+
+                var registroHoraParejaId = await InsertarRegistroHoraAsync(ejecucionPareja, registroParejaVm, horaInicioReal, horaFinReal, personaId.Value, usuarioId, calculoPareja, cn, tx);
+                await GuardarDefectosScrapAsync(registroHoraParejaId, registroParejaVm.DefectosScrap, usuarioId, cn, tx);
+                await InsertarSegmentosRegistroHoraAsync(registroHoraParejaId, ejecucionPareja.EjecucionProduccionID, calculoPareja, usuarioId, cn, tx);
+                await RegistrarLecturaContadorHoraAsync(ejecucionPareja, registroHoraParejaId, personaId.Value, usuarioId, fechaFinFila, vm.ContadorMaquinaActual.Value, calculoPareja, cn, tx);
+                await RegistrarBonusProduccionHoraAsync(personaId.Value, ejecucionPareja.EjecucionProduccionID, registroHoraParejaId, cantidadOKPareja, calculoPareja.PiezasCalculadas, fechaFinFila, usuarioId, cn, tx);
+                await VincularRegistroHoraConCalidadAsync(ejecucionPareja, registroParejaVm, horaInicioReal, horaFinReal, registroHoraParejaId, usuarioId, cn, tx);
+
+                await RecalcularTotalesEjecucionAsync(ejecucion.EjecucionProduccionID, usuarioId, cn, tx);
+                await RecalcularTotalesEjecucionAsync(ejecucionPareja.EjecucionProduccionID, usuarioId, cn, tx);
+
                 await tx.CommitAsync();
-                TempData["Success"] = ConstruirMensajeCumplimientoHora(filaSolicitada.NumeroHora, vm.CantidadOK, vm.CantidadScrap, vm.ContadorMaquinaActual.Value, calculo);
+
+                var lados = ResolverLadosLhRhOperador(ejecucion.ReferenciaSAP, ejecucion.NumeroParte, ejecucion.DescripcionParte, pareja);
+
+                TempData["Success"] =
+                    $"Hora {filaSolicitada.NumeroHora} guardada como producción conjunta LH/RH. " +
+                    $"Contador físico: {vm.ContadorMaquinaActual.Value:N0}. " +
+                    $"{lados.LadoActual}: {calculo.PiezasCalculadas:N0} físicas, {cantidadOKActual:N0} OK y {vm.CantidadScrap:N0} scrap. " +
+                    $"{lados.LadoPareja}: {calculoPareja.PiezasCalculadas:N0} físicas, {cantidadOKPareja:N0} OK y {vm.CantidadScrapPareja:N0} scrap.";
+
                 return RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID });
             }
             catch (Exception ex)
@@ -9502,6 +10009,27 @@ ORDER BY
 
             return lista;
         }
+        private async Task CargarDatosComplementariosTabletAsync(ProduccionOperadorTabletVm vm, int personaId, SqlConnection cn, bool cargarCatalogos)
+        {
+            vm.ConfiguracionActual = await ObtenerConfiguracionActualOperadorAsync(vm.EjecucionProduccionID, cn);
+            vm.UltimoContadorMaquina = await ObtenerUltimaLecturaContadorMaquinaAsync(vm.EjecucionProduccionID, cn);
+            vm.BonusOperadorActual = await ObtenerBonusOperadorActualAsync(personaId, cn);
+
+            if (cargarCatalogos)
+            {
+                vm.MotivosParo = await CargarMotivosParoAsync(cn);
+                vm.CatalogoDefectos = await CargarCatalogoDefectosAsync(cn);
+            }
+
+            vm.HorasCaptura = await ObtenerFilasCapturaHoraAsync(vm.EjecucionProduccionID, vm.ProgramaProduccionID, cn);
+            vm.HistorialCambiosTurno = await ObtenerHistorialCambiosTurnoAsync(vm.EjecucionProduccionID, cn);
+            vm.HistorialTurnos = ConstruirHistorialTurnos(vm.HorasCaptura, vm.HistorialCambiosTurno);
+            vm.FechaHoraServidor = DateTime.Now;
+            vm.TiempoExtraActivo = await ObtenerTiempoExtraActivoAsync(vm.EjecucionProduccionID, cn);
+            vm.HistorialTiempoExtra = await ObtenerHistorialTiempoExtraAsync(vm.EjecucionProduccionID, cn);
+            vm.PuedeIniciarTiempoExtra = vm.TiempoExtraActivo == null && await PuedeIniciarTiempoExtraAsync(vm.EjecucionProduccionID, cn);
+        }
+
         private static async Task<(bool Valido, string Mensaje, List<ProduccionRegistroDefectoPostVm> Defectos)> ValidarYNormalizarDefectosScrapAsync(int cantidadScrap, List<ProduccionRegistroDefectoPostVm>? defectos, SqlConnection cn, SqlTransaction tx)
         {
             var vacio = new List<ProduccionRegistroDefectoPostVm>();
@@ -9595,6 +10123,249 @@ WHERE Activo=1
             return (true, string.Empty, normalizados);
         }
 
+        private async Task<ProduccionParejaLhRhVm?> ObtenerParejaLhRhOperadorAsync(int programaProduccionId, SqlConnection cn, SqlTransaction? tx = null)
+        {
+            if (programaProduccionId <= 0) return null;
+
+            const string sql = @"
+WITH Origen AS
+(
+    SELECT
+        pp.ProgramaProduccionID,
+        pp.MaquinaID,
+        pp.MoldeID,
+        pp.MoldeCodigo,
+        pp.FechaInicioProgramada,
+        pp.FechaFinProgramada,
+        grupo.GrupoLhRh
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    CROSS APPLY
+    (
+        SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N'')) AS PosGrupo
+    ) posicion
+    CROSS APPLY
+    (
+        SELECT TRY_CONVERT
+        (
+            INT,
+            LEFT
+            (
+                SUBSTRING(pp.Observaciones,posicion.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),
+                CHARINDEX(N';',SUBSTRING(pp.Observaciones,posicion.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1
+            )
+        ) AS GrupoLhRh
+    ) grupo
+    WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+      AND pp.Activo=1
+      AND posicion.PosGrupo>0
+      AND grupo.GrupoLhRh IS NOT NULL
+)
+SELECT
+    o.GrupoLhRh,
+    o.ProgramaProduccionID,
+    pareja.ProgramaProduccionID AS ProgramaParejaID,
+    pareja.SolicitudProduccionID AS SolicitudProduccionParejaID,
+    s.FolioSolicitud AS FolioSolicitudPareja,
+    s.NumeroOFRecibida AS NumeroOFPareja,
+    ejecucion.EjecucionProduccionID AS EjecucionParejaID,
+    ejecucion.EstatusID AS EstatusEjecucionParejaID,
+    ISNULL(pareja.EstatusID,1) AS EstatusProgramaParejaID,
+    pareja.ParteID AS ParteParejaID,
+    pareja.NumeroParte AS NumeroPartePareja,
+    pareja.ReferenciaSAP AS ReferenciaSAPPareja,
+    pareja.DesignacionDescripcionSAP AS DescripcionPartePareja,
+    pareja.MaquinaID AS MaquinaParejaID,
+    COALESCE(NULLIF(pareja.MaquinaCodigo,N''),maquina.Codigo) AS MaquinaParejaCodigo,
+    COALESCE(NULLIF(pareja.MaquinaNombre,N''),maquina.Nombre) AS MaquinaParejaNombre,
+    pareja.MoldeID AS MoldeParejaID,
+    pareja.MoldeCodigo AS MoldeParejaCodigo,
+    CONVERT(INT,ISNULL(pareja.CantidadProgramada,0)) AS CantidadProgramadaPareja,
+    CONVERT(INT,ISNULL(ejecucion.CantidadOKTotal,ISNULL(pareja.CantidadProducida,0))) AS CantidadProducidaPareja,
+    pareja.FechaInicioProgramada AS FechaInicioProgramadaPareja,
+    pareja.FechaFinProgramada AS FechaFinProgramadaPareja,
+    CONVERT(bit,CASE WHEN o.MaquinaID IS NOT NULL AND pareja.MaquinaID=o.MaquinaID THEN 1 ELSE 0 END) AS MismaMaquina,
+    CONVERT(bit,
+        CASE
+            WHEN o.MoldeID IS NOT NULL AND pareja.MoldeID IS NOT NULL
+                THEN CASE WHEN o.MoldeID=pareja.MoldeID THEN 1 ELSE 0 END
+            WHEN NULLIF(LTRIM(RTRIM(ISNULL(o.MoldeCodigo,N''))),N'') IS NOT NULL
+             AND UPPER(LTRIM(RTRIM(ISNULL(o.MoldeCodigo,N''))))=
+                 UPPER(LTRIM(RTRIM(ISNULL(pareja.MoldeCodigo,N''))))
+                THEN 1
+            ELSE 0
+        END
+    ) AS MismoMolde,
+    CONVERT(bit,
+        CASE
+            WHEN o.FechaInicioProgramada=pareja.FechaInicioProgramada
+             AND
+             (
+                    o.FechaFinProgramada=pareja.FechaFinProgramada
+                 OR (o.FechaFinProgramada IS NULL AND pareja.FechaFinProgramada IS NULL)
+             )
+                THEN 1
+            ELSE 0
+        END
+    ) AS MismaVentanaProgramada
+FROM Origen o
+INNER JOIN dbo.Planeacion_ProgramaProduccion pareja
+    ON pareja.Activo=1
+   AND pareja.ProgramaProduccionID<>o.ProgramaProduccionID
+   AND pareja.Observaciones LIKE N'%NSQ_LHRH_PAIR:'+CONVERT(NVARCHAR(20),o.GrupoLhRh)+N';%'
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=pareja.SolicitudProduccionID
+   AND s.Activo=1
+LEFT JOIN dbo.ERP_Maquinas maquina
+    ON maquina.MaquinaID=pareja.MaquinaID
+OUTER APPLY
+(
+    SELECT TOP(1)
+        e.EjecucionProduccionID,
+        e.EstatusID,
+        e.CantidadOKTotal
+    FROM dbo.Produccion_Ejecucion e
+    WHERE e.ProgramaProduccionID=pareja.ProgramaProduccionID
+      AND e.Activo=1
+      AND e.EstatusID NOT IN(9,99)
+    ORDER BY e.EjecucionProduccionID DESC
+) ejecucion
+ORDER BY pareja.ProgramaProduccionID;";
+
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+
+            var resultados = new List<ProduccionParejaLhRhVm>();
+            await using var rd = await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                resultados.Add(new ProduccionParejaLhRhVm
+                {
+                    GrupoLhRh = Convert.ToInt32(rd["GrupoLhRh"]),
+                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                    ProgramaParejaID = Convert.ToInt32(rd["ProgramaParejaID"]),
+                    SolicitudProduccionParejaID = rd["SolicitudProduccionParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["SolicitudProduccionParejaID"]),
+                    FolioSolicitudPareja = rd["FolioSolicitudPareja"] == DBNull.Value ? null : rd["FolioSolicitudPareja"]?.ToString()?.Trim(),
+                    NumeroOFPareja = rd["NumeroOFPareja"] == DBNull.Value ? null : rd["NumeroOFPareja"]?.ToString()?.Trim(),
+                    EjecucionParejaID = rd["EjecucionParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["EjecucionParejaID"]),
+                    EstatusEjecucionParejaID = rd["EstatusEjecucionParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["EstatusEjecucionParejaID"]),
+                    EstatusProgramaParejaID = Convert.ToInt32(rd["EstatusProgramaParejaID"]),
+                    ParteParejaID = rd["ParteParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteParejaID"]),
+                    NumeroPartePareja = rd["NumeroPartePareja"] == DBNull.Value ? null : rd["NumeroPartePareja"]?.ToString()?.Trim(),
+                    ReferenciaSAPPareja = rd["ReferenciaSAPPareja"] == DBNull.Value ? null : rd["ReferenciaSAPPareja"]?.ToString()?.Trim(),
+                    DescripcionPartePareja = rd["DescripcionPartePareja"] == DBNull.Value ? null : rd["DescripcionPartePareja"]?.ToString()?.Trim(),
+                    MaquinaParejaID = rd["MaquinaParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MaquinaParejaID"]),
+                    MaquinaParejaCodigo = rd["MaquinaParejaCodigo"] == DBNull.Value ? null : rd["MaquinaParejaCodigo"]?.ToString()?.Trim(),
+                    MaquinaParejaNombre = rd["MaquinaParejaNombre"] == DBNull.Value ? null : rd["MaquinaParejaNombre"]?.ToString()?.Trim(),
+                    MoldeParejaID = rd["MoldeParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["MoldeParejaID"]),
+                    MoldeParejaCodigo = rd["MoldeParejaCodigo"] == DBNull.Value ? null : rd["MoldeParejaCodigo"]?.ToString()?.Trim(),
+                    CantidadProgramadaPareja = Convert.ToInt32(rd["CantidadProgramadaPareja"]),
+                    CantidadProducidaPareja = Convert.ToInt32(rd["CantidadProducidaPareja"]),
+                    FechaInicioProgramadaPareja = rd["FechaInicioProgramadaPareja"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaInicioProgramadaPareja"]),
+                    FechaFinProgramadaPareja = rd["FechaFinProgramadaPareja"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaFinProgramadaPareja"]),
+                    MismaMaquina = Convert.ToBoolean(rd["MismaMaquina"]),
+                    MismoMolde = Convert.ToBoolean(rd["MismoMolde"]),
+                    MismaVentanaProgramada = Convert.ToBoolean(rd["MismaVentanaProgramada"])
+                });
+            }
+
+            if (resultados.Count > 1)
+                throw new InvalidOperationException($"El Programa {programaProduccionId} tiene más de una contraparte con el mismo grupo LH/RH. Revisa Planeación antes de continuar.");
+
+            return resultados.FirstOrDefault();
+        }
+
+        private static void ValidarSincronizacionCalculosLhRh(CalculoProduccionContadorHora actual, CalculoProduccionContadorHora pareja)
+        {
+            if (actual.ContadorInicialReferencia != pareja.ContadorInicialReferencia)
+                throw new InvalidOperationException($"Los contadores base LH/RH están desincronizados ({actual.ContadorInicialReferencia:N0} y {pareja.ContadorInicialReferencia:N0}). No se guardará la captura.");
+
+            if (actual.ContadorFinal != pareja.ContadorFinal)
+                throw new InvalidOperationException("Las dos OF no están utilizando el mismo contador final físico.");
+
+            if (actual.TieneReinicioContador != pareja.TieneReinicioContador)
+                throw new InvalidOperationException("Solo una de las dos OF detectó reinicio del contador. Revisa las lecturas antes de continuar.");
+
+            var segmentosActual = actual.Segmentos.OrderBy(x => x.NumeroSegmento).ToList();
+            var segmentosPareja = pareja.Segmentos.OrderBy(x => x.NumeroSegmento).ToList();
+
+            if (segmentosActual.Count != segmentosPareja.Count)
+                throw new InvalidOperationException($"Las configuraciones LH/RH no están sincronizadas durante el bloque. Un lado generó {segmentosActual.Count} segmento(s) y el otro {segmentosPareja.Count}.");
+
+            for (var i = 0; i < segmentosActual.Count; i++)
+            {
+                var a = segmentosActual[i];
+                var b = segmentosPareja[i];
+
+                if (Math.Abs((a.FechaHoraInicio - b.FechaHoraInicio).TotalSeconds) > 60 ||
+                    Math.Abs((a.FechaHoraFin - b.FechaHoraFin).TotalSeconds) > 60)
+                {
+                    throw new InvalidOperationException($"El segmento físico #{i + 1} no cubre el mismo periodo en LH y RH.");
+                }
+
+                if (a.ContadorInicial != b.ContadorInicial || a.ContadorFinal != b.ContadorFinal)
+                    throw new InvalidOperationException($"El segmento físico #{i + 1} tiene lecturas de contador distintas entre LH y RH.");
+
+                if (Math.Abs(a.TiempoCicloSegundos - b.TiempoCicloSegundos) > 0.0001m)
+                    throw new InvalidOperationException($"El segmento físico #{i + 1} tiene tiempos de ciclo diferentes entre LH y RH.");
+
+                if (Math.Abs(a.MinutosProductivos - b.MinutosProductivos) > 0.05m)
+                    throw new InvalidOperationException($"El segmento físico #{i + 1} tiene minutos productivos distintos entre LH y RH. Revisa los paros de ambas ejecuciones.");
+            }
+        }
+        private static (string LadoActual, string LadoPareja) ResolverLadosLhRhOperador(string? referenciaActual, string? numeroParteActual, string? descripcionActual, ProduccionParejaLhRhVm pareja)
+        {
+            var ladoActual = DeterminarLadoLhRhOperador(referenciaActual, numeroParteActual, descripcionActual);
+            var ladoPareja = DeterminarLadoLhRhOperador(pareja.ReferenciaSAPPareja, pareja.NumeroPartePareja, pareja.DescripcionPartePareja);
+
+            if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "LH", StringComparison.OrdinalIgnoreCase)) ladoActual = "RH";
+            else if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "RH", StringComparison.OrdinalIgnoreCase)) ladoActual = "LH";
+
+            if (string.IsNullOrWhiteSpace(ladoPareja) && string.Equals(ladoActual, "LH", StringComparison.OrdinalIgnoreCase)) ladoPareja = "RH";
+            else if (string.IsNullOrWhiteSpace(ladoPareja) && string.Equals(ladoActual, "RH", StringComparison.OrdinalIgnoreCase)) ladoPareja = "LH";
+
+            return (ladoActual ?? "LH/RH", ladoPareja ?? "PAREJA");
+        }
+        private static string? DeterminarLadoLhRhOperador(string? referenciaSAP, string? numeroParte, string? descripcion)
+        {
+            var texto = string.Join(" ", new[] { referenciaSAP, numeroParte, descripcion }.Where(x => !string.IsNullOrWhiteSpace(x))).ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(texto)) return null;
+
+            var tieneLh = System.Text.RegularExpressions.Regex.IsMatch(texto, @"(?<![A-Z0-9])LH(?![A-Z0-9])", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var tieneRh = System.Text.RegularExpressions.Regex.IsMatch(texto, @"(?<![A-Z0-9])RH(?![A-Z0-9])", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (tieneLh == tieneRh) return null;
+            return tieneLh ? "LH" : "RH";
+        }
+        private static void ValidarParejaLhRhOperador(ProduccionParejaLhRhVm pareja)
+        {
+            if (!pareja.MismaMaquina)
+                throw new InvalidOperationException($"La pareja LH/RH grupo {pareja.GrupoLhRh} ya no utiliza la misma máquina.");
+            if (!pareja.MismoMolde)
+                throw new InvalidOperationException($"La pareja LH/RH grupo {pareja.GrupoLhRh} ya no utiliza el mismo molde.");
+            if (!pareja.MismaVentanaProgramada)
+                throw new InvalidOperationException($"La pareja LH/RH grupo {pareja.GrupoLhRh} ya no conserva la misma ventana programada.");
+            if (!pareja.EjecucionParejaID.HasValue || pareja.EjecucionParejaID.Value <= 0)
+                throw new InvalidOperationException($"No existe una ejecución activa para {pareja.OFParejaTexto}.");
+        }
+
+        private static bool MismoBloqueCaptura(ProduccionCapturaHoraFilaVm actual, ProduccionCapturaHoraFilaVm pareja)
+        {
+            return actual.FechaProduccion.Date == pareja.FechaProduccion.Date &&
+                   actual.HoraInicio.Hours == pareja.HoraInicio.Hours &&
+                   actual.HoraInicio.Minutes == pareja.HoraInicio.Minutes &&
+                   actual.HoraFin.Hours == pareja.HoraFin.Hours &&
+                   actual.HoraFin.Minutes == pareja.HoraFin.Minutes;
+        }
+        private static ProduccionCapturaHoraFilaVm? BuscarFilaCaptura(IEnumerable<ProduccionCapturaHoraFilaVm> filas, DateTime fechaProduccion, TimeSpan horaInicio, TimeSpan horaFin)
+        {
+            return filas.FirstOrDefault(x =>
+                x.FechaProduccion.Date == fechaProduccion.Date &&
+                x.HoraInicio.Hours == horaInicio.Hours &&
+                x.HoraInicio.Minutes == horaInicio.Minutes &&
+                x.HoraFin.Hours == horaFin.Hours &&
+                x.HoraFin.Minutes == horaFin.Minutes);
+        }
         private static async Task GuardarDefectosScrapAsync(int registroHoraId, List<ProduccionRegistroDefectoPostVm>? defectos, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             if (registroHoraId <= 0) throw new InvalidOperationException("No se recibió un registro horario válido para guardar sus defectos.");

@@ -738,6 +738,11 @@ public sealed class ProduccionRegistroHoraVm
     public int? NumeroCorteTiempoExtra { get; set; }
     public bool TieneCambioConfiguracion { get; set; }
     public bool TieneReinicioContador { get; set; }
+
+    public int CantidadScrapPareja { get; set; }
+    public string? ObservacionesPareja { get; set; }
+    public List<ProduccionRegistroDefectoPostVm> DefectosScrapPareja { get; set; } = new();
+    public bool ConfirmarCapturaLhRh { get; set; }
     public List<ProduccionRegistroHoraSegmentoVm> Segmentos { get; set; } = new();
     public List<ProduccionRegistroHoraAjusteProduccionVm> AjustesProduccion { get; set; } = new();
     public long? ContadorInicial => Segmentos.Count > 0 ? Segmentos.OrderBy(x => x.NumeroSegmento).First().ContadorInicial : null;
@@ -1245,69 +1250,136 @@ public sealed class ProduccionParejaLhRhVm
 public sealed class ProduccionDetalleVm
 {
     public ProduccionEjecucionVm Ejecucion { get; set; } = new();
-
     public ProduccionParejaLhRhVm? ParejaLhRh { get; set; }
+    public ProduccionEjecucionVm? EjecucionPareja { get; set; }
+    public string? LadoLhRh { get; set; }
+    public string? LadoParejaLhRh { get; set; }
+
     public bool EsProduccionLhRh => ParejaLhRh != null;
+    public bool TieneEjecucionPareja => EjecucionPareja != null;
+    public bool PuedeUsarWorkspaceConjunto => EsProduccionLhRh && TieneEjecucionPareja;
+    public int? GrupoLhRh => ParejaLhRh?.GrupoLhRh;
 
     public List<ProduccionRegistroHoraVm> RegistrosHora { get; set; } = new();
+    public List<ProduccionRegistroHoraVm> RegistrosHoraPareja { get; set; } = new();
 
     public List<ProduccionParoVm> Paros { get; set; } = new();
-
+    public List<ProduccionParoVm> ParosPareja { get; set; } = new();
     public List<SelectListItem> MotivosParo { get; set; } = new();
 
-    public int TotalOK =>
-        RegistrosHora
-            .Where(x => x.Activo)
-            .Sum(x => x.CantidadOK);
+    public int TotalOK => RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadOK);
+    public int TotalSospechoso => RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadSospechosa);
+    public int TotalScrap => RegistrosHora.Where(x => x.Activo).Sum(x => x.CantidadScrap);
+    public int TotalCapturado => TotalOK + TotalSospechoso + TotalScrap;
 
-    public int TotalSospechoso =>
-        RegistrosHora
-            .Where(x => x.Activo)
-            .Sum(x => x.CantidadSospechosa);
+    public int TotalOKPareja => RegistrosHoraPareja.Where(x => x.Activo).Sum(x => x.CantidadOK);
+    public int TotalSospechosoPareja => RegistrosHoraPareja.Where(x => x.Activo).Sum(x => x.CantidadSospechosa);
+    public int TotalScrapPareja => RegistrosHoraPareja.Where(x => x.Activo).Sum(x => x.CantidadScrap);
+    public int TotalCapturadoPareja => TotalOKPareja + TotalSospechosoPareja + TotalScrapPareja;
 
-    public int TotalScrap =>
-        RegistrosHora
-            .Where(x => x.Activo)
-            .Sum(x => x.CantidadScrap);
+    public int TotalOKConjunto => TotalOK + TotalOKPareja;
+    public int TotalSospechosoConjunto => TotalSospechoso + TotalSospechosoPareja;
+    public int TotalScrapConjunto => TotalScrap + TotalScrapPareja;
+    public int TotalCapturadoConjunto => TotalCapturado + TotalCapturadoPareja;
 
-    public int TotalCapturado =>
-        TotalOK +
-        TotalSospechoso +
-        TotalScrap;
 
-    public bool TieneParoAbierto =>
-        Paros.Any(x =>
-            x.Activo &&
-            x.EstaAbierto);
+    public ProduccionChecklistResumenVm? ChecklistResumenPareja { get; set; }
+    public ProduccionCalidadResumenVm? CalidadResumenPareja { get; set; }
+    public List<ProduccionRecepcionOFVm> RecepcionesOFPareja { get; set; } = new();
+    public ProduccionMonitoreoTurnoAvisoVm? MonitoreoTurnoActualPareja { get; set; }
+    public ProduccionCambioTurnoTecnicoVm? CambioTurnoTecnicoPareja { get; set; }
+    public ProduccionConfiguracionTecnicoVm? ConfiguracionTiempoRealPareja { get; set; }
 
-    public ProduccionParoVm? ParoAbierto =>
-        Paros.FirstOrDefault(x =>
-            x.Activo &&
-            x.EstaAbierto);
+    public bool TieneParoAbierto => Paros.Any(x => x.Activo && x.EstaAbierto);
+    public ProduccionParoVm? ParoAbierto => Paros.FirstOrDefault(x => x.Activo && x.EstaAbierto);
+    public bool TieneParoAbiertoPareja => ParosPareja.Any(x => x.Activo && x.EstaAbierto);
+    public ProduccionParoVm? ParoAbiertoPareja => ParosPareja.FirstOrDefault(x => x.Activo && x.EstaAbierto);
 
     public ProduccionChecklistResumenVm? ChecklistResumen { get; set; }
 
+
     public ProduccionCalidadResumenVm? CalidadResumen { get; set; }
+
 
     public List<ProduccionRecepcionOFVm> RecepcionesOF { get; set; } = new();
 
-    public ProduccionMonitoreoTurnoAvisoVm? MonitoreoTurnoActual { get; set; }
 
+    public ProduccionMonitoreoTurnoAvisoVm? MonitoreoTurnoActual { get; set; }
+ 
     public ProduccionCambioTurnoTecnicoVm? CambioTurnoTecnico { get; set; }
 
-    
+
     public ProduccionConfiguracionTecnicoVm? ConfiguracionTiempoReal { get; set; }
 
-  
     public ProduccionBonusOperadorResumenVm? BonusOperadorActual { get; set; }
+    public ProduccionBonusOperadorResumenVm? BonusOperadorPareja { get; set; }
 
-    public bool MostrarAvisoMonitoreoTurno =>
-        MonitoreoTurnoActual?.ChecklistPendiente == true;
+    public bool MostrarAvisoMonitoreoTurno => MonitoreoTurnoActual?.ChecklistPendiente == true;
+    public bool MostrarAvisoMonitoreoTurnoPareja => MonitoreoTurnoActualPareja?.ChecklistPendiente == true;
 
     public bool TieneConfiguracionTiempoReal =>
-        ConfiguracionTiempoReal?.TieneConfiguracionActual == true;
+     ConfiguracionTiempoReal?.TieneConfiguracionActual == true &&
+     (!PuedeUsarWorkspaceConjunto ||
+      ConfiguracionTiempoRealPareja?.TieneConfiguracionActual == true);
+    public bool ConfiguracionFisicaSincronizada =>
+        !PuedeUsarWorkspaceConjunto ||
+        (
+            ConfiguracionTiempoReal?.ConfiguracionActual != null &&
+            ConfiguracionTiempoRealPareja?.ConfiguracionActual != null &&
+            Math.Abs(
+                ConfiguracionTiempoReal.ConfiguracionActual.TiempoCicloSegundos -
+                ConfiguracionTiempoRealPareja.ConfiguracionActual.TiempoCicloSegundos
+            ) <= 0.0001m &&
+            ConfiguracionTiempoReal.ConfiguracionActual.ContadorInicioVigencia ==
+            ConfiguracionTiempoRealPareja.ConfiguracionActual.ContadorInicioVigencia
+        );
+    public bool AmbasEnPreparacion =>
+        PuedeUsarWorkspaceConjunto &&
+        Ejecucion.EstatusID == ProduccionEstatus.EnPreparacion &&
+        EjecucionPareja!.EstatusID == ProduccionEstatus.EnPreparacion;
+
+    public bool AmbasEnProduccion =>
+        PuedeUsarWorkspaceConjunto &&
+        Ejecucion.EstatusID == ProduccionEstatus.EnProduccion &&
+        EjecucionPareja!.EstatusID == ProduccionEstatus.EnProduccion;
+
+    public bool AmbasLiberadasPorCalidad =>
+        PuedeUsarWorkspaceConjunto &&
+        CalidadResumen?.PuedeIniciarSerie == true &&
+        CalidadResumenPareja?.PuedeIniciarSerie == true;
 }
 
+public sealed class ProduccionRegistroHoraLhRhPostVm
+{
+    public int EjecucionProduccionID { get; set; }
+    public DateTime FechaProduccion { get; set; } = DateTime.Today;
+    public string HoraInicio { get; set; } = string.Empty;
+    public string HoraFin { get; set; } = string.Empty;
+
+    // Único contador físico de la máquina.
+    public long? ContadorMaquinaActual { get; set; }
+
+    // Tiempo extra también corresponde a la operación física.
+    public bool EsTiempoExtra { get; set; }
+    public int? MinutosTiempoExtra { get; set; }
+    public int? TiempoExtraID { get; set; }
+    public int? NumeroCorteTiempoExtra { get; set; }
+    public bool FinalizarTiempoExtra { get; set; }
+
+    // Datos independientes de cada OF.
+    public ProduccionRegistroHoraLadoPostVm LadoActual { get; set; } = new();
+    public ProduccionRegistroHoraLadoPostVm LadoPareja { get; set; } = new();
+}
+
+public sealed class ProduccionRegistroHoraLadoPostVm
+{
+    public int CantidadOK { get; set; }
+    public bool OkModificadoManual { get; set; }
+    public int CantidadSospechosa { get; set; }
+    public int CantidadScrap { get; set; }
+    public string? Observaciones { get; set; }
+    public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
+}
 public sealed class ProduccionIniciarRequestVm
 {
     public int ProgramaProduccionID { get; set; }
@@ -1319,32 +1391,23 @@ public sealed class ProduccionIniciarRequestVm
 public sealed class ProduccionRegistroHoraPostVm
 {
     public int EjecucionProduccionID { get; set; }
-
     public DateTime FechaProduccion { get; set; } = DateTime.Today;
-
     public string HoraInicio { get; set; } = string.Empty;
     public string HoraFin { get; set; } = string.Empty;
-
     public long? ContadorMaquinaActual { get; set; }
-
     public int CantidadOK { get; set; }
     public bool OkModificadoManual { get; set; }
-
     public int CantidadSospechosa { get; set; }
     public int CantidadScrap { get; set; }
-
-
     public bool EsTiempoExtra { get; set; }
     public int? MinutosTiempoExtra { get; set; }
-
     public int? TiempoExtraID { get; set; }
     public int? NumeroCorteTiempoExtra { get; set; }
-
     public bool FinalizarTiempoExtra { get; set; }
-
     public string? Observaciones { get; set; }
-
     public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
+
+   
 }
 public sealed class ProduccionParoPostVm
 {
@@ -1374,6 +1437,16 @@ public sealed class ProduccionOperadorTabletVm
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
 
+    public ProduccionParejaLhRhVm? ParejaLhRh { get; set; }
+    public ProduccionOperadorTabletVm? LadoPareja { get; set; }
+    public string? LadoLhRh { get; set; }
+    public string? LadoParejaLhRh { get; set; }
+
+    
+    public bool TieneLadoPareja => LadoPareja != null;
+   
+
+
     public int? SolicitudProduccionID { get; set; }
     public string? FolioSolicitud { get; set; }
     public string? NumeroOFRecibida { get; set; }
@@ -1398,6 +1471,7 @@ public sealed class ProduccionOperadorTabletVm
     public int? ObjetivoHora { get; set; }
     public decimal? Ciclo { get; set; }
     public int? Cavidades { get; set; }
+
 
     public ProduccionConfiguracionCorridaVm? ConfiguracionActual { get; set; }
     public long? UltimoContadorMaquina { get; set; }
@@ -1448,6 +1522,8 @@ public sealed class ProduccionOperadorTabletVm
 
     public List<ProduccionCapturaHoraFilaVm> HorasCaptura { get; set; } = new();
 
+    public List<ProduccionCapturaHoraLhRhVm> HorasCapturaLhRh { get; set; } = new();
+
     public DateTime FechaProduccion { get; set; } = DateTime.Today;
     public TimeSpan HoraInicioSugerida { get; set; }
     public TimeSpan HoraFinSugerida { get; set; }
@@ -1482,6 +1558,53 @@ public sealed class ProduccionOperadorTabletVm
                 CantidadOKTotal);
         }
     }
+}
+
+public sealed class ProduccionCapturaHoraLhRhVm
+{
+    public int NumeroHora { get; set; }
+    public DateTime FechaProduccion { get; set; }
+    public TimeSpan HoraInicio { get; set; }
+    public TimeSpan HoraFin { get; set; }
+
+    public ProduccionCapturaHoraFilaVm? LadoActual { get; set; }
+    public ProduccionCapturaHoraFilaVm? LadoPareja { get; set; }
+
+    public bool CapturadaActual => LadoActual?.Capturada == true;
+    public bool CapturadaPareja => LadoPareja?.Capturada == true;
+    public bool CapturaCompleta => CapturadaActual && CapturadaPareja;
+    public bool CapturaParcial => CapturadaActual != CapturadaPareja;
+
+    public bool Disponible =>
+        LadoActual?.Disponible == true ||
+        LadoPareja?.Disponible == true;
+
+    public bool Vencida =>
+        !CapturaCompleta &&
+        (LadoActual?.Vencida == true ||
+         LadoPareja?.Vencida == true);
+
+    public long? ContadorInicialActual => LadoActual?.ContadorInicial;
+    public long? ContadorFinalActual => LadoActual?.ContadorFinal;
+    public long? ContadorInicialPareja => LadoPareja?.ContadorInicial;
+    public long? ContadorFinalPareja => LadoPareja?.ContadorFinal;
+
+    public bool ContadorInicialSincronizado =>
+        !ContadorInicialActual.HasValue ||
+        !ContadorInicialPareja.HasValue ||
+        ContadorInicialActual.Value == ContadorInicialPareja.Value;
+
+    public bool ContadorFinalSincronizado =>
+        !ContadorFinalActual.HasValue ||
+        !ContadorFinalPareja.HasValue ||
+        ContadorFinalActual.Value == ContadorFinalPareja.Value;
+
+    public bool ContadoresSincronizados =>
+        ContadorInicialSincronizado &&
+        ContadorFinalSincronizado;
+
+    public string RangoHora =>
+        $"{HoraInicio:hh\\:mm} - {HoraFin:hh\\:mm}";
 }
 public static class ProduccionCambioTurnoEstado
 {
@@ -2476,6 +2599,12 @@ public sealed class ProduccionProgramaDisponibleVm
     public string? TurnoSugeridoNombre { get; set; }
     public string? TurnoSugeridoColor { get; set; }
     public int? EscalaAsignacionID { get; set; }
+
+    public ProduccionParejaLhRhVm? ParejaLhRh { get; set; }
+    public string? LadoLhRh { get; set; }
+    public bool EsParejaLhRh => ParejaLhRh != null && ParejaLhRh.GrupoLhRh > 0 && ParejaLhRh.ProgramaParejaID > 0;
+    public int? GrupoLhRh => EsParejaLhRh ? ParejaLhRh!.GrupoLhRh : null;
+    public int? ProgramaParejaID => EsParejaLhRh ? ParejaLhRh!.ProgramaParejaID : null;
 
     public string TituloPrograma
     {
