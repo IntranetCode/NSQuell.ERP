@@ -65,7 +65,10 @@ public sealed partial class AlmacenOFController : AlmacenBaseController
             ("dbo.AlmacenMP_Movimientos", "U"),
             ("dbo.AlmacenEmbalajes_Movimientos", "U"),
             ("dbo.AlmacenPT_Movimientos", "U"),
-            ("dbo.ERP_Partes", "U")
+            ("dbo.ERP_Partes", "U"),
+            // NSQ_DEVOLUCION_MATERIALES_V1_2
+            ("dbo.Produccion_RecepcionMateriales", "U"),
+            ("dbo.Produccion_DevolucionesMateriales", "U")
         };
 
         foreach (var objeto in objetosRequeridos)
@@ -414,8 +417,12 @@ FETCH NEXT @TamanoPagina ROWS ONLY;";
                 ? vm.EstatusID.Value
                 : DBNull.Value;
 
+        // NSQ_DEVOLUCION_MATERIALES_V1_2
+        // PENDIENTES se filtra despues de sustituir "entregado" por
+        // la cantidad realmente aceptada por Produccion.
         command.Parameters.Add("@Area", SqlDbType.NVarChar, 30).Value =
             string.IsNullOrWhiteSpace(vm.Area)
+            || string.Equals(vm.Area, "PENDIENTES", StringComparison.OrdinalIgnoreCase)
                 ? DBNull.Value
                 : vm.Area;
 
@@ -490,9 +497,364 @@ FETCH NEXT @TamanoPagina ROWS ONLY;";
         // ALMACEN_OF_MAQUINAS_PT_V4_1
         await CargarMaquinasAlmacenAsync(connection, vm.Ordenes, cancellationToken);
         await CargarProductoTerminadoSolicitadoAsync(connection, vm.Ordenes, cancellationToken);
+
+        // NSQ_DEVOLUCION_MATERIALES_V1_2
+        await AplicarValidacionProduccionYDevolucionesAsync(
+            connection,
+            vm.Ordenes,
+            cancellationToken);
+
+        if (string.Equals(
+                vm.Area,
+                "PENDIENTES",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            vm.Ordenes = vm.Ordenes
+                .Where(x => x.TienePendientesAlmacen)
+                .ToList();
+        }
+
+        vm.Ordenes = vm.Ordenes
+            .OrderByDescending(x => x.TieneDevolucionPendiente)
+            .ThenByDescending(x => x.UltimaDevolucionFecha)
+            .ThenByDescending(x => x.FechaSolicitud)
+            .ThenByDescending(x => x.SolicitudProduccionID)
+            .ToList();
+
+        vm.PendientesMP =
+            vm.Ordenes.Count(
+                x => x.MaterialesEntrega.Any(
+                    y => y.Pendiente > 0.0005m));
+
+        vm.PendientesEmbalaje =
+            vm.Ordenes.Count(
+                x => x.EmbalajesEntrega.Any(
+                    y => y.Pendiente > 0.0005m));
+
+        vm.TotalRegistros = vm.Ordenes.Count;
+
         return View(vm);
     }
 
+    // ============================================================
+    // NSQ_DEVOLUCION_MATERIALES_V1_2
+    // "Entregado" para cerrar una OF ya no significa solo Salida de Almacen.
+    // Para MP/Embalaje significa cantidad ACEPTADA por Produccion.
+    // ============================================================
+    private static async Task AplicarValidacionProduccionYDevolucionesAsync(
+        SqlConnection connection,
+        List<AlmacenOFItemVm> ordenes,
+        CancellationToken cancellationToken)
+    {
+        if (ordenes.Count == 0)
+            return;
+
+        var parametros =
+            ordenes
+                .Select(
+                    (x, i) =>
+                        new
+                        {
+                            x.SolicitudProduccionID,
+                            Nombre = $"@DevOf{i}"
+                        })
+                .ToList();
+
+        var inSql =
+            string.Join(
+                ",",
+                parametros.Select(x => x.Nombre));
+
+        var aceptacion =
+            new Dictionary<
+                (int SolicitudID,string Tipo,int CatalogoID),
+                (decimal Aceptado,decimal EnValidacion)>();
+
+        var sqlAceptacion = $@"
+SELECT
+    r.SolicitudProduccionID,
+    r.TipoOrigen,
+    CASE
+        WHEN r.TipoOrigen=N'MP'
+            THEN r.MaterialSolicitadoID
+        ELSE r.EmbalajeSolicitadoID
+    END AS CatalogoID,
+    CONVERT(
+        decimal(18,4),
+        ISNULL(
+            SUM(
+                CASE
+                    WHEN r.EstadoRecepcion IN(
+                        N'RECIBIDO_COMPLETO',
+                        N'RECIBIDO_PARCIAL')
+                    THEN ISNULL(r.CantidadRecibidaProduccion,0)
+                    ELSE 0
+                END),
+            0)
+    ) AS AceptadoProduccion,
+    CONVERT(
+        decimal(18,4),
+        ISNULL(
+            SUM(
+                CASE
+                    WHEN r.EstadoRecepcion=N'PENDIENTE'
+                    THEN r.CantidadEntregadaAlmacen
+                    ELSE 0
+                END),
+            0)
+    ) AS EnValidacionProduccion
+FROM dbo.Produccion_RecepcionMateriales r
+WHERE r.Activo=1
+  AND r.SolicitudProduccionID IN ({inSql})
+  AND r.TipoOrigen IN(N'MP',N'EMBALAJE')
+  AND
+  (
+      (r.TipoOrigen=N'MP' AND r.MaterialSolicitadoID IS NOT NULL)
+      OR
+      (r.TipoOrigen=N'EMBALAJE' AND r.EmbalajeSolicitadoID IS NOT NULL)
+  )
+GROUP BY
+    r.SolicitudProduccionID,
+    r.TipoOrigen,
+    CASE
+        WHEN r.TipoOrigen=N'MP'
+            THEN r.MaterialSolicitadoID
+        ELSE r.EmbalajeSolicitadoID
+    END;";
+
+        await using (var command =
+            new SqlCommand(sqlAceptacion, connection))
+        {
+            foreach (var parametro in parametros)
+            {
+                command.Parameters.Add(
+                    parametro.Nombre,
+                    SqlDbType.Int).Value =
+                    parametro.SolicitudProduccionID;
+            }
+
+            await using var reader =
+                await command.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var catalogoId =
+                    reader["CatalogoID"] == DBNull.Value
+                        ? 0
+                        : Convert.ToInt32(reader["CatalogoID"]);
+
+                if (catalogoId <= 0)
+                    continue;
+
+                var key =
+                    (
+                        Convert.ToInt32(reader["SolicitudProduccionID"]),
+                        reader["TipoOrigen"]?.ToString()?.Trim()
+                            ?? string.Empty,
+                        catalogoId
+                    );
+
+                aceptacion[key] =
+                    (
+                        Convert.ToDecimal(reader["AceptadoProduccion"]),
+                        Convert.ToDecimal(reader["EnValidacionProduccion"])
+                    );
+            }
+        }
+
+        var devoluciones =
+            // NSQ_DEVOLUCION_MATERIALES_V1_3
+            // NSQ_DEVOLUCION_MATERIALES_V1_4
+            new Dictionary<
+                (int SolicitudID,string Tipo,int CatalogoID),
+                (long Id,decimal Cantidad,string Motivo,string? Comentario,string Usuario,DateTime Fecha)>();
+
+        var sqlDevoluciones = $@"
+;WITH D AS
+(
+    SELECT
+        d.DevolucionMaterialID,
+        d.SolicitudProduccionID,
+        d.TipoOrigen,
+        CASE
+            WHEN d.TipoOrigen=N'MP'
+                THEN d.MaterialSolicitadoID
+            ELSE d.EmbalajeSolicitadoID
+        END AS CatalogoID,
+        d.CantidadDevuelta,
+        d.Motivo,
+        d.Comentario,
+        COALESCE
+        (
+            NULLIF
+            (
+                LTRIM(RTRIM
+                (
+                    ISNULL(pDev.Nombre,N'')+N' '+
+                    ISNULL(pDev.ApellidoPaterno,N'')+N' '+
+                    ISNULL(pDev.ApellidoMaterno,N'')
+                )),
+                N''
+            ),
+            N'Usuario #'+CONVERT(nvarchar(20),d.UsuarioDevolucionID)
+        ) AS UsuarioDevolucionNombre,
+        d.FechaDevolucion,
+        ROW_NUMBER() OVER
+        (
+            PARTITION BY
+                d.SolicitudProduccionID,
+                d.TipoOrigen,
+                CASE
+                    WHEN d.TipoOrigen=N'MP'
+                        THEN d.MaterialSolicitadoID
+                    ELSE d.EmbalajeSolicitadoID
+                END
+            ORDER BY
+                d.FechaDevolucion DESC,
+                d.DevolucionMaterialID DESC
+        ) AS rn
+    FROM dbo.Produccion_DevolucionesMateriales d
+    LEFT JOIN dbo.Usuarios uDev
+        ON uDev.UsuarioID=d.UsuarioDevolucionID
+    LEFT JOIN dbo.Persona pDev
+        ON pDev.PersonaID=uDev.PersonaID
+    WHERE d.Activo=1
+      AND d.Estado=N'PENDIENTE_REPOSICION'
+      AND d.SolicitudProduccionID IN ({inSql})
+)
+SELECT
+    DevolucionMaterialID,
+    SolicitudProduccionID,
+    TipoOrigen,
+    CatalogoID,
+    CantidadDevuelta,
+    Motivo,
+    Comentario,
+    UsuarioDevolucionNombre,
+    FechaDevolucion
+FROM D
+WHERE rn=1;";
+
+        await using (var command =
+            new SqlCommand(sqlDevoluciones, connection))
+        {
+            foreach (var parametro in parametros)
+            {
+                command.Parameters.Add(
+                    parametro.Nombre,
+                    SqlDbType.Int).Value =
+                    parametro.SolicitudProduccionID;
+            }
+
+            await using var reader =
+                await command.ExecuteReaderAsync(cancellationToken);
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (reader["CatalogoID"] == DBNull.Value)
+                    continue;
+
+                var key =
+                    (
+                        Convert.ToInt32(reader["SolicitudProduccionID"]),
+                        reader["TipoOrigen"]?.ToString()?.Trim()
+                            ?? string.Empty,
+                        Convert.ToInt32(reader["CatalogoID"])
+                    );
+
+                devoluciones[key] =
+                    (
+                        Convert.ToInt64(reader["DevolucionMaterialID"]),
+                        Convert.ToDecimal(reader["CantidadDevuelta"]),
+                        reader["Motivo"]?.ToString()?.Trim()
+                            ?? string.Empty,
+                        reader["Comentario"] == DBNull.Value
+                            ? null
+                            : reader["Comentario"]?.ToString()?.Trim(),
+                        reader["UsuarioDevolucionNombre"]?.ToString()?.Trim()
+                            ?? "Usuario de Produccion",
+                        Convert.ToDateTime(reader["FechaDevolucion"])
+                    );
+            }
+        }
+
+        foreach (var orden in ordenes)
+        {
+            foreach (var item in orden.MaterialesEntrega)
+            {
+                item.EntregadoFisico = item.Entregado;
+
+                var key =
+                    (
+                        orden.SolicitudProduccionID,
+                        "MP",
+                        item.CatalogoID
+                    );
+
+                if (aceptacion.TryGetValue(key, out var a))
+                {
+                    item.Entregado = Math.Max(0m, a.Aceptado);
+                    item.EnValidacionProduccion =
+                        Math.Max(0m, a.EnValidacion);
+                }
+                else
+                {
+                    item.Entregado = 0m;
+                    item.EnValidacionProduccion = 0m;
+                }
+
+                if (devoluciones.TryGetValue(key, out var d))
+                {
+                    item.DevolucionMaterialID = d.Id;
+                    item.CantidadDevuelta = d.Cantidad;
+                    item.MotivoDevolucion = d.Motivo;
+                    item.ComentarioDevolucion = d.Comentario;
+                    item.UsuarioDevolucionNombre = d.Usuario;
+                    item.FechaDevolucion = d.Fecha;
+                }
+            }
+
+            foreach (var item in orden.EmbalajesEntrega)
+            {
+                item.EntregadoFisico = item.Entregado;
+
+                var key =
+                    (
+                        orden.SolicitudProduccionID,
+                        "EMBALAJE",
+                        item.CatalogoID
+                    );
+
+                if (aceptacion.TryGetValue(key, out var a))
+                {
+                    item.Entregado = Math.Max(0m, a.Aceptado);
+                    item.EnValidacionProduccion =
+                        Math.Max(0m, a.EnValidacion);
+                }
+                else
+                {
+                    item.Entregado = 0m;
+                    item.EnValidacionProduccion = 0m;
+                }
+
+                if (devoluciones.TryGetValue(key, out var d))
+                {
+                    item.DevolucionMaterialID = d.Id;
+                    item.CantidadDevuelta = d.Cantidad;
+                    item.MotivoDevolucion = d.Motivo;
+                    item.ComentarioDevolucion = d.Comentario;
+                    item.UsuarioDevolucionNombre = d.Usuario;
+                    item.FechaDevolucion = d.Fecha;
+                }
+            }
+
+            orden.MpEntregada =
+                orden.MaterialesEntrega.Sum(x => x.Entregado);
+
+            orden.EmbalajeEntregado =
+                orden.EmbalajesEntrega.Sum(x => x.Entregado);
+        }
+    }
     private static async Task CargarEntregablesAsync(
         SqlConnection connection,
         List<AlmacenOFItemVm> ordenes,

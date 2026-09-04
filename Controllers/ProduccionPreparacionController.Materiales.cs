@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -358,6 +358,18 @@ IF @@ROWCOUNT<>1
                 if (string.Equals(tipoOrigen, ProduccionRecepcionMaterialTipo.Embalaje, StringComparison.OrdinalIgnoreCase) && embalajeSolicitadoId.HasValue && embalajeSolicitadoId.Value > 0 && programaProduccionId.HasValue && programaProduccionId.Value > 0)
                     embalajeAutoConfirmado = await AutoConfirmarPreparacionEmbalajeAsync(programaProduccionId.Value, solicitudProduccionId, solicitudProduccionDetalleId, embalajeSolicitadoId.Value, usuarioId, cn, tx);
 
+                // NSQ_DEVOLUCION_MATERIALES_V1_2
+                // Si una reposicion ya completo lo requerido por la OF,
+                // se cierran las devoluciones pendientes de ese articulo.
+                await ResolverDevolucionesPendientesAsync(
+                    tipoOrigen,
+                    solicitudProduccionId,
+                    materialSolicitadoId,
+                    embalajeSolicitadoId,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 await tx.CommitAsync();
 
                 if (nuevoEstado == ProduccionRecepcionMaterialEstado.RecibidoCompleto)
@@ -387,6 +399,1166 @@ IF @@ROWCOUNT<>1
             }
         }
 
+        // ============================================================
+        // NSQ_DEVOLUCION_MATERIALES_V1_2
+        // Produccion devuelve material fisicamente a Almacen.
+        // La recepcion conserva los estados canonicos existentes:
+        // NO_RECIBIDO o RECIBIDO_PARCIAL.
+        // ============================================================
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(12000000)]
+        public async Task<IActionResult> DevolverMaterial(
+            long RecepcionMaterialID,
+            decimal CantidadDevuelta,
+            string? MotivoDevolucion,
+            string? ComentarioDevolucion,
+            IFormFile? EvidenciaDevolucion)
+        {
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
+            if (RecepcionMaterialID <= 0)
+            {
+                TempData["Error"] = "No se recibio correctamente la entrega que se desea devolver.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            // NSQ_DEVOLUCION_MATERIALES_V1_3
+            var motivoSolicitado =
+                string.IsNullOrWhiteSpace(MotivoDevolucion)
+                    ? null
+                    : MotivoDevolucion.Trim();
+
+            var detalleComentario =
+                string.IsNullOrWhiteSpace(ComentarioDevolucion)
+                    ? null
+                    : ComentarioDevolucion.Trim();
+
+            if (string.IsNullOrWhiteSpace(motivoSolicitado))
+            {
+                TempData["Error"] =
+                    "Selecciona el motivo de la devolucion.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            if (string.IsNullOrWhiteSpace(detalleComentario))
+            {
+                TempData["Error"] =
+                    "Escribe el comentario o detalle del problema.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            if (detalleComentario.Length > 500)
+            {
+                TempData["Error"] =
+                    "El comentario de la devolucion no puede superar 500 caracteres.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            CantidadDevuelta =
+                Math.Round(
+                    CantidadDevuelta,
+                    3,
+                    MidpointRounding.AwayFromZero);
+
+            if (CantidadDevuelta <= 0.0005m)
+            {
+                TempData["Error"] = "La cantidad a devolver debe ser mayor a cero.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            if (EvidenciaDevolucion == null || EvidenciaDevolucion.Length <= 0)
+            {
+                TempData["Error"] = "La fotografia de evidencia es obligatoria para una devolucion.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            const long maxEvidenceBytes = 8L * 1024L * 1024L;
+            if (EvidenciaDevolucion.Length > maxEvidenceBytes)
+            {
+                TempData["Error"] = "La evidencia no puede superar 8 MB.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            var extension = System.IO.Path
+                .GetExtension(EvidenciaDevolucion.FileName)
+                .ToLowerInvariant();
+
+            var extensionesPermitidas = new HashSet<string>(
+                new[] { ".jpg", ".jpeg", ".png", ".webp" },
+                StringComparer.OrdinalIgnoreCase);
+
+            var contentType = EvidenciaDevolucion.ContentType?.Trim() ?? string.Empty;
+
+            if (!extensionesPermitidas.Contains(extension)
+                || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["Error"] = "La evidencia debe ser una imagen JPG, PNG o WEBP.";
+                return RedirectToAction(nameof(Materiales));
+            }
+
+            var usuarioId = ObtenerUsuarioID();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            var permisos = await ObtenerPermisosPreparacionUsuarioAsync(usuarioId, cn);
+            if (!permisos.PuedeGestionarEmbalaje)
+                return StatusCode(StatusCodes.Status403Forbidden);
+
+            await using (var existe = new SqlCommand(
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.Produccion_DevolucionesMateriales',N'U') IS NULL THEN 0 ELSE 1 END;",
+                cn))
+            {
+                if (Convert.ToInt32(await existe.ExecuteScalarAsync()) != 1)
+                {
+                    TempData["Error"] =
+                        "Falta instalar NSQ_DEVOLUCION_MATERIALES_V1.sql en ERP_QUELL.";
+                    return RedirectToAction(nameof(Materiales));
+                }
+            }
+
+            string? evidenciaFisica = null;
+
+            await using var tx =
+                (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            try
+            {
+                const string sqlRecepcion = @"
+SELECT
+    r.RecepcionMaterialID,
+    r.TipoOrigen,
+    r.MovimientoAlmacenID,
+    r.SolicitudProduccionID,
+    r.SolicitudProduccionDetalleID,
+    r.NumeroOFSnapshot,
+    r.MaterialSolicitadoID,
+    r.MaterialEntregadoID,
+    r.EmbalajeSolicitadoID,
+    r.EmbalajeEntregadoID,
+    r.TipoMP,
+    r.Lote,
+    r.Unidad,
+    r.CantidadEntregadaAlmacen,
+    r.EstadoRecepcion,
+    r.EstadoAclaracion,
+    r.CodigoEntregadoSnapshot
+FROM dbo.Produccion_RecepcionMateriales r WITH(UPDLOCK,HOLDLOCK)
+WHERE r.RecepcionMaterialID=@RecepcionMaterialID
+  AND r.Activo=1;";
+
+                string tipoOrigen;
+                long movimientoAlmacenId;
+                int solicitudProduccionId;
+                int? solicitudProduccionDetalleId;
+                string numeroOf;
+                int? materialSolicitadoId;
+                int? materialEntregadoId;
+                int? embalajeSolicitadoId;
+                int? embalajeEntregadoId;
+                string? tipoMp;
+                string? lote;
+                string unidad;
+                decimal cantidadEntregada;
+                string estadoAnterior;
+                string aclaracionAnterior;
+                string codigoEntregado;
+
+                await using (var cmd = new SqlCommand(sqlRecepcion, cn, tx))
+                {
+                    cmd.Parameters.Add("@RecepcionMaterialID", SqlDbType.BigInt)
+                        .Value = RecepcionMaterialID;
+
+                    await using var rd = await cmd.ExecuteReaderAsync();
+
+                    if (!await rd.ReadAsync())
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "La entrega ya no existe.";
+                        return RedirectToAction(nameof(Materiales));
+                    }
+
+                    tipoOrigen = rd["TipoOrigen"]?.ToString()?.Trim() ?? string.Empty;
+                    movimientoAlmacenId = Convert.ToInt64(rd["MovimientoAlmacenID"]);
+                    solicitudProduccionId = Convert.ToInt32(rd["SolicitudProduccionID"]);
+                    solicitudProduccionDetalleId =
+                        rd["SolicitudProduccionDetalleID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["SolicitudProduccionDetalleID"]);
+                    numeroOf = rd["NumeroOFSnapshot"]?.ToString()?.Trim() ?? string.Empty;
+                    materialSolicitadoId =
+                        rd["MaterialSolicitadoID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["MaterialSolicitadoID"]);
+                    materialEntregadoId =
+                        rd["MaterialEntregadoID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["MaterialEntregadoID"]);
+                    embalajeSolicitadoId =
+                        rd["EmbalajeSolicitadoID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["EmbalajeSolicitadoID"]);
+                    embalajeEntregadoId =
+                        rd["EmbalajeEntregadoID"] == DBNull.Value
+                            ? null
+                            : Convert.ToInt32(rd["EmbalajeEntregadoID"]);
+                    tipoMp =
+                        rd["TipoMP"] == DBNull.Value
+                            ? null
+                            : rd["TipoMP"]?.ToString()?.Trim();
+                    lote =
+                        rd["Lote"] == DBNull.Value
+                            ? null
+                            : rd["Lote"]?.ToString()?.Trim();
+                    unidad = rd["Unidad"]?.ToString()?.Trim() ?? string.Empty;
+                    cantidadEntregada = Convert.ToDecimal(rd["CantidadEntregadaAlmacen"]);
+                    estadoAnterior = rd["EstadoRecepcion"]?.ToString()?.Trim() ?? string.Empty;
+                    aclaracionAnterior = rd["EstadoAclaracion"]?.ToString()?.Trim()
+                        ?? ProduccionRecepcionMaterialEstadoAclaracion.NoAplica;
+                    codigoEntregado = rd["CodigoEntregadoSnapshot"]?.ToString()?.Trim()
+                        ?? string.Empty;
+                }
+
+                var motivo =
+                    NormalizarMotivoDevolucion(
+                        tipoOrigen,
+                        motivoSolicitado);
+
+                if (string.IsNullOrWhiteSpace(motivo))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "El motivo seleccionado no es valido para el tipo de material.";
+
+                    return RedirectToAction(nameof(Materiales));
+                }
+
+                var detalleDevolucion =
+                    $"{motivo}. {detalleComentario}".Trim();
+                if (!string.Equals(
+                        estadoAnterior,
+                        ProduccionRecepcionMaterialEstado.Pendiente,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] =
+                        "Solo se puede devolver una entrega que aun esta pendiente de confirmacion.";
+                    return RedirectToAction(nameof(Materiales));
+                }
+
+                if (CantidadDevuelta > cantidadEntregada + 0.0005m)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] =
+                        $"No puedes devolver mas de {cantidadEntregada:0.####} {unidad}, que es lo reportado por Almacen.";
+                    return RedirectToAction(nameof(Materiales));
+                }
+
+                const string sqlDuplicada = @"
+SELECT COUNT(1)
+FROM dbo.Produccion_DevolucionesMateriales WITH(UPDLOCK,HOLDLOCK)
+WHERE RecepcionMaterialID=@RecepcionMaterialID
+  AND Activo=1;";
+
+                await using (var cmd = new SqlCommand(sqlDuplicada, cn, tx))
+                {
+                    cmd.Parameters.Add("@RecepcionMaterialID", SqlDbType.BigInt)
+                        .Value = RecepcionMaterialID;
+
+                    if (Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "Esta entrega ya tiene una devolucion registrada.";
+                        return RedirectToAction(nameof(Materiales));
+                    }
+                }
+
+                var usuarioNombre =
+                    await ObtenerNombreUsuarioDevolucionAsync(usuarioId, cn, tx);
+
+                var archivoId = Guid.NewGuid().ToString("N");
+                var rutaRelativa =
+                    $"{RecepcionMaterialID}/{archivoId}{extension}";
+                evidenciaFisica =
+                    ObtenerRutaEvidenciaDevolucionLocal(rutaRelativa);
+
+                var directorio = System.IO.Path.GetDirectoryName(evidenciaFisica);
+                if (string.IsNullOrWhiteSpace(directorio))
+                    throw new InvalidOperationException(
+                        "No fue posible determinar el directorio de evidencia.");
+
+                System.IO.Directory.CreateDirectory(directorio);
+
+                await using (var origen = EvidenciaDevolucion.OpenReadStream())
+                await using (var destino = new System.IO.FileStream(
+                    evidenciaFisica,
+                    System.IO.FileMode.CreateNew,
+                    System.IO.FileAccess.Write,
+                    System.IO.FileShare.None,
+                    81920,
+                    useAsync: true))
+                {
+                    await origen.CopyToAsync(destino);
+                    await destino.FlushAsync();
+                }
+
+                var referenciaRetorno =
+                    "DEV-PROD-" + Guid.NewGuid().ToString("N").ToUpperInvariant();
+
+                var movimientoRetornoId =
+                    await RegistrarRetornoAlmacenDevolucionAsync(
+                        tipoOrigen,
+                        materialSolicitadoId,
+                        materialEntregadoId,
+                        embalajeSolicitadoId,
+                        embalajeEntregadoId,
+                        tipoMp,
+                        lote,
+                        unidad,
+                        CantidadDevuelta,
+                        numeroOf,
+                        solicitudProduccionId,
+                        solicitudProduccionDetalleId,
+                        referenciaRetorno,
+                        detalleDevolucion,
+                        usuarioId,
+                        usuarioNombre,
+                        cn,
+                        tx);
+
+                var cantidadRecibida =
+                    Math.Max(0m, cantidadEntregada - CantidadDevuelta);
+
+                var esDevolucionTotal =
+                    cantidadRecibida <= 0.0005m;
+
+                var nuevoEstado =
+                    esDevolucionTotal
+                        ? ProduccionRecepcionMaterialEstado.NoRecibido
+                        : ProduccionRecepcionMaterialEstado.RecibidoParcial;
+
+                var motivoRecepcion =
+                    ("DEVOLUCION: " + detalleDevolucion).Trim();
+
+                if (motivoRecepcion.Length > 500)
+                    motivoRecepcion = motivoRecepcion[..500];
+
+                var observacionesRecepcion =
+                    $"Produccion devolvio {CantidadDevuelta:0.####} {unidad} a Almacen. Motivo: {motivo}. Evidencia fotografica registrada.";
+
+                const string sqlActualizarRecepcion = @"
+UPDATE dbo.Produccion_RecepcionMateriales
+SET
+    EstadoRecepcion=@EstadoRecepcion,
+    CantidadRecibidaProduccion=@CantidadRecibida,
+    MotivoDiferencia=@Motivo,
+    ObservacionesRecepcion=@Observaciones,
+    UsuarioRecepcionID=@UsuarioID,
+    FechaRecepcion=SYSDATETIME(),
+    EstadoAclaracion=N'PENDIENTE',
+    ResolucionAclaracion=NULL,
+    UsuarioResolucionID=NULL,
+    FechaResolucion=NULL,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+WHERE RecepcionMaterialID=@RecepcionMaterialID
+  AND Activo=1
+  AND EstadoRecepcion=N'PENDIENTE';
+
+IF @@ROWCOUNT<>1
+    THROW 51241,N'La recepcion cambio de estado mientras se registraba la devolucion.',1;";
+
+                await using (var cmd =
+                    new SqlCommand(sqlActualizarRecepcion, cn, tx))
+                {
+                    cmd.Parameters.Add("@EstadoRecepcion", SqlDbType.NVarChar, 30)
+                        .Value = nuevoEstado;
+
+                    var pCantidad = cmd.Parameters.Add(
+                        "@CantidadRecibida",
+                        SqlDbType.Decimal);
+                    pCantidad.Precision = 18;
+                    pCantidad.Scale = 4;
+                    pCantidad.Value = cantidadRecibida;
+
+                    cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500)
+                        .Value = motivoRecepcion;
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 800)
+                        .Value = observacionesRecepcion;
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int)
+                        .Value = usuarioId;
+                    cmd.Parameters.Add("@RecepcionMaterialID", SqlDbType.BigInt)
+                        .Value = RecepcionMaterialID;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await ActualizarValidacionMovimientoAlmacenAsync(
+                    tipoOrigen,
+                    movimientoAlmacenId,
+                    solicitudProduccionId,
+                    false,
+                    cn,
+                    tx);
+
+                if (string.Equals(
+                        tipoOrigen,
+                        ProduccionRecepcionMaterialTipo.MP,
+                        StringComparison.OrdinalIgnoreCase)
+                    && cantidadRecibida > 0.0005m)
+                {
+                    await RegistrarMaterialPendienteSecadoDesdeRecepcionAsync(
+                        RecepcionMaterialID,
+                        usuarioId,
+                        cn,
+                        tx);
+                }
+
+                const string sqlInsertDevolucion = @"
+INSERT dbo.Produccion_DevolucionesMateriales
+(
+    RecepcionMaterialID,
+    SolicitudProduccionID,
+    TipoOrigen,
+    MaterialSolicitadoID,
+    MaterialEntregadoID,
+    EmbalajeSolicitadoID,
+    EmbalajeEntregadoID,
+    MovimientoRetornoAlmacenID,
+    CantidadDevuelta,
+    Motivo,
+    Comentario,
+    EvidenciaRuta,
+    EvidenciaContentType,
+    EvidenciaNombreOriginal,
+    Estado,
+    UsuarioDevolucionID,
+    FechaDevolucion,
+    Activo,
+    FechaCreacion
+)
+VALUES
+(
+    @RecepcionMaterialID,
+    @SolicitudProduccionID,
+    @TipoOrigen,
+    @MaterialSolicitadoID,
+    @MaterialEntregadoID,
+    @EmbalajeSolicitadoID,
+    @EmbalajeEntregadoID,
+    @MovimientoRetornoAlmacenID,
+    @CantidadDevuelta,
+    @Motivo,
+    @Comentario,
+    @EvidenciaRuta,
+    @EvidenciaContentType,
+    @EvidenciaNombreOriginal,
+    N'PENDIENTE_REPOSICION',
+    @UsuarioID,
+    SYSDATETIME(),
+    1,
+    SYSDATETIME()
+);";
+
+                await using (var cmd =
+                    new SqlCommand(sqlInsertDevolucion, cn, tx))
+                {
+                    cmd.Parameters.Add("@RecepcionMaterialID", SqlDbType.BigInt)
+                        .Value = RecepcionMaterialID;
+                    cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int)
+                        .Value = solicitudProduccionId;
+                    cmd.Parameters.Add("@TipoOrigen", SqlDbType.NVarChar, 20)
+                        .Value = tipoOrigen;
+
+                    cmd.Parameters.Add("@MaterialSolicitadoID", SqlDbType.Int)
+                        .Value = materialSolicitadoId.HasValue
+                            ? materialSolicitadoId.Value
+                            : DBNull.Value;
+                    cmd.Parameters.Add("@MaterialEntregadoID", SqlDbType.Int)
+                        .Value = materialEntregadoId.HasValue
+                            ? materialEntregadoId.Value
+                            : DBNull.Value;
+                    cmd.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int)
+                        .Value = embalajeSolicitadoId.HasValue
+                            ? embalajeSolicitadoId.Value
+                            : DBNull.Value;
+                    cmd.Parameters.Add("@EmbalajeEntregadoID", SqlDbType.Int)
+                        .Value = embalajeEntregadoId.HasValue
+                            ? embalajeEntregadoId.Value
+                            : DBNull.Value;
+                    cmd.Parameters.Add("@MovimientoRetornoAlmacenID", SqlDbType.BigInt)
+                        .Value = movimientoRetornoId;
+
+                    var pDev = cmd.Parameters.Add("@CantidadDevuelta", SqlDbType.Decimal);
+                    pDev.Precision = 18;
+                    pDev.Scale = 4;
+                    pDev.Value = CantidadDevuelta;
+
+                    cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 500)
+                        .Value = motivo;
+                    cmd.Parameters.Add("@Comentario", SqlDbType.NVarChar, 500)
+                        .Value = detalleComentario;
+                    cmd.Parameters.Add("@EvidenciaRuta", SqlDbType.NVarChar, 500)
+                        .Value = rutaRelativa;
+                    cmd.Parameters.Add("@EvidenciaContentType", SqlDbType.NVarChar, 100)
+                        .Value = contentType;
+                    cmd.Parameters.Add("@EvidenciaNombreOriginal", SqlDbType.NVarChar, 255)
+                        .Value = string.IsNullOrWhiteSpace(EvidenciaDevolucion.FileName)
+                            ? DBNull.Value
+                            : EvidenciaDevolucion.FileName[..Math.Min(
+                                255,
+                                EvidenciaDevolucion.FileName.Length)];
+                    cmd.Parameters.Add("@UsuarioID", SqlDbType.Int)
+                        .Value = usuarioId;
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                var comentario =
+                    $"Produccion devolvio {CantidadDevuelta:0.####} {unidad} de {codigoEntregado}. Motivo: {motivo}. Comentario: {detalleComentario}";
+
+                if (comentario.Length > 1000)
+                    comentario = comentario[..1000];
+
+                await AgregarHistorialRecepcionMaterialAsync(
+                    RecepcionMaterialID,
+                    "DEVOLUCION_PRODUCCION",
+                    estadoAnterior,
+                    nuevoEstado,
+                    null,
+                    cantidadRecibida,
+                    aclaracionAnterior,
+                    ProduccionRecepcionMaterialEstadoAclaracion.Pendiente,
+                    comentario,
+                    usuarioId,
+                    cn,
+                    tx);
+
+                const string sqlSync = @"
+IF OBJECT_ID(N'dbo.sp_Almacen_SincronizarReservas',N'P') IS NOT NULL
+BEGIN
+    EXEC dbo.sp_Almacen_SincronizarReservas @Usuario=@Usuario;
+END;";
+
+                await using (var cmd = new SqlCommand(sqlSync, cn, tx))
+                {
+                    cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 120)
+                        .Value = usuarioNombre;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                await tx.CommitAsync();
+
+                TempData["Success"] =
+                    $"Devolucion registrada. {CantidadDevuelta:0.####} {unidad} regreso al inventario de Almacen y la OF quedo pendiente de reposicion.";
+
+                return RedirectToAction(nameof(Materiales));
+            }
+            catch (Exception ex)
+            {
+                try { await tx.RollbackAsync(); } catch { }
+
+                if (!string.IsNullOrWhiteSpace(evidenciaFisica))
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(evidenciaFisica))
+                            System.IO.File.Delete(evidenciaFisica);
+                    }
+                    catch { }
+                }
+
+                TempData["Error"] =
+                    "No fue posible registrar la devolucion: " + ex.Message;
+
+                return RedirectToAction(nameof(Materiales));
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EvidenciaDevolucion(long id)
+        {
+            if (!UsuarioEnSesion())
+                return RedirectToAction("Login", "Login");
+
+            if (id <= 0)
+                return NotFound();
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sql = @"
+SELECT EvidenciaRuta,EvidenciaContentType
+FROM dbo.Produccion_DevolucionesMateriales
+WHERE DevolucionMaterialID=@Id
+  AND Activo=1;";
+
+            string? rutaRelativa = null;
+            string contentType = "application/octet-stream";
+
+            await using (var cmd = new SqlCommand(sql, cn))
+            {
+                cmd.Parameters.Add("@Id", SqlDbType.BigInt).Value = id;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                if (!await rd.ReadAsync())
+                    return NotFound();
+
+                rutaRelativa = rd["EvidenciaRuta"]?.ToString()?.Trim();
+                contentType = rd["EvidenciaContentType"]?.ToString()?.Trim()
+                    ?? "application/octet-stream";
+            }
+
+            if (string.IsNullOrWhiteSpace(rutaRelativa))
+                return NotFound();
+
+            var rutaFisica =
+                ObtenerRutaEvidenciaDevolucionLocal(rutaRelativa);
+
+            if (!System.IO.File.Exists(rutaFisica))
+                return NotFound();
+
+            var bytes =
+                await System.IO.File.ReadAllBytesAsync(rutaFisica);
+
+            if (bytes.Length == 0)
+                return NotFound();
+
+            return File(bytes, contentType);
+        }
+
+        // NSQ_DEVOLUCION_MATERIALES_V1_3
+        private static string? NormalizarMotivoDevolucion(
+            string tipoOrigen,
+            string? motivo)
+        {
+            if (string.IsNullOrWhiteSpace(motivo))
+                return null;
+
+            string[] permitidos;
+
+            if (string.Equals(
+                    tipoOrigen,
+                    ProduccionRecepcionMaterialTipo.MP,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                permitidos = new[]
+                {
+                    "Material sucio",
+                    "Material contaminado",
+                    "Material húmedo / mojado",
+                    "Material incorrecto",
+                    "Lote incorrecto",
+                    "Saco / empaque dañado",
+                    "Etiquetado / identificación incorrecta",
+                    "Cantidad incorrecta",
+                    "Material mezclado",
+                    "Otro"
+                };
+            }
+            else if (string.Equals(
+                    tipoOrigen,
+                    ProduccionRecepcionMaterialTipo.Embalaje,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                permitidos = new[]
+                {
+                    "Embalaje sucio",
+                    "Embalaje dañado / roto",
+                    "Embalaje mojado / húmedo",
+                    "Código de embalaje incorrecto",
+                    "Medida / especificación incorrecta",
+                    "Etiquetado / impresión incorrecta",
+                    "Cantidad incorrecta",
+                    "Deformado / aplastado",
+                    "Material de embalaje incorrecto",
+                    "Otro"
+                };
+            }
+            else
+            {
+                return null;
+            }
+
+            foreach (var permitido in permitidos)
+            {
+                if (string.Equals(
+                        permitido,
+                        motivo.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return permitido;
+                }
+            }
+
+            return null;
+        }
+        private string ObtenerRutaEvidenciaDevolucionLocal(
+            string rutaRelativa)
+        {
+            var raiz =
+                System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(
+                        _environment.ContentRootPath,
+                        "App_Data",
+                        "Produccion",
+                        "Devoluciones"));
+
+            var normalizada =
+                (rutaRelativa ?? string.Empty)
+                    .Replace(
+                        '/',
+                        System.IO.Path.DirectorySeparatorChar)
+                    .TrimStart(
+                        System.IO.Path.DirectorySeparatorChar,
+                        System.IO.Path.AltDirectorySeparatorChar);
+
+            var ruta =
+                System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(
+                        raiz,
+                        normalizada));
+
+            var raizConSeparador =
+                raiz.TrimEnd(
+                    System.IO.Path.DirectorySeparatorChar,
+                    System.IO.Path.AltDirectorySeparatorChar)
+                + System.IO.Path.DirectorySeparatorChar;
+
+            if (!ruta.StartsWith(
+                    raizConSeparador,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Ruta de evidencia de devolucion invalida.");
+            }
+
+            return ruta;
+        }
+
+        private static async Task<string>
+            ObtenerNombreUsuarioDevolucionAsync(
+                int usuarioId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    NULLIF(
+        LTRIM(RTRIM(
+            ISNULL(p.Nombre,N'')+N' '+
+            ISNULL(p.ApellidoPaterno,N'')+N' '+
+            ISNULL(p.ApellidoMaterno,N'')
+        )),
+        N''
+    )
+FROM dbo.Usuarios u
+LEFT JOIN dbo.Persona p ON p.PersonaID=u.PersonaID
+WHERE u.UsuarioID=@UsuarioID;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int)
+                .Value = usuarioId;
+
+            var value = await cmd.ExecuteScalarAsync();
+
+            var nombre =
+                value == null || value == DBNull.Value
+                    ? null
+                    : value.ToString()?.Trim();
+
+            return string.IsNullOrWhiteSpace(nombre)
+                ? "Produccion"
+                : nombre;
+        }
+
+        private static async Task<long>
+            RegistrarRetornoAlmacenDevolucionAsync(
+                string tipoOrigen,
+                int? materialSolicitadoId,
+                int? materialEntregadoId,
+                int? embalajeSolicitadoId,
+                int? embalajeEntregadoId,
+                string? tipoMp,
+                string? lote,
+                string unidad,
+                decimal cantidad,
+                string numeroOf,
+                int solicitudProduccionId,
+                int? solicitudProduccionDetalleId,
+                string referencia,
+                string motivo,
+                int usuarioId,
+                string usuarioNombre,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            var seguimiento =
+                $"[DEVOLUCION PRODUCCION] {motivo}".Trim();
+
+            if (seguimiento.Length > 800)
+                seguimiento = seguimiento[..800];
+
+            if (string.Equals(
+                    tipoOrigen,
+                    ProduccionRecepcionMaterialTipo.MP,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (!materialSolicitadoId.HasValue
+                    || !materialEntregadoId.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        "La recepcion MP no tiene material solicitado/entregado valido.");
+                }
+
+                var tipoMpNormalizado =
+                    string.Equals(tipoMp, "M", StringComparison.OrdinalIgnoreCase)
+                        ? "M"
+                        : "V";
+
+                const string sql = @"
+INSERT dbo.AlmacenMP_Movimientos
+(
+    FechaMovimiento,
+    MaterialID,
+    MaterialSolicitadoID,
+    TipoMovimiento,
+    TipoMP,
+    Lote,
+    Cantidad,
+    Unidad,
+    UbicacionID,
+    NumeroOF,
+    FolioCompra,
+    ResponsableUsuarioID,
+    EntregadoPorNombre,
+    Seguimiento,
+    FechaCreacion,
+    CreadoPor,
+    Activo,
+    RequiereValidacionProduccion,
+    ValidadoProduccion,
+    ReferenciaOperacion,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID
+)
+OUTPUT INSERTED.MovimientoID
+VALUES
+(
+    SYSDATETIME(),
+    @MaterialEntregadoID,
+    @MaterialSolicitadoID,
+    N'Retorno',
+    @TipoMP,
+    @Lote,
+    @Cantidad,
+    N'KG',
+    NULL,
+    @NumeroOF,
+    NULL,
+    @UsuarioID,
+    @UsuarioNombre,
+    @Seguimiento,
+    SYSUTCDATETIME(),
+    @UsuarioNombre,
+    1,
+    0,
+    1,
+    @Referencia,
+    @SolicitudProduccionID,
+    @SolicitudProduccionDetalleID
+);";
+
+                await using var cmd =
+                    new SqlCommand(sql, cn, tx);
+
+                cmd.Parameters.Add("@MaterialEntregadoID", SqlDbType.Int)
+                    .Value = materialEntregadoId.Value;
+                cmd.Parameters.Add("@MaterialSolicitadoID", SqlDbType.Int)
+                    .Value = materialSolicitadoId.Value;
+                cmd.Parameters.Add("@TipoMP", SqlDbType.NVarChar, 20)
+                    .Value = tipoMpNormalizado;
+                cmd.Parameters.Add("@Lote", SqlDbType.NVarChar, 120)
+                    .Value = string.IsNullOrWhiteSpace(lote)
+                        ? "S/L"
+                        : lote;
+                var pCantidad =
+                    cmd.Parameters.Add("@Cantidad", SqlDbType.Decimal);
+                pCantidad.Precision = 18;
+                pCantidad.Scale = 3;
+                pCantidad.Value = cantidad;
+                cmd.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80)
+                    .Value = string.IsNullOrWhiteSpace(numeroOf)
+                        ? DBNull.Value
+                        : numeroOf;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int)
+                    .Value = usuarioId;
+                cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 180)
+                    .Value = usuarioNombre;
+                cmd.Parameters.Add("@Seguimiento", SqlDbType.NVarChar, 800)
+                    .Value = seguimiento;
+                cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120)
+                    .Value = referencia;
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int)
+                    .Value = solicitudProduccionId;
+                cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int)
+                    .Value = solicitudProduccionDetalleId.HasValue
+                        ? solicitudProduccionDetalleId.Value
+                        : DBNull.Value;
+
+                var value = await cmd.ExecuteScalarAsync();
+                var id = Convert.ToInt64(value ?? 0L);
+
+                if (id <= 0)
+                    throw new InvalidOperationException(
+                        "No fue posible registrar el retorno de MP en Almacen.");
+
+                return id;
+            }
+
+            if (!string.Equals(
+                    tipoOrigen,
+                    ProduccionRecepcionMaterialTipo.Embalaje,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Tipo de recepcion no valido para devolucion.");
+            }
+
+            if (!embalajeSolicitadoId.HasValue
+                || !embalajeEntregadoId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "La recepcion de embalaje no tiene catalogos validos.");
+            }
+
+            const string sqlEmbalaje = @"
+INSERT dbo.AlmacenEmbalajes_Movimientos
+(
+    EmbalajeID,
+    FechaMovimiento,
+    NumeroOF,
+    TipoMovimiento,
+    Lote,
+    Cantidad,
+    Unidad,
+    ResponsableUsuarioID,
+    UbicacionID,
+    Seguimiento,
+    FechaCreacion,
+    CreadoPor,
+    Activo,
+    EntregadoPorNombre,
+    RequiereValidacionProduccion,
+    ValidadoProduccion,
+    ReferenciaOperacion,
+    SolicitudProduccionID,
+    SolicitudProduccionDetalleID,
+    EmbalajeSolicitadoID
+)
+OUTPUT INSERTED.MovimientoID
+VALUES
+(
+    @EmbalajeEntregadoID,
+    SYSDATETIME(),
+    @NumeroOF,
+    N'Retorno',
+    @Lote,
+    @Cantidad,
+    @Unidad,
+    @UsuarioID,
+    NULL,
+    @Seguimiento,
+    SYSUTCDATETIME(),
+    @UsuarioNombre,
+    1,
+    @UsuarioNombre,
+    0,
+    1,
+    @Referencia,
+    @SolicitudProduccionID,
+    @SolicitudProduccionDetalleID,
+    @EmbalajeSolicitadoID
+);";
+
+            await using (var cmd =
+                new SqlCommand(sqlEmbalaje, cn, tx))
+            {
+                cmd.Parameters.Add("@EmbalajeEntregadoID", SqlDbType.Int)
+                    .Value = embalajeEntregadoId.Value;
+                cmd.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int)
+                    .Value = embalajeSolicitadoId.Value;
+                cmd.Parameters.Add("@NumeroOF", SqlDbType.NVarChar, 80)
+                    .Value = string.IsNullOrWhiteSpace(numeroOf)
+                        ? DBNull.Value
+                        : numeroOf;
+                cmd.Parameters.Add("@Lote", SqlDbType.NVarChar, 120)
+                    .Value = string.IsNullOrWhiteSpace(lote)
+                        ? "S/L"
+                        : lote;
+
+                var pCantidad =
+                    cmd.Parameters.Add("@Cantidad", SqlDbType.Decimal);
+                pCantidad.Precision = 18;
+                pCantidad.Scale = 3;
+                pCantidad.Value = cantidad;
+
+                cmd.Parameters.Add("@Unidad", SqlDbType.NVarChar, 20)
+                    .Value = string.IsNullOrWhiteSpace(unidad)
+                        ? "PZA"
+                        : unidad;
+                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int)
+                    .Value = usuarioId;
+                cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 180)
+                    .Value = usuarioNombre;
+                cmd.Parameters.Add("@Seguimiento", SqlDbType.NVarChar, 800)
+                    .Value = seguimiento;
+                cmd.Parameters.Add("@Referencia", SqlDbType.NVarChar, 120)
+                    .Value = referencia;
+                cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int)
+                    .Value = solicitudProduccionId;
+                cmd.Parameters.Add("@SolicitudProduccionDetalleID", SqlDbType.Int)
+                    .Value = solicitudProduccionDetalleId.HasValue
+                        ? solicitudProduccionDetalleId.Value
+                        : DBNull.Value;
+
+                var value = await cmd.ExecuteScalarAsync();
+                var id = Convert.ToInt64(value ?? 0L);
+
+                if (id <= 0)
+                    throw new InvalidOperationException(
+                        "No fue posible registrar el retorno de embalaje en Almacen.");
+
+                return id;
+            }
+        }
+
+        private static async Task ResolverDevolucionesPendientesAsync(
+            string tipoOrigen,
+            int solicitudProduccionId,
+            int? materialSolicitadoId,
+            int? embalajeSolicitadoId,
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+IF OBJECT_ID(N'dbo.Produccion_DevolucionesMateriales',N'U') IS NULL
+    RETURN;
+
+DECLARE @Requerido decimal(18,4)=0;
+DECLARE @Aceptado decimal(18,4)=0;
+
+IF @TipoOrigen=N'MP' AND @MaterialSolicitadoID IS NOT NULL
+BEGIN
+    SELECT
+        @Requerido=CONVERT(decimal(18,4),ISNULL(SUM(ISNULL(d.CantidadMpKg,0)),0))
+    FROM dbo.SolicitudesProduccionDetalle d
+    LEFT JOIN dbo.ERP_Materiales m
+        ON m.MaterialID=@MaterialSolicitadoID
+    WHERE d.SolicitudProduccionID=@SolicitudProduccionID
+      AND d.Activo=1
+      AND
+      (
+          d.MaterialID=@MaterialSolicitadoID
+          OR
+          (
+              m.MaterialID IS NOT NULL
+              AND UPPER(LTRIM(RTRIM(ISNULL(d.MaterialCodigo,N''))))=
+                  UPPER(LTRIM(RTRIM(ISNULL(m.Codigo,N''))))
+          )
+      );
+
+    SELECT
+        @Aceptado=CONVERT(decimal(18,4),ISNULL(SUM(ISNULL(r.CantidadRecibidaProduccion,0)),0))
+    FROM dbo.Produccion_RecepcionMateriales r
+    WHERE r.Activo=1
+      AND r.SolicitudProduccionID=@SolicitudProduccionID
+      AND r.TipoOrigen=N'MP'
+      AND r.MaterialSolicitadoID=@MaterialSolicitadoID
+      AND r.EstadoRecepcion IN(N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL');
+
+    IF @Requerido>0 AND @Aceptado+0.0005>=@Requerido
+    BEGIN
+        UPDATE dbo.Produccion_DevolucionesMateriales
+        SET Estado=N'RESUELTA',
+            UsuarioResolucionID=@UsuarioID,
+            FechaResolucion=SYSDATETIME(),
+            FechaModificacion=SYSDATETIME()
+        WHERE Activo=1
+          AND Estado=N'PENDIENTE_REPOSICION'
+          AND SolicitudProduccionID=@SolicitudProduccionID
+          AND TipoOrigen=N'MP'
+          AND MaterialSolicitadoID=@MaterialSolicitadoID;
+    END;
+END;
+
+IF @TipoOrigen=N'EMBALAJE' AND @EmbalajeSolicitadoID IS NOT NULL
+BEGIN
+    SELECT
+        @Requerido=CONVERT(decimal(18,4),ISNULL(SUM(ISNULL(d.CantidadEmbalajes,0)),0))
+    FROM dbo.SolicitudesProduccionDetalle d
+    LEFT JOIN dbo.ERP_Embalajes e
+        ON e.EmbalajeID=@EmbalajeSolicitadoID
+    WHERE d.SolicitudProduccionID=@SolicitudProduccionID
+      AND d.Activo=1
+      AND
+      (
+          UPPER(LTRIM(RTRIM(ISNULL(d.EmbalajeCodigo,N''))))=
+              UPPER(LTRIM(RTRIM(ISNULL(e.Codigo,N''))))
+      );
+
+    SELECT
+        @Aceptado=CONVERT(decimal(18,4),ISNULL(SUM(ISNULL(r.CantidadRecibidaProduccion,0)),0))
+    FROM dbo.Produccion_RecepcionMateriales r
+    WHERE r.Activo=1
+      AND r.SolicitudProduccionID=@SolicitudProduccionID
+      AND r.TipoOrigen=N'EMBALAJE'
+      AND r.EmbalajeSolicitadoID=@EmbalajeSolicitadoID
+      AND r.EstadoRecepcion IN(N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL');
+
+    IF @Requerido>0 AND @Aceptado+0.0005>=@Requerido
+    BEGIN
+        UPDATE dbo.Produccion_DevolucionesMateriales
+        SET Estado=N'RESUELTA',
+            UsuarioResolucionID=@UsuarioID,
+            FechaResolucion=SYSDATETIME(),
+            FechaModificacion=SYSDATETIME()
+        WHERE Activo=1
+          AND Estado=N'PENDIENTE_REPOSICION'
+          AND SolicitudProduccionID=@SolicitudProduccionID
+          AND TipoOrigen=N'EMBALAJE'
+          AND EmbalajeSolicitadoID=@EmbalajeSolicitadoID;
+    END;
+END;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn, tx);
+
+            cmd.Parameters.Add("@TipoOrigen", SqlDbType.NVarChar, 20)
+                .Value = tipoOrigen;
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int)
+                .Value = solicitudProduccionId;
+            cmd.Parameters.Add("@MaterialSolicitadoID", SqlDbType.Int)
+                .Value = materialSolicitadoId.HasValue
+                    ? materialSolicitadoId.Value
+                    : DBNull.Value;
+            cmd.Parameters.Add("@EmbalajeSolicitadoID", SqlDbType.Int)
+                .Value = embalajeSolicitadoId.HasValue
+                    ? embalajeSolicitadoId.Value
+                    : DBNull.Value;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int)
+                .Value = usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
         private async Task<List<ProduccionRecepcionMaterialVm>>
             CargarRecepcionesMaterialesAsync(
                 string? filtro,

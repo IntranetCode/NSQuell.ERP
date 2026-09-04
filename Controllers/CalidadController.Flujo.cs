@@ -3449,9 +3449,11 @@ VALUES
                 return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
             }
 
-            var rutaEvidencia =
-                $"Calidad/Monitoreos/{InspeccionID}/Disparos/Disparo_{MonitoreoID}.img";
-            var storage = new global::SftpStorage(_configuration);
+            var rutaEvidenciaFisica =
+                ObtenerRutaEvidenciaDisparoLocal(InspeccionID, MonitoreoID);
+            var rutaEvidenciaTemporal =
+                rutaEvidenciaFisica + ".tmp." + System.Guid.NewGuid().ToString("N");
+            string? respaldoEvidenciaAnterior = null;
             var evidenciaSubida = false;
 
             var observacionesGuardadas =
@@ -3525,26 +3527,128 @@ VALUES
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                using (var stream = evidencia.OpenReadStream())
+                var directorioEvidencia = System.IO.Path.GetDirectoryName(rutaEvidenciaFisica);
+                if (string.IsNullOrWhiteSpace(directorioEvidencia))
+                    throw new InvalidOperationException("No fue posible determinar el directorio local de evidencia.");
+
+                System.IO.Directory.CreateDirectory(directorioEvidencia);
+
+                await using (var origen = evidencia.OpenReadStream())
+                await using (var destino = new System.IO.FileStream(
+                    rutaEvidenciaTemporal,
+                    System.IO.FileMode.CreateNew,
+                    System.IO.FileAccess.Write,
+                    System.IO.FileShare.None,
+                    81920,
+                    useAsync: true))
                 {
-                    storage.SubirStream(stream, rutaEvidencia);
-                    evidenciaSubida = true;
+                    await origen.CopyToAsync(destino);
+                    await destino.FlushAsync();
                 }
 
+                if (System.IO.File.Exists(rutaEvidenciaFisica))
+                {
+                    respaldoEvidenciaAnterior =
+                        rutaEvidenciaFisica + ".bak." + System.Guid.NewGuid().ToString("N");
+                    System.IO.File.Copy(
+                        rutaEvidenciaFisica,
+                        respaldoEvidenciaAnterior,
+                        overwrite: false);
+                }
+
+                System.IO.File.Move(
+                    rutaEvidenciaTemporal,
+                    rutaEvidenciaFisica,
+                    overwrite: true);
+                evidenciaSubida = true;
+
                 await tx.CommitAsync();
+
+                if (!string.IsNullOrWhiteSpace(respaldoEvidenciaAnterior)
+                    && System.IO.File.Exists(respaldoEvidenciaAnterior))
+                {
+                    try { System.IO.File.Delete(respaldoEvidenciaAnterior); } catch { }
+                }
+
                 TempData["Mensaje"] = "Disparo auditado guardado con evidencia fotografica.";
             }
             catch (Exception ex)
             {
                 try { await tx.RollbackAsync(); } catch { }
+
+                try
+                {
+                    if (System.IO.File.Exists(rutaEvidenciaTemporal))
+                        System.IO.File.Delete(rutaEvidenciaTemporal);
+                }
+                catch { }
+
                 if (evidenciaSubida)
                 {
-                    try { storage.EliminarRecursivo(rutaEvidencia); } catch { }
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(respaldoEvidenciaAnterior)
+                            && System.IO.File.Exists(respaldoEvidenciaAnterior))
+                        {
+                            System.IO.File.Move(
+                                respaldoEvidenciaAnterior,
+                                rutaEvidenciaFisica,
+                                overwrite: true);
+                        }
+                        else if (System.IO.File.Exists(rutaEvidenciaFisica))
+                        {
+                            System.IO.File.Delete(rutaEvidenciaFisica);
+                        }
+                    }
+                    catch { }
                 }
+                else if (!string.IsNullOrWhiteSpace(respaldoEvidenciaAnterior)
+                         && System.IO.File.Exists(respaldoEvidenciaAnterior))
+                {
+                    try { System.IO.File.Delete(respaldoEvidenciaAnterior); } catch { }
+                }
+
                 TempData["Error"] = "No fue posible guardar el disparo auditado: " + ex.Message;
             }
 
             return RedirectToAction(nameof(Detalle), new { id = InspeccionID });
+        }
+
+        // NSQ_CALIDAD_EVIDENCIA_LOCAL_V1_0
+        // Evidencias fuera de wwwroot. No requieren credenciales SFTP.
+        private string ObtenerRutaEvidenciaDisparoLocal(int inspeccionId, int monitoreoId)
+        {
+            if (inspeccionId <= 0 || monitoreoId <= 0)
+                throw new InvalidOperationException("Identificadores de evidencia invalidos.");
+
+            var raiz = System.IO.Path.GetFullPath(
+                System.IO.Path.Combine(
+                    _environment.ContentRootPath,
+                    "App_Data",
+                    "Calidad",
+                    "Monitoreos"));
+
+            var ruta = System.IO.Path.GetFullPath(
+                System.IO.Path.Combine(
+                    raiz,
+                    inspeccionId.ToString(),
+                    "Disparos",
+                    $"Disparo_{monitoreoId}.img"));
+
+            var raizConSeparador =
+                raiz.TrimEnd(
+                    System.IO.Path.DirectorySeparatorChar,
+                    System.IO.Path.AltDirectorySeparatorChar)
+                + System.IO.Path.DirectorySeparatorChar;
+
+            if (!ruta.StartsWith(
+                    raizConSeparador,
+                    System.StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Ruta local de evidencia invalida.");
+            }
+
+            return ruta;
         }
 
         [HttpGet]
@@ -3552,6 +3656,12 @@ VALUES
             int inspeccionId,
             int monitoreoId)
         {
+            // NSQ_CALIDAD_EVIDENCIA_NOINDEX_V1_2
+            // Defensa adicional: la evidencia no debe indexarse ni cachearse como recurso publico.
+            Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noimageindex, noarchive";
+            Response.Headers["Cache-Control"] = "private, no-store, max-age=0";
+            Response.Headers["Pragma"] = "no-cache";
+
             var usuarioId = ObtenerUsuarioIdActual();
             if (!usuarioId.HasValue || usuarioId.Value <= 0)
                 return Unauthorized();
@@ -3578,8 +3688,10 @@ WHERE MonitoreoID=@MonitoreoID
 
             try
             {
-                var ruta = $"Calidad/Monitoreos/{inspeccionId}/Disparos/Disparo_{monitoreoId}.img";
-                var bytes = new global::SftpStorage(_configuration).DescargarBytes(ruta);
+                var ruta = ObtenerRutaEvidenciaDisparoLocal(inspeccionId, monitoreoId);
+                if (!System.IO.File.Exists(ruta)) return NotFound();
+
+                var bytes = await System.IO.File.ReadAllBytesAsync(ruta);
                 if (bytes.Length < 4) return NotFound();
 
                 var contentType = "application/octet-stream";

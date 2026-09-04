@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm
+@model ERP.NSQuell.Models.PlaneacionCalendarioMaquinasVm
 @using System.Globalization
 
 @functions {
@@ -170,6 +170,54 @@
 }
 
 @section Scripts {
+    <script id="NSQ_NOTIF_FOCUS_PROGRAMA_V6">
+        (function () {
+            function enfocarProgramaNotificado() {
+                const params =
+                    new URLSearchParams(
+                        window.location.search);
+
+                const raw =
+                    params.get('focusPrograma');
+
+                const programaId =
+                    Number(raw || 0);
+
+                if (!Number.isFinite(programaId)
+                    || programaId <= 0) {
+                    return;
+                }
+
+                const bloque =
+                    document.querySelector(
+                        `.block[data-programa-id="${programaId}"]`);
+
+                if (!bloque) {
+                    return;
+                }
+
+                bloque.classList.add(
+                    'reprogram-request-focus');
+
+                bloque.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center'
+                });
+
+                window.setTimeout(
+                    function () {
+                        bloque.classList.remove(
+                            'reprogram-request-focus');
+                    },
+                    8000);
+            }
+
+            window.setTimeout(
+                enfocarProgramaNotificado,
+                180);
+        })();
+    </script>
     <script>
         const search = document.getElementById('calendarSearch');
         const statusBox = document.getElementById('calendarStatus');
@@ -227,11 +275,11 @@
                 return;
             }
 
-           
+
             timelineScroll.style.overflowX = 'auto';
             timelineScroll.style.overflowY = 'auto';
 
-          
+
             calendarKiosk.classList.add('kiosk-compact');
 
             if (btnCompactarCalendario) {
@@ -2123,7 +2171,7 @@ else
                                 <div class="empty-row">Sin OF programada durante este periodo.</div>
                             }
 
-                           
+
                                 @foreach (var bloque in maquina.Bloques)
                                 {
                                     var inicioVisualBloque = bloque.InicioVisual;

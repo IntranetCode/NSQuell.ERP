@@ -11,12 +11,10 @@ namespace ERP.NSQuell.Controllers
     public class NotificacionesController : Controller
     {
         private readonly ApplicationDbContext _context;
-        private readonly ServicioNotificaciones _servicio;
 
-        public NotificacionesController(ApplicationDbContext context, ServicioNotificaciones servicio)
+        public NotificacionesController(ApplicationDbContext context)
         {
             _context = context;
-            _servicio = servicio;
         }
 
         // Helpers
@@ -48,7 +46,7 @@ namespace ERP.NSQuell.Controllers
 
         private IQueryable<Notificacion> QueryVisiblesPara(int? usuarioId, int? empresaId)
         {
-            var ahora = DateTime.UtcNow;
+            var ahora = DateTime.Now;
             return _context.Notificaciones
                 .Where(n => n.FechaEliminacion == null && n.FechaExpiracion > ahora)
                 .Where(n =>
@@ -115,8 +113,10 @@ namespace ERP.NSQuell.Controllers
                     n.Titulo,
                     n.Mensaje,
                     n.Tipo,
+                    n.CodigoEvento,
                     n.IdOrigen,
                     n.TablaOrigen,
+                    n.UrlDestino,
                     EsLeida = usuarioId != null && _context.NotificacionLecturas
                                   .Any(l => l.NotificacionId == n.Id && l.UsuarioId == usuarioId),
                     n.FechaCreacion

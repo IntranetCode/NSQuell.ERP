@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
 @using ERP.NSQuell.Models
 @{
     string Mostrar(string? valor) => string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
@@ -835,8 +835,7 @@
                                                                        asp-action="EvidenciaDisparoMonitoreoV3"
                                                                        asp-route-inspeccionId="@Model.InspeccionID"
                                                                        asp-route-monitoreoId="@monitor.MonitoreoID"
-                                                                       target="_blank"
-                                                                       class="quality-btn quality-btn-light">
+                                                                       class="quality-btn quality-btn-light js-qm-evidence-open">
                                                                         Ver imagen
                                                                     </a>
                                                                 }
@@ -1999,3 +1998,357 @@
     }
 })();
 </script>
+
+<!-- NSQ_CALIDAD_MODAL_EVIDENCIA_V1_2 -->
+<style>
+    body.qm-evidence-modal-open {
+        overflow: hidden;
+    }
+
+    .qm-evidence-modal[hidden] {
+        display: none !important;
+    }
+
+    .qm-evidence-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 2500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(2, 6, 23, .78);
+        backdrop-filter: blur(3px);
+    }
+
+    .qm-evidence-modal-panel {
+        width: min(1180px, 96vw);
+        max-height: 94vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, .42);
+    }
+
+    .qm-evidence-modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #dfe5ec;
+    }
+
+    .qm-evidence-modal-title {
+        margin: 0;
+        color: #14213d;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .qm-evidence-modal-close {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 40px;
+        border: 1px solid #dfe5ec;
+        border-radius: 10px;
+        background: #fff;
+        color: #334155;
+        font-size: 1.15rem;
+        cursor: pointer;
+    }
+
+    .qm-evidence-modal-body {
+        position: relative;
+        min-height: 320px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        overflow: auto;
+        background: #0f172a;
+    }
+
+    .qm-evidence-modal-image {
+        display: block;
+        max-width: 100%;
+        max-height: calc(94vh - 105px);
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 8px;
+    }
+
+    .qm-evidence-modal-status {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        color: #e2e8f0;
+        font-weight: 800;
+        text-align: center;
+    }
+
+    .qm-evidence-modal-status.is-error {
+        color: #fecaca;
+    }
+
+    html[data-nsq-theme="dark"] .qm-evidence-modal-panel {
+        background: #111c2d;
+        border-color: rgba(148, 163, 184, .26);
+    }
+
+    html[data-nsq-theme="dark"] .qm-evidence-modal-head {
+        border-color: rgba(148, 163, 184, .20);
+    }
+
+    html[data-nsq-theme="dark"] .qm-evidence-modal-title {
+        color: #f8fafc;
+    }
+
+    html[data-nsq-theme="dark"] .qm-evidence-modal-close {
+        background: #16243a;
+        color: #e8eef7;
+        border-color: rgba(148, 163, 184, .24);
+    }
+
+    @@media(max-width: 767.98px) {
+        .qm-evidence-modal {
+            padding: 10px;
+        }
+
+        .qm-evidence-modal-panel {
+            width: 100%;
+            max-height: 96vh;
+            border-radius: 12px;
+        }
+
+        .qm-evidence-modal-body {
+            min-height: 260px;
+            padding: 10px;
+        }
+
+        .qm-evidence-modal-image {
+            max-height: calc(96vh - 94px);
+        }
+    }
+</style>
+
+<div id="qmEvidenceModal"
+     class="qm-evidence-modal"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="qmEvidenceModalTitle"
+     hidden>
+    <div class="qm-evidence-modal-panel" role="document">
+        <div class="qm-evidence-modal-head">
+            <h3 id="qmEvidenceModalTitle" class="qm-evidence-modal-title">
+                Evidencia fotografica del disparo
+            </h3>
+            <button type="button"
+                    class="qm-evidence-modal-close"
+                    data-qm-evidence-close
+                    aria-label="Cerrar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="qm-evidence-modal-body">
+            <div id="qmEvidenceModalStatus" class="qm-evidence-modal-status">
+                Cargando evidencia...
+            </div>
+            <img id="qmEvidenceModalImage"
+                 class="qm-evidence-modal-image"
+                 alt="Evidencia fotografica del disparo de Calidad"
+                 hidden />
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const modal = document.getElementById('qmEvidenceModal');
+        const image = document.getElementById('qmEvidenceModalImage');
+        const status = document.getElementById('qmEvidenceModalStatus');
+
+        if (!modal || !image || !status || modal.dataset.bound === '1') return;
+        modal.dataset.bound = '1';
+
+        let ultimoFoco = null;
+
+        const cerrar = () => {
+            if (modal.hidden) return;
+            modal.hidden = true;
+            document.body.classList.remove('qm-evidence-modal-open');
+            image.hidden = true;
+            image.removeAttribute('src');
+            status.classList.remove('is-error');
+            status.textContent = 'Cargando evidencia...';
+            status.hidden = false;
+
+            if (ultimoFoco && typeof ultimoFoco.focus === 'function') {
+                ultimoFoco.focus();
+            }
+        };
+
+        const abrir = (url, trigger) => {
+            if (!url) return;
+
+            ultimoFoco = trigger || null;
+            image.hidden = true;
+            image.removeAttribute('src');
+            status.classList.remove('is-error');
+            status.textContent = 'Cargando evidencia...';
+            status.hidden = false;
+
+            modal.hidden = false;
+            document.body.classList.add('qm-evidence-modal-open');
+
+            image.onload = () => {
+                status.hidden = true;
+                image.hidden = false;
+            };
+
+            image.onerror = () => {
+                image.hidden = true;
+                status.hidden = false;
+                status.classList.add('is-error');
+                status.textContent = 'No fue posible cargar la evidencia.';
+            };
+
+            image.src = url;
+            modal.querySelector('[data-qm-evidence-close]')?.focus();
+        };
+
+        document.addEventListener('click', (event) => {
+            const trigger = event.target.closest('.js-qm-evidence-open');
+            if (trigger) {
+                event.preventDefault();
+                abrir(trigger.getAttribute('href'), trigger);
+                return;
+            }
+
+            if (event.target.closest('[data-qm-evidence-close]')) {
+                event.preventDefault();
+                cerrar();
+                return;
+            }
+
+            if (event.target === modal) {
+                cerrar();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !modal.hidden) {
+                cerrar();
+            }
+        });
+    })();
+</script>
+
+<!-- NSQ_CALIDAD_MODAL_EVIDENCIA_V1_5 -->
+<style>
+    .qm-evidence-modal {
+        padding: 12px !important;
+    }
+
+    .qm-evidence-modal-panel {
+        width: min(1540px, 98vw) !important;
+        height: 94vh !important;
+        max-height: 94vh !important;
+    }
+
+    .qm-evidence-modal-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        padding: 10px !important;
+        overflow: hidden !important;
+    }
+
+    .qm-evidence-modal-image {
+        display: block !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        object-position: center center !important;
+    }
+
+    @@media (max-width: 767.98px) {
+        .qm-evidence-modal {
+            padding: 6px !important;
+        }
+
+        .qm-evidence-modal-panel {
+            width: 100% !important;
+            height: 96vh !important;
+            max-height: 96vh !important;
+            border-radius: 12px !important;
+        }
+
+        .qm-evidence-modal-body {
+            padding: 6px !important;
+        }
+    }
+</style>
+
+<!-- NSQ_CALIDAD_MODAL_EVIDENCIA_V1_6 -->
+<style>
+    .qm-evidence-modal {
+        padding: 18px !important;
+    }
+
+    .qm-evidence-modal-panel {
+        width: min(1260px, 84vw) !important;
+        height: min(72vh, 720px) !important;
+        max-height: min(72vh, 720px) !important;
+    }
+
+    .qm-evidence-modal-head {
+        flex: 0 0 auto !important;
+        position: relative !important;
+        z-index: 2 !important;
+    }
+
+    .qm-evidence-modal-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        padding: 12px !important;
+        overflow: hidden !important;
+    }
+
+    .qm-evidence-modal-image {
+        display: block !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        object-position: center center !important;
+    }
+
+    @@media (max-width: 767.98px) {
+        .qm-evidence-modal {
+            padding: 10px !important;
+        }
+
+        .qm-evidence-modal-panel {
+            width: 96vw !important;
+            height: 78vh !important;
+            max-height: 78vh !important;
+        }
+
+        .qm-evidence-modal-body {
+            padding: 8px !important;
+        }
+    }
+</style>

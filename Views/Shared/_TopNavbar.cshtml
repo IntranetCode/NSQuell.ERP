@@ -1,4 +1,4 @@
-﻿@using System.Security.Claims
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Http
 
 @{
@@ -1093,16 +1093,144 @@
                 .replace(/'/g, '&#039;');
         }
 
-        function linkDestino(tipo, idOrigen) {
-            let url = '#';
+        // NSQ_NOTIFICACIONES_INTERNAS_V4_3_4: acceso rapido unificado; sin href legacy.
+            // NSQ_NOTIFICACIONES_FIX_FINAL_V1
+        // NSQ_NOTIFICACIONES_DETALLE_ACCESO_V6
+        // NSQ_NOTIFICACIONES_NAVBAR_FINAL_V9
+        // 1) Notificaciones nuevas: siempre usa UrlDestino exacta.
+        // 2) Notificaciones historicas: usa una pagina funcional especifica
+        //    segun TablaOrigen/accion; nunca href="#" ni un Index generico engañoso.
+        function linkDestino(tipo, idOrigen, urlDestino, codigoEvento, tablaOrigen, titulo) {
+            let url = null;
+            let textoAccion = 'Ver detalle';
 
-            if (tipo === 'CursoAsignado') url = `/Universidad/MisCursos/${idOrigen}`;
-            else if (tipo === 'WebinarAsignado') url = `/Lider/Lista/${idOrigen}`;
-            else if (tipo === 'Comunicado_Nuevo') url = `/Comunicados/Index/${idOrigen}`;
+            const candidata =
+                typeof urlDestino === 'string'
+                    ? urlDestino.trim()
+                    : '';
 
-            return `<a class="js-ver" href="${url}">Ver</a>`;
+            const codigo =
+                String(codigoEvento || tipo || '')
+                    .trim()
+                    .toUpperCase();
+
+            const tabla =
+                String(tablaOrigen || '')
+                    .trim()
+                    .toUpperCase();
+
+            const tituloNormalizado =
+                String(titulo || '')
+                    .trim()
+                    .toUpperCase();
+
+            if (candidata.startsWith('/') && !candidata.startsWith('//')) {
+                url = candidata;
+            }
+            else if (tipo === 'CursoAsignado') {
+                url = `/Universidad/MisCursos/${idOrigen}`;
+                textoAccion = 'Ir al curso';
+            }
+            else if (tipo === 'WebinarAsignado') {
+                url = `/Lider/Lista/${idOrigen}`;
+                textoAccion = 'Abrir webinar';
+            }
+            else if (tipo === 'Comunicado_Nuevo') {
+                url = `/Comunicados/Index/${idOrigen}`;
+                textoAccion = 'Leer comunicado';
+            }
+            else {
+                /*
+                 * Fallback SOLO para registros historicos sin UrlDestino.
+                 * Se dirige a la pantalla funcional de la accion conocida.
+                 * Las nuevas notificaciones detalladas nunca pasan por aqui.
+                 */
+                if (
+                    tabla.includes('PLANEACIONCALENDARIOMAQUINAS')
+                    || tituloNormalizado.includes('REPROGRAMAR CALENDARIO')
+                    || tituloNormalizado.includes('REPROGRAMAR CALENDARIO')
+                ) {
+                    url = '/PlaneacionCalendarioMaquinas/Index';
+                    textoAccion = 'Ver calendario';
+                }
+                else if (tabla.includes('ALMACENMP')) {
+                    url = '/AlmacenMP/Historial';
+                    textoAccion = 'Ver movimientos MP';
+                }
+                else if (tabla.includes('ALMACENEMBALAJES')) {
+                    url = '/AlmacenEmbalajes/Historial';
+                    textoAccion = 'Ver movimientos de embalaje';
+                }
+                else if (tabla.includes('ALMACENOF')) {
+                    url = '/AlmacenOF/Historico';
+                    textoAccion = 'Ver historial de OF';
+                }
+                else if (tabla.includes('ALMACENPT')) {
+                    url = '/AlmacenPT/Index';
+                    textoAccion = 'Ver almacén PT';
+                }
+                else if (tabla.includes('ALMACENSCRAP')) {
+                    url = '/AlmacenScrap/Index';
+                    textoAccion = 'Ver Scrap';
+                }
+                else if (tabla.includes('PLANEACIONPROGRAMA')) {
+                    url = '/PlaneacionPrograma/Index';
+                    textoAccion = 'Ver programa';
+                }
+                else if (tabla === 'PLANEACION' || tabla.startsWith('PLANEACION')) {
+                    url = '/Planeacion/Index';
+                    textoAccion = 'Ver planeación';
+                }
+                else if (tabla.includes('PRODUCCIONPREPARACION')) {
+                    url = '/ProduccionPreparacion/Index';
+                    textoAccion = 'Ver preparación';
+                }
+                else if (tabla === 'PRODUCCION' || tabla.startsWith('PRODUCCION')) {
+                    url = '/Produccion/Index';
+                    textoAccion = 'Ver producción';
+                }
+                else if (tabla.startsWith('CALIDAD')) {
+                    url = '/Calidad/Index';
+                    textoAccion = 'Ver calidad';
+                }
+                else if (tabla.startsWith('GP12')) {
+                    url = '/GP12/Index';
+                    textoAccion = 'Ver GP12';
+                }
+                else if (tabla.startsWith('LOGISTICA')) {
+                    url = '/Logistica/Index';
+                    textoAccion = 'Ver logística';
+                }
+            }
+
+            if (!url) {
+                return '';
+            }
+
+            if (codigo === 'OF_CREADA') {
+                textoAccion = 'Consultar OF';
+            }
+            else if (codigo.startsWith('ALMACEN_MP_')) {
+                textoAccion = 'Ver movimiento MP';
+            }
+            else if (codigo.startsWith('ALMACEN_EMBALAJE_')) {
+                textoAccion = 'Ver movimiento de embalaje';
+            }
+            else if (codigo === 'PLANEACION_REPROGRAMACION') {
+                textoAccion = 'Ver reprogramación';
+            }
+            else if (codigo.includes('CALIDAD')) {
+                textoAccion = 'Ver detalle de calidad';
+            }
+            else if (codigo.includes('GP12')) {
+                textoAccion = 'Ver GP12';
+            }
+            else if (codigo.includes('LOGISTICA') || codigo.includes('EMBARQUE')) {
+                textoAccion = 'Ver embarque';
+            }
+
+            return `<a class="js-ver" href="${escapeHtml(url)}">${escapeHtml(textoAccion)}</a>`;
         }
-
         async function cargarLista(pagina = 1, tamanio = 10) {
             try {
                 const data = await getJson(`/Notificaciones/Listar?pagina=${pagina}&tamanio=${tamanio}`);
@@ -1118,7 +1246,10 @@
                     const titulo = val(n, 'Titulo', 'titulo') ?? '';
                     const mensaje = val(n, 'Mensaje', 'mensaje') ?? '';
                     const tipo = val(n, 'Tipo', 'tipo') ?? '';
+                    const codigoEvento = val(n, 'CodigoEvento', 'codigoEvento') ?? '';
                     const idOrigen = val(n, 'IdOrigen', 'idOrigen');
+                    const tablaOrigen = val(n, 'TablaOrigen', 'tablaOrigen') ?? '';
+                    const urlDestino = val(n, 'UrlDestino', 'urlDestino') ?? '';
                     const fechaStr = val(n, 'FechaCreacion', 'fechaCreacion');
                     const fecha = new Date(fechaStr || Date.now()).toLocaleString();
                     const esLeida = !!(n.Leida ?? n.leida ?? n.EsLeida ?? n.esLeida);
@@ -1138,7 +1269,7 @@
                             ${!esLeida ? '<span class="notif-new">Nueva</span>' : ''}
                         </div>
                         <div class="notif-actions">
-                            ${linkDestino(tipo, idOrigen)}
+                            ${linkDestino(tipo, idOrigen, urlDestino, codigoEvento, tablaOrigen, titulo)}
                         </div>
                     `;
 

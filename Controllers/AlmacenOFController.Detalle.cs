@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using ERP.NSQuell.Models.ViewModels.Almacen;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -277,28 +277,258 @@ GROUP BY LTRIM(RTRIM(c.{OfIdentificador(catalogCode)}));";
         return result;
     }
 
+    // NSQ_ALMACEN_OF_DETALLE_LOGS_V1_6
+    // Usa la vista canonica de trazabilidad de Almacen y resuelve:
+    //   Entrego  -> nombre guardado / usuario responsable / CreadoPor.
+    //   Recibio  -> nombre guardado / usuario receptor / recepcion canonica de Produccion.
+    // Si Produccion aun no confirma, no inventa una persona: muestra que esta pendiente.
     private static async Task CargarEntregasAsync(
         SqlConnection connection,
         AlmacenOFDetalleVm vm,
         CancellationToken cancellationToken)
     {
-        await CargarHistorialAreaAsync(
-            connection,
-            vm,
-            "MP",
-            "dbo.AlmacenMP_Movimientos",
-            "dbo.ERP_Materiales",
-            "MaterialID",
-            cancellationToken);
+        var tieneVistaTrazabilidad = false;
 
-        await CargarHistorialAreaAsync(
-            connection,
-            vm,
-            "EMBALAJE",
-            "dbo.AlmacenEmbalajes_Movimientos",
-            "dbo.ERP_Embalajes",
-            "EmbalajeID",
-            cancellationToken);
+        await using (var checkVista = new SqlCommand(
+            "SELECT CASE WHEN OBJECT_ID(N'dbo.vw_AlmacenOF_TrazabilidadEntregas',N'V') IS NULL THEN 0 ELSE 1 END;",
+            connection))
+        {
+            tieneVistaTrazabilidad =
+                Convert.ToInt32(
+                    await checkVista.ExecuteScalarAsync(cancellationToken)) == 1;
+        }
+
+        if (!tieneVistaTrazabilidad)
+        {
+            await CargarHistorialAreaAsync(
+                connection,
+                vm,
+                "MP",
+                "dbo.AlmacenMP_Movimientos",
+                "dbo.ERP_Materiales",
+                "MaterialID",
+                cancellationToken);
+
+            await CargarHistorialAreaAsync(
+                connection,
+                vm,
+                "EMBALAJE",
+                "dbo.AlmacenEmbalajes_Movimientos",
+                "dbo.ERP_Embalajes",
+                "EmbalajeID",
+                cancellationToken);
+
+            vm.Entregas = vm.Entregas
+                .OrderByDescending(x => x.Fecha)
+                .ToList();
+
+            return;
+        }
+
+        var tieneRecepcionCanonica = false;
+
+        await using (var checkRecepcion = new SqlCommand(
+            @"SELECT CASE
+                WHEN OBJECT_ID(N'dbo.Produccion_RecepcionMateriales',N'U') IS NOT NULL
+                 AND COL_LENGTH(N'dbo.Produccion_RecepcionMateriales',N'UsuarioRecepcionID') IS NOT NULL
+                 AND COL_LENGTH(N'dbo.Produccion_RecepcionMateriales',N'EstadoRecepcion') IS NOT NULL
+                 AND COL_LENGTH(N'dbo.Produccion_RecepcionMateriales',N'MovimientoAlmacenID') IS NOT NULL
+                THEN 1 ELSE 0 END;",
+            connection))
+        {
+            tieneRecepcionCanonica =
+                Convert.ToInt32(
+                    await checkRecepcion.ExecuteScalarAsync(cancellationToken)) == 1;
+        }
+
+        var recepcionApply = tieneRecepcionCanonica
+            ? @"
+OUTER APPLY
+(
+    SELECT TOP(1)
+        r.UsuarioRecepcionID,
+        r.EstadoRecepcion,
+        r.FechaRecepcion
+    FROM dbo.Produccion_RecepcionMateriales r
+    WHERE r.Activo=1
+      AND r.MovimientoAlmacenID=t.MovimientoID
+      AND
+      (
+          (t.Modulo=N'MP' AND r.TipoOrigen=N'MP')
+          OR
+          (t.Modulo=N'EMBALAJES' AND r.TipoOrigen=N'EMBALAJE')
+      )
+    ORDER BY r.RecepcionMaterialID DESC
+) recepcion
+LEFT JOIN dbo.Usuarios uRecCanon
+    ON uRecCanon.UsuarioID=recepcion.UsuarioRecepcionID
+LEFT JOIN dbo.Persona pRecCanon
+    ON pRecCanon.PersonaID=uRecCanon.PersonaID
+"
+            : string.Empty;
+
+        var receptorCanonico = tieneRecepcionCanonica
+            ? @"
+        NULLIF
+        (
+            LTRIM(RTRIM
+            (
+                ISNULL(pRecCanon.Nombre,N'')+N' '+
+                ISNULL(pRecCanon.ApellidoPaterno,N'')+N' '+
+                ISNULL(pRecCanon.ApellidoMaterno,N'')
+            )),
+            N''
+        ),
+        CASE
+            WHEN recepcion.EstadoRecepcion=N'PENDIENTE'
+                THEN N'Pendiente de confirmacion en Produccion'
+            ELSE NULL
+        END,
+"
+            : string.Empty;
+
+        var sql = $@"
+SELECT TOP(500)
+    CASE
+        WHEN t.Modulo=N'EMBALAJES' THEN N'EMBALAJE'
+        ELSE t.Modulo
+    END AS Area,
+    ISNULL(t.Codigo,N'') AS Codigo,
+    ISNULL(t.Descripcion,N'') AS Descripcion,
+    ISNULL(t.TipoMovimiento,N'') AS TipoMovimiento,
+    CONVERT(decimal(18,4),ISNULL(t.Cantidad,0)) AS Cantidad,
+    ISNULL(t.Unidad,N'') AS Unidad,
+    t.FechaMovimiento,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(t.EntregadoPor)),N''),
+        NULLIF
+        (
+            LTRIM(RTRIM
+            (
+                ISNULL(pResp.Nombre,N'')+N' '+
+                ISNULL(pResp.ApellidoPaterno,N'')+N' '+
+                ISNULL(pResp.ApellidoMaterno,N'')
+            )),
+            N''
+        ),
+        N''
+    ) AS Responsable,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(t.RecibidoPorNombre)),N''),
+        NULLIF
+        (
+            LTRIM(RTRIM
+            (
+                ISNULL(pRecMov.Nombre,N'')+N' '+
+                ISNULL(pRecMov.ApellidoPaterno,N'')+N' '+
+                ISNULL(pRecMov.ApellidoMaterno,N'')
+            )),
+            N''
+        ),
+        {receptorCanonico}
+        NULLIF
+        (
+            LTRIM(RTRIM
+            (
+                CASE
+                    WHEN t.Modulo=N'MP'
+                    THEN
+                    (
+                        SELECT TOP(1)
+                            mLegacy.ValidadoProduccionNombre
+                        FROM dbo.AlmacenMP_Movimientos mLegacy
+                        WHERE mLegacy.MovimientoID=t.MovimientoID
+                    )
+                    WHEN t.Modulo=N'EMBALAJES'
+                    THEN
+                    (
+                        SELECT TOP(1)
+                            eLegacy.ValidadoProduccionNombre
+                        FROM dbo.AlmacenEmbalajes_Movimientos eLegacy
+                        WHERE eLegacy.MovimientoID=t.MovimientoID
+                    )
+                    ELSE NULL
+                END
+            )),
+            N''
+        ),
+        N''
+    ) AS Recibio,
+    ISNULL(t.Observaciones,N'') AS Observaciones
+FROM dbo.vw_AlmacenOF_TrazabilidadEntregas t
+LEFT JOIN dbo.Usuarios uResp
+    ON uResp.UsuarioID=t.ResponsableUsuarioID
+LEFT JOIN dbo.Persona pResp
+    ON pResp.PersonaID=uResp.PersonaID
+LEFT JOIN dbo.Usuarios uRecMov
+    ON uRecMov.UsuarioID=t.RecibidoPorUsuarioID
+LEFT JOIN dbo.Persona pRecMov
+    ON pRecMov.PersonaID=uRecMov.PersonaID
+{recepcionApply}
+WHERE t.Activo=1
+  AND
+  (
+      t.SolicitudProduccionID=@SolicitudProduccionID
+      OR
+      (
+          @Folio<>N''
+          AND LTRIM(RTRIM(ISNULL(t.NumeroOF,N'')))=@Folio
+      )
+      OR
+      (
+          @NumeroOF<>N''
+          AND LTRIM(RTRIM(ISNULL(t.NumeroOF,N'')))=@NumeroOF
+      )
+  )
+ORDER BY t.FechaMovimiento DESC,t.MovimientoID DESC;";
+
+        await using var command =
+            new SqlCommand(sql, connection);
+
+        command.Parameters.Add(
+            "@SolicitudProduccionID",
+            SqlDbType.Int).Value =
+            vm.SolicitudProduccionID;
+
+        command.Parameters.Add(
+            "@Folio",
+            SqlDbType.NVarChar,
+            100).Value =
+            vm.FolioSolicitud.Trim();
+
+        command.Parameters.Add(
+            "@NumeroOF",
+            SqlDbType.NVarChar,
+            100).Value =
+            vm.NumeroOFRecibida.Trim();
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            vm.Entregas.Add(
+                new AlmacenOFEntregaHistorialVm
+                {
+                    Area = LeerTextoOf(reader, "Area"),
+                    Codigo = LeerTextoOf(reader, "Codigo"),
+                    Descripcion = LeerTextoOf(reader, "Descripcion"),
+                    TipoMovimiento = LeerTextoOf(reader, "TipoMovimiento"),
+                    Cantidad = LeerDecimalOf(reader, "Cantidad"),
+                    Unidad = LeerTextoOf(reader, "Unidad"),
+                    Fecha =
+                        LeerFechaOf(reader, "FechaMovimiento")
+                        ?? DateTime.MinValue,
+                    Responsable =
+                        LeerTextoOf(reader, "Responsable"),
+                    Recibio =
+                        LeerTextoOf(reader, "Recibio"),
+                    Observaciones =
+                        LeerTextoOf(reader, "Observaciones")
+                });
+        }
 
         vm.Entregas = vm.Entregas
             .OrderByDescending(x => x.Fecha)
