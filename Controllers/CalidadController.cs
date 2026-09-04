@@ -17,6 +17,7 @@ namespace ERP.NSQuell.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _environment;
 
         private static readonly string[] EstadosProcesoActivo =
         {
@@ -38,10 +39,12 @@ namespace ERP.NSQuell.Controllers
 
         public CalidadController(
             ApplicationDbContext context,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IWebHostEnvironment environment)
         {
             _context = context;
             _configuration = configuration;
+            _environment = environment;
         }
 
         private string ConnectionString =>

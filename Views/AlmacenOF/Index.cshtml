@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Material OF Solicitados";
@@ -38,15 +38,386 @@
     <link rel="stylesheet" href="~/css/Almacen/almacen-vistas.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Almacen/almacen-temas.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Almacen/almacen-of-v4.css" asp-append-version="true" />
+
+    <style>
+        /* NSQ_DEVOLUCION_MATERIALES_V1_2 */
+        .of-return-priority {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #b4232d;
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+        }
+
+        .of4-item.devuelto {
+            border-color: #dc5961 !important;
+            background: #fff5f5 !important;
+        }
+
+        .of4-item.validacion {
+            border-color: #e4b554 !important;
+            background: #fffaf0 !important;
+        }
+
+        .of-return-detail {
+            margin: 6px 0 9px;
+            padding: 10px 12px;
+            border: 1px solid #efb6ba;
+            border-radius: 11px;
+            background: #fff1f2;
+            color: #8d2028;
+            font-size: .73rem;
+        }
+
+        .of-return-detail strong {
+            display: block;
+            margin-bottom: 3px;
+            font-weight: 950;
+        }
+
+        .of-return-detail p {
+            margin: 4px 0 7px;
+        }
+
+        .of-return-evidence {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 9px;
+            border-radius: 8px;
+            background: #8d2028;
+            color: #fff !important;
+            text-decoration: none;
+            font-weight: 850;
+        }
+
+        .of-validation-note {
+            display: block;
+            margin-top: 3px;
+            color: #9a6700;
+            font-size: .64rem;
+            font-weight: 850;
+        }
+
+        html[data-nsq-theme="dark"] .of4-item.devuelto,
+        html[data-bs-theme="dark"] .of4-item.devuelto {
+            background: #32171b !important;
+        }
+
+        html[data-nsq-theme="dark"] .of4-item.validacion,
+        html[data-bs-theme="dark"] .of4-item.validacion {
+            background: #2a2415 !important;
+        }
+
+        /* NSQ_DEVOLUCION_MATERIALES_V1_3 */
+        .of-return-evidence {
+            border: 0;
+            cursor: pointer;
+        }
+
+        .return-evidence-modal[hidden] {
+            display: none !important;
+        }
+
+        .return-evidence-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1100;
+            display: grid;
+            place-items: center;
+            padding: 18px;
+            background: rgba(7,15,30,.72);
+            backdrop-filter: blur(4px);
+        }
+
+        .return-evidence-card {
+            width: min(980px,94vw);
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #d6deea;
+            border-radius: 18px;
+            background: #fff;
+            color: #162238;
+            box-shadow: 0 28px 80px rgba(0,0,0,.32);
+        }
+
+        .return-evidence-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #dce4ef;
+        }
+
+        .return-evidence-head h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 950;
+        }
+
+        .return-evidence-head p {
+            margin: 4px 0 0;
+            color: #6d798f;
+            font-size: .72rem;
+        }
+
+        .return-evidence-close {
+            width: 38px;
+            height: 38px;
+            flex: none;
+            border: 1px solid #dce4ef;
+            border-radius: 10px;
+            background: #fff;
+            color: #17233d;
+            cursor: pointer;
+        }
+
+        .return-evidence-content {
+            min-height: 0;
+            overflow: auto;
+            padding: 16px 18px 18px;
+        }
+
+        .return-evidence-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .return-evidence-info > div {
+            padding: 10px 12px;
+            border: 1px solid #e3e8ef;
+            border-radius: 11px;
+            background: #f7f9fc;
+        }
+
+        .return-evidence-info span {
+            display: block;
+            margin-bottom: 3px;
+            color: #738097;
+            font-size: .62rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .return-evidence-info strong {
+            font-size: .78rem;
+        }
+
+        .return-evidence-comment {
+            grid-column: 1 / -1;
+        }
+
+        .return-evidence-image-wrap {
+            height: min(55vh,520px);
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            border: 1px solid #dce4ef;
+            border-radius: 13px;
+            background: #0f192b;
+        }
+
+        .return-evidence-image {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        html[data-nsq-theme="dark"] .return-evidence-card,
+        html[data-bs-theme="dark"] .return-evidence-card {
+            background: #111b2d;
+            color: #e8eef7;
+            border-color: #314158;
+        }
+
+        html[data-nsq-theme="dark"] .return-evidence-head,
+        html[data-bs-theme="dark"] .return-evidence-head {
+            border-color: #314158;
+        }
+
+        html[data-nsq-theme="dark"] .return-evidence-close,
+        html[data-bs-theme="dark"] .return-evidence-close {
+            background: #17243a;
+            color: #e8eef7;
+            border-color: #314158;
+        }
+
+        html[data-nsq-theme="dark"] .return-evidence-info > div,
+        html[data-bs-theme="dark"] .return-evidence-info > div {
+            background: #17243a;
+            border-color: #314158;
+        }
+
+        @@media (max-width: 700px) {
+            .return-evidence-info {
+                grid-template-columns: 1fr;
+            }
+
+            .return-evidence-comment {
+                grid-column: auto;
+            }
+
+            .return-evidence-image-wrap {
+                height: 46vh;
+            }
+        }
+        html[data-nsq-theme="dark"] .of-return-detail,
+        html[data-bs-theme="dark"] .of-return-detail {
+            background: #35181c;
+            color: #ffb9be;
+            border-color: #73353b;
+        }
+    </style>
 }
 
 
 @section Scripts {
     <script src="~/js/Almacen/almacen-vistas.js" asp-append-version="true"></script>
     <script src="~/js/shared/nsq-dynamic-style.js" asp-append-version="true"></script>
+
+    <script>
+        // NSQ_DEVOLUCION_MATERIALES_V1_3
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('returnEvidenceModal');
+            const image = document.getElementById('returnEvidenceImage');
+            const motivo = document.getElementById('returnEvidenceReason');
+            const comentario = document.getElementById('returnEvidenceComment');
+            // NSQ_DEVOLUCION_MATERIALES_V1_4
+            const usuario = document.getElementById('returnEvidenceUser');
+            const meta = document.getElementById('returnEvidenceMeta');
+
+            function closeEvidenceModal() {
+                if (!modal) return;
+
+                modal.hidden = true;
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+
+                if (image) {
+                    image.removeAttribute('src');
+                }
+            }
+
+            document.querySelectorAll('.js-return-evidence').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    if (!modal || !image) return;
+
+                    const url = button.dataset.url || '';
+                    const reason = button.dataset.motivo || 'Sin motivo registrado';
+                    const comment =
+                        button.dataset.comentario
+                        || 'Sin comentario adicional';
+                    const user =
+                        button.dataset.usuario
+                        || 'Usuario de Producción';
+                    const quantity = button.dataset.cantidad || '0';
+                    const unit = button.dataset.unidad || '';
+                    const date = button.dataset.fecha || '';
+
+                    if (motivo) motivo.textContent = reason;
+                    if (comentario) comentario.textContent = comment;
+                    if (usuario) usuario.textContent = user;
+
+                    if (meta) {
+                        meta.textContent =
+                            quantity + ' ' + unit
+                            + (date ? ' · ' + date : '');
+                    }
+
+                    image.src = url;
+
+                    modal.hidden = false;
+                    modal.setAttribute('aria-hidden', 'false');
+                    document.body.style.overflow = 'hidden';
+                });
+            });
+
+            document.querySelectorAll('.js-return-evidence-close').forEach(function (button) {
+                button.addEventListener('click', closeEvidenceModal);
+            });
+
+            if (modal) {
+                modal.addEventListener('click', function (event) {
+                    if (event.target === modal) {
+                        closeEvidenceModal();
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape'
+                    && modal
+                    && !modal.hidden) {
+                    closeEvidenceModal();
+                }
+            });
+        });
+    </script>
 }
 
 
+<div class="return-evidence-modal"
+     id="returnEvidenceModal"
+     hidden
+     aria-hidden="true">
+    <div class="return-evidence-card"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="returnEvidenceTitle">
+        <div class="return-evidence-head">
+            <div>
+                <h3 id="returnEvidenceTitle">
+                    <i class="fa-solid fa-camera"></i>
+                    Evidencia de devolución
+                </h3>
+                <p id="returnEvidenceMeta"></p>
+            </div>
+
+            <button class="return-evidence-close js-return-evidence-close"
+                    type="button"
+                    aria-label="Cerrar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="return-evidence-content">
+            <div class="return-evidence-info">
+                <div>
+                    <span>Motivo</span>
+                    <strong id="returnEvidenceReason">—</strong>
+                </div>
+
+                <div>
+                    <span>Devuelto por</span>
+                    <strong id="returnEvidenceUser">—</strong>
+                </div>
+
+                <div class="return-evidence-comment">
+                    <span>Comentario / descripción del problema</span>
+                    <strong id="returnEvidenceComment">—</strong>
+                </div>
+            </div>
+
+            <div class="return-evidence-image-wrap">
+                <img id="returnEvidenceImage"
+                     class="return-evidence-image"
+                     alt="Evidencia fotográfica de la devolución" />
+            </div>
+        </div>
+    </div>
+</div>
 @await Html.PartialAsync("_AlmacenNavegacion")
 
 @await Html.PartialAsync("_AlmacenMensajes")
@@ -187,6 +558,13 @@ else
                         </div>
 
                         <div class="of4-state-block">
+                            @if (x.TieneDevolucionPendiente)
+                            {
+                                <span class="of-return-priority">
+                                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                                    DEVOLUCIÓN · @x.DevolucionesPendientes
+                                </span>
+                            }
                             <span class="of-status">@x.EstatusNombre</span>
                             <span class="of-priority @x.PrioridadClase">@x.Prioridad</span>
                         </div>
@@ -214,8 +592,40 @@ else
                                             : null;
                                         <a class="of4-item @item.Clase @(!puedeEntregar ? "disabled" : string.Empty)" href="@url" aria-disabled="@(!puedeEntregar)">
                                             <span class="of4-item-copy"><strong>@item.Codigo</strong><small title="@item.Descripcion">@item.Descripcion</small></span>
-                                            <span class="of4-item-progress"><span><strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong><em>@item.Estado</em></span><i><b data-nsq-style="width:@item.Porcentaje%"></b></i></span>
+                                            <span class="of4-item-progress">
+                                                <span>
+                                                    <strong>Producción aceptó @item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong>
+                                                    <em>@item.Estado</em>
+                                                    @if (item.EnValidacionProduccion > 0.0005m)
+                                                    {
+                                                        <small class="of-validation-note">En validación de Producción: @item.EnValidacionProduccion.ToString("0.###") @item.Unidad</small>
+                                                    }
+                                                </span>
+                                                <i><b data-nsq-style="width:@item.Porcentaje%"></b></i>
+                                            </span>
                                         </a>
+                                        @if (item.TieneDevolucionPendiente)
+                                        {
+                                            <div class="of-return-detail">
+                                                <strong><i class="fa-solid fa-triangle-exclamation"></i> Producción devolvió @item.CantidadDevuelta?.ToString("0.###") @item.Unidad</strong>
+                                                <span>
+                                                    @item.FechaDevolucion?.ToString("dd/MM/yyyy HH:mm")
+                                                    · @item.UsuarioDevolucionNombre
+                                                </span>
+                                                <p>@item.MotivoDevolucion</p>
+                                                <button class="of-return-evidence js-return-evidence"
+                                                        type="button"
+                                                        data-url="@Url.Action("EvidenciaDevolucion", "ProduccionPreparacion", new { id = item.DevolucionMaterialID })"
+                                                        data-motivo="@item.MotivoDevolucion"
+                                                        data-comentario="@item.ComentarioDevolucion"
+                                                        data-usuario="@item.UsuarioDevolucionNombre"
+                                                        data-cantidad="@item.CantidadDevuelta?.ToString("0.###")"
+                                                        data-unidad="@item.Unidad"
+                                                        data-fecha="@item.FechaDevolucion?.ToString("dd/MM/yyyy HH:mm")">
+                                                    <i class="fa-solid fa-camera"></i> Ver evidencia
+                                                </button>
+                                            </div>
+                                        }
                                     }
                                 </div>
                             </section>
@@ -237,8 +647,40 @@ else
                                             : null;
                                         <a class="of4-item @item.Clase @(!puedeEntregar ? "disabled" : string.Empty)" href="@url" aria-disabled="@(!puedeEntregar)">
                                             <span class="of4-item-copy"><strong>@item.Codigo</strong><small title="@item.Descripcion">@item.Descripcion</small></span>
-                                            <span class="of4-item-progress"><span><strong>@item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong><em>@item.Estado</em></span><i><b data-nsq-style="width:@item.Porcentaje%"></b></i></span>
+                                            <span class="of4-item-progress">
+                                                <span>
+                                                    <strong>Producción aceptó @item.Entregado.ToString("0.###") / @item.Requerido.ToString("0.###") @item.Unidad</strong>
+                                                    <em>@item.Estado</em>
+                                                    @if (item.EnValidacionProduccion > 0.0005m)
+                                                    {
+                                                        <small class="of-validation-note">En validación de Producción: @item.EnValidacionProduccion.ToString("0.###") @item.Unidad</small>
+                                                    }
+                                                </span>
+                                                <i><b data-nsq-style="width:@item.Porcentaje%"></b></i>
+                                            </span>
                                         </a>
+                                        @if (item.TieneDevolucionPendiente)
+                                        {
+                                            <div class="of-return-detail">
+                                                <strong><i class="fa-solid fa-triangle-exclamation"></i> Producción devolvió @item.CantidadDevuelta?.ToString("0.###") @item.Unidad</strong>
+                                                <span>
+                                                    @item.FechaDevolucion?.ToString("dd/MM/yyyy HH:mm")
+                                                    · @item.UsuarioDevolucionNombre
+                                                </span>
+                                                <p>@item.MotivoDevolucion</p>
+                                                <button class="of-return-evidence js-return-evidence"
+                                                        type="button"
+                                                        data-url="@Url.Action("EvidenciaDevolucion", "ProduccionPreparacion", new { id = item.DevolucionMaterialID })"
+                                                        data-motivo="@item.MotivoDevolucion"
+                                                        data-comentario="@item.ComentarioDevolucion"
+                                                        data-usuario="@item.UsuarioDevolucionNombre"
+                                                        data-cantidad="@item.CantidadDevuelta?.ToString("0.###")"
+                                                        data-unidad="@item.Unidad"
+                                                        data-fecha="@item.FechaDevolucion?.ToString("dd/MM/yyyy HH:mm")">
+                                                    <i class="fa-solid fa-camera"></i> Ver evidencia
+                                                </button>
+                                            </div>
+                                        }
                                     }
                                 </div>
                             </section>

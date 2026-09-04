@@ -46,11 +46,9 @@ namespace ERP.NSQuell.Controllers
 
         private IQueryable<Notificacion> QueryVisiblesPara(int? usuarioId, int? empresaId)
         {
-            var ahora = DateTime.UtcNow;
+            var ahora = DateTime.Now;
             return _context.Notificaciones
                 .Where(n => n.FechaEliminacion == null && n.FechaExpiracion > ahora)
-                // NSQ_NOTIFICACIONES_V3F_OCULTAR_LEGACY: los EVENTO_DEPARTAMENTO eran auditoria generica, no avisos accionables.
-                .Where(n => n.Tipo != "EVENTO_DEPARTAMENTO")
                 .Where(n =>
                        (n.UsuarioId == null && n.EmpresaId == null
                             && !_context.NotificacionEmpresas.Any(ne => ne.NotificacionId == n.Id)) // GLOBAL

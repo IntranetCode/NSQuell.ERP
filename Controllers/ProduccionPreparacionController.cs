@@ -14,6 +14,8 @@ namespace ERP.NSQuell.Controllers
     public sealed partial class ProduccionPreparacionController : Controller
     {
         private readonly IConfiguration _configuration;
+        // NSQ_DEVOLUCION_MATERIALES_V1_2
+        private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _environment;
 
         private const int PreparacionMinutosAvisoCambioMolde = 30;
         private const int PreparacionMinutosAnticipacionEmbalaje = 120;
@@ -21,9 +23,12 @@ namespace ERP.NSQuell.Controllers
         private const int PreparacionDiasHistorial = 30;
         private const int PreparacionMinutosAnticipacionMateriaPrima = 120;
 
-        public ProduccionPreparacionController(IConfiguration configuration)
+        public ProduccionPreparacionController(
+            IConfiguration configuration,
+            Microsoft.AspNetCore.Hosting.IWebHostEnvironment environment)
         {
             _configuration = configuration;
+            _environment = environment;
         }
 
         private string ConnectionString =>
@@ -2123,18 +2128,31 @@ ORDER BY Codigo,Nombre;";
 
         private sealed class PermisosPreparacionUsuario
         {
+            // NSQ_FIX_PRODUCCION_CARGOS_DEPARTAMENTO_V1_2
             public bool EsAdministradorERP { get; set; }
+            public bool EsDepartamentoProduccion { get; set; }
             public bool EsEncargadoProduccion { get; set; }
             public bool EsTecnicoProduccion { get; set; }
+            public bool EsOperadorProduccion { get; set; }
             public bool EsSMED { get; set; }
             public bool EsAuxiliarProduccion { get; set; }
 
-            public bool PuedeVerTodo => EsAdministradorERP || EsEncargadoProduccion;
+            public bool PuedeVerTodo =>
+                EsAdministradorERP ||
+                EsEncargadoProduccion;
+
             public bool PuedeVerModulo =>
-                PuedeVerTodo ||
-                EsTecnicoProduccion ||
-                EsSMED ||
-                EsAuxiliarProduccion;
+                EsAdministradorERP ||
+                (
+                    EsDepartamentoProduccion &&
+                    (
+                        EsEncargadoProduccion ||
+                        EsTecnicoProduccion ||
+                        EsOperadorProduccion ||
+                        EsAuxiliarProduccion ||
+                        EsSMED
+                    )
+                );
 
             public bool PuedeGestionarCambioMolde =>
                 PuedeVerTodo ||
@@ -2163,11 +2181,15 @@ ORDER BY Codigo,Nombre;";
             const string sql = @"
 SELECT TOP(1)
     u.RolID,
+    u.DepartamentoID,
+    LTRIM(RTRIM(ISNULL(d.NombreDepartamento,N''))) AS NombreDepartamento,
     ISNULL(p.EsColaboradorActivo,0) AS EsColaboradorActivo,
     LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto
 FROM dbo.Usuarios u
 LEFT JOIN dbo.Persona p
     ON p.PersonaID=u.PersonaID
+LEFT JOIN dbo.Departamentos d
+    ON d.DepartamentoID=u.DepartamentoID
 WHERE u.UsuarioID=@UsuarioID
   AND u.Activo=1;";
 
@@ -2180,29 +2202,50 @@ WHERE u.UsuarioID=@UsuarioID
 
             var rolId = rd["RolID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RolID"]);
             var colaboradorActivo = rd["EsColaboradorActivo"] != DBNull.Value && Convert.ToBoolean(rd["EsColaboradorActivo"]);
+            var departamento = rd["NombreDepartamento"]?.ToString()?.Trim() ?? string.Empty;
             var puesto = rd["Puesto"]?.ToString()?.Trim() ?? string.Empty;
 
             permisos.EsAdministradorERP = rolId == 1;
 
-            if (!colaboradorActivo)
+            if (!colaboradorActivo && !permisos.EsAdministradorERP)
                 return permisos;
 
+            var departamentoNormalizado = departamento.ToUpperInvariant();
             var puestoNormalizado = puesto.ToUpperInvariant();
 
+            permisos.EsDepartamentoProduccion =
+                departamentoNormalizado.Contains("PRODUC");
+
+            if (!permisos.EsDepartamentoProduccion)
+                return permisos;
+
+            /*
+                El DEPARTAMENTO define que pertenece al modulo Produccion.
+                Persona.Puesto define las reglas internas.
+
+                Ejemplos reales soportados:
+                  - Tecnico de Inyeccion
+                  - ENCARGADO DE PRODUCCION
+                  - Auxiliares de Produccion
+                  - OPERADOR
+
+                Se conserva SMED por compatibilidad con la logica existente.
+            */
             permisos.EsEncargadoProduccion =
-                puestoNormalizado.Contains("ENCARGAD") &&
-                puestoNormalizado.Contains("PRODUC");
+                puestoNormalizado.Contains("ENCARGAD");
 
             permisos.EsTecnicoProduccion =
-                (puestoNormalizado.Contains("TECNICO") || puestoNormalizado.Contains("TÉCNICO")) &&
-                puestoNormalizado.Contains("PRODUC");
+                puestoNormalizado.Contains("TECNICO") ||
+                puestoNormalizado.Contains("TÉCNICO");
+
+            permisos.EsOperadorProduccion =
+                puestoNormalizado.Contains("OPERADOR");
 
             permisos.EsSMED =
                 puestoNormalizado.Contains("SMED");
 
             permisos.EsAuxiliarProduccion =
-                puestoNormalizado.Contains("AUXILIAR") &&
-                puestoNormalizado.Contains("PRODUC");
+                puestoNormalizado.Contains("AUXILIAR");
 
             return permisos;
         }

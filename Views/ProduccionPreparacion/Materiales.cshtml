@@ -1,4 +1,4 @@
-﻿@using ERP.NSQuell.Models
+@using ERP.NSQuell.Models
 @using System
 @using System.Collections.Generic
 @using System.Linq
@@ -1022,6 +1022,144 @@
             grid-template-columns: 1fr 1fr;
         }
     }
+    /* NSQ_DEVOLUCION_MATERIALES_V1_2 */
+    .btnx-return {
+        background: #8f1f24;
+        border-color: #8f1f24;
+        color: #fff;
+    }
+
+    .btnx-return:hover {
+        background: #74191d;
+        color: #fff;
+    }
+
+    .actions {
+        grid-template-columns: 1.35fr 1fr 1fr 1fr;
+    }
+
+    .return-modal[hidden] {
+        display: none !important;
+    }
+
+    .return-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1085;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(8,16,30,.68);
+        backdrop-filter: blur(3px);
+    }
+
+    .return-modal-card {
+        width: min(720px,96vw);
+        max-height: 92vh;
+        overflow: auto;
+        background: var(--mat-card);
+        color: var(--mat-text);
+        border: 1px solid var(--mat-line);
+        border-radius: 18px;
+        box-shadow: 0 24px 70px rgba(0,0,0,.28);
+    }
+
+    .return-modal-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--mat-line);
+    }
+
+    .return-modal-head h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 950;
+    }
+
+    .return-modal-head p {
+        margin: 4px 0 0;
+        color: var(--mat-muted);
+        font-size: .72rem;
+        font-weight: 700;
+    }
+
+    .return-modal-close {
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--mat-line);
+        border-radius: 10px;
+        background: var(--mat-card);
+        color: var(--mat-text);
+        cursor: pointer;
+    }
+
+    .return-modal-body {
+        padding: 18px 20px 20px;
+    }
+
+    .return-context {
+        margin-bottom: 14px;
+        padding: 11px 12px;
+        border: 1px solid #efb7b3;
+        border-radius: 12px;
+        background: var(--mat-red-soft);
+        color: var(--mat-red);
+        font-size: .75rem;
+        font-weight: 850;
+    }
+
+    .return-form-grid {
+        display: grid;
+        grid-template-columns: 180px minmax(0,1fr);
+        gap: 12px;
+    }
+
+    .return-form-grid .field.reason,
+    .return-form-grid .field.evidence {
+        grid-column: 1 / -1;
+    }
+
+    .return-preview {
+        display: block;
+        width: min(100%,520px);
+        max-height: 300px;
+        object-fit: contain;
+        margin: 10px auto 0;
+        border: 1px solid var(--mat-line);
+        border-radius: 12px;
+        background: var(--mat-bg);
+    }
+
+    .return-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 9px;
+        margin-top: 16px;
+    }
+
+    @@media (max-width: 900px) {
+        .actions {
+            grid-template-columns: repeat(2,minmax(0,1fr));
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .actions {
+            grid-template-columns: 1fr;
+        }
+
+        .return-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .return-form-grid .field.reason,
+        .return-form-grid .field.evidence {
+            grid-column: auto;
+        }
+    }
 </style>
 
 <div class="mat-page">
@@ -1254,6 +1392,16 @@
                                                     </button>
                                                     <button class="btnx btnx-danger js-toggle-panel" type="button" data-target="@panelNoRecibido">
                                                         <i class="bi bi-x-circle"></i> No recibí
+                                                    </button>
+                                                    <button class="btnx btnx-return js-return-open"
+                                                            type="button"
+                                                            data-recepcion-id="@item.RecepcionMaterialID"
+                                                            data-label="@item.TextoEntregado"
+                                                            data-max="@item.CantidadEntregadaAlmacen.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                            data-unit="@item.Unidad"
+                                                            data-step="0.001"
+                                                            data-tipo="@(item.EsMateriaPrima ? "MP" : "EMBALAJE")">
+                                                        <i class="bi bi-arrow-return-left"></i> Devolver
                                                     </button>
                                                 </div>
 
@@ -1539,6 +1687,113 @@
     }
 </div>
 
+<div class="return-modal"
+     id="materialReturnModal"
+     hidden
+     aria-hidden="true">
+    <div class="return-modal-card"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="materialReturnTitle">
+        <div class="return-modal-head">
+            <div>
+                <h3 id="materialReturnTitle">
+                    <i class="bi bi-arrow-return-left me-1"></i>
+                    Devolver material a Almacén
+                </h3>
+                <p>
+                    Registra la cantidad, la razón y una fotografía.
+                    El material devuelto regresará al inventario de Almacén.
+                </p>
+            </div>
+            <button class="return-modal-close js-return-close"
+                    type="button"
+                    aria-label="Cerrar">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <form asp-controller="ProduccionPreparacion"
+              asp-action="DevolverMaterial"
+              method="post"
+              enctype="multipart/form-data"
+              class="return-modal-body js-submit-form"
+              id="materialReturnForm">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden"
+                   id="returnRecepcionId"
+                   name="RecepcionMaterialID" />
+
+            <div class="return-context" id="returnContext">
+                Entrega seleccionada
+            </div>
+
+            <div class="return-form-grid">
+                <div class="field">
+                    <label for="returnCantidad">Cantidad a devolver</label>
+                    <input id="returnCantidad"
+                           type="number"
+                           name="CantidadDevuelta"
+                           min="0.0001"
+                           step="0.0001"
+                           required />
+                </div>
+
+                <div class="field reason">
+                    <label for="returnMotivo">
+                        Motivo de devolución
+                    </label>
+                    <select id="returnMotivo"
+                            name="MotivoDevolucion"
+                            required>
+                        <option value="">Selecciona un motivo</option>
+                    </select>
+                </div>
+
+                <div class="field reason">
+                    <label for="returnComentario">
+                        Comentario / detalle del problema
+                    </label>
+                    <textarea id="returnComentario"
+                              name="ComentarioDevolucion"
+                              rows="3"
+                              maxlength="500"
+                              required
+                              placeholder="Describe qué se encontró físicamente y por qué debe regresar a Almacén."></textarea>
+                </div>
+
+                <div class="field evidence">
+                    <label for="returnEvidence">
+                        Fotografía de evidencia
+                    </label>
+                    <input id="returnEvidence"
+                           type="file"
+                           name="EvidenciaDevolucion"
+                           accept="image/jpeg,image/png,image/webp"
+                           required />
+                    <img id="returnPreview"
+                         class="return-preview"
+                         alt="Vista previa de evidencia"
+                         hidden />
+                </div>
+            </div>
+
+            <div class="return-modal-actions">
+                <button class="btnx js-return-close"
+                        type="button">
+                    Cancelar
+                </button>
+                <button class="btnx btnx-return"
+                        type="submit">
+                    <i class="bi bi-arrow-return-left"></i>
+                    Confirmar devolución
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     (function () {
         document.querySelectorAll('.js-machine-accordion').forEach(function (machine) {
@@ -1586,6 +1841,162 @@
             });
         });
 
+        // NSQ_DEVOLUCION_MATERIALES_V1_2
+        // NSQ_DEVOLUCION_MATERIALES_V1_3
+        const returnModal = document.getElementById('materialReturnModal');
+        const returnForm = document.getElementById('materialReturnForm');
+        const returnId = document.getElementById('returnRecepcionId');
+        const returnQty = document.getElementById('returnCantidad');
+        const returnContext = document.getElementById('returnContext');
+        const returnMotivo = document.getElementById('returnMotivo');
+        const returnComentario = document.getElementById('returnComentario');
+        const returnEvidence = document.getElementById('returnEvidence');
+        const returnPreview = document.getElementById('returnPreview');
+
+        const returnReasons = {
+            MP: [
+                'Material sucio',
+                'Material contaminado',
+                'Material húmedo / mojado',
+                'Material incorrecto',
+                'Lote incorrecto',
+                'Saco / empaque dañado',
+                'Etiquetado / identificación incorrecta',
+                'Cantidad incorrecta',
+                'Material mezclado',
+                'Otro'
+            ],
+            EMBALAJE: [
+                'Embalaje sucio',
+                'Embalaje dañado / roto',
+                'Embalaje mojado / húmedo',
+                'Código de embalaje incorrecto',
+                'Medida / especificación incorrecta',
+                'Etiquetado / impresión incorrecta',
+                'Cantidad incorrecta',
+                'Deformado / aplastado',
+                'Material de embalaje incorrecto',
+                'Otro'
+            ]
+        };
+
+        function loadReturnReasons(tipo) {
+            if (!returnMotivo) return;
+
+            returnMotivo.innerHTML =
+                '<option value="">Selecciona un motivo</option>';
+
+            (returnReasons[tipo] || []).forEach(function (reason) {
+                const option = document.createElement('option');
+                option.value = reason;
+                option.textContent = reason;
+                returnMotivo.appendChild(option);
+            });
+        }
+
+        function closeReturnModal() {
+            if (!returnModal) return;
+
+            returnModal.hidden = true;
+            returnModal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+
+            if (returnForm) returnForm.reset();
+
+            if (returnMotivo) {
+                returnMotivo.innerHTML =
+                    '<option value="">Selecciona un motivo</option>';
+            }
+
+            if (returnPreview) {
+                if (returnPreview.dataset.objectUrl) {
+                    URL.revokeObjectURL(returnPreview.dataset.objectUrl);
+                }
+
+                returnPreview.removeAttribute('src');
+                returnPreview.dataset.objectUrl = '';
+                returnPreview.hidden = true;
+            }
+        }
+
+        document.querySelectorAll('.js-return-open').forEach(function (button) {
+            button.addEventListener('click', function () {
+                if (!returnModal || !returnId || !returnQty || !returnContext) return;
+
+                const id = button.dataset.recepcionId || '';
+                const label = button.dataset.label || 'Material';
+                const max = button.dataset.max || '';
+                const unit = button.dataset.unit || '';
+                const step = button.dataset.step || '0.001';
+                const tipo = button.dataset.tipo || '';
+
+                returnId.value = id;
+                returnQty.value = max;
+                returnQty.max = max;
+                returnQty.step = step;
+                returnQty.min = step;
+
+                returnContext.textContent =
+                    label + ' · máximo a devolver: ' + max + ' ' + unit;
+
+                loadReturnReasons(tipo);
+
+                if (returnComentario) returnComentario.value = '';
+                if (returnEvidence) returnEvidence.value = '';
+
+                returnModal.hidden = false;
+                returnModal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+
+                if (returnMotivo) {
+                    setTimeout(function () {
+                        returnMotivo.focus();
+                    }, 30);
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-return-close').forEach(function (button) {
+            button.addEventListener('click', closeReturnModal);
+        });
+
+        if (returnModal) {
+            returnModal.addEventListener('click', function (event) {
+                if (event.target === returnModal) closeReturnModal();
+            });
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape'
+                && returnModal
+                && !returnModal.hidden) {
+                closeReturnModal();
+            }
+        });
+
+        if (returnEvidence && returnPreview) {
+            returnEvidence.addEventListener('change', function () {
+                if (returnPreview.dataset.objectUrl) {
+                    URL.revokeObjectURL(returnPreview.dataset.objectUrl);
+                    returnPreview.dataset.objectUrl = '';
+                }
+
+                const file =
+                    returnEvidence.files && returnEvidence.files[0];
+
+                if (!file) {
+                    returnPreview.hidden = true;
+                    returnPreview.removeAttribute('src');
+                    return;
+                }
+
+                const objectUrl = URL.createObjectURL(file);
+
+                returnPreview.dataset.objectUrl = objectUrl;
+                returnPreview.src = objectUrl;
+                returnPreview.hidden = false;
+            });
+        }
         document.querySelectorAll('.js-submit-form').forEach(function (form) {
             form.addEventListener('submit', function () {
                 const button = form.querySelector('button[type="submit"]');

@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFDetalleVm
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFDetalleVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = $"Detalle {Model.NumeroOFClave}";
@@ -162,7 +162,8 @@
                 <div class="of4-history-type"><span>@delivery.Area</span><strong>@delivery.TipoMovimiento</strong></div>
                 <div class="of4-history-material"><strong>@delivery.Codigo</strong><small>@delivery.Descripcion</small></div>
                 <div class="of4-history-quantity"><strong>@delivery.Cantidad.ToString("N3") @delivery.Unidad</strong></div>
-                <div class="of4-history-people"><span>Entregó</span><strong>@(string.IsNullOrWhiteSpace(delivery.Responsable) ? "Usuario no registrado" : delivery.Responsable)</strong><span>Recibió</span><strong>@(string.IsNullOrWhiteSpace(delivery.Recibio) ? "Persona no registrada" : delivery.Recibio)</strong></div>
+                <!-- NSQ_ALMACEN_OF_DETALLE_LOGS_V1_6 -->
+                <div class="of4-history-people"><span>Entregó</span><strong>@(string.IsNullOrWhiteSpace(delivery.Responsable) ? "Usuario no registrado" : delivery.Responsable)</strong><span>Recibió</span><strong>@(string.IsNullOrWhiteSpace(delivery.Recibio) ? "Sin confirmación registrada" : delivery.Recibio)</strong></div>
                 @if (!string.IsNullOrWhiteSpace(delivery.Observaciones)) { <div class="of4-history-notes">@delivery.Observaciones</div> }
             </article>
         }

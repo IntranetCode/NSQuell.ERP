@@ -1,4 +1,4 @@
-﻿@model List<ERP.NSQuell.Models.MenuModel>
+@model List<ERP.NSQuell.Models.MenuModel>
 @using System.Security.Claims
 @using ERP.NSQuell.Areas.AdminUsuarios.Interfaces
 
@@ -49,928 +49,116 @@
 
     <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
 
-    <style id="theme-switcher-hard-fix">
-        /* FIX DURO: si otro CSS intenta esconder el boton, esto lo fuerza visible */
-        #btnThemeToggle.theme-switcher,
-        .navbar-right > #btnThemeToggle {
-            display: inline-flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: .55rem !important;
-            min-width: 112px !important;
-            height: 50px !important;
-            padding: 0 .9rem !important;
-            border-radius: 18px !important;
-            border: 1px solid var(--line, rgba(255,255,255,.13)) !important;
-            background: var(--panel, rgba(255,255,255,.075)) !important;
-            color: var(--ink, #fff) !important;
-            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif !important;
-            font-size: .78rem !important;
-            font-weight: 950 !important;
-            line-height: 1 !important;
-            cursor: pointer !important;
-            white-space: nowrap !important;
-            box-shadow: var(--shadow-soft, 0 16px 44px rgba(0,0,0,.30)) !important;
-            flex: 0 0 auto !important;
-            position: relative !important;
-            z-index: 999999 !important;
-            pointer-events: auto !important;
-        }
 
-        #btnThemeToggle .theme-switcher-icon {
-            width: 26px !important;
-            height: 26px !important;
-            display: inline-grid !important;
-            place-items: center !important;
-            border-radius: 10px !important;
-            background: rgba(255, 130, 0, .14) !important;
-            color: var(--nsq-orange-soft, #FFB04A) !important;
-            flex: 0 0 26px !important;
-        }
 
-        #btnThemeToggle .theme-switcher-text {
-            display: inline-block !important;
-        }
 
-        #btnThemeToggle:hover {
-            color: #FFFFFF !important;
-            background: linear-gradient(135deg, var(--nsq-orange, #FF8200), var(--nsq-red, #DA291C)) !important;
-            border-color: rgba(255, 130, 0, .45) !important;
-            transform: translateY(-2px) !important;
-        }
 
-        .navbar-right {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: .75rem !important;
-            flex-wrap: nowrap !important;
-            overflow: visible !important;
-        }
-    </style>
 
-<!-- NSQ_BRAND_FIX_V4_MENU_START -->
-<style id="nsq-brand-fix-v4-menu">
-    .navbar-brand .navbar-logo {
-        width: 52px !important;
-        height: 52px !important;
-        flex: 0 0 52px !important;
-        border-radius: 17px !important;
-        object-fit: contain !important;
-        background: rgba(255, 255, 255, 0.10) !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        padding: 6px !important;
-        box-shadow: none !important;
+
+
+
+
+
+
+
+
+
+
+
+
+
+<style id="NSQ_MENU_INDEX_NAVBAR_PARITY_FINAL_V9">
+    /* Menu/Index NO redefine el componente; solo vence overrides historicos locales. */
+    html[data-nsq-theme="light"] body #notifDropdown.notif-dropdown {
+        background: rgba(255,255,255,.98) !important;
+        border-color: rgba(41,67,95,.14) !important;
+        box-shadow: 0 24px 60px rgba(41,67,95,.18) !important;
     }
 
-    .navbar-title-mark {
-        display: none !important;
-    }
-</style>
-<!-- NSQ_BRAND_FIX_V4_MENU_END -->
-
-
-    <style id="NSQ_MENU_INDEX_BRAND_V5_3">
-        .navbar-brand .navbar-logo {
-            width: 58px !important;
-            height: 58px !important;
-            flex: 0 0 58px !important;
-            object-fit: contain !important;
-            padding: 0 !important;
-            border-radius: 0 !important;
-            background: transparent !important;
-            box-shadow: none !important;
-        }
-    </style><style id="nsq-brand-theme-v7">
-    /* NSQ_BRAND_THEME_V7_START */
-    .navbar-brand .nsq-brand-logo {
-        width: 62px !important;
-        height: 62px !important;
-        flex: 0 0 62px !important;
-        object-fit: contain !important;
-        object-position: center !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        background-color: transparent !important;
-        box-shadow: none !important;
-    }
-
-    .navbar-brand .nsq-brand-logo--light {
-        display: block !important;
-    }
-
-    .navbar-brand .nsq-brand-logo--dark {
-        display: none !important;
-    }
-
-    html[data-nsq-theme="dark"] .navbar-brand .nsq-brand-logo--light {
-        display: none !important;
-    }
-
-    html[data-nsq-theme="dark"] .navbar-brand .nsq-brand-logo--dark {
-        display: block !important;
-    }
-
-    html[data-nsq-theme="light"] .navbar-brand .nsq-brand-logo--light {
-        display: block !important;
-    }
-
-    html[data-nsq-theme="light"] .navbar-brand .nsq-brand-logo--dark {
-        display: none !important;
-    }
-
-    .navbar-brand .nsq-brand-title {
-        font-size: 1.05rem !important;
-        font-weight: 950 !important;
-        letter-spacing: .055em !important;
-        white-space: nowrap !important;
-    }
-
-    .navbar-brand .nsq-brand-title::after,
-    .navbar-brand .navbar-title-mark {
-        content: none !important;
-        display: none !important;
-    }
-    /* NSQ_BRAND_THEME_V7_END */
-</style>
-
-
-<!-- NSQ_MENU_INDEX_LOGO_V4_6_START -->
-<style id="NSQ_MENU_INDEX_LOGO_V4_6">
-    .nsq-menu-root-logo-v46 {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        width: 58px !important;
-        height: 58px !important;
-        min-width: 58px !important;
-        flex: 0 0 58px !important;
-        object-fit: contain !important;
-        object-position: center !important;
-        margin: 0 .35rem 0 0 !important;
-        padding: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    .nsq-menu-root-old-brand-visual-v46 {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-    }
-</style>
-<!-- NSQ_MENU_INDEX_LOGO_V4_6_END -->
-<!-- NSQ_MENU_INDEX_NAVBAR_V4_7_1_START -->
-<link rel="stylesheet"
-      href="~/css/global-navigation-v4.css"
-      asp-append-version="true" />
-
-<style id="NSQ_MENU_INDEX_NAVBAR_V4_7_1">
-    body.nsq-menu-index-v47 {
-        overflow-x: hidden !important;
-    }
-
-    body.nsq-menu-index-v47 .main-wrapper {
-        width: 100% !important;
-        max-width: none !important;
-        padding-top: 0 !important;
-    }
-
-    body.nsq-menu-index-v47 .top-navbar {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 3000 !important;
-
-        width: 100% !important;
-        max-width: none !important;
-
-        margin: 0 !important;
-        padding:
-            .30rem
-            clamp(.45rem,.75vw,.85rem) !important;
-
-        border: 0 !important;
-        border-radius: 0 0 18px 18px !important;
-        border-bottom:
-            1px solid rgba(255,255,255,.10) !important;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(8,16,29,.95),
-                rgba(15,23,42,.91)
-            ) !important;
-
-        box-shadow:
-            0 8px 26px rgba(0,0,0,.18) !important;
-
-        backdrop-filter:
-            blur(18px) saturate(140%) !important;
-
-        -webkit-backdrop-filter:
-            blur(18px) saturate(140%) !important;
-    }
-
-    html[data-nsq-theme="light"]
-    body.nsq-menu-index-v47 .top-navbar {
-        border-bottom-color:
-            rgba(41,67,95,.12) !important;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(255,255,255,.97),
-                rgba(248,250,252,.93)
-            ) !important;
-
-        box-shadow:
-            0 7px 24px rgba(41,67,95,.11) !important;
-    }
-
-    body.nsq-menu-index-v47
-    .top-navbar .navbar-content {
-        width: 100% !important;
-        max-width: none !important;
-        min-width: 0 !important;
-
-        min-height: 62px !important;
-
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-
-        gap: .75rem !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border: 0 !important;
-        border-radius: 0 !important;
-
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-left,
-    body.nsq-menu-index-v47
-    .navbar-right {
-        display: inline-flex !important;
-        align-items: center !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-right {
-        justify-content: flex-end !important;
-        gap: .35rem !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-brand {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: .55rem !important;
-
-        margin: 0 !important;
-
-        color: #f8fafc !important;
-        text-decoration: none !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-brand > i,
-    body.nsq-menu-index-v47
-    .navbar-brand .brand-icon,
-    body.nsq-menu-index-v47
-    .navbar-brand .navbar-title-mark,
-    body.nsq-menu-index-v47
-    .navbar-brand [class*="brand-mark"] {
-        display: none !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-brand .nsq-brand-logo,
-    body.nsq-menu-index-v47
-    .navbar-brand .navbar-logo {
-        width: 62px !important;
-        height: 62px !important;
-        min-width: 62px !important;
-        flex: 0 0 62px !important;
-
-        object-fit: contain !important;
-        object-position: center !important;
-
-        padding: 0 !important;
-        margin: 0 !important;
-
-        border: 0 !important;
-        border-radius: 0 !important;
-
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-brand .nsq-brand-logo--light {
-        display: block !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-brand .nsq-brand-logo--dark {
-        display: none !important;
-    }
-
-    html[data-nsq-theme="dark"]
-    body.nsq-menu-index-v47
-    .navbar-brand .nsq-brand-logo--light {
-        display: none !important;
-    }
-
-    html[data-nsq-theme="dark"]
-    body.nsq-menu-index-v47
-    .navbar-brand .nsq-brand-logo--dark {
-        display: block !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-title,
-    body.nsq-menu-index-v47
-    .nsq-brand-title {
-        color: #f8fafc !important;
-
-        font-size: 1rem !important;
-        font-weight: 950 !important;
-        letter-spacing: .055em !important;
-
-        text-transform: uppercase !important;
-
-        white-space: nowrap !important;
-    }
-
-    body.nsq-menu-index-v47
-    .navbar-title::after,
-    body.nsq-menu-index-v47
-    .nsq-brand-title::after {
-        display: none !important;
-        content: none !important;
-    }
-
-    html[data-nsq-theme="light"]
-    body.nsq-menu-index-v47
-    .navbar-title,
-    html[data-nsq-theme="light"]
-    body.nsq-menu-index-v47
-    .nsq-brand-title {
+    html[data-nsq-theme="light"] body #notifDropdown .notif-header,
+    html[data-nsq-theme="light"] body #notifDropdown .notif-title {
         color: #0d1929 !important;
     }
 
-    body.nsq-menu-index-v47
-    #btnThemeToggle.theme-switcher {
-        width: 38px !important;
-        min-width: 38px !important;
-        max-width: 38px !important;
-
-        height: 38px !important;
-        min-height: 38px !important;
-
-        flex: 0 0 38px !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-        gap: 0 !important;
-
-        border-radius: 10px !important;
+    html[data-nsq-theme="light"] body #notifDropdown .notif-item,
+    html[data-nsq-theme="light"] body #notifDropdown .notif-empty,
+    html[data-nsq-theme="light"] body #notifDropdown .notif-error {
+        color: #2c3e55 !important;
     }
 
-    body.nsq-menu-index-v47
-    #btnThemeToggle .theme-switcher-text,
-    body.nsq-menu-index-v47
-    #themeToggleText {
-        display: none !important;
+    html[data-nsq-theme="light"] body #notifDropdown .notif-date,
+    html[data-nsq-theme="light"] body #notifDropdown .notif-msg {
+        color: #64748b !important;
     }
 
-    body.nsq-menu-index-v47
-    #btnThemeToggle .theme-switcher-icon {
-        width: 30px !important;
-        height: 30px !important;
-        min-width: 30px !important;
-
-        flex: 0 0 30px !important;
-
-        margin: 0 !important;
+    html[data-nsq-theme="light"] body #notifDropdown .notif-actions a {
+        color: #f47b20 !important;
     }
 
-    body.nsq-menu-index-v47
-    .quick-action-btn {
-        width: 38px !important;
-        min-width: 38px !important;
-        height: 38px !important;
-        min-height: 38px !important;
-
-        padding: 0 !important;
-
-        border-radius: 10px !important;
+    html[data-nsq-theme="dark"] body #notifDropdown.notif-dropdown {
+        background: rgba(15,23,42,.98) !important;
+        border-color: rgba(255,255,255,.13) !important;
+        box-shadow: 0 24px 60px rgba(0,0,0,.40) !important;
     }
 
-    body.nsq-menu-index-v47
-    .user-toggle {
-        min-height: 42px !important;
-        border-radius: 14px !important;
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-header,
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-title {
+        color: #ffffff !important;
     }
 
-    body.nsq-menu-index-v47
-    .main-content {
-        padding-top:
-            clamp(.75rem,1.2vw,1.2rem) !important;
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-item,
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-empty,
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-error {
+        color: #cbd5e1 !important;
     }
 
-    @@media (max-width: 960px) {
-        body.nsq-menu-index-v47
-        .navbar-brand .nsq-brand-logo,
-        body.nsq-menu-index-v47
-        .navbar-brand .navbar-logo {
-            width: 52px !important;
-            height: 52px !important;
-            min-width: 52px !important;
-            flex-basis: 52px !important;
-        }
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-date,
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-msg {
+        color: #94a3b8 !important;
+    }
 
-        body.nsq-menu-index-v47
-        .user-info {
-            display: none !important;
-        }
+    html[data-nsq-theme="dark"] body #notifDropdown .notif-actions a {
+        color: #ffb86b !important;
     }
 </style>
-<!-- NSQ_MENU_INDEX_NAVBAR_V4_7_1_END -->
-
-<!-- NSQ_MENU_INDEX_NAVBAR_V4_8_2_START -->
-<style id="NSQ_MENU_INDEX_NAVBAR_V4_8_2">
-    body[data-empresa] .main-wrapper {
-        width: 100% !important;
-        max-width: none !important;
-        padding-top: 0 !important;
-    }
-
-    body[data-empresa] .top-navbar {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 3000 !important;
-
-        width: 100% !important;
-        max-width: none !important;
-
-        margin: 0 !important;
-        padding: .30rem clamp(.45rem,.75vw,.85rem) !important;
-
-        border: 0 !important;
-        border-radius: 0 0 18px 18px !important;
-        border-bottom: 1px solid rgba(255,255,255,.10) !important;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(8,16,29,.95),
-                rgba(15,23,42,.91)
-            ) !important;
-
-        box-shadow: 0 8px 26px rgba(0,0,0,.18) !important;
-
-        backdrop-filter: blur(18px) saturate(140%) !important;
-        -webkit-backdrop-filter: blur(18px) saturate(140%) !important;
-    }
-
-    html[data-nsq-theme="light"]
-    body[data-empresa] .top-navbar {
-        border-bottom-color: rgba(41,67,95,.12) !important;
-
-        background:
-            linear-gradient(
-                135deg,
-                rgba(255,255,255,.97),
-                rgba(248,250,252,.93)
-            ) !important;
-
-        box-shadow: 0 7px 24px rgba(41,67,95,.11) !important;
-    }
-
-    body[data-empresa] .top-navbar .navbar-content {
-        width: 100% !important;
-        max-width: none !important;
-        min-width: 0 !important;
-        min-height: 62px !important;
-
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-
-        gap: .75rem !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border: 0 !important;
-        border-radius: 0 !important;
-
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    body[data-empresa] .navbar-left,
-    body[data-empresa] .navbar-right {
-        display: inline-flex !important;
-        align-items: center !important;
-    }
-
-    body[data-empresa] .navbar-right {
-        justify-content: flex-end !important;
-        gap: .35rem !important;
-    }
-
-    body[data-empresa] .navbar-brand {
-        display: inline-flex !important;
-        align-items: center !important;
-
-        gap: .55rem !important;
-
-        margin: 0 !important;
-
-        color: #f8fafc !important;
-        text-decoration: none !important;
-    }
-
-    body[data-empresa]
-    .navbar-brand
-    > .navbar-logo:not(.nsq-root-logo-v48),
-    body[data-empresa]
-    .navbar-brand
-    > .nsq-brand-logo:not(.nsq-root-logo-v48),
-    body[data-empresa]
-    .navbar-brand
-    > i,
-    body[data-empresa]
-    .navbar-brand
-    > .brand-icon,
-    body[data-empresa]
-    .navbar-brand
-    > .navbar-title-mark,
-    body[data-empresa]
-    .navbar-brand
-    > [class*="brand-mark"] {
-        display: none !important;
-    }
-
-    body[data-empresa] .nsq-root-logo-v48 {
-        width: 62px !important;
-        height: 62px !important;
-        min-width: 62px !important;
-        flex: 0 0 62px !important;
-
-        object-fit: contain !important;
-        object-position: center !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-
-        border: 0 !important;
-        border-radius: 0 !important;
-
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    body[data-empresa] .nsq-root-logo-v48--light {
-        display: block !important;
-    }
-
-    body[data-empresa] .nsq-root-logo-v48--dark {
-        display: none !important;
-    }
-
-    html[data-nsq-theme="dark"]
-    body[data-empresa] .nsq-root-logo-v48--light {
-        display: none !important;
-    }
-
-    html[data-nsq-theme="dark"]
-    body[data-empresa] .nsq-root-logo-v48--dark {
-        display: block !important;
-    }
-
-    body[data-empresa] .navbar-title,
-    body[data-empresa] .nsq-brand-title {
-        color: #f8fafc !important;
-
-        font-size: 1rem !important;
-        font-weight: 950 !important;
-        letter-spacing: .055em !important;
-
-        text-transform: uppercase !important;
-        white-space: nowrap !important;
-    }
-
-    body[data-empresa] .navbar-title::after,
-    body[data-empresa] .nsq-brand-title::after {
-        display: none !important;
-        content: none !important;
-    }
-
-    html[data-nsq-theme="light"]
-    body[data-empresa] .navbar-title,
-    html[data-nsq-theme="light"]
-    body[data-empresa] .nsq-brand-title {
-        color: #0d1929 !important;
-    }
-
-    body[data-empresa] #btnThemeToggle.theme-switcher {
-        width: 38px !important;
-        min-width: 38px !important;
-        max-width: 38px !important;
-
-        height: 38px !important;
-        min-height: 38px !important;
-
-        flex: 0 0 38px !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-        gap: 0 !important;
-
-        border-radius: 10px !important;
-    }
-
-    body[data-empresa]
-    #btnThemeToggle
-    .theme-switcher-text,
-    body[data-empresa]
-    #themeToggleText {
-        display: none !important;
-    }
-
-    body[data-empresa]
-    #btnThemeToggle
-    .theme-switcher-icon {
-        width: 30px !important;
-        height: 30px !important;
-        min-width: 30px !important;
-
-        flex: 0 0 30px !important;
-
-        margin: 0 !important;
-    }
-
-    body[data-empresa] .quick-action-btn {
-        width: 38px !important;
-        min-width: 38px !important;
-
-        height: 38px !important;
-        min-height: 38px !important;
-
-        padding: 0 !important;
-
-        border-radius: 10px !important;
-    }
-
-    body[data-empresa] .main-content {
-        padding-top: clamp(.65rem,1vw,1rem) !important;
-    }
-
-    @@media (max-width: 960px) {
-        body[data-empresa] .nsq-root-logo-v48 {
-            width: 52px !important;
-            height: 52px !important;
-            min-width: 52px !important;
-            flex-basis: 52px !important;
-        }
-
-        body[data-empresa] .user-info {
-            display: none !important;
-        }
-    }
-</style>
-<!-- NSQ_MENU_INDEX_NAVBAR_V4_8_2_END -->
-
-<!-- NSQ_MENU_INDEX_NAVBAR_FORCE_V2_START -->
-<style id="NSQ_MENU_INDEX_NAVBAR_FORCE_V2">
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 3000 !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host > .top-navbar {
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: .30rem clamp(.45rem,.75vw,.85rem) !important;
-        border-radius: 0 0 18px 18px !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-content {
-        width: 100% !important;
-        max-width: none !important;
-        min-height: 62px !important;
-        display: grid !important;
-        grid-template-columns: auto minmax(0,1fr) auto !important;
-        align-items: center !important;
-        gap: .75rem !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-global-department-slot {
-        visibility: hidden !important;
-        pointer-events: none !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-brand > i,
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-brand .brand-icon,
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .navbar-title-mark {
-        display: none !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-brand-logo {
-        width: 62px !important;
-        height: 62px !important;
-        min-width: 62px !important;
-        flex: 0 0 62px !important;
-        object-fit: contain !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-brand-title {
-        font-size: 1rem !important;
-        font-weight: 950 !important;
-        letter-spacing: .055em !important;
-        text-transform: uppercase !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host #btnThemeToggle {
-        width: 42px !important;
-        min-width: 42px !important;
-        max-width: 42px !important;
-        height: 42px !important;
-        min-height: 42px !important;
-        padding: 0 !important;
-        gap: 0 !important;
-        border-radius: 12px !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host #btnThemeToggle .theme-switcher-text,
-    html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host #themeToggleText {
-        display: none !important;
-    }
-
-    html body.nsq-menu-index-global-v2 .main-content {
-        padding-top: clamp(.75rem,1.2vw,1.2rem) !important;
-    }
-
-    @@media (max-width: 960px) {
-        html body.nsq-menu-index-global-v2 .nsq-menu-index-global-host .nsq-brand-logo {
-            width: 52px !important;
-            height: 52px !important;
-            min-width: 52px !important;
-            flex-basis: 52px !important;
-        }
-    }
-</style>
-<!-- NSQ_MENU_INDEX_NAVBAR_FORCE_V2_END -->
-<!-- NSQ_MENU_INDEX_GLOBAL_V3_STYLE_START -->
-<style id="NSQ_MENU_INDEX_GLOBAL_V3_STYLE">
-    /*
-     * V3 no intenta adivinar cual de los parches historicos quedo activo.
-     * Garantiza un unico navbar VISIBLE: el host V3.
-     */
-    body .main-wrapper > .nsq-unified-navbar-host:not(.nsq-menu-index-v3-host),
-    body .main-wrapper > .global-navbar-host:not(.nsq-menu-index-v3-host),
-    body .main-wrapper > .layout-top-navbar-host:not(.nsq-menu-index-v3-host),
-    body .main-wrapper > nav.top-navbar {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-    }
-
-    body .main-wrapper > .nsq-menu-index-v3-host {
-        display: block !important;
-        visibility: visible !important;
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 5000 !important;
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    body .nsq-menu-index-v3-host > .top-navbar {
-        display: block !important;
-        visibility: visible !important;
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        border-radius: 0 0 18px 18px !important;
-    }
-
-    /* Menu/Index es portal raiz: no muestra menus de un departamento concreto. */
-    body .nsq-menu-index-v3-host .nsq-global-department-slot {
-        display: none !important;
-    }
-
-    body .nsq-menu-index-v3-host .navbar-content {
-        width: 100% !important;
-        max-width: none !important;
-        grid-template-columns: auto minmax(0,1fr) auto !important;
-    }
-
-    body .nsq-menu-index-v3-host .navbar-left {
-        grid-column: 1 !important;
-    }
-
-    body .nsq-menu-index-v3-host .navbar-right {
-        grid-column: 3 !important;
-    }
-
-    body .nsq-menu-index-v3-host .navbar-brand > i,
-    body .nsq-menu-index-v3-host .brand-icon,
-    body .nsq-menu-index-v3-host .navbar-title-mark {
-        display: none !important;
-    }
-
-    body .nsq-menu-index-v3-host .nsq-brand-logo {
-        display: block !important;
-        visibility: visible !important;
-        width: 62px !important;
-        height: 62px !important;
-        min-width: 62px !important;
-        flex: 0 0 62px !important;
-        object-fit: contain !important;
-        padding: 0 !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    body .nsq-menu-index-v3-host #btnThemeToggle.theme-switcher {
-        display: inline-flex !important;
-        width: 42px !important;
-        min-width: 42px !important;
-        max-width: 42px !important;
-        height: 42px !important;
-        min-height: 42px !important;
-        padding: 0 !important;
-        gap: 0 !important;
-        border-radius: 12px !important;
-    }
-
-    body .nsq-menu-index-v3-host #btnThemeToggle .theme-switcher-text,
-    body .nsq-menu-index-v3-host #themeToggleText {
-        display: none !important;
-    }
-
-    body .main-content {
-        padding-top: clamp(.65rem, 1vw, 1rem) !important;
-    }
-
-    @@media (max-width: 960px) {
-        body .nsq-menu-index-v3-host .nsq-brand-logo {
-            width: 52px !important;
-            height: 52px !important;
-            min-width: 52px !important;
-            flex-basis: 52px !important;
-        }
-    }
-</style>
-<!-- NSQ_MENU_INDEX_GLOBAL_V3_STYLE_END -->
 </head>
 
-<body class="nsq-theme-dark nsq-menu-index-root-v1 nsq-menu-index-global-v2" data-empresa="@empresaId">
+<body class="nsq-menu-index-root-v1 " data-empresa="@empresaId">
+<script id="NSQ_MENU_THEME_PARITY_V7">
+(function () {
+    const root = document.documentElement;
+    const saved = localStorage.getItem('nsq-theme') || 'dark';
+    const theme = saved === 'light' ? 'light' : 'dark';
+
+    root.setAttribute('data-nsq-theme', theme);
+    root.setAttribute('data-bs-theme', theme);
+    root.style.colorScheme = theme;
+
+    document.body.classList.remove(
+        'nsq-theme-dark',
+        'nsq-theme-light',
+        'dark-mode',
+        'light-mode'
+    );
+
+    if (theme === 'light') {
+        document.body.classList.add('nsq-theme-light', 'light-mode');
+    } else {
+        document.body.classList.add('nsq-theme-dark', 'dark-mode');
+    }
+})();
+</script>
     @await Html.PartialAsync("_Overlay")
 
     <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
 
     <div class="main-wrapper">
 <!-- NSQ_MENU_INDEX_GLOBAL_V3_START -->
-        <div class="nsq-unified-navbar-host nsq-menu-index-v3-host">
+        <div class="global-navbar-host nsq-menu-index-root-navbar">
             @await Html.PartialAsync("_TopNavbar")
         </div>
 <!-- NSQ_MENU_INDEX_GLOBAL_V3_END -->
-        <!-- NSQ_MENU_INDEX_GLOBAL_NAV_V4_4_START -->
-        <div class="nsq-unified-navbar-host nsq-menu-index-global-host">
-            @await Html.PartialAsync("_TopNavbar")
-        </div>
-        <!-- NSQ_MENU_INDEX_GLOBAL_NAV_V4_4_END -->
+<!-- NSQ_NOTIFICACIONES_INTERNAS_V4_3_4: UN SOLO _TopNavbar; SIN JS LEGACY DE NOTIFICACIONES -->
 
         @* NSQ_MENU_INDEX_LEGACY_NAV_DISABLED_V4_4 *@
         @if (false)
@@ -1325,314 +513,9 @@
         });
     </script>
 
-    <script>
-        (function () {
-            const btn = document.getElementById('btnNotificaciones');
-            const badge = document.getElementById('notifCount');
-            const dropdown = document.getElementById('notifDropdown');
-            const list = document.getElementById('notifList');
 
-            if (!btn || !badge || !dropdown || !list || btn.dataset.notifInit === '1') {
-                return;
-            }
 
-            btn.dataset.notifInit = '1';
 
-            function getToken() {
-                return (
-                    document.querySelector('meta[name="request-verification-token"]')?.content ||
-                    document.querySelector('input[name="__RequestVerificationToken"]')?.value ||
-                    ''
-                );
-            }
-
-            function renderBadge(total) {
-                const n = Number(total) || 0;
-
-                if (n > 0) {
-                    badge.textContent = n;
-                    badge.hidden = false;
-                } else {
-                    badge.textContent = '0';
-                    badge.hidden = true;
-                }
-            }
-
-            function bust(url) {
-                return url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
-            }
-
-            async function post(url, body = {}) {
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': getToken()
-                    },
-                    credentials: 'same-origin',
-                    cache: 'no-store',
-                    body: JSON.stringify(body)
-                });
-
-                if (!res.ok) throw new Error('POST ' + url + ' -> ' + res.status);
-
-                try {
-                    return await res.json();
-                } catch {
-                    return {};
-                }
-            }
-
-            async function getJson(url) {
-                const res = await fetch(bust(url), {
-                    credentials: 'same-origin',
-                    cache: 'no-store',
-                    headers: { 'Accept': 'application/json' }
-                });
-
-                if (!res.ok) throw new Error('GET ' + url + ' -> ' + res.status);
-
-                return await res.json();
-            }
-
-            async function actualizarContador() {
-                try {
-                    const data = await getJson('/Notificaciones/Contar');
-                    const total = data.total ?? data.unread ?? data.count ?? 0;
-                    renderBadge(total);
-                } catch (e) {
-                    console.error('Contar:', e);
-                }
-            }
-
-            function val(n, up, low) {
-                return n[up] ?? n[low];
-            }
-
-            function escapeHtml(str) {
-                return String(str)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;');
-            }
-
-            function linkDestino(tipo, idOrigen) {
-                let url = '#';
-
-                if (tipo === 'CursoAsignado') url = `/Universidad/MisCursos/${idOrigen}`;
-                else if (tipo === 'WebinarAsignado') url = `/Lider/Lista/${idOrigen}`;
-                else if (tipo === 'Comunicado_Nuevo') url = `/Comunicados/Index/${idOrigen}`;
-
-                return `<a class="js-ver" href="${url}">Ver</a>`;
-            }
-
-            async function cargarLista(pagina = 1, tamanio = 10) {
-                try {
-                    const data = await getJson(`/Notificaciones/Listar?pagina=${pagina}&tamanio=${tamanio}`);
-                    list.innerHTML = '';
-
-                    if (!data.items || data.items.length === 0) {
-                        list.innerHTML = '<li class="notif-empty">Sin notificaciones</li>';
-                        return;
-                    }
-
-                    data.items.forEach(n => {
-                        const id = val(n, 'Id', 'id');
-                        const titulo = val(n, 'Titulo', 'titulo') ?? '';
-                        const mensaje = val(n, 'Mensaje', 'mensaje') ?? '';
-                        const tipo = val(n, 'Tipo', 'tipo') ?? '';
-                        const idOrigen = val(n, 'IdOrigen', 'idOrigen');
-                        const fechaStr = val(n, 'FechaCreacion', 'fechaCreacion');
-                        const fecha = new Date(fechaStr || Date.now()).toLocaleString();
-                        const esLeida = !!(n.Leida ?? n.leida ?? n.EsLeida ?? n.esLeida);
-                        const li = document.createElement('li');
-
-                        li.className = 'notif-item' + (!esLeida ? ' unread' : '');
-                        li.dataset.id = id;
-                        li.dataset.tipo = tipo;
-                        li.dataset.idorigen = idOrigen;
-                        li.innerHTML = `
-                            <div class="notif-row">
-                                <div class="notif-main">
-                                    <div class="notif-title">${escapeHtml(titulo)}</div>
-                                    <div class="notif-date">${fecha}</div>
-                                    ${mensaje ? `<div class="notif-msg">${escapeHtml(mensaje)}</div>` : ''}
-                                </div>
-                                ${!esLeida ? '<span class="notif-new">Nueva</span>' : ''}
-                            </div>
-                            <div class="notif-actions">
-                                ${linkDestino(tipo, idOrigen)}
-                            </div>
-                        `;
-
-                        list.appendChild(li);
-                    });
-                } catch (e) {
-                    console.error('Listar:', e);
-                    list.innerHTML = '<li class="notif-error">Error al cargar</li>';
-                }
-            }
-
-            async function marcarTodasAlAbrir() {
-                try {
-                    await post('/Notificaciones/MarcarTodasLeidas');
-
-                    list?.querySelectorAll('.notif-item.unread').forEach(li => {
-                        li.classList.remove('unread');
-                        li.querySelector('.notif-new')?.remove();
-                    });
-
-                    await actualizarContador();
-                } catch (e) {
-                    console.error('MarcarTodasLeidas:', e);
-
-                    try {
-                        await actualizarContador();
-                    } catch { }
-                }
-            }
-
-            let yaMarqueEnEstaApertura = false;
-
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-
-                const open = dropdown.getAttribute('data-open') === '1';
-
-                if (open) {
-                    dropdown.setAttribute('data-open', '0');
-                    dropdown.style.display = 'none';
-                    btn.setAttribute('aria-expanded', 'false');
-                    yaMarqueEnEstaApertura = false;
-                    return;
-                }
-
-                dropdown.setAttribute('data-open', '1');
-                dropdown.style.display = 'block';
-                btn.setAttribute('aria-expanded', 'true');
-
-                await cargarLista();
-
-                if (!yaMarqueEnEstaApertura) {
-                    yaMarqueEnEstaApertura = true;
-                    await marcarTodasAlAbrir();
-                }
-            });
-
-            document.addEventListener('click', (e) => {
-                if (!dropdown.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
-                    dropdown.setAttribute('data-open', '0');
-                    dropdown.style.display = 'none';
-                    btn.setAttribute('aria-expanded', 'false');
-                    yaMarqueEnEstaApertura = false;
-                }
-            });
-
-            actualizarContador();
-            setInterval(actualizarContador, 30000);
-        })();
-    </script>
-
-    <script>
-        (function () {
-            const STORAGE_KEY = 'nsq-theme';
-
-            function ensureThemeButton() {
-                const navbarRight = document.querySelector('.navbar-right');
-                let btn = document.getElementById('btnThemeToggle');
-
-                if (!btn && navbarRight) {
-                    btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'theme-switcher';
-                    btn.id = 'btnThemeToggle';
-                    btn.setAttribute('aria-label', 'Cambiar a modo claro');
-                    btn.setAttribute('title', 'Cambiar a modo claro');
-                    btn.innerHTML = `
-                        <span class="theme-switcher-icon" aria-hidden="true">
-                            <i class="fas fa-sun" id="themeToggleIcon"></i>
-                        </span>
-                        <span class="theme-switcher-text" id="themeToggleText">Claro</span>
-                    `;
-
-                    navbarRight.insertBefore(btn, navbarRight.firstElementChild);
-                }
-
-                if (btn) {
-                    btn.hidden = false;
-                    btn.style.setProperty('display', 'inline-flex', 'important');
-                    btn.style.setProperty('visibility', 'visible', 'important');
-                    btn.style.setProperty('opacity', '1', 'important');
-                    btn.style.setProperty('min-width', '112px', 'important');
-                    btn.style.setProperty('height', '50px', 'important');
-                    btn.style.setProperty('align-items', 'center', 'important');
-                    btn.style.setProperty('justify-content', 'center', 'important');
-                    btn.style.setProperty('gap', '.55rem', 'important');
-                    btn.style.setProperty('position', 'relative', 'important');
-                    btn.style.setProperty('z-index', '999999', 'important');
-                    btn.style.setProperty('pointer-events', 'auto', 'important');
-                }
-
-                return btn;
-            }
-
-            function applyTheme(theme) {
-                const selectedTheme = theme === 'light' ? 'light' : 'dark';
-
-                document.documentElement.setAttribute('data-nsq-theme', selectedTheme);
-
-                if (document.body) {
-                    document.body.classList.remove('nsq-theme-dark', 'nsq-theme-light');
-                    document.body.classList.add(selectedTheme === 'light' ? 'nsq-theme-light' : 'nsq-theme-dark');
-                }
-
-                localStorage.setItem(STORAGE_KEY, selectedTheme);
-
-                const btn = ensureThemeButton();
-                const icon = document.getElementById('themeToggleIcon');
-                const text = document.getElementById('themeToggleText');
-
-                if (btn) {
-                    btn.setAttribute('title', selectedTheme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
-                    btn.setAttribute('aria-label', selectedTheme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro');
-                }
-
-                if (icon) {
-                    icon.className = selectedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-                }
-
-                if (text) {
-                    text.textContent = selectedTheme === 'light' ? 'Oscuro' : 'Claro';
-                }
-            }
-
-            document.addEventListener('DOMContentLoaded', function () {
-                const savedTheme = localStorage.getItem(STORAGE_KEY) || 'dark';
-                const btn = ensureThemeButton();
-
-                applyTheme(savedTheme);
-
-                if (!btn || btn.dataset.themeInit === '1') return;
-
-                btn.dataset.themeInit = '1';
-
-                btn.addEventListener('click', function () {
-                    const currentTheme = document.documentElement.getAttribute('data-nsq-theme') || 'dark';
-                    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
-                    applyTheme(nextTheme);
-                });
-            });
-
-            window.nsqDebugThemeButton = function () {
-                const btn = document.getElementById('btnThemeToggle');
-                console.log('btnThemeToggle:', btn);
-                if (btn) console.log('computed:', window.getComputedStyle(btn));
-                return btn;
-            };
-        })();
-    </script>
 
     <script>
         if (window.history.replaceState) {
@@ -1681,256 +564,50 @@
         });
     </script>
 
-<!-- NSQ_MENU_INDEX_LOGO_JS_V4_6_START -->
-<script id="NSQ_MENU_INDEX_LOGO_JS_V4_6">
+
+
+
+
+
+<script id="NSQ_MENU_INDEX_THEME_SYNC_FINAL_V9">
 (function () {
-    function installNsQuellLogoV46() {
-        var path = (window.location.pathname || '')
-            .replace(/\/+$/, '')
-            .toLowerCase();
+    function syncRootTheme() {
+        let theme =
+            document.documentElement.getAttribute('data-nsq-theme')
+            || localStorage.getItem('nsq-theme')
+            || 'dark';
 
-        if (path !== '/menu/index' && path !== '/menu') {
-            return;
-        }
+        theme = theme === 'light' ? 'light' : 'dark';
 
-        var brand = document.querySelector(
-            '.top-navbar .navbar-brand, nav.top-navbar .navbar-brand'
-        );
+        document.documentElement.setAttribute('data-nsq-theme', theme);
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        document.documentElement.style.colorScheme = theme;
 
-        if (!brand) {
-            return;
-        }
-
-        var previous = brand.querySelector(
-            '[data-nsq-menu-root-logo-v46="1"]'
-        );
-
-        if (previous) {
-            previous.remove();
-        }
-
-        Array.prototype.slice
-            .call(brand.children)
-            .forEach(function (child) {
-                var isTitle =
-                    child.matches(
-                        '.navbar-title, .nsq-brand-title, ' +
-                        '.navbar-title-mark, [class*="title"]'
-                    );
-
-                if (isTitle) {
-                    return;
-                }
-
-                var isVisual =
-                    child.tagName === 'IMG'
-                    || child.tagName === 'I'
-                    || child.matches(
-                        '.brand-icon, .navbar-icon, .action-icon, ' +
-                        '[class*="brand-mark"], [class*="brand-icon"], ' +
-                        '[class*="navbar-logo"], [class*="nsq-brand-logo"], ' +
-                        '[class*="logo"], [class*="icon"]'
-                    );
-
-                if (isVisual) {
-                    child.classList.add(
-                        'nsq-menu-root-old-brand-visual-v46'
-                    );
-                }
-            });
-
-        var logo = document.createElement('img');
-
-        logo.src = '/Imagenes/logo-quell.png';
-        logo.alt = 'NS Quell';
-        logo.className = 'nsq-menu-root-logo-v46';
-        logo.setAttribute(
-            'data-nsq-menu-root-logo-v46',
-            '1'
-        );
-        logo.setAttribute('loading', 'eager');
-
-        logo.style.setProperty(
-            'display',
-            'block',
-            'important'
-        );
-        logo.style.setProperty(
-            'visibility',
-            'visible',
-            'important'
-        );
-        logo.style.setProperty(
-            'opacity',
-            '1',
-            'important'
-        );
-
-        brand.insertBefore(
-            logo,
-            brand.firstChild
-        );
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener(
-            'DOMContentLoaded',
-            installNsQuellLogoV46,
-            { once: true }
-        );
-    }
-    else {
-        installNsQuellLogoV46();
-    }
-})();
-</script>
-<!-- NSQ_MENU_INDEX_LOGO_JS_V4_6_END -->
-<!-- NSQ_MENU_INDEX_NAVBAR_JS_V4_7_1_START -->
-<script id="NSQ_MENU_INDEX_NAVBAR_JS_V4_7_1">
-(function () {
-    function normalizeRootNavbar() {
-        document.body.classList.add(
-            'nsq-menu-index-v47'
-        );
-
-        var title = document.querySelector(
-            '.top-navbar .navbar-title, ' +
-            '.top-navbar .nsq-brand-title'
-        );
-
-        if (title) {
-            title.textContent = 'NS QUELL - ERP';
-        }
-
-        var toggle = document.getElementById(
-            'btnThemeToggle'
-        );
-
-        if (toggle) {
-            [
-                ['width', '38px'],
-                ['min-width', '38px'],
-                ['max-width', '38px'],
-                ['height', '38px'],
-                ['min-height', '38px'],
-                ['padding', '0'],
-                ['margin', '0'],
-                ['gap', '0'],
-                ['flex', '0 0 38px']
-            ].forEach(function (pair) {
-                toggle.style.setProperty(
-                    pair[0],
-                    pair[1],
-                    'important'
-                );
-            });
-        }
-
-        var toggleText =
-            document.getElementById(
-                'themeToggleText'
+        if (document.body) {
+            document.body.classList.remove(
+                'nsq-theme-dark',
+                'nsq-theme-light',
+                'dark-mode',
+                'light-mode'
             );
 
-        if (toggleText) {
-            toggleText.hidden = true;
-
-            toggleText.style.setProperty(
-                'display',
-                'none',
-                'important'
-            );
+            if (theme === 'light') {
+                document.body.classList.add('nsq-theme-light', 'light-mode');
+            } else {
+                document.body.classList.add('nsq-theme-dark', 'dark-mode');
+            }
         }
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener(
-            'DOMContentLoaded',
-            normalizeRootNavbar,
-            { once: true }
-        );
+        document.addEventListener('DOMContentLoaded', syncRootTheme);
+    } else {
+        syncRootTheme();
     }
-    else {
-        normalizeRootNavbar();
-    }
+
+    window.addEventListener('nsq:themechange', syncRootTheme);
 })();
 </script>
-<!-- NSQ_MENU_INDEX_NAVBAR_JS_V4_7_1_END -->
-
-<!-- NSQ_MENU_INDEX_NAVBAR_JS_V4_8_2_START -->
-<script id="NSQ_MENU_INDEX_NAVBAR_JS_V4_8_2">
-(function () {
-    function compactRootNavbarV48() {
-        var path = (window.location.pathname || '')
-            .replace(/\/+$/, '')
-            .toLowerCase();
-
-        if (path !== '/menu/index' && path !== '/menu') {
-            return;
-        }
-
-        var title = document.querySelector(
-            '.top-navbar .navbar-title, ' +
-            '.top-navbar .nsq-brand-title'
-        );
-
-        if (title) {
-            title.textContent = 'NS QUELL - ERP';
-        }
-
-        var toggle = document.getElementById(
-            'btnThemeToggle'
-        );
-
-        if (toggle) {
-            [
-                ['width', '38px'],
-                ['min-width', '38px'],
-                ['max-width', '38px'],
-                ['height', '38px'],
-                ['min-height', '38px'],
-                ['padding', '0'],
-                ['margin', '0'],
-                ['gap', '0'],
-                ['flex', '0 0 38px']
-            ].forEach(function (pair) {
-                toggle.style.setProperty(
-                    pair[0],
-                    pair[1],
-                    'important'
-                );
-            });
-        }
-
-        var toggleText =
-            document.getElementById(
-                'themeToggleText'
-            );
-
-        if (toggleText) {
-            toggleText.hidden = true;
-
-            toggleText.style.setProperty(
-                'display',
-                'none',
-                'important'
-            );
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener(
-            'DOMContentLoaded',
-            compactRootNavbarV48,
-            { once: true }
-        );
-    }
-    else {
-        compactRootNavbarV48();
-    }
-})();
-</script>
-<!-- NSQ_MENU_INDEX_NAVBAR_JS_V4_8_2_END -->
-
 </body>
 </html>
 

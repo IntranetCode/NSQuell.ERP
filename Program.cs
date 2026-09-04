@@ -112,6 +112,11 @@ builder.Services.AddSingleton<ISftpStorage, SftpStorage>();
 // Registrar el servicio de notificacionesa
 builder.Services.AddScoped<ServicioNotificaciones>();
 
+// NSQ_NOTIFICACIONES_CORREO_V10
+builder.Services.AddScoped<NotificacionCorreoErpService>();
+builder.Services.AddScoped<ProduccionBloqueoCorreoService>();
+builder.Services.AddHostedService<ProduccionBloqueoCorreoHostedService>();
+
 // NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
 // Todo POST/PUT/PATCH/DELETE exitoso de un módulo departamental
 // crea aviso en el navbar; el correo se redirige a Sistemas durante pruebas.
@@ -439,7 +444,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Configurar el middleware                                             
+// Configurar el middleware
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");

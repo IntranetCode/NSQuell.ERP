@@ -1,4 +1,4 @@
-﻿namespace ERP.NSQuell.Models.ViewModels.Almacen;
+namespace ERP.NSQuell.Models.ViewModels.Almacen;
 
 public sealed class AlmacenOFIndexVm
 {
@@ -44,6 +44,9 @@ public sealed class AlmacenOFItemVm
     public DateTime? FechaRequerida { get; set; }
     public DateTime? FechaInicioPlaneada { get; set; }
     public DateTime? FechaFinPlaneada { get; set; }
+
+    // NSQ_ALMACEN_OF_HISTORICO_LISTA_V1_8_2
+    public DateTime? UltimaActualizacionAlmacen { get; set; }
 
     // ALMACEN_OF_MAQUINA_ITEM_V4_1
     public string Maquina { get; set; } = string.Empty;
@@ -102,6 +105,23 @@ public sealed class AlmacenOFItemVm
     public bool EntregaCompletaAlmacen =>
         TieneRequerimientosAlmacen
         && !TienePendientesAlmacen;
+    // NSQ_DEVOLUCION_MATERIALES_V1_2
+    public bool TieneDevolucionPendiente =>
+        MaterialesEntrega.Any(x => x.TieneDevolucionPendiente)
+        || EmbalajesEntrega.Any(x => x.TieneDevolucionPendiente);
+
+    public int DevolucionesPendientes =>
+        MaterialesEntrega.Count(x => x.TieneDevolucionPendiente)
+        + EmbalajesEntrega.Count(x => x.TieneDevolucionPendiente);
+
+    public DateTime? UltimaDevolucionFecha =>
+        MaterialesEntrega
+            .Concat(EmbalajesEntrega)
+            .Where(x => x.TieneDevolucionPendiente)
+            .Select(x => x.FechaDevolucion)
+            .Where(x => x.HasValue)
+            .OrderByDescending(x => x)
+            .FirstOrDefault();
     public string PrioridadClase =>
         Prioridad.Trim().ToUpperInvariant() switch
         {
@@ -158,7 +178,25 @@ public sealed class AlmacenOFEntregableVm
     public string Descripcion { get; set; } = string.Empty;
     public string Unidad { get; set; } = string.Empty;
     public decimal Requerido { get; set; }
+
+    // Para MP/Embalaje, Entregado representa lo ACEPTADO por Produccion.
+    // EntregadoFisico conserva el neto de movimientos de Almacen.
     public decimal Entregado { get; set; }
+    public decimal EntregadoFisico { get; set; }
+    public decimal EnValidacionProduccion { get; set; }
+
+    public long? DevolucionMaterialID { get; set; }
+    public decimal? CantidadDevuelta { get; set; }
+    public string? MotivoDevolucion { get; set; }
+    // NSQ_DEVOLUCION_MATERIALES_V1_3
+    public string? ComentarioDevolucion { get; set; }
+    // NSQ_DEVOLUCION_MATERIALES_V1_4
+    public string? UsuarioDevolucionNombre { get; set; }
+    public DateTime? FechaDevolucion { get; set; }
+
+    public bool TieneDevolucionPendiente =>
+        DevolucionMaterialID.HasValue
+        && DevolucionMaterialID.Value > 0;
 
     // ALMACEN_OF_PT_DISPONIBLE_V4_1
     public decimal DisponibleInventario { get; set; }
@@ -181,17 +219,28 @@ public sealed class AlmacenOFEntregableVm
     {
         get
         {
+            if (TieneDevolucionPendiente)
+                return "Devuelto - reentregar";
+
+            if (EnValidacionProduccion > 0.0005m)
+                return "Esperando aceptación de Producción";
+
             if (Requerido <= 0) return "No aplica";
             if (Entregado <= 0) return "Pendiente";
             if (Entregado + 0.0005m < Requerido) return "Parcial";
             return "Completo";
         }
     }
-
     public string Clase
     {
         get
         {
+            if (TieneDevolucionPendiente)
+                return "devuelto";
+
+            if (EnValidacionProduccion > 0.0005m)
+                return "validacion";
+
             if (Requerido <= 0) return "na";
             if (Entregado <= 0) return "pendiente";
             if (Entregado + 0.0005m < Requerido) return "parcial";
@@ -200,9 +249,9 @@ public sealed class AlmacenOFEntregableVm
     }
 
 
-
     public bool PuedeEntregar =>
         CatalogoID > 0
         && Pendiente > 0
+        && EnValidacionProduccion <= 0.0005m
         && (!RequiereInventarioDisponible || DisponibleInventario > 0);
 }

@@ -8,15 +8,16 @@ using UglyToad.PdfPig;
 
 namespace ERP.NSQuell.Servicios.Releases;
 
-// GENERIC_RELEASE_READER_V1_0
-// Fallback para documentos que no coinciden con una plantilla especializada.
+// GENERIC_RELEASE_READER_V2_0
+// Fallback universal para documentos que no coinciden con una plantilla especializada.
 // La prioridad sigue siendo: parser conocido -> parser generico.
 //
-// Principio de seguridad:
-// - No inventar ParteID.
-// - Las partes conocidas se identifican contra ERP_Partes.
-// - Si no existe una relacion fecha/cantidad suficientemente clara, no se crea
-//   una entrega falsa.
+// Reglas:
+// - La identidad y el cliente se obtienen de ERP_Partes.
+// - Se reconocen NumeroParte, ReferenciaSAP, Designacion y descripciones unicas.
+// - Se soportan matrices con fechas reales y matrices con semanas (Sem/CW/WK/WEEK).
+// - Los PDF solo generan entregas cuando existe una relacion segura fecha/cantidad.
+// - Nunca se inventa ParteID ni se crea demanda si falta fecha o cantidad positiva.
 public sealed class GenericReleaseKnownPart
 {
     public int ParteID { get; init; }
@@ -64,6 +65,14 @@ public static class GenericReleaseParser
     {
         public required Dictionary<string, List<GenericReleaseKnownPart>> ByAlias { get; init; }
         public required List<(string Normalized, string Raw, GenericReleaseKnownPart Part)> SearchAliases { get; init; }
+    }
+
+    private sealed class PeriodColumn
+    {
+        public int Column { get; init; }
+        public DateTime Date { get; init; }
+        public string Label { get; init; } = string.Empty;
+        public bool InferredFromWeek { get; init; }
     }
 
     public static GenericReleaseDocument Parse(
@@ -120,7 +129,7 @@ public static class GenericReleaseParser
         var warnings = new List<string>();
 
         foreach (DataTable table in workbook.Tables)
-            ExtractFromTable(table, index, rows, warnings);
+            ExtractFromTable(table, index, rows, warnings, fileName);
 
         return BuildDocument(bytes, fileName, rows, warnings, "Excel");
     }
@@ -172,7 +181,7 @@ public static class GenericReleaseParser
 
         var rows = new List<GenericReleaseRow>();
         var warnings = new List<string>();
-        ExtractFromTable(table, index, rows, warnings);
+        ExtractFromTable(table, index, rows, warnings, fileName);
 
         return BuildDocument(bytes, fileName, rows, warnings, "CSV");
     }
@@ -197,14 +206,21 @@ public static class GenericReleaseParser
         }
 
         if (string.IsNullOrWhiteSpace(text))
-            throw new InvalidOperationException("El PDF no contiene texto util para el lector generico.");
+        {
+            throw new InvalidOperationException(
+                "El PDF no contiene una capa de texto util. Si es un escaneo/imagen no se generara demanda automaticamente sin OCR.");
+        }
 
         var normalizedDocument = Normalize(text);
+        var preferredClientId = InferPreferredClientFromText(text, index);
         var candidateParts = new Dictionary<int, (GenericReleaseKnownPart Part, string RawAlias)>();
 
         foreach (var alias in index.SearchAliases)
         {
             if (alias.Normalized.Length < 6)
+                continue;
+
+            if (preferredClientId.HasValue && alias.Part.ClienteID != preferredClientId.Value)
                 continue;
 
             if (!normalizedDocument.Contains(alias.Normalized, StringComparison.Ordinal))
@@ -219,13 +235,21 @@ public static class GenericReleaseParser
 
         foreach (var candidate in candidateParts.Values)
         {
-            var window = FindTextWindow(text, candidate.RawAlias, candidate.Part.NumeroParte);
+            var window = FindTextWindow(
+                text,
+                candidate.RawAlias,
+                candidate.Part.NumeroParte,
+                candidate.Part.ReferenciaSAP,
+                candidate.Part.Designacion,
+                candidate.Part.Descripcion);
+
             var deliveries = ExtractTextDeliveries(window);
 
             if (deliveries.Count == 0)
             {
-                warnings.Add(
-                    $"Se detecto la parte {candidate.Part.NumeroParte} en el PDF, pero no se pudo asociar con seguridad una fecha y cantidad.");
+                AddWarningOnce(
+                    warnings,
+                    $"Se detecto la parte {candidate.Part.NumeroParte} en el PDF, pero no se pudo asociar con seguridad una fecha de entrega y cantidad.");
                 continue;
             }
 
@@ -246,12 +270,14 @@ public static class GenericReleaseParser
         DataTable table,
         PartIndex index,
         List<GenericReleaseRow> output,
-        List<string> warnings)
+        List<string> warnings,
+        string? fileName)
     {
         if (table.Rows.Count == 0 || table.Columns.Count == 0)
             return;
 
         var collected = new Dictionary<int, GenericReleaseRow>();
+        var preferredClientId = InferPreferredClientFromTable(table, index);
 
         for (var row = 0; row < table.Rows.Count; row++)
         {
@@ -261,7 +287,7 @@ public static class GenericReleaseParser
                 if (string.IsNullOrWhiteSpace(raw))
                     continue;
 
-                var matches = ResolveCellParts(raw, index);
+                var matches = ResolveCellParts(raw, index, preferredClientId);
                 if (matches.Count == 0)
                     continue;
 
@@ -273,13 +299,14 @@ public static class GenericReleaseParser
 
                 if (distinctParts.Count != 1)
                 {
-                    warnings.Add(
+                    AddWarningOnce(
+                        warnings,
                         $"La celda '{Truncate(raw, 80)}' coincide con mas de una parte activa; se omitio por ambiguedad.");
                     continue;
                 }
 
                 var part = distinctParts[0];
-                var deliveries = ExtractTableDeliveries(table, row, col);
+                var deliveries = ExtractTableDeliveries(table, row, col, fileName, warnings);
 
                 if (deliveries.Count == 0)
                     continue;
@@ -291,7 +318,7 @@ public static class GenericReleaseParser
                         Part = part,
                         SourceToken = raw,
                         Uom = DetectUomInTable(table, row),
-                        SourceReference = null,
+                        SourceReference = Path.GetFileNameWithoutExtension(fileName ?? string.Empty),
                         Deliveries = new List<GenericReleaseDelivery>()
                     };
                     collected[part.ParteID] = target;
@@ -339,43 +366,39 @@ public static class GenericReleaseParser
     private static List<GenericReleaseDelivery> ExtractTableDeliveries(
         DataTable table,
         int partRow,
-        int partCol)
+        int partCol,
+        string? fileName,
+        List<string> warnings)
     {
         var result = new List<GenericReleaseDelivery>();
 
-        // Caso 1: matriz horizontal.
-        // Busca la fila de fechas mas cercana arriba de la parte.
-        var bestDates = new List<(int Column, DateTime Date)>();
+        // Caso 0: tabla clasica con encabezados semanticos (fecha entrega / cantidad).
+        var mapped = ExtractHeaderMappedDelivery(table, partRow, partCol);
+        if (mapped.Count > 0)
+            return mapped;
 
-        for (var headerRow = Math.Max(0, partRow - 8); headerRow <= partRow; headerRow++)
+        // Evita tomar historicos de embarque/recibo/precio como nueva demanda.
+        if (IsExplicitNonDemandRow(table, partRow))
+            return result;
+
+        // Caso 1: matriz horizontal con fechas reales o semanas.
+        var periods = FindBestPeriodColumns(table, partRow, fileName, warnings);
+
+        if (periods.Count > 0)
         {
-            var dates = new List<(int Column, DateTime Date)>();
-
-            for (var col = 0; col < table.Columns.Count; col++)
+            foreach (var period in periods)
             {
-                if (TryReadDate(Get(table, headerRow, col), out var date))
-                    dates.Add((col, date.Date));
-            }
-
-            if (dates.Count > bestDates.Count)
-                bestDates = dates;
-        }
-
-        if (bestDates.Count > 0)
-        {
-            foreach (var dc in bestDates)
-            {
-                if (dc.Column == partCol)
+                if (period.Column == partCol)
                     continue;
 
-                if (!TryPositiveInteger(Get(table, partRow, dc.Column), out var quantity))
+                if (!TryPositiveInteger(Get(table, partRow, period.Column), out var quantity))
                     continue;
 
                 result.Add(new GenericReleaseDelivery
                 {
-                    RequiredDate = dc.Date,
+                    RequiredDate = period.Date.Date,
                     RequiredQuantity = quantity,
-                    PeriodLabel = $"GEN {dc.Date:dd/MM/yyyy}"
+                    PeriodLabel = period.Label
                 });
             }
 
@@ -412,8 +435,11 @@ public static class GenericReleaseParser
         }
 
         // Caso 3: bloque vertical debajo de la parte.
-        for (var row = partRow; row <= Math.Min(table.Rows.Count - 1, partRow + 10); row++)
+        for (var row = partRow; row <= Math.Min(table.Rows.Count - 1, partRow + 12); row++)
         {
+            if (IsExplicitNonDemandRow(table, row))
+                continue;
+
             var dates = new List<DateTime>();
             var quantities = new List<int>();
 
@@ -443,6 +469,437 @@ public static class GenericReleaseParser
             .Select(x => x.First())
             .OrderBy(x => x.RequiredDate)
             .ToList();
+    }
+
+    private static List<GenericReleaseDelivery> ExtractHeaderMappedDelivery(
+        DataTable table,
+        int partRow,
+        int partCol)
+    {
+        if (partRow <= 0)
+            return new List<GenericReleaseDelivery>();
+
+        foreach (var headerRow in CandidateHeaderRows(partRow, includeCurrent: false).OrderByDescending(x => x))
+        {
+            int? dateColumn = null;
+            int? quantityColumn = null;
+
+            for (var col = 0; col < table.Columns.Count; col++)
+            {
+                var header = NormalizeWords(CellText(Get(table, headerRow, col)));
+                if (string.IsNullOrWhiteSpace(header))
+                    continue;
+
+                if (!dateColumn.HasValue && IsDeliveryDateHeader(header))
+                    dateColumn = col;
+
+                if (!quantityColumn.HasValue && IsQuantityHeader(header))
+                    quantityColumn = col;
+            }
+
+            if (!dateColumn.HasValue || !quantityColumn.HasValue)
+                continue;
+
+            if (dateColumn.Value == partCol || quantityColumn.Value == partCol)
+                continue;
+
+            if (!TryReadDate(Get(table, partRow, dateColumn.Value), out var date))
+                continue;
+
+            if (!TryPositiveInteger(Get(table, partRow, quantityColumn.Value), out var quantity))
+                continue;
+
+            return new List<GenericReleaseDelivery>
+            {
+                new()
+                {
+                    RequiredDate = date.Date,
+                    RequiredQuantity = quantity,
+                    PeriodLabel = $"GEN {date:dd/MM/yyyy}"
+                }
+            };
+        }
+
+        return new List<GenericReleaseDelivery>();
+    }
+
+    private static List<PeriodColumn> FindBestPeriodColumns(
+        DataTable table,
+        int partRow,
+        string? fileName,
+        List<string> warnings)
+    {
+        var best = new List<PeriodColumn>();
+        var bestScore = 0;
+
+        foreach (var headerRow in CandidateHeaderRows(partRow, includeCurrent: true))
+        {
+            var directDates = new List<PeriodColumn>();
+            var weeks = new List<(int Column, int Week, string Label)>();
+
+            for (var col = 0; col < table.Columns.Count; col++)
+            {
+                var value = Get(table, headerRow, col);
+
+                if (TryReadDate(value, out var date))
+                {
+                    directDates.Add(new PeriodColumn
+                    {
+                        Column = col,
+                        Date = date.Date,
+                        Label = $"GEN {date:dd/MM/yyyy}",
+                        InferredFromWeek = false
+                    });
+                    continue;
+                }
+
+                if (TryReadWeekLabel(value, out var week, out var label))
+                    weeks.Add((col, week, label));
+            }
+
+            if (directDates.Count >= 2)
+            {
+                var score = 1000 + directDates.Count;
+                if (score > bestScore)
+                {
+                    best = directDates;
+                    bestScore = score;
+                }
+            }
+
+            if (weeks.Count >= 2)
+            {
+                var inferred = ResolveWeekColumns(weeks, fileName);
+                var score = 500 + inferred.Count;
+
+                if (score > bestScore)
+                {
+                    best = inferred;
+                    bestScore = score;
+                }
+            }
+        }
+
+        if (best.Any(x => x.InferredFromWeek))
+        {
+            AddWarningOnce(
+                warnings,
+                "El documento usa semanas sin fecha completa. El lector generico convirtio Sem/CW/WK a lunes de semana ISO y resolvio el cambio de anio automaticamente.");
+        }
+
+        return best;
+    }
+
+    private static List<PeriodColumn> ResolveWeekColumns(
+        List<(int Column, int Week, string Label)> weeks,
+        string? fileName)
+    {
+        var ordered = weeks.OrderBy(x => x.Column).ToList();
+        if (ordered.Count == 0)
+            return new List<PeriodColumn>();
+
+        var anchor = InferReferenceDate(fileName);
+        var year = FindClosestIsoYear(anchor, ordered[0].Week);
+        var previousWeek = ordered[0].Week;
+        var result = new List<PeriodColumn>();
+
+        foreach (var item in ordered)
+        {
+            if (result.Count > 0)
+            {
+                if (previousWeek >= 40 && item.Week <= 15)
+                    year++;
+                else if (previousWeek <= 15 && item.Week >= 40)
+                    year--;
+            }
+
+            year = AdjustYearForIsoWeek(year, item.Week, anchor);
+
+            result.Add(new PeriodColumn
+            {
+                Column = item.Column,
+                Date = ISOWeek.ToDateTime(year, item.Week, DayOfWeek.Monday).Date,
+                Label = string.IsNullOrWhiteSpace(item.Label)
+                    ? $"CW{item.Week}"
+                    : item.Label.Trim().ToUpperInvariant(),
+                InferredFromWeek = true
+            });
+
+            previousWeek = item.Week;
+        }
+
+        return result;
+    }
+
+    private static DateTime InferReferenceDate(string? fileName)
+    {
+        var name = Path.GetFileNameWithoutExtension(fileName ?? string.Empty);
+
+        var ymd = Regex.Match(name, @"(?<!\d)(?<y>20\d{2})[-_]?((?<m>0[1-9]|1[0-2]))[-_]?(?<d>0[1-9]|[12]\d|3[01])(?!\d)");
+        if (ymd.Success &&
+            int.TryParse(ymd.Groups["y"].Value, out var y) &&
+            int.TryParse(ymd.Groups["m"].Value, out var m) &&
+            int.TryParse(ymd.Groups["d"].Value, out var d))
+        {
+            try
+            {
+                return new DateTime(y, m, d);
+            }
+            catch
+            {
+                // Usa la fecha actual.
+            }
+        }
+
+        return DateTime.Today;
+    }
+
+    private static int FindClosestIsoYear(DateTime anchor, int week)
+    {
+        var candidates = new List<(int Year, int Distance)>();
+
+        for (var year = anchor.Year - 1; year <= anchor.Year + 1; year++)
+        {
+            if (week < 1 || week > ISOWeek.GetWeeksInYear(year))
+                continue;
+
+            var date = ISOWeek.ToDateTime(year, week, DayOfWeek.Monday).Date;
+            candidates.Add((year, Math.Abs((date - anchor.Date).Days)));
+        }
+
+        return candidates.Count == 0
+            ? anchor.Year
+            : candidates.OrderBy(x => x.Distance).ThenBy(x => Math.Abs(x.Year - anchor.Year)).First().Year;
+    }
+
+    private static int AdjustYearForIsoWeek(int preferredYear, int week, DateTime anchor)
+    {
+        if (week >= 1 && week <= ISOWeek.GetWeeksInYear(preferredYear))
+            return preferredYear;
+
+        var candidates = new[] { preferredYear - 1, preferredYear + 1 }
+            .Where(year => week >= 1 && week <= ISOWeek.GetWeeksInYear(year))
+            .Select(year => new
+            {
+                Year = year,
+                Distance = Math.Abs((ISOWeek.ToDateTime(year, week, DayOfWeek.Monday).Date - anchor.Date).Days)
+            })
+            .OrderBy(x => x.Distance)
+            .ToList();
+
+        return candidates.Count > 0 ? candidates[0].Year : preferredYear;
+    }
+
+    private static bool TryReadWeekLabel(object? value, out int week, out string label)
+    {
+        week = 0;
+        label = string.Empty;
+
+        var text = CellText(value).Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var match = Regex.Match(
+            text,
+            @"^(?:SEM(?:ANA)?|CW|WK|WEEK|W|KW)\s*[.\-#:]*\s*(?<week>\d{1,2})$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        if (!match.Success ||
+            !int.TryParse(match.Groups["week"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out week) ||
+            week is < 1 or > 53)
+        {
+            week = 0;
+            return false;
+        }
+
+        label = text;
+        return true;
+    }
+
+    private static bool IsExplicitNonDemandRow(DataTable table, int row)
+    {
+        if (row < 0 || row >= table.Rows.Count)
+            return false;
+
+        var parts = new List<string>();
+        for (var col = 0; col < table.Columns.Count; col++)
+        {
+            var text = CellText(Get(table, row, col));
+            if (!string.IsNullOrWhiteSpace(text))
+                parts.Add(text);
+        }
+
+        if (parts.Count == 0)
+            return false;
+
+        var normalized = NormalizeWords(string.Join(" ", parts));
+
+        var positive = ContainsAny(
+            normalized,
+            "PLAN", "FORECAST", "DEMAND", "REQUIREMENT", "REQUIRED",
+            "RELEASE", "CALL OFF", "CALL-OFF", "CANTIDAD REQUERIDA", "PEDIDO");
+
+        var negative = ContainsAny(
+            normalized,
+            "QTY SHIP", "QTY SHIPPED", "SHIPPED", "RECEIPT", "RECEIVED",
+            "INVENTORY", "STOCK", "UNIT PRICE", "PRECIO UNITARIO", "AMOUNT", "MONTO TOTAL");
+
+        if (!positive && Regex.IsMatch(normalized, @"(^|\s)PO($|\s)", RegexOptions.IgnoreCase))
+            negative = true;
+
+        return negative && !positive;
+    }
+
+    private static bool IsDeliveryDateHeader(string normalized)
+    {
+        return ContainsAny(
+            normalized,
+            "FECHA ENTREGA", "FEC ENTREGA", "FECHA REQUERIDA", "FECHA REQUERIMIENTO",
+            "DELIVERY DATE", "REQUIRED DATE", "DUE DATE", "SHIP DATE", "ARRIVAL DATE");
+    }
+
+    private static bool IsQuantityHeader(string normalized)
+    {
+        if (ContainsAny(normalized, "PRICE", "PRECIO", "AMOUNT", "MONTO", "RECEIPT", "RECEIVED", "SHIP"))
+            return false;
+
+        return normalized == "QTY" ||
+               normalized == "PCS" ||
+               normalized == "PIECES" ||
+               ContainsAny(normalized, "CANTIDAD", "QUANTITY", "QTY REQUIRED", "REQUIRED QTY", "PIEZAS");
+    }
+
+    private static bool ContainsAny(string text, params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (text.Contains(value, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<int> CandidateHeaderRows(int partRow, bool includeCurrent)
+    {
+        if (partRow < 0)
+            yield break;
+
+        var seen = new HashSet<int>();
+        var last = includeCurrent ? partRow : partRow - 1;
+        if (last < 0)
+            yield break;
+
+        // Los encabezados globales suelen vivir al inicio de la hoja.
+        var topEnd = Math.Min(last, 39);
+        for (var row = 0; row <= topEnd; row++)
+        {
+            if (seen.Add(row))
+                yield return row;
+        }
+
+        // Tambien cubre bloques repetidos con encabezado cercano a la parte.
+        var nearStart = Math.Max(0, last - 40);
+        for (var row = nearStart; row <= last; row++)
+        {
+            if (seen.Add(row))
+                yield return row;
+        }
+    }
+
+    private static int? InferPreferredClientFromTable(DataTable table, PartIndex index)
+    {
+        var scores = new Dictionary<int, int>();
+
+        for (var row = 0; row < table.Rows.Count; row++)
+        {
+            for (var col = 0; col < table.Columns.Count; col++)
+            {
+                var raw = CellText(Get(table, row, col));
+                if (string.IsNullOrWhiteSpace(raw) || raw.Length > 300)
+                    continue;
+
+                ScoreClientEvidence(raw, index, scores);
+            }
+        }
+
+        return SelectPreferredClient(scores);
+    }
+
+    private static int? InferPreferredClientFromText(string text, PartIndex index)
+    {
+        var scores = new Dictionary<int, int>();
+        var normalized = Normalize(text);
+
+        // En PDF no se recorre cada token porque PdfPig puede perder columnas.
+        foreach (var alias in index.SearchAliases)
+        {
+            if (alias.Normalized.Length < 6 ||
+                !normalized.Contains(alias.Normalized, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            AddClientScore(scores, alias.Part.ClienteID, alias.Normalized.Any(char.IsDigit) ? 5 : 3);
+        }
+
+        return SelectPreferredClient(scores);
+    }
+
+    private static void ScoreClientEvidence(
+        string raw,
+        PartIndex index,
+        Dictionary<int, int> scores)
+    {
+        var normalized = Normalize(raw);
+        if (normalized.Length < 4)
+            return;
+
+        if (index.ByAlias.TryGetValue(normalized, out var exact))
+        {
+            var exactClients = exact.Select(x => x.ClienteID).Distinct().ToList();
+            if (exactClients.Count == 1)
+                AddClientScore(scores, exactClients[0], 12);
+            return;
+        }
+
+        var matches = ResolveCellParts(raw, index)
+            .Select(x => x.Part.ClienteID)
+            .Distinct()
+            .ToList();
+
+        if (matches.Count == 1)
+            AddClientScore(scores, matches[0], 3);
+    }
+
+    private static void AddClientScore(Dictionary<int, int> scores, int clientId, int points)
+    {
+        scores.TryGetValue(clientId, out var current);
+        scores[clientId] = current + points;
+    }
+
+    private static int? SelectPreferredClient(Dictionary<int, int> scores)
+    {
+        if (scores.Count == 0)
+            return null;
+
+        var ordered = scores
+            .OrderByDescending(x => x.Value)
+            .ThenBy(x => x.Key)
+            .ToList();
+
+        var winner = ordered[0];
+        var runnerUp = ordered.Count > 1 ? ordered[1].Value : 0;
+
+        // Un identificador exacto unico basta. Para coincidencias parciales se
+        // exige evidencia repetida y ventaja clara sobre otro cliente.
+        if (winner.Value >= 10 ||
+            (winner.Value >= 6 && winner.Value >= runnerUp * 2))
+        {
+            return winner.Key;
+        }
+
+        return null;
     }
 
     private static GenericReleaseDocument BuildDocument(
@@ -490,7 +947,7 @@ public static class GenericReleaseParser
                 : string.Empty;
 
             throw new InvalidOperationException(
-                $"El lector generico {sourceType} no encontro una combinacion segura de Parte ERP + fecha de entrega + cantidad.{extra}");
+                $"El lector generico {sourceType} no encontro una combinacion segura de parte/designacion ERP + fecha de entrega + cantidad.{extra}");
         }
 
         var clients = rows
@@ -508,7 +965,7 @@ public static class GenericReleaseParser
 
         warnings.Insert(
             0,
-            $"Lector generico {sourceType}: las partes se reconocieron contra ERP_Partes; el archivo solo aporta demanda/fechas/cantidades.");
+            $"Lector generico V2 {sourceType}: parte/designacion y cliente se resolvieron contra ERP_Partes; el archivo aporta demanda, fechas y cantidades.");
 
         return new GenericReleaseDocument
         {
@@ -516,7 +973,7 @@ public static class GenericReleaseParser
             ClienteNombre = client.ClienteNombre,
             FolioCliente = Path.GetFileNameWithoutExtension(fileName ?? string.Empty),
             DocumentDate = null,
-            VersionText = $"Lectura generica {DateTime.Today:dd.MM.yyyy}",
+            VersionText = $"Lectura generica V2 {DateTime.Today:dd.MM.yyyy}",
             Sha256 = Convert.ToHexString(SHA256.HashData(bytes)),
             Rows = rows,
             Warnings = warnings
@@ -530,18 +987,31 @@ public static class GenericReleaseParser
 
         foreach (var part in catalog)
         {
-            AddAlias(part.NumeroParte, part, byAlias, search);
-            AddAlias(part.ReferenciaSAP, part, byAlias, search);
+            AddAlias(part.NumeroParte, part, byAlias, search, allowTextOnly: false);
+            AddAlias(part.ReferenciaSAP, part, byAlias, search, allowTextOnly: false);
+            AddAlias(part.Designacion, part, byAlias, search, allowTextOnly: true);
+            AddAlias(part.Descripcion, part, byAlias, search, allowTextOnly: true);
         }
+
+        var searchable = search
+            .Where(x =>
+            {
+                if (!byAlias.TryGetValue(x.Normalized, out var owners))
+                    return false;
+
+                var uniqueOwners = owners.Select(p => p.ParteID).Distinct().Count();
+                return uniqueOwners == 1 &&
+                       (x.Normalized.Any(char.IsDigit) || x.Normalized.Length >= 10);
+            })
+            .GroupBy(x => new { x.Normalized, x.Part.ParteID })
+            .Select(x => x.First())
+            .OrderByDescending(x => x.Normalized.Length)
+            .ToList();
 
         return new PartIndex
         {
             ByAlias = byAlias,
-            SearchAliases = search
-                .GroupBy(x => new { x.Normalized, x.Part.ParteID })
-                .Select(x => x.First())
-                .OrderByDescending(x => x.Normalized.Length)
-                .ToList()
+            SearchAliases = searchable
         };
     }
 
@@ -549,13 +1019,17 @@ public static class GenericReleaseParser
         string? raw,
         GenericReleaseKnownPart part,
         Dictionary<string, List<GenericReleaseKnownPart>> byAlias,
-        List<(string Normalized, string Raw, GenericReleaseKnownPart Part)> search)
+        List<(string Normalized, string Raw, GenericReleaseKnownPart Part)> search,
+        bool allowTextOnly)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return;
 
         var normalized = Normalize(raw);
-        if (normalized.Length < 4 || !normalized.Any(char.IsDigit))
+        if (normalized.Length < 4)
+            return;
+
+        if (!normalized.Any(char.IsDigit) && (!allowTextOnly || normalized.Length < 8))
             return;
 
         if (!byAlias.TryGetValue(normalized, out var list))
@@ -572,14 +1046,19 @@ public static class GenericReleaseParser
 
     private static List<(GenericReleaseKnownPart Part, string Alias)> ResolveCellParts(
         string raw,
-        PartIndex index)
+        PartIndex index,
+        int? preferredClientId = null)
     {
         var result = new List<(GenericReleaseKnownPart Part, string Alias)>();
         var normalized = Normalize(raw);
 
         if (index.ByAlias.TryGetValue(normalized, out var exact))
         {
-            result.AddRange(exact.Select(x => (x, raw)));
+            var exactCandidates = preferredClientId.HasValue
+                ? exact.Where(x => x.ClienteID == preferredClientId.Value)
+                : exact;
+
+            result.AddRange(exactCandidates.Select(x => (x, raw)));
             return result;
         }
 
@@ -591,8 +1070,14 @@ public static class GenericReleaseParser
             if (alias.Normalized.Length < 6)
                 continue;
 
-            if (normalized.Contains(alias.Normalized, StringComparison.Ordinal))
+            if (preferredClientId.HasValue && alias.Part.ClienteID != preferredClientId.Value)
+                continue;
+
+            if (normalized.Contains(alias.Normalized, StringComparison.Ordinal) ||
+                (normalized.Length >= 8 && alias.Normalized.Contains(normalized, StringComparison.Ordinal)))
+            {
                 result.Add((alias.Part, alias.Raw));
+            }
         }
 
         return result
@@ -612,12 +1097,12 @@ public static class GenericReleaseParser
             if (idx < 0)
                 continue;
 
-            var start = Math.Max(0, idx - 500);
-            var length = Math.Min(text.Length - start, 1800);
+            var start = Math.Max(0, idx - 700);
+            var length = Math.Min(text.Length - start, 2600);
             return text.Substring(start, length);
         }
 
-        return text.Length <= 3000 ? text : text.Substring(0, 3000);
+        return text.Length <= 3500 ? text : text.Substring(0, 3500);
     }
 
     private static List<GenericReleaseDelivery> ExtractTextDeliveries(string text)
@@ -627,16 +1112,19 @@ public static class GenericReleaseParser
         const string datePattern =
             @"(?<date>(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:20)?\d{2}|20\d{2}[./-](?:0?[1-9]|1[0-2])[./-](?:0?[1-9]|[12]\d|3[01]))";
 
-        var qtyBefore = new Regex(
-            @"(?<qty>\d[\d., ]{0,16})\s*(?:pcs|pzas?|piezas?|pieces?)?\s*(?:arrival|due|delivery|date|fecha)?\s*" + datePattern,
+        const string uomPattern = @"(?:pcs|pza|pzas|pieza|piezas|piece|pieces)";
+
+        // Patron fuerte: fecha + cantidad + unidad. Evita confundir ordenes, telefonos o precios.
+        var dateQtyUom = new Regex(
+            datePattern + @"\s*(?<qty>\d[\d., ]{0,16})\s*(?<uom>" + uomPattern + @")\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        foreach (Match match in qtyBefore.Matches(text))
+        foreach (Match match in dateQtyUom.Matches(text))
         {
             if (!TryParseDateText(match.Groups["date"].Value, out var date))
                 continue;
 
-            if (!TryParseQuantityText(match.Groups["qty"].Value, out var qty))
+            if (!TryParseQuantityText(match.Groups["qty"].Value, out var qty, preferDecimalWhenAmbiguous: true))
                 continue;
 
             result.Add(new GenericReleaseDelivery
@@ -647,17 +1135,40 @@ public static class GenericReleaseParser
             });
         }
 
-        var dateBefore = new Regex(
-            datePattern +
-            @"\s*(?:qty|quantity|cantidad|pcs|pzas?|piezas?|pieces?)?\s*(?<qty>\d[\d., ]{0,16})",
+        // Variante cantidad + unidad + fecha.
+        var qtyUomDate = new Regex(
+            @"(?<qty>\d[\d., ]{0,16})\s*(?<uom>" + uomPattern + @")\b\s*" + datePattern,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        foreach (Match match in dateBefore.Matches(text))
+        foreach (Match match in qtyUomDate.Matches(text))
         {
             if (!TryParseDateText(match.Groups["date"].Value, out var date))
                 continue;
 
-            if (!TryParseQuantityText(match.Groups["qty"].Value, out var qty))
+            if (!TryParseQuantityText(match.Groups["qty"].Value, out var qty, preferDecimalWhenAmbiguous: true))
+                continue;
+
+            result.Add(new GenericReleaseDelivery
+            {
+                RequiredDate = date.Date,
+                RequiredQuantity = qty,
+                PeriodLabel = $"GEN {date:dd/MM/yyyy}"
+            });
+        }
+
+        // Patron por etiquetas cuando el documento no imprime unidad junto a la cantidad.
+        var labeledDateQty = new Regex(
+            @"(?:delivery\s*date|required\s*date|due\s*date|fecha\s*(?:de\s*)?entrega|fec\s*entrega)\s*[:#-]?\s*" +
+            datePattern +
+            @"[\s\S]{0,180}?(?:qty|required\s*qty|quantity|cantidad(?:\s*requerida)?)\s*[:#-]?\s*(?<qty>\d[\d., ]{0,16})",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        foreach (Match match in labeledDateQty.Matches(text))
+        {
+            if (!TryParseDateText(match.Groups["date"].Value, out var date))
+                continue;
+
+            if (!TryParseQuantityText(match.Groups["qty"].Value, out var qty, preferDecimalWhenAmbiguous: false))
                 continue;
 
             result.Add(new GenericReleaseDelivery
@@ -669,6 +1180,7 @@ public static class GenericReleaseParser
         }
 
         return result
+            .Where(x => x.RequiredQuantity > 0)
             .GroupBy(x => new { Date = x.RequiredDate.Date, x.RequiredQuantity })
             .Select(x => x.First())
             .OrderBy(x => x.RequiredDate)
@@ -818,10 +1330,12 @@ public static class GenericReleaseParser
         var formats = new[]
         {
             "dd/MM/yyyy", "d/M/yyyy",
+            "MM/dd/yyyy", "M/d/yyyy",
             "dd.MM.yyyy", "d.M.yyyy",
             "dd-MM-yyyy", "d-M-yyyy",
             "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd",
             "dd/MM/yy", "d/M/yy",
+            "MM/dd/yy", "M/d/yy",
             "dd.MM.yy", "d.M.yy",
             "dd-MM-yy", "d-M-yy"
         };
@@ -842,10 +1356,7 @@ public static class GenericReleaseParser
     private static bool TryPositiveInteger(object? value, out int quantity)
     {
         quantity = 0;
-        if (value == null)
-            return false;
-
-        if (value is DateTime)
+        if (value == null || value is DateTime)
             return false;
 
         if (value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal)
@@ -856,21 +1367,6 @@ public static class GenericReleaseParser
                 if (number <= 0 || number > int.MaxValue)
                     return false;
 
-                // Evitar seriales de fecha de Excel cuando se usan como cantidades.
-                if (number >= 20000 && number <= 100000 && decimal.Truncate(number) == number)
-                {
-                    try
-                    {
-                        var possibleDate = DateTime.FromOADate((double)number);
-                        if (possibleDate.Year is >= 1950 and <= 2200)
-                            return false;
-                    }
-                    catch
-                    {
-                        // No era fecha.
-                    }
-                }
-
                 quantity = Convert.ToInt32(Math.Round(number, 0, MidpointRounding.AwayFromZero));
                 return quantity > 0;
             }
@@ -880,10 +1376,13 @@ public static class GenericReleaseParser
             }
         }
 
-        return TryParseQuantityText(CellText(value), out quantity);
+        return TryParseQuantityText(CellText(value), out quantity, preferDecimalWhenAmbiguous: false);
     }
 
-    private static bool TryParseQuantityText(string text, out int quantity)
+    private static bool TryParseQuantityText(
+        string text,
+        out int quantity,
+        bool preferDecimalWhenAmbiguous)
     {
         quantity = 0;
         var value = (text ?? string.Empty).Trim();
@@ -912,18 +1411,37 @@ public static class GenericReleaseParser
                 normalized = value.Replace(",", string.Empty, StringComparison.Ordinal);
             }
         }
-        else if (Regex.IsMatch(value, @"^\d{1,3}(?:\.\d{3})+(?:,\d+)?$"))
+        else if (value.Contains('.') || value.Contains(','))
         {
-            normalized = value.Replace(".", string.Empty, StringComparison.Ordinal)
-                              .Replace(',', '.');
-        }
-        else if (Regex.IsMatch(value, @"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$"))
-        {
-            normalized = value.Replace(",", string.Empty, StringComparison.Ordinal);
+            var separator = value.Contains('.') ? '.' : ',';
+            var pieces = value.Split(separator);
+
+            if (pieces.Length > 2 && pieces.Skip(1).All(x => x.Length == 3))
+            {
+                normalized = string.Concat(pieces);
+            }
+            else if (pieces.Length == 2)
+            {
+                var trailing = pieces[1].Length;
+
+                if (trailing == 3 &&
+                    !(preferDecimalWhenAmbiguous && pieces[0].Length >= 3))
+                {
+                    normalized = pieces[0] + pieces[1];
+                }
+                else
+                {
+                    normalized = pieces[0] + "." + pieces[1];
+                }
+            }
+            else
+            {
+                normalized = value.Replace(separator.ToString(), string.Empty, StringComparison.Ordinal);
+            }
         }
         else
         {
-            normalized = value.Replace(',', '.');
+            normalized = value;
         }
 
         if (!decimal.TryParse(
@@ -939,11 +1457,6 @@ public static class GenericReleaseParser
             return false;
 
         quantity = Convert.ToInt32(Math.Round(parsed, 0, MidpointRounding.AwayFromZero));
-
-        // Evitar que anios aislados terminen como cantidades.
-        if (quantity is >= 1950 and <= 2200)
-            return false;
-
         return quantity > 0;
     }
 
@@ -952,14 +1465,56 @@ public static class GenericReleaseParser
         if (string.IsNullOrWhiteSpace(value))
             return string.Empty;
 
-        var sb = new StringBuilder(value.Length);
-        foreach (var ch in value.ToUpperInvariant())
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+
+        foreach (var ch in normalized.ToUpperInvariant())
         {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category == UnicodeCategory.NonSpacingMark)
+                continue;
+
             if (char.IsLetterOrDigit(ch))
                 sb.Append(ch);
         }
 
         return sb.ToString();
+    }
+
+    private static string NormalizeWords(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        var lastWasSpace = false;
+
+        foreach (var ch in normalized.ToUpperInvariant())
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category == UnicodeCategory.NonSpacingMark)
+                continue;
+
+            if (char.IsLetterOrDigit(ch))
+            {
+                sb.Append(ch);
+                lastWasSpace = false;
+            }
+            else if (!lastWasSpace)
+            {
+                sb.Append(' ');
+                lastWasSpace = true;
+            }
+        }
+
+        return Regex.Replace(sb.ToString().Trim(), @"\s+", " ");
+    }
+
+    private static void AddWarningOnce(List<string> warnings, string warning)
+    {
+        if (!warnings.Any(x => string.Equals(x, warning, StringComparison.OrdinalIgnoreCase)))
+            warnings.Add(warning);
     }
 
     private static string Truncate(string value, int max)

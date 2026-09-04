@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPHistorialVm
+@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenMPHistorialVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Historial MP";
@@ -7,6 +7,17 @@
 }
 
 @section Styles {
+    <style id="NSQ_NOTIF_DEEPLINK_MP_V6">
+        tr.nsq-notif-target {
+            scroll-margin-top: 130px;
+        }
+
+        tr.nsq-notif-target:target {
+            outline: 3px solid #f47b20;
+            outline-offset: -3px;
+            background: rgba(244,123,32,.14) !important;
+        }
+    </style>
     <link rel="stylesheet" href="~/css/Almacen/almacen-navegacion.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/nsquell-erp-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/Almacen/almacen.css" asp-append-version="true" />
@@ -165,7 +176,7 @@
                 @foreach (var x in Model.Movimientos)
                 {
                     var claseTipo = x.TipoMovimiento is "Entrada" or "Retorno" or "AjustePositivo" ? "entrada" : "salida";
-                    <tr>
+                    <tr id="movimiento-@x.MovimientoID" class="nsq-notif-target">
                         <td>@x.FechaMovimiento.ToString("dd/MM/yyyy HH:mm")</td>
                         <td>
                             <a class="alm-trace-link" asp-action="Historial" asp-route-material="@x.Codigo" title="Ver solamente la trazabilidad de @x.Codigo">

@@ -9,14 +9,17 @@ public sealed class NotificacionEventoService
 {
     private readonly string _connectionString;
     private readonly ILogger<NotificacionEventoService> _logger;
+    private readonly NotificacionCorreoErpService _correoErp;
 
     public NotificacionEventoService(
         IConfiguration configuration,
+        NotificacionCorreoErpService correoErp,
         ILogger<NotificacionEventoService> logger)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection.");
         _logger = logger;
+        _correoErp = correoErp;
     }
 
     private sealed record OfCreadaDatos(
@@ -176,6 +179,38 @@ END;
         {
             try { await tx.RollbackAsync(); } catch { }
             throw;
+        }
+
+        // NSQ_NOTIFICACIONES_CORREO_V10
+        // Solo se envia correo cuando el evento produjo al menos una notificacion nueva.
+        if (insertadas > 0)
+        {
+            try
+            {
+                var resultadoCorreo = await _correoErp.EnviarAUsuariosAsync(
+                    destinatarios,
+                    titulo,
+                    mensaje ?? string.Empty,
+                    urlDestino,
+                    codigoEvento,
+                    departamento: null);
+
+                _logger.LogInformation(
+                    "Correo evento {CodigoEvento}: encontrados={Encontrados}; enviados={Enviados}; bloqueados={Bloqueados}; errores={Errores}.",
+                    codigoEvento,
+                    resultadoCorreo.Encontrados,
+                    resultadoCorreo.Enviados,
+                    resultadoCorreo.FiltradosPorCandados,
+                    resultadoCorreo.Errores);
+            }
+            catch (Exception exCorreo)
+            {
+                _logger.LogError(
+                    exCorreo,
+                    "El evento interno {CodigoEvento}/{IdOrigen} se guardo, pero fallo su correo.",
+                    codigoEvento,
+                    evento.IdOrigen);
+            }
         }
 
         return insertadas;
