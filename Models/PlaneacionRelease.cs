@@ -447,7 +447,7 @@ namespace ERP.NSQuell.Models
         public int TotalEntregas => Archivos
             .Where(x => x.Estado == "CREADO" || x.Estado == "PENDIENTE")
             .Sum(x => x.TotalEntregas);
-        public int TotalPiezas => Archivos
+        public long TotalPiezas => Archivos
             .Where(x => x.Estado == "CREADO" || x.Estado == "PENDIENTE")
             .Sum(x => x.TotalPiezas);
     }
@@ -469,7 +469,7 @@ namespace ERP.NSQuell.Models
         public string? ArchivoGuardado { get; set; }
         public bool RequiereVinculacion { get; set; }
         public int TotalEntregas { get; set; }
-        public int TotalPiezas { get; set; }
+        public long TotalPiezas { get; set; }
         public int VersionesAnterioresCerradas { get; set; }
         public List<string> Advertencias { get; set; } = new();
     }
@@ -515,7 +515,7 @@ namespace ERP.NSQuell.Models
         public string? Version { get; set; }
 
         public int TotalEntregas { get; set; }
-        public int TotalPiezas { get; set; }
+        public long TotalPiezas { get; set; }
         public int? ReleaseID { get; set; }
         public string? FolioRelease { get; set; }
 

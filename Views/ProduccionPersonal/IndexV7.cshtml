@@ -89,6 +89,7 @@
 @section Styles {
     <link rel="stylesheet" href="~/css/ProduccionPersonal/semanal.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ProduccionPersonal/v7.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ProduccionPersonal/operator-focus-v12.css" asp-append-version="true" />
 }
 
 <div class="ppv3-page" id="ppv3Root">
@@ -112,6 +113,30 @@
         </div>
     }
 
+    <section class="ppv12-operator-guide" aria-label="Guía rápida de programación de operadores">
+        <div class="ppv12-operator-guide__main">
+            <div class="ppv12-operator-guide__icon"><i class="fa-solid fa-user-gear"></i></div>
+            <div>
+                <div class="ppv12-operator-guide__eyebrow">PROGRAMACIÓN DE OPERADORES</div>
+                <h2>Elige primero el periodo, después el turno y finalmente el operador</h2>
+                <p>La selección conserva polivalencia, escala, carga semanal y validación de cruces. No cambia el flujo que consumen Producción, Planeación y las demás áreas.</p>
+            </div>
+        </div>
+        <div class="ppv12-shift-strip" aria-label="Turnos operativos">
+            <span><strong>1er</strong> 07:00-15:00</span>
+            <span><strong>2do</strong> 15:00-22:30</span>
+            <span><strong>3ro</strong> 22:30-07:00</span>
+            <span class="is-12x12"><strong>12x12 Día</strong> 07:00-19:00</span>
+            <span class="is-12x12"><strong>12x12 Noche</strong> 19:00-07:00</span>
+            <span class="is-mixed"><strong>Mixto</strong> 08:30-18:00</span>
+        </div>
+        <div class="ppv12-operator-steps">
+            <span><b>1</b> Periodo</span><i class="fa-solid fa-chevron-right"></i>
+            <span><b>2</b> Máquina / turno</span><i class="fa-solid fa-chevron-right"></i>
+            <span><b>3</b> Operador</span><i class="fa-solid fa-chevron-right"></i>
+            <span><b>4</b> Confirmar</span>
+        </div>
+    </section>
     <!-- NSQ_PRODUCCION_PERSONAL_V11_HOY_NAVEGACION -->
     <section class="ppv7-period-shell ppv11-period-shell">
         <div class="ppv11-module-brand">
@@ -329,7 +354,7 @@
     </section>
 
     <nav class="ppv3-tabs">
-        <button type="button" class="ppv3-tab @(panelActual=="planner" ? "active" : "")" data-view="planner"><i class="fa-solid fa-table-cells-large"></i> Programación</button>
+        <button type="button" class="ppv3-tab @(panelActual=="planner" ? "active" : "")" data-view="planner"><i class="fa-solid fa-user-group"></i> Operadores</button>
         <button type="button" class="ppv3-tab @(panelActual=="support" ? "active" : "")" data-view="support"><i class="fa-solid fa-people-group"></i> Cobertura por turno</button>
         <button type="button" class="ppv3-tab @(panelActual=="people" ? "active" : "")" data-view="people"><i class="fa-solid fa-users-viewfinder"></i> Vista por persona</button>
         <button type="button" class="ppv3-tab @(panelActual=="pending" ? "active" : "")" data-view="pending"><i class="fa-solid fa-triangle-exclamation"></i> Pendientes <span class="ppv3-tab-count">@Model.TotalSinOperador</span></button>
@@ -338,7 +363,7 @@
     <section class="ppv3-view @(panelActual=="planner" ? "active" : "")" data-view-panel="planner">
         <div class="ppv3-view-head ppv75-planner-head">
             <div>
-                <h2>Programación por OF y turno</h2>
+                <h2>Asignación de operadores por OF y turno</h2>
                 <p>Una OF se divide por los turnos que cruza. El horario mostrado es únicamente el tiempo real trabajado dentro de esa OF.</p>
             </div>
             <div class="ppv75-planner-actions">
@@ -1515,11 +1540,16 @@
 
 <div class="offcanvas offcanvas-end ppv3-availability" tabindex="-1" id="ppv3Availability">
     <div class="offcanvas-header">
-        <div><div class="ppv3-eyebrow">PERSONAL DISPONIBLE</div><h5 class="offcanvas-title mb-0" id="ppv3DrawerTitle">Asignar operador</h5></div>
+        <div><div class="ppv3-eyebrow">OPERADORES DISPONIBLES</div><h5 class="offcanvas-title mb-0" id="ppv3DrawerTitle">Asignar operador</h5></div>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
     <div class="offcanvas-body">
         <div class="ppv3-drawer-summary" id="ppv3DrawerSummary"></div>
+        <div class="ppv12-candidate-legend">
+            <span class="recommended"><i class="fa-solid fa-star"></i> Mejor opción</span>
+            <span class="available"><i class="fa-solid fa-circle-check"></i> Disponible</span>
+            <span class="busy"><i class="fa-solid fa-triangle-exclamation"></i> Con cruce</span>
+        </div>
         <div class="ppv3-candidate-search-wrap">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="search" id="ppv3CandidateSearch" class="form-control" autocomplete="off" placeholder="Buscar operador por nombre o No. control..." />
@@ -2615,12 +2645,15 @@
             if (!producing) clear.addEventListener('click', () => prepareConfirmation({ id:null, name:'Sin asignar', conflict:false }));
             candidateList.appendChild(clear);
 
+            let recommendedMarked = false;
             data.candidatos.forEach(c => {
                 const card = document.createElement('button'); card.type = 'button';
                 const isCurrent = String(c.personaID) === String(current);
-                card.className = `ppv3-candidate ${c.conflicto ? 'busy' : 'available'} ${isCurrent ? 'current' : ''}`;
+                const isRecommended = !recommendedMarked && !c.conflicto;
+                if (isRecommended) recommendedMarked = true;
+                card.className = `ppv3-candidate ${c.conflicto ? 'busy' : 'available'} ${isCurrent ? 'current' : ''} ${isRecommended ? 'recommended' : ''}`;
                 card.dataset.candidateSearch = [c.nombre||'',c.numeroControl||'',c.nivel?`N${c.nivel}`:'',c.enEscala?'en escala':'fuera de escala'].join(' ');
-                card.innerHTML = `<div class="ppv3-candidate-main"><div class="ppv3-candidate-name"><span class="ppv3-level-badge ${levelClass(c.nivel)}">${c.nivel?'N'+c.nivel:'—'}</span><div><strong>${c.nombre || 'Persona sin nombre'}</strong><small>${c.numeroControl||''} · ${c.enEscala?'En escala':'Fuera de escala'}</small></div></div><div class="ppv3-candidate-load"><span>CARGA</span><strong>${Number(c.horasSemana||0).toFixed(1)} h</strong></div></div><div class="ppv3-availability-state ${c.conflicto?'busy':'ok'}"><i class="fa-solid ${c.conflicto?'fa-triangle-exclamation':'fa-circle-check'}"></i> ${c.conflicto?'Cruza con otra OF · permitido con advertencia':'Disponible durante todo el intervalo'}</div><div class="ppv7-candidate-action">${isCurrent?'Asignado actualmente':c.conflicto?'Asignar con aviso':'Asignar a este horario'}</div>`;
+                card.innerHTML = `${isRecommended ? '<span class="ppv12-recommended-badge"><i class="fa-solid fa-star"></i> MEJOR OPCIÓN</span>' : ''}<div class="ppv3-candidate-main"><div class="ppv3-candidate-name"><span class="ppv3-level-badge ${levelClass(c.nivel)}">${c.nivel?'N'+c.nivel:'—'}</span><div><strong>${c.nombre || 'Persona sin nombre'}</strong><small>${c.numeroControl||''} · ${c.enEscala?'En escala':'Fuera de escala'}</small></div></div><div class="ppv3-candidate-load"><span>CARGA</span><strong>${Number(c.horasSemana||0).toFixed(1)} h</strong></div></div><div class="ppv3-availability-state ${c.conflicto?'busy':'ok'}"><i class="fa-solid ${c.conflicto?'fa-triangle-exclamation':'fa-circle-check'}"></i> ${c.conflicto?'Cruza con otra OF · permitido con advertencia':'Disponible durante todo el intervalo'}</div><div class="ppv7-candidate-action">${isCurrent?'Asignado actualmente':c.conflicto?'Asignar con aviso':'Asignar a este horario'}</div>`;
                 card.addEventListener('click', () => prepareConfirmation({ id:c.personaID, name:c.nombre, conflict:!!c.conflicto }));
                 candidateList.appendChild(card);
             });

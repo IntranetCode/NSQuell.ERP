@@ -216,12 +216,10 @@ public sealed partial class ProduccionPersonalController
 
     private static bool EsTurnoOperadorV7(TurnoV2 t)
     {
-        var nombre=(t.Nombre ?? string.Empty).ToUpperInvariant();
-        var tipo=(t.TipoTurno ?? string.Empty).ToUpperInvariant();
-        if (!t.Inicio.HasValue || !t.Fin.HasValue) return false;
-        if (nombre.Contains("12X12") || nombre.Contains("12 X 12") || tipo.Contains("12")) return false;
-        if (nombre.Contains("MIXT")) return false;
-        return true;
+        // Produccion trabaja con todos los turnos operativos que tengan horario
+        // real: regulares, 12x12 y Mixto. El constructor de segmentos ya maneja
+        // correctamente los turnos que cruzan al dia siguiente.
+        return t.Inicio.HasValue && t.Fin.HasValue;
     }
 
     private static IEnumerable<ProduccionPersonalV7SegmentoVm> ConstruirSegmentosV7(

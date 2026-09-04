@@ -511,7 +511,7 @@ ORDER BY r.FechaCreacion DESC;";
             item.OrdenCliente = document.OrderNumber;
             item.Version = document.VersionText;
             item.TotalEntregas = document.Deliveries.Count;
-            item.TotalPiezas = document.Deliveries.Sum(x => x.RequiredQuantity);
+            item.TotalPiezas = document.Deliveries.Sum(x => (long)x.RequiredQuantity);
             item.Advertencias.AddRange(document.Warnings);
 
             await using var cn = new SqlConnection(ConnectionString);
@@ -671,7 +671,7 @@ ORDER BY r.FechaCreacion DESC;";
             item.OrdenCliente = document.ContractNumber;
             item.Version = document.VersionText;
             item.TotalEntregas = document.Deliveries.Count;
-            item.TotalPiezas = document.Deliveries.Sum(x => x.RequiredQuantity);
+            item.TotalPiezas = document.Deliveries.Sum(x => (long)x.RequiredQuantity);
             item.Advertencias.AddRange(document.Warnings);
 
             await using var cn = new SqlConnection(ConnectionString);
@@ -896,7 +896,7 @@ ORDER BY r.FechaCreacion DESC;";
             item.OrdenCliente = document.FolioCliente;
             item.Version = document.VersionText;
             item.TotalEntregas = document.Rows.Sum(x => x.Deliveries.Count);
-            item.TotalPiezas = document.Rows.Sum(x => x.Deliveries.Sum(d => d.RequiredQuantity));
+            item.TotalPiezas = document.Rows.Sum(x => x.Deliveries.Sum(d => (long)d.RequiredQuantity));
             item.Advertencias.AddRange(document.Warnings);
 
             await using var cn = new SqlConnection(ConnectionString);
@@ -5070,7 +5070,7 @@ WHERE ClienteID = @ClienteID
             documento.Version = preparado.VersionRelease;
             documento.FechaDocumento = request.FechaDocumento?.Date;
             documento.TotalEntregas = nuevosRenglones.Sum(x => x.Entregas.Count);
-            documento.TotalPiezas = nuevosRenglones.Sum(x => x.Entregas.Sum(e => e.CantidadRequerida));
+            documento.TotalPiezas = nuevosRenglones.Sum(x => x.Entregas.Sum(e => (long)e.CantidadRequerida));
 
             DefinirEstadoDocumentoPreparado(documento);
             await GuardarLoteValidacionAsync(lote);
@@ -5618,7 +5618,7 @@ private async Task PrepararHufValidacionAsync(
             documento.FolioCliente = parsed.ScheduleNumber;
             documento.Version = parsed.VersionText;
             documento.TotalEntregas = parsed.Deliveries.Count;
-            documento.TotalPiezas = parsed.Deliveries.Sum(x => x.RequiredQuantity);
+            documento.TotalPiezas = parsed.Deliveries.Sum(x => (long)x.RequiredQuantity);
             documento.Advertencias.AddRange(parsed.Warnings);
 
             documento.ReleasePreparado = new PlaneacionReleaseCrearVm
@@ -5748,7 +5748,7 @@ private async Task PrepararHufValidacionAsync(
             documento.FolioCliente = parsed.ContractNumber;
             documento.Version = parsed.VersionText;
             documento.TotalEntregas = parsed.Deliveries.Count;
-            documento.TotalPiezas = parsed.Deliveries.Sum(x => x.RequiredQuantity);
+            documento.TotalPiezas = parsed.Deliveries.Sum(x => (long)x.RequiredQuantity);
             documento.Advertencias.AddRange(parsed.Warnings);
             documento.ReleasePreparado = vm;
 
@@ -5844,7 +5844,7 @@ private async Task PrepararHufValidacionAsync(
             documento.FolioCliente = parsed.FolioCliente;
             documento.Version = parsed.VersionText;
             documento.TotalEntregas = parsed.Rows.Sum(x => x.Deliveries.Count);
-            documento.TotalPiezas = parsed.Rows.Sum(x => x.Deliveries.Sum(d => d.RequiredQuantity));
+            documento.TotalPiezas = parsed.Rows.Sum(x => x.Deliveries.Sum(d => (long)d.RequiredQuantity));
             documento.Advertencias.AddRange(parsed.Warnings);
             documento.ReleasePreparado = vm;
 
@@ -5861,11 +5861,14 @@ private async Task PrepararHufValidacionAsync(
         private static void DefinirEstadoDocumentoPreparado(ReleaseValidacionDocumentoVm documento)
         {
             var pendientes = documento.ReleasePreparado.Renglones.Count(x => !x.ParteID.HasValue);
+            var clientePendiente = !documento.ClienteID.HasValue || documento.ClienteID.Value <= 0;
 
-            if (pendientes > 0)
+            if (clientePendiente || pendientes > 0)
             {
                 documento.Estado = ReleaseValidacionEstados.Pendiente;
-                documento.Mensaje = $"Falta validar {pendientes} número(s) de parte.";
+                documento.Mensaje = clientePendiente
+                    ? $"Falta validar el cliente y {pendientes} n\u00FAmero(s) de parte. La demanda extra\u00EDda se conserv\u00F3 sin inventar v\u00EDnculos ERP."
+                    : $"Falta validar {pendientes} n\u00FAmero(s) de parte.";
             }
             else
             {

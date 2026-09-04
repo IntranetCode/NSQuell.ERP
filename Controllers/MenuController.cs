@@ -265,6 +265,20 @@ ORDER BY m.Orden, m.Nombre;";
             .ToList();
     }
 
+    // NSQ_PRODUCCION_MENU_SOLO_VISTA_OPERATIVA_V1
+    // Solo cambia la presentacion del grupo Produccion. No desactiva Menus,
+    // SubMenus, permisos, controladores ni rutas usadas por otras areas.
+    if (id == 2)
+    {
+        menus = menus
+            .Where(m => string.Equals(
+                m.Nombre?.Trim(),
+                "Vista Operativa",
+                StringComparison.OrdinalIgnoreCase))
+            .OrderBy(m => m.Orden)
+            .ToList();
+    }
+
     ViewBag.MenuGrupoID = id;
     ViewBag.NombreGrupo = await ObtenerNombreGrupo(conn, id);
 

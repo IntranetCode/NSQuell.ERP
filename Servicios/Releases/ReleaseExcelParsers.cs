@@ -234,8 +234,15 @@ public static class ReleaseExcelDocumentDetector
 
         var rows = new List<ReleaseExcelRow>();
         var warnings = new List<string>();
+        var releaseDateRow = FindAirThermalReleaseDateRow(table);
 
-        for (var planRow = 5; planRow < table.Rows.Count; planRow++)
+        if (releaseDateRow < 0)
+        {
+            throw new InvalidOperationException(
+                "AIR THERMAL: no se encontro la fila de fechas del Material Release.");
+        }
+
+        for (var planRow = releaseDateRow + 1; planRow < table.Rows.Count; planRow++)
         {
             if (!CellText(Get(table, planRow, 3))
                 .Equals("Plan PO", StringComparison.OrdinalIgnoreCase))
@@ -258,7 +265,7 @@ public static class ReleaseExcelDocumentDetector
 
             for (var column = 4; column < table.Columns.Count; column++)
             {
-                if (TryReadDate(Get(table, 4, column), out var columnDate))
+                if (TryReadDate(Get(table, releaseDateRow, column), out var columnDate))
                     datedColumns.Add((column, columnDate.Date));
             }
 
@@ -459,22 +466,84 @@ public static class ReleaseExcelDocumentDetector
         }
     }
 
+    private static int FindAirThermalReleaseDateRow(DataTable table)
+    {
+        if (table.Rows.Count == 0 || table.Columns.Count == 0)
+            return -1;
+
+        var bestRow = -1;
+        var bestDateCount = 0;
+        var scanRows = Math.Min(table.Rows.Count, 20);
+
+        for (var row = 0; row < scanRows; row++)
+        {
+            var label = CellText(Get(table, row, 3)).Trim();
+            var dateCount = 0;
+
+            for (var column = 4; column < table.Columns.Count; column++)
+            {
+                if (TryReadDate(Get(table, row, column), out _))
+                    dateCount++;
+            }
+
+            var isReleaseDate = label.Equals("Release Date", StringComparison.OrdinalIgnoreCase);
+            var isDeliveryDate = label.Equals("Delivery Date", StringComparison.OrdinalIgnoreCase);
+
+            if ((isReleaseDate || isDeliveryDate) && dateCount >= 3)
+                return row;
+
+            if (dateCount > bestDateCount)
+            {
+                bestDateCount = dateCount;
+                bestRow = row;
+            }
+        }
+
+        return bestDateCount >= 3 ? bestRow : -1;
+    }
+
     private static bool LooksLikeAirThermal(DataTable table)
     {
-        if (table.Rows.Count < 17 || table.Columns.Count < 8)
+        if (table.Rows.Count < 6 || table.Columns.Count < 5)
             return false;
 
-        var customerLabel = CellText(Get(table, 0, 1));
-        var customer = CellText(Get(table, 0, 2));
-        var deliveryDateLabel = CellText(Get(table, 4, 3));
-        var firstPlanLabel = CellText(Get(table, 5, 3));
-        var firstPart = CellText(Get(table, 5, 1));
+        var hasAirThermal = false;
+        var textRows = Math.Min(table.Rows.Count, 12);
+        var textCols = Math.Min(table.Columns.Count, 12);
 
-        return customerLabel.Equals("Customer:", StringComparison.OrdinalIgnoreCase) &&
-               customer.Contains("AIR THERMAL", StringComparison.OrdinalIgnoreCase) &&
-               deliveryDateLabel.Equals("Delivery date", StringComparison.OrdinalIgnoreCase) &&
-               firstPlanLabel.Equals("Plan PO", StringComparison.OrdinalIgnoreCase) &&
-               !string.IsNullOrWhiteSpace(firstPart);
+        for (var row = 0; row < textRows && !hasAirThermal; row++)
+        {
+            for (var column = 0; column < textCols; column++)
+            {
+                if (CellText(Get(table, row, column))
+                    .Contains("AIR THERMAL", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasAirThermal = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasAirThermal)
+            return false;
+
+        var releaseDateRow = FindAirThermalReleaseDateRow(table);
+        if (releaseDateRow < 0)
+            return false;
+
+        for (var row = releaseDateRow + 1; row < table.Rows.Count; row++)
+        {
+            if (!CellText(Get(table, row, 3))
+                .Equals("Plan PO", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(CellText(Get(table, row, 1))))
+                return true;
+        }
+
+        return false;
     }
     private static bool LooksLikeGolde(DataTable table)
     {
