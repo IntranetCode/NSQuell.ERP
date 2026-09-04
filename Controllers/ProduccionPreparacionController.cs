@@ -185,11 +185,11 @@ SELECT COUNT(1)
 FROM dbo.Produccion_PreparacionAnticipada pa WITH(UPDLOCK,HOLDLOCK)
 INNER JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=pa.ProgramaProduccionID
 WHERE pa.Activo=1
-  AND pa.TipoTarea=@TipoTarea
-  AND pa.Estado=@EstadoEnProceso
-  AND pp.MaquinaID=@MaquinaID
-  AND pa.PreparacionAnticipadaID<>@Tarea1
-  AND pa.PreparacionAnticipadaID<>@Tarea2;";
+AND pa.TipoTarea=@TipoTarea
+AND pa.Estado=@EstadoEnProceso
+AND pp.MaquinaID=@MaquinaID
+AND pa.PreparacionAnticipadaID<>@Tarea1
+AND pa.PreparacionAnticipadaID<>@Tarea2;";
                 await using (var cmd = new SqlCommand(sqlOtroCambio, cn, tx))
                 {
                     cmd.Parameters.Add("@TipoTarea", SqlDbType.NVarChar, 40).Value = ProduccionPreparacionTipo.CambioMolde;
@@ -210,21 +210,21 @@ WHERE pa.Activo=1
                 const string sqlIniciar = @"
 UPDATE dbo.Produccion_PreparacionAnticipada
 SET Estado=@EstadoEnProceso,
-    UsuarioInicioID=@UsuarioInicioID,
-    FechaInicioReal=@FechaInicioReal,
-    FechaFinReal=NULL,
-    DuracionRealMinutos=NULL,
-    LimiteMinutosAplicado=@LimiteMinutos,
-    ExcedioLimite=0,
-    MotivoExceso=NULL,
-    UsuarioConfirmacionID=NULL,
-    FechaConfirmacion=NULL,
-    UsuarioModificacionID=@UsuarioModificacionID,
-    FechaModificacion=SYSDATETIME()
+UsuarioInicioID=@UsuarioInicioID,
+FechaInicioReal=@FechaInicioReal,
+FechaFinReal=NULL,
+DuracionRealMinutos=NULL,
+LimiteMinutosAplicado=@LimiteMinutos,
+ExcedioLimite=0,
+MotivoExceso=NULL,
+UsuarioConfirmacionID=NULL,
+FechaConfirmacion=NULL,
+UsuarioModificacionID=@UsuarioModificacionID,
+FechaModificacion=SYSDATETIME()
 WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
-  AND TipoTarea=@TipoTarea
-  AND Activo=1
-  AND Estado IN(@EstadoPendiente,@EstadoEnProceso);";
+AND TipoTarea=@TipoTarea
+AND Activo=1
+AND Estado IN(@EstadoPendiente,@EstadoEnProceso);";
                 await using (var cmd = new SqlCommand(sqlIniciar, cn, tx))
                 {
                     cmd.Parameters.Add("@EstadoEnProceso", SqlDbType.NVarChar, 30).Value = ProduccionPreparacionEstado.EnProceso;
@@ -240,9 +240,7 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                     if (filas != tareas.Count) throw new InvalidOperationException("Una de las tareas cambió de estado mientras intentabas iniciar el cambio de molde.");
                 }
                 await tx.CommitAsync();
-                TempData["Success"] = esPareja
-                    ? $"Cambio de molde LH/RH iniciado como una sola operación física. Las dos OF quedaron sincronizadas. Límite operativo: {limiteMinutos} minutos."
-                    : $"Cambio de molde iniciado. Límite operativo: {limiteMinutos} minutos.";
+                TempData["Success"] = esPareja ? $"Cambio de molde LH/RH iniciado como una sola operación física. Las dos OF quedaron sincronizadas. Límite operativo: {limiteMinutos} minutos." : $"Cambio de molde iniciado. Esta máquina tiene un límite operativo de {limiteMinutos} minutos.";
                 return RedirectToAction(nameof(CambioMolde), new { maquinaId });
             }
             catch (Exception ex)
@@ -321,13 +319,13 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                 if (checklist == null)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = "No existe el checklist GQ-F-PR01-03 para este cambio de molde. Debes completar el checklist antes de finalizar el cambio.";
+                    TempData["Error"] = "No existe el checklist GQ-F-PR01-03 para este cambio de molde. Debes atender la actividad A1 antes de finalizar.";
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
                 if (!checklist.EstaCompleto)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = $"El checklist GQ-F-PR01-03 todavía no está completo. Avance actual: {checklist.TextoAvance}. Completa y finaliza el checklist antes de cerrar el cambio de molde.";
+                    TempData["Error"] = $"El checklist GQ-F-PR01-03 todavía no está completo. Avance actual: {checklist.TextoAvance}. Debes completar y finalizar la actividad A1 antes de cerrar el cambio de molde.";
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
                 var fechasInicio = tareas.Where(x => x.FechaInicioReal.HasValue).Select(x => x.FechaInicioReal!.Value).OrderBy(x => x).ToList();
@@ -353,25 +351,21 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                 const string sqlFinalizar = @"
 UPDATE dbo.Produccion_PreparacionAnticipada
 SET Estado=@EstadoConfirmada,
-    FechaInicioReal=@FechaInicioReal,
-    FechaFinReal=@FechaFinReal,
-    DuracionRealMinutos=@DuracionRealMinutos,
-    LimiteMinutosAplicado=@LimiteMinutos,
-    ExcedioLimite=@ExcedioLimite,
-    MotivoExceso=@MotivoExceso,
-    UsuarioConfirmacionID=@UsuarioID,
-    FechaConfirmacion=@FechaFinReal,
-    Observaciones=LEFT(CASE
-        WHEN @Observaciones IS NULL THEN Observaciones
-        WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones
-        ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones
-    END,500),
-    UsuarioModificacionID=@UsuarioID,
-    FechaModificacion=SYSDATETIME()
+FechaInicioReal=@FechaInicioReal,
+FechaFinReal=@FechaFinReal,
+DuracionRealMinutos=@DuracionRealMinutos,
+LimiteMinutosAplicado=@LimiteMinutos,
+ExcedioLimite=@ExcedioLimite,
+MotivoExceso=@MotivoExceso,
+UsuarioConfirmacionID=@UsuarioID,
+FechaConfirmacion=@FechaFinReal,
+Observaciones=LEFT(CASE WHEN @Observaciones IS NULL THEN Observaciones WHEN Observaciones IS NULL OR LTRIM(RTRIM(Observaciones))=N'' THEN @Observaciones ELSE Observaciones+CHAR(13)+CHAR(10)+@Observaciones END,500),
+UsuarioModificacionID=@UsuarioID,
+FechaModificacion=SYSDATETIME()
 WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
-  AND TipoTarea=@TipoTarea
-  AND Activo=1
-  AND Estado=@EstadoEnProceso;";
+AND TipoTarea=@TipoTarea
+AND Activo=1
+AND Estado=@EstadoEnProceso;";
                 await using (var cmd = new SqlCommand(sqlFinalizar, cn, tx))
                 {
                     cmd.Parameters.Add("@EstadoConfirmada", SqlDbType.NVarChar, 30).Value = ProduccionPreparacionEstado.Confirmada;
@@ -393,15 +387,11 @@ WHERE PreparacionAnticipadaID IN(@Tarea1,@Tarea2)
                 await tx.CommitAsync();
                 if (esPareja)
                 {
-                    TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite
-                        ? $"Cambio de molde LH/RH finalizado para ambas OF en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido."
-                        : $"Cambio de molde LH/RH finalizado correctamente para ambas OF en {duracionMinutos} minutos.";
+                    TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite ? $"Cambio de molde LH/RH finalizado para ambas OF en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido." : $"Cambio de molde LH/RH finalizado correctamente para ambas OF en {duracionMinutos} minutos.";
                 }
                 else
                 {
-                    TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite
-                        ? $"Cambio de molde finalizado en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido."
-                        : $"Cambio de molde finalizado correctamente en {duracionMinutos} minutos. Límite de la máquina: {limiteMinutos} minutos.";
+                    TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite ? $"Cambio de molde finalizado en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido." : $"Cambio de molde finalizado correctamente en {duracionMinutos} minutos. Límite de la máquina: {limiteMinutos} minutos.";
                 }
                 return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
             }

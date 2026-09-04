@@ -173,8 +173,13 @@ WHERE c.ChecklistArranqueID=@ChecklistArranqueID
                     await cmd.ExecuteNonQueryAsync();
                 }
                 await tx.CommitAsync();
-                var actualizado = await ObtenerChecklistCambioMoldePorPreparacionAsync(vm.PreparacionAnticipadaID, cn);
-                return Json(new { ok = true, mensaje = $"Sección {vm.OrdenSeccion} guardada correctamente.", checklist = actualizado });
+
+                return Json(new
+                {
+                    ok = true,
+                    mensaje = $"Sección {vm.OrdenSeccion} guardada correctamente.",
+                    checklistArranqueID = checklist.ChecklistArranqueID
+                });
             }
             catch (Exception ex)
             {
@@ -242,8 +247,13 @@ IF @@ROWCOUNT<>1
                     await cmd.ExecuteNonQueryAsync();
                 }
                 await tx.CommitAsync();
-                var actualizado = await ObtenerChecklistCambioMoldePorPreparacionAsync(vm.PreparacionAnticipadaID, cn);
-                return Json(new { ok = true, mensaje = "Checklist GQ-F-PR01-03 completado correctamente.", checklist = actualizado });
+
+                return Json(new
+                {
+                    ok = true,
+                    mensaje = "Checklist GQ-F-PR01-03 completado correctamente.",
+                    checklistArranqueID = checklist.ChecklistArranqueID
+                });
             }
             catch (Exception ex)
             {
@@ -396,14 +406,9 @@ ORDER BY c.ChecklistArranqueID DESC;";
         private async Task<ProduccionChecklistVm?> CargarChecklistCambioMoldePorIdAsync(int checklistArranqueId, SqlConnection cn, SqlTransaction? tx = null)
         {
             const string sqlEncabezado = @"
-SELECT TOP(1)
-    ChecklistArranqueID,EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,
-    ReleaseID,ReleaseDetalleID,FechaChecklist,MaquinaID,MaquinaCodigo,MaquinaNombre,MoldeID,MoldeCodigo,ParteID,
-    NumeroParte,ReferenciaSAP,DescripcionParte,CodigoFormato,VersionFormato,EstatusID,EstadoFlujo,TipoChecklist,
-    MomentoProceso,ObservacionesGenerales,UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo
+SELECT TOP(1) ChecklistArranqueID,EjecucionProduccionID,ProgramaProduccionID,SolicitudProduccionID,SolicitudProduccionDetalleID,ReleaseID,ReleaseDetalleID,FechaChecklist,MaquinaID,MaquinaCodigo,MaquinaNombre,MoldeID,MoldeCodigo,ParteID,NumeroParte,ReferenciaSAP,DescripcionParte,CodigoFormato,VersionFormato,EstatusID,EstadoFlujo,TipoChecklist,MomentoProceso,ObservacionesGenerales,UsuarioCreacionID,FechaCreacion,UsuarioModificacionID,FechaModificacion,Activo
 FROM dbo.Produccion_ChecklistArranque
-WHERE ChecklistArranqueID=@ChecklistArranqueID
-  AND Activo=1;";
+WHERE ChecklistArranqueID=@ChecklistArranqueID AND Activo=1;";
             ProduccionChecklistVm? vm = null;
             await using (var cmd = CrearComandoChecklist(sqlEncabezado, cn, tx))
             {
@@ -445,34 +450,13 @@ WHERE ChecklistArranqueID=@ChecklistArranqueID
             }
             var tablaVinculo = await ObtenerTablaVinculoChecklistProgramasAsync(cn, tx);
             var sqlProgramas = $@"
-SELECT
-    cp.ChecklistProgramaID,cp.ChecklistArranqueID,cp.ProgramaProduccionID,cp.PreparacionAnticipadaID,
-    cp.EjecucionProduccionID,cp.LadoLhRh,ISNULL(cp.EsPrincipal,0) AS EsPrincipal,
-    COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),N'') AS NumeroOF,
-    pp.ParteID,pp.NumeroParte,pp.ReferenciaSAP,pp.DesignacionDescripcionSAP AS DescripcionParte,
-    grupo.GrupoLhRh
+SELECT cp.ChecklistProgramaID,cp.ChecklistArranqueID,cp.ProgramaProduccionID,cp.PreparacionAnticipadaID,cp.EjecucionProduccionID,cp.LadoLhRh,ISNULL(cp.EsPrincipal,0) AS EsPrincipal,COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),N'') AS NumeroOF,pp.ParteID,pp.NumeroParte,pp.ReferenciaSAP,pp.DesignacionDescripcionSAP AS DescripcionParte,grupo.GrupoLhRh
 FROM {tablaVinculo} cp
 LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=cp.ProgramaProduccionID
 LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=pp.SolicitudProduccionID
-OUTER APPLY
-(
-    SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N'')) AS PosGrupo
-) marca
-OUTER APPLY
-(
-    SELECT TRY_CONVERT
-    (
-        INT,
-        LEFT
-        (
-            SUBSTRING(pp.Observaciones,marca.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),
-            CHARINDEX(N';',SUBSTRING(pp.Observaciones,marca.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1
-        )
-    ) AS GrupoLhRh
-    WHERE marca.PosGrupo>0
-) grupo
-WHERE cp.ChecklistArranqueID=@ChecklistArranqueID
-  AND cp.Activo=1
+OUTER APPLY(SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N'')) AS PosGrupo) marca
+OUTER APPLY(SELECT TRY_CONVERT(INT,LEFT(SUBSTRING(pp.Observaciones,marca.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),CHARINDEX(N';',SUBSTRING(pp.Observaciones,marca.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1)) AS GrupoLhRh WHERE marca.PosGrupo>0) grupo
+WHERE cp.ChecklistArranqueID=@ChecklistArranqueID AND cp.Activo=1
 ORDER BY ISNULL(cp.EsPrincipal,0) DESC,cp.ProgramaProduccionID;";
             await using (var cmd = CrearComandoChecklist(sqlProgramas, cn, tx))
             {
@@ -502,32 +486,18 @@ ORDER BY ISNULL(cp.EsPrincipal,0) DESC,cp.ProgramaProduccionID;";
             }
             vm.EsOperacionLhRh = vm.Programas.Count > 1 && vm.GrupoLhRh.HasValue;
             const string sqlPreguntas = @"
-SELECT
-    p.PreguntaID,p.CodigoFormato,p.VersionFormato,p.Seccion,p.OrdenSeccion,p.OrdenPregunta,p.TextoPregunta,
-    p.ResponsableSugerido,p.RequiereObservacionSiNOK,p.RequiereObservacionSiNA,p.TipoChecklist,p.MomentoProceso,
-    p.TipoRespuesta,p.EstadoPredeterminado,p.EsPreguntaCalidad,p.GrupoResponsable,p.EsRecurrente,p.Activo,
-    CONVERT(bit,1) AS EsObligatoria,
-    CONVERT(bit,1) AS PermiteNA,
-    detalle.ChecklistArranqueDetalleID,detalle.Resultado,detalle.Observaciones,detalle.UsuarioRespuestaID,
-    detalle.FechaRespuesta,detalle.Confirmado,detalle.ValorCapturado,detalle.Unidad,detalle.Especificacion,detalle.Tolerancia,
-    LTRIM(RTRIM(ISNULL(per.Nombre,N'')+N' '+ISNULL(per.ApellidoPaterno,N'')+N' '+ISNULL(per.ApellidoMaterno,N''))) AS UsuarioRespuestaNombre
+SELECT p.PreguntaID,p.CodigoFormato,p.VersionFormato,p.Seccion,p.OrdenSeccion,p.OrdenPregunta,p.TextoPregunta,p.ResponsableSugerido,p.RequiereObservacionSiNOK,p.RequiereObservacionSiNA,p.TipoChecklist,p.MomentoProceso,p.TipoRespuesta,p.EstadoPredeterminado,p.EsPreguntaCalidad,p.GrupoResponsable,p.EsRecurrente,p.EsObligatoria,p.PermiteNA,p.Activo,detalle.ChecklistArranqueDetalleID,detalle.Resultado,detalle.Observaciones,detalle.UsuarioRespuestaID,detalle.FechaRespuesta,detalle.Confirmado,detalle.ValorCapturado,detalle.Unidad,detalle.Especificacion,detalle.Tolerancia,LTRIM(RTRIM(ISNULL(per.Nombre,N'')+N' '+ISNULL(per.ApellidoPaterno,N'')+N' '+ISNULL(per.ApellidoMaterno,N''))) AS UsuarioRespuestaNombre
 FROM dbo.ERP_ChecklistArranquePreguntas p
 OUTER APPLY
 (
-    SELECT TOP(1)
-        d.ChecklistArranqueDetalleID,d.Resultado,d.Observaciones,d.UsuarioRespuestaID,d.FechaRespuesta,
-        d.Confirmado,d.ValorCapturado,d.Unidad,d.Especificacion,d.Tolerancia
+    SELECT TOP(1) d.ChecklistArranqueDetalleID,d.Resultado,d.Observaciones,d.UsuarioRespuestaID,d.FechaRespuesta,d.Confirmado,d.ValorCapturado,d.Unidad,d.Especificacion,d.Tolerancia
     FROM dbo.Produccion_ChecklistArranqueDetalle d
-    WHERE d.ChecklistArranqueID=@ChecklistArranqueID
-      AND d.PreguntaID=p.PreguntaID
-      AND d.Activo=1
+    WHERE d.ChecklistArranqueID=@ChecklistArranqueID AND d.PreguntaID=p.PreguntaID AND d.Activo=1
     ORDER BY d.ChecklistArranqueDetalleID DESC
 ) detalle
 LEFT JOIN dbo.Usuarios usr ON usr.UsuarioID=detalle.UsuarioRespuestaID
 LEFT JOIN dbo.Persona per ON per.PersonaID=usr.PersonaID
-WHERE p.Activo=1
-  AND p.CodigoFormato=@CodigoFormato
-  AND p.VersionFormato=@VersionFormato
+WHERE p.Activo=1 AND p.CodigoFormato=@CodigoFormato AND p.VersionFormato=@VersionFormato
 ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
             await using (var cmd = CrearComandoChecklist(sqlPreguntas, cn, tx))
             {
@@ -539,6 +509,7 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
                 {
                     var pregunta = new ProduccionChecklistPreguntaVm
                     {
+                        ChecklistArranqueID = checklistArranqueId,
                         PreguntaID = Convert.ToInt32(rd["PreguntaID"]),
                         CodigoFormato = ChecklistTexto(rd, "CodigoFormato") ?? string.Empty,
                         VersionFormato = ChecklistTexto(rd, "VersionFormato"),
@@ -556,9 +527,9 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
                         EsPreguntaCalidad = rd["EsPreguntaCalidad"] != DBNull.Value && Convert.ToBoolean(rd["EsPreguntaCalidad"]),
                         GrupoResponsable = ChecklistTexto(rd, "GrupoResponsable"),
                         EsRecurrente = rd["EsRecurrente"] != DBNull.Value && Convert.ToBoolean(rd["EsRecurrente"]),
-                        EsObligatoria = true,
-                        PermiteNA = true,
-                        Activo = true,
+                        EsObligatoria = rd["EsObligatoria"] != DBNull.Value && Convert.ToBoolean(rd["EsObligatoria"]),
+                        PermiteNA = rd["PermiteNA"] != DBNull.Value && Convert.ToBoolean(rd["PermiteNA"]),
+                        Activo = rd["Activo"] != DBNull.Value && Convert.ToBoolean(rd["Activo"]),
                         ChecklistArranqueDetalleID = ChecklistNullableInt(rd, "ChecklistArranqueDetalleID"),
                         Resultado = ChecklistTexto(rd, "Resultado"),
                         Observaciones = ChecklistTexto(rd, "Observaciones"),
@@ -574,7 +545,12 @@ ORDER BY p.OrdenSeccion,p.OrdenPregunta,p.PreguntaID;";
                     var seccion = vm.Secciones.FirstOrDefault(x => x.OrdenSeccion == pregunta.OrdenSeccion && string.Equals(x.Seccion, pregunta.Seccion, StringComparison.OrdinalIgnoreCase));
                     if (seccion == null)
                     {
-                        seccion = new ProduccionChecklistSeccionVm { Seccion = pregunta.Seccion, OrdenSeccion = pregunta.OrdenSeccion };
+                        seccion = new ProduccionChecklistSeccionVm
+                        {
+                            Seccion = pregunta.Seccion,
+                            OrdenSeccion = pregunta.OrdenSeccion,
+                            ResponsableSugerido = pregunta.ResponsableSugerido
+                        };
                         vm.Secciones.Add(seccion);
                     }
                     seccion.Preguntas.Add(pregunta);

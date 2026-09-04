@@ -25,6 +25,13 @@
             : value.Replace("\"", "&quot;").Replace("\r", " ").Replace("\n", " ");
     }
 
+    static string NumeroOFVisible(string? numeroOFRecibida, string? folioSolicitud)
+    {
+        if (!string.IsNullOrWhiteSpace(numeroOFRecibida)) return numeroOFRecibida.Trim();
+        if (!string.IsNullOrWhiteSpace(folioSolicitud)) return folioSolicitud.Trim();
+        return "Sin OF";
+    }
+
     static int MinutosDiferencia(DateTime fecha)
     {
         return (int)Math.Round(
@@ -730,7 +737,7 @@
                 </h3>
 
                 <div class="prox-sub">
-                    OF atrasadas que todavía no han iniciado y programas previstos para los próximos 15 minutos.
+                    OF atrasadas que todavía no han iniciado y OF previstas para los próximos 15 minutos.
                 </div>
             </div>
 
@@ -815,6 +822,8 @@
                 ? ""
                 : item.TurnoSugeridoNombre.Trim();
 
+                var numeroOF = NumeroOFVisible(item.NumeroOFRecibida, item.FolioSolicitud);
+
                 var maquinaOcupada =
                 item.MaquinaID.HasValue &&
                 maquinasOcupadas.Contains(item.MaquinaID.Value);
@@ -835,16 +844,17 @@
 
                     <div class="prox-main">
                         <div class="prox-program">
-                            Programa @item.ProgramaProduccionID
+                            <i class="bi bi-file-earmark-text me-1"></i>
+                            OF @numeroOF
                         </div>
 
                         <div class="prox-of">
-                            @Txt(item.TituloPrograma)
+                            Programa interno #@item.ProgramaProduccionID
 
                             @if (item.SolicitudProduccionID.HasValue)
                             {
                                 <span>
-                                    · OF ID @item.SolicitudProduccionID
+                                    · Solicitud @item.SolicitudProduccionID
                                 </span>
                             }
                     </div>
@@ -967,7 +977,7 @@
                                             data-bs-toggle="modal"
                                             data-bs-target="#modalSolicitarReprogramacion"
                                             data-programa-id="@item.ProgramaProduccionID"
-                                            data-titulo="@Data(item.TituloPrograma)"
+                                            data-titulo="@Data(numeroOF)"
                                             data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
                                             data-inicio="@Fecha(item.FechaInicioProgramada)">
                                         <i class="bi bi-calendar2-event me-1"></i>
@@ -1024,7 +1034,7 @@
                                             data-bs-toggle="modal"
                                             data-bs-target="#modalSolicitarReprogramacion"
                                             data-programa-id="@item.ProgramaProduccionID"
-                                            data-titulo="@Data(item.TituloPrograma)"
+                                            data-titulo="@Data(numeroOF)"
                                             data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
                                             data-inicio="@Fecha(item.FechaInicioProgramada)">
                                         <i class="bi bi-calendar2-event me-1"></i>
@@ -1036,7 +1046,7 @@
                                         data-bs-toggle="modal"
                                         data-bs-target="#modalIniciarPreparacion"
                                         data-programa-id="@item.ProgramaProduccionID"
-                                        data-titulo="@Data(item.TituloPrograma)"
+                                        data-titulo="@Data(numeroOF)"
                                         data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
                                         data-maquina-id="@(item.MaquinaID?.ToString() ?? "")"
                                         data-parte-id="@(item.ParteID?.ToString() ?? "")"

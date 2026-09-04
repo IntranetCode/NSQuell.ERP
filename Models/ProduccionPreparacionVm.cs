@@ -478,10 +478,20 @@ namespace ERP.NSQuell.Models
     {
         public string Seccion { get; set; } = string.Empty;
         public int OrdenSeccion { get; set; }
+        public string? ResponsableSugerido { get; set; }
         public List<ProduccionChecklistPreguntaVm> Preguntas { get; set; } = new();
+
+        public bool EsSeccionCalidad =>
+            Preguntas.Any(x => x.Activo && x.EsPreguntaCalidad) ||
+            Seccion.Contains("CALIDAD", StringComparison.OrdinalIgnoreCase) ||
+            (ResponsableSugerido?.Contains("CALIDAD", StringComparison.OrdinalIgnoreCase) ?? false);
 
         public int TotalPreguntas => Preguntas.Count(x => x.Activo);
         public int RespuestasContestadas => Preguntas.Count(x => x.Activo && x.EstaRespondida);
+        public int TotalRespondidas => Preguntas.Count(x => x.Activo && x.Confirmado);
+        public int TotalPendientes => Math.Max(0, TotalPreguntas - TotalRespondidas);
+        public int TotalNOK => Preguntas.Count(x => x.Activo && x.Confirmado && x.EsNok);
+        public int TotalNA => Preguntas.Count(x => x.Activo && x.Confirmado && x.EsNa);
         public int PreguntasObligatorias => Preguntas.Count(x => x.Activo && x.EsObligatoria);
         public int PreguntasObligatoriasPendientes => Preguntas.Count(x => x.Activo && x.EsObligatoria && !x.RespuestaValida);
         public bool TieneRespuestas => Preguntas.Any(x => x.Activo && x.EstaRespondida);
@@ -502,6 +512,8 @@ namespace ERP.NSQuell.Models
 
     public sealed class ProduccionChecklistPreguntaVm
     {
+        public int? ChecklistArranqueDetalleID { get; set; }
+        public int ChecklistArranqueID { get; set; }
         public int PreguntaID { get; set; }
         public string CodigoFormato { get; set; } = string.Empty;
         public string? VersionFormato { get; set; }
@@ -522,8 +534,6 @@ namespace ERP.NSQuell.Models
         public bool EsObligatoria { get; set; } = true;
         public bool PermiteNA { get; set; } = true;
         public bool Activo { get; set; } = true;
-
-        public int? ChecklistArranqueDetalleID { get; set; }
         public string? Resultado { get; set; }
         public string? Observaciones { get; set; }
         public int? UsuarioRespuestaID { get; set; }
@@ -551,9 +561,20 @@ namespace ERP.NSQuell.Models
         public bool EsNa =>
             string.Equals(Resultado, ProduccionChecklistResultado.Na, StringComparison.OrdinalIgnoreCase);
 
+        public bool EsOK => Confirmado && EsOk;
+        public bool EsNOK => Confirmado && EsNok;
+        public bool EsNA => Confirmado && EsNa;
+
+        public bool RequiereCapturarValor =>
+            string.Equals(TipoRespuesta, "NUMERICO", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(TipoRespuesta, "ESTADO_Y_VALOR", StringComparison.OrdinalIgnoreCase);
+
         public bool RequiereObservacionActual =>
             (EsNok && RequiereObservacionSiNOK) ||
             (EsNa && RequiereObservacionSiNA);
+
+        public bool RequiereObservacion =>
+            Confirmado && RequiereObservacionActual;
 
         public bool RespuestaValida
         {
@@ -563,13 +584,40 @@ namespace ERP.NSQuell.Models
                 if (!EstaRespondida) return false;
                 if (EsNa && !PermiteNA) return false;
                 if (RequiereObservacionActual && string.IsNullOrWhiteSpace(Observaciones)) return false;
+                if (RequiereCapturarValor && string.IsNullOrWhiteSpace(ValorCapturado)) return false;
                 return true;
             }
         }
+
+        public bool TieneErrorCaptura =>
+            !Confirmado ||
+            (RequiereObservacion && string.IsNullOrWhiteSpace(Observaciones)) ||
+            (RequiereCapturarValor && string.IsNullOrWhiteSpace(ValorCapturado));
+
+        public string ResultadoTexto
+        {
+            get
+            {
+                if (!Confirmado) return "Pendiente";
+                if (EsOk) return "OK";
+                if (EsNok) return "NOK";
+                if (EsNa) return "N/A";
+                return "Pendiente";
+            }
+        }
+
+        public string ResultadoClase
+        {
+            get
+            {
+                if (!Confirmado) return "bg-warning text-dark";
+                if (EsOk) return "bg-success";
+                if (EsNok) return "bg-danger";
+                if (EsNa) return "bg-secondary";
+                return "bg-light text-dark border";
+            }
+        }
     }
-
-
-
     public sealed class ProduccionChecklistGuardarSeccionVm
     {
         public int PreparacionAnticipadaID { get; set; }
