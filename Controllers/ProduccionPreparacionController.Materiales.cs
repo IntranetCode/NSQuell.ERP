@@ -15,26 +15,21 @@ namespace ERP.NSQuell.Controllers
         [HttpGet]
         public async Task<IActionResult> Materiales(string? filtro = null, int? maquinaId = null)
         {
-            if (!UsuarioEnSesion())
-                return RedirectToAction("Login", "Login");
-
+            if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
             filtro = string.IsNullOrWhiteSpace(filtro) ? null : filtro.Trim();
-            if (maquinaId.HasValue && maquinaId.Value <= 0)
-                maquinaId = null;
-
+            if (maquinaId.HasValue && maquinaId.Value <= 0) maquinaId = null;
             var usuarioId = ObtenerUsuarioID();
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var permisos = await ObtenerPermisosPreparacionUsuarioAsync(usuarioId, cn);
-            if (!permisos.PuedeVerModulo)
-                return StatusCode(StatusCodes.Status403Forbidden);
-
+            if (!permisos.PuedeVerModulo) return StatusCode(StatusCodes.Status403Forbidden);
             await SincronizarRecepcionesFaltantesAsync(usuarioId, cn);
-
             var ahora = DateTime.Now;
-
+            var materialesEsperados = await CargarMaterialesEsperadosAsync(filtro, maquinaId, cn);
+            var recepciones = await CargarRecepcionesMaterialesAsync(filtro, maquinaId, cn);
+            var relacionesLhRh = await CargarRelacionesMaterialesLhRhAsync(cn);
+            AplicarRelacionesLhRhMaterialesEsperados(materialesEsperados, relacionesLhRh);
+            AplicarRelacionesLhRhRecepciones(recepciones, relacionesLhRh);
             var vm = new ProduccionPreparacionMaterialesVm
             {
                 FechaConsulta = ahora,
@@ -42,12 +37,84 @@ namespace ERP.NSQuell.Controllers
                 MaquinaID = maquinaId,
                 PuedeGestionarMateriales = permisos.PuedeGestionarEmbalaje,
                 Maquinas = await CargarMaquinasPreparacionAsync(cn),
-                MaterialesEsperados = await CargarMaterialesEsperadosAsync(filtro, maquinaId, cn),
-                Recepciones = await CargarRecepcionesMaterialesAsync(filtro, maquinaId, cn)
+                MaterialesEsperados = materialesEsperados,
+                Recepciones = recepciones
             };
-
             return View("Materiales", vm);
         }
+
+        private static async Task<Dictionary<int, RelacionMaterialLhRhInterna>> CargarRelacionesMaterialesLhRhAsync(SqlConnection cn)
+        {
+            var resultado = new Dictionary<int, RelacionMaterialLhRhInterna>();
+            const string sql = @"
+SELECT
+    origen.ProgramaProduccionID,
+    grupo.GrupoLhRh,
+    pareja.ProgramaProduccionID AS ProgramaParejaID,
+    ejecucionPareja.EjecucionProduccionID AS EjecucionParejaID,
+    COALESCE(NULLIF(LTRIM(RTRIM(sPareja.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(sPareja.FolioSolicitud)),N''),N'') AS NumeroOFPareja,
+    pareja.ParteID AS ParteParejaID,
+    pareja.NumeroParte AS NumeroPartePareja,
+    pareja.ReferenciaSAP AS ReferenciaSAPPareja,
+    pareja.DesignacionDescripcionSAP AS DescripcionPartePareja
+FROM dbo.Planeacion_ProgramaProduccion origen
+OUTER APPLY
+(
+    SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(origen.Observaciones,N'')) AS PosGrupo
+) marca
+OUTER APPLY
+(
+    SELECT TRY_CONVERT
+    (
+        INT,
+        LEFT
+        (
+            SUBSTRING(origen.Observaciones,marca.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),
+            CHARINDEX(N';',SUBSTRING(origen.Observaciones,marca.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1
+        )
+    ) AS GrupoLhRh
+    WHERE marca.PosGrupo>0
+) grupo
+INNER JOIN dbo.Planeacion_ProgramaProduccion pareja
+    ON pareja.Activo=1
+   AND pareja.ProgramaProduccionID<>origen.ProgramaProduccionID
+   AND grupo.GrupoLhRh IS NOT NULL
+   AND pareja.Observaciones LIKE N'%NSQ_LHRH_PAIR:'+CONVERT(NVARCHAR(20),grupo.GrupoLhRh)+N';%'
+LEFT JOIN dbo.SolicitudesProduccion sPareja
+    ON sPareja.SolicitudProduccionID=pareja.SolicitudProduccionID
+   AND sPareja.Activo=1
+OUTER APPLY
+(
+    SELECT TOP(1) e.EjecucionProduccionID
+    FROM dbo.Produccion_Ejecucion e
+    WHERE e.ProgramaProduccionID=pareja.ProgramaProduccionID
+      AND e.Activo=1
+    ORDER BY e.EjecucionProduccionID DESC
+) ejecucionPareja
+WHERE origen.Activo=1
+  AND grupo.GrupoLhRh IS NOT NULL
+ORDER BY origen.ProgramaProduccionID,pareja.ProgramaProduccionID;";
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                var programaId = Convert.ToInt32(rd["ProgramaProduccionID"]);
+                if (resultado.ContainsKey(programaId)) continue;
+                resultado[programaId] = new RelacionMaterialLhRhInterna
+                {
+                    GrupoLhRh = rd["GrupoLhRh"] == DBNull.Value ? null : Convert.ToInt32(rd["GrupoLhRh"]),
+                    ProgramaParejaID = Convert.ToInt32(rd["ProgramaParejaID"]),
+                    EjecucionParejaID = rd["EjecucionParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["EjecucionParejaID"]),
+                    NumeroOFPareja = rd["NumeroOFPareja"] == DBNull.Value ? null : rd["NumeroOFPareja"]?.ToString()?.Trim(),
+                    ParteParejaID = rd["ParteParejaID"] == DBNull.Value ? null : Convert.ToInt32(rd["ParteParejaID"]),
+                    NumeroPartePareja = rd["NumeroPartePareja"] == DBNull.Value ? null : rd["NumeroPartePareja"]?.ToString()?.Trim(),
+                    ReferenciaSAPPareja = rd["ReferenciaSAPPareja"] == DBNull.Value ? null : rd["ReferenciaSAPPareja"]?.ToString()?.Trim(),
+                    DescripcionPartePareja = rd["DescripcionPartePareja"] == DBNull.Value ? null : rd["DescripcionPartePareja"]?.ToString()?.Trim()
+                };
+            }
+            return resultado;
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmarRecepcionMaterial(ProduccionConfirmarRecepcionMaterialVm vm)
@@ -1304,7 +1371,68 @@ IF @@ROWCOUNT<>1
             await cmd.ExecuteNonQueryAsync();
         }
 
-        
+        private static void AplicarRelacionesLhRhMaterialesEsperados(List<ProduccionMaterialEsperadoVm> materiales, Dictionary<int, RelacionMaterialLhRhInterna> relaciones)
+        {
+            if (materiales == null || materiales.Count == 0 || relaciones.Count == 0) return;
+            foreach (var item in materiales)
+            {
+                if (!item.ProgramaProduccionID.HasValue || item.ProgramaProduccionID.Value <= 0) continue;
+                if (!relaciones.TryGetValue(item.ProgramaProduccionID.Value, out var relacion)) continue;
+                item.GrupoLhRh = relacion.GrupoLhRh;
+                item.ProgramaParejaID = relacion.ProgramaParejaID;
+                item.EjecucionParejaID = relacion.EjecucionParejaID;
+                item.NumeroOFPareja = relacion.NumeroOFPareja;
+                item.ParteParejaID = relacion.ParteParejaID;
+                item.NumeroPartePareja = relacion.NumeroPartePareja;
+                item.ReferenciaSAPPareja = relacion.ReferenciaSAPPareja;
+                item.DescripcionPartePareja = relacion.DescripcionPartePareja;
+                var ladoActual = DeterminarLadoLhRhMaterial(item.NumeroParte, item.DescripcionParte);
+                var ladoPareja = DeterminarLadoLhRhMaterial(relacion.NumeroPartePareja, relacion.ReferenciaSAPPareja, relacion.DescripcionPartePareja);
+                if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "LH", StringComparison.OrdinalIgnoreCase)) ladoActual = "RH";
+                else if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "RH", StringComparison.OrdinalIgnoreCase)) ladoActual = "LH";
+                item.LadoLhRh = ladoActual;
+            }
+        }
+
+        private static void AplicarRelacionesLhRhRecepciones(List<ProduccionRecepcionMaterialVm> recepciones, Dictionary<int, RelacionMaterialLhRhInterna> relaciones)
+        {
+            if (recepciones == null || recepciones.Count == 0 || relaciones.Count == 0) return;
+            foreach (var item in recepciones)
+            {
+                if (!item.ProgramaProduccionID.HasValue || item.ProgramaProduccionID.Value <= 0) continue;
+                if (!relaciones.TryGetValue(item.ProgramaProduccionID.Value, out var relacion)) continue;
+                item.GrupoLhRh = relacion.GrupoLhRh;
+                item.ProgramaParejaID = relacion.ProgramaParejaID;
+                item.EjecucionParejaID = relacion.EjecucionParejaID;
+                item.NumeroOFPareja = relacion.NumeroOFPareja;
+                item.ParteParejaID = relacion.ParteParejaID;
+                item.NumeroPartePareja = relacion.NumeroPartePareja;
+                item.ReferenciaSAPPareja = relacion.ReferenciaSAPPareja;
+                item.DescripcionPartePareja = relacion.DescripcionPartePareja;
+                var ladoActual = DeterminarLadoLhRhMaterial(item.NumeroParte, item.DescripcionParte);
+                var ladoPareja = DeterminarLadoLhRhMaterial(relacion.NumeroPartePareja, relacion.ReferenciaSAPPareja, relacion.DescripcionPartePareja);
+                if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "LH", StringComparison.OrdinalIgnoreCase)) ladoActual = "RH";
+                else if (string.IsNullOrWhiteSpace(ladoActual) && string.Equals(ladoPareja, "RH", StringComparison.OrdinalIgnoreCase)) ladoActual = "LH";
+                item.LadoLhRh = ladoActual;
+            }
+        }
+
+        private static string? DeterminarLadoLhRhMaterial(params string?[] valores)
+        {
+            var tieneLh = false;
+            var tieneRh = false;
+            foreach (var valor in valores)
+            {
+                if (string.IsNullOrWhiteSpace(valor)) continue;
+                var texto = valor.Trim().ToUpperInvariant();
+                if (texto.Contains("LH/RH", StringComparison.Ordinal) || texto.Contains("RH/LH", StringComparison.Ordinal)) continue;
+                if (System.Text.RegularExpressions.Regex.IsMatch(texto, @"(?<![A-Z0-9])LH(?![A-Z0-9])", System.Text.RegularExpressions.RegexOptions.CultureInvariant)) tieneLh = true;
+                if (System.Text.RegularExpressions.Regex.IsMatch(texto, @"(?<![A-Z0-9])RH(?![A-Z0-9])", System.Text.RegularExpressions.RegexOptions.CultureInvariant)) tieneRh = true;
+            }
+            if (tieneLh == tieneRh) return null;
+            return tieneLh ? "LH" : "RH";
+        }
+
         private static async Task<bool>
             AutoConfirmarPreparacionEmbalajeAsync(
                 int programaProduccionId,
@@ -1694,6 +1822,18 @@ VALUES
                     comentario[..1000];
 
             return comentario;
+        }
+
+        private sealed class RelacionMaterialLhRhInterna
+        {
+            public int? GrupoLhRh { get; set; }
+            public int ProgramaParejaID { get; set; }
+            public int? EjecucionParejaID { get; set; }
+            public string? NumeroOFPareja { get; set; }
+            public int? ParteParejaID { get; set; }
+            public string? NumeroPartePareja { get; set; }
+            public string? ReferenciaSAPPareja { get; set; }
+            public string? DescripcionPartePareja { get; set; }
         }
     }
 }

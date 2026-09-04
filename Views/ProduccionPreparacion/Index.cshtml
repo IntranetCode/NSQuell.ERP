@@ -85,6 +85,49 @@
         .SelectMany(x => x)
         .ToList();
 
+    bool EsOperacionConjuntaLhRh(ProduccionPreparacionTareaVm t) =>
+        t.EsParejaLhRh && (t.EsCambioMolde || t.EsSecadoMaterial);
+
+    string LadoVisual(ProduccionPreparacionTareaVm t)
+    {
+        if (!string.IsNullOrWhiteSpace(t.LadoLhRh)) return t.LadoLhRh!.Trim().ToUpperInvariant();
+        return "LH/RH";
+    }
+
+    string LadoParejaVisual(ProduccionPreparacionTareaVm t)
+    {
+        var lado = LadoVisual(t);
+        if (lado == "LH") return "RH";
+        if (lado == "RH") return "LH";
+        return "PAREJA";
+    }
+
+    string TextoPartePareja(ProduccionPreparacionTareaVm t)
+    {
+        if (!string.IsNullOrWhiteSpace(t.NumeroPartePareja) && !string.IsNullOrWhiteSpace(t.DescripcionPartePareja)) return $"{t.NumeroPartePareja} - {t.DescripcionPartePareja}";
+        if (!string.IsNullOrWhiteSpace(t.NumeroPartePareja)) return t.NumeroPartePareja!;
+        if (!string.IsNullOrWhiteSpace(t.ReferenciaSAPPareja) && !string.IsNullOrWhiteSpace(t.DescripcionPartePareja)) return $"{t.ReferenciaSAPPareja} - {t.DescripcionPartePareja}";
+        if (!string.IsNullOrWhiteSpace(t.ReferenciaSAPPareja)) return t.ReferenciaSAPPareja!;
+        return t.DescripcionPartePareja ?? "Parte pareja";
+    }
+
+    List<ProduccionPreparacionTareaVm> ConsolidarTareasVisuales(IEnumerable<ProduccionPreparacionTareaVm> origen)
+    {
+        return origen
+            .GroupBy(x => EsOperacionConjuntaLhRh(x) && x.GrupoLhRh.HasValue
+                ? $"PAIR:{x.GrupoLhRh.Value}:{x.TipoTarea}"
+                : $"TASK:{x.PreparacionAnticipadaID}")
+            .Select(g => g
+                .OrderByDescending(EsRiesgo)
+                .ThenByDescending(EsEnCurso)
+                .ThenByDescending(x => x.EstaPendiente && (x.EsHacerAhora || x.EsVencida))
+                .ThenBy(x => x.FechaObjetivo)
+                .First())
+            .ToList();
+    }
+
+    var tareasVisuales = ConsolidarTareasVisuales(tareas);
+
     var gruposMaquina = tareas
         .Where(x => x.MaquinaID.HasValue)
         .GroupBy(x => new
@@ -100,7 +143,7 @@
         .ThenBy(x => x.Key.MaquinaNombre)
         .ToList();
 
-    var proximas = tareas
+    var proximas = tareasVisuales
         .Where(x =>
             x.EstaPendiente &&
             x.EsProxima &&
@@ -110,15 +153,15 @@
         .Take(20)
         .ToList();
 
-    var tareasSinMaquina = tareas
+    var tareasSinMaquina = tareasVisuales
         .Where(x => !x.MaquinaID.HasValue)
         .ToList();
 
-    var riesgos = tareas.Count(EsRiesgo);
+    var riesgos = tareasVisuales.Count(EsRiesgo);
 
-    var enCurso = tareas.Count(EsEnCurso);
+    var enCurso = tareasVisuales.Count(EsEnCurso);
 
-    var requierenAccion = tareas.Count(x =>
+    var requierenAccion = tareasVisuales.Count(x =>
         x.EstaPendiente &&
         (
             x.EsHacerAhora ||
@@ -296,34 +339,19 @@
 
     string UrlTarea(ProduccionPreparacionTareaVm t)
     {
-        var filtro = string.IsNullOrWhiteSpace(t.NumeroOF)
-            ? Model.Filtro
-            : t.NumeroOF;
-
+        var filtro = string.IsNullOrWhiteSpace(t.NumeroOF) ? Model.Filtro : t.NumeroOF;
         if (t.EsCambioMolde)
-            return Url.Action(
-                "CambioMolde",
-                "ProduccionPreparacion",
-                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
-
-        if (t.EsMateriaPrima)
-            return Url.Action(
-                "Materiales",
-                "ProduccionPreparacion",
-                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
-
-        if (t.EsPreparacionEmbalaje)
-            return Url.Action(
-                "Embalajes",
-                "ProduccionPreparacion",
-                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
-
+        {
+            if (t.EsParejaLhRh) return Url.Action("CambioMolde", "ProduccionPreparacion", new { maquinaId = t.MaquinaID }) ?? "#";
+            return Url.Action("CambioMolde", "ProduccionPreparacion", new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+        }
+        if (t.EsMateriaPrima) return Url.Action("Materiales", "ProduccionPreparacion", new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+        if (t.EsPreparacionEmbalaje) return Url.Action("Embalajes", "ProduccionPreparacion", new { maquinaId = t.MaquinaID, filtro }) ?? "#";
         if (t.EsSecadoMaterial)
-            return Url.Action(
-                "Secado",
-                "ProduccionPreparacion",
-                new { maquinaId = t.MaquinaID, filtro }) ?? "#";
-
+        {
+            if (t.EsParejaLhRh) return Url.Action("Secado", "ProduccionPreparacion", new { maquinaId = t.MaquinaID }) ?? "#";
+            return Url.Action("Secado", "ProduccionPreparacion", new { maquinaId = t.MaquinaID, filtro }) ?? "#";
+        }
         return "#";
     }
 
@@ -1289,6 +1317,137 @@
         font-weight: 700;
     }
 
+    .program-block.is-pair {
+        border: 2px solid rgba(104,69,219,.52);
+        border-left: 7px solid var(--purple);
+        box-shadow: 0 8px 22px rgba(104,69,219,.10);
+    }
+
+        .program-block.is-pair > .program-head {
+            background: linear-gradient(90deg,var(--purpleSoft),var(--panel) 58%);
+        }
+
+    .pair-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        width: fit-content;
+        margin-bottom: 6px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: var(--purple);
+        color: #fff;
+        font-size: .49rem;
+        font-weight: 950;
+        letter-spacing: .045em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .pair-of-grid {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) 24px minmax(0,1fr);
+        gap: 6px;
+        align-items: stretch;
+        margin-top: 3px;
+    }
+
+    .pair-side {
+        min-width: 0;
+        padding: 7px 8px;
+        border: 1px solid rgba(104,69,219,.20);
+        border-radius: 9px;
+        background: rgba(255,255,255,.70);
+    }
+
+        .pair-side.current {
+            box-shadow: inset 0 0 0 1px rgba(104,69,219,.12);
+        }
+
+    .pair-side-label {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--purple);
+        font-size: .47rem;
+        font-weight: 950;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+    .pair-side strong {
+        display: block;
+        font-size: .68rem;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pair-side span:last-child {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: .52rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pair-link {
+        display: grid;
+        place-items: center;
+        color: var(--purple);
+        font-size: .82rem;
+    }
+
+    .pair-task-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 5px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        font-size: .47rem;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+
+        .pair-task-chip.shared {
+            background: var(--purpleSoft);
+            color: var(--purple);
+            border: 1px solid rgba(104,69,219,.22);
+        }
+
+        .pair-task-chip.individual {
+            background: var(--blueSoft);
+            color: var(--blue);
+            border: 1px solid rgba(54,95,218,.18);
+        }
+
+    .pair-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 4px;
+        padding: 3px 6px;
+        border-radius: 7px;
+        background: var(--purpleSoft);
+        color: var(--purple);
+        font-size: .5rem;
+        font-weight: 950;
+    }
+
+    .pair-upcoming-row {
+        box-shadow: inset 4px 0 0 var(--purple);
+    }
+
+    html[data-nsq-theme="dark"] .pair-side,
+    html[data-bs-theme="dark"] .pair-side {
+        background: rgba(17,27,45,.82);
+        border-color: #4a3d77;
+    }
+
     @@media(max-width:1100px) {
         .filters {
             grid-template-columns: 1fr 1fr auto;
@@ -1826,6 +1985,14 @@
     }
 
     @@media(max-width:600px) {
+        .pair-of-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .pair-link {
+            transform: rotate(90deg);
+        }
+
         .machine-body {
             padding: 10px 8px 10px 20px !important;
         }
@@ -2017,7 +2184,7 @@
 
             <span class="section-summary-title">
                 <strong>Operación por máquina</strong>
-                <span>Cada máquina agrupa sus OF y sus actividades de preparación.</span>
+                <span>Cada máquina agrupa sus OF y sus actividades. Las parejas LH/RH se identifican como una misma operación física, conservando MP y embalaje por OF.</span>
             </span>
 
             <span class="section-count">@gruposMaquina.Count</span>
@@ -2037,23 +2204,11 @@
                     {
                         var estadoMaquina = EstadoGeneral(grupo);
                         var claseMaquina = EstadoGeneralClase(estadoMaquina);
-
-                        var riesgosMaquina = grupo.Count(EsRiesgo);
-
-                        var accionMaquina = grupo.Count(x =>
-                        x.EstaPendiente &&
-                        (
-                        x.EsHacerAhora ||
-                        x.EsVencida ||
-                        SecadoLlegariaTarde(x)
-                        ));
-
-                        var enCursoMaquina = grupo.Count(EsEnCurso);
-
-                        var programadasMaquina = grupo.Count(x =>
-                        x.EstaPendiente &&
-                        x.EsProxima &&
-                        !SecadoLlegariaTarde(x));
+                        var tareasVisualesMaquina = ConsolidarTareasVisuales(grupo);
+                        var riesgosMaquina = tareasVisualesMaquina.Count(EsRiesgo);
+                        var accionMaquina = tareasVisualesMaquina.Count(x => x.EstaPendiente && (x.EsHacerAhora || x.EsVencida || SecadoLlegariaTarde(x)));
+                        var enCursoMaquina = tareasVisualesMaquina.Count(EsEnCurso);
+                        var programadasMaquina = tareasVisualesMaquina.Count(x => x.EstaPendiente && x.EsProxima && !SecadoLlegariaTarde(x));
 
                         var requiereAtencion =
                         riesgosMaquina > 0 ||
@@ -2061,12 +2216,15 @@
                         enCursoMaquina > 0;
 
                         var programas = grupo
-                        .GroupBy(x => x.ProgramaProduccionID)
+                        .GroupBy(x => new
+                        {
+                            EsPareja = x.EsParejaLhRh && x.GrupoLhRh.HasValue,
+                            GrupoLhRh = x.EsParejaLhRh && x.GrupoLhRh.HasValue ? x.GrupoLhRh : null,
+                            ProgramaIndividual = x.EsParejaLhRh && x.GrupoLhRh.HasValue ? 0 : x.ProgramaProduccionID
+                        })
                         .Where(ProgramaEsOperativo)
-                        .OrderBy(x =>
-                        ArranquePrograma(x) ??
-                        x.Min(y => y.FechaObjetivo))
-                        .ThenBy(x => x.Key)
+                        .OrderBy(x => ArranquePrograma(x) ?? x.Min(y => y.FechaObjetivo))
+                        .ThenBy(x => x.Key.EsPareja ? x.Key.GrupoLhRh.GetValueOrDefault() : x.Key.ProgramaIndividual)
                         .ToList();
 
                         var siguientePrograma = programas.FirstOrDefault();
@@ -2079,9 +2237,9 @@
                         ? "Sin parte"
                         : PartePrograma(siguientePrograma);
 
-                        var siguienteArranque = siguientePrograma == null
-                        ? (DateTime?)null
-                        : ArranquePrograma(siguientePrograma);
+                        var siguienteArranque = siguientePrograma == null ? (DateTime?)null : ArranquePrograma(siguientePrograma);
+                        var siguientePareja = siguientePrograma?.FirstOrDefault(x => x.EsParejaLhRh);
+                        var siguienteEsPareja = siguientePareja != null && siguientePareja.EsParejaLhRh;
 
                         var collapseId = $"maquina-{grupo.Key.MaquinaID}";
                         var headingId = $"heading-{grupo.Key.MaquinaID}";
@@ -2121,8 +2279,16 @@
                             </div>
 
                                     <div class="machine-next">
-                                        <strong>OF @siguienteOf</strong>
-                                        <span>@siguienteParte</span>
+                                @if (siguienteEsPareja && siguientePareja != null)
+                                        {
+                                            <strong>@LadoVisual(siguientePareja) OF @siguienteOf + @LadoParejaVisual(siguientePareja) OF @(string.IsNullOrWhiteSpace(siguientePareja.NumeroOFPareja) ? "—" : siguientePareja.NumeroOFPareja)</strong>
+                                            <span>Pareja LH/RH · Grupo @(siguientePareja.GrupoLhRh?.ToString() ?? "—")</span>
+                                        }
+                                        else
+                                        {
+                                            <strong>OF @siguienteOf</strong>
+                                            <span>@siguienteParte</span>
+                                        }
                                     </div>
 
                                     <div class="machine-time">
@@ -2131,7 +2297,7 @@
                                     </div>
 
                                     <div class="machine-counters">
-                                @if (riesgosMaquina > 0)
+                                        @if (riesgosMaquina > 0)
                                         {
                                             <span class="mini-count risk">
                                                 <i class="bi bi-exclamation-octagon"></i>
@@ -2187,25 +2353,48 @@
                                         var arranque = ArranquePrograma(programa);
                                         var of = OfPrograma(programa);
                                         var parte = PartePrograma(programa);
+                                        var tareasVisualesPrograma = ConsolidarTareasVisuales(programa);
+                                        var referenciaPareja = programa.FirstOrDefault(x => x.EsParejaLhRh);
+                                        var esParejaPrograma = referenciaPareja != null && referenciaPareja.EsParejaLhRh;
+                                        var programasIds = programa.Select(x => x.ProgramaProduccionID).Distinct().OrderBy(x => x).ToList();
+                                        var textoProgramas = string.Join(" + ", programasIds.Select(x => $"#{x}"));
+                                        var riesgosPrograma = tareasVisualesPrograma.Count(EsRiesgo);
+                                        var enCursoPrograma = tareasVisualesPrograma.Count(EsEnCurso);
+                                        var accionPrograma = tareasVisualesPrograma.Count(x => x.EstaPendiente && (x.EsHacerAhora || x.EsVencida || SecadoLlegariaTarde(x)));
+                                        var totalActividadesPrograma = tareasVisualesPrograma.Count;
 
-                                        var riesgosPrograma = programa.Count(EsRiesgo);
-                                        var enCursoPrograma = programa.Count(EsEnCurso);
-                                        var accionPrograma = programa.Count(x =>
-                                        x.EstaPendiente &&
-                                        (x.EsHacerAhora || x.EsVencida || SecadoLlegariaTarde(x)));
-                                        var totalActividadesPrograma = programa.Count();
-
-                                        <details class="program-block @clasePrograma">
+                                        <details class="program-block @clasePrograma @(esParejaPrograma ? "is-pair" : "")">
                                             <summary class="program-head">
                                                 <div class="program-of">
-                                                    <span class="level-kicker level-of">NIVEL 2 · ORDEN DE FABRICACIÓN</span>
-                                                    <strong>OF @of</strong>
-                                                    <span>@parte</span>
+                                                    @if (esParejaPrograma && referenciaPareja != null)
+                                                    {
+                                                        <span class="level-kicker level-of">NIVEL 2 · OPERACIÓN FÍSICA CONJUNTA</span>
+                                                        <span class="pair-badge"><i class="bi bi-link-45deg"></i>Pareja LH/RH · Grupo @(referenciaPareja.GrupoLhRh?.ToString() ?? "—")</span>
+                                                        <div class="pair-of-grid">
+                                                            <div class="pair-side current">
+                                                                <span class="pair-side-label">@LadoVisual(referenciaPareja)</span>
+                                                                <strong>OF @(string.IsNullOrWhiteSpace(referenciaPareja.NumeroOF) ? "—" : referenciaPareja.NumeroOF)</strong>
+                                                                <span>@referenciaPareja.TextoParte</span>
+                                                            </div>
+                                                            <div class="pair-link"><i class="bi bi-link-45deg"></i></div>
+                                                            <div class="pair-side">
+                                                                <span class="pair-side-label">@LadoParejaVisual(referenciaPareja)</span>
+                                                                <strong>OF @(string.IsNullOrWhiteSpace(referenciaPareja.NumeroOFPareja) ? "—" : referenciaPareja.NumeroOFPareja)</strong>
+                                                                <span>@TextoPartePareja(referenciaPareja)</span>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="level-kicker level-of">NIVEL 2 · ORDEN DE FABRICACIÓN</span>
+                                                        <strong>OF @of</strong>
+                                                        <span>@parte</span>
+                                                    }
                                                 </div>
 
                                                 <div class="program-info">
-                                                    <strong>Programa #@programa.Key</strong>
-                                                    <span>@programa.First().CantidadProgramada.ToString("N0") pza programadas</span>
+                                                    <strong>@(esParejaPrograma ? "Programas " + textoProgramas : "Programa " + textoProgramas)</strong>
+                                                    <span>@(esParejaPrograma ? "Dos OF · una operación física" : programa.First().CantidadProgramada.ToString("N0") + " pza programadas")</span>
                                                 </div>
 
                                                 <div class="program-info arranque-info">
@@ -2254,7 +2443,7 @@
                                                 <div class="task-level-title">
                                                     <span class="task-level-line"></span>
                                                     <span class="level-kicker level-task">NIVEL 3 · ACTIVIDADES</span>
-                                                    <span>Preparaciones de esta OF</span>
+                                                    <span>@(esParejaPrograma ? "Cambio de molde y secado conjuntos; materia prima y embalaje separados por OF" : "Preparaciones de esta OF")</span>
                                                 </div>
 
                                                 <div class="task-table-wrap">
@@ -2271,7 +2460,7 @@
                                                         </thead>
 
                                                         <tbody>
-                                                            @foreach (var tarea in programa
+                                                            @foreach (var tarea in tareasVisualesPrograma
                                                                                                             .OrderBy(x =>
                                                                                                             x.EsCambioMolde ? 1 :
                                                                                                             x.EsMateriaPrima ? 2 :
@@ -2293,6 +2482,13 @@
                                                                             <div>
                                                                                 <span class="activity-kicker">ACTIVIDAD</span>
                                                                                 <span class="type @TipoClase(tarea)">@TipoNombre(tarea)</span>
+                                                                                @if (tarea.EsParejaLhRh)
+                                                                                {
+                                                                                    <span class="pair-task-chip @(EsOperacionConjuntaLhRh(tarea) ? "shared" : "individual")">
+                                                                                        <i class="bi @(EsOperacionConjuntaLhRh(tarea) ? "bi-link-45deg" : "bi-diagram-2")"></i>
+                                                                                        @(EsOperacionConjuntaLhRh(tarea) ? "Conjunto LH/RH" : $"Propio de {LadoVisual(tarea)}")
+                                                                                    </span>
+                                                                                }
                                                                             </div>
                                                                         </div>
                                                                     </td>
@@ -2301,6 +2497,10 @@
                                                                         <div class="task-detail">
                                                                             <strong>@TituloTarea(tarea)</strong>
                                                                             <span>@SubtituloTarea(tarea)</span>
+                                                                            @if (EsOperacionConjuntaLhRh(tarea))
+                                                                            {
+                                                                                <span class="pair-inline"><i class="bi bi-link-45deg"></i>Aplica a @LadoVisual(tarea) OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) + @LadoParejaVisual(tarea) OF @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja)</span>
+                                                                            }
                                                                         </div>
                                                                     </td>
 
@@ -2470,9 +2670,8 @@
                                 ? (DateTime?)null
                                 : ArranquePrograma(programaReferencia);
 
-                                var proximaOf = programaReferencia == null
-                                ? "—"
-                                : OfPrograma(programaReferencia);
+                                var proximaOf = programaReferencia == null ? "—" : OfPrograma(programaReferencia);
+                                var referenciaParejaMatriz = programaReferencia?.FirstOrDefault(x => x.EsParejaLhRh);
 
                                 <tr class="@(claseGeneral == "risk" ? "row-risk" : "")">
                                     <td>
@@ -2492,7 +2691,15 @@
                             </td>
 
                                     <td>
-                                        <strong>@proximaOf</strong>
+                                @if (referenciaParejaMatriz != null && referenciaParejaMatriz.EsParejaLhRh)
+                                        {
+                                            <strong>@LadoVisual(referenciaParejaMatriz) @proximaOf + @LadoParejaVisual(referenciaParejaMatriz) @(string.IsNullOrWhiteSpace(referenciaParejaMatriz.NumeroOFPareja) ? "—" : referenciaParejaMatriz.NumeroOFPareja)</strong>
+                                            <span class="pair-inline"><i class="bi bi-link-45deg"></i>Pareja LH/RH · Grupo @(referenciaParejaMatriz.GrupoLhRh?.ToString() ?? "—")</span>
+                                        }
+                                        else
+                                        {
+                                            <strong>@proximaOf</strong>
+                                        }
                                     </td>
 
                                     <td class="matrix-state">
@@ -2500,7 +2707,7 @@
                                             @EstadoTarea(materiaPrima)
                                         </span>
 
-                                @if (materiaPrima != null)
+                                        @if (materiaPrima != null)
                                         {
                                             var requeridaMp = materiaPrima.CantidadMpKg.GetValueOrDefault();
                                             var recibidaMp = materiaPrima.CantidadMpRecibidaProduccionKg;
@@ -2614,7 +2821,7 @@
                         <tbody>
                             @foreach (var tarea in proximas)
                             {
-                                <tr>
+                                <tr class="@(tarea.EsParejaLhRh ? "pair-upcoming-row" : "")">
                                     <td>
                                         <span class="time-main">@Fecha(tarea.FechaAviso)</span>
                                         <span class="time-sub">@tarea.TextoTiempo</span>
@@ -2638,13 +2845,16 @@
 
                                     <td>
                                         <div class="task-detail">
-                                            <strong>
-                                                OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF)
-                                                                                        ? "—"
-                                                                                        : tarea.NumeroOF)
-                                    </strong>
-
-                                            <span>@tarea.TextoParte</span>
+                                    @if (tarea.EsParejaLhRh)
+                                            {
+                                                <strong>@LadoVisual(tarea) OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) + @LadoParejaVisual(tarea) OF @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja)</strong>
+                                                <span class="pair-inline"><i class="bi bi-link-45deg"></i>Pareja LH/RH · Grupo @(tarea.GrupoLhRh?.ToString() ?? "—")</span>
+                                            }
+                                            else
+                                            {
+                                                <strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</strong>
+                                                <span>@tarea.TextoParte</span>
+                                            }
                                         </div>
                                     </td>
 
@@ -2653,6 +2863,10 @@
                                             <i class="bi @TipoIcono(tarea)"></i>
                                             @TipoNombre(tarea)
                                         </span>
+                                        @if (tarea.EsParejaLhRh)
+                                        {
+                                            <span class="pair-task-chip @(EsOperacionConjuntaLhRh(tarea) ? "shared" : "individual")">@(EsOperacionConjuntaLhRh(tarea) ? "Conjunto LH/RH" : $"Por {LadoVisual(tarea)}")</span>
+                                        }
                                     </td>
 
                                     <td>
@@ -2674,7 +2888,7 @@
                                         </a>
                                     </td>
                                 </tr>
-                                                }
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -2692,7 +2906,7 @@
 
     <div class="footer-note">
         <span>
-            Todo inicia contraído. El usuario decide qué sección y qué máquina necesita desplegar.
+            Todo inicia contraído. Las tarjetas moradas identifican una pareja LH/RH: cambio de molde y secado son conjuntos; MP y embalaje permanecen separados por OF.
         </span>
 
         <span>

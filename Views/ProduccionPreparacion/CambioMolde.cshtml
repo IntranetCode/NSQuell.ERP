@@ -84,6 +84,29 @@
         };
     }
 
+    string LadoActual(ProduccionPreparacionTareaVm tarea)
+    {
+        var lado = (tarea.LadoLhRh ?? "").Trim().ToUpperInvariant();
+        return lado == "LH" || lado == "RH" ? lado : "OF 1";
+    }
+
+    string LadoPareja(ProduccionPreparacionTareaVm tarea)
+    {
+        var lado = (tarea.LadoLhRh ?? "").Trim().ToUpperInvariant();
+        if (lado == "LH") return "RH";
+        if (lado == "RH") return "LH";
+        return "OF 2";
+    }
+
+    string TextoPartePareja(ProduccionPreparacionTareaVm tarea)
+    {
+        if (!string.IsNullOrWhiteSpace(tarea.NumeroPartePareja) && !string.IsNullOrWhiteSpace(tarea.DescripcionPartePareja)) return $"{tarea.NumeroPartePareja} - {tarea.DescripcionPartePareja}";
+        if (!string.IsNullOrWhiteSpace(tarea.NumeroPartePareja)) return tarea.NumeroPartePareja;
+        if (!string.IsNullOrWhiteSpace(tarea.ReferenciaSAPPareja) && !string.IsNullOrWhiteSpace(tarea.DescripcionPartePareja)) return $"{tarea.ReferenciaSAPPareja} - {tarea.DescripcionPartePareja}";
+        if (!string.IsNullOrWhiteSpace(tarea.ReferenciaSAPPareja)) return tarea.ReferenciaSAPPareja;
+        return tarea.DescripcionPartePareja ?? "Sin parte";
+    }
+
     var filtroActual = string.IsNullOrWhiteSpace(Model.Filtro) ? "" : Model.Filtro;
 }
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
@@ -860,6 +883,84 @@
         font-weight: 900;
     }
 
+    .pair-banner {
+        margin-bottom: 12px;
+        border: 1px solid #cfc4ff;
+        border-radius: 14px;
+        overflow: hidden;
+        background: linear-gradient(135deg,#f7f4ff,#fff);
+    }
+
+    .pair-banner-head {
+        padding: 8px 11px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: #eee9ff;
+        color: #4d358f;
+        font-size: .64rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .035em;
+    }
+
+    .pair-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        background: #ddd5ff;
+    }
+
+    .pair-side {
+        padding: 10px 11px;
+        background: #fff;
+        min-width: 0;
+    }
+
+    .pair-side-top {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 4px;
+    }
+
+    .pair-side-badge {
+        min-width: 33px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        background: #6c43dc;
+        color: #fff;
+        text-align: center;
+        font-size: .55rem;
+        font-weight: 950;
+    }
+
+    .pair-side strong {
+        color: #20335c;
+        font-size: .73rem;
+        font-weight: 950;
+        overflow-wrap: anywhere;
+    }
+
+    .pair-side small {
+        display: block;
+        color: #758197;
+        font-size: .61rem;
+        font-weight: 750;
+        overflow-wrap: anywhere;
+    }
+
+    .pair-note {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f2edff;
+        color: #5a3ea1;
+        font-size: .62rem;
+        font-weight: 850;
+    }
+
     .pending-meta {
         margin-top: 9px;
         display: grid;
@@ -1001,7 +1102,7 @@
             grid-template-columns: 1fr 1fr
         }
 
-        .finalize-grid {
+        .finalize-grid, .pair-grid {
             grid-template-columns: 1fr
         }
 
@@ -1129,7 +1230,7 @@
         <div class="section-head">
             <div>
                 <h2>Cambios en proceso</h2>
-                <p>El tiempo se actualiza automáticamente y la alerta depende del límite configurado para cada máquina.</p>
+                <p>El tiempo se actualiza automáticamente. Las parejas LH/RH se muestran como una sola intervención física y mantienen ambas OF identificadas.</p>
             </div>
             <span class="section-count">@enProceso.Count</span>
         </div>
@@ -1153,7 +1254,14 @@
                                 <div class="machine-icon"><i class="bi bi-gear-wide-connected"></i></div>
                                 <div>
                                     <strong>@tarea.TextoMaquina</strong>
-                                    <small>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) · @tarea.TextoParte</small>
+                                    @if (tarea.EsParejaLhRh)
+                                    {
+                                        <small>Pareja LH/RH · Grupo @tarea.GrupoLhRh · OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) + @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja)</small>
+                                    }
+                                    else
+                                    {
+                                        <small>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) · @tarea.TextoParte</small>
+                                    }
                                 </div>
                             </div>
 
@@ -1163,6 +1271,26 @@
                         </div>
 
                         <div class="change-body">
+                            @if (tarea.EsParejaLhRh)
+                            {
+                                <div class="pair-banner">
+                                    <div class="pair-banner-head">
+                                        <span><i class="bi bi-link-45deg me-1"></i>Operación física conjunta LH / RH</span>
+                                        <span>Grupo @tarea.GrupoLhRh</span>
+                                    </div>
+                                    <div class="pair-grid">
+                                        <div class="pair-side">
+                                            <div class="pair-side-top"><span class="pair-side-badge">@LadoActual(tarea)</span><strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</strong></div>
+                                            <small>@tarea.TextoParte · Programa @tarea.ProgramaProduccionID</small>
+                                        </div>
+                                        <div class="pair-side">
+                                            <div class="pair-side-top"><span class="pair-side-badge">@LadoPareja(tarea)</span><strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja)</strong></div>
+                                            <small>@TextoPartePareja(tarea) · Programa @(tarea.ProgramaParejaID?.ToString() ?? "—")</small>
+                                        </div>
+                                    </div>
+                                    <div class="pair-note"><i class="bi bi-info-circle me-1"></i>Es un solo cambio de molde físico. Iniciar o finalizar esta tarjeta sincroniza las dos OF.</div>
+                                </div>
+                            }
                             <div class="mold-flow">
                                 <div class="mold-box">
                                     <span>Molde anterior</span>
@@ -1212,7 +1340,7 @@
                                     <button type="button"
                                             class="btnx btnx-success js-toggle-finalizar"
                                             data-target="finalizar-@tarea.PreparacionAnticipadaID">
-                                        <i class="bi bi-check2-square"></i> Finalizar cambio
+                                        <i class="bi bi-check2-square"></i> @(tarea.EsParejaLhRh ? "Finalizar cambio LH/RH" : "Finalizar cambio")
                                     </button>
                                 </div>
 
@@ -1241,7 +1369,7 @@
 
                                         <div class="card-actions">
                                             <button class="btnx btnx-success" type="submit">
-                                                <i class="bi bi-check-circle"></i> Registrar finalización
+                                                <i class="bi bi-check-circle"></i> @(tarea.EsParejaLhRh ? "Finalizar ambas OF" : "Registrar finalización")
                                             </button>
                                             <button class="btnx btnx-outline js-cancel-finalizar"
                                                     type="button"
@@ -1271,7 +1399,7 @@
         <div class="section-head">
             <div>
                 <h2>Pendientes y próximos</h2>
-                <p>Las tareas se agrupan por máquina. Los grupos inician cerrados para mantener la pantalla limpia.</p>
+                <p>Las tareas se agrupan por máquina. Cuando Planeación relaciona LH/RH, ambas OF aparecen dentro de una sola tarea de cambio.</p>
             </div>
             <span class="section-count">@pendientes.Count</span>
         </div>
@@ -1304,8 +1432,16 @@
                             <article class="pending-card @ClasePendiente(tarea)">
                                 <div class="pending-head">
                                     <div>
-                                        <div class="pending-title">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</div>
-                                        <div class="pending-sub">@tarea.TextoParte · Programa @tarea.ProgramaProduccionID</div>
+                                        @if (tarea.EsParejaLhRh)
+                                        {
+                                            <div class="pending-title">Pareja LH/RH · Grupo @tarea.GrupoLhRh</div>
+                                            <div class="pending-sub">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) + @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja)</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="pending-title">OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</div>
+                                            <div class="pending-sub">@tarea.TextoParte · Programa @tarea.ProgramaProduccionID</div>
+                                        }
                                     </div>
 
                                     <span class="status-pill @(tarea.EsVencida ? "overdue" : tarea.EsHacerAhora ? "now" : "next")">
@@ -1316,6 +1452,23 @@
                                 <div class="pending-mold">
                                     <i class="bi bi-arrow-repeat me-1"></i>@tarea.TextoCambioMolde
                                 </div>
+
+                                @if (tarea.EsParejaLhRh)
+                                {
+                                    <div class="pair-banner" style="margin-top:10px;margin-bottom:0">
+                                        <div class="pair-grid">
+                                            <div class="pair-side">
+                                                <div class="pair-side-top"><span class="pair-side-badge">@LadoActual(tarea)</span><strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</strong></div>
+                                                <small>@tarea.TextoParte · Programa @tarea.ProgramaProduccionID</small>
+                                            </div>
+                                            <div class="pair-side">
+                                                <div class="pair-side-top"><span class="pair-side-badge">@LadoPareja(tarea)</span><strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja)</strong></div>
+                                                <small>@TextoPartePareja(tarea) · Programa @(tarea.ProgramaParejaID?.ToString() ?? "—")</small>
+                                            </div>
+                                        </div>
+                                        <div class="pair-note"><i class="bi bi-tools me-1"></i>Una sola intervención SMED para las dos OF.</div>
+                                    </div>
+                                }
 
                                 <div class="pending-meta">
                                     <div><span>Cambio</span><strong>@Fecha(tarea.FechaCambioMolde)</strong></div>
@@ -1331,18 +1484,21 @@
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="PreparacionAnticipadaID" value="@tarea.PreparacionAnticipadaID" />
                                             <button class="btnx btnx-primary" type="submit">
-                                                <i class="bi bi-play-fill"></i> Iniciar cambio
+                                                <i class="bi bi-play-fill"></i> @(tarea.EsParejaLhRh ? "Iniciar cambio LH/RH" : "Iniciar cambio")
                                             </button>
                                         </form>
                                     }
 
                                     @if (tarea.EjecucionProduccionID.HasValue)
                                     {
-                                        <a class="btnx btnx-outline"
-                                           asp-controller="Produccion"
-                                           asp-action="Detalle"
-                                           asp-route-id="@tarea.EjecucionProduccionID.Value">
-                                            <i class="bi bi-box-arrow-up-right"></i> Ver producción
+                                        <a class="btnx btnx-outline" asp-controller="Produccion" asp-action="Detalle" asp-route-id="@tarea.EjecucionProduccionID.Value">
+                                            <i class="bi bi-box-arrow-up-right"></i> @(tarea.EsParejaLhRh ? $"Ver {LadoActual(tarea)}" : "Ver producción")
+                                        </a>
+                                    }
+                                    @if (tarea.EsParejaLhRh && tarea.EjecucionParejaID.HasValue)
+                                    {
+                                        <a class="btnx btnx-outline" asp-controller="Produccion" asp-action="Detalle" asp-route-id="@tarea.EjecucionParejaID.Value">
+                                            <i class="bi bi-box-arrow-up-right"></i> Ver @LadoPareja(tarea)
                                         </a>
                                     }
                                 </div>
@@ -1382,12 +1538,29 @@
                         <div class="history-card">
                             <div>
                                 <strong>@tarea.TextoMaquina</strong><br />
-                                <span>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
+                                @if (tarea.EsParejaLhRh)
+                                {
+                                    <span>Pareja LH/RH · Grupo @tarea.GrupoLhRh</span>
+                                }
+                                else
+                                {
+                                    <span>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</span>
+                                }
                             </div>
 
                             <div>
                                 <strong>@tarea.TextoCambioMolde</strong><br />
-                                <span>@tarea.TextoParte</span>
+                                @if (tarea.EsParejaLhRh)
+                                {
+                                    <span>@LadoActual(tarea) · OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF) · @tarea.TextoParte</span>
+                        
+                                    <br />
+                                    <span>@LadoPareja(tarea) · OF @(string.IsNullOrWhiteSpace(tarea.NumeroOFPareja) ? "—" : tarea.NumeroOFPareja) · @TextoPartePareja(tarea)</span>
+                                }
+                                else
+                                {
+                                    <span>@tarea.TextoParte</span>
+                                }
                             </div>
 
                             <div>

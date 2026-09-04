@@ -100,6 +100,17 @@ public sealed class ProduccionMaterialEsperadoVm
     public decimal CantidadEntregadaAlmacen { get; set; }
     public decimal CantidadConfirmadaProduccion { get; set; }
 
+    public int? GrupoLhRh { get; set; }
+    public string? LadoLhRh { get; set; }
+    public int? ProgramaParejaID { get; set; }
+    public int? EjecucionParejaID { get; set; }
+    public string? NumeroOFPareja { get; set; }
+    public int? ParteParejaID { get; set; }
+    public string? NumeroPartePareja { get; set; }
+    public string? ReferenciaSAPPareja { get; set; }
+    public string? DescripcionPartePareja { get; set; }
+    public bool EsParejaLhRh => GrupoLhRh.HasValue && ProgramaParejaID.HasValue && ProgramaParejaID.Value > 0;
+
     public DateTime? FechaArranque { get; set; }
 
     public bool EsMateriaPrima =>
@@ -253,6 +264,17 @@ public sealed class ProduccionRecepcionMaterialVm
     public int? UsuarioRecepcionID { get; set; }
     public string? UsuarioRecepcionNombre { get; set; }
     public DateTime? FechaRecepcion { get; set; }
+
+    public int? GrupoLhRh { get; set; }
+    public string? LadoLhRh { get; set; }
+    public int? ProgramaParejaID { get; set; }
+    public int? EjecucionParejaID { get; set; }
+    public string? NumeroOFPareja { get; set; }
+    public int? ParteParejaID { get; set; }
+    public string? NumeroPartePareja { get; set; }
+    public string? ReferenciaSAPPareja { get; set; }
+    public string? DescripcionPartePareja { get; set; }
+    public bool EsParejaLhRh => GrupoLhRh.HasValue && ProgramaParejaID.HasValue && ProgramaParejaID.Value > 0;
 
     public string EstadoAclaracion { get; set; } =
         ProduccionRecepcionMaterialEstadoAclaracion.NoAplica;
