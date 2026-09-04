@@ -30,6 +30,8 @@ WHERE p.Activo = 1
   (
        NULLIF(LTRIM(RTRIM(ISNULL(p.NumeroParte, ''))), '') IS NOT NULL
        OR NULLIF(LTRIM(RTRIM(ISNULL(p.ReferenciaSAP, ''))), '') IS NOT NULL
+       OR NULLIF(LTRIM(RTRIM(ISNULL(p.Designacion, ''))), '') IS NOT NULL
+       OR NULLIF(LTRIM(RTRIM(ISNULL(p.Descripcion, ''))), '') IS NOT NULL
   )
 ORDER BY p.ClienteID, p.ParteID;";
 
@@ -72,7 +74,7 @@ ORDER BY p.ClienteID, p.ParteID;";
 
         var vm = new PlaneacionReleaseCrearVm
         {
-            ClienteID = parsed.ClienteID,
+            ClienteID = parsed.ClienteID > 0 ? parsed.ClienteID : null,
             ClienteNombre = parsed.ClienteNombre,
             FolioCliente = parsed.FolioCliente,
             FechaRecepcion = DateTime.Today,
@@ -95,7 +97,7 @@ ORDER BY p.ClienteID, p.ParteID;";
             vm.Renglones.Add(new PlaneacionReleaseRenglonCrearVm
             {
                 Renglon = rowNumber++,
-                ParteID = sourceRow.Part.ParteID,
+                ParteID = sourceRow.Part.ParteID > 0 ? sourceRow.Part.ParteID : null,
 
                 // IMPORTANTE:
                 // La identidad de la parte sale del maestro ERP,
@@ -125,12 +127,12 @@ ORDER BY p.ClienteID, p.ParteID;";
 
         documento.Plantilla = parsed.TemplateCode;
         documento.FechaDocumento = parsed.DocumentDate;
-        documento.ClienteID = parsed.ClienteID;
+        documento.ClienteID = parsed.ClienteID > 0 ? parsed.ClienteID : null;
         documento.Cliente = parsed.ClienteNombre;
         documento.FolioCliente = parsed.FolioCliente;
         documento.Version = parsed.VersionText;
         documento.TotalEntregas = parsed.Rows.Sum(x => x.Deliveries.Count);
-        documento.TotalPiezas = parsed.Rows.Sum(x => x.Deliveries.Sum(d => d.RequiredQuantity));
+        documento.TotalPiezas = parsed.Rows.Sum(x => x.Deliveries.Sum(d => (long)d.RequiredQuantity));
         documento.Advertencias.AddRange(parsed.Warnings);
         documento.ReleasePreparado = vm;
 

@@ -263,6 +263,17 @@ public static class GenericReleaseParser
             });
         }
 
+        // Si el PDF contiene una demanda legible pero la parte/cliente aun no
+        // existe o no se pudo resolver contra ERP_Partes, se conserva como
+        // PENDIENTE para validacion humana. Nunca se inventa una ParteID.
+        if (rows.Count == 0)
+        {
+            rows.AddRange(ExtractUnresolvedPdfDemandRows(
+                text,
+                fileName,
+                warnings));
+        }
+
         return BuildDocument(bytes, fileName, rows, warnings, "PDF");
     }
 
@@ -598,8 +609,11 @@ public static class GenericReleaseParser
         if (ordered.Count == 0)
             return new List<PeriodColumn>();
 
-        var anchor = InferReferenceDate(fileName);
-        var year = FindClosestIsoYear(anchor, ordered[0].Week);
+        // Regla NS Quell: W43 / CW43 / Sem 43 pertenece inicialmente al
+        // anio calendario actual. Solo cambia de anio cuando la secuencia
+        // cruza de W52/W53 hacia W1.
+        var anchor = DateTime.Today;
+        var year = anchor.Year;
         var previousWeek = ordered[0].Week;
         var result = new List<PeriodColumn>();
 
@@ -742,7 +756,8 @@ public static class GenericReleaseParser
         var negative = ContainsAny(
             normalized,
             "QTY SHIP", "QTY SHIPPED", "SHIPPED", "RECEIPT", "RECEIVED",
-            "INVENTORY", "STOCK", "UNIT PRICE", "PRECIO UNITARIO", "AMOUNT", "MONTO TOTAL");
+            "INVENTORY", "STOCK", "UNIT PRICE", "PRECIO UNITARIO", "AMOUNT", "MONTO TOTAL",
+            "BALANCE", "BACKLOG", "INVOICE", "INVOICE NO", "SALDO");
 
         if (!positive && Regex.IsMatch(normalized, @"(^|\s)PO($|\s)", RegexOptions.IgnoreCase))
             negative = true;
@@ -911,7 +926,9 @@ public static class GenericReleaseParser
     {
         rows = rows
             .Where(x => x.Deliveries.Count > 0)
-            .GroupBy(x => x.Part.ParteID)
+            .GroupBy(x => x.Part.ParteID > 0
+                ? $"ERP:{x.Part.ParteID}"
+                : $"RAW:{Normalize(x.Part.NumeroParte)}")
             .Select(group =>
             {
                 var first = group.First();
@@ -951,26 +968,30 @@ public static class GenericReleaseParser
         }
 
         var clients = rows
+            .Where(x => x.Part.ClienteID > 0)
             .Select(x => new { x.Part.ClienteID, x.Part.ClienteNombre })
             .Distinct()
             .ToList();
 
-        if (clients.Count != 1)
+        if (clients.Count > 1)
         {
             throw new InvalidOperationException(
                 "El documento contiene partes activas de mas de un cliente ERP. No se puede determinar automaticamente un solo cliente.");
         }
 
-        var client = clients[0];
+        var clientId = clients.Count == 1 ? clients[0].ClienteID : 0;
+        var clientName = clients.Count == 1 ? clients[0].ClienteNombre : string.Empty;
 
         warnings.Insert(
             0,
-            $"Lector generico V2 {sourceType}: parte/designacion y cliente se resolvieron contra ERP_Partes; el archivo aporta demanda, fechas y cantidades.");
+            clients.Count == 1
+                ? $"Lector generico V3 {sourceType}: parte/designacion y cliente se resolvieron contra ERP_Partes; el archivo aporta demanda, fechas y cantidades."
+                : $"Lector generico V3 {sourceType}: se extrajo demanda, pero cliente/parte requieren validacion antes de guardar.");
 
         return new GenericReleaseDocument
         {
-            ClienteID = client.ClienteID,
-            ClienteNombre = client.ClienteNombre,
+            ClienteID = clientId,
+            ClienteNombre = clientName,
             FolioCliente = Path.GetFileNameWithoutExtension(fileName ?? string.Empty),
             DocumentDate = null,
             VersionText = $"Lectura generica V2 {DateTime.Today:dd.MM.yyyy}",
@@ -1105,6 +1126,167 @@ public static class GenericReleaseParser
         return text.Length <= 3500 ? text : text.Substring(0, 3500);
     }
 
+    private static List<GenericReleaseRow> ExtractUnresolvedPdfDemandRows(
+        string text,
+        string? fileName,
+        List<string> warnings)
+    {
+        var result = new List<GenericReleaseRow>();
+        if (string.IsNullOrWhiteSpace(text))
+            return result;
+
+        const string datePattern =
+            @"(?<date>(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:20)?\d{2}|20\d{2}[./-](?:0?[1-9]|1[0-2])[./-](?:0?[1-9]|[12]\d|3[01]))";
+
+        var demand = new Regex(
+            datePattern +
+            @"\s+(?<qty>\d[\d., ]{0,16})\s*(?<uom>PZA|PZAS|PIEZA|PIEZAS|PCS|PC|PIECE|PIECES)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        var lines = text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => Regex.Replace(x, @"\s+", " ").Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        foreach (var line in lines)
+        {
+            foreach (Match match in demand.Matches(line))
+            {
+                if (!TryParseDateText(match.Groups["date"].Value, out var date))
+                    continue;
+
+                if (!TryParsePdfDemandQuantity(
+                        match.Groups["qty"].Value,
+                        line,
+                        match.Index + match.Length,
+                        out var quantity))
+                {
+                    continue;
+                }
+
+                var prefix = line.Substring(0, match.Index).Trim();
+                if (string.IsNullOrWhiteSpace(prefix))
+                    continue;
+
+                var tokens = Regex.Matches(
+                        prefix.ToUpperInvariant(),
+                        @"(?<![A-Z0-9])(?<part>[A-Z0-9][A-Z0-9._/-]{4,})(?![A-Z0-9])",
+                        RegexOptions.CultureInvariant)
+                    .Cast<Match>()
+                    .Where(x =>
+                    {
+                        var value = x.Groups["part"].Value;
+                        if (!value.Any(char.IsDigit))
+                            return false;
+
+                        var digitsOnly = value.All(char.IsDigit);
+                        if (digitsOnly && value.Length <= 5)
+                            return false; // posicion 00010, 00020, etc.
+
+                        if (digitsOnly && int.TryParse(value, out var numeric) &&
+                            numeric is >= 1950 and <= 2200)
+                        {
+                            return false;
+                        }
+
+                        return value.Length <= 80;
+                    })
+                    .ToList();
+
+                if (tokens.Count == 0)
+                    continue;
+
+                var token = tokens.Last();
+                var partNumber = token.Groups["part"].Value.Trim();
+                var descriptionStart = token.Index + token.Length;
+                var description = descriptionStart < prefix.Length
+                    ? Regex.Replace(prefix.Substring(descriptionStart), @"\s+", " ").Trim(' ', '-', ':', ';', '|')
+                    : string.Empty;
+
+                if (description.Length > 300)
+                    description = description.Substring(0, 300);
+
+                var existing = result.FirstOrDefault(x =>
+                    Normalize(x.Part.NumeroParte) == Normalize(partNumber));
+
+                if (existing == null)
+                {
+                    existing = new GenericReleaseRow
+                    {
+                        Part = new GenericReleaseKnownPart
+                        {
+                            ParteID = 0,
+                            ClienteID = 0,
+                            ClienteNombre = string.Empty,
+                            NumeroParte = partNumber,
+                            ReferenciaSAP = partNumber,
+                            Descripcion = string.IsNullOrWhiteSpace(description) ? null : description,
+                            Designacion = string.IsNullOrWhiteSpace(description) ? null : description
+                        },
+                        SourceToken = partNumber,
+                        Uom = "PIEZA",
+                        SourceReference = Path.GetFileNameWithoutExtension(fileName ?? string.Empty),
+                        Deliveries = new List<GenericReleaseDelivery>()
+                    };
+                    result.Add(existing);
+                }
+
+                if (!existing.Deliveries.Any(x =>
+                    x.RequiredDate.Date == date.Date &&
+                    x.RequiredQuantity == quantity))
+                {
+                    existing.Deliveries.Add(new GenericReleaseDelivery
+                    {
+                        Sequence = existing.Deliveries.Count + 1,
+                        RequiredDate = date.Date,
+                        RequiredQuantity = quantity,
+                        PeriodLabel = $"GEN {date:dd/MM/yyyy}"
+                    });
+                }
+            }
+        }
+
+        if (result.Count > 0)
+        {
+            AddWarningOnce(
+                warnings,
+                "El PDF contiene demanda legible, pero cliente/parte no pudieron vincularse automaticamente con ERP_Partes. Se conservo como pendiente para validacion; no se invento ninguna ParteID.");
+        }
+
+        return result;
+    }
+
+    private static bool TryParsePdfDemandQuantity(
+        string raw,
+        string line,
+        int tailStart,
+        out int quantity)
+    {
+        quantity = 0;
+        var value = (raw ?? string.Empty).Trim().Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        // Ejemplo real VITALMEX:
+        // 28.09.2026  200.000 PZA  2.78  556.00
+        // Aqui 200.000 es precision decimal de la cantidad (200 piezas), no
+        // doscientos mil. La pareja precio/importe de dos decimales lo confirma.
+        var decimalZero = Regex.Match(value, @"^(?<whole>\d{1,9})[.,]0{2,3}$");
+        var tail = tailStart < line.Length ? line.Substring(tailStart) : string.Empty;
+        var hasPriceAndAmount = Regex.Matches(
+            tail,
+            @"(?<!\d)\d{1,12}[.,]\d{2}(?!\d)",
+            RegexOptions.CultureInvariant).Count >= 2;
+
+        if (decimalZero.Success && hasPriceAndAmount &&
+            int.TryParse(decimalZero.Groups["whole"].Value, out quantity))
+        {
+            return quantity > 0;
+        }
+
+        return TryParseQuantityText(value, out quantity, preferDecimalWhenAmbiguous: true);
+    }
     private static List<GenericReleaseDelivery> ExtractTextDeliveries(string text)
     {
         var result = new List<GenericReleaseDelivery>();
