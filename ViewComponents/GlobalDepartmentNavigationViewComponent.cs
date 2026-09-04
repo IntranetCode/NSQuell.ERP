@@ -160,6 +160,40 @@ ORDER BY
             EnsureCompatibilityLinks(vm);
             EnrichPermittedMenuSectionsFromViews(vm);
             ResolveNavigationState(vm);
+// NSQ_PRODUCCION_NAVBAR_SOLO_VISTA_OPERATIVA_V1
+// Regla EXCLUSIVA de presentacion del navbar para Produccion.
+// /Menu/Grupo/2 sigue mostrando todos los menus permitidos por BD.
+            var produccionNavbar = vm.Groups.FirstOrDefault(x =>
+                x.MenuGrupoID == 2 ||
+                NormalizeNavigationToken(x.Nombre).Equals(
+                    "PRODUCCION",
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (produccionNavbar != null)
+            {
+                var vistaOperativa = produccionNavbar.Menus
+                    .Where(menu =>
+                        NormalizeNavigationToken(menu.Nombre).Equals(
+                            "VISTAOPERATIVA",
+                            StringComparison.OrdinalIgnoreCase)
+                        ||
+                        menu.SubMenus.Any(sub =>
+                            PathOnly(sub.Url).Equals(
+                                "/Produccion/CalendarioOperativo",
+                                StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(menu => menu.Orden)
+                    .ThenBy(menu => menu.Nombre)
+                    .FirstOrDefault();
+
+                if (vistaOperativa != null)
+                {
+                    produccionNavbar.Menus =
+                        new List<GlobalDepartmentNavigationMenuVm>
+                        {
+                            vistaOperativa
+                        };
+                }
+            }
         }
         catch (Exception ex)
         {

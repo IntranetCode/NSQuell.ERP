@@ -876,7 +876,9 @@ SELECT
                         N'OK',
                         N'NOK',
                         N'NO_APLICA',
-                        N'N/A'
+                        N'N/A',
+                        N'NA',
+                        N'NO APLICA'
                      )
                     THEN 1
                 ELSE 0

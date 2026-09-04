@@ -839,7 +839,7 @@ WHERE d.ChecklistArranqueDetalleID = @DetalleID
 SELECT
     COUNT(*) AS TotalPreguntas,
     ISNULL(SUM(CASE WHEN d.Resultado IS NULL OR LTRIM(RTRIM(d.Resultado)) = N'' THEN 1 ELSE 0 END), 0) AS Pendientes,
-    ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(d.Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A') THEN 1 ELSE 0 END), 0) AS Invalidas,
+    ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(d.Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A', N'NA', N'NO APLICA') THEN 1 ELSE 0 END), 0) AS Invalidas,
     ISNULL(SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(d.Resultado, N'')))) = N'NOK' AND (d.Observaciones IS NULL OR LTRIM(RTRIM(d.Observaciones)) = N'') THEN 1 ELSE 0 END), 0) AS NokSinObservacion
 FROM dbo.Produccion_ChecklistArranqueDetalle d
 INNER JOIN dbo.ERP_ChecklistArranquePreguntas p ON p.PreguntaID = d.PreguntaID
@@ -1360,11 +1360,11 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
 SELECT
     ISNULL(SUM(CASE WHEN EsCalidad = 0 THEN 1 ELSE 0 END), 0) AS TotalProduccion,
     ISNULL(SUM(CASE WHEN EsCalidad = 0 AND (Resultado IS NULL OR LTRIM(RTRIM(Resultado)) = N'') THEN 1 ELSE 0 END), 0) AS PendientesProduccion,
-    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A') THEN 1 ELSE 0 END), 0) AS InvalidasProduccion,
+    ISNULL(SUM(CASE WHEN EsCalidad = 0 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A', N'NA', N'NO APLICA') THEN 1 ELSE 0 END), 0) AS InvalidasProduccion,
     ISNULL(SUM(CASE WHEN EsCalidad = 0 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) = N'NOK' THEN 1 ELSE 0 END), 0) AS NokProduccion,
     ISNULL(SUM(CASE WHEN EsCalidad = 1 THEN 1 ELSE 0 END), 0) AS TotalCalidad,
     ISNULL(SUM(CASE WHEN EsCalidad = 1 AND (Resultado IS NULL OR LTRIM(RTRIM(Resultado)) = N'') THEN 1 ELSE 0 END), 0) AS PendientesCalidad,
-    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A') THEN 1 ELSE 0 END), 0) AS InvalidasCalidad,
+    ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) NOT IN (N'OK', N'NOK', N'NO_APLICA', N'N/A', N'NA', N'NO APLICA') THEN 1 ELSE 0 END), 0) AS InvalidasCalidad,
     ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) = N'NOK' THEN 1 ELSE 0 END), 0) AS NokCalidad,
     ISNULL(SUM(CASE WHEN EsCalidad = 1 AND UPPER(LTRIM(RTRIM(ISNULL(Resultado, N'')))) = N'NOK' AND (Observaciones IS NULL OR LTRIM(RTRIM(Observaciones)) = N'') THEN 1 ELSE 0 END), 0) AS NokSinObservacion
 FROM Preguntas;";
@@ -1412,14 +1412,22 @@ FROM Preguntas;";
 
             var valor = resultado.Trim().ToUpperInvariant();
 
-            return valor switch
+            if (valor == CalidadChecklistResultado.Ok)
+                return CalidadChecklistResultado.Ok;
+
+            if (valor == CalidadChecklistResultado.Nok)
+                return CalidadChecklistResultado.Nok;
+
+            if (valor == CalidadChecklistResultado.NoAplica ||
+                valor == "NO_APLICA" ||
+                valor == "N/A" ||
+                valor == "NA" ||
+                valor == "NO APLICA")
             {
-                CalidadChecklistResultado.Ok => CalidadChecklistResultado.Ok,
-                CalidadChecklistResultado.Nok => CalidadChecklistResultado.Nok,
-                CalidadChecklistResultado.NoAplica => CalidadChecklistResultado.NoAplica,
-                "N/A" => CalidadChecklistResultado.NoAplica,
-                _ => "__INVALIDO__"
-            };
+                return CalidadChecklistResultado.NoAplica;
+            }
+
+            return "__INVALIDO__";
         }
 
         // =========================================================

@@ -602,10 +602,6 @@
             </div>
 
             <div class="d-flex gap-2 flex-wrap">
-                <a href="@Url.Action("Historial", "ProduccionOperador")" class="btn-hero">
-                    <i class="fa-solid fa-clock-rotate-left"></i>
-                    Mi historial
-                </a>
 
                 <a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero">
                     <i class="fa-solid fa-rotate-right"></i>
@@ -651,12 +647,12 @@
                                 <div><div class="alert-type">@AlertaTipo(alerta)</div><div class="alert-time">@AlertaTiempo(alerta)</div></div><div><div class="main">@alerta.TextoMaquina</div><div class="sub">Objetivo @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")</div></div><div><div class="main">@alerta.TextoParte</div><div class="sub">Molde @Txt(alerta.MoldeCodigo)</div></div><div><div class="main">@alerta.CantidadProgramada.ToString("N0")</div><div class="sub">piezas</div></div><div>
                                     @if (alerta.EjecucionProduccionID.HasValue)
                                     {
-                                        <a class="btn-captura" href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"><i class="fa-solid fa-eye"></i>Ver preparación</a>
+                                        <a class="btn-captura" href="@Url.Action("Captura", "ProduccionOperador", new { id = alerta.EjecucionProduccionID.Value })"><i class="fa-solid fa-keyboard"></i>Abrir captura</a>
                                     }
                                     else
                                     {
 
-                                        <a class="btn-captura" href="@Url.Action("Index", "Produccion")"><i class="fa-solid fa-industry"></i>Ir a Producción</a>
+                                        <span class="btn-captura" aria-disabled="true"><i class="fa-solid fa-clock"></i>Pendiente de ejecución</span>
                                     }
                                 </div>
                             </div>

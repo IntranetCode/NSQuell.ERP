@@ -32,17 +32,37 @@
         valor.HasValue ? (valor.Value ? "true" : "false") : string.Empty;
 
     var confirmacionAjustes = esReliberacion ? "¿Confirmas que deseas rechazar la reliberación y solicitar nuevas primeras piezas?" : "¿Confirmas que deseas solicitar ajustes a Producción?";
+
+    string NormalizarResultadoChecklistVista(string? resultado)
+    {
+        if (string.IsNullOrWhiteSpace(resultado)) return string.Empty;
+        var valor = resultado.Trim().ToUpperInvariant();
+        return valor == "N/A" || valor == "NA" || valor == "NO APLICA"
+            ? "NO_APLICA"
+            : valor;
+    }
+
+    bool EsResultadoChecklistValido(string? resultado)
+    {
+        var valor = NormalizarResultadoChecklistVista(resultado);
+        return valor == "OK" || valor == "NOK" || valor == "NO_APLICA";
+    }
+
+    var totalPreguntasProduccion = Model.PreguntasChecklistProduccion.Count;
+    var preguntasProduccionRespondidas = Model.PreguntasChecklistProduccion.Count(x => EsResultadoChecklistValido(x.Resultado));
+    var preguntasProduccionPendientes = totalPreguntasProduccion - preguntasProduccionRespondidas;
+    var preguntasProduccionNok = Model.PreguntasChecklistProduccion.Count(x => NormalizarResultadoChecklistVista(x.Resultado) == "NOK");
+    var checklistProduccionCompleto = totalPreguntasProduccion > 0 && preguntasProduccionPendientes == 0;
+    var checklistProduccionPuedeAutorizar = checklistProduccionCompleto && preguntasProduccionNok == 0;
+
     var totalPreguntasCalidad = Model.PreguntasChecklistCalidad.Count;
-    var preguntasCalidadRespondidas = Model.PreguntasChecklistCalidad.Count(x =>
-        !string.IsNullOrWhiteSpace(x.Resultado) &&
-        new[] { "OK", "NOK", "NO_APLICA", "N/A", "NA" }.Contains(x.Resultado.Trim().ToUpperInvariant()));
+    var preguntasCalidadRespondidas = Model.PreguntasChecklistCalidad.Count(x => EsResultadoChecklistValido(x.Resultado));
     var preguntasCalidadPendientes = totalPreguntasCalidad - preguntasCalidadRespondidas;
-    var preguntasCalidadNok = Model.PreguntasChecklistCalidad.Count(x =>
-        string.Equals(x.Resultado?.Trim(), "NOK", StringComparison.OrdinalIgnoreCase));
+    var preguntasCalidadNok = Model.PreguntasChecklistCalidad.Count(x => NormalizarResultadoChecklistVista(x.Resultado) == "NOK");
     var seccionCalidadGuardada = totalPreguntasCalidad > 0 && preguntasCalidadPendientes == 0;
-    var checklistCalidadPuedeAutorizar = seccionCalidadGuardada && preguntasCalidadNok == 0;
+    var checklistCalidadPuedeAutorizar = checklistProduccionPuedeAutorizar && seccionCalidadGuardada && preguntasCalidadNok == 0;
     var respuestasChecklistGuardadas = Model.PreguntasChecklistCalidad
-        .Where(x => !string.IsNullOrWhiteSpace(x.Resultado) && new[] { "OK", "NOK", "NO_APLICA", "N/A", "NA" }.Contains(x.Resultado.Trim().ToUpperInvariant()))
+        .Where(x => EsResultadoChecklistValido(x.Resultado))
         .OrderBy(x => x.OrdenSeccion)
         .ThenBy(x => x.OrdenPregunta)
         .ThenBy(x => x.PreguntaID)
@@ -826,6 +846,47 @@
             grid-template-columns: 1fr;
         }
     }
+    /* NSQ_CHECKLIST_PRODUCCION_RESULT_COLORS_V1 */
+    #modalChecklistProduccion .checklist-production-result {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
+        padding: 6px 10px;
+        border: 1px solid transparent !important;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 900;
+        line-height: 1.15;
+        letter-spacing: .01em;
+        opacity: 1 !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+    }
+
+    #modalChecklistProduccion .checklist-production-result-ok {
+        background: #16a34a !important;
+        border-color: #15803d !important;
+        color: #ffffff !important;
+    }
+
+    #modalChecklistProduccion .checklist-production-result-na {
+        background: #facc15 !important;
+        border-color: #eab308 !important;
+        color: #422006 !important;
+    }
+
+    #modalChecklistProduccion .checklist-production-result-nok {
+        background: #dc2626 !important;
+        border-color: #b91c1c !important;
+        color: #ffffff !important;
+    }
+
+    #modalChecklistProduccion .checklist-production-result-pending {
+        background: #e2e8f0 !important;
+        border-color: #cbd5e1 !important;
+        color: #334155 !important;
+    }
 </style>
 <div class="quality-liberacion">
     <section class="quality-card">
@@ -841,23 +902,48 @@
                 <div class="quality-doc-item">
                     <span class="quality-doc-name">
                         <i class="fa-solid fa-list-check"></i>
-                        Checklist de Producción
+                        <span>
+                            Checklist de Producción
+                            <small class="d-block text-muted fw-normal mt-1">
+                                @preguntasProduccionRespondidas de @totalPreguntasProduccion respondida(s)
+                            </small>
+                        </span>
                     </span>
 
-                    @if (Model.ChecklistValidado)
-                    {
-                        <span class="quality-check quality-check-ok">
-                            <i class="fa-solid fa-check"></i>
-                            Validado
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="quality-check quality-check-pending">
-                            <i class="fa-solid fa-clock"></i>
-                            Pendiente
-                        </span>
-                    }
+                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        @if (totalPreguntasProduccion <= 0 || preguntasProduccionPendientes > 0)
+                        {
+                            <span class="quality-check quality-check-pending">
+                                <i class="fa-solid fa-clock"></i>
+                                @(totalPreguntasProduccion <= 0 ? "Sin preguntas" : $"{preguntasProduccionPendientes} pendiente(s)")
+                            </span>
+                        }
+                        else if (preguntasProduccionNok > 0)
+                        {
+                            <span class="quality-check text-bg-danger">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                @preguntasProduccionNok NOK
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="quality-check quality-check-ok">
+                                <i class="fa-solid fa-check"></i>
+                                Listo
+                            </span>
+                        }
+
+                        @if (Model.ChecklistArranqueID.HasValue)
+                        {
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalChecklistProduccion">
+                                <i class="fa-solid fa-eye"></i>
+                                Ver checklist
+                            </button>
+                        }
+                    </div>
                 </div>
 
                 <div class="quality-doc-item">
@@ -906,6 +992,148 @@
             </div>
         </div>
     </section>
+
+    @if (Model.ChecklistArranqueID.HasValue)
+    {
+        <div class="modal fade" id="modalChecklistProduccion" tabindex="-1" aria-labelledby="modalChecklistProduccionLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title" id="modalChecklistProduccionLabel">
+                                <i class="fa-solid fa-list-check me-2"></i>
+                                Checklist realizado por Producción
+                            </h5>
+                            <div class="small text-muted mt-1">
+                                Checklist #@Model.ChecklistArranqueID
+                                @if (Model.EstatusChecklistArranqueID.HasValue)
+                                {
+                                    <text> · Estatus @Model.EstatusChecklistArranqueID</text>
+                                }
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2">
+                            <i class="fa-solid fa-circle-info me-1"></i>
+                            Vista de solo lectura del checklist capturado por Producción.
+                            <strong>NO APLICA es una respuesta válida y no genera candado.</strong>
+                            Para avanzar se trata igual que OK; solamente NOK o una pregunta realmente pendiente bloquean.
+                        </div>
+
+                        @if (!Model.PreguntasChecklistProduccion.Any())
+                        {
+                            <div class="alert alert-warning mb-0">
+                                No se encontraron preguntas de Producción relacionadas con este checklist.
+                            </div>
+                        }
+                        else
+                        {
+                            var gruposChecklistProduccion = Model.PreguntasChecklistProduccion
+                                .OrderBy(x => x.OrdenSeccion)
+                                .ThenBy(x => x.OrdenPregunta)
+                                .ThenBy(x => x.PreguntaID)
+                                .GroupBy(x => new
+                                {
+                                    x.OrdenSeccion,
+                                    Seccion = string.IsNullOrWhiteSpace(x.Seccion) ? "PREPARACIÓN DE PRODUCCIÓN" : x.Seccion.Trim()
+                                })
+                                .OrderBy(x => x.Key.OrdenSeccion)
+                                .ToList();
+
+                            @foreach (var grupoProduccion in gruposChecklistProduccion)
+                            {
+                                <div class="card mb-3">
+                                    <div class="card-header d-flex justify-content-between align-items-center gap-2">
+                                        <strong>@grupoProduccion.Key.Seccion</strong>
+                                        <span class="badge text-bg-secondary">@grupoProduccion.Count() pregunta(s)</span>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:70px">#</th>
+                                                    <th>Pregunta</th>
+                                                    <th style="width:150px">Resultado</th>
+                                                    <th style="min-width:260px">Observaciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var preguntaProduccion in grupoProduccion)
+                                                {
+                                                    var resultadoProduccion = NormalizarResultadoChecklistVista(preguntaProduccion.Resultado);
+                                                    var esNaProduccion = resultadoProduccion == "NO_APLICA";
+                                                    var esOkProduccion = resultadoProduccion == "OK";
+                                                    var esNokProduccion = resultadoProduccion == "NOK";
+                                                    var textoResultadoProduccion = esNaProduccion
+                                                        ? "NO APLICA"
+                                                        : esOkProduccion
+                                                            ? "OK"
+                                                            : esNokProduccion
+                                                                ? "NOK"
+                                                                : "PENDIENTE";
+                                                    var claseResultadoProduccion = esNokProduccion
+                                                        ? "checklist-production-result checklist-production-result-nok"
+                                                        : esOkProduccion
+                                                            ? "checklist-production-result checklist-production-result-ok"
+                                                            : esNaProduccion
+                                                                ? "checklist-production-result checklist-production-result-na"
+                                                                : "checklist-production-result checklist-production-result-pending";
+
+                                                    <tr>
+                                                        <td>@preguntaProduccion.OrdenPregunta</td>
+                                                        <td>
+                                                            <div class="fw-semibold">@preguntaProduccion.TextoPregunta</div>
+                                                            @if (!string.IsNullOrWhiteSpace(preguntaProduccion.ResponsableSugerido))
+                                                            {
+                                                                <small class="text-muted">Responsable: @preguntaProduccion.ResponsableSugerido</small>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge @claseResultadoProduccion">@textoResultadoProduccion</span>
+                                                            @if (esNaProduccion)
+                                                            {
+                                                                <div class="small text-success mt-1">Válido · no bloquea</div>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            @if (string.IsNullOrWhiteSpace(preguntaProduccion.Observaciones))
+                                                            {
+                                                                <span class="text-muted">Sin observaciones</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                @preguntaProduccion.Observaciones
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Model.ObservacionesChecklistProduccion))
+                        {
+                            <div class="mt-3">
+                                <label class="form-label fw-bold">Observaciones generales de Producción</label>
+                                <div class="border rounded p-3 bg-light">@Model.ObservacionesChecklistProduccion</div>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <span class="me-auto small text-muted">
+                            @preguntasProduccionRespondidas de @totalPreguntasProduccion respondida(s) · @preguntasProduccionNok NOK
+                        </span>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     @if (hayRespuestasPrevias)
     {
@@ -962,7 +1190,7 @@
                                     @foreach (var respuesta in grupoHistorial)
                                     {
                                         var resultadoHistorial = (respuesta.Resultado ?? string.Empty).Trim().ToUpperInvariant();
-                                        if (resultadoHistorial == "N/A" || resultadoHistorial == "NA") resultadoHistorial = "NO_APLICA";
+                                        if (resultadoHistorial == "N/A" || resultadoHistorial == "NA" || resultadoHistorial == "NO APLICA") resultadoHistorial = "NO_APLICA";
                                         var claseHistorial = resultadoHistorial == "OK" ? "quality-result-ok" : resultadoHistorial == "NOK" ? "quality-result-nok" : "quality-result-na";
                                         var textoHistorial = resultadoHistorial == "OK" ? "OK" : resultadoHistorial == "NOK" ? "NOK" : "NO APLICA";
                                         <div class="quality-history-row">
@@ -1167,7 +1395,7 @@
                                 @foreach (var pregunta in grupo)
                                 {
                                     var resultadoGuardado = (pregunta.Resultado ?? string.Empty).Trim().ToUpperInvariant();
-                                    if (resultadoGuardado == "N/A" || resultadoGuardado == "NA") resultadoGuardado = "NO_APLICA";
+                                    if (resultadoGuardado == "N/A" || resultadoGuardado == "NA" || resultadoGuardado == "NO APLICA") resultadoGuardado = "NO_APLICA";
                                     var tieneResultadoGuardado = resultadoGuardado == "OK" || resultadoGuardado == "NOK" || resultadoGuardado == "NO_APLICA";
                                     var resultadoVisual = tieneResultadoGuardado ? resultadoGuardado : "OK";
                                     var esOk = resultadoVisual == "OK";
@@ -1314,9 +1542,21 @@
                         @if (!checklistCalidadPuedeAutorizar)
                         {
                             <div class="quality-prearranque-help">
-                                @if (preguntasCalidadPendientes > 0)
+                                @if (preguntasProduccionPendientes > 0)
                                 {
-                                    <text>Faltan @preguntasCalidadPendientes pregunta(s) del checklist de Calidad por responder y guardar.</text>
+                                    <text>Producción todavía tiene @preguntasProduccionPendientes pregunta(s) realmente pendiente(s). NO APLICA cuenta como respuesta válida.</text>
+                                }
+                                else if (preguntasProduccionNok > 0)
+                                {
+                                    <text>El checklist de Producción contiene @preguntasProduccionNok resultado(s) NOK. Revisa el detalle en "Ver checklist".</text>
+                                }
+                                else if (!checklistProduccionCompleto)
+                                {
+                                    <text>No se encontraron preguntas válidas del checklist de Producción para esta inspección.</text>
+                                }
+                                else if (preguntasCalidadPendientes > 0)
+                                {
+                                    <text>Faltan @preguntasCalidadPendientes pregunta(s) del checklist de Calidad por responder y guardar. NO APLICA cuenta como respuesta válida.</text>
                                 }
                                 else if (preguntasCalidadNok > 0)
                                 {
