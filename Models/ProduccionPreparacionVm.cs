@@ -142,6 +142,21 @@ namespace ERP.NSQuell.Models
         public string? OperadorPrincipalNombre { get; set; }
         public int? OperadorAuxiliarID { get; set; }
         public string? OperadorAuxiliarNombre { get; set; }
+
+        public int? GrupoLhRh { get; set; }
+        public string? LadoLhRh { get; set; }
+        public int? ProgramaParejaID { get; set; }
+        public int? EjecucionParejaID { get; set; }
+        public string? NumeroOFPareja { get; set; }
+        public int? ParteParejaID { get; set; }
+        public string? NumeroPartePareja { get; set; }
+        public string? ReferenciaSAPPareja { get; set; }
+        public string? DescripcionPartePareja { get; set; }
+
+        public bool EsParejaLhRh =>
+            GrupoLhRh.HasValue &&
+            ProgramaParejaID.HasValue &&
+            ProgramaParejaID.Value > 0;
         public DateTime Ahora { get; set; } = DateTime.Now;
 
         public bool EstaConfirmada => string.Equals(Estado, ProduccionPreparacionEstado.Confirmada, StringComparison.OrdinalIgnoreCase);

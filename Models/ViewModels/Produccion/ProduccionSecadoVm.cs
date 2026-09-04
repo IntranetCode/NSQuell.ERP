@@ -164,6 +164,17 @@ namespace ERP.NSQuell.Models
         public decimal? TolvaSugeridaCapacidadKg { get; set; }
         public DateTime Ahora { get; set; } = DateTime.Now;
         public int MinutosAlertaEsperaInicio { get; set; } = 20;
+
+        public int? GrupoLhRh { get; set; }
+        public string? LadoLhRh { get; set; }
+        public int? ProgramaParejaID { get; set; }
+        public int? EjecucionParejaID { get; set; }
+        public string? NumeroOFPareja { get; set; }
+        public int? ParteParejaID { get; set; }
+        public string? NumeroPartePareja { get; set; }
+        public string? ReferenciaSAPPareja { get; set; }
+        public string? DescripcionPartePareja { get; set; }
+        public bool EsParejaLhRh => GrupoLhRh.HasValue && ProgramaParejaID.HasValue && ProgramaParejaID.Value > 0;
         public List<ProduccionSecadoCargaVm> Cargas { get; set; } = new();
 
         public decimal CantidadPendienteAsignarKg =>
@@ -333,6 +344,10 @@ namespace ERP.NSQuell.Models
         public DateTime Ahora { get; set; } = DateTime.Now;
         public int MinutosAvisoProximoFin { get; set; } = 15;
         public int MinutosToleranciaFin { get; set; } = 10;
+        public int? GrupoLhRh { get; set; }
+        public List<ProduccionSecadoCargaMaterialVm> Materiales { get; set; } = new();
+        public bool EsCargaConjunta => Materiales.Count(x => x.Activo) > 1;
+        public decimal CantidadComponentesKg => Materiales.Where(x => x.Activo).Sum(x => x.CantidadKg);
         public List<ProduccionSecadoSegmentoVm> Segmentos { get; set; } = new();
 
         public bool EstaPendiente =>
@@ -424,6 +439,31 @@ namespace ERP.NSQuell.Models
         }
     }
 
+    public sealed class ProduccionSecadoCargaMaterialVm
+    {
+        public long SecadoCargaMaterialID { get; set; }
+        public long SecadoCargaID { get; set; }
+        public long SecadoMaterialID { get; set; }
+        public int? ProgramaProduccionID { get; set; }
+        public int? EjecucionProduccionID { get; set; }
+        public string? NumeroOF { get; set; }
+        public string? LadoLhRh { get; set; }
+        public int MaterialID { get; set; }
+        public string? MaterialCodigo { get; set; }
+        public string? MaterialDescripcion { get; set; }
+        public decimal CantidadKg { get; set; }
+        public bool EsPrincipal { get; set; }
+        public bool Activo { get; set; } = true;
+        public string TextoOF
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(LadoLhRh) && !string.IsNullOrWhiteSpace(NumeroOF)) return $"{LadoLhRh} · {NumeroOF}";
+                if (!string.IsNullOrWhiteSpace(NumeroOF)) return NumeroOF;
+                return "OF sin identificar";
+            }
+        }
+    }
     public sealed class ProduccionSecadoTolvaVm
     {
         public int TolvaID { get; set; }
@@ -502,11 +542,17 @@ namespace ERP.NSQuell.Models
         }
     }
 
+    public sealed class ProduccionIniciarSecadoComponenteVm
+    {
+        public long SecadoMaterialID { get; set; }
+        public decimal CantidadKg { get; set; }
+    }
     public sealed class ProduccionIniciarSecadoVm
     {
         public long SecadoMaterialID { get; set; }
         public int TolvaID { get; set; }
         public decimal CantidadKg { get; set; }
+        public List<ProduccionIniciarSecadoComponenteVm> Componentes { get; set; } = new();
         public string? Observaciones { get; set; }
     }
 
