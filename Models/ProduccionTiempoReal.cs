@@ -602,6 +602,11 @@ namespace ERP.NSQuell.Models
 
         public string? Observaciones { get; set; }
 
+        public int CantidadScrapPareja { get; set; }
+        public string? ObservacionesPareja { get; set; }
+        public List<ProduccionRegistroDefectoPostVm> DefectosScrapPareja { get; set; } = new();
+        public bool ConfirmarCapturaLhRh { get; set; }
+
         public int TotalClasificado =>
             CantidadOK +
             CantidadSospechosa +
@@ -625,20 +630,19 @@ namespace ERP.NSQuell.Models
     {
         public int TiempoExtraID { get; set; }
         public int EjecucionProduccionID { get; set; }
-
         public long? ContadorMaquinaActual { get; set; }
-
         public int CantidadOK { get; set; }
         public bool OkModificadoManual { get; set; }
-
         public int CantidadSospechosa { get; set; }
         public int CantidadScrap { get; set; }
-
         public string? Observaciones { get; set; }
-
         public bool FinalizarTiempoExtra { get; set; }
-
         public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
+
+        public int CantidadScrapPareja { get; set; }
+        public string? ObservacionesPareja { get; set; }
+        public List<ProduccionRegistroDefectoPostVm> DefectosScrapPareja { get; set; } = new();
+        public bool ConfirmarCapturaLhRh { get; set; }
     }
 
 

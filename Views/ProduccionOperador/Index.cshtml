@@ -6,7 +6,11 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
     var producciones = Model ?? new List<ProduccionOperadorTabletVm>();
     var alertas = ViewBag.AlertasProximosProgramas as List<ProduccionAlertaProximoProgramaVm> ?? new List<ProduccionAlertaProximoProgramaVm>();
+    var alertasLhRh = ViewBag.AlertasLhRh as List<string> ?? new List<string>();
     var maquinas = producciones.Select(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "SIN MÁQUINA" : x.MaquinaCodigo.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    var gruposLhRh = producciones.Where(x => x.ParejaLhRh != null && x.ProduccionPareja != null && x.ParejaLhRh.GrupoLhRh > 0).Select(x => x.ParejaLhRh!.GrupoLhRh).Distinct().ToList();
+    var produccionesIndividuales = producciones.Count(x => x.ParejaLhRh == null || x.ProduccionPareja == null || x.ParejaLhRh.GrupoLhRh <= 0);
+    var totalOperacionesVisibles = produccionesIndividuales + gruposLhRh.Count;
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
@@ -17,12 +21,30 @@
     public static decimal Avance(ProduccionOperadorTabletVm item) { var planeada = item.CantidadPlaneada ?? 0; if (planeada <= 0) return 0; return Math.Min(100m, Math.Round(item.CantidadOKTotal * 100m / planeada, 2)); }
     public static string AlertaTiempo(ProduccionAlertaProximoProgramaVm alerta) => alerta.MinutosRestantes < 0 ? "Hace " + Math.Abs(alerta.MinutosRestantes) + " min" : alerta.MinutosRestantes == 0 ? "Ahora" : "En " + alerta.MinutosRestantes + " min";
     public static string AlertaTipo(ProduccionAlertaProximoProgramaVm alerta) => alerta.TipoAlerta == "CAMBIO_MOLDE" ? "Cambio de molde" : alerta.TipoAlerta == "ARRANQUE" ? "Arranque" : "Alerta";
+    public static bool EsParejaVisible(ProduccionOperadorTabletVm item) => item.ParejaLhRh != null && item.ProduccionPareja != null && item.ParejaLhRh.GrupoLhRh > 0;
+    public static string LadoTexto(ProduccionOperadorTabletVm item, string alterno) => string.IsNullOrWhiteSpace(item.LadoLhRh) ? alterno : item.LadoLhRh!.Trim().ToUpperInvariant();
+    public static string EstadoFisicoTexto(ProduccionOperadorTabletVm actual, ProduccionOperadorTabletVm pareja)
+    {
+        if (actual.TieneParoAbierto || pareja.TieneParoAbierto) return "Paro LH/RH";
+        if (actual.EstatusID == ProduccionEstatus.Pausado || pareja.EstatusID == ProduccionEstatus.Pausado) return "Pausado LH/RH";
+        if (actual.EstatusID == ProduccionEstatus.EnProduccion && pareja.EstatusID == ProduccionEstatus.EnProduccion) return "En producción conjunta";
+        return "Estado desincronizado";
+    }
+    public static string EstadoFisicoClase(ProduccionOperadorTabletVm actual, ProduccionOperadorTabletVm pareja)
+    {
+        if (actual.TieneParoAbierto || pareja.TieneParoAbierto) return "estado-paro";
+        if (actual.EstatusID == ProduccionEstatus.Pausado || pareja.EstatusID == ProduccionEstatus.Pausado) return "estado-pausa";
+        if (actual.EstatusID == ProduccionEstatus.EnProduccion && pareja.EstatusID == ProduccionEstatus.EnProduccion) return "estado-produccion";
+        return "estado-programada";
+    }
 }
-@{ ViewData["Title"] = "Kiosco de Operador"; }
+@{
+    ViewData["Title"] = "Kiosco de Operador";
+}
 
 @section Styles {
     <style>
-:root {
+        :root {
             --azul: #004aad;
             --azul-oscuro: #00347a;
             --verde: #107c41;
@@ -444,6 +466,113 @@
             font-weight: 700
         }
 
+        .lh-rh-alert {
+            border: 1px solid #f4c790;
+            background: #fff8eb;
+            color: #8a4b08;
+            border-radius: 16px;
+            padding: 13px 15px;
+            margin-bottom: 16px;
+            font-weight: 800
+        }
+
+        .pair-row td {
+            background: linear-gradient(180deg,#ffffff,#f8fbff)
+        }
+
+            .pair-row td:first-child {
+                border-left: 4px solid var(--azul)
+            }
+
+        .pair-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            background: #eaf2ff;
+            color: var(--azul-oscuro);
+            font-size: .72rem;
+            font-weight: 950;
+            margin-top: 6px
+        }
+
+        .pair-cell {
+            display: grid;
+            gap: 8px
+        }
+
+        .pair-side {
+            border: 1px solid #dbe7f7;
+            border-radius: 12px;
+            padding: 9px 10px;
+            background: #fff
+        }
+
+        .pair-side-head {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+            margin-bottom: 3px
+        }
+
+        .side-badge {
+            display: inline-flex;
+            min-width: 34px;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 3px 7px;
+            background: var(--azul);
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 950
+        }
+
+            .side-badge.rh {
+                background: #5b3dbb
+            }
+
+        .pair-progress {
+            display: grid;
+            gap: 9px;
+            min-width: 180px
+        }
+
+        .pair-progress-line {
+            display: grid;
+            gap: 4px
+        }
+
+        .pair-progress-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: .72rem;
+            font-weight: 900
+        }
+
+        .pair-action-note {
+            color: var(--gris);
+            font-size: .72rem;
+            font-weight: 750;
+            margin-top: 5px;
+            max-width: 190px
+        }
+
+        .pair-missing {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 4px 8px;
+            margin-top: 5px;
+            background: #fff7ed;
+            color: var(--amarillo);
+            font-size: .68rem;
+            font-weight: 950
+        }
+
         @@media(max-width:800px) {
             .page {
                 padding: 10px
@@ -465,152 +594,251 @@
 }
 
 <div class="page">
-        <section class="hero">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                <div>
-                    <h1><i class="fa-solid fa-tablet-screen-button me-2"></i>Kiosco de Operador</h1>
-                    <p>Consulta las OF programadas por máquina y entra directamente a la captura horaria.</p>
-                </div>
-
-                <div class="d-flex gap-2 flex-wrap">
-                    <a href="@Url.Action("Historial", "ProduccionOperador")" class="btn-hero">
-                        <i class="fa-solid fa-clock-rotate-left"></i>
-                        Mi historial
-                    </a>
-
-                    <a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero">
-                        <i class="fa-solid fa-rotate-right"></i>
-                        Actualizar
-                    </a>
-                </div>
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h1><i class="fa-solid fa-tablet-screen-button me-2"></i>Kiosco de Operador</h1>
+                <p>Consulta las OF programadas por máquina y entra directamente a la captura horaria.</p>
             </div>
-        </section>
-        @if (TempData["Success"] != null)
-        {
-            <div class="alert alert-success rounded-4 fw-bold">@TempData["Success"]</div>
-        }
-        @if (TempData["Error"] != null)
-        {
-            <div class="alert alert-danger rounded-4 fw-bold">@TempData["Error"]</div>
-        }
-        <section class="turn-reception d-none" id="turnosPendientesSection">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div><div class="turn-reception-title"><i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Tienes un turno pendiente por recibir</div><div class="turn-reception-sub">Revisa exactamente lo que recibes antes de aceptar. La responsabilidad cambia únicamente cuando confirmas la recepción.</div></div><span class="badge bg-primary" id="turnosPendientesCount">0</span></div>
-            <div class="turn-reception-list" id="turnosPendientesLista"></div>
-        </section>
 
-       
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="@Url.Action("Historial", "ProduccionOperador")" class="btn-hero">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    Mi historial
+                </a>
 
-        <section class="panel">
-            <div class="panel-body">
-                <button class="alert-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#proximasProducciones" aria-expanded="false" aria-controls="proximasProducciones"><span><i class="fa-solid fa-bell me-2"></i>Próximas producciones en 15 minutos (@alertas.Count)</span><i class="fa-solid fa-chevron-down"></i></button><div class="collapse" id="proximasProducciones">
-                    <div class="alert-list">
-                        @if (alertas.Any())
+                <a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Actualizar
+                </a>
+            </div>
+        </div>
+    </section>
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success rounded-4 fw-bold">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger rounded-4 fw-bold">@TempData["Error"]</div>
+    }
+    @if (alertasLhRh.Any())
+    {
+        <div class="lh-rh-alert">
+            <div class="fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-2"></i>Revisión LH/RH</div>
+            @foreach (var mensaje in alertasLhRh.Distinct())
+            {
+                <div class="small">@mensaje</div>
+            }
+        </div>
+    }
+    <section class="turn-reception d-none" id="turnosPendientesSection">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2"><div><div class="turn-reception-title"><i class="fa-solid fa-arrow-right-arrow-left me-2"></i>Tienes un turno pendiente por recibir</div><div class="turn-reception-sub">Revisa exactamente lo que recibes antes de aceptar. La responsabilidad cambia únicamente cuando confirmas la recepción.</div></div><span class="badge bg-primary" id="turnosPendientesCount">0</span></div>
+        <div class="turn-reception-list" id="turnosPendientesLista"></div>
+    </section>
+
+
+
+    <section class="panel">
+        <div class="panel-body">
+            <button class="alert-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#proximasProducciones" aria-expanded="false" aria-controls="proximasProducciones"><span><i class="fa-solid fa-bell me-2"></i>Próximas producciones en 15 minutos (@alertas.Count)</span><i class="fa-solid fa-chevron-down"></i></button><div class="collapse" id="proximasProducciones">
+                <div class="alert-list">
+                    @if (alertas.Any())
+                    {
+                        foreach (var alerta in alertas.OrderBy(x => x.FechaObjetivo))
                         {
-                            foreach (var alerta in alertas.OrderBy(x => x.FechaObjetivo))
-                            {
-                                <div class="alert-row">
-                                    <div><div class="alert-type">@AlertaTipo(alerta)</div><div class="alert-time">@AlertaTiempo(alerta)</div></div><div><div class="main">@alerta.TextoMaquina</div><div class="sub">Objetivo @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")</div></div><div><div class="main">@alerta.TextoParte</div><div class="sub">Molde @Txt(alerta.MoldeCodigo)</div></div><div><div class="main">@alerta.CantidadProgramada.ToString("N0")</div><div class="sub">piezas</div></div><div>
-                                        @if (alerta.EjecucionProduccionID.HasValue)
-                                        {
-                                            <a class="btn-captura" href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"><i class="fa-solid fa-eye"></i>Ver preparación</a>
-                                        }
-                                        else
-                                        {
+                            <div class="alert-row">
+                                <div><div class="alert-type">@AlertaTipo(alerta)</div><div class="alert-time">@AlertaTiempo(alerta)</div></div><div><div class="main">@alerta.TextoMaquina</div><div class="sub">Objetivo @alerta.FechaObjetivo.ToString("dd/MM/yyyy HH:mm")</div></div><div><div class="main">@alerta.TextoParte</div><div class="sub">Molde @Txt(alerta.MoldeCodigo)</div></div><div><div class="main">@alerta.CantidadProgramada.ToString("N0")</div><div class="sub">piezas</div></div><div>
+                                    @if (alerta.EjecucionProduccionID.HasValue)
+                                    {
+                                        <a class="btn-captura" href="@Url.Action("Detalle", "Produccion", new { id = alerta.EjecucionProduccionID.Value })"><i class="fa-solid fa-eye"></i>Ver preparación</a>
+                                    }
+                                    else
+                                    {
 
-                                            <a class="btn-captura" href="@Url.Action("Index", "Produccion")"><i class="fa-solid fa-industry"></i>Ir a Producción</a>
-                                        }
-                                    </div>
+                                        <a class="btn-captura" href="@Url.Action("Index", "Produccion")"><i class="fa-solid fa-industry"></i>Ir a Producción</a>
+                                    }
                                 </div>
-                            }
+                            </div>
                         }
-                        else
-                        {
+                    }
+                    else
+                    {
 
-                            <div class="empty">No hay próximas producciones dentro de la ventana de 15 minutos.</div>
-                        }
-                    </div>
+                        <div class="empty">No hay próximas producciones dentro de la ventana de 15 minutos.</div>
+                    }
                 </div>
             </div>
-        </section>
-        <section class="panel">
-            <div class="panel-head d-flex justify-content-between align-items-center"><span><i class="fa-solid fa-list-check me-2"></i>OF programadas por máquina</span><span id="contadorVisible" class="badge bg-primary">@producciones.Count</span></div><div class="panel-body">
-                @if (!producciones.Any())
-                {
-                    <div class="empty"><i class="fa-solid fa-folder-open fa-2x mb-2"></i><div>No hay producciones disponibles.</div></div>
-                }
-                else
-                {
+        </div>
+    </section>
+    <section class="panel">
+        <div class="panel-body">
+            <div class="filter-grid">
+                <div>
+                    <label class="filter-label" for="filtroMaquina"><i class="fa-solid fa-filter me-1"></i>Filtrar por máquina</label>
+                    <select class="form-select" id="filtroMaquina">
+                        <option value="">Todas las máquinas</option>
+                        @foreach (var maquinaFiltro in maquinas)
+                        {
+                            <option value="@maquinaFiltro">@maquinaFiltro</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <div class="filter-label">Resumen visible</div>
+                    <div class="machine-summary" id="resumenFiltro">Mostrando @totalOperacionesVisibles producción(es) física(s). @gruposLhRh.Count pareja(s) LH/RH.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="panel">
+        <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2"><span><i class="fa-solid fa-list-check me-2"></i>OF programadas por máquina</span><div class="d-flex gap-2 align-items-center"><span class="badge bg-info text-dark">LH/RH @gruposLhRh.Count</span><span id="contadorVisible" class="badge bg-primary">@totalOperacionesVisibles</span></div></div><div class="panel-body">
+            @if (!producciones.Any())
+            {
+                <div class="empty"><i class="fa-solid fa-folder-open fa-2x mb-2"></i><div>No hay producciones disponibles.</div></div>
+            }
+            else
+            {
 
-                    <div class="table-wrap">
-                        <table class="prod-table">
-                            <thead><tr><th>Máquina</th><th>OF / Programa</th><th>Parte</th><th>Operador</th><th>Estado</th><th>Cantidades</th><th>Avance</th><th>Acción</th></tr></thead>
-                            <tbody>
-                                @foreach (var item in producciones.OrderBy(x => x.MaquinaCodigo).ThenBy(x => x.ProgramaProduccionID))
+                <div class="table-wrap">
+                    <table class="prod-table">
+                        <thead><tr><th>Máquina</th><th>OF / Programa</th><th>Parte</th><th>Operador</th><th>Estado</th><th>Cantidades</th><th>Avance</th><th>Acción</th></tr></thead>
+                        <tbody>
+                            @{
+                                var gruposRenderizados = new HashSet<int>();
+                            }
+                            @foreach (var item in producciones.OrderBy(x => x.MaquinaCodigo).ThenBy(x => x.ProgramaProduccionID))
+                            {
+                                var maquina = string.IsNullOrWhiteSpace(item.MaquinaCodigo) ? "SIN MÁQUINA" : item.MaquinaCodigo.Trim();
+                                var esParejaVisible = EsParejaVisible(item);
+                                if (esParejaVisible)
                                 {
-                                    var maquina = string.IsNullOrWhiteSpace(item.MaquinaCodigo) ? "SIN MÁQUINA" : item.MaquinaCodigo.Trim(); var avance = Avance(item); var avanceCss = avance.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                                    var grupo = item.ParejaLhRh!.GrupoLhRh;
+                                    if (!gruposRenderizados.Add(grupo)) { continue; }
+                                    var pareja = item.ProduccionPareja!;
+                                    var itemEsLh = string.Equals(item.LadoLhRh, "LH", StringComparison.OrdinalIgnoreCase);
+                                    var parejaEsLh = string.Equals(pareja.LadoLhRh, "LH", StringComparison.OrdinalIgnoreCase);
+                                    var ladoLh = itemEsLh ? item : parejaEsLh ? pareja : item;
+                                    var ladoRh = ReferenceEquals(ladoLh, item) ? pareja : item;
+                                    var etiquetaLh = string.Equals(ladoLh.LadoLhRh, "RH", StringComparison.OrdinalIgnoreCase) ? "RH" : "LH";
+                                    var etiquetaRh = etiquetaLh == "LH" ? "RH" : "LH";
+                                    var avanceLh = Avance(ladoLh);
+                                    var avanceRh = Avance(ladoRh);
+                                    var avanceLhCss = avanceLh.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                                    var avanceRhCss = avanceRh.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+                                    var mismoOperador = ladoLh.OperadorID == ladoRh.OperadorID && string.Equals(Txt(ladoLh.OperadorNombre), Txt(ladoRh.OperadorNombre), StringComparison.OrdinalIgnoreCase);
+                                    <tr data-maquina="@maquina" class="pair-row" data-grupo-lhrh="@grupo">
+                                        <td>
+                                            <div class="main">@maquina</div>
+                                            <div class="sub">@Txt(item.MaquinaNombre)</div>
+                                            <span class="pair-badge"><i class="fa-solid fa-link"></i>Producción LH/RH · Grupo @grupo</span>
+                                        </td>
+                                        <td>
+                                            <div class="pair-cell">
+                                                <div class="pair-side"><div class="pair-side-head"><span class="side-badge">@etiquetaLh</span><span class="main">@OFTexto(ladoLh)</span></div><div class="sub">Programa @ladoLh.ProgramaProduccionID · Ejecución @ladoLh.EjecucionProduccionID</div></div>
+                                                <div class="pair-side"><div class="pair-side-head"><span class="side-badge rh">@etiquetaRh</span><span class="main">@OFTexto(ladoRh)</span></div><div class="sub">Programa @ladoRh.ProgramaProduccionID · Ejecución @ladoRh.EjecucionProduccionID</div></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="pair-cell">
+                                                <div class="pair-side"><div class="pair-side-head"><span class="side-badge">@etiquetaLh</span><span class="main">@ParteTexto(ladoLh)</span></div><div class="sub">@Txt(ladoLh.DescripcionParte)</div></div>
+                                                <div class="pair-side"><div class="pair-side-head"><span class="side-badge rh">@etiquetaRh</span><span class="main">@ParteTexto(ladoRh)</span></div><div class="sub">@Txt(ladoRh.DescripcionParte)</div></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (mismoOperador)
+                                            {
+                                                <div class="main">@Txt(ladoLh.OperadorNombre)</div>
+                                                <div class="sub">Operador compartido · @(ladoLh.OperadorID.HasValue ? "ID " + ladoLh.OperadorID.Value : "Sin ID")</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="pair-cell">
+                                                    <div class="pair-side"><div class="pair-side-head"><span class="side-badge">@etiquetaLh</span><span class="main">@Txt(ladoLh.OperadorNombre)</span></div></div>
+                                                    <div class="pair-side"><div class="pair-side-head"><span class="side-badge rh">@etiquetaRh</span><span class="main">@Txt(ladoRh.OperadorNombre)</span></div></div>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td><span class="estado @EstadoFisicoClase(ladoLh, ladoRh)">@EstadoFisicoTexto(ladoLh, ladoRh)</span></td>
+                                        <td>
+                                            <div class="pair-cell">
+                                                <div class="pair-side"><div class="pair-side-head"><span class="side-badge">@etiquetaLh</span></div><div class="qty"><span class="pill ok">OK @ladoLh.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @ladoLh.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @ladoLh.CantidadScrapTotal.ToString("N0")</span></div></div>
+                                                <div class="pair-side"><div class="pair-side-head"><span class="side-badge rh">@etiquetaRh</span></div><div class="qty"><span class="pill ok">OK @ladoRh.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @ladoRh.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @ladoRh.CantidadScrapTotal.ToString("N0")</span></div></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="pair-progress">
+                                                <div class="pair-progress-line"><div class="pair-progress-meta"><span>@etiquetaLh · @avanceLh.ToString("0.##")%</span><span>@ladoLh.CantidadOKTotal.ToString("N0") / @((ladoLh.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceLhCss%"></div></div></div>
+                                                <div class="pair-progress-line"><div class="pair-progress-meta"><span>@etiquetaRh · @avanceRh.ToString("0.##")%</span><span>@ladoRh.CantidadOKTotal.ToString("N0") / @((ladoRh.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceRhCss%"></div></div></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Captura", "ProduccionOperador", new { id = item.EjecucionProduccionID })" class="btn-captura"><i class="fa-solid fa-keyboard"></i>Abrir producción LH/RH</a></div>
+                                            <div class="pair-action-note">Puedes entrar desde cualquiera de las dos OF; la captura carga automáticamente ambos lados.</div>
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    var avance = Avance(item);
+                                    var avanceCss = avance.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
                                     <tr data-maquina="@maquina">
                                         <td><div class="main">@maquina</div><div class="sub">@Txt(item.MaquinaNombre)</div></td>
-                                        <td><div class="main">@OFTexto(item)</div><div class="sub">Programa @item.ProgramaProduccionID</div></td>
+                                        <td>
+                                            <div class="main">@OFTexto(item)</div><div class="sub">Programa @item.ProgramaProduccionID</div>
+                                            @if (item.ParejaLhRh != null && item.ProduccionPareja == null)
+                                            {
+                                                <span class="pair-missing"><i class="fa-solid fa-triangle-exclamation"></i>Pareja LH/RH no visible</span>
+                                            }
+                                        </td>
                                         <td><div class="main">@ParteTexto(item)</div><div class="sub">@Txt(item.DescripcionParte)</div></td>
                                         <td><div class="main">@Txt(item.OperadorNombre)</div><div class="sub">@(item.OperadorID.HasValue ? "ID " + item.OperadorID.Value : "Sin operador")</div></td>
                                         <td><span class="estado @EstadoClase(item)">@EstadoTexto(item)</span></td>
                                         <td><div class="qty"><span class="pill ok">OK @item.CantidadOKTotal.ToString("N0")</span><span class="pill sos">Amarillos @item.CantidadSospechosaTotal.ToString("N0")</span><span class="pill scrap">Scrap @item.CantidadScrapTotal.ToString("N0")</span></div></td>
                                         <td><div class="d-flex justify-content-between small fw-bold mb-1"><span>@avance.ToString("0.##")%</span><span>@item.CantidadOKTotal.ToString("N0") / @((item.CantidadPlaneada ?? 0).ToString("N0"))</span></div><div class="progress"><div class="progress-bar" style="width:@avanceCss%"></div></div></td>
-                                        <td>
-                                            <div class="d-flex gap-2 flex-wrap">
-
-                                                <a href="@Url.Action(
-                                                                                                                                                                 "Captura",
-                                                                                                                                                                 "ProduccionOperador",
-                                                                                                                                                                 new { id = item.EjecucionProduccionID })"
-                                           class="btn-captura">
-                                            <i class="fa-solid fa-keyboard"></i>
-                                            Capturar
-                                       
-
-                                            </div>
-                                        </td>
+                                        <td><div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Captura", "ProduccionOperador", new { id = item.EjecucionProduccionID })" class="btn-captura"><i class="fa-solid fa-keyboard"></i>Capturar</a></div></td>
                                     </tr>
-                                                        }
-                            </tbody>
-                        </table>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+</div>
+<div class="modal fade" id="modalRecibirTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 rounded-4">
+            <div class="modal-header turn-accept-header rounded-top-4"><h5 class="modal-title fw-bold"><i class="fa-solid fa-handshake me-2"></i>Recepción de turno</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <form method="post" action="@Url.Action("RecibirTurno","ProduccionOperador")" id="formRecibirTurno">
+                @Html.AntiForgeryToken()<input type="hidden" name="CambioTurnoID" id="recibirCambioTurnoID" />
+                <div class="modal-body p-4">
+                    <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>Al aceptar, esta máquina quedará bajo tu responsabilidad como único operador asignado.</div>
+                    <div class="turn-detail-grid">
+                        <div class="turn-detail-card"><div class="k">Recibes de</div><div class="v" id="recibirSaliente">-</div></div>
+                        <div class="turn-detail-card"><div class="k">Máquina</div><div class="v" id="recibirMaquina">-</div></div>
+                        <div class="turn-detail-card"><div class="k">Parte</div><div class="v" id="recibirParte">-</div></div>
+                        <div class="turn-detail-card"><div class="k">Fecha entrega</div><div class="v" id="recibirFecha">-</div></div>
+                        <div class="turn-detail-card"><div class="k">OK acumulado</div><div class="v text-success" id="recibirOK">0</div></div>
+                        <div class="turn-detail-card"><div class="k">Sospechoso</div><div class="v text-warning" id="recibirSos">0</div></div>
+                        <div class="turn-detail-card"><div class="k">Scrap</div><div class="v text-danger" id="recibirScrap">0</div></div>
+                        <div class="turn-detail-card"><div class="k">Cajas producidas</div><div class="v" id="recibirCajas">0</div></div>
+                        <div class="turn-detail-card"><div class="k">Cajas entregadas</div><div class="v text-success" id="recibirCajasEntregadas">0</div></div>
                     </div>
-                }
-            </div>
-        </section>
-    </div>
-    <div class="modal fade" id="modalRecibirTurno" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content border-0 rounded-4">
-                <div class="modal-header turn-accept-header rounded-top-4"><h5 class="modal-title fw-bold"><i class="fa-solid fa-handshake me-2"></i>Recepción de turno</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <form method="post" action="@Url.Action("RecibirTurno","ProduccionOperador")" id="formRecibirTurno">
-                    @Html.AntiForgeryToken()<input type="hidden" name="CambioTurnoID" id="recibirCambioTurnoID" />
-                    <div class="modal-body p-4">
-                        <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>Al aceptar, esta máquina quedará bajo tu responsabilidad como único operador asignado.</div>
-                        <div class="turn-detail-grid">
-                            <div class="turn-detail-card"><div class="k">Recibes de</div><div class="v" id="recibirSaliente">-</div></div>
-                            <div class="turn-detail-card"><div class="k">Máquina</div><div class="v" id="recibirMaquina">-</div></div>
-                            <div class="turn-detail-card"><div class="k">Parte</div><div class="v" id="recibirParte">-</div></div>
-                            <div class="turn-detail-card"><div class="k">Fecha entrega</div><div class="v" id="recibirFecha">-</div></div>
-                            <div class="turn-detail-card"><div class="k">OK acumulado</div><div class="v text-success" id="recibirOK">0</div></div>
-                            <div class="turn-detail-card"><div class="k">Sospechoso</div><div class="v text-warning" id="recibirSos">0</div></div>
-                            <div class="turn-detail-card"><div class="k">Scrap</div><div class="v text-danger" id="recibirScrap">0</div></div>
-                            <div class="turn-detail-card"><div class="k">Cajas producidas</div><div class="v" id="recibirCajas">0</div></div>
-                            <div class="turn-detail-card"><div class="k">Cajas entregadas</div><div class="v text-success" id="recibirCajasEntregadas">0</div></div>
-                        </div>
-                        <div class="mb-3"><label class="form-label fw-bold">Observaciones del operador saliente</label><div class="turn-observations" id="recibirObservacionesEntrega">Sin observaciones.</div></div>
-                        <div class="mb-3"><label class="form-label fw-bold">Observaciones de recepción</label><textarea class="form-control" rows="3" maxlength="1000" name="ObservacionesRecepcion" id="observacionesRecepcion" placeholder="Opcional. Registra cualquier condición detectada al recibir."></textarea></div>
-                        <div class="form-check p-3 border rounded-4 bg-light"><input class="form-check-input" type="checkbox" id="confirmoRecepcion"><label class="form-check-label fw-bold" for="confirmoRecepcion">Confirmo que revisé la máquina, producción, cajas y observaciones mostradas.</label></div>
-                        <div class="alert alert-danger rounded-4 fw-bold d-none mt-3 mb-0" id="mensajeRecepcionTurno"></div>
-                    </div>
-                    <div class="modal-footer border-0 px-4 pb-4"><button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success fw-bold" id="btnAceptarRecepcion" disabled><i class="fa-solid fa-circle-check me-1"></i>Aceptar y recibir turno</button></div>
-                </form>
-            </div>
+                    <div class="mb-3"><label class="form-label fw-bold">Observaciones del operador saliente</label><div class="turn-observations" id="recibirObservacionesEntrega">Sin observaciones.</div></div>
+                    <div class="mb-3"><label class="form-label fw-bold">Observaciones de recepción</label><textarea class="form-control" rows="3" maxlength="1000" name="ObservacionesRecepcion" id="observacionesRecepcion" placeholder="Opcional. Registra cualquier condición detectada al recibir."></textarea></div>
+                    <div class="form-check p-3 border rounded-4 bg-light"><input class="form-check-input" type="checkbox" id="confirmoRecepcion"><label class="form-check-label fw-bold" for="confirmoRecepcion">Confirmo que revisé la máquina, producción, cajas y observaciones mostradas.</label></div>
+                    <div class="alert alert-danger rounded-4 fw-bold d-none mt-3 mb-0" id="mensajeRecepcionTurno"></div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4"><button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success fw-bold" id="btnAceptarRecepcion" disabled><i class="fa-solid fa-circle-check me-1"></i>Aceptar y recibir turno</button></div>
+            </form>
         </div>
     </div>
+</div>
 
 @section Scripts {
-<script>
+    <script>
         document.addEventListener('DOMContentLoaded',function(){
             const filtro=document.getElementById('filtroMaquina'),filas=Array.from(document.querySelectorAll('tr[data-maquina]')),contador=document.getElementById('contadorVisible'),resumen=document.getElementById('resumenFiltro');
             const section=document.getElementById('turnosPendientesSection'),lista=document.getElementById('turnosPendientesLista'),count=document.getElementById('turnosPendientesCount'),modalEl=document.getElementById('modalRecibirTurno'),modal=modalEl?bootstrap.Modal.getOrCreateInstance(modalEl):null,form=document.getElementById('formRecibirTurno'),check=document.getElementById('confirmoRecepcion'),btn=document.getElementById('btnAceptarRecepcion');

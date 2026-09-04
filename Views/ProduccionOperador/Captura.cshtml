@@ -1,32 +1,68 @@
 ﻿@model ERP.NSQuell.Models.ProduccionOperadorTabletVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var produccionPareja = Model.ProduccionPareja;
+    var relacionPareja = Model.ParejaLhRh;
+    var esLhRh = Model.EsProduccionLhRh && produccionPareja != null && relacionPareja != null;
+    var ladoActual = !string.IsNullOrWhiteSpace(Model.LadoLhRh) ? Model.LadoLhRh! : "OF A";
+    var ladoPareja = !string.IsNullOrWhiteSpace(Model.LadoParejaLhRh) ? Model.LadoParejaLhRh! : "OF B";
+    var capturaLhRhBloqueada = esLhRh && ViewBag.CapturaLhRhBloqueada == true;
+    var errorLhRh = ViewBag.ErrorLhRh as string;
+
     var planeada = Model.CantidadPlaneada ?? 0;
     var totalCapturado = Model.CantidadOKTotal + Model.CantidadScrapTotal;
     var pendiente = Math.Max(0, planeada - Model.CantidadOKTotal);
     var avance = planeada > 0 ? Math.Min(100m, Math.Round(Model.CantidadOKTotal * 100m / planeada, 2)) : 0m;
-    var horas = Model.HorasCaptura?.OrderBy(x => x.NumeroHora).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
+
+    var planeadaPareja = esLhRh ? produccionPareja!.CantidadPlaneada ?? 0 : 0;
+    var pendientePareja = esLhRh ? Math.Max(0, planeadaPareja - produccionPareja!.CantidadOKTotal) : 0;
+    var avancePareja = esLhRh && planeadaPareja > 0 ? Math.Min(100m, Math.Round(produccionPareja!.CantidadOKTotal * 100m / planeadaPareja, 2)) : 0m;
+
+    var horas = Model.HorasCaptura?.OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
+    var horasPareja = esLhRh ? produccionPareja!.HorasCaptura?.OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>() : new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>();
     var historialTurnos = Model.HistorialTurnos?.OrderBy(x => x.NumeroTurno).ToList() ?? new List<ERP.NSQuell.Models.ProduccionHistorialTurnoVm>();
     var historialCambiosTurno = Model.HistorialCambiosTurno?.OrderBy(x => x.FechaEntrega).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCambioTurnoHistorialVm>();
+
     var tiempoExtraActivo = Model.TiempoExtraActivo;
     var historialTiempoExtra = Model.HistorialTiempoExtra?.OrderByDescending(x => x.TiempoExtraID).ToList() ?? new List<ERP.NSQuell.Models.ProduccionTiempoExtraVm>();
     var tieneTiempoExtraActivo = tiempoExtraActivo != null;
-    var capturaNormalFinalizada = Model.PuedeIniciarTiempoExtra || tieneTiempoExtraActivo;
-    var horasPendientes = capturaNormalFinalizada ? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>() : horas.Where(x => !x.Capturada).OrderBy(x => x.NumeroHora).ToList();
+    var capturaNormalFinalizada = esLhRh
+        ? horas.Count > 0 && horasPareja.Count > 0 && horas.All(x => x.Capturada) && horasPareja.All(x => x.Capturada)
+        : Model.PuedeIniciarTiempoExtra || tieneTiempoExtraActivo;
+
+    var horasPendientes = capturaNormalFinalizada ? new List<ERP.NSQuell.Models.ProduccionCapturaHoraFilaVm>() : horas.Where(x => !x.Capturada).OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).ToList();
     var horasPendientesVisibles = horasPendientes.Take(5).ToList();
     var horasPendientesAdicionales = horasPendientes.Skip(5).ToList();
-    var horasCapturadas = horas.Where(x => x.Capturada).OrderByDescending(x => x.NumeroHora).ToList();
-    var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.NumeroHora).FirstOrDefault();
-    var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto && !capturaNormalFinalizada;
-    var puedeIniciarTiempoExtra = Model.PuedeIniciarTiempoExtra && !tieneTiempoExtraActivo && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
+    var horasCapturadas = horas.Where(x => x.Capturada).OrderByDescending(x => x.FechaProduccion).ThenByDescending(x => x.NumeroHora).ToList();
+    var horaObligatoria = horasPendientes.Where(x => x.Disponible).OrderBy(x => x.FechaProduccion).ThenBy(x => x.NumeroHora).FirstOrDefault();
+
+    var tieneParoFisico = Model.TieneParoAbierto || (esLhRh && produccionPareja!.TieneParoAbierto);
+    var ambasEnProduccion = !esLhRh || produccionPareja!.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion;
+    var capturaHabilitada = Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && ambasEnProduccion && !tieneParoFisico && !capturaNormalFinalizada && !capturaLhRhBloqueada;
+    var puedeIniciarTiempoExtra = !esLhRh && Model.PuedeIniciarTiempoExtra && !tieneTiempoExtraActivo && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion && !Model.TieneParoAbierto;
+
     var segundosSesionTiempoExtra = tiempoExtraActivo != null ? Math.Max(0d, (Model.FechaHoraServidor - tiempoExtraActivo.FechaHoraInicio).TotalSeconds) : 0d;
     var segundosCorteTiempoExtra = tiempoExtraActivo != null ? Math.Max(0d, (Model.FechaHoraServidor - tiempoExtraActivo.FechaHoraUltimoCorte).TotalSeconds) : 0d;
     var corteTiempoExtraDisponible = tiempoExtraActivo != null && segundosCorteTiempoExtra >= 3600d;
+
     var objetivoHora = Model.ObjetivoHoraEnUso ?? Model.ObjetivoHora;
     var cavidadesEnUso = Model.CavidadesEnUso;
     var cicloEnUso = Model.CicloEnUso;
     var ultimoContador = Model.UltimoContadorMaquina;
     var bonusActual = Model.BonusOperadorActual;
+
+    var objetivoHoraPareja = esLhRh ? produccionPareja!.ObjetivoHoraEnUso ?? produccionPareja.ObjetivoHora : null;
+    var cavidadesEnUsoPareja = esLhRh ? produccionPareja!.CavidadesEnUso : null;
+    var cicloEnUsoPareja = esLhRh ? produccionPareja!.CicloEnUso : null;
+    var ultimoContadorPareja = esLhRh ? produccionPareja!.UltimoContadorMaquina : null;
+    var bonusPareja = esLhRh ? produccionPareja!.BonusOperadorActual : 0;
+    var ultimoContadorCompartido = !esLhRh
+        ? ultimoContador
+        : ultimoContador.HasValue && ultimoContadorPareja.HasValue && ultimoContador.Value == ultimoContadorPareja.Value
+            ? ultimoContador
+            : null;
+
     var catalogoDefectos = Model.CatalogoDefectos?.Where(x => x.Activo).OrderBy(x => x.Codigo).ThenBy(x => x.Nombre).ToList() ?? new List<ERP.NSQuell.Models.ProduccionCatalogoDefectoVm>();
     var mensajeSuccess = TempData["Success"]?.ToString();
     var mensajeObjetivoNoCumplido = !string.IsNullOrWhiteSpace(mensajeSuccess) && mensajeSuccess.Contains("No alcanzaste el objetivo por hora", StringComparison.OrdinalIgnoreCase);
@@ -1890,13 +1926,130 @@
                 grid-template-columns: 1fr 1fr
             }
         }
+
+        /* =========================================================
+           WORKSPACE LH/RH
+           ========================================================= */
+        .pair-workspace {
+            border: 1px solid #b9ccff;
+            background: linear-gradient(180deg,#f8fbff,#eef4ff);
+            border-radius: 22px;
+            padding: 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 12px 30px rgba(0,74,173,.08)
+        }
+        .pair-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 12px 14px;
+            border-radius: 15px;
+            background: linear-gradient(135deg,#002c6d,#004aad);
+            color: #fff;
+            margin-bottom: 12px
+        }
+        .pair-banner-title { font-size: 1.05rem; font-weight: 950 }
+        .pair-banner-sub { margin-top: 2px; color: rgba(255,255,255,.82); font-size: .8rem; font-weight: 700 }
+        .pair-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.25);
+            font-size: .76rem;
+            font-weight: 950
+        }
+        .pair-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px }
+        .pair-side {
+            position: relative;
+            overflow: hidden;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            background: #fff;
+            padding: 15px
+        }
+        .pair-side.lh { border-top: 4px solid #004aad }
+        .pair-side.rh { border-top: 4px solid #7c3aed }
+        .pair-side-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: .72rem;
+            font-weight: 950;
+            background: #eef4ff;
+            color: #1d4ed8
+        }
+        .pair-side.rh .pair-side-label { background: #f5f3ff; color: #6d28d9 }
+        .pair-of { margin-top: 8px; font-size: 1.25rem; font-weight: 950; color: var(--blue-dark) }
+        .pair-part { color: #475467; font-size: .86rem; font-weight: 750; margin-top: 2px }
+        .pair-side-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin-top: 12px }
+        .pair-stat { background: #f8fafc; border: 1px solid #e4e7ec; border-radius: 11px; padding: 8px }
+        .pair-stat .k { color: var(--muted); font-size: .62rem; font-weight: 900; text-transform: uppercase }
+        .pair-stat .v { color: var(--blue-dark); font-weight: 950; margin-top: 2px }
+        .pair-shared {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-top: 12px
+        }
+        .pair-shared-card { border: 1px solid #bfdbfe; background: #fff; border-radius: 13px; padding: 10px 11px; text-align: center }
+        .pair-shared-card .k { color: var(--muted); font-size: .64rem; text-transform: uppercase; font-weight: 900 }
+        .pair-shared-card .v { margin-top: 3px; color: var(--blue-dark); font-size: 1.02rem; font-weight: 950 }
+        .pair-note { border: 1px solid #c4b5fd; background: #f5f3ff; color: #5b21b6; border-radius: 14px; padding: 11px 13px; font-weight: 800; margin-bottom: 14px }
+        .pair-hour-table { min-width: 1120px }
+        .pair-hour-side-cell { min-width: 275px }
+        .pair-hour-side {
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            padding: 9px;
+            background: #fff
+        }
+        .pair-hour-side.current { border-left: 4px solid #004aad }
+        .pair-hour-side.partner { border-left: 4px solid #7c3aed }
+        .pair-hour-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-weight: 950 }
+        .pair-hour-side-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px }
+        .pair-hour-mini .k { font-size: .6rem; color: var(--muted); font-weight: 900; text-transform: uppercase; text-align: center }
+        .pair-hour-mini .hour-input { height: 45px; min-width: 0; font-size: 1.05rem; margin-top: 3px }
+        .pair-hour-obs { margin-top: 7px; min-width: 0; width: 100% }
+        .pair-modal-dialog { max-width: 1180px }
+        .pair-capture-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-top: 14px }
+        .pair-capture-side { border: 1px solid var(--border); border-radius: 18px; padding: 14px; background: #fff }
+        .pair-capture-side.current { border-top: 4px solid #004aad }
+        .pair-capture-side.partner { border-top: 4px solid #7c3aed }
+        .pair-capture-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px }
+        .pair-capture-title { font-size: 1rem; color: var(--blue-dark); font-weight: 950 }
+        .pair-capture-of { color: var(--muted); font-size: .78rem; font-weight: 750; margin-top: 2px }
+        .pair-physical-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin-bottom: 12px }
+        .pair-physical-summary .physical-card { padding: 8px }
+        .pair-physical-summary .physical-card .v { font-size: 1rem }
+        .pair-history-table { min-width: 1050px }
+        .pair-disabled-action { opacity: .72 }
+        .pair-state-warning { border: 1px solid #fedf89; background: #fffcf5; color: #93370d; border-radius: 14px; padding: 11px 13px; font-weight: 800; margin-bottom: 14px }
+
+        @@media(max-width:900px) {
+            .pair-grid,.pair-capture-grid { grid-template-columns: 1fr }
+            .pair-shared { grid-template-columns: repeat(2,1fr) }
+        }
+        @@media(max-width:600px) {
+            .pair-side-stats,.pair-hour-side-grid,.pair-physical-summary { grid-template-columns: 1fr 1fr }
+            .pair-shared { grid-template-columns: 1fr 1fr }
+        }
     </style>
 }
 
 <div class="page">
     <section class="hero">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-            <div><h1><i class="fa-solid fa-table-list me-2"></i>Captura de producción por hora</h1><p>Captura cada fila como en AppSheet. La Hora 1 comienza cuando inicia producción en serie.</p></div>
+            <div>
+                <h1><i class="fa-solid @(esLhRh ? "fa-link" : "fa-table-list") me-2"></i>@(esLhRh ? "Producción conjunta LH / RH" : "Captura de producción por hora")</h1>
+                <p>@(esLhRh ? $"Grupo LH/RH {relacionPareja!.GrupoLhRh} · una operación física, dos OF trazables." : "Captura cada fila como en AppSheet. La Hora 1 comienza cuando inicia producción en serie.")</p>
+            </div>
             <div class="d-flex gap-2 flex-wrap"><a href="@Url.Action("Index", "ProduccionOperador")" class="btn-hero"><i class="fa-solid fa-arrow-left"></i>Kiosco</a><a href="@Url.Action("Captura", "ProduccionOperador", new { id = Model.EjecucionProduccionID })" class="btn-hero"><i class="fa-solid fa-rotate-right"></i>Actualizar</a></div>
         </div>
     </section>
@@ -1918,6 +2071,56 @@
         <div class="alert alert-info rounded-4 fw-bold"><i class="fa-solid fa-circle-info me-1"></i>@TempData["Info"]</div>
     }
 
+    @if (esLhRh)
+    {
+        <section class="pair-workspace">
+            <div class="pair-banner">
+                <div>
+                    <div class="pair-banner-title"><i class="fa-solid fa-link me-2"></i>Pareja LH/RH · Grupo @relacionPareja!.GrupoLhRh</div>
+                    <div class="pair-banner-sub">Las dos OF comparten máquina, molde, ciclo y contador. Cavidades, OK, scrap, defectos, calidad y cajas permanecen separados por lado.</div>
+                </div>
+                <span class="pair-badge"><i class="fa-solid fa-gears"></i>@Txt(Model.MaquinaCodigo) · @Txt(Model.MaquinaNombre)</span>
+            </div>
+            <div class="pair-grid">
+                <div class="pair-side lh">
+                    <span class="pair-side-label"><i class="fa-solid fa-arrow-left"></i>@ladoActual</span>
+                    <div class="pair-of">OF @Txt(Model.NumeroOFRecibida ?? Model.FolioSolicitud)</div>
+                    <div class="pair-part">@Txt(Model.ReferenciaSAP ?? Model.NumeroParte) · @Txt(Model.DescripcionParte)</div>
+                    <div class="pair-side-stats">
+                        <div class="pair-stat"><div class="k">Planeado</div><div class="v">@(planeada > 0 ? Numero(planeada) : "-")</div></div>
+                        <div class="pair-stat"><div class="k">OK</div><div class="v text-success">@Numero(Model.CantidadOKTotal)</div></div>
+                        <div class="pair-stat"><div class="k">Scrap</div><div class="v text-danger">@Numero(Model.CantidadScrapTotal)</div></div>
+                        <div class="pair-stat"><div class="k">Pendiente</div><div class="v">@Numero(pendiente)</div></div>
+                        <div class="pair-stat"><div class="k">Cavidades</div><div class="v">@(cavidadesEnUso.HasValue ? cavidadesEnUso.Value.ToString("N0") : "-")</div></div>
+                        <div class="pair-stat"><div class="k">Objetivo/h</div><div class="v">@(objetivoHora.HasValue ? objetivoHora.Value.ToString("N0") : "-")</div></div>
+                    </div>
+                    <div class="small text-muted fw-bold mt-2">Avance @avance.ToString("0.##")% · Bonus provisional @bonusActual.ToString("N0")</div>
+                </div>
+                <div class="pair-side rh">
+                    <span class="pair-side-label"><i class="fa-solid fa-arrow-right"></i>@ladoPareja</span>
+                    <div class="pair-of">OF @Txt(produccionPareja!.NumeroOFRecibida ?? produccionPareja.FolioSolicitud)</div>
+                    <div class="pair-part">@Txt(produccionPareja.ReferenciaSAP ?? produccionPareja.NumeroParte) · @Txt(produccionPareja.DescripcionParte)</div>
+                    <div class="pair-side-stats">
+                        <div class="pair-stat"><div class="k">Planeado</div><div class="v">@(planeadaPareja > 0 ? Numero(planeadaPareja) : "-")</div></div>
+                        <div class="pair-stat"><div class="k">OK</div><div class="v text-success">@Numero(produccionPareja.CantidadOKTotal)</div></div>
+                        <div class="pair-stat"><div class="k">Scrap</div><div class="v text-danger">@Numero(produccionPareja.CantidadScrapTotal)</div></div>
+                        <div class="pair-stat"><div class="k">Pendiente</div><div class="v">@Numero(pendientePareja)</div></div>
+                        <div class="pair-stat"><div class="k">Cavidades</div><div class="v">@(cavidadesEnUsoPareja.HasValue ? cavidadesEnUsoPareja.Value.ToString("N0") : "-")</div></div>
+                        <div class="pair-stat"><div class="k">Objetivo/h</div><div class="v">@(objetivoHoraPareja.HasValue ? objetivoHoraPareja.Value.ToString("N0") : "-")</div></div>
+                    </div>
+                    <div class="small text-muted fw-bold mt-2">Avance @avancePareja.ToString("0.##")% · Bonus provisional @bonusPareja.ToString("N0")</div>
+                </div>
+            </div>
+            <div class="pair-shared">
+                <div class="pair-shared-card"><div class="k">Máquina física</div><div class="v">@Txt(Model.MaquinaCodigo)</div></div>
+                <div class="pair-shared-card"><div class="k">Ciclo compartido</div><div class="v">@(cicloEnUso.HasValue ? $"{cicloEnUso.Value:0.##} s" : "-")</div></div>
+                <div class="pair-shared-card"><div class="k">Último contador</div><div class="v">@(ultimoContadorCompartido.HasValue ? ultimoContadorCompartido.Value.ToString("N0") : "Revisar")</div></div>
+                <div class="pair-shared-card"><div class="k">Estado conjunto</div><div class="v">@(capturaLhRhBloqueada ? "Bloqueado" : tieneParoFisico ? "En paro" : ambasEnProduccion ? "Produciendo" : "Revisar")</div></div>
+            </div>
+        </section>
+    }
+    else
+    {
     <section class="summary-grid">
 
         <div class="summary">
@@ -2067,6 +2270,27 @@
 
     </section>
 
+    }
+
+    @if (esLhRh)
+    {
+        <section class="turn-toolbar pair-disabled-action">
+            <div>
+                <div class="turn-title"><i class="fa-solid fa-people-arrows-left-right me-2"></i>Entrega de turno · Pareja LH/RH</div>
+                <div class="turn-subtitle">La entrega debe cambiar al operador de las dos OF en una sola operación. Mientras el endpoint conjunto no esté habilitado, esta acción queda protegida para evitar desincronizar los lados.</div>
+            </div>
+            <button type="button" class="btn-turn" disabled><i class="fa-solid fa-lock"></i>Entrega conjunta</button>
+        </section>
+        <section class="paro-toolbar pair-disabled-action">
+            <div>
+                <div class="paro-title"><i class="fa-solid fa-link me-2"></i>Paro físico LH/RH</div>
+                <div class="paro-subtitle">Un paro de esta máquina debe afectar simultáneamente a ambas ejecuciones. La captura horaria conjunta sí está habilitada; el paro desde Operador permanecerá protegido hasta usar el método atómico LH/RH.</div>
+            </div>
+            <button type="button" class="btn-paro-start" disabled><i class="fa-solid fa-lock"></i>Paro conjunto</button>
+        </section>
+    }
+    else
+    {
     <section class="turn-toolbar">
         <div>
             <div class="turn-title">
@@ -2130,6 +2354,167 @@
         }
     </section>
 
+    }
+
+    @if (esLhRh)
+    {
+        <section class="panel">
+            <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span><i class="fa-solid fa-link me-2"></i>Registro por hora · Producción conjunta LH/RH</span>
+                <span class="badge bg-primary">Grupo @relacionPareja!.GrupoLhRh · @ladoActual + @ladoPareja</span>
+            </div>
+            <div class="panel-body">
+                @if (!string.IsNullOrWhiteSpace(errorLhRh))
+                {
+                    <div class="alert alert-danger rounded-4 fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>@errorLhRh</div>
+                }
+                @if (capturaLhRhBloqueada)
+                {
+                    <div class="pair-state-warning"><i class="fa-solid fa-lock me-1"></i>La captura conjunta está bloqueada porque las dos ejecuciones no están sincronizadas. Corrige la condición indicada arriba y actualiza la pantalla.</div>
+                }
+                else if (tieneParoFisico)
+                {
+                    <div class="alert alert-danger fw-bold"><i class="fa-solid fa-circle-pause me-1"></i>Existe un paro abierto en al menos uno de los lados. No se guardará una hora parcial LH/RH.</div>
+                }
+                else if (Model.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion || produccionPareja!.EstatusID != ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+                {
+                    <div class="alert alert-warning fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Ambas OF deben estar en Producción para habilitar la captura conjunta.</div>
+                }
+                else
+                {
+                    <div class="pair-note"><i class="fa-solid fa-gauge-high me-1"></i>Captura <strong>un solo contador físico</strong>. El ERP aplica los mismos ciclos a ambas OF y calcula las piezas de cada lado con sus propias cavidades. Scrap, defectos y observaciones se registran por separado.</div>
+                }
+
+                @if (horas.Count == 0 || horasPareja.Count == 0)
+                {
+                    <div class="alert alert-secondary mb-0">No se generaron bloques horarios para ambos lados. Se requieren filas de captura tanto para @ladoActual como para @ladoPareja.</div>
+                }
+                else if (horasPendientes.Count > 0)
+                {
+                    <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
+                        <table class="hour-table pair-hour-table">
+                            <thead>
+                                <tr><th>Hora</th><th>Rango</th><th>Contador físico</th><th>@ladoActual</th><th>@ladoPareja</th><th>Estado</th><th>Acción</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var fila in horasPendientesVisibles)
+                                {
+                                    var filaPareja = horasPareja.FirstOrDefault(x => x.FechaProduccion.Date == fila.FechaProduccion.Date && x.HoraInicio.Hours == fila.HoraInicio.Hours && x.HoraInicio.Minutes == fila.HoraInicio.Minutes && x.HoraFin.Hours == fila.HoraFin.Hours && x.HoraFin.Minutes == fila.HoraFin.Minutes);
+                                    var editable = capturaHabilitada && !fila.Capturada && fila.Disponible && filaPareja != null && !filaPareja.Capturada && filaPareja.Disponible;
+                                    var claseFila = fila.Vencida || filaPareja?.Vencida == true ? "row-overdue" : fila.Disponible && filaPareja?.Disponible == true ? "row-ready" : "";
+                                    var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora && horaObligatoria.FechaProduccion.Date == fila.FechaProduccion.Date;
+                                    var objetivoActualFila = fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora ?? 0;
+                                    var objetivoParejaFila = filaPareja?.ObjetivoBloque ?? filaPareja?.ObjetivoHora ?? objetivoHoraPareja ?? 0;
+                                    <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@objetivoActualFila" data-objetivo-pareja="@objetivoParejaFila" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                        <td><div class="hour-label">Hora @fila.NumeroHora</div><div class="small text-muted">Conjunta</div></td>
+                                        <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                        <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
+                                        <td class="pair-hour-side-cell">
+                                            <div class="pair-hour-side current">
+                                                <div class="pair-hour-side-head"><span>@ladoActual</span><span class="small text-muted">OF @Txt(Model.NumeroOFRecibida ?? Model.FolioSolicitud)</span></div>
+                                                <div class="pair-hour-side-grid">
+                                                    <div class="pair-hour-mini"><div class="k">Objetivo</div><input class="hour-input" value="@(objetivoActualFila > 0 ? objetivoActualFila.ToString("N0") : "-")" readonly tabindex="-1" /></div>
+                                                    <div class="pair-hour-mini"><div class="k">OK</div><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" data-field="ok" readonly tabindex="-1" /></div>
+                                                    <div class="pair-hour-mini"><div class="k">Scrap</div><input class="hour-input scrap empty-number" type="number" min="0" value="0" data-field="scrap" @(editable ? "" : "disabled") /></div>
+                                                </div>
+                                                <input class="obs-input form-control pair-hour-obs" maxlength="500" placeholder="Observaciones @ladoActual" data-field="obs" @(editable ? "" : "disabled") />
+                                            </div>
+                                        </td>
+                                        <td class="pair-hour-side-cell">
+                                            <div class="pair-hour-side partner">
+                                                <div class="pair-hour-side-head"><span>@ladoPareja</span><span class="small text-muted">OF @Txt(produccionPareja!.NumeroOFRecibida ?? produccionPareja.FolioSolicitud)</span></div>
+                                                @if (filaPareja == null)
+                                                {
+                                                    <div class="alert alert-danger py-2 mb-0 small fw-bold">No existe el mismo bloque horario en la OF pareja.</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="pair-hour-side-grid">
+                                                        <div class="pair-hour-mini"><div class="k">Objetivo</div><input class="hour-input" value="@(objetivoParejaFila > 0 ? objetivoParejaFila.ToString("N0") : "-")" readonly tabindex="-1" /></div>
+                                                        <div class="pair-hour-mini"><div class="k">OK</div><input class="hour-input ok empty-number" type="number" min="0" value="" placeholder="Auto" data-field="ok-pareja" readonly tabindex="-1" /></div>
+                                                        <div class="pair-hour-mini"><div class="k">Scrap</div><input class="hour-input scrap empty-number" type="number" min="0" value="0" data-field="scrap-pareja" @(editable ? "" : "disabled") /></div>
+                                                    </div>
+                                                    <input class="obs-input form-control pair-hour-obs" maxlength="500" placeholder="Observaciones @ladoPareja" data-field="obs-pareja" @(editable ? "" : "disabled") />
+                                                }
+                                            </div>
+                                        </td>
+                                        <td><span class="status-pill @(editable ? EstadoClase(fila) : "status-future")">@(filaPareja == null ? "Desfasada" : editable ? EstadoTexto(fila) : "Pendiente")</span></td>
+                                        <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Capturar ambas</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (horasPendientesAdicionales.Count > 0)
+                    {
+                        <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#pendientesAdicionalesLhRh" aria-expanded="false"><span><i class="fa-solid fa-list me-2"></i>Ver más horas pendientes (@horasPendientesAdicionales.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+                        <div class="collapse history-box" id="pendientesAdicionalesLhRh">
+                            <div class="table-wrap @(capturaHabilitada ? "" : "blocked")">
+                                <table class="hour-table pair-hour-table">
+                                    <thead><tr><th>Hora</th><th>Rango</th><th>Contador físico</th><th>@ladoActual</th><th>@ladoPareja</th><th>Estado</th><th>Acción</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var fila in horasPendientesAdicionales)
+                                        {
+                                            var filaPareja = horasPareja.FirstOrDefault(x => x.FechaProduccion.Date == fila.FechaProduccion.Date && x.HoraInicio.Hours == fila.HoraInicio.Hours && x.HoraInicio.Minutes == fila.HoraInicio.Minutes && x.HoraFin.Hours == fila.HoraFin.Hours && x.HoraFin.Minutes == fila.HoraFin.Minutes);
+                                            var editable = capturaHabilitada && !fila.Capturada && fila.Disponible && filaPareja != null && !filaPareja.Capturada && filaPareja.Disponible;
+                                            var claseFila = fila.Vencida || filaPareja?.Vencida == true ? "row-overdue" : fila.Disponible && filaPareja?.Disponible == true ? "row-ready" : "";
+                                            var esObligatoria = horaObligatoria != null && horaObligatoria.NumeroHora == fila.NumeroHora && horaObligatoria.FechaProduccion.Date == fila.FechaProduccion.Date;
+                                            var objetivoActualFila = fila.ObjetivoBloque ?? fila.ObjetivoHora ?? objetivoHora ?? 0;
+                                            var objetivoParejaFila = filaPareja?.ObjetivoBloque ?? filaPareja?.ObjetivoHora ?? objetivoHoraPareja ?? 0;
+                                            <tr class="@claseFila" data-hour-row data-numero="@fila.NumeroHora" data-fecha="@fila.FechaProduccion.ToString("yyyy-MM-dd")" data-inicio="@Hora(fila.HoraInicio)" data-fin="@Hora(fila.HoraFin)" data-objetivo="@objetivoActualFila" data-objetivo-pareja="@objetivoParejaFila" data-obligatoria="@(esObligatoria ? "true" : "false")">
+                                                <td><div class="hour-label">Hora @fila.NumeroHora</div><div class="small text-muted">Conjunta</div></td>
+                                                <td><div class="hour-range">@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)</div><div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                                <td><input class="hour-input counter empty-number" type="number" min="0" value="" placeholder="Actual" inputmode="numeric" data-field="counter" @(editable ? "" : "disabled") /></td>
+                                                <td class="pair-hour-side-cell"><div class="pair-hour-side current"><div class="pair-hour-side-head"><span>@ladoActual</span></div><div class="pair-hour-side-grid"><div class="pair-hour-mini"><div class="k">Objetivo</div><input class="hour-input" value="@(objetivoActualFila > 0 ? objetivoActualFila.ToString("N0") : "-")" readonly /></div><div class="pair-hour-mini"><div class="k">OK</div><input class="hour-input ok empty-number" value="" placeholder="Auto" data-field="ok" readonly /></div><div class="pair-hour-mini"><div class="k">Scrap</div><input class="hour-input scrap empty-number" type="number" min="0" value="0" data-field="scrap" @(editable ? "" : "disabled") /></div></div><input class="obs-input form-control pair-hour-obs" maxlength="500" placeholder="Observaciones @ladoActual" data-field="obs" @(editable ? "" : "disabled") /></div></td>
+                                                <td class="pair-hour-side-cell"><div class="pair-hour-side partner"><div class="pair-hour-side-head"><span>@ladoPareja</span></div>@if (filaPareja == null){<div class="alert alert-danger py-2 mb-0 small fw-bold">Bloque faltante.</div>}else{<div class="pair-hour-side-grid"><div class="pair-hour-mini"><div class="k">Objetivo</div><input class="hour-input" value="@(objetivoParejaFila > 0 ? objetivoParejaFila.ToString("N0") : "-")" readonly /></div><div class="pair-hour-mini"><div class="k">OK</div><input class="hour-input ok empty-number" value="" placeholder="Auto" data-field="ok-pareja" readonly /></div><div class="pair-hour-mini"><div class="k">Scrap</div><input class="hour-input scrap empty-number" type="number" min="0" value="0" data-field="scrap-pareja" @(editable ? "" : "disabled") /></div></div><input class="obs-input form-control pair-hour-obs" maxlength="500" placeholder="Observaciones @ladoPareja" data-field="obs-pareja" @(editable ? "" : "disabled") />}</div></td>
+                                                <td><span class="status-pill @(editable ? EstadoClase(fila) : "status-future")">@(filaPareja == null ? "Desfasada" : editable ? EstadoTexto(fila) : "Pendiente")</span></td>
+                                                <td><button type="button" class="btn-save-row btn-open-hour" @(editable ? "" : "disabled")><i class="fa-solid fa-floppy-disk me-1"></i>Capturar ambas</button></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-success rounded-4 fw-bold"><i class="fa-solid fa-circle-check me-1"></i>Todos los bloques normales de ambas OF están capturados.</div>
+                }
+
+                @if (horasCapturadas.Count > 0)
+                {
+                    <button class="history-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#historialHorasLhRh" aria-expanded="false"><span><i class="fa-solid fa-clock-rotate-left me-2"></i>Historial conjunto (@horasCapturadas.Count)</span><i class="fa-solid fa-chevron-down"></i></button>
+                    <div class="collapse history-box" id="historialHorasLhRh">
+                        <div class="table-wrap">
+                            <table class="hour-table pair-history-table">
+                                <thead><tr><th>Hora</th><th>Rango</th><th>Contador</th><th>@ladoActual · OK</th><th>@ladoActual · Scrap</th><th>@ladoPareja · OK</th><th>@ladoPareja · Scrap</th><th>Estado</th></tr></thead>
+                                <tbody>
+                                    @foreach (var fila in horasCapturadas)
+                                    {
+                                        var filaPareja = horasPareja.FirstOrDefault(x => x.FechaProduccion.Date == fila.FechaProduccion.Date && x.HoraInicio.Hours == fila.HoraInicio.Hours && x.HoraInicio.Minutes == fila.HoraInicio.Minutes && x.HoraFin.Hours == fila.HoraFin.Hours && x.HoraFin.Minutes == fila.HoraFin.Minutes);
+                                        var contadoresIguales = !fila.ContadorFinal.HasValue || filaPareja == null || !filaPareja.ContadorFinal.HasValue || fila.ContadorFinal.Value == filaPareja.ContadorFinal.Value;
+                                        <tr class="@(filaPareja?.Capturada == true && contadoresIguales ? "row-complete" : "row-overdue")">
+                                            <td><strong>Hora @fila.NumeroHora</strong></td>
+                                            <td>@Hora(fila.HoraInicio) - @Hora(fila.HoraFin)<div class="small text-muted">@fila.FechaProduccion.ToString("dd/MM/yyyy")</div></td>
+                                            <td>@(fila.ContadorFinal.HasValue ? fila.ContadorFinal.Value.ToString("N0") : "-")</td>
+                                            <td><span class="status-pill status-complete">@Numero(fila.CantidadOK)</span></td>
+                                            <td><span class="status-pill status-overdue">@Numero(fila.CantidadScrap)</span></td>
+                                            <td><span class="status-pill status-complete">@(filaPareja != null ? Numero(filaPareja.CantidadOK) : "-")</span></td>
+                                            <td><span class="status-pill status-overdue">@(filaPareja != null ? Numero(filaPareja.CantidadScrap) : "-")</span></td>
+                                            <td>@if (filaPareja?.Capturada == true && contadoresIguales){<span class="status-pill status-complete"><i class="fa-solid fa-check me-1"></i>Sincronizada</span>}else{<span class="status-pill status-overdue"><i class="fa-solid fa-triangle-exclamation me-1"></i>Revisar</span>}</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
     <section class="panel">
         <div class="panel-head d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span><i class="fa-solid fa-clock me-2"></i>Registro por horas</span><span class="badge bg-primary">
@@ -2363,6 +2748,8 @@
         </div>
     </section>
 
+    }
+
     @if (tieneTiempoExtraActivo && tiempoExtraActivo != null)
     {
         <section class="extra-panel active" id="panelTiempoExtra" data-segundos-sesion="@Math.Floor(segundosSesionTiempoExtra)" data-segundos-corte="@Math.Floor(segundosCorteTiempoExtra)">
@@ -2448,7 +2835,7 @@
             </div>
         </section>
     }
-    else if (Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
+    else if (!esLhRh && Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion)
     {
         <section class="extra-panel waiting">
             <div class="extra-body">
@@ -2855,6 +3242,72 @@
     </div>
 </div>
 
+@if (esLhRh)
+{
+    <div class="modal fade" id="modalCapturaHora" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered pair-modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div><h5 class="modal-title"><i class="fa-solid fa-link me-2"></i>Captura horaria conjunta LH/RH</h5><div class="small opacity-75 fw-semibold">Un contador físico · dos cálculos por cavidades · dos clasificaciones independientes</div></div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form method="post" action="@Url.Action("RegistrarHora","ProduccionOperador")" id="formModalHora">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                        <input type="hidden" name="FechaProduccion" id="modalFecha" />
+                        <input type="hidden" name="HoraInicio" id="modalInicio" />
+                        <input type="hidden" name="HoraFin" id="modalFin" />
+                        <input type="hidden" name="ConfirmarCapturaLhRh" value="true" />
+                        <div class="text-center mb-3"><div class="text-muted fw-bold">Debes completar ambas OF</div><div class="modal-hour" id="modalTituloHora">Hora pendiente</div><div class="text-muted" id="modalRangoHora"></div></div>
+
+                        <div class="counter-capture-card">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                <div><div class="fw-bold text-primary"><i class="fa-solid fa-gauge-high me-1"></i>Contador físico compartido</div><div class="small text-muted fw-semibold">Escribe una sola lectura. El ERP utilizará los mismos ciclos para @ladoActual y @ladoPareja.</div></div>
+                                <span class="badge bg-primary">Grupo @relacionPareja!.GrupoLhRh</span>
+                            </div>
+                            <div class="counter-capture-grid">
+                                <div><label for="modalContador" class="form-label fw-bold">Contador actual</label><input type="number" min="0" step="1" value="" placeholder="Ej. 12850" name="ContadorMaquinaActual" id="modalContador" class="counter-value-input empty-number" inputmode="numeric" autocomplete="off" /></div>
+                                <div class="counter-reference"><div class="k">Último contador compartido</div><div class="v">@(ultimoContadorCompartido.HasValue ? ultimoContadorCompartido.Value.ToString("N0") : "Sin lectura sincronizada")</div><div class="small text-muted mt-1">Ciclo físico: @(cicloEnUso.HasValue ? $"{cicloEnUso.Value:0.##} s" : "-")</div></div>
+                            </div>
+                            <div class="counter-feedback" id="modalContadorFeedback">Captura el contador. El servidor calculará cada lado usando sus cavidades vigentes.</div>
+                        </div>
+
+                        <div id="mensajeCapturaHora" class="alert alert-danger rounded-4 fw-bold d-none mb-3" role="alert"></div>
+
+                        <div class="pair-capture-grid">
+                            <section class="pair-capture-side current">
+                                <div class="pair-capture-head"><div><div class="pair-capture-title"><i class="fa-solid fa-arrow-left me-1"></i>@ladoActual · OF @Txt(Model.NumeroOFRecibida ?? Model.FolioSolicitud)</div><div class="pair-capture-of">@Txt(Model.ReferenciaSAP ?? Model.NumeroParte) · @(cavidadesEnUso.HasValue ? $"{cavidadesEnUso.Value} cavidad(es)" : "Cavidades pendientes")</div></div><span class="badge bg-primary">Objetivo <span id="modalObjetivo">-</span></span></div>
+                                <div class="pair-physical-summary"><div class="physical-card"><div class="k">Producción física</div><div class="v" id="modalPiezasFisicas">-</div></div><div class="physical-card"><div class="k">Verdes / OK</div><div class="v text-success" id="modalOKSugerido">-</div></div><div class="physical-card"><div class="k">Min. productivos</div><div class="v" id="modalMinutosProductivos">-</div></div></div>
+                                <div class="modal-goal"><div class="goal-label">Resultado contra objetivo · @ladoActual</div><div class="modal-goal-feedback" id="modalObjetivoFeedback">Captura el contador y scrap para calcular.</div></div>
+                                <div class="modal-grid mb-3"><div><div class="modal-label text-success">Verdes / OK</div><input type="number" min="0" value="" placeholder="Auto" name="CantidadOK" id="modalOK" class="modal-qty ok empty-number" readonly tabindex="-1" /><div class="ok-mode-row"><span class="ok-mode-badge"><i class="fa-solid fa-wand-magic-sparkles"></i>Automático</span></div></div><div><div class="modal-label text-danger">Rojas / Scrap</div><input type="number" min="0" value="0" name="CantidadScrap" id="modalScrap" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div></div>
+                                <div class="defect-panel d-none" id="panelDefectosNormal"><div class="defect-head"><div><div class="defect-title"><i class="fa-solid fa-bug me-2"></i>Defectos @ladoActual <span class="text-danger">*</span></div><div class="defect-help">Clasifica exactamente todas las piezas scrap de este lado.</div></div><div class="defect-counter" id="contadorDefectosNormal">0 / 0 clasificadas</div></div>@if (catalogoDefectos.Count == 0){<div class="alert alert-danger rounded-4 fw-bold mb-0">No existen defectos activos.</div>}else{<div class="defect-list" id="listaDefectosNormal"></div><div class="defect-footer"><button type="button" class="btn-add-defect" id="btnAgregarDefectoNormal"><i class="fa-solid fa-plus me-1"></i>Agregar defecto</button><div class="defect-feedback" id="resumenDefectosNormal">Selecciona el defecto.</div></div>}</div>
+                                <div class="classification-feedback" id="modalClasificacionFeedback"><i class="fa-solid fa-circle-info me-1"></i>OK = producción física de @ladoActual - scrap de @ladoActual.</div>
+                                <label class="form-label fw-bold mt-3">Observaciones @ladoActual</label><textarea name="Observaciones" id="modalObs" class="form-control" rows="3" maxlength="500" placeholder="Opcional"></textarea>
+                            </section>
+
+                            <section class="pair-capture-side partner">
+                                <div class="pair-capture-head"><div><div class="pair-capture-title"><i class="fa-solid fa-arrow-right me-1"></i>@ladoPareja · OF @Txt(produccionPareja!.NumeroOFRecibida ?? produccionPareja.FolioSolicitud)</div><div class="pair-capture-of">@Txt(produccionPareja.ReferenciaSAP ?? produccionPareja.NumeroParte) · @(cavidadesEnUsoPareja.HasValue ? $"{cavidadesEnUsoPareja.Value} cavidad(es)" : "Cavidades pendientes")</div></div><span class="badge" style="background:#7c3aed">Objetivo <span id="modalObjetivoPareja">-</span></span></div>
+                                <div class="pair-physical-summary"><div class="physical-card"><div class="k">Producción física</div><div class="v" id="modalPiezasFisicasPareja">-</div></div><div class="physical-card"><div class="k">Verdes / OK</div><div class="v text-success" id="modalOKSugeridoPareja">-</div></div><div class="physical-card"><div class="k">Min. productivos</div><div class="v" id="modalMinutosProductivosPareja">-</div></div></div>
+                                <div class="modal-goal"><div class="goal-label">Resultado contra objetivo · @ladoPareja</div><div class="modal-goal-feedback" id="modalObjetivoFeedbackPareja">Captura el contador y scrap para calcular.</div></div>
+                                <div class="modal-grid mb-3"><div><div class="modal-label text-success">Verdes / OK</div><input type="number" min="0" value="" placeholder="Auto" id="modalOKPareja" class="modal-qty ok empty-number" readonly tabindex="-1" /><div class="ok-mode-row"><span class="ok-mode-badge"><i class="fa-solid fa-wand-magic-sparkles"></i>Automático</span></div></div><div><div class="modal-label text-danger">Rojas / Scrap</div><input type="number" min="0" value="0" name="CantidadScrapPareja" id="modalScrapPareja" class="modal-qty scrap empty-number" inputmode="numeric" autocomplete="off" /></div></div>
+                                <div class="defect-panel d-none" id="panelDefectosPareja"><div class="defect-head"><div><div class="defect-title"><i class="fa-solid fa-bug me-2"></i>Defectos @ladoPareja <span class="text-danger">*</span></div><div class="defect-help">Clasifica exactamente todas las piezas scrap de este lado.</div></div><div class="defect-counter" id="contadorDefectosPareja">0 / 0 clasificadas</div></div>@if (catalogoDefectos.Count == 0){<div class="alert alert-danger rounded-4 fw-bold mb-0">No existen defectos activos.</div>}else{<div class="defect-list" id="listaDefectosPareja"></div><div class="defect-footer"><button type="button" class="btn-add-defect" id="btnAgregarDefectoPareja"><i class="fa-solid fa-plus me-1"></i>Agregar defecto</button><div class="defect-feedback" id="resumenDefectosPareja">Selecciona el defecto.</div></div>}</div>
+                                <div class="classification-feedback" id="modalClasificacionFeedbackPareja"><i class="fa-solid fa-circle-info me-1"></i>OK = producción física de @ladoPareja - scrap de @ladoPareja.</div>
+                                <label class="form-label fw-bold mt-3">Observaciones @ladoPareja</label><textarea name="ObservacionesPareja" id="modalObsPareja" class="form-control" rows="3" maxlength="500" placeholder="Opcional"></textarea>
+                            </section>
+                        </div>
+                        <input type="hidden" id="modalSegmentos" value="" />
+                        <input type="hidden" id="modalSegmentosPareja" value="" />
+                        <div class="alert alert-success mt-3 mb-0"><i class="fa-solid fa-calculator me-1"></i><strong>Regla física:</strong> el delta del contador representa ciclos completos para los dos lados. No se divide entre LH y RH; cada OF multiplica esos ciclos por sus cavidades activas.</div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4"><button type="submit" class="btn btn-primary w-100" id="btnGuardarHora"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar hora LH/RH</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+else
+{
 <div class="modal fade" id="modalCapturaHora" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -2949,6 +3402,8 @@
     </div>
 </div>
 
+}
+
 <template id="templateDefectoScrap">
     <div class="defect-row" data-defect-row>
         <div>
@@ -2980,8 +3435,9 @@
             const modal=modalElement?bootstrap.Modal.getOrCreateInstance(modalElement):null;
             const form=document.getElementById('formModalHora');
             const urlPrevisualizar='@Url.Action("PrevisualizarProduccionHora", "ProduccionOperador")';
+            const esLhRh=@esLhRh.ToString().ToLowerInvariant();
             const capturaHabilitada=@capturaHabilitada.ToString().ToLowerInvariant();
-            const tieneParoAbierto=@Model.TieneParoAbierto.ToString().ToLowerInvariant();
+            const tieneParoAbierto=@tieneParoFisico.ToString().ToLowerInvariant();
             const tieneTiempoExtraActivo=@tieneTiempoExtraActivo.ToString().ToLowerInvariant();
             const ejecucionEnProduccion=@(Model.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ? "true" : "false");
             const formIniciarTiempoExtra=document.getElementById('formIniciarTiempoExtra');
@@ -2989,6 +3445,8 @@
             let previewTimer=null;
             let previewSecuencia=0;
             let ultimaPrevisualizacion=null;
+            let claveFilaDefectosNormal=null;
+            let claveFilaDefectosPareja=null;
 
             function numeroSeguro(input){
                 const raw=(input?.value||'').trim();
@@ -2998,12 +3456,11 @@
             }
 
             const hayCatalogoDefectos=@(catalogoDefectos.Count > 0 ? "true" : "false");
-            let claveFilaDefectosNormal=null;
 
             function configDefectos(tipo){
-                return tipo==='extra'
-                    ?{scrapId:'extraScrap',panelId:'panelDefectosExtra',listaId:'listaDefectosExtra',contadorId:'contadorDefectosExtra',resumenId:'resumenDefectosExtra',agregarId:'btnAgregarDefectoExtra'}
-                    :{scrapId:'modalScrap',panelId:'panelDefectosNormal',listaId:'listaDefectosNormal',contadorId:'contadorDefectosNormal',resumenId:'resumenDefectosNormal',agregarId:'btnAgregarDefectoNormal'};
+                if(tipo==='extra')return{scrapId:'extraScrap',panelId:'panelDefectosExtra',listaId:'listaDefectosExtra',contadorId:'contadorDefectosExtra',resumenId:'resumenDefectosExtra',agregarId:'btnAgregarDefectoExtra',prefix:'DefectosScrap'};
+                if(tipo==='pareja')return{scrapId:'modalScrapPareja',panelId:'panelDefectosPareja',listaId:'listaDefectosPareja',contadorId:'contadorDefectosPareja',resumenId:'resumenDefectosPareja',agregarId:'btnAgregarDefectoPareja',prefix:'DefectosScrapPareja'};
+                return{scrapId:'modalScrap',panelId:'panelDefectosNormal',listaId:'listaDefectosNormal',contadorId:'contadorDefectosNormal',resumenId:'resumenDefectosNormal',agregarId:'btnAgregarDefectoNormal',prefix:'DefectosScrap'};
             }
 
             function filasDefecto(tipo){
@@ -3013,13 +3470,14 @@
             }
 
             function reindexarDefectos(tipo){
+                const cfg=configDefectos(tipo);
                 filasDefecto(tipo).forEach(function(fila,index){
                     const select=fila.querySelector('[data-defect-select]');
                     const qty=fila.querySelector('[data-defect-qty]');
                     const obs=fila.querySelector('[data-defect-obs]');
-                    if(select)select.name='DefectosScrap['+index+'].CatalogoDefectoID';
-                    if(qty)qty.name='DefectosScrap['+index+'].CantidadScrap';
-                    if(obs)obs.name='DefectosScrap['+index+'].Observaciones';
+                    if(select)select.name=cfg.prefix+'['+index+'].CatalogoDefectoID';
+                    if(qty)qty.name=cfg.prefix+'['+index+'].CantidadScrap';
+                    if(obs)obs.name=cfg.prefix+'['+index+'].Observaciones';
                 });
             }
 
@@ -3031,10 +3489,7 @@
                 const fragment=template.content.cloneNode(true);
                 const fila=fragment.querySelector('[data-defect-row]');
                 const qty=fila?.querySelector('[data-defect-qty]');
-                if(qty&&Number(cantidadSugerida)>0){
-                    qty.value=String(Math.trunc(Number(cantidadSugerida)));
-                    fila.dataset.cantidadAutomatica='true';
-                }
+                if(qty&&Number(cantidadSugerida)>0){qty.value=String(Math.trunc(Number(cantidadSugerida)));fila.dataset.cantidadAutomatica='true';}
                 lista.appendChild(fragment);
                 reindexarDefectos(tipo);
                 return lista.lastElementChild;
@@ -3044,8 +3499,7 @@
                 const cfg=configDefectos(tipo);
                 const lista=document.getElementById(cfg.listaId);
                 if(lista)lista.innerHTML='';
-                const panel=document.getElementById(cfg.panelId);
-                panel?.classList.add('d-none');
+                document.getElementById(cfg.panelId)?.classList.add('d-none');
                 pintarEstadoDefectos(tipo);
             }
 
@@ -3066,13 +3520,20 @@
                     const qty=Number(raw);
                     if(!Number.isInteger(id)||id<=0)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'Selecciona un tipo de defecto en todas las filas.',estado:'error'};
                     if(raw===''||!Number.isInteger(qty)||qty<=0)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'La cantidad de cada defecto debe ser un número entero mayor a cero.',estado:'error'};
-                    ids.push(id);
-                    total+=qty;
+                    ids.push(id);total+=qty;
                 }
-                if(new Set(ids).size!==ids.length)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'No repitas el mismo defecto. Usa una sola fila y coloca ahí la cantidad total de ese defecto.',estado:'error'};
+                if(new Set(ids).size!==ids.length)return{valido:false,scrap,total,faltan:Math.max(0,scrap-total),mensaje:'No repitas el mismo defecto. Usa una sola fila y coloca ahí la cantidad total.',estado:'error'};
                 if(total<scrap)return{valido:false,scrap,total,faltan:scrap-total,mensaje:'Has clasificado '+total.toLocaleString('es-MX')+' de '+scrap.toLocaleString('es-MX')+' pieza(s). Faltan '+(scrap-total).toLocaleString('es-MX')+'.',estado:'warning'};
-                if(total>scrap)return{valido:false,scrap,total,faltan:0,mensaje:'Asignaste '+total.toLocaleString('es-MX')+' pieza(s) a defectos, pero el scrap es '+scrap.toLocaleString('es-MX')+'. Reduce '+(total-scrap).toLocaleString('es-MX')+'.',estado:'error'};
+                if(total>scrap)return{valido:false,scrap,total,faltan:0,mensaje:'Asignaste '+total.toLocaleString('es-MX')+' pieza(s) a defectos, pero el scrap es '+scrap.toLocaleString('es-MX')+'.',estado:'error'};
                 return{valido:true,scrap,total,faltan:0,mensaje:'Scrap completamente clasificado: '+total.toLocaleString('es-MX')+' de '+scrap.toLocaleString('es-MX')+' pieza(s).',estado:'ok'};
+            }
+
+            function actualizarBotonGuardarHora(){
+                const guardar=document.getElementById('btnGuardarHora');
+                if(!guardar||guardar.dataset.enviando)return;
+                const normal=evaluarDefectos('normal').valido;
+                const pareja=!esLhRh||evaluarDefectos('pareja').valido;
+                guardar.disabled=!(normal&&pareja);
             }
 
             function pintarEstadoDefectos(tipo){
@@ -3081,22 +3542,10 @@
                 const contador=document.getElementById(cfg.contadorId);
                 const resumen=document.getElementById(cfg.resumenId);
                 const agregar=document.getElementById(cfg.agregarId);
-                if(contador){
-                    contador.textContent=estado.total.toLocaleString('es-MX')+' / '+estado.scrap.toLocaleString('es-MX')+' clasificadas';
-                    contador.classList.toggle('ok',estado.valido&&estado.scrap>0);
-                }
-                if(resumen){
-                    resumen.textContent=estado.mensaje;
-                    resumen.className='defect-feedback'+(estado.estado==='ok'?' ok':estado.estado==='warning'?' warning':'');
-                }
-                if(agregar){
-                    const numeroFilas=filasDefecto(tipo).length;
-                    agregar.disabled=!hayCatalogoDefectos||estado.scrap<=0||(estado.scrap>0&&numeroFilas>=estado.scrap);
-                }
-                if(tipo==='normal'){
-                    const guardar=document.getElementById('btnGuardarHora');
-                    if(guardar&&!guardar.dataset.enviando)guardar.disabled=!estado.valido;
-                }
+                if(contador){contador.textContent=estado.total.toLocaleString('es-MX')+' / '+estado.scrap.toLocaleString('es-MX')+' clasificadas';contador.classList.toggle('ok',estado.valido&&estado.scrap>0);}
+                if(resumen){resumen.textContent=estado.mensaje;resumen.className='defect-feedback'+(estado.estado==='ok'?' ok':estado.estado==='warning'?' warning':'');}
+                if(agregar){const numeroFilas=filasDefecto(tipo).length;agregar.disabled=!hayCatalogoDefectos||estado.scrap<=0||(estado.scrap>0&&numeroFilas>=estado.scrap);}
+                if(tipo==='normal'||tipo==='pareja')actualizarBotonGuardarHora();
                 return estado;
             }
 
@@ -3105,21 +3554,12 @@
                 const scrap=Math.max(0,Math.trunc(numeroSeguro(document.getElementById(cfg.scrapId))));
                 const panel=document.getElementById(cfg.panelId);
                 const lista=document.getElementById(cfg.listaId);
-                if(scrap<=0){
-                    if(lista)lista.innerHTML='';
-                    panel?.classList.add('d-none');
-                    pintarEstadoDefectos(tipo);
-                    return;
-                }
+                if(scrap<=0){if(lista)lista.innerHTML='';panel?.classList.add('d-none');pintarEstadoDefectos(tipo);return;}
                 panel?.classList.remove('d-none');
                 if(hayCatalogoDefectos&&filasDefecto(tipo).length===0)agregarFilaDefecto(tipo,scrap);
                 const filas=filasDefecto(tipo);
-                if(filas.length===1&&filas[0].dataset.cantidadAutomatica==='true'){
-                    const qty=filas[0].querySelector('[data-defect-qty]');
-                    if(qty)qty.value=String(scrap);
-                }
-                reindexarDefectos(tipo);
-                pintarEstadoDefectos(tipo);
+                if(filas.length===1&&filas[0].dataset.cantidadAutomatica==='true'){const qty=filas[0].querySelector('[data-defect-qty]');if(qty)qty.value=String(scrap);}
+                reindexarDefectos(tipo);pintarEstadoDefectos(tipo);
             }
 
             function prepararEventosDefectos(tipo){
@@ -3127,339 +3567,165 @@
                 const lista=document.getElementById(cfg.listaId);
                 const agregar=document.getElementById(cfg.agregarId);
                 agregar?.addEventListener('click',function(){
-                    const estadoAntes=evaluarDefectos(tipo);
-                    const scrap=estadoAntes.scrap;
-                    const filas=filasDefecto(tipo);
-                    if(scrap<=0)return;
-                    if(filas.length>=scrap)return;
+                    const estadoAntes=evaluarDefectos(tipo);const scrap=estadoAntes.scrap;const filas=filasDefecto(tipo);if(scrap<=0||filas.length>=scrap)return;
                     filas.forEach(f=>f.dataset.cantidadAutomatica='false');
-                    let cantidadNueva=estadoAntes.total<scrap?scrap-estadoAntes.total:1;
-                    if(cantidadNueva<=0)cantidadNueva=1;
-                    const nueva=agregarFilaDefecto(tipo,cantidadNueva);
-                    nueva?.querySelector('[data-defect-select]')?.focus();
-                    pintarEstadoDefectos(tipo);
-                    if(tipo==='extra')actualizarBotonConfirmarExtra();
+                    let cantidadNueva=estadoAntes.total<scrap?scrap-estadoAntes.total:1;if(cantidadNueva<=0)cantidadNueva=1;
+                    const nueva=agregarFilaDefecto(tipo,cantidadNueva);nueva?.querySelector('[data-defect-select]')?.focus();pintarEstadoDefectos(tipo);if(tipo==='extra')actualizarBotonConfirmarExtra();
                 });
-                lista?.addEventListener('input',function(e){
-                    const fila=e.target.closest?.('[data-defect-row]');
-                    if(fila&&e.target.matches('[data-defect-qty]'))fila.dataset.cantidadAutomatica='false';
-                    reindexarDefectos(tipo);
-                    pintarEstadoDefectos(tipo);
-                    if(tipo==='extra')actualizarBotonConfirmarExtra();
-                });
-                lista?.addEventListener('change',function(){
-                    reindexarDefectos(tipo);
-                    pintarEstadoDefectos(tipo);
-                    if(tipo==='extra')actualizarBotonConfirmarExtra();
-                });
-                lista?.addEventListener('click',function(e){
-                    const boton=e.target.closest?.('[data-remove-defect]');
-                    if(!boton)return;
-                    boton.closest('[data-defect-row]')?.remove();
-                    reindexarDefectos(tipo);
-                    if(filasDefecto(tipo).length===0){
-                        const scrap=Math.max(0,Math.trunc(numeroSeguro(document.getElementById(cfg.scrapId))));
-                        if(scrap>0&&hayCatalogoDefectos)agregarFilaDefecto(tipo,scrap);
-                    }
-                    pintarEstadoDefectos(tipo);
-                    if(tipo==='extra')actualizarBotonConfirmarExtra();
-                });
+                lista?.addEventListener('input',function(e){const fila=e.target.closest?.('[data-defect-row]');if(fila&&e.target.matches('[data-defect-qty]'))fila.dataset.cantidadAutomatica='false';reindexarDefectos(tipo);pintarEstadoDefectos(tipo);if(tipo==='extra')actualizarBotonConfirmarExtra();});
+                lista?.addEventListener('change',function(){reindexarDefectos(tipo);pintarEstadoDefectos(tipo);if(tipo==='extra')actualizarBotonConfirmarExtra();});
+                lista?.addEventListener('click',function(e){const boton=e.target.closest?.('[data-remove-defect]');if(!boton)return;boton.closest('[data-defect-row]')?.remove();reindexarDefectos(tipo);if(filasDefecto(tipo).length===0){const scrap=Math.max(0,Math.trunc(numeroSeguro(document.getElementById(cfg.scrapId))));if(scrap>0&&hayCatalogoDefectos)agregarFilaDefecto(tipo,scrap);}pintarEstadoDefectos(tipo);if(tipo==='extra')actualizarBotonConfirmarExtra();});
             }
 
             prepararEventosDefectos('normal');
+            prepararEventosDefectos('pareja');
             prepararEventosDefectos('extra');
 
             function limpiarPrevisualizacion(){
                 ultimaPrevisualizacion=null;
-                document.getElementById('modalPiezasFisicas').textContent='-';
-                document.getElementById('modalOKSugerido').textContent='-';
-                document.getElementById('modalMinutosProductivos').textContent='-';
-                document.getElementById('modalSegmentos').textContent='-';
-                const ok=document.getElementById('modalOK');
-                if(ok)ok.value='';
-                if(filaActiva){
-                    const campo=filaActiva.querySelector('[data-field="ok"]');
-                    if(campo)campo.value='';
-                }
-                actualizarComparacionObjetivo();
+                ['modalPiezasFisicas','modalOKSugerido','modalMinutosProductivos','modalSegmentos','modalPiezasFisicasPareja','modalOKSugeridoPareja','modalMinutosProductivosPareja','modalSegmentosPareja'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='-';});
+                const ok=document.getElementById('modalOK');if(ok)ok.value='';
+                const okPareja=document.getElementById('modalOKPareja');if(okPareja)okPareja.value='';
+                if(filaActiva){const campo=filaActiva.querySelector('[data-field="ok"]');if(campo)campo.value='';const campoPareja=filaActiva.querySelector('[data-field="ok-pareja"]');if(campoPareja)campoPareja.value='';}
+                actualizarComparacionObjetivos();actualizarClasificaciones();
             }
 
-            function establecerOKAutomatico(valor){
-                const input=document.getElementById('modalOK');
-                if(!input)return;
+            function establecerOKAutomatico(valor,esPareja=false){
+                const input=document.getElementById(esPareja?'modalOKPareja':'modalOK');if(!input)return;
                 input.value=Number(valor||0).toString();
-                if(filaActiva){
-                    const campo=filaActiva.querySelector('[data-field="ok"]');
-                    if(campo)campo.value=input.value;
-                }
+                if(filaActiva){const campo=filaActiva.querySelector(esPareja?'[data-field="ok-pareja"]':'[data-field="ok"]');if(campo)campo.value=input.value;}
             }
 
-            function actualizarComparacionObjetivo(){
-                const input=document.getElementById('modalOK');
-                const feedback=document.getElementById('modalObjetivoFeedback');
-                if(!input||!feedback)return;
-                const objetivo=Number(input.dataset.objetivo||0);
-                const valorRaw=(input.value||'').trim();
-                if(objetivo<=0){
-                    feedback.className='modal-goal-feedback text-muted';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Esta parte no tiene objetivo configurado para este bloque.';
-                    return;
-                }
-                if(valorRaw===''){
-                    feedback.className='modal-goal-feedback text-muted';
-                    feedback.textContent='Las verdes / OK se calcularán automáticamente después de leer el contador y descontar las piezas rojas.';
-                    return;
-                }
-                const ok=Number(valorRaw||0);
-                const diferencia=ok-objetivo;
-                const porcentaje=Math.round((ok/objetivo)*1000)/10;
-                if(diferencia>0){
-                    feedback.className='modal-goal-feedback text-success';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Alcanzaste el objetivo: <strong>'+porcentaje.toLocaleString('es-MX')+'%</strong>. Lo superaste por '+diferencia.toLocaleString('es-MX')+' pieza(s).';
-                    return;
-                }
-                if(diferencia===0){
-                    feedback.className='modal-goal-feedback text-success';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Alcanzaste exactamente el objetivo: <strong>100%</strong>.';
-                    return;
-                }
-                feedback.className='modal-goal-feedback text-danger';
-                feedback.innerHTML='<i class="fa-solid fa-circle-xmark me-1"></i>No alcanzaste el objetivo: <strong>'+porcentaje.toLocaleString('es-MX')+'%</strong>. Faltaron '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s).';
+            function actualizarComparacionObjetivoLado(inputId,feedbackId){
+                const input=document.getElementById(inputId);const feedback=document.getElementById(feedbackId);if(!input||!feedback)return;
+                const objetivo=Number(input.dataset.objetivo||0);const valorRaw=(input.value||'').trim();
+                if(objetivo<=0){feedback.className='modal-goal-feedback text-muted';feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Esta OF no tiene objetivo configurado para este bloque.';return;}
+                if(valorRaw===''){feedback.className='modal-goal-feedback text-muted';feedback.textContent='Las verdes / OK se calcularán al leer el contador y descontar scrap.';return;}
+                const ok=Number(valorRaw||0);const diferencia=ok-objetivo;const porcentaje=Math.round((ok/objetivo)*1000)/10;
+                if(diferencia>0){feedback.className='modal-goal-feedback text-success';feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>'+porcentaje.toLocaleString('es-MX')+'% · supera por '+diferencia.toLocaleString('es-MX')+' pieza(s).';return;}
+                if(diferencia===0){feedback.className='modal-goal-feedback text-success';feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Objetivo exacto · 100%.';return;}
+                feedback.className='modal-goal-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-circle-xmark me-1"></i>'+porcentaje.toLocaleString('es-MX')+'% · faltan '+Math.abs(diferencia).toLocaleString('es-MX')+' pieza(s).';
             }
 
-            function actualizarClasificacion(){
-                const feedback=document.getElementById('modalClasificacionFeedback');
-                if(!feedback)return;
-                const ok=numeroSeguro(document.getElementById('modalOK'));
-                const scrap=numeroSeguro(document.getElementById('modalScrap'));
-                if(!ultimaPrevisualizacion){
-                    feedback.className='classification-feedback';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Rojas capturadas: <strong>'+scrap.toLocaleString('es-MX')+'</strong>. Captura el contador para calcular automáticamente las verdes.';
-                    return;
-                }
-                const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);
-                const total=ok+scrap;
-                if(total===fisicas){
-                    feedback.className='classification-feedback ok';
-                    feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Producción física: <strong>'+fisicas.toLocaleString('es-MX')+'</strong> · Verdes/OK: <strong>'+ok.toLocaleString('es-MX')+'</strong> · Rojas/Scrap: <strong>'+scrap.toLocaleString('es-MX')+'</strong>.';
-                    return;
-                }
-                feedback.className='classification-feedback warning';
-                feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>El cálculo cambió. Espera a que el ERP actualice las verdes antes de guardar.';
+            function actualizarComparacionObjetivos(){
+                actualizarComparacionObjetivoLado('modalOK','modalObjetivoFeedback');
+                if(esLhRh)actualizarComparacionObjetivoLado('modalOKPareja','modalObjetivoFeedbackPareja');
             }
 
-            function pintarPrevisualizacion(data,forzarAuto){
+            function actualizarClasificacionLado(feedbackId,okId,scrapId,dataSide){
+                const feedback=document.getElementById(feedbackId);if(!feedback)return;
+                const ok=numeroSeguro(document.getElementById(okId));const scrap=numeroSeguro(document.getElementById(scrapId));
+                if(!dataSide){feedback.className='classification-feedback';feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Scrap capturado: <strong>'+scrap.toLocaleString('es-MX')+'</strong>. Captura el contador para calcular las verdes.';return;}
+                const fisicas=Number(dataSide.piezasFisicas??dataSide.PiezasFisicas??0);const total=ok+scrap;
+                if(total===fisicas){feedback.className='classification-feedback ok';feedback.innerHTML='<i class="fa-solid fa-circle-check me-1"></i>Físicas <strong>'+fisicas.toLocaleString('es-MX')+'</strong> · OK <strong>'+ok.toLocaleString('es-MX')+'</strong> · Scrap <strong>'+scrap.toLocaleString('es-MX')+'</strong>.';return;}
+                feedback.className='classification-feedback warning';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>El cálculo cambió. Espera la actualización antes de guardar.';
+            }
+
+            function obtenerParejaPreview(){return ultimaPrevisualizacion?.pareja??ultimaPrevisualizacion?.Pareja??null;}
+            function actualizarClasificaciones(){
+                actualizarClasificacionLado('modalClasificacionFeedback','modalOK','modalScrap',ultimaPrevisualizacion);
+                if(esLhRh)actualizarClasificacionLado('modalClasificacionFeedbackPareja','modalOKPareja','modalScrapPareja',obtenerParejaPreview());
+            }
+
+            function pintarPrevisualizacion(data){
                 ultimaPrevisualizacion=data;
-                const fisicas=Number(data.piezasFisicas??data.PiezasFisicas??0);
-                const sugerido=Number(data.cantidadOK??data.CantidadOK??0);
-                const minutos=Number(data.minutosProductivos??data.MinutosProductivos??0);
-                const segmentos=Number(data.numeroSegmentos??data.NumeroSegmentos??0);
-                document.getElementById('modalPiezasFisicas').textContent=fisicas.toLocaleString('es-MX');
-                document.getElementById('modalOKSugerido').textContent=sugerido.toLocaleString('es-MX');
-                document.getElementById('modalMinutosProductivos').textContent=minutos.toLocaleString('es-MX',{maximumFractionDigits:2});
-                document.getElementById('modalSegmentos').textContent=segmentos.toLocaleString('es-MX');
-                establecerOKAutomatico(sugerido);
-                const contadorInicial=data.contadorInicial??data.ContadorInicial;
-                const contadorFinal=data.contadorFinal??data.ContadorFinal;
-                const feedback=document.getElementById('modalContadorFeedback');
-                if(feedback){
-                    let texto='<i class="fa-solid fa-calculator me-1"></i>Producción física calculada por el servidor: <strong>'+fisicas.toLocaleString('es-MX')+' pieza(s)</strong>.';
-                    if(contadorInicial!==null&&contadorInicial!==undefined&&contadorFinal!==null&&contadorFinal!==undefined)texto+=' Contador '+Number(contadorInicial).toLocaleString('es-MX')+' → '+Number(contadorFinal).toLocaleString('es-MX')+'.';
-                    if(Boolean(data.tieneCambioConfiguracion??data.TieneCambioConfiguracion))texto+=' <span class="text-primary">Se consideraron cambios de configuración.</span>';
-                    if(Boolean(data.tieneReinicioContador??data.TieneReinicioContador))texto+=' <span class="text-warning">Se detectó reinicio del contador.</span>';
-                    feedback.className='counter-feedback';
-                    feedback.innerHTML=texto;
+                const fisicas=Number(data.piezasFisicas??data.PiezasFisicas??0);const sugerido=Number(data.cantidadOK??data.CantidadOK??0);const minutos=Number(data.minutosProductivos??data.MinutosProductivos??0);const segmentos=Number(data.numeroSegmentos??data.NumeroSegmentos??0);
+                const eFis=document.getElementById('modalPiezasFisicas');if(eFis)eFis.textContent=fisicas.toLocaleString('es-MX');
+                const eOk=document.getElementById('modalOKSugerido');if(eOk)eOk.textContent=sugerido.toLocaleString('es-MX');
+                const eMin=document.getElementById('modalMinutosProductivos');if(eMin)eMin.textContent=minutos.toLocaleString('es-MX',{maximumFractionDigits:2});
+                const eSeg=document.getElementById('modalSegmentos');if(eSeg)eSeg.textContent=segmentos.toLocaleString('es-MX');
+                establecerOKAutomatico(sugerido,false);
+                const obj=data.objetivoBloque??data.ObjetivoBloque;if(obj!==undefined&&obj!==null){const m=document.getElementById('modalObjetivo');if(m)m.textContent=Number(obj)>0?Number(obj).toLocaleString('es-MX'):'-';const i=document.getElementById('modalOK');if(i)i.dataset.objetivo=String(obj||0);}
+
+                const parejaData=data.pareja??data.Pareja??null;
+                if(esLhRh){
+                    if(!parejaData){ultimaPrevisualizacion=null;limpiarPrevisualizacion();const feedback=document.getElementById('modalContadorFeedback');if(feedback){feedback.className='counter-feedback text-danger';feedback.textContent='El servidor no devolvió el cálculo de la OF pareja. No se permitirá guardar una captura parcial.';}return;}
+                    const fisP=Number(parejaData.piezasFisicas??parejaData.PiezasFisicas??0);const okP=Number(parejaData.cantidadOK??parejaData.CantidadOK??0);const minP=Number(parejaData.minutosProductivos??parejaData.MinutosProductivos??0);const segP=Number(parejaData.numeroSegmentos??parejaData.NumeroSegmentos??0);
+                    const pFis=document.getElementById('modalPiezasFisicasPareja');if(pFis)pFis.textContent=fisP.toLocaleString('es-MX');
+                    const pOk=document.getElementById('modalOKSugeridoPareja');if(pOk)pOk.textContent=okP.toLocaleString('es-MX');
+                    const pMin=document.getElementById('modalMinutosProductivosPareja');if(pMin)pMin.textContent=minP.toLocaleString('es-MX',{maximumFractionDigits:2});
+                    const pSeg=document.getElementById('modalSegmentosPareja');if(pSeg)pSeg.textContent=segP.toLocaleString('es-MX');
+                    establecerOKAutomatico(okP,true);
+                    const objP=parejaData.objetivoBloque??parejaData.ObjetivoBloque;if(objP!==undefined&&objP!==null){const m=document.getElementById('modalObjetivoPareja');if(m)m.textContent=Number(objP)>0?Number(objP).toLocaleString('es-MX'):'-';const i=document.getElementById('modalOKPareja');if(i)i.dataset.objetivo=String(objP||0);}
                 }
-                actualizarComparacionObjetivo();
-                actualizarClasificacion();
+
+                const contadorInicial=data.contadorInicial??data.ContadorInicial;const contadorFinal=data.contadorFinal??data.ContadorFinal;const feedback=document.getElementById('modalContadorFeedback');
+                if(feedback){let texto='<i class="fa-solid fa-calculator me-1"></i>';if(esLhRh)texto+='Mismo contador aplicado a ambas OF. ';texto+='Contador '+(contadorInicial!==null&&contadorInicial!==undefined?Number(contadorInicial).toLocaleString('es-MX'):'-')+' → '+(contadorFinal!==null&&contadorFinal!==undefined?Number(contadorFinal).toLocaleString('es-MX'):'-')+'.';if(Boolean(data.tieneCambioConfiguracion??data.TieneCambioConfiguracion))texto+=' <span class="text-primary">Se consideraron cambios de configuración.</span>';if(Boolean(data.tieneReinicioContador??data.TieneReinicioContador))texto+=' <span class="text-warning">Se detectó reinicio del contador.</span>';feedback.className='counter-feedback';feedback.innerHTML=texto;}
+                actualizarComparacionObjetivos();actualizarClasificaciones();actualizarBotonGuardarHora();
             }
 
-            async function ejecutarPrevisualizacion(forzarAuto=false){
-                const contadorInput=document.getElementById('modalContador');
-                const raw=(contadorInput?.value||'').trim();
-                if(raw===''||!Number.isFinite(Number(raw))||Number(raw)<0){
-                    limpiarPrevisualizacion();
-                    const feedback=document.getElementById('modalContadorFeedback');
-                    if(feedback){
-                        feedback.className='counter-feedback';
-                        feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura un contador válido para calcular automáticamente la producción física y las verdes / OK.';
-                    }
-                    actualizarClasificacion();
-                    return;
-                }
+            async function ejecutarPrevisualizacion(){
+                const contadorInput=document.getElementById('modalContador');const raw=(contadorInput?.value||'').trim();
+                if(raw===''||!Number.isFinite(Number(raw))||Number(raw)<0){limpiarPrevisualizacion();const feedback=document.getElementById('modalContadorFeedback');if(feedback){feedback.className='counter-feedback';feedback.innerHTML='<i class="fa-solid fa-circle-info me-1"></i>Captura un contador válido para calcular la producción.';}actualizarClasificaciones();return;}
                 if(!form)return;
-                const secuencia=++previewSecuencia;
-                const card=document.getElementById('resumenFisicoHora');
-                card?.classList.add('preview-loading');
-                const token=form.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
-                const datos=new FormData();
-                datos.append('__RequestVerificationToken',token);
-                datos.append('ejecucionProduccionId','@Model.EjecucionProduccionID');
-                datos.append('fechaProduccion',document.getElementById('modalFecha')?.value||'');
-                datos.append('horaInicio',document.getElementById('modalInicio')?.value||'');
-                datos.append('horaFin',document.getElementById('modalFin')?.value||'');
-                datos.append('contadorMaquinaActual',raw);
-                datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('modalScrap'))));
+                const secuencia=++previewSecuencia;const card=document.getElementById('resumenFisicoHora');card?.classList.add('preview-loading');
+                const token=form.querySelector('input[name="__RequestVerificationToken"]')?.value||'';const datos=new FormData();
+                datos.append('__RequestVerificationToken',token);datos.append('ejecucionProduccionId','@Model.EjecucionProduccionID');datos.append('fechaProduccion',document.getElementById('modalFecha')?.value||'');datos.append('horaInicio',document.getElementById('modalInicio')?.value||'');datos.append('horaFin',document.getElementById('modalFin')?.value||'');datos.append('contadorMaquinaActual',raw);datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('modalScrap'))));
+                if(esLhRh)datos.append('cantidadScrapPareja',String(numeroSeguro(document.getElementById('modalScrapPareja'))));
                 try{
-                    const response=await fetch(urlPrevisualizar,{method:'POST',body:datos,headers:{'X-Requested-With':'XMLHttpRequest'}});
-                    let data=null;
-                    try{data=await response.json();}catch{data=null;}
+                    const response=await fetch(urlPrevisualizar,{method:'POST',body:datos,headers:{'X-Requested-With':'XMLHttpRequest'}});let data=null;try{data=await response.json();}catch{data=null;}
                     if(secuencia!==previewSecuencia)return;
-                    if(!response.ok||!data||data.ok===false){
-                        ultimaPrevisualizacion=null;
-                        const mensaje=data?.mensaje||data?.Mensaje||'No fue posible calcular la producción del bloque.';
-                        const feedback=document.getElementById('modalContadorFeedback');
-                        if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+mensaje;}
-                        limpiarPrevisualizacion();
-                        actualizarClasificacion();
-                        return;
-                    }
-                    pintarPrevisualizacion(data,forzarAuto);
-                }catch(error){
-                    if(secuencia!==previewSecuencia)return;
-                    ultimaPrevisualizacion=null;
-                    limpiarPrevisualizacion();
-                    const feedback=document.getElementById('modalContadorFeedback');
-                    if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+(error?.message||'No fue posible consultar el cálculo automático.');}
-                    actualizarClasificacion();
-                }finally{
-                    if(secuencia===previewSecuencia)card?.classList.remove('preview-loading');
-                }
+                    if(!response.ok||!data||data.ok===false){ultimaPrevisualizacion=null;const mensaje=data?.mensaje||data?.Mensaje||'No fue posible calcular la producción del bloque.';const feedback=document.getElementById('modalContadorFeedback');if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+mensaje;}limpiarPrevisualizacion();actualizarClasificaciones();return;}
+                    pintarPrevisualizacion(data);
+                }catch(error){if(secuencia!==previewSecuencia)return;ultimaPrevisualizacion=null;limpiarPrevisualizacion();const feedback=document.getElementById('modalContadorFeedback');if(feedback){feedback.className='counter-feedback text-danger';feedback.innerHTML='<i class="fa-solid fa-triangle-exclamation me-1"></i>'+(error?.message||'No fue posible consultar el cálculo automático.');}actualizarClasificaciones();}
+                finally{if(secuencia===previewSecuencia)card?.classList.remove('preview-loading');}
             }
 
-            function programarPrevisualizacion(forzarAuto=false){
-                if(previewTimer)window.clearTimeout(previewTimer);
-                previewTimer=window.setTimeout(function(){ejecutarPrevisualizacion(forzarAuto);},300);
-            }
+            function programarPrevisualizacion(){if(previewTimer)window.clearTimeout(previewTimer);previewTimer=window.setTimeout(ejecutarPrevisualizacion,300);}
 
             function cargarFila(row){
-                if(!row||!form)return;
-                filaActiva=row;
+                if(!row||!form)return;filaActiva=row;
                 const claveActual=(row.dataset.fecha||'')+'|'+(row.dataset.inicio||'')+'|'+(row.dataset.numero||'');
-                if(claveFilaDefectosNormal!==claveActual){
-                    reiniciarDefectos('normal');
-                    claveFilaDefectosNormal=claveActual;
-                }
-                limpiarPrevisualizacion();
-                limpiarMensajeCaptura();
-                document.getElementById('modalFecha').value=row.dataset.fecha||'';
-                document.getElementById('modalInicio').value=row.dataset.inicio||'';
-                document.getElementById('modalFin').value=row.dataset.fin||'';
-                document.getElementById('modalTituloHora').textContent='Hora '+(row.dataset.numero||'');
-                document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
-                document.getElementById('modalObjetivo').textContent=Number(row.dataset.objetivo||0)>0?Number(row.dataset.objetivo).toLocaleString('es-MX'):'-';
-                document.getElementById('modalOK').dataset.objetivo=row.dataset.objetivo||'0';
+                if(claveFilaDefectosNormal!==claveActual){reiniciarDefectos('normal');claveFilaDefectosNormal=claveActual;}
+                if(esLhRh&&claveFilaDefectosPareja!==claveActual){reiniciarDefectos('pareja');claveFilaDefectosPareja=claveActual;}
+                limpiarPrevisualizacion();limpiarMensajeCaptura();
+                document.getElementById('modalFecha').value=row.dataset.fecha||'';document.getElementById('modalInicio').value=row.dataset.inicio||'';document.getElementById('modalFin').value=row.dataset.fin||'';
+                document.getElementById('modalTituloHora').textContent='Hora '+(row.dataset.numero||'');document.getElementById('modalRangoHora').textContent=(row.dataset.inicio||'')+' - '+(row.dataset.fin||'');
+                const objetivo=Number(row.dataset.objetivo||0);const objetivoPareja=Number(row.dataset.objetivoPareja||0);
+                const modalObjetivo=document.getElementById('modalObjetivo');if(modalObjetivo)modalObjetivo.textContent=objetivo>0?objetivo.toLocaleString('es-MX'):'-';
+                const modalOK=document.getElementById('modalOK');if(modalOK)modalOK.dataset.objetivo=String(objetivo||0);
+                const modalObjetivoPareja=document.getElementById('modalObjetivoPareja');if(modalObjetivoPareja)modalObjetivoPareja.textContent=objetivoPareja>0?objetivoPareja.toLocaleString('es-MX'):'-';
+                const modalOKPareja=document.getElementById('modalOKPareja');if(modalOKPareja)modalOKPareja.dataset.objetivo=String(objetivoPareja||0);
                 document.getElementById('modalContador').value=row.querySelector('[data-field="counter"]')?.value||'';
                 document.getElementById('modalOK').value=row.querySelector('[data-field="ok"]')?.value||'';
-                document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'0';
-                document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
-                sincronizarDefectosConScrap('normal');
-                actualizarComparacionObjetivo();
-                actualizarClasificacion();
-                if((document.getElementById('modalContador').value||'').trim()!=='')programarPrevisualizacion(true);
+                document.getElementById('modalScrap').value=row.querySelector('[data-field="scrap"]')?.value||'0';document.getElementById('modalObs').value=row.querySelector('[data-field="obs"]')?.value||'';
+                if(esLhRh){if(modalOKPareja)modalOKPareja.value=row.querySelector('[data-field="ok-pareja"]')?.value||'';const scrapP=document.getElementById('modalScrapPareja');if(scrapP)scrapP.value=row.querySelector('[data-field="scrap-pareja"]')?.value||'0';const obsP=document.getElementById('modalObsPareja');if(obsP)obsP.value=row.querySelector('[data-field="obs-pareja"]')?.value||'';}
+                sincronizarDefectosConScrap('normal');if(esLhRh)sincronizarDefectosConScrap('pareja');actualizarComparacionObjetivos();actualizarClasificaciones();
+                if((document.getElementById('modalContador').value||'').trim()!=='')programarPrevisualizacion();
             }
 
-            document.getElementById('modalContador')?.addEventListener('input',function(){
-                if(filaActiva){const campo=filaActiva.querySelector('[data-field="counter"]');if(campo)campo.value=this.value;}
-                programarPrevisualizacion(false);
-            });
+            document.getElementById('modalContador')?.addEventListener('input',function(){if(filaActiva){const campo=filaActiva.querySelector('[data-field="counter"]');if(campo)campo.value=this.value;}programarPrevisualizacion();});
+            document.getElementById('modalScrap')?.addEventListener('input',function(){if(filaActiva){const campo=filaActiva.querySelector('[data-field="scrap"]');if(campo)campo.value=this.value;}sincronizarDefectosConScrap('normal');actualizarClasificaciones();programarPrevisualizacion();});
+            document.getElementById('modalScrapPareja')?.addEventListener('input',function(){if(filaActiva){const campo=filaActiva.querySelector('[data-field="scrap-pareja"]');if(campo)campo.value=this.value;}sincronizarDefectosConScrap('pareja');actualizarClasificaciones();programarPrevisualizacion();});
+            document.getElementById('modalObs')?.addEventListener('input',function(){if(filaActiva){const campo=filaActiva.querySelector('[data-field="obs"]');if(campo)campo.value=this.value;}});
+            document.getElementById('modalObsPareja')?.addEventListener('input',function(){if(filaActiva){const campo=filaActiva.querySelector('[data-field="obs-pareja"]');if(campo)campo.value=this.value;}});
 
-            document.getElementById('modalScrap')?.addEventListener('input',function(){
-                if(filaActiva){
-                    const campo=filaActiva.querySelector('[data-field="scrap"]');
-                    if(campo)campo.value=this.value;
-                }
-                sincronizarDefectosConScrap('normal');
-                actualizarClasificacion();
-                programarPrevisualizacion(false);
-            });
+            document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){if(!capturaHabilitada||tieneParoAbierto)return;const row=this.closest('[data-hour-row]');cargarFila(row);modal?.show();}));
 
-            document.getElementById('modalObs')?.addEventListener('input',function(){
-                if(filaActiva){const campo=filaActiva.querySelector('[data-field="obs"]');if(campo)campo.value=this.value;}
-            });
-
-
-            document.querySelectorAll('.btn-open-hour').forEach(btn=>btn.addEventListener('click',function(){
-                if(!capturaHabilitada||tieneParoAbierto)return;
-                const row=this.closest('[data-hour-row]');
-                cargarFila(row);
-                modal?.show();
-            }));
-
-            function mostrarMensajeCaptura(mensaje){
-                const box=document.getElementById('mensajeCapturaHora');
-                if(!box)return;
-                box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;
-                box.classList.remove('d-none');
-            }
-
-            function limpiarMensajeCaptura(){
-                const box=document.getElementById('mensajeCapturaHora');
-                if(!box)return;
-                box.classList.add('d-none');
-                box.innerHTML='';
-            }
+            function mostrarMensajeCaptura(mensaje){const box=document.getElementById('mensajeCapturaHora');if(!box)return;box.innerHTML='<i class="fa-solid fa-triangle-exclamation me-2"></i>'+mensaje;box.classList.remove('d-none');}
+            function limpiarMensajeCaptura(){const box=document.getElementById('mensajeCapturaHora');if(!box)return;box.classList.add('d-none');box.innerHTML='';}
 
             form?.addEventListener('submit',function(e){
                 limpiarMensajeCaptura();
-                const contadorRaw=(document.getElementById('modalContador')?.value||'').trim();
-                const contador=Number(contadorRaw);
-                const okRaw=(document.getElementById('modalOK')?.value||'').trim();
-                const ok=Number(okRaw||0);
-                const scrap=numeroSeguro(document.getElementById('modalScrap'));
-                const obs=(document.getElementById('modalObs')?.value||'').trim();
-                if(contadorRaw===''||!Number.isFinite(contador)||contador<0){
-                    e.preventDefault();
-                    mostrarMensajeCaptura('Captura el contador actual de la máquina antes de guardar la hora.');
-                    document.getElementById('modalContador')?.focus();
-                    return;
-                }
-                if(okRaw===''||!Number.isFinite(ok)||ok<0||scrap<0){
-                    e.preventDefault();
-                    mostrarMensajeCaptura('Revisa las cantidades. Las piezas rojas deben ser un número mayor o igual a cero y las verdes deben haber sido calculadas por el ERP.');
-                    return;
-                }
-                if(!ultimaPrevisualizacion){
-                    e.preventDefault();
-                    mostrarMensajeCaptura('Espera a que el ERP termine de calcular las piezas físicas y las verdes antes de guardar.');
-                    programarPrevisualizacion(true);
-                    return;
-                }
-                const estadoDefectos=evaluarDefectos('normal');
-                pintarEstadoDefectos('normal');
-                if(!estadoDefectos.valido){
-                    e.preventDefault();
-                    mostrarMensajeCaptura(estadoDefectos.mensaje);
-                    document.getElementById('panelDefectosNormal')?.scrollIntoView({behavior:'smooth',block:'center'});
-                    return;
-                }
+                const contadorRaw=(document.getElementById('modalContador')?.value||'').trim();const contador=Number(contadorRaw);
+                const okRaw=(document.getElementById('modalOK')?.value||'').trim();const ok=Number(okRaw||0);const scrap=numeroSeguro(document.getElementById('modalScrap'));const obs=(document.getElementById('modalObs')?.value||'').trim();
+                const okParejaRaw=(document.getElementById('modalOKPareja')?.value||'').trim();const okPareja=Number(okParejaRaw||0);const scrapPareja=numeroSeguro(document.getElementById('modalScrapPareja'));const obsPareja=(document.getElementById('modalObsPareja')?.value||'').trim();
+                if(contadorRaw===''||!Number.isFinite(contador)||contador<0){e.preventDefault();mostrarMensajeCaptura('Captura el contador actual de la máquina antes de guardar la hora.');document.getElementById('modalContador')?.focus();return;}
+                if(okRaw===''||!Number.isFinite(ok)||ok<0||scrap<0){e.preventDefault();mostrarMensajeCaptura('Revisa las cantidades de la OF actual.');return;}
+                if(esLhRh&&(okParejaRaw===''||!Number.isFinite(okPareja)||okPareja<0||scrapPareja<0)){e.preventDefault();mostrarMensajeCaptura('Revisa las cantidades de la OF pareja.');return;}
+                if(!ultimaPrevisualizacion){e.preventDefault();mostrarMensajeCaptura('Espera a que el ERP termine de calcular ambos lados antes de guardar.');programarPrevisualizacion();return;}
+                const estadoNormal=evaluarDefectos('normal');pintarEstadoDefectos('normal');if(!estadoNormal.valido){e.preventDefault();mostrarMensajeCaptura(estadoNormal.mensaje);document.getElementById('panelDefectosNormal')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
                 reindexarDefectos('normal');
-                if(ok===0&&scrap===0&&!obs){
-                    e.preventDefault();
-                    mostrarMensajeCaptura('No existe producción clasificada. Explica en observaciones por qué no hubo producción durante este bloque.');
-                    return;
-                }
-                if(ultimaPrevisualizacion){
-                    const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);
-                    const total=ok+scrap;
-                    if(total!==fisicas){
-                        e.preventDefault();
-                        mostrarMensajeCaptura('El cálculo automático cambió. Espera a que el ERP recalcule las verdes antes de guardar.');
-                        programarPrevisualizacion(true);
-                        return;
-                    }
-                }
-                const button=form.querySelector('button[type="submit"]');
-                if(button){button.dataset.enviando='true';button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';}
+                if(esLhRh){const estadoPareja=evaluarDefectos('pareja');pintarEstadoDefectos('pareja');if(!estadoPareja.valido){e.preventDefault();mostrarMensajeCaptura(estadoPareja.mensaje);document.getElementById('panelDefectosPareja')?.scrollIntoView({behavior:'smooth',block:'center'});return;}reindexarDefectos('pareja');}
+                if(!esLhRh&&ok===0&&scrap===0&&!obs){e.preventDefault();mostrarMensajeCaptura('No existe producción clasificada. Explica en observaciones por qué no hubo producción durante este bloque.');return;}
+                if(esLhRh&&ok===0&&scrap===0&&okPareja===0&&scrapPareja===0&&!obs&&!obsPareja){e.preventDefault();mostrarMensajeCaptura('El contador no registró producción en ninguno de los lados. Explica qué ocurrió en observaciones.');return;}
+                const fisicas=Number(ultimaPrevisualizacion.piezasFisicas??ultimaPrevisualizacion.PiezasFisicas??0);if(ok+scrap!==fisicas){e.preventDefault();mostrarMensajeCaptura('El cálculo de la OF actual cambió. Espera a que el ERP recalcule antes de guardar.');programarPrevisualizacion();return;}
+                if(esLhRh){const pd=obtenerParejaPreview();if(!pd){e.preventDefault();mostrarMensajeCaptura('No existe cálculo válido de la OF pareja.');return;}const fisP=Number(pd.piezasFisicas??pd.PiezasFisicas??0);if(okPareja+scrapPareja!==fisP){e.preventDefault();mostrarMensajeCaptura('El cálculo de la OF pareja cambió. Espera a que el ERP recalcule antes de guardar.');programarPrevisualizacion();return;}}
+                const button=form.querySelector('button[type="submit"]');if(button){button.dataset.enviando='true';button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>'+(esLhRh?'Guardando LH/RH...':'Guardando...');}
             });
 
             const obligatoria=document.querySelector('[data-hour-row][data-obligatoria="true"]');
-            if(capturaHabilitada&&!tieneParoAbierto&&obligatoria){
-                cargarFila(obligatoria);
-                modal?.show();
-            }else{
-                modal?.hide();
-            }
+            if(capturaHabilitada&&!tieneParoAbierto&&obligatoria){cargarFila(obligatoria);modal?.show();}else{modal?.hide();}
 
             function mostrarMensajeParo(mensaje){
                 const box=document.getElementById('mensajeParo');

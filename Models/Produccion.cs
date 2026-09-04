@@ -1407,7 +1407,11 @@ public sealed class ProduccionRegistroHoraPostVm
     public string? Observaciones { get; set; }
     public List<ProduccionRegistroDefectoPostVm> DefectosScrap { get; set; } = new();
 
-   
+    // LH/RH
+    public int CantidadScrapPareja { get; set; }
+    public string? ObservacionesPareja { get; set; }
+    public List<ProduccionRegistroDefectoPostVm> DefectosScrapPareja { get; set; } = new();
+    public bool ConfirmarCapturaLhRh { get; set; }
 }
 public sealed class ProduccionParoPostVm
 {
@@ -1436,14 +1440,25 @@ public sealed class ProduccionOperadorTabletVm
 {
     public int EjecucionProduccionID { get; set; }
     public int ProgramaProduccionID { get; set; }
-
     public ProduccionParejaLhRhVm? ParejaLhRh { get; set; }
-    public ProduccionOperadorTabletVm? LadoPareja { get; set; }
+    public ProduccionOperadorTabletVm? ProduccionPareja { get; set; }
     public string? LadoLhRh { get; set; }
     public string? LadoParejaLhRh { get; set; }
 
-    
-    public bool TieneLadoPareja => LadoPareja != null;
+    public bool EsProduccionLhRh =>
+        ParejaLhRh != null &&
+        ProduccionPareja != null;
+
+    public bool TieneLadoPareja =>
+        ProduccionPareja != null;
+
+    public bool EsWorkspaceConjunto =>
+        EsProduccionLhRh &&
+        TieneLadoPareja;
+
+    public int? GrupoLhRh =>
+        ParejaLhRh?.GrupoLhRh;
+
    
 
 
