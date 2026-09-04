@@ -1,4 +1,4 @@
-﻿
+
 using ERP.NSQuell.Areas.AdminUsuarios.Interfaces;
 using ERP.NSQuell.Areas.AdminUsuarios.Services;
 using ERP.NSQuell.Controllers;
@@ -116,6 +116,7 @@ builder.Services.AddScoped<ServicioNotificaciones>();
 // Todo POST/PUT/PATCH/DELETE exitoso de un módulo departamental
 // crea aviso en el navbar; el correo se redirige a Sistemas durante pruebas.
 builder.Services.AddScoped<NotificacionDepartamentalService>();
+builder.Services.AddScoped<NotificacionEventoService>();
 builder.Services.AddScoped<
     ERP.NSQuell.Filtros.NotificacionDepartamentoActionFilter>();
 

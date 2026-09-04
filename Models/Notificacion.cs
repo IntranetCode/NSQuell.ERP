@@ -1,4 +1,4 @@
-﻿namespace ERP.NSQuell.Models
+namespace ERP.NSQuell.Models
 {
     public class Notificacion
     {
@@ -8,6 +8,8 @@
         public string Tipo { get; set; } = string.Empty;
         public string Titulo { get; set; }= string.Empty;
         public string? Mensaje { get; set; }
+        public string? CodigoEvento { get; set; }
+        public string? UrlDestino { get; set; }
 
         public int IdOrigen { get; set; }
          public string TablaOrigen { get; set; } = string.Empty;

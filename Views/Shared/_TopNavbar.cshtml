@@ -1,4 +1,4 @@
-﻿@using System.Security.Claims
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Http
 
 @{
@@ -1093,14 +1093,38 @@
                 .replace(/'/g, '&#039;');
         }
 
-        function linkDestino(tipo, idOrigen) {
-            let url = '#';
+        function linkDestino(tipo, idOrigen, urlDestino, codigoEvento) {
+            let url = null;
+            let textoAccion = 'Abrir';
+            const candidata = typeof urlDestino === 'string' ? urlDestino.trim() : '';
+            const codigo = String(codigoEvento || tipo || '').trim().toUpperCase();
 
-            if (tipo === 'CursoAsignado') url = `/Universidad/MisCursos/${idOrigen}`;
-            else if (tipo === 'WebinarAsignado') url = `/Lider/Lista/${idOrigen}`;
-            else if (tipo === 'Comunicado_Nuevo') url = `/Comunicados/Index/${idOrigen}`;
+            if (candidata.startsWith('/') && !candidata.startsWith('//')) {
+                url = candidata;
+            }
+            else if (tipo === 'CursoAsignado') {
+                url = `/Universidad/MisCursos/${idOrigen}`;
+                textoAccion = 'Ir al curso';
+            }
+            else if (tipo === 'WebinarAsignado') {
+                url = `/Lider/Lista/${idOrigen}`;
+                textoAccion = 'Abrir webinar';
+            }
+            else if (tipo === 'Comunicado_Nuevo') {
+                url = `/Comunicados/Index/${idOrigen}`;
+                textoAccion = 'Leer comunicado';
+            }
 
-            return `<a class="js-ver" href="${url}">Ver</a>`;
+            if (codigo === 'OF_CREADA') textoAccion = 'Consultar OF';
+            else if (codigo.includes('ALERTA')) textoAccion = 'Revisar alerta';
+            else if (codigo.includes('CALIDAD')) textoAccion = 'Revisar calidad';
+            else if (codigo.includes('GP12')) textoAccion = 'Revisar GP12';
+            else if (codigo.includes('ENTREGA_MP')) textoAccion = 'Revisar entrega MP';
+            else if (codigo.includes('LOGISTICA') || codigo.includes('EMBARQUE')) textoAccion = 'Revisar logÃ­stica';
+
+            // Nunca fabricar rutas y nunca regresar #.
+            if (!url) return '';
+            return `<a class="js-ver" href="${escapeHtml(url)}">${escapeHtml(textoAccion)}</a>`;
         }
 
         async function cargarLista(pagina = 1, tamanio = 10) {
@@ -1118,7 +1142,10 @@
                     const titulo = val(n, 'Titulo', 'titulo') ?? '';
                     const mensaje = val(n, 'Mensaje', 'mensaje') ?? '';
                     const tipo = val(n, 'Tipo', 'tipo') ?? '';
+                    const codigoEvento = val(n, 'CodigoEvento', 'codigoEvento') ?? '';
                     const idOrigen = val(n, 'IdOrigen', 'idOrigen');
+                    const tablaOrigen = val(n, 'TablaOrigen', 'tablaOrigen') ?? '';
+                    const urlDestino = val(n, 'UrlDestino', 'urlDestino') ?? '';
                     const fechaStr = val(n, 'FechaCreacion', 'fechaCreacion');
                     const fecha = new Date(fechaStr || Date.now()).toLocaleString();
                     const esLeida = !!(n.Leida ?? n.leida ?? n.EsLeida ?? n.esLeida);
@@ -1138,7 +1165,7 @@
                             ${!esLeida ? '<span class="notif-new">Nueva</span>' : ''}
                         </div>
                         <div class="notif-actions">
-                            ${linkDestino(tipo, idOrigen)}
+                            ${linkDestino(tipo, idOrigen, urlDestino, codigoEvento)}
                         </div>
                     `;
 

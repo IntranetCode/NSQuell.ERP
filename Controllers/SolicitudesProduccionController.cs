@@ -1,4 +1,5 @@
-﻿using ERP.NSQuell.Models.ERP;
+using ERP.NSQuell.Models.ERP;
+using ERP.NSQuell.Servicios;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -9,10 +10,14 @@ namespace ERP.NSQuell.Controllers
     public class SolicitudesProduccionController : Controller
     {
         private readonly IConfiguration _configuration;
+        private readonly NotificacionEventoService _notificacionEventoService;
 
-        public SolicitudesProduccionController(IConfiguration configuration)
+        public SolicitudesProduccionController(
+            IConfiguration configuration,
+            NotificacionEventoService notificacionEventoService)
         {
             _configuration = configuration;
+            _notificacionEventoService = notificacionEventoService;
         }
 
         private string ConnectionString =>
@@ -301,6 +306,12 @@ ORDER BY s.FechaCreacion DESC;";
                 );
 
                 await tx.CommitAsync();
+                // NSQ_NOTIFICACIONES_V3_INTERNO_OF_CREADA
+                // Evento explicito DESPUES del commit. El servicio registra cualquier
+                // fallo y nunca revierte la OF ya confirmada.
+                await _notificacionEventoService.PublicarOfCreadaAsync(
+                    solicitudId,
+                    usuarioId);
 
                 TempData["Success"] = "Solicitud de producción creada correctamente.";
                 return RedirectToAction(nameof(Detalle), new { id = solicitudId });
@@ -380,6 +391,11 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
             }
 
             vm.Historial = await ObtenerHistorialAsync(id, cn);
+            // NSQ_OF_TRAZABILIDAD_V3E
+            ViewBag.TrazabilidadOF = await ObtenerTrazabilidadCompletaAsync(id, cn);
+            ViewBag.AlertasOF = await ObtenerAlertasActivasAsync(id, cn);
+            ViewBag.EstadoActualOF = await ObtenerEstadoActualAsync(id, cn);
+            ViewBag.SoloLectura = string.Equals(Request.Query["soloLectura"], "1", StringComparison.OrdinalIgnoreCase);
 
             return View(vm);
         }
@@ -1525,6 +1541,105 @@ ORDER BY h.FechaMovimiento DESC;";
             }
 
             return lista;
+        }
+
+        // NSQ_OF_TRAZABILIDAD_V3E
+        private async Task<List<SolicitudProduccionTrazabilidadItemVm>> ObtenerTrazabilidadCompletaAsync(int solicitudId, SqlConnection cn)
+        {
+            var lista = new List<SolicitudProduccionTrazabilidadItemVm>();
+            const string sql = @"
+IF OBJECT_ID(N'dbo.vw_OF_Trazabilidad',N'V') IS NULL RETURN;
+SELECT SolicitudProduccionID,FechaEvento,OrdenEtapa,Etapa,Evento,EstadoAnterior,EstadoNuevo,
+       Descripcion,Usuario,TipoOrigen,OrigenID,EsAlerta,Severidad,EvidenciaUrl
+FROM dbo.vw_OF_Trazabilidad
+WHERE SolicitudProduccionID=@SolicitudProduccionID
+ORDER BY FechaEvento DESC,OrdenEtapa DESC,OrigenID DESC;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new SolicitudProduccionTrazabilidadItemVm
+                {
+                    SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    FechaEvento = Convert.ToDateTime(rd["FechaEvento"]),
+                    OrdenEtapa = Convert.ToInt32(rd["OrdenEtapa"]),
+                    Etapa = rd["Etapa"]?.ToString() ?? string.Empty,
+                    Evento = rd["Evento"]?.ToString() ?? string.Empty,
+                    EstadoAnterior = rd["EstadoAnterior"] == DBNull.Value ? null : rd["EstadoAnterior"].ToString(),
+                    EstadoNuevo = rd["EstadoNuevo"] == DBNull.Value ? null : rd["EstadoNuevo"].ToString(),
+                    Descripcion = rd["Descripcion"] == DBNull.Value ? null : rd["Descripcion"].ToString(),
+                    Usuario = rd["Usuario"]?.ToString() ?? "Sistema",
+                    TipoOrigen = rd["TipoOrigen"]?.ToString() ?? string.Empty,
+                    OrigenID = Convert.ToInt64(rd["OrigenID"]),
+                    EsAlerta = Convert.ToBoolean(rd["EsAlerta"]),
+                    Severidad = rd["Severidad"] == DBNull.Value ? null : rd["Severidad"].ToString(),
+                    EvidenciaUrl = rd["EvidenciaUrl"] == DBNull.Value ? null : rd["EvidenciaUrl"].ToString()
+                });
+            }
+            return lista;
+        }
+
+        private async Task<List<SolicitudProduccionAlertaVm>> ObtenerAlertasActivasAsync(int solicitudId, SqlConnection cn)
+        {
+            var lista = new List<SolicitudProduccionAlertaVm>();
+            const string sql = @"
+IF OBJECT_ID(N'dbo.vw_OF_AlertasActivas',N'V') IS NULL RETURN;
+SELECT SolicitudProduccionID,FechaAlerta,Departamento,TipoAlerta,Severidad,Mensaje,OrigenTabla,OrigenID,EvidenciaUrl
+FROM dbo.vw_OF_AlertasActivas
+WHERE SolicitudProduccionID=@SolicitudProduccionID
+ORDER BY CASE Severidad WHEN N'Crítica' THEN 0 WHEN N'Alta' THEN 1 WHEN N'Media' THEN 2 ELSE 3 END,
+         FechaAlerta DESC,OrigenID DESC;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                lista.Add(new SolicitudProduccionAlertaVm
+                {
+                    SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
+                    FechaAlerta = Convert.ToDateTime(rd["FechaAlerta"]),
+                    Departamento = rd["Departamento"]?.ToString() ?? string.Empty,
+                    TipoAlerta = rd["TipoAlerta"]?.ToString() ?? string.Empty,
+                    Severidad = rd["Severidad"]?.ToString() ?? "Media",
+                    Mensaje = rd["Mensaje"]?.ToString() ?? string.Empty,
+                    OrigenTabla = rd["OrigenTabla"]?.ToString() ?? string.Empty,
+                    OrigenID = Convert.ToInt64(rd["OrigenID"]),
+                    EvidenciaUrl = rd["EvidenciaUrl"] == DBNull.Value ? null : rd["EvidenciaUrl"].ToString()
+                });
+            }
+            return lista;
+        }
+
+        private async Task<SolicitudProduccionEstadoActualVm> ObtenerEstadoActualAsync(int solicitudId, SqlConnection cn)
+        {
+            const string sql = @"
+IF OBJECT_ID(N'dbo.vw_OF_EstadoActual',N'V') IS NULL
+BEGIN
+    SELECT @SolicitudProduccionID AS SolicitudProduccionID,1 AS EtapaActualOrden,N'OF creada' AS EtapaActual,
+           N'La vista V3E de estado actual aun no esta instalada.' AS ResumenActual,CAST(NULL AS datetime2) AS FechaUltimoAvance;
+    RETURN;
+END;
+SELECT SolicitudProduccionID,EtapaActualOrden,EtapaActual,ResumenActual,FechaUltimoAvance
+FROM dbo.vw_OF_EstadoActual
+WHERE SolicitudProduccionID=@SolicitudProduccionID;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@SolicitudProduccionID", SqlDbType.Int).Value = solicitudId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return new SolicitudProduccionEstadoActualVm { SolicitudProduccionID = solicitudId, EtapaActualOrden = 1, EtapaActual = "OF creada" };
+
+            return new SolicitudProduccionEstadoActualVm
+            {
+                SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
+                EtapaActualOrden = Convert.ToInt32(rd["EtapaActualOrden"]),
+                EtapaActual = rd["EtapaActual"]?.ToString() ?? "OF creada",
+                ResumenActual = rd["ResumenActual"]?.ToString() ?? string.Empty,
+                FechaUltimoAvance = rd["FechaUltimoAvance"] == DBNull.Value ? null : Convert.ToDateTime(rd["FechaUltimoAvance"])
+            };
         }
 
         private async Task<string> GenerarFolioAsync()

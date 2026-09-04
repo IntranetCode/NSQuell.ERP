@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.ERP.SolicitudProduccionDetalleVistaVm
+@model ERP.NSQuell.Models.ERP.SolicitudProduccionDetalleVistaVm
 
 @{
     Layout = null;
@@ -6,6 +6,33 @@
 
     var detalles = Model.Detalles ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionDetalleVistaRenglonVm>();
     var historial = Model.Historial ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionHistorialVistaVm>();
+
+    // NSQ_OF_TRAZABILIDAD_V3E
+    var trazabilidadOF = ViewBag.TrazabilidadOF as List<ERP.NSQuell.Models.ERP.SolicitudProduccionTrazabilidadItemVm>
+        ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionTrazabilidadItemVm>();
+    var alertasOF = ViewBag.AlertasOF as List<ERP.NSQuell.Models.ERP.SolicitudProduccionAlertaVm>
+        ?? new List<ERP.NSQuell.Models.ERP.SolicitudProduccionAlertaVm>();
+    var estadoActualOF = ViewBag.EstadoActualOF as ERP.NSQuell.Models.ERP.SolicitudProduccionEstadoActualVm
+        ?? new ERP.NSQuell.Models.ERP.SolicitudProduccionEstadoActualVm
+        {
+            SolicitudProduccionID = Model.SolicitudProduccionID,
+            EtapaActualOrden = 1,
+            EtapaActual = "OF creada"
+        };
+    var soloLectura = ViewBag.SoloLectura is bool sl && sl;
+    var etapasVisitadas = trazabilidadOF.Select(x => x.OrdenEtapa).ToHashSet();
+    var huboGp12 = etapasVisitadas.Contains(6);
+    var etapasOF = new[]
+    {
+        (Orden: 1, Nombre: "OF"),
+        (Orden: 2, Nombre: "Planeación"),
+        (Orden: 3, Nombre: "Almacén MP"),
+        (Orden: 4, Nombre: "Producción"),
+        (Orden: 5, Nombre: "Calidad"),
+        (Orden: 6, Nombre: "GP12"),
+        (Orden: 7, Nombre: "Almacén PT"),
+        (Orden: 8, Nombre: "Logística")
+    };
 
     string EstatusClase(int estatusId)
     {
@@ -310,6 +337,25 @@
                 box-shadow: 0 0 0 2px #BBD8FF;
             }
 
+        /* NSQ_OF_TRAZABILIDAD_V3E */
+        .erp-stage-wrap { overflow-x: auto; padding: 8px 2px 4px; }
+        .erp-stage-line { display: flex; min-width: 900px; align-items: flex-start; }
+        .erp-stage { flex: 1 1 0; position: relative; text-align: center; padding: 0 6px; }
+        .erp-stage:not(:last-child)::after { content: ""; position: absolute; top: 17px; left: 50%; width: 100%; height: 3px; background: #CBD5E1; z-index: 0; }
+        .erp-stage.done:not(:last-child)::after, .erp-stage.current:not(:last-child)::after { background: #60A5FA; }
+        .erp-stage-dot { position: relative; z-index: 1; width: 36px; height: 36px; border-radius: 50%; margin: 0 auto 8px; display: grid; place-items: center; background: #E2E8F0; color: #64748B; border: 3px solid #FFF; box-shadow: 0 0 0 2px #CBD5E1; font-weight: 900; }
+        .erp-stage.done .erp-stage-dot { background: #DCFCE7; color: #047857; box-shadow: 0 0 0 2px #86EFAC; }
+        .erp-stage.current .erp-stage-dot { background: #DBEAFE; color: #0B5CAD; box-shadow: 0 0 0 3px #60A5FA; }
+        .erp-stage.skipped .erp-stage-dot { background: #F8FAFC; color: #94A3B8; border-style: dashed; }
+        .erp-stage-name { font-size: .78rem; font-weight: 800; color: #475569; }
+        .erp-stage.current .erp-stage-name { color: #0B5CAD; }
+        .erp-alert-card { border-left: 5px solid #B45309; background: #FFFBEB; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+        .erp-alert-card.alta, .erp-alert-card.critica { border-left-color: #B91C1C; background: #FEF2F2; }
+        .erp-trace-item { border-left: 4px solid #94A3B8; background: #FFF; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(15,23,42,.04); }
+        .erp-trace-item.alerta { border-left-color: #B91C1C; background: #FFF7F7; }
+        .erp-trace-stage { display: inline-flex; border-radius: 999px; background: #EEF2FF; color: #3730A3; font-weight: 800; font-size: .72rem; padding: 4px 8px; margin-right: 6px; }
+        .erp-readonly-banner { background: #EFF6FF; border: 1px solid #BFDBFE; color: #1E40AF; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-weight: 700; }
+
         .erp-modal-label {
             font-size: .86rem;
             font-weight: 800;
@@ -355,7 +401,7 @@
                             Volver
                         </a>
 
-                        @if (Model.EstatusID < ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.EnProduccion &&
+                        @if (!soloLectura && Model.EstatusID < ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.EnProduccion &&
                                                 Model.EstatusID != ERP.NSQuell.Models.ERP.SolicitudProduccionEstatus.Cancelada)
                         {
                             <button type="button" class="btn btn-outline-danger rounded-3" data-bs-toggle="modal" data-bs-target="#modalCancelar">
@@ -457,6 +503,152 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- NSQ_OF_TRAZABILIDAD_V3E -->
+            @if (soloLectura)
+            {
+                <div class="erp-readonly-banner">
+                    <i class="fa-solid fa-eye me-2"></i>
+                    Vista informativa de la OF. Aquí se consulta la trazabilidad; las operaciones siguen perteneciendo al departamento responsable.
+                </div>
+            }
+
+            <div class="erp-card">
+                <div class="erp-card-header d-flex flex-column flex-md-row justify-content-between gap-2">
+                    <span><i class="fa-solid fa-route me-2 text-primary"></i>Estado actual y recorrido de la OF</span>
+                    <span class="erp-badge @(alertasOF.Any() ? "erp-badge-rojo" : "erp-badge-verde")">
+                        @(alertasOF.Any() ? $"{alertasOF.Count} alerta(s) activa(s)" : "Sin alertas activas")
+                    </span>
+                </div>
+                <div class="erp-card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="erp-info-label">Etapa actual</div>
+                            <div class="erp-info-value fs-5 text-primary">@estadoActualOF.EtapaActual</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="erp-info-label">Dónde estamos</div>
+                            <div class="erp-info-value">@(string.IsNullOrWhiteSpace(estadoActualOF.ResumenActual) ? "Sin avance operativo registrado todavía." : estadoActualOF.ResumenActual)</div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="erp-info-label">Último avance</div>
+                            <div class="erp-info-value">@(estadoActualOF.FechaUltimoAvance.HasValue ? estadoActualOF.FechaUltimoAvance.Value.ToString("dd/MM/yyyy HH:mm") : "Sin fecha")</div>
+                        </div>
+                    </div>
+
+                    <div class="erp-stage-wrap">
+                        <div class="erp-stage-line">
+                            @foreach (var etapa in etapasOF)
+                            {
+                                var omitida = etapa.Orden == 6 && estadoActualOF.EtapaActualOrden > 6 && !huboGp12;
+                                var visitada = etapasVisitadas.Contains(etapa.Orden);
+                                var estadoClase = omitida ? "skipped" : etapa.Orden == estadoActualOF.EtapaActualOrden ? "current" : visitada ? "done" : "pending";
+                                <div class="erp-stage @estadoClase">
+                                    <div class="erp-stage-dot">
+                                        @if (omitida)
+                                        {
+                                            <i class="fa-solid fa-minus"></i>
+                                        }
+                                        else if (etapa.Orden < estadoActualOF.EtapaActualOrden)
+                                        {
+                                            <i class="fa-solid fa-check"></i>
+                                        }
+                                        else
+                                        {
+                                            @etapa.Orden
+                                        }
+                                    </div>
+                                    <div class="erp-stage-name">@etapa.Nombre</div>
+                                    @if (omitida)
+                                    {
+                                        <div class="erp-muted">No requerido</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-card-header">
+                    <i class="fa-solid fa-triangle-exclamation me-2 text-warning"></i>
+                    Alertas activas
+                </div>
+                <div class="erp-card-body">
+                    @if (!alertasOF.Any())
+                    {
+                        <div class="alert alert-success mb-0 rounded-3">
+                            <i class="fa-solid fa-circle-check me-2"></i>No hay alertas activas detectadas para esta OF.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var a in alertasOF)
+                        {
+                            var sev = (a.Severidad ?? "Media").ToLowerInvariant().Replace("í", "i");
+                            <div class="erp-alert-card @sev">
+                                <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-1">
+                                    <div class="fw-bold"><i class="fa-solid fa-bell me-1"></i>@a.Departamento · @a.TipoAlerta.Replace("_", " ")</div>
+                                    <div class="erp-muted">@a.FechaAlerta.ToString("dd/MM/yyyy HH:mm") · @a.Severidad</div>
+                                </div>
+                                <div>@a.Mensaje</div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="erp-card">
+                <div class="erp-card-header d-flex justify-content-between align-items-center gap-2">
+                    <span><i class="fa-solid fa-timeline me-2 text-primary"></i>Trazabilidad completa interdepartamental</span>
+                    <span class="erp-badge erp-badge-gris">@trazabilidadOF.Count movimiento(s)</span>
+                </div>
+                <div class="erp-card-body">
+                    @if (!trazabilidadOF.Any())
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="fa-solid fa-route fa-2x mb-2"></i>
+                            <h5 class="fw-bold">Sin movimientos consolidados</h5>
+                            <p class="mb-0">La OF existe, pero todavía no hay movimientos departamentales registrados en las fuentes V3E.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var t in trazabilidadOF)
+                        {
+                            <div class="erp-trace-item @(t.EsAlerta ? "alerta" : "")">
+                                <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+                                    <div>
+                                        <span class="erp-trace-stage">@t.Etapa</span>
+                                        <strong>@t.Evento</strong>
+                                        @if (t.EsAlerta)
+                                        {
+                                            <span class="erp-badge erp-badge-rojo ms-1">Alerta @(string.IsNullOrWhiteSpace(t.Severidad) ? "" : t.Severidad)</span>
+                                        }
+                                    </div>
+                                    <div class="erp-muted">@t.FechaEvento.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                                </div>
+                                <div class="erp-muted mt-1">Usuario: @t.Usuario · Fuente: @t.TipoOrigen #@t.OrigenID</div>
+                                @if (!string.IsNullOrWhiteSpace(t.EstadoAnterior) || !string.IsNullOrWhiteSpace(t.EstadoNuevo))
+                                {
+                                    <div class="mt-2">
+                                        <span class="erp-badge erp-badge-gris">@(string.IsNullOrWhiteSpace(t.EstadoAnterior) ? "-" : t.EstadoAnterior) → @(string.IsNullOrWhiteSpace(t.EstadoNuevo) ? "-" : t.EstadoNuevo)</span>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(t.Descripcion))
+                                {
+                                    <div class="mt-2">@t.Descripcion</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(t.EvidenciaUrl) && t.EvidenciaUrl.StartsWith("/") && !t.EvidenciaUrl.StartsWith("//"))
+                                {
+                                    <div class="mt-2"><a href="@t.EvidenciaUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-paperclip me-1"></i>Ver evidencia</a></div>
+                                }
+                            </div>
+                        }
+                    }
                 </div>
             </div>
 
@@ -647,7 +839,7 @@
             <div class="erp-card">
                 <div class="erp-card-header">
                     <i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i>
-                    Historial
+                    Historial base del encabezado de la OF
                 </div>
 
                 <div class="erp-card-body">

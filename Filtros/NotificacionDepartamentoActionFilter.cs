@@ -1,33 +1,33 @@
-﻿// NSQ_NOTIFICACIONES_DEPARTAMENTALES_V1_1
+// NSQ_NOTIFICACIONES_V3F_EVENTOS_EXPLICITOS
+// El filtro global YA NO convierte cada POST/PUT/PATCH/DELETE en una notificacion.
+// Solo conserva la deteccion segura de flujos que CREAN una OF real.
+// Los demas avisos deben publicarse como eventos de negocio explicitos desde el flujo que hace COMMIT.
 using ERP.NSQuell.Servicios;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace ERP.NSQuell.Filtros;
 
-public sealed class NotificacionDepartamentoActionFilter
-    : IAsyncActionFilter
+public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
 {
-    private readonly NotificacionDepartamentalService _service;
+    private readonly NotificacionDepartamentalService _resolver;
+    private readonly NotificacionEventoService _eventoService;
     private readonly ILogger<NotificacionDepartamentoActionFilter> _logger;
 
     public NotificacionDepartamentoActionFilter(
-        NotificacionDepartamentalService service,
+        NotificacionDepartamentalService resolver,
+        NotificacionEventoService eventoService,
         ILogger<NotificacionDepartamentoActionFilter> logger)
     {
-        _service = service;
+        _resolver = resolver;
+        _eventoService = eventoService;
         _logger = logger;
     }
 
-    public async Task OnActionExecutionAsync(
-        ActionExecutingContext context,
-        ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        var method =
-            context.HttpContext.Request.Method;
-
-        var mutacion =
-            HttpMethods.IsPost(method)
+        var method = context.HttpContext.Request.Method;
+        var mutacion = HttpMethods.IsPost(method)
             || HttpMethods.IsPut(method)
             || HttpMethods.IsPatch(method)
             || HttpMethods.IsDelete(method);
@@ -38,179 +38,128 @@ public sealed class NotificacionDepartamentoActionFilter
             return;
         }
 
-        var controller =
-            context.RouteData.Values["controller"]
-                ?.ToString()
-                ?.Trim()
-            ?? string.Empty;
+        var controller = context.RouteData.Values["controller"]?.ToString()?.Trim() ?? string.Empty;
+        var action = context.RouteData.Values["action"]?.ToString()?.Trim() ?? string.Empty;
 
-        // Evita una recursión al marcar/crear notificaciones.
-        if (
-            controller.Equals(
-                "Notificaciones",
-                StringComparison.OrdinalIgnoreCase)
-            || controller.Equals(
-                "Login",
-                StringComparison.OrdinalIgnoreCase)
-        )
+        if (controller.Equals("Notificaciones", StringComparison.OrdinalIgnoreCase)
+            || controller.Equals("Login", StringComparison.OrdinalIgnoreCase))
+        {
+            await next();
+            return;
+        }
+
+        // SolicitudesProduccion/Crear ya publica OF_CREADA explicitamente DESPUES de su COMMIT.
+        if (controller.Equals("SolicitudesProduccion", StringComparison.OrdinalIgnoreCase)
+            && action.Equals("Crear", StringComparison.OrdinalIgnoreCase))
+        {
+            await next();
+            return;
+        }
+
+        // V3F: no existe fallback generico. Guardar/Editar/Eliminar por si solos NO son eventos de negocio.
+        if (!EsCreacionOf(controller, action))
         {
             await next();
             return;
         }
 
         var executed = await next();
-
-        if (
-            executed.Exception != null
-            && !executed.ExceptionHandled
-        )
-        {
-            return;
-        }
-
-        if (context.HttpContext.Response.StatusCode >= 400)
-            return;
-
-        // Varios controladores del ERP regresan RedirectToAction con
-        // TempData["Error"] cuando la operación no se aplicó.
-        if (
-            executed.Controller is Controller mvc
-            && mvc.TempData.ContainsKey("Error")
-        )
-        {
-            return;
-        }
+        if (executed.Exception != null && !executed.ExceptionHandled) return;
+        if (context.HttpContext.Response.StatusCode >= 400) return;
+        if (executed.Controller is Controller mvc && mvc.TempData.ContainsKey("Error")) return;
 
         try
         {
-            var area =
-                await _service.ResolverAreaAsync(controller);
+            var solicitudProduccionId = await ResolverSolicitudProduccionIdAsync(
+                context,
+                executed.Result,
+                controller,
+                action);
 
-            if (string.IsNullOrWhiteSpace(area))
-                return;
-
-            var action =
-                context.RouteData.Values["action"]
-                    ?.ToString()
-                    ?.Trim()
-                ?? "Actualizacion";
-
-            var actor =
-                context.HttpContext.User.Identity?.Name;
-
-            if (string.IsNullOrWhiteSpace(actor))
+            if (!solicitudProduccionId.HasValue || solicitudProduccionId.Value <= 0)
             {
-                actor =
-                    context.HttpContext.Session.GetString("Username")
-                    ?? context.HttpContext.Session.GetString("NombreUsuario")
-                    ?? "Usuario ERP";
+                _logger.LogWarning(
+                    "Flujo {Controller}/{Action} identificado como creacion de OF, pero no se resolvio SolicitudProduccionID. No se publica una notificacion ambigua.",
+                    controller,
+                    action);
+                return;
             }
 
-            var idOrigen =
-                ObtenerIdOrigen(context.ActionArguments);
-
-            await _service.NotificarAsync(
-                area,
-                controller,
-                action,
-                idOrigen,
-                actor);
+            var actorId = context.HttpContext.Session.GetInt32("UsuarioID") ?? 0;
+            await _eventoService.PublicarOfCreadaAsync(solicitudProduccionId.Value, actorId);
         }
         catch (Exception ex)
         {
-            // La notificación jamás debe revertir una operación de negocio
-            // que ya fue completada correctamente.
             _logger.LogError(
                 ex,
-                "Error posterior creando la notificación departamental " +
-                "para {Controller}.",
-                controller);
+                "Error posterior publicando evento explicito para {Controller}/{Action}.",
+                controller,
+                action);
         }
     }
 
-    private static int ObtenerIdOrigen(
-        IDictionary<string,object?> argumentos)
+    private async Task<int?> ResolverSolicitudProduccionIdAsync(
+        ActionExecutingContext context,
+        IActionResult? result,
+        string controller,
+        string action)
     {
-        foreach (var key in new[]
+        foreach (var key in new[] { "solicitudProduccionId", "SolicitudProduccionID", "solicitudId" })
         {
-            "id",
-            "Id",
-            "ID",
-            "inspeccionId",
-            "InspeccionID",
-            "solicitudId",
-            "SolicitudID",
-            "embarqueId",
-            "EmbarqueID"
-        })
-        {
-            if (
-                argumentos.TryGetValue(key,out var value)
-                && TryInt(value,out var id)
-            )
-            {
+            if (context.ActionArguments.TryGetValue(key, out var raw) && TryInt(raw, out var id))
                 return id;
-            }
         }
 
-        foreach (var value in argumentos.Values)
+        // El flujo real GenerarOF termina en un Detalle con el ID de la OF creada.
+        if (result is RedirectToActionResult redirect
+            && redirect.ActionName != null
+            && redirect.ActionName.Equals("Detalle", StringComparison.OrdinalIgnoreCase)
+            && redirect.RouteValues != null
+            && redirect.RouteValues.TryGetValue("id", out var redirectId)
+            && TryInt(redirectId, out var ofId))
         {
-            if (value == null)
-                continue;
+            return ofId;
+        }
 
-            var properties =
-                value.GetType().GetProperties()
-                    .Where(p =>
-                        p.CanRead
-                        && p.Name.EndsWith(
-                            "ID",
-                            StringComparison.OrdinalIgnoreCase))
-                    .Take(8);
-
-            foreach (var property in properties)
+        // Respaldo seguro para PlaneacionPrograma/GenerarOF cuando el argumento recibido es ProgramaProduccionID.
+        if (controller.Equals("PlaneacionPrograma", StringComparison.OrdinalIgnoreCase)
+            && action.Replace("_", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Equals("GenerarOF", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var key in new[] { "programaProduccionId", "ProgramaProduccionID", "id" })
             {
-                try
-                {
-                    if (
-                        TryInt(
-                            property.GetValue(value),
-                            out var id)
-                    )
-                    {
-                        return id;
-                    }
-                }
-                catch
-                {
-                }
+                if (context.ActionArguments.TryGetValue(key, out var raw) && TryInt(raw, out var programaId))
+                    return await _resolver.ResolverSolicitudProduccionIdAsync("PROGRAMA", programaId);
             }
         }
 
-        return 0;
+        return null;
     }
 
-    private static bool TryInt(
-        object? value,
-        out int id)
+    private static bool EsCreacionOf(string controller, string action)
     {
-        id=0;
+        var compacta = action.Replace("_", string.Empty, StringComparison.OrdinalIgnoreCase);
 
-        if (value==null)
-            return false;
+        if (controller.Equals("PlaneacionPrograma", StringComparison.OrdinalIgnoreCase))
+            return compacta.Equals("GenerarOF", StringComparison.OrdinalIgnoreCase);
 
+        if (controller.Equals("Planeacion", StringComparison.OrdinalIgnoreCase))
+            return compacta.Equals("Crear", StringComparison.OrdinalIgnoreCase)
+                || compacta.Equals("CrearOF", StringComparison.OrdinalIgnoreCase)
+                || compacta.Equals("GenerarOF", StringComparison.OrdinalIgnoreCase);
+
+        return false;
+    }
+
+    private static bool TryInt(object? value, out int id)
+    {
+        id = 0;
+        if (value == null) return false;
         try
         {
-            var raw=Convert.ToInt64(value);
-
-            if (
-                raw<=0
-                || raw>int.MaxValue
-            )
-            {
-                return false;
-            }
-
-            id=(int)raw;
+            var raw = Convert.ToInt64(value);
+            if (raw <= 0 || raw > int.MaxValue) return false;
+            id = (int)raw;
             return true;
         }
         catch
