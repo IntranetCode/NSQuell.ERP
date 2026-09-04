@@ -536,14 +536,27 @@ namespace ERP.NSQuell.Models.ViewModels
         public string? Resultado { get; set; }
         public string? Observaciones { get; set; }
 
-        public string? ResultadoNormalizado =>
-            string.IsNullOrWhiteSpace(Resultado)
-                ? null
-                : Resultado.Trim().ToUpperInvariant() switch
+        public string? ResultadoNormalizado
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(Resultado))
+                    return null;
+
+                var valor = Resultado.Trim().ToUpperInvariant();
+
+                if (valor == CalidadChecklistResultado.NoAplica ||
+                    valor == "NO_APLICA" ||
+                    valor == "N/A" ||
+                    valor == "NA" ||
+                    valor == "NO APLICA")
                 {
-                    "N/A" => CalidadChecklistResultado.NoAplica,
-                    var valor => valor
-                };
+                    return CalidadChecklistResultado.NoAplica;
+                }
+
+                return valor;
+            }
+        }
 
         public bool EstaRespondida =>
             ResultadoNormalizado == CalidadChecklistResultado.Ok ||

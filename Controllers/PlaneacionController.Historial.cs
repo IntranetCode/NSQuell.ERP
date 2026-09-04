@@ -206,11 +206,6 @@ OUTER APPLY
 
 WHERE s.Activo = 1
 
-  AND
-  (
-      ISNULL(prod.TotalEjecuciones,0) > 0
-      OR s.EstatusID IN (10,99)
-  )
 
   AND
   (

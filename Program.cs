@@ -1,4 +1,4 @@
-
+﻿
 using ERP.NSQuell.Areas.AdminUsuarios.Interfaces;
 using ERP.NSQuell.Areas.AdminUsuarios.Services;
 using ERP.NSQuell.Controllers;
@@ -472,6 +472,101 @@ app.UseRouting();
 // ? Session DEBE ir antes de Authentication
 app.UseSession();
 app.UseAuthentication();
+// NSQ_OPERADOR_PORTAL_CERRADO_V1
+// RolID 4 = Operador. El operador trabaja dentro de un portal cerrado:
+// Kiosco + Captura. Los POST/AJAX internos de ProduccionOperador siguen
+// permitidos para no romper captura, paros, turnos ni tiempo extra.
+app.Use(async (context, next) =>
+{
+    int? rolIdOperador = context.Session.GetInt32("RolID");
+
+    if (!rolIdOperador.HasValue &&
+        int.TryParse(
+            context.User.FindFirst("RolID")?.Value,
+            out var rolIdDesdeClaim))
+    {
+        rolIdOperador = rolIdDesdeClaim;
+    }
+
+    if (rolIdOperador == 4)
+    {
+        var rutaOperador = context.Request.Path;
+        var metodoOperador = context.Request.Method;
+
+        var esGetOHeadOperador =
+            HttpMethods.IsGet(metodoOperador) ||
+            HttpMethods.IsHead(metodoOperador);
+
+        var esControladorOperador =
+            rutaOperador.StartsWithSegments("/ProduccionOperador");
+
+        var esLogoutOperador =
+            rutaOperador.StartsWithSegments("/Login/Logout");
+
+        // Fuera de ProduccionOperador no hay acceso funcional para RolID 4.
+        if (!esControladorOperador && !esLogoutOperador)
+        {
+            if (esGetOHeadOperador)
+            {
+                context.Response.Redirect("/ProduccionOperador/Index");
+            }
+            else
+            {
+                context.Response.StatusCode =
+                    StatusCodes.Status403Forbidden;
+            }
+
+            return;
+        }
+
+        if (esControladorOperador && esGetOHeadOperador)
+        {
+            var rutaNormalizadaOperador =
+                (rutaOperador.Value ?? string.Empty)
+                    .TrimEnd('/');
+
+            var esKioscoOperador =
+                rutaNormalizadaOperador.Equals(
+                    "/ProduccionOperador",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                rutaNormalizadaOperador.Equals(
+                    "/ProduccionOperador/Index",
+                    StringComparison.OrdinalIgnoreCase);
+
+            var esCapturaOperador =
+                rutaNormalizadaOperador.Equals(
+                    "/ProduccionOperador/Captura",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                rutaNormalizadaOperador.StartsWith(
+                    "/ProduccionOperador/Captura/",
+                    StringComparison.OrdinalIgnoreCase);
+
+            var esAjaxOperador =
+                string.Equals(
+                    context.Request.Headers["X-Requested-With"].ToString(),
+                    "XMLHttpRequest",
+                    StringComparison.OrdinalIgnoreCase);
+
+            // Historial, Cajas u otra vista GET de ProduccionOperador
+            // tampoco son portales navegables para el operador.
+            // Solo se permiten GET auxiliares cuando son AJAX internos.
+            if (!esKioscoOperador &&
+                !esCapturaOperador &&
+                !esAjaxOperador)
+            {
+                context.Response.Redirect(
+                    "/ProduccionOperador/Index");
+
+                return;
+            }
+        }
+    }
+
+    await next();
+});
+
 app.UseMiddleware<MiddlewareContextoSolicitud>();
 
 app.UseAuthorization();
