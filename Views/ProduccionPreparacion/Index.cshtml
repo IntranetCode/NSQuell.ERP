@@ -1780,12 +1780,7 @@
             font-size: .49rem;
         }
 
-        .program-tasks .task-table tbody {
-            counter-reset: activity-counter;
-        }
-
         .program-tasks .task-table tr.task-row {
-            counter-increment: activity-counter;
             position: relative;
         }
 
@@ -1809,6 +1804,10 @@
                     border-radius: 0 10px 10px 0;
                     min-width: 96px;
                 }
+
+        .program-tasks .task-table tr.task-checklist td:first-child {
+            border-left-color: #7c3aed;
+        }
 
         .program-tasks .task-table tr.task-molde td:first-child {
             border-left-color: var(--purple);
@@ -1855,23 +1854,15 @@
         position: relative;
     }
 
-        .activity-bullet::after {
-            content: "A" counter(activity-counter);
-            position: absolute;
-            right: -7px;
-            top: -7px;
-            min-width: 18px;
-            height: 18px;
-            padding: 0 4px;
-            border-radius: 999px;
-            display: grid;
-            place-items: center;
-            background: var(--text);
-            color: var(--panel);
-            border: 2px solid var(--panel);
-            font-size: .42rem;
-            font-weight: 950;
-        }
+
+    .task-checklist .activity-bullet {
+        background: #f3e8ff;
+        color: #7c3aed;
+    }
+
+    .type.checklist {
+        color: #6d28d9;
+    }
 
     .task-molde .activity-bullet {
         background: var(--purpleSoft);
@@ -2263,7 +2254,6 @@
                                         </span>
 
                                         <div>
-                                            <span class="level-kicker level-machine">NIVEL 1 · MÁQUINA</span>
                                             <strong>
                                                 @(string.IsNullOrWhiteSpace(grupo.Key.MaquinaCodigo)
                                                                                         ? "Sin código"
@@ -2354,6 +2344,16 @@
                                         var of = OfPrograma(programa);
                                         var parte = PartePrograma(programa);
                                         var tareasVisualesPrograma = ConsolidarTareasVisuales(programa);
+                                        var tareaCambioMoldePrograma = tareasVisualesPrograma
+                                            .Where(x => x.EsCambioMolde)
+                                            .OrderBy(x => x.ProgramaProduccionID)
+                                            .FirstOrDefault();
+                                        var mostrarChecklistCambioMolde = tareaCambioMoldePrograma != null && tareaCambioMoldePrograma.PreparacionAnticipadaID > 0;
+                                        var checklistCambioMolde = tareaCambioMoldePrograma?.ChecklistCambioMolde;
+                                        var checklistCompleto = checklistCambioMolde?.EstaCompleto == true;
+                                        var checklistEnProceso = checklistCambioMolde?.EstaEnProceso == true;
+                                        var checklistPorcentaje = checklistCambioMolde?.PorcentajeAvance ?? 0;
+
                                         var referenciaPareja = programa.FirstOrDefault(x => x.EsParejaLhRh);
                                         var esParejaPrograma = referenciaPareja != null && referenciaPareja.EsParejaLhRh;
                                         var programasIds = programa.Select(x => x.ProgramaProduccionID).Distinct().OrderBy(x => x).ToList();
@@ -2361,14 +2361,13 @@
                                         var riesgosPrograma = tareasVisualesPrograma.Count(EsRiesgo);
                                         var enCursoPrograma = tareasVisualesPrograma.Count(EsEnCurso);
                                         var accionPrograma = tareasVisualesPrograma.Count(x => x.EstaPendiente && (x.EsHacerAhora || x.EsVencida || SecadoLlegariaTarde(x)));
-                                        var totalActividadesPrograma = tareasVisualesPrograma.Count;
+                                        var totalActividadesPrograma = tareasVisualesPrograma.Count + (mostrarChecklistCambioMolde ? 1 : 0);
 
                                         <details class="program-block @clasePrograma @(esParejaPrograma ? "is-pair" : "")">
                                             <summary class="program-head">
                                                 <div class="program-of">
                                                     @if (esParejaPrograma && referenciaPareja != null)
                                                     {
-                                                        <span class="level-kicker level-of">NIVEL 2 · OPERACIÓN FÍSICA CONJUNTA</span>
                                                         <span class="pair-badge"><i class="bi bi-link-45deg"></i>Pareja LH/RH · Grupo @(referenciaPareja.GrupoLhRh?.ToString() ?? "—")</span>
                                                         <div class="pair-of-grid">
                                                             <div class="pair-side current">
@@ -2386,7 +2385,6 @@
                                                     }
                                                     else
                                                     {
-                                                        <span class="level-kicker level-of">NIVEL 2 · ORDEN DE FABRICACIÓN</span>
                                                         <strong>OF @of</strong>
                                                         <span>@parte</span>
                                                     }
@@ -2442,7 +2440,6 @@
                                             <div class="program-tasks">
                                                 <div class="task-level-title">
                                                     <span class="task-level-line"></span>
-                                                    <span class="level-kicker level-task">NIVEL 3 · ACTIVIDADES</span>
                                                     <span>@(esParejaPrograma ? "Cambio de molde y secado conjuntos; materia prima y embalaje separados por OF" : "Preparaciones de esta OF")</span>
                                                 </div>
 
@@ -2460,6 +2457,67 @@
                                                         </thead>
 
                                                         <tbody>
+                                                            @if (mostrarChecklistCambioMolde && tareaCambioMoldePrograma != null)
+                                                            {
+                                                                var estadoChecklist = checklistCompleto ? "COMPLETO" : checklistEnProceso ? "EN PROCESO" : "PENDIENTE";
+                                                                var claseChecklist = checklistCompleto ? "ready" : checklistEnProceso ? "process" : "scheduled";
+
+                                                                <tr class="task-row task-checklist">
+                                                                    <td>
+                                                                        <div class="activity-cell">
+                                                                            <span class="activity-bullet">
+                                                                                <i class="bi bi-clipboard2-check"></i>
+                                                                            </span>
+                                                                            <div>
+                                                                                <span class="activity-kicker">ACTIVIDAD</span>
+                                                                                <span class="type checklist">Checklist de cambio de molde</span>
+                                                                                @if (tareaCambioMoldePrograma.EsParejaLhRh)
+                                                                                {
+                                                                                    <span class="pair-task-chip shared">
+                                                                                        <i class="bi bi-link-45deg"></i>
+                                                                                        Conjunto LH/RH
+                                                                                    </span>
+                                                                                }
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div class="task-detail">
+                                                                            <strong>GQ-F-PR01-03 · Desmontaje y montaje de molde</strong>
+                                                                            <span>Ver.09 · 3 secciones · 39 puntos de verificación</span>
+                                                                            @if (tareaCambioMoldePrograma.EsParejaLhRh)
+                                                                            {
+                                                                                <span class="pair-inline"><i class="bi bi-link-45deg"></i>Aplica a @LadoVisual(tareaCambioMoldePrograma) OF @(string.IsNullOrWhiteSpace(tareaCambioMoldePrograma.NumeroOF) ? "—" : tareaCambioMoldePrograma.NumeroOF) + @LadoParejaVisual(tareaCambioMoldePrograma) OF @(string.IsNullOrWhiteSpace(tareaCambioMoldePrograma.NumeroOFPareja) ? "—" : tareaCambioMoldePrograma.NumeroOFPareja)</span>
+                                                                            }
+                                                                        </div>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="state @claseChecklist">@estadoChecklist</span>
+                                                                        @if (checklistCambioMolde != null)
+                                                                        {
+                                                                            <span class="time-sub">@checklistPorcentaje% capturado</span>
+                                                                        }
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="time-main">@Fecha(tareaCambioMoldePrograma.FechaAviso)</span>
+                                                                        <span class="time-sub">Antes y durante el cambio</span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="time-main">@Fecha(tareaCambioMoldePrograma.FechaObjetivo)</span>
+                                                                        <span class="time-sub">GQ-F-PR01-03</span>
+                                                                    </td>
+                                                                    <td class="task-action">
+                                                                        <a class="btnx @(checklistCompleto ? "btnx-outline" : "btnx-primary")"
+                                                                           asp-controller="ProduccionPreparacion"
+                                                                           asp-action="ChecklistCambioMolde"
+                                                                           asp-route-id="@tareaCambioMoldePrograma.PreparacionAnticipadaID">
+                                                                            @(checklistCompleto ? "Ver" : checklistEnProceso ? "Continuar" : "Atender")
+                                                                            <i class="bi bi-arrow-right"></i>
+                                                                        </a>
+                                                                    </td>
+                                                                </tr>
+                                                            }
+
                                                             @foreach (var tarea in tareasVisualesPrograma
                                                                                                             .OrderBy(x =>
                                                                                                             x.EsCambioMolde ? 1 :

@@ -1,0 +1,1400 @@
+﻿@model ERP.NSQuell.Models.ProduccionChecklistVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+
+@{
+    Layout = "_Layout";
+
+    var preparacionAnticipadaID = ViewBag.PreparacionAnticipadaID != null ? Convert.ToInt32(ViewBag.PreparacionAnticipadaID) : 0;
+    var puedeGestionar = ViewBag.PuedeGestionarCambioMolde != null && Convert.ToBoolean(ViewBag.PuedeGestionarCambioMolde);
+    var estadoCambioMolde = Convert.ToString(ViewBag.EstadoCambioMolde) ?? "";
+    var fechaInicioCambioMolde = ViewBag.FechaInicioCambioMolde as DateTime?;
+    var limiteCambioMoldeMinutos = ViewBag.LimiteCambioMoldeMinutos != null ? Convert.ToInt32(ViewBag.LimiteCambioMoldeMinutos) : 0;
+    var esParejaLhRh = ViewBag.EsParejaLhRh != null && Convert.ToBoolean(ViewBag.EsParejaLhRh);
+    var grupoLhRh = ViewBag.GrupoLhRh != null ? Convert.ToInt32(ViewBag.GrupoLhRh) : (int?)null;
+    var puedeEditar = puedeGestionar && !Model.EstaCompleto;
+    var cambioEnProceso = string.Equals(estadoCambioMolde, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase);
+    var cambioConfirmado = string.Equals(estadoCambioMolde, ProduccionPreparacionEstado.Confirmada, StringComparison.OrdinalIgnoreCase);
+    var totalPreguntas = Model.TotalPreguntas;
+    var respondidas = Model.RespuestasContestadas;
+    var porcentaje = Model.PorcentajeAvance;
+    var secciones = Model.Secciones.OrderBy(x => x.OrdenSeccion).ToList();
+}
+
+@functions {
+    public static string Txt(string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor) ? "—" : valor.Trim();
+    }
+
+    public static string ResultadoNormalizado(string? valor)
+    {
+        var r = (valor ?? "").Trim().ToUpperInvariant();
+        if (r == "N/A") return "NA";
+        if (r == "SI" || r == "SÍ") return "OK";
+        if (r == "NO") return "NOK";
+        return r;
+    }
+
+    public static string LadoTexto(string? lado)
+    {
+        if (string.Equals(lado, "LH", StringComparison.OrdinalIgnoreCase)) return "LH";
+        if (string.Equals(lado, "RH", StringComparison.OrdinalIgnoreCase)) return "RH";
+        return "OF";
+    }
+}
+
+@section Styles {
+    <style>
+        .cm-page {
+            --cm-primary: #5639d9;
+            --cm-primary-dark: #4128b7;
+            --cm-soft: #f3f0ff;
+            --cm-border: #dfe4ec;
+            --cm-text: #172033;
+            --cm-muted: #667085;
+            --cm-success: #168a55;
+            --cm-warning: #b66a00;
+            --cm-danger: #cf3b35;
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 18px
+        }
+
+        .cm-hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            padding: 22px 24px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg,#31206f 0%,#5639d9 55%,#7257ed 100%);
+            color: #fff;
+            box-shadow: 0 18px 42px rgba(65,40,183,.18)
+        }
+
+            .cm-hero:after {
+                content: "";
+                position: absolute;
+                width: 340px;
+                height: 340px;
+                border-radius: 50%;
+                right: -130px;
+                top: -190px;
+                background: rgba(255,255,255,.08)
+            }
+
+        .cm-hero-top {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            flex-wrap: wrap
+        }
+
+        .cm-kicker {
+            font-size: .7rem;
+            font-weight: 900;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+            color: #ddd5ff
+        }
+
+        .cm-title {
+            font-size: 1.65rem;
+            font-weight: 950;
+            line-height: 1.15;
+            margin: 5px 0 7px
+        }
+
+        .cm-subtitle {
+            font-size: .88rem;
+            font-weight: 650;
+            color: rgba(255,255,255,.82)
+        }
+
+        .cm-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 13px;
+            border-radius: 11px;
+            border: 1px solid rgba(255,255,255,.3);
+            background: rgba(255,255,255,.1);
+            color: #fff;
+            text-decoration: none;
+            font-weight: 850
+        }
+
+            .cm-back:hover {
+                background: rgba(255,255,255,.18);
+                color: #fff
+            }
+
+        .cm-layout {
+            display: grid;
+            grid-template-columns: 330px minmax(0,1fr);
+            gap: 16px;
+            align-items: start
+        }
+
+        .cm-sidebar {
+            position: sticky;
+            top: 15px
+        }
+
+        .cm-card {
+            background: #fff;
+            border: 1px solid var(--cm-border);
+            border-radius: 18px;
+            box-shadow: 0 8px 25px rgba(15,23,42,.05);
+            overflow: hidden;
+            margin-bottom: 14px
+        }
+
+        .cm-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 13px 15px;
+            background: #f8f9fc;
+            border-bottom: 1px solid var(--cm-border);
+            font-weight: 900;
+            color: #27324a
+        }
+
+        .cm-card-body {
+            padding: 15px
+        }
+
+        .cm-data {
+            display: grid;
+            grid-template-columns: 105px minmax(0,1fr);
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid #edf0f5
+        }
+
+            .cm-data:last-child {
+                border-bottom: 0
+            }
+
+        .cm-data-k {
+            font-size: .67rem;
+            font-weight: 900;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--cm-muted)
+        }
+
+        .cm-data-v {
+            font-size: .84rem;
+            font-weight: 800;
+            color: var(--cm-text);
+            word-break: break-word
+        }
+
+        .cm-pair {
+            border: 1px solid #cabfff;
+            background: #f7f5ff;
+            border-radius: 15px;
+            padding: 12px;
+            margin-bottom: 14px
+        }
+
+        .cm-pair-title {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .08em;
+            color: #5536d4;
+            text-transform: uppercase;
+            margin-bottom: 9px
+        }
+
+        .cm-program {
+            display: grid;
+            grid-template-columns: 42px minmax(0,1fr);
+            gap: 9px;
+            align-items: center;
+            padding: 8px;
+            border-radius: 11px;
+            background: #fff;
+            border: 1px solid #e6e0ff;
+            margin-top: 7px
+        }
+
+        .cm-side {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 32px;
+            border-radius: 9px;
+            background: #ede9fe;
+            color: #5233c9;
+            font-weight: 950;
+            font-size: .75rem
+        }
+
+        .cm-of {
+            font-weight: 900;
+            color: #1f2937
+        }
+
+        .cm-part {
+            font-size: .72rem;
+            color: var(--cm-muted);
+            margin-top: 2px
+        }
+
+        .cm-progress-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px
+        }
+
+        .cm-progress-value {
+            font-size: 1.55rem;
+            font-weight: 950;
+            color: var(--cm-primary)
+        }
+
+        .cm-progress-text {
+            font-size: .75rem;
+            color: var(--cm-muted);
+            font-weight: 750;
+            text-align: right
+        }
+
+        .cm-progress {
+            height: 10px;
+            background: #e9edf3;
+            border-radius: 999px;
+            overflow: hidden
+        }
+
+        .cm-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg,#5639d9,#8269ef);
+            border-radius: 999px;
+            transition: width .25s ease
+        }
+
+        .cm-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            font-size: .7rem;
+            font-weight: 900
+        }
+
+            .cm-status.pending {
+                background: #fff4dc;
+                color: #9a5a00
+            }
+
+            .cm-status.process {
+                background: #eaf2ff;
+                color: #1758a5
+            }
+
+            .cm-status.complete {
+                background: #e6f7ef;
+                color: #117a4b
+            }
+
+            .cm-status.change {
+                background: #f1edff;
+                color: #5536d4
+            }
+
+        .cm-alert {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            border-radius: 14px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            font-size: .82rem;
+            font-weight: 700
+        }
+
+            .cm-alert.info {
+                background: #eef5ff;
+                border: 1px solid #cfe0fb;
+                color: #225a9a
+            }
+
+            .cm-alert.warning {
+                background: #fff8e8;
+                border: 1px solid #f6d998;
+                color: #855100
+            }
+
+            .cm-alert.success {
+                background: #eaf8f1;
+                border: 1px solid #bae6d0;
+                color: #16683f
+            }
+
+        .cm-section {
+            background: #fff;
+            border: 1px solid var(--cm-border);
+            border-radius: 18px;
+            box-shadow: 0 8px 24px rgba(15,23,42,.05);
+            overflow: hidden;
+            margin-bottom: 16px
+        }
+
+        .cm-section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 17px;
+            background: #fbfcfe;
+            border-bottom: 1px solid var(--cm-border)
+        }
+
+        .cm-section-index {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 31px;
+            height: 31px;
+            border-radius: 10px;
+            background: var(--cm-soft);
+            color: var(--cm-primary);
+            font-weight: 950;
+            margin-right: 9px
+        }
+
+        .cm-section-title {
+            display: flex;
+            align-items: center;
+            font-weight: 950;
+            color: #202b40
+        }
+
+        .cm-section-sub {
+            font-size: .72rem;
+            color: var(--cm-muted);
+            font-weight: 700;
+            margin-top: 4px;
+            padding-left: 40px
+        }
+
+        .cm-section-state {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+            justify-content: flex-end
+        }
+
+        .cm-section-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 8px;
+            border: 1px solid #dce2eb;
+            border-radius: 999px;
+            font-size: .7rem;
+            font-weight: 850;
+            color: #475467;
+            background: #fff
+        }
+
+        .cm-question {
+            display: grid;
+            grid-template-columns: 48px minmax(0,1fr) 390px;
+            gap: 13px;
+            padding: 15px 17px;
+            border-bottom: 1px solid #edf0f4;
+            transition: background .15s ease
+        }
+
+            .cm-question:last-child {
+                border-bottom: 0
+            }
+
+            .cm-question.invalid {
+                background: #fff4f3
+            }
+
+        .cm-number {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1efff;
+            color: #5639d9;
+            border: 1px solid #d8d1ff;
+            font-weight: 950
+        }
+
+        .cm-question-text {
+            font-weight: 800;
+            line-height: 1.42;
+            color: #202b40
+        }
+
+        .cm-question-meta {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 8px
+        }
+
+        .cm-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #f4f6f9;
+            color: #667085;
+            font-size: .67rem;
+            font-weight: 800
+        }
+
+            .cm-meta.required {
+                background: #fff0ef;
+                color: #ba342d
+            }
+
+        .cm-answer {
+            border: 1px solid #e1e6ee;
+            border-radius: 14px;
+            padding: 10px;
+            background: #fafbfc
+        }
+
+        .cm-options {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 7px
+        }
+
+        .cm-option {
+            position: relative
+        }
+
+            .cm-option input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+            .cm-option label {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 5px;
+                width: 100%;
+                min-height: 38px;
+                border: 1px solid #d7dde7;
+                border-radius: 10px;
+                background: #fff;
+                color: #5a6576;
+                font-size: .72rem;
+                font-weight: 900;
+                cursor: pointer;
+                transition: .15s ease
+            }
+
+            .cm-option.ok input:checked + label {
+                background: #e8f8f0;
+                border-color: #75cda2;
+                color: #117547
+            }
+
+            .cm-option.nok input:checked + label {
+                background: #fff0ef;
+                border-color: #ec9993;
+                color: #b72c26
+            }
+
+            .cm-option.na input:checked + label {
+                background: #eef1f5;
+                border-color: #aeb8c7;
+                color: #465365
+            }
+
+            .cm-option input:disabled + label {
+                opacity: .55;
+                cursor: not-allowed
+            }
+
+        .cm-observation {
+            margin-top: 9px
+        }
+
+            .cm-observation label {
+                display: block;
+                font-size: .68rem;
+                font-weight: 850;
+                color: #667085;
+                margin-bottom: 4px
+            }
+
+            .cm-observation textarea {
+                width: 100%;
+                min-height: 62px;
+                resize: vertical;
+                border: 1px solid #d7dde7;
+                border-radius: 10px;
+                padding: 8px 9px;
+                font-size: .78rem;
+                background: #fff;
+                color: #253047
+            }
+
+                .cm-observation textarea:focus {
+                    outline: none;
+                    border-color: #7961e7;
+                    box-shadow: 0 0 0 3px rgba(86,57,217,.1)
+                }
+
+                .cm-observation textarea.is-invalid {
+                    border-color: #dc4b45;
+                    background: #fff7f6
+                }
+
+        .cm-saved {
+            font-size: .66rem;
+            color: #758195;
+            font-weight: 700;
+            margin-top: 6px
+        }
+
+        .cm-section-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            padding: 13px 16px;
+            background: #fafbfd;
+            border-top: 1px solid var(--cm-border)
+        }
+
+        .cm-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            border-radius: 11px;
+            padding: 9px 13px;
+            border: 1px solid transparent;
+            font-size: .78rem;
+            font-weight: 900;
+            cursor: pointer;
+            text-decoration: none;
+            transition: .15s ease
+        }
+
+        .cm-btn-primary {
+            background: var(--cm-primary);
+            border-color: var(--cm-primary);
+            color: #fff
+        }
+
+            .cm-btn-primary:hover {
+                background: var(--cm-primary-dark);
+                color: #fff
+            }
+
+        .cm-btn-outline {
+            background: #fff;
+            border-color: #d4dae4;
+            color: #344054
+        }
+
+            .cm-btn-outline:hover {
+                background: #f6f7f9;
+                color: #344054
+            }
+
+        .cm-btn-success {
+            background: #168a55;
+            border-color: #168a55;
+            color: #fff
+        }
+
+            .cm-btn-success:hover {
+                background: #107345;
+                color: #fff
+            }
+
+        .cm-btn:disabled {
+            opacity: .5;
+            cursor: not-allowed
+        }
+
+        .cm-final {
+            position: sticky;
+            bottom: 10px;
+            z-index: 20;
+            background: rgba(255,255,255,.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--cm-border);
+            border-radius: 17px;
+            padding: 13px 15px;
+            box-shadow: 0 -7px 25px rgba(15,23,42,.08)
+        }
+
+        .cm-final-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap
+        }
+
+        .cm-final-note {
+            font-size: .74rem;
+            color: var(--cm-muted);
+            font-weight: 700
+        }
+
+        .cm-general {
+            margin-bottom: 14px
+        }
+
+            .cm-general label {
+                display: block;
+                font-size: .74rem;
+                font-weight: 900;
+                color: #344054;
+                margin-bottom: 6px
+            }
+
+            .cm-general textarea {
+                width: 100%;
+                min-height: 76px;
+                border: 1px solid #d7dde7;
+                border-radius: 11px;
+                padding: 9px 10px;
+                resize: vertical
+            }
+
+                .cm-general textarea:focus {
+                    outline: none;
+                    border-color: #7961e7;
+                    box-shadow: 0 0 0 3px rgba(86,57,217,.1)
+                }
+
+        .cm-toast {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            z-index: 2000;
+            min-width: 300px;
+            max-width: 480px;
+            padding: 13px 15px;
+            border-radius: 13px;
+            color: #fff;
+            font-size: .8rem;
+            font-weight: 800;
+            box-shadow: 0 14px 35px rgba(0,0,0,.2);
+            display: none
+        }
+
+            .cm-toast.show {
+                display: block
+            }
+
+            .cm-toast.success {
+                background: #16794d
+            }
+
+            .cm-toast.error {
+                background: #b93832
+            }
+
+            .cm-toast.info {
+                background: #315f9e
+            }
+
+        html[data-nsq-theme="dark"] .cm-card, html[data-nsq-theme="dark"] .cm-section, html[data-nsq-theme="dark"] .cm-final {
+            background: #111b2c;
+            border-color: #2d3b50;
+            color: #e7eef8
+        }
+
+        html[data-nsq-theme="dark"] .cm-card-head, html[data-nsq-theme="dark"] .cm-section-head, html[data-nsq-theme="dark"] .cm-section-actions {
+            background: #162236;
+            border-color: #2d3b50
+        }
+
+        html[data-nsq-theme="dark"] .cm-data {
+            border-color: #26344a
+        }
+
+        html[data-nsq-theme="dark"] .cm-data-v, html[data-nsq-theme="dark"] .cm-section-title, html[data-nsq-theme="dark"] .cm-question-text {
+            color: #e7eef8
+        }
+
+        html[data-nsq-theme="dark"] .cm-answer {
+            background: #101827;
+            border-color: #2d3b50
+        }
+
+        html[data-nsq-theme="dark"] .cm-option label, html[data-nsq-theme="dark"] .cm-observation textarea, html[data-nsq-theme="dark"] .cm-general textarea {
+            background: #0d1726;
+            border-color: #35465d;
+            color: #e7eef8
+        }
+
+        html[data-nsq-theme="dark"] .cm-question {
+            border-color: #26344a
+        }
+
+            html[data-nsq-theme="dark"] .cm-question.invalid {
+                background: #321b1b
+            }
+
+        html[data-nsq-theme="dark"] .cm-pair {
+            background: #17152c;
+            border-color: #4c3e83
+        }
+
+        html[data-nsq-theme="dark"] .cm-program {
+            background: #111b2c;
+            border-color: #3a3263
+        }
+
+        html[data-nsq-theme="dark"] .cm-of {
+            color: #f0f4fb
+        }
+
+        html[data-nsq-theme="dark"] .cm-section-count {
+            background: #172236;
+            border-color: #35465d;
+            color: #cbd5e1
+        }
+
+        @@media(max-width:1100px) {
+            .cm-layout {
+                grid-template-columns: 1fr
+            }
+
+            .cm-sidebar {
+                position: static
+            }
+
+            .cm-question {
+                grid-template-columns: 46px minmax(0,1fr)
+            }
+
+            .cm-answer {
+                grid-column: 1/-1
+            }
+        }
+
+        @@media(max-width:650px) {
+            .cm-page {
+                padding: 10px
+            }
+
+            .cm-hero {
+                padding: 17px
+            }
+
+            .cm-title {
+                font-size: 1.35rem
+            }
+
+            .cm-section-head {
+                align-items: flex-start;
+                flex-direction: column
+            }
+
+            .cm-section-state {
+                justify-content: flex-start
+            }
+
+            .cm-question {
+                padding: 13px 12px
+            }
+
+            .cm-options {
+                grid-template-columns: 1fr
+            }
+
+            .cm-final-row {
+                align-items: stretch
+            }
+
+                .cm-final-row .cm-btn {
+                    width: 100%
+                }
+        }
+    </style>
+}
+
+<div class="cm-page">
+    <section class="cm-hero">
+        <div class="cm-hero-top">
+            <div>
+                <div class="cm-kicker">A1 · Actividad obligatoria de preparación</div>
+                <h1 class="cm-title">Check List Desmontaje y Montaje de Molde</h1>
+                <div class="cm-subtitle">@Txt(Model.CodigoFormato) · @Txt(Model.VersionFormato) · Preparación antes y durante el cambio físico de molde</div>
+            </div>
+            <a class="cm-back" asp-controller="ProduccionPreparacion" asp-action="Index">
+                <i class="bi bi-arrow-left"></i>
+                Volver a preparación
+            </a>
+        </div>
+    </section>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="cm-alert warning">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div>@TempData["Error"]</div>
+        </div>
+    }
+
+    @if (Model.EstaCompleto)
+    {
+        <div class="cm-alert success">
+            <i class="bi bi-check-circle-fill"></i>
+            <div>El checklist está completo. Sus respuestas quedaron bloqueadas para edición y el cambio de molde ya puede finalizarse.</div>
+        </div>
+    }
+    else if (!cambioEnProceso)
+    {
+        <div class="cm-alert info">
+            <i class="bi bi-info-circle-fill"></i>
+            <div>Puedes comenzar la sección de preparación previa. Las secciones de desmontaje y montaje corresponden al trabajo físico del cambio de molde.</div>
+        </div>
+    }
+
+    <div class="cm-layout">
+        <aside class="cm-sidebar">
+            <section class="cm-card">
+                <div class="cm-card-head">
+                    <span><i class="bi bi-info-circle me-1"></i>Datos de la operación</span>
+                    <span class="cm-status change">@Txt(estadoCambioMolde)</span>
+                </div>
+                <div class="cm-card-body">
+                    <div class="cm-data">
+                        <div class="cm-data-k">Máquina</div>
+                        <div class="cm-data-v">@Txt(Model.MaquinaCodigo)<div class="text-muted small">@Txt(Model.MaquinaNombre)</div></div>
+                    </div>
+                    <div class="cm-data">
+                        <div class="cm-data-k">Molde</div>
+                        <div class="cm-data-v">@Txt(Model.MoldeCodigo)</div>
+                    </div>
+                    <div class="cm-data">
+                        <div class="cm-data-k">Formato</div>
+                        <div class="cm-data-v">@Txt(Model.CodigoFormato) · @Txt(Model.VersionFormato)</div>
+                    </div>
+                    <div class="cm-data">
+                        <div class="cm-data-k">Checklist</div>
+                        <div class="cm-data-v">#@Model.ChecklistArranqueID</div>
+                    </div>
+                    <div class="cm-data">
+                        <div class="cm-data-k">Inicio cambio</div>
+                        <div class="cm-data-v">@(fechaInicioCambioMolde.HasValue? fechaInicioCambioMolde.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</div>
+                    </div>
+                    <div class="cm-data">
+                        <div class="cm-data-k">Límite</div>
+                        <div class="cm-data-v">@(limiteCambioMoldeMinutos > 0 ? limiteCambioMoldeMinutos + " min" : "—")</div>
+                    </div>
+                </div>
+            </section>
+
+            @if (Model.Programas.Any())
+            {
+                <section class="cm-card">
+                    <div class="cm-card-head">
+                        <span><i class="bi bi-diagram-3 me-1"></i>@(esParejaLhRh ? "Operación LH/RH" : "Orden de fabricación")</span>
+                    </div>
+                    <div class="cm-card-body">
+                        @if (esParejaLhRh)
+                        {
+                            <div class="cm-pair">
+                                <div class="cm-pair-title">
+                                    <i class="bi bi-link-45deg"></i>
+                                    Checklist físico único
+                                    @if (grupoLhRh.HasValue)
+                                    {
+                                        <span>· Grupo @grupoLhRh</span>
+                                    }
+                                </div>
+                                <div class="small text-muted">Las dos OF comparten este checklist porque corresponden al mismo cambio físico de molde.</div>
+                            </div>
+                        }
+
+                        @foreach (var programa in Model.Programas.OrderByDescending(x => x.EsPrincipal).ThenBy(x => x.ProgramaProduccionID))
+                        {
+                            <div class="cm-program">
+                                <div class="cm-side">@LadoTexto(programa.LadoLhRh)</div>
+                                <div>
+                                    <div class="cm-of">@Txt(programa.NumeroOF)</div>
+                                    <div class="cm-part">@Txt(programa.ReferenciaSAP) · @Txt(programa.NumeroParte)</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <section class="cm-card">
+                <div class="cm-card-head">
+                    <span><i class="bi bi-graph-up-arrow me-1"></i>Avance general</span>
+                </div>
+                <div class="cm-card-body">
+                    <div class="cm-progress-top">
+                        <div class="cm-progress-value" id="porcentajeGeneral">@porcentaje%</div>
+                        <div class="cm-progress-text">
+                            <span id="respuestasGeneral">@respondidas</span> de
+                            <span id="preguntasGeneral">@totalPreguntas</span><br />
+                            respuestas
+                        </div>
+                    </div>
+                    <div class="cm-progress">
+                        <div class="cm-progress-bar" id="barraGeneral" style="width:@porcentaje%"></div>
+                    </div>
+                    <div class="mt-3">
+                        <span id="estadoChecklist" class="cm-status @(Model.EstaCompleto ? "complete" : Model.EstaEnProceso ? "process" : "pending")">
+                            <i class="bi @(Model.EstaCompleto ? "bi-check-circle" : Model.EstaEnProceso ? "bi-hourglass-split" : "bi-clock")"></i>
+                            @Model.EstadoFlujo
+                        </span>
+                    </div>
+                </div>
+            </section>
+        </aside>
+
+        <main>
+            <form id="tokenForm" class="d-none">
+                @Html.AntiForgeryToken()
+            </form>
+
+            @if (!secciones.Any())
+            {
+                <div class="cm-alert warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div>No se encontraron preguntas activas para @Model.CodigoFormato @Model.VersionFormato.</div>
+                </div>
+            }
+
+            @foreach (var seccion in secciones)
+            {
+                var preguntas = seccion.Preguntas.Where(x => x.Activo).OrderBy(x => x.OrdenPregunta).ThenBy(x => x.PreguntaID).ToList();
+                var respuestasSeccion = preguntas.Count(x => x.EstaRespondida);
+                var seccionCompleta = seccion.EstaCompleta;
+
+                <section class="cm-section" data-section="@seccion.OrdenSeccion">
+                    <div class="cm-section-head">
+                        <div>
+                            <div class="cm-section-title">
+                                <span class="cm-section-index">@seccion.OrdenSeccion</span>
+                                @seccion.Seccion
+                            </div>
+                            <div class="cm-section-sub">
+                                @if (!string.IsNullOrWhiteSpace(seccion.ResponsableSugerido))
+                                {
+                                    <span>Responsable sugerido: @seccion.ResponsableSugerido · </span>
+                                }
+                                <span>@preguntas.Count punto(s) de verificación</span>
+                            </div>
+                        </div>
+                        <div class="cm-section-state">
+                            <span class="cm-section-count">
+                                <i class="bi bi-list-check"></i>
+                                <span class="section-counter">@respuestasSeccion / @preguntas.Count</span>
+                            </span>
+                            <span class="cm-status section-status @(seccionCompleta ? "complete" : respuestasSeccion > 0 ? "process" : "pending")">
+                                @(seccionCompleta ? "COMPLETA" : respuestasSeccion > 0 ? "EN PROCESO" : "PENDIENTE")
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="cm-section-questions">
+                        @foreach (var pregunta in preguntas)
+                        {
+                            var resultado = ResultadoNormalizado(pregunta.Resultado);
+                            var esOk = resultado == "OK";
+                            var esNok = resultado == "NOK";
+                            var esNa = resultado == "NA";
+
+                            <div class="cm-question" data-question="@pregunta.PreguntaID" data-required="@(pregunta.EsObligatoria.ToString().ToLowerInvariant())" data-permite-na="@(pregunta.PermiteNA.ToString().ToLowerInvariant())" data-requiere-nok="@(pregunta.RequiereObservacionSiNOK.ToString().ToLowerInvariant())" data-requiere-na="@(pregunta.RequiereObservacionSiNA.ToString().ToLowerInvariant())">
+                                <div>
+                                    <div class="cm-number">@pregunta.OrdenPregunta</div>
+                                </div>
+                                <div>
+                                    <div class="cm-question-text">@pregunta.TextoPregunta</div>
+                                    <div class="cm-question-meta">
+                                        @if (pregunta.EsObligatoria)
+                                        {
+                                            <span class="cm-meta required"><i class="bi bi-asterisk"></i>Obligatoria</span>
+                                        }
+                                        @if (pregunta.PermiteNA)
+                                        {
+                                            <span class="cm-meta"><i class="bi bi-dash-circle"></i>Permite N/A</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(pregunta.ResponsableSugerido))
+                                        {
+                                            <span class="cm-meta"><i class="bi bi-person"></i>@pregunta.ResponsableSugerido</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="cm-answer">
+                                    <input type="hidden" class="question-id" value="@pregunta.PreguntaID" />
+
+                                    <div class="cm-options">
+                                        <div class="cm-option ok">
+                                            <input type="radio" id="ok_@pregunta.PreguntaID" name="resultado_@pregunta.PreguntaID" value="OK" @(esOk ? "checked" : "") @(!puedeEditar ? "disabled" : "") />
+                                            <label for="ok_@pregunta.PreguntaID"><i class="bi bi-check-circle"></i>OK</label>
+                                        </div>
+                                        <div class="cm-option nok">
+                                            <input type="radio" id="nok_@pregunta.PreguntaID" name="resultado_@pregunta.PreguntaID" value="NOK" @(esNok ? "checked" : "") @(!puedeEditar ? "disabled" : "") />
+                                            <label for="nok_@pregunta.PreguntaID"><i class="bi bi-x-circle"></i>NOK</label>
+                                        </div>
+                                        <div class="cm-option na">
+                                            <input type="radio" id="na_@pregunta.PreguntaID" name="resultado_@pregunta.PreguntaID" value="NA" @(esNa ? "checked" : "") @(!pregunta.PermiteNA || !puedeEditar ? "disabled" : "") />
+                                            <label for="na_@pregunta.PreguntaID"><i class="bi bi-dash-circle"></i>N/A</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="cm-observation">
+                                        <label class="observation-label">
+                                            Observaciones
+                                            <span class="observation-required d-none text-danger">· requerida</span>
+                                        </label>
+                                        <textarea class="question-observation" maxlength="1000" @(!puedeEditar ? "readonly" : "") placeholder="Captura observación cuando sea necesario">@pregunta.Observaciones</textarea>
+                                    </div>
+
+                                    @if (pregunta.FechaRespuesta.HasValue)
+                                    {
+                                        <div class="cm-saved">
+                                            <i class="bi bi-clock-history"></i>
+                                            Última respuesta: @pregunta.FechaRespuesta.Value.ToString("dd/MM/yyyy HH:mm")
+                                            @if (!string.IsNullOrWhiteSpace(pregunta.UsuarioRespuestaNombre))
+                                            {
+                                                <span> · @pregunta.UsuarioRespuestaNombre</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="cm-section-actions">
+                        @if (puedeEditar)
+                        {
+                            <button type="button" class="cm-btn cm-btn-primary btn-save-section" data-section="@seccion.OrdenSeccion">
+                                <i class="bi bi-save"></i>
+                                Guardar sección
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="cm-status @(Model.EstaCompleto ? "complete" : "pending")">
+                                <i class="bi bi-lock"></i>
+                                @(Model.EstaCompleto ? "Checklist finalizado" : "Solo lectura")
+                            </span>
+                        }
+                    </div>
+                </section>
+            }
+
+            <section class="cm-card">
+                <div class="cm-card-head">
+                    <span><i class="bi bi-chat-left-text me-1"></i>Observaciones generales</span>
+                </div>
+                <div class="cm-card-body">
+                    <div class="cm-general">
+                        <textarea id="observacionesGenerales" maxlength="2000" @(!puedeEditar ? "readonly" : "") placeholder="Comentarios generales del desmontaje y montaje de molde">@Model.ObservacionesGenerales</textarea>
+                    </div>
+                </div>
+            </section>
+
+            <div class="cm-final">
+                <div class="cm-final-row">
+                    <div>
+                        <div class="fw-bold">Cierre del checklist GQ-F-PR01-03</div>
+                        <div class="cm-final-note" id="mensajeFinalizacion">
+                            @if (Model.EstaCompleto)
+                            {
+                                <span>El checklist ya fue finalizado.</span>
+                            }
+                            else
+                            {
+                                <span>Para finalizar deben estar contestadas todas las preguntas obligatorias.</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a class="cm-btn cm-btn-outline" asp-controller="ProduccionPreparacion" asp-action="Index">
+                            <i class="bi bi-arrow-left"></i>
+                            Volver
+                        </a>
+                        @if (puedeEditar)
+                        {
+                            <button type="button" id="btnFinalizarChecklist" class="cm-btn cm-btn-success">
+                                <i class="bi bi-check2-circle"></i>
+                                Finalizar checklist
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div id="cmToast" class="cm-toast"></div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded',function(){
+            const preparacionId=@preparacionAnticipadaID;
+            const checklistId=@Model.ChecklistArranqueID;
+            const puedeEditar=@puedeEditar.ToString().ToLowerInvariant();
+            const token=document.querySelector('#tokenForm input[name="__RequestVerificationToken"]')?.value||'';
+            const toast=document.getElementById('cmToast');
+            const btnFinalizar=document.getElementById('btnFinalizarChecklist');
+
+            function mostrarToast(mensaje,tipo){
+                if(!toast)return;
+                toast.textContent=mensaje||'';
+                toast.className='cm-toast show '+(tipo||'info');
+                window.clearTimeout(window.__cmToastTimer);
+                window.__cmToastTimer=window.setTimeout(()=>toast.classList.remove('show'),4200);
+            }
+
+            function resultadoPregunta(row){
+                return row.querySelector('input[type="radio"]:checked')?.value||'';
+            }
+
+            function requiereObservacion(row){
+                const resultado=resultadoPregunta(row);
+                return (resultado==='NOK'&&row.dataset.requiereNok==='true')||(resultado==='NA'&&row.dataset.requiereNa==='true');
+            }
+
+            function actualizarPregunta(row){
+                const requiere=requiereObservacion(row);
+                const badge=row.querySelector('.observation-required');
+                const textarea=row.querySelector('.question-observation');
+                badge?.classList.toggle('d-none',!requiere);
+                if(textarea)textarea.required=requiere;
+                if(!requiere)textarea?.classList.remove('is-invalid');
+            }
+
+            function respuestaValida(row){
+                if(row.dataset.required!=='true')return true;
+                const resultado=resultadoPregunta(row);
+                if(!resultado)return false;
+                if(resultado==='NA'&&row.dataset.permiteNa!=='true')return false;
+                if(requiereObservacion(row)){
+                    const obs=row.querySelector('.question-observation')?.value.trim()||'';
+                    if(!obs)return false;
+                }
+                return true;
+            }
+
+            function actualizarResumen(){
+                const rows=Array.from(document.querySelectorAll('.cm-question'));
+                const total=rows.length;
+                const respondidas=rows.filter(x=>!!resultadoPregunta(x)).length;
+                const porcentaje=total>0?Math.round(respondidas*100/total):0;
+                const totalEl=document.getElementById('preguntasGeneral');
+                const respEl=document.getElementById('respuestasGeneral');
+                const pctEl=document.getElementById('porcentajeGeneral');
+                const barra=document.getElementById('barraGeneral');
+                if(totalEl)totalEl.textContent=total;
+                if(respEl)respEl.textContent=respondidas;
+                if(pctEl)pctEl.textContent=porcentaje+'%';
+                if(barra)barra.style.width=porcentaje+'%';
+
+                document.querySelectorAll('.cm-section').forEach(section=>{
+                    const sectionRows=Array.from(section.querySelectorAll('.cm-question'));
+                    const sectionRespondidas=sectionRows.filter(x=>!!resultadoPregunta(x)).length;
+                    const sectionCompleta=sectionRows.length>0&&sectionRows.every(respuestaValida);
+                    const counter=section.querySelector('.section-counter');
+                    const status=section.querySelector('.section-status');
+                    if(counter)counter.textContent=sectionRespondidas+' / '+sectionRows.length;
+                    if(status){
+                        status.classList.remove('pending','process','complete');
+                        if(sectionCompleta){
+                            status.classList.add('complete');
+                            status.textContent='COMPLETA';
+                        }else if(sectionRespondidas>0){
+                            status.classList.add('process');
+                            status.textContent='EN PROCESO';
+                        }else{
+                            status.classList.add('pending');
+                            status.textContent='PENDIENTE';
+                        }
+                    }
+                });
+
+                const todasValidas=rows.length>0&&rows.every(respuestaValida);
+                const msg=document.getElementById('mensajeFinalizacion');
+                if(msg&&!@Model.EstaCompleto.ToString().ToLowerInvariant()){
+                    msg.textContent=todasValidas?'Todas las preguntas obligatorias están completas. Ya puedes finalizar el checklist.':'Para finalizar deben estar contestadas todas las preguntas obligatorias.';
+                }
+                if(btnFinalizar&&puedeEditar)btnFinalizar.disabled=!todasValidas;
+            }
+
+            function validarSeccion(section){
+                let valido=true;
+                const rows=Array.from(section.querySelectorAll('.cm-question'));
+                rows.forEach(row=>{
+                    row.classList.remove('invalid');
+                    const textarea=row.querySelector('.question-observation');
+                    textarea?.classList.remove('is-invalid');
+                    if(!respuestaValida(row)){
+                        valido=false;
+                        row.classList.add('invalid');
+                        if(requiereObservacion(row)&&textarea&&!textarea.value.trim())textarea.classList.add('is-invalid');
+                    }
+                });
+                if(!valido){
+                    const primera=section.querySelector('.cm-question.invalid');
+                    primera?.scrollIntoView({behavior:'smooth',block:'center'});
+                }
+                return valido;
+            }
+
+            async function guardarSeccion(sectionNumber,button){
+                if(!puedeEditar)return false;
+                const section=document.querySelector('.cm-section[data-section="'+sectionNumber+'"]');
+                if(!section)return false;
+                const rows=Array.from(section.querySelectorAll('.cm-question'));
+                const formData=new FormData();
+                formData.append('__RequestVerificationToken',token);
+                formData.append('PreparacionAnticipadaID',preparacionId);
+                formData.append('ChecklistArranqueID',checklistId);
+                formData.append('OrdenSeccion',sectionNumber);
+                rows.forEach((row,index)=>{
+                    const preguntaId=row.querySelector('.question-id')?.value||'';
+                    const resultado=resultadoPregunta(row);
+                    const observacion=row.querySelector('.question-observation')?.value.trim()||'';
+                    formData.append('Respuestas['+index+'].PreguntaID',preguntaId);
+                    formData.append('Respuestas['+index+'].Resultado',resultado);
+                    formData.append('Respuestas['+index+'].Observaciones',observacion);
+                    formData.append('Respuestas['+index+'].ValorCapturado','');
+                });
+                const htmlOriginal=button?.innerHTML;
+                if(button){
+                    button.disabled=true;
+                    button.innerHTML='<span class="spinner-border spinner-border-sm"></span> Guardando...';
+                }
+                try{
+                    const response=await fetch('@Url.Action("GuardarSeccionChecklistCambioMolde", "ProduccionPreparacion")',{
+                        method:'POST',
+                        body:formData,
+                        headers:{'X-Requested-With':'XMLHttpRequest'}
+                    });
+                    const data=await response.json();
+                    if(!response.ok||!data.ok)throw new Error(data.mensaje||'No fue posible guardar la sección.');
+                    mostrarToast(data.mensaje||'Sección guardada correctamente.','success');
+                    actualizarResumen();
+                    return true;
+                }catch(error){
+                    mostrarToast(error.message||'No fue posible guardar la sección.','error');
+                    return false;
+                }finally{
+                    if(button){
+                        button.disabled=false;
+                        button.innerHTML=htmlOriginal;
+                    }
+                }
+            }
+
+            async function guardarTodasLasSecciones(){
+                const sections=Array.from(document.querySelectorAll('.cm-section'));
+                for(const section of sections){
+                    const numero=section.dataset.section;
+                    const button=section.querySelector('.btn-save-section');
+                    const ok=await guardarSeccion(numero,button);
+                    if(!ok)return false;
+                }
+                return true;
+            }
+
+            async function finalizarChecklist(){
+                if(!puedeEditar)return;
+                const sections=Array.from(document.querySelectorAll('.cm-section'));
+                const sectionInvalida=sections.find(x=>!validarSeccion(x));
+                if(sectionInvalida){
+                    mostrarToast('Faltan respuestas obligatorias o alguna observación requerida.','error');
+                    actualizarResumen();
+                    return;
+                }
+
+                btnFinalizar.disabled=true;
+                const original=btnFinalizar.innerHTML;
+                btnFinalizar.innerHTML='<span class="spinner-border spinner-border-sm"></span> Finalizando...';
+
+                try{
+                    const guardado=await guardarTodasLasSecciones();
+                    if(!guardado)throw new Error('No fue posible guardar todas las secciones antes de finalizar.');
+
+                    const formData=new FormData();
+                    formData.append('__RequestVerificationToken',token);
+                    formData.append('PreparacionAnticipadaID',preparacionId);
+                    formData.append('ChecklistArranqueID',checklistId);
+                    formData.append('ObservacionesGenerales',document.getElementById('observacionesGenerales')?.value.trim()||'');
+
+                    const response=await fetch('@Url.Action("FinalizarChecklistCambioMolde", "ProduccionPreparacion")',{
+                        method:'POST',
+                        body:formData,
+                        headers:{'X-Requested-With':'XMLHttpRequest'}
+                    });
+                    const data=await response.json();
+                    if(!response.ok||!data.ok)throw new Error(data.mensaje||'No fue posible finalizar el checklist.');
+
+                    mostrarToast(data.mensaje||'Checklist finalizado correctamente.','success');
+                    window.setTimeout(()=>window.location.reload(),900);
+                }catch(error){
+                    mostrarToast(error.message||'No fue posible finalizar el checklist.','error');
+                    btnFinalizar.disabled=false;
+                    btnFinalizar.innerHTML=original;
+                }
+            }
+
+            document.querySelectorAll('.cm-question').forEach(row=>{
+                actualizarPregunta(row);
+                row.querySelectorAll('input[type="radio"]').forEach(input=>{
+                    input.addEventListener('change',function(){
+                        row.classList.remove('invalid');
+                        actualizarPregunta(row);
+                        actualizarResumen();
+                    });
+                });
+                row.querySelector('.question-observation')?.addEventListener('input',function(){
+                    this.classList.remove('is-invalid');
+                    row.classList.remove('invalid');
+                    actualizarResumen();
+                });
+            });
+
+            document.querySelectorAll('.btn-save-section').forEach(button=>{
+                button.addEventListener('click',async function(){
+                    const sectionNumber=this.dataset.section;
+                    await guardarSeccion(sectionNumber,this);
+                });
+            });
+
+            btnFinalizar?.addEventListener('click',finalizarChecklist);
+            actualizarResumen();
+        });
+    </script>
+}
