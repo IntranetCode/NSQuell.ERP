@@ -125,6 +125,7 @@
         .Where(x => x.EsOperacionActiva || x.MaquinaLiberada)
         .OrderBy(x => string.IsNullOrWhiteSpace(x.MaquinaCodigo) ? "ZZZ" : x.MaquinaCodigo)
         .ThenBy(x => x.EstadoOperativoPrioridad)
+        .ThenBy(x => x.TextoOF)
         .ThenBy(x => x.ProgramaProduccionID)
         .ThenBy(x => x.EjecucionProduccionID)
         .ToList();
@@ -1179,7 +1180,7 @@
 
                         <thead>
                             <tr>
-                                <th>Programa / OF</th>
+                                <th>OF</th>
                                 <th>Parte</th>
                                 <th>Molde</th>
                                 <th>Operador</th>
@@ -1198,6 +1199,7 @@
                         <tbody>
                             @foreach (var item in grupo
                                                 .OrderBy(x => x.EstadoOperativoPrioridad)
+                                                .ThenBy(x => x.TextoOF)
                                                 .ThenBy(x => x.ProgramaProduccionID)
                                                 .ThenBy(x => x.EjecucionProduccionID))
                             {
@@ -1221,15 +1223,12 @@
                                     data-es-operativa="@esOperativa">
                                     <td>
                                         <span class="ejec-programa">
-                                            Programa @item.ProgramaProduccionID
+                                            OF @item.TextoOF
                                         </span>
 
-                                        @if (item.SolicitudProduccionID.HasValue)
-                                        {
-                                            <span class="ejec-small">
-                                                OF @item.SolicitudProduccionID
-                                            </span>
-                                        }
+                                        <span class="ejec-small">
+                                            Programa interno #@item.ProgramaProduccionID
+                                        </span>
 
                                         @if (item.ReleaseID.HasValue)
                                         {

@@ -1,99 +1,158 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeEditarVm
-
 @{
     ViewData["Title"] = "Completar preparación";
     Layout = "_Layout";
 }
-
 <style>
+    :root {
+        --lv-blue: #173a7a;
+        --lv-text: #172033;
+        --lv-muted: #6d7888;
+        --lv-border: #dce4ee;
+        --lv-soft: #f6f8fb;
+        --lv-shadow: 0 8px 24px rgba(22,42,75,.06)
+    }
+
     .viaje-form-page {
+        max-width: 1500px;
+        margin: 0 auto;
         padding: 18px 20px 30px;
+        color: var(--lv-text)
     }
 
     .viaje-form-header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 12px;
-        margin-bottom: 16px;
         flex-wrap: wrap;
+        padding: 15px 17px;
+        margin-bottom: 14px;
+        border: 1px solid var(--lv-border);
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow)
     }
 
     .viaje-form-title {
         margin: 0;
-        font-size: 1.35rem;
-        font-weight: 700;
+        color: var(--lv-text);
+        font-size: 1.48rem;
+        font-weight: 800;
+        letter-spacing: -.02em
     }
+
+        .viaje-form-title i {
+            color: var(--lv-blue)
+        }
 
     .viaje-form-subtitle {
         margin: 3px 0 0;
-        color: #6c757d;
-        font-size: .9rem;
+        color: var(--lv-muted);
+        font-size: .86rem;
+        font-weight: 500
+    }
+
+    .viaje-form-header > .btn {
+        min-height: 35px;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center
     }
 
     .form-section {
-        padding: 14px 0;
-        border-top: 1px solid #e9ecef;
+        margin-bottom: 12px;
+        padding: 14px;
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow)
     }
-
-        .form-section:first-of-type {
-            border-top: 0;
-            padding-top: 0;
-        }
 
     .form-section-title {
-        font-size: .88rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-        color: #343a40;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3;
+        color: var(--lv-text);
+        font-size: .96rem;
+        font-weight: 800
     }
+
+        .form-section-title:before {
+            content: "";
+            width: 4px;
+            height: 18px;
+            border-radius: 8px;
+            background: var(--lv-blue);
+            flex: 0 0 auto
+        }
 
     .form-grid {
         display: grid;
-        grid-template-columns: repeat(12, 1fr);
-        gap: 12px;
+        grid-template-columns: repeat(12,1fr);
+        gap: 10px 12px
     }
 
     .col-12g {
-        grid-column: span 12;
+        grid-column: span 12
     }
 
     .col-8g {
-        grid-column: span 8;
+        grid-column: span 8
     }
 
     .col-6g {
-        grid-column: span 6;
+        grid-column: span 6
     }
 
     .col-4g {
-        grid-column: span 4;
+        grid-column: span 4
     }
 
     .col-3g {
-        grid-column: span 3;
+        grid-column: span 3
     }
 
     .form-label {
-        font-size: .78rem;
-        font-weight: 600;
         margin-bottom: 4px;
-        color: #495057;
+        color: #465164;
+        font-size: .78rem;
+        font-weight: 700
     }
 
-    .form-control,
-    .form-select {
-        min-height: 38px;
-        font-size: .86rem;
+    .required:after {
+        content: " *";
+        color: #b42318;
+        font-weight: 900
     }
+
+    .form-control, .form-select {
+        min-height: 39px;
+        border-radius: 8px;
+        border-color: #d4dde7;
+        background: #fff;
+        box-shadow: none;
+        font-size: .86rem
+    }
+
+        .form-control:focus, .form-select:focus {
+            border-color: #8ba5d4;
+            box-shadow: 0 0 0 .18rem rgba(23,58,122,.08)
+        }
 
     textarea.form-control {
-        min-height: 90px;
-        resize: vertical;
+        min-height: 104px;
+        resize: vertical
     }
 
     .form-text {
-        font-size: .74rem;
+        color: #7a8492;
+        font-size: .74rem
     }
 
     .field-validation-error {
@@ -101,377 +160,7 @@
         margin-top: 4px;
         color: #dc3545;
         font-size: .76rem;
-    }
-
-    .validation-summary-errors {
-        color: #dc3545;
-        font-size: .82rem;
-    }
-
-        .validation-summary-errors ul {
-            margin-bottom: 0;
-            padding-left: 18px;
-        }
-
-    .transport-info {
-        font-size: .78rem;
-        color: #6c757d;
-        margin-top: 5px;
-    }
-
-    .form-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        padding-top: 14px;
-        border-top: 1px solid #e9ecef;
-        margin-top: 4px;
-    }
-
-    .external-fields {
-        display: none;
-    }
-
-    @@media (max-width: 900px) {
-        .col-8g,
-        .col-6g,
-        .col-4g,
-        .col-3g {
-            grid-column: span 6;
-        }
-    }
-
-    @@media (max-width: 600px) {
-        .viaje-form-page {
-            padding: 14px 10px 24px;
-        }
-
-        .col-8g,
-        .col-6g,
-        .col-4g,
-        .col-3g,
-        .col-12g {
-            grid-column: span 12;
-        }
-
-        .form-actions {
-            flex-direction: column-reverse;
-        }
-
-            .form-actions .btn {
-                width: 100%;
-            }
-    }
-
-    /* =========================================================
-               EDITAR VIAJE - MEJORA VISUAL SIN CARDS
-               Mantiene estructura, validaciones y cambio interno/externo.
-               ========================================================= */
-
-    .viaje-form-page {
-        position: relative;
-    }
-
-    .viaje-form-header {
-        padding: 6px 0 12px;
-        border-bottom: 1px solid #dbe4ee;
-    }
-
-    .viaje-form-title {
-        color: #172033;
-        letter-spacing: -.02em;
-        font-size: 1.48rem;
-    }
-
-        .viaje-form-title i {
-            color: #173a7a;
-        }
-
-    .viaje-form-subtitle {
-        color: #6f7b8d;
-        font-weight: 500;
-    }
-
-    .viaje-form-header > .btn {
-        min-height: 35px;
-        border-radius: 8px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .form-section {
-        margin-bottom: 14px;
-        padding: 14px 14px 12px;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.76);
-        box-shadow: 0 6px 18px rgba(25,47,80,.04);
-    }
-
-        .form-section:first-of-type {
-            border-top: 1px solid #dce5ef;
-            padding-top: 14px;
-        }
-
-    .form-section-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e8edf3;
-        color: #172033;
-        font-size: .96rem;
-        letter-spacing: -.01em;
-    }
-
-        .form-section-title::before {
-            content: "";
-            width: 4px;
-            height: 18px;
-            border-radius: 8px;
-            background: #173a7a;
-            flex: 0 0 auto;
-        }
-
-    .form-grid {
-        gap: 10px 12px;
-    }
-
-    .form-label {
-        color: #465164;
-        font-weight: 700;
-    }
-
-    .form-control,
-    .form-select {
-        min-height: 39px;
-        border-radius: 8px;
-        border-color: #d4dde7;
-        background: #fff;
-        box-shadow: none;
-        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
-    }
-
-        .form-control:focus,
-        .form-select:focus {
-            border-color: #8ba5d4;
-            box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-            background: #fff;
-        }
-
-    textarea.form-control {
-        min-height: 104px;
-    }
-
-    .transport-info,
-    .form-text {
-        color: #7a8492;
-    }
-
-    .internal-fields {
-        border-left: 4px solid #2f6cb3;
-    }
-
-    .external-fields {
-        border-left: 4px solid #6c757d;
-    }
-
-    .validation-summary-errors {
-        padding: 10px 12px;
-        border: 1px solid #efc5ca;
-        border-radius: 9px;
-        background: #fff7f8;
-    }
-
-    .field-validation-error {
-        font-weight: 600;
-    }
-
-    .form-actions {
-        position: sticky;
-        bottom: 0;
-        z-index: 5;
-        margin-top: 14px;
-        padding: 12px 14px;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.96);
-        box-shadow: 0 -4px 16px rgba(25,47,80,.05);
-        backdrop-filter: blur(4px);
-    }
-
-        .form-actions .btn {
-            min-height: 38px;
-            border-radius: 8px;
-            font-weight: 700;
-        }
-
-        .form-actions .btn-primary {
-            min-width: 170px;
-            background: #233f80;
-            border-color: #233f80;
-        }
-
-    @@media (max-width: 900px) {
-        .form-section {
-            padding: 12px 10px 10px;
-        }
-    }
-
-    @@media (max-width: 600px) {
-        .form-section {
-            border-radius: 10px;
-        }
-
-        .form-actions {
-            position: static;
-            padding: 10px;
-        }
-
-        .viaje-form-header > .btn {
-            width: 100%;
-            justify-content: center;
-        }
-    }
-
-
-
-    :root {
-        --lv-blue: #173a7a;
-        --lv-blue-2: #2f63ad;
-        --lv-text: #172033;
-        --lv-muted: #6d7888;
-        --lv-border: #dce4ee;
-        --lv-soft: #f6f8fb;
-        --lv-shadow: 0 8px 24px rgba(22,42,75,.06);
-    }
-
-    /* =========================================================
-           LOGISTICA VIAJES ERP - FORMULARIO
-           Mantiene campos, validaciones y JS original.
-           ========================================================= */
-    .viaje-form-page {
-        max-width: 1500px;
-        margin: 0 auto;
-        color: var(--lv-text);
-    }
-
-    .viaje-form-header {
-        align-items: center;
-        padding: 15px 17px;
-        margin-bottom: 14px;
-        border: 1px solid var(--lv-border);
-        border-left: 4px solid var(--lv-blue);
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: var(--lv-shadow);
-    }
-
-    .viaje-form-title {
-        color: var(--lv-text);
-        font-size: 1.48rem;
-        font-weight: 800;
-        letter-spacing: -.02em;
-    }
-
-        .viaje-form-title i {
-            color: var(--lv-blue);
-        }
-
-    .viaje-form-subtitle {
-        color: var(--lv-muted);
-        font-weight: 500;
-    }
-
-    .viaje-form-header > .btn {
-        min-height: 35px;
-        border-radius: 8px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .form-section {
-        position: relative;
-        margin-bottom: 12px;
-        padding: 14px;
-        border: 1px solid var(--lv-border);
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: var(--lv-shadow);
-    }
-
-        .form-section:first-of-type {
-            border-top: 1px solid var(--lv-border);
-            padding-top: 14px;
-        }
-
-    .form-section-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e8edf3;
-        color: var(--lv-text);
-        font-size: .96rem;
-        font-weight: 800;
-        letter-spacing: -.01em;
-    }
-
-        .form-section-title::before {
-            content: "";
-            width: 4px;
-            height: 18px;
-            border-radius: 8px;
-            background: var(--lv-blue);
-            flex: 0 0 auto;
-        }
-
-    .form-grid {
-        gap: 10px 12px;
-    }
-
-    .form-label {
-        color: #465164;
-        font-weight: 700;
-    }
-
-    .form-control,
-    .form-select {
-        min-height: 39px;
-        border-radius: 8px;
-        border-color: #d4dde7;
-        background: #fff;
-        box-shadow: none;
-        transition: border-color .15s ease,box-shadow .15s ease,background .15s ease;
-    }
-
-        .form-control:focus,
-        .form-select:focus {
-            border-color: #8ba5d4;
-            box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-            background: #fff;
-        }
-
-    textarea.form-control {
-        min-height: 104px;
-    }
-
-    .transport-info,
-    .form-text {
-        color: #7a8492;
-    }
-
-    .internal-fields {
-        border-left: 4px solid #2f6cb3;
-    }
-
-    .external-fields {
-        border-left: 4px solid #778394;
+        font-weight: 600
     }
 
     .validation-summary-errors {
@@ -480,561 +169,298 @@
         border-radius: 9px;
         background: #fff7f8;
         color: #b42318;
+        font-size: .82rem
     }
 
-    .field-validation-error {
-        font-weight: 600;
+    .stage-note {
+        margin-bottom: 10px;
+        padding: 9px 11px;
+        border: 1px dashed #c8d7e8;
+        border-radius: 9px;
+        background: #f7faff;
+        color: #58697d;
+        font-size: .76rem
     }
+
+        .stage-note strong {
+            color: var(--lv-blue)
+        }
+
+    .resource-state {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(120px,1fr));
+        gap: 8px;
+        margin-top: 10px
+    }
+
+        .resource-state > div {
+            padding: 9px 10px;
+            border: 1px solid #dce4ed;
+            border-radius: 8px;
+            background: #fbfcfd
+        }
+
+        .resource-state span {
+            display: block;
+            color: #748195;
+            font-size: .66rem
+        }
+
+        .resource-state strong {
+            display: block;
+            margin-top: 2px;
+            font-size: .78rem
+        }
+
+        .resource-state .ok {
+            color: #17633a
+        }
+
+        .resource-state .pending {
+            color: #9b6a00
+        }
 
     .form-actions {
         position: sticky;
         bottom: 0;
         z-index: 5;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
         margin-top: 14px;
         padding: 12px 14px;
         border: 1px solid var(--lv-border);
         border-radius: 12px;
         background: rgba(255,255,255,.97);
         box-shadow: 0 -4px 16px rgba(25,47,80,.05);
-        backdrop-filter: blur(4px);
+        backdrop-filter: blur(4px)
     }
 
         .form-actions .btn {
             min-height: 38px;
             border-radius: 8px;
-            font-weight: 700;
+            font-weight: 700
         }
 
         .form-actions .btn-primary {
-            min-width: 170px;
+            min-width: 190px;
             background: #233f80;
-            border-color: #233f80;
+            border-color: #233f80
         }
 
     html[data-nsq-theme="dark"] .viaje-form-page {
-        color: #e7edf6;
+        color: #e7edf6
     }
 
-    html[data-nsq-theme="dark"] .viaje-form-header,
-    html[data-nsq-theme="dark"] .form-section,
-    html[data-nsq-theme="dark"] .form-actions {
+    html[data-nsq-theme="dark"] .viaje-form-header, html[data-nsq-theme="dark"] .form-section, html[data-nsq-theme="dark"] .form-actions {
         background: #111b2d;
         border-color: #2a3a50;
-        box-shadow: none;
+        box-shadow: none
     }
 
-    html[data-nsq-theme="dark"] .viaje-form-title,
-    html[data-nsq-theme="dark"] .form-section-title {
-        color: #eef4fb;
+    html[data-nsq-theme="dark"] .viaje-form-title, html[data-nsq-theme="dark"] .form-section-title {
+        color: #eef4fb
     }
 
-    html[data-nsq-theme="dark"] .viaje-form-subtitle,
-    html[data-nsq-theme="dark"] .transport-info,
-    html[data-nsq-theme="dark"] .form-text {
-        color: #9eacbf;
+    html[data-nsq-theme="dark"] .viaje-form-subtitle, html[data-nsq-theme="dark"] .form-text, html[data-nsq-theme="dark"] .stage-note {
+        color: #9eacbf
     }
 
     html[data-nsq-theme="dark"] .form-label {
-        color: #c7d3e2;
+        color: #c7d3e2
     }
 
-    html[data-nsq-theme="dark"] .form-control,
-    html[data-nsq-theme="dark"] .form-select {
+    html[data-nsq-theme="dark"] .form-control, html[data-nsq-theme="dark"] .form-select {
         background: #0d1727;
         color: #eef4fb;
-        border-color: #314158;
+        border-color: #314158
     }
 
-    html[data-nsq-theme="dark"] .form-section-title {
-        border-color: #29394e;
+    html[data-nsq-theme="dark"] .stage-note, html[data-nsq-theme="dark"] .resource-state > div {
+        background: #162237;
+        border-color: #2a3a50
     }
 
-    html[data-nsq-theme="dark"] .validation-summary-errors {
-        background: #2a151b;
-        border-color: #63303b;
-        color: #f5aab5;
-    }
+    @@media(max-width:900px) {
+        .col-8g, .col-6g, .col-4g, .col-3g {
+            grid-column: span 6
+        }
 
-    @@media (max-width:900px) {
-        .form-section {
-            padding: 12px 10px 10px;
+        .resource-state {
+            grid-template-columns: repeat(2,minmax(0,1fr))
         }
     }
 
-    @@media (max-width:600px) {
-        .viaje-form-header {
-            padding: 12px;
+    @@media(max-width:600px) {
+        .viaje-form-page {
+            padding: 14px 10px 24px
         }
 
-        .form-section {
-            border-radius: 10px;
-        }
-
-        .form-actions {
-            position: static;
-            padding: 10px;
+        .col-8g, .col-6g, .col-4g, .col-3g, .col-12g {
+            grid-column: span 12
         }
 
         .viaje-form-header > .btn {
             width: 100%;
-            justify-content: center;
+            justify-content: center
+        }
+
+        .form-actions {
+            position: static;
+            flex-direction: column-reverse;
+            padding: 10px
+        }
+
+            .form-actions .btn {
+                width: 100%
+            }
+
+        .resource-state {
+            grid-template-columns: 1fr
         }
     }
-
-    /* LOGISTICA_VIAJES_CHOFERES_V5 */
-    label[for="TipoViaje"]::after,label[for="FechaProgramada"]::after,label[for="Origen"]::after,label[for="Destino"]::after,label[for="Motivo"]::after{content:" *";color:#b42318;font-weight:900}.external-fields{display:none!important}
 </style>
 
 <div class="viaje-form-page">
-
     <div class="viaje-form-header">
         <div>
-            <h1 class="viaje-form-title">
-                <i class="fa-solid fa-pen-to-square me-1"></i>
-                Completar preparación
-            </h1>
-
-            <p class="viaje-form-subtitle">
-                Ajusta la programación antes de registrar la salida.
-            </p>
+            <h1 class="viaje-form-title"><i class="fa-solid fa-list-check me-1"></i>Completar preparación</h1>
+            <p class="viaje-form-subtitle">Completa o ajusta la programación antes de iniciar el viaje. Hora, ruta, unidad y chofer serán obligatorios al momento de registrar la salida.</p>
         </div>
-
-        <a asp-controller="LogisticaViajes"
-           asp-action="Detalle"
-           asp-route-id="@Model.ViajeID"
-           class="btn btn-outline-secondary btn-sm">
-            <i class="fa-solid fa-arrow-left me-1"></i>
-            Regresar
-        </a>
+        <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Regresar</a>
     </div>
 
     @if (TempData["LogisticaError"] != null)
     {
         <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3" role="alert">
-            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-            @TempData["LogisticaError"]
-
-            <button type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"></button>
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }
 
-    <form asp-controller="LogisticaViajes"
-          asp-action="Editar"
-          method="post"
-          autocomplete="off">
-
+    <form asp-controller="LogisticaViajes" asp-action="Editar" method="post" autocomplete="off">
         @Html.AntiForgeryToken()
-
         <input asp-for="ViajeID" type="hidden" />
-
-        <div asp-validation-summary="ModelOnly"
-             class="validation-summary-errors mb-3"></div>
+        <div asp-validation-summary="ModelOnly" class="validation-summary-errors mb-3"></div>
 
         <div class="form-section">
-
-            <div class="form-section-title">
-                Datos generales
-            </div>
-
+            <div class="form-section-title">Datos generales</div>
             <div class="form-grid">
-
                 <div class="col-4g">
-
-                    <label asp-for="TipoViaje"
-                           class="form-label">
-                        Tipo de viaje
-                    </label>
-
-                    <select asp-for="TipoViaje"
-                            class="form-select">
-
+                    <label asp-for="TipoViaje" class="form-label required">Tipo de salida</label>
+                    <select asp-for="TipoViaje" class="form-select" required>
                         <option value="">Selecciona...</option>
+                        <option value="Entrega PT">Entrega PT</option>
                         <option value="Ruta de personal">Ruta de personal</option>
                         <option value="Recolección de MP">Recolección de MP</option>
                         <option value="Traslado entre plantas">Traslado entre plantas</option>
                         <option value="Recolección de material">Recolección de material</option>
                         <option value="Entrega / recolección especial">Entrega / recolección especial</option>
                         <option value="Otro">Otro</option>
-
                     </select>
-
                     <span asp-validation-for="TipoViaje"></span>
-
                 </div>
-
-                <input asp-for="TipoTransporte" id="TipoTransporte" type="hidden" value="Interno" />
-
                 <div class="col-4g">
-
-                    <label asp-for="FechaProgramada"
-                           class="form-label">
-                        Fecha programada
-                    </label>
-
-                    <input asp-for="FechaProgramada"
-                           type="date"
-                           class="form-control" />
-
+                    <label asp-for="FechaProgramada" class="form-label required">Fecha programada</label>
+                    <input asp-for="FechaProgramada" type="date" class="form-control" required />
                     <span asp-validation-for="FechaProgramada"></span>
-
                 </div>
-
+                <div class="col-4g">
+                    <label asp-for="HoraSalidaProgramada" class="form-label">Hora de salida</label>
+                    <input asp-for="HoraSalidaProgramada" type="time" class="form-control" />
+                    <div class="form-text">Puede quedar pendiente mientras el viaje siga Programado.</div>
+                    <span asp-validation-for="HoraSalidaProgramada"></span>
+                </div>
             </div>
-
         </div>
 
         <div class="form-section">
-
-            <div class="form-section-title">
-                Ruta
-            </div>
-
+            <div class="form-section-title">Ruta y objetivo</div>
             <div class="form-grid">
-
                 <div class="col-6g">
-
-                    <label asp-for="Origen"
-                           class="form-label">
-                        Origen
-                    </label>
-
-                    <input asp-for="Origen"
-                           class="form-control"
-                           maxlength="300"
-                           placeholder="Origen del viaje" />
-
+                    <label asp-for="Origen" class="form-label required">Origen</label>
+                    <input asp-for="Origen" class="form-control" maxlength="300" placeholder="Origen del viaje" required />
                     <span asp-validation-for="Origen"></span>
-
                 </div>
-
                 <div class="col-6g">
-
-                    <label asp-for="Destino"
-                           class="form-label">
-                        Destino
-                    </label>
-
-                    <input asp-for="Destino"
-                           class="form-control"
-                           maxlength="300"
-                           placeholder="Destino del viaje" />
-
+                    <label asp-for="Destino" class="form-label required">Destino</label>
+                    <input asp-for="Destino" class="form-control" maxlength="300" placeholder="Destino del viaje" required />
                     <span asp-validation-for="Destino"></span>
-
                 </div>
-
                 <div class="col-8g">
-
-                    <label asp-for="Motivo"
-                           class="form-label">
-                        Motivo / objetivo
-                    </label>
-
-                    <input asp-for="Motivo"
-                           class="form-control"
-                           maxlength="500"
-                           placeholder="Describe brevemente el propósito del viaje" />
-
+                    <label asp-for="Motivo" class="form-label required">Motivo / objetivo</label>
+                    <input asp-for="Motivo" class="form-control" maxlength="500" placeholder="Describe brevemente el propósito del viaje" required />
                     <span asp-validation-for="Motivo"></span>
-
                 </div>
-
                 <div class="col-4g">
-
-                    <label asp-for="RutaID"
-                           class="form-label">
-                        Ruta registrada
-                    </label>
-
-                    <select asp-for="RutaID"
-                            class="form-select">
-
-                        <option value="">Selecciona una ruta...</option>
-
+                    <label asp-for="RutaID" class="form-label">Ruta registrada</label>
+                    <select asp-for="RutaID" class="form-select">
+                        <option value="">Pendiente por asignar...</option>
                         @foreach (var ruta in Model.Rutas)
                         {
-                            <option value="@ruta.Id">
-                                @ruta.Texto
-                            </option>
+                            <option value="@ruta.Id">@ruta.Texto</option>
                         }
-
                     </select>
-
                     <span asp-validation-for="RutaID"></span>
-
                 </div>
-
             </div>
-
         </div>
 
         <div class="form-section">
-
-            <div class="form-section-title">
-                Horarios
-            </div>
-
+            <div class="form-section-title">Unidad y chofer</div>
+            <div class="stage-note"><strong>Preparación por etapas.</strong> Puedes guardar el viaje mientras falten recursos. Al pulsar <strong>Iniciar viaje</strong> desde el detalle, el sistema exigirá hora de salida, ruta, unidad y chofer activos.</div>
             <div class="form-grid">
-
-                <div class="col-4g">
-
-                    <label asp-for="HoraSalidaProgramada"
-                           class="form-label">
-                        Hora de salida
-                    </label>
-
-                    <input asp-for="HoraSalidaProgramada"
-                           type="time"
-                           class="form-control" />
-
-                    <span asp-validation-for="HoraSalidaProgramada"></span>
-
-                </div>
-
-                <input asp-for="HoraRegresoProgramada" type="hidden" value="" />
-
-            </div>
-
-        </div>
-
-        <div class="form-section internal-fields">
-
-            <div class="form-section-title">
-                Unidad y chofer
-            </div>
-            <div class="alert alert-info py-2 px-3 mb-2"><strong>Campos por etapa:</strong> puedes guardar sin recursos; ruta, unidad y chofer son obligatorios al iniciar.</div>
-
-            <div class="form-grid">
-
                 <div class="col-6g">
-
-                    <label asp-for="UnidadID"
-                           class="form-label">
-                        Unidad
-                    </label>
-
-                    <select asp-for="UnidadID"
-                            class="form-select">
-
-                        <option value="">Selecciona una unidad...</option>
-
+                    <label asp-for="UnidadID" class="form-label">Unidad</label>
+                    <select asp-for="UnidadID" class="form-select">
+                        <option value="">Pendiente por asignar...</option>
                         @foreach (var unidad in Model.Unidades)
                         {
-                            <option value="@unidad.Id">
-                                @unidad.Texto
-                            </option>
+                            <option value="@unidad.Id">@unidad.Texto</option>
                         }
-
                     </select>
-
                     <span asp-validation-for="UnidadID"></span>
-
                 </div>
-
                 <div class="col-6g">
-
-                    <label asp-for="OperadorUsuarioID" class="form-label">
-                        Operador / chofer
-                    </label>
+                    <label asp-for="OperadorUsuarioID" class="form-label">Chofer</label>
                     <select asp-for="OperadorUsuarioID" class="form-select">
-                        <option value="">Selecciona un chofer...</option>
+                        <option value="">Pendiente por asignar...</option>
                         @foreach (var operador in Model.Operadores)
                         {
                             <option value="@operador.Id">@operador.Texto</option>
                         }
                     </select>
                     <span asp-validation-for="OperadorUsuarioID"></span>
-                    <div class="transport-info">Solo se muestran usuarios de Logística cuyo puesto contiene “Chofer”.</div>
-
+                    <div class="form-text">Solo aparecen usuarios activos del departamento de Logística cuyo puesto contiene “Chofer”.</div>
                 </div>
-
             </div>
-
-        </div>
-
-        <div class="form-section external-fields">
-
-            <div class="form-section-title">
-                Transporte externo
+            <div class="resource-state">
+                <div><span>Hora de salida</span><strong class="@(Model.HoraSalidaProgramada.HasValue ? "ok" : "pending")">@(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm"):"Pendiente")</strong></div>
+                <div><span>Ruta</span><strong class="@(Model.RutaID.HasValue ? "ok" : "pending")">@(Model.RutaID.HasValue ? "Asignada" : "Pendiente")</strong></div>
+                <div><span>Unidad</span><strong class="@(Model.UnidadID.HasValue ? "ok" : "pending")">@(Model.UnidadID.HasValue ? "Asignada" : "Pendiente")</strong></div>
+                <div><span>Chofer</span><strong class="@(Model.OperadorUsuarioID.HasValue ? "ok" : "pending")">@(Model.OperadorUsuarioID.HasValue ? "Asignado" : "Pendiente")</strong></div>
             </div>
-
-            <div class="form-grid">
-
-                <div class="col-6g">
-
-                    <label asp-for="TransportistaExterno"
-                           class="form-label">
-                        Transportista
-                    </label>
-
-                    <input asp-for="TransportistaExterno"
-                           class="form-control"
-                           maxlength="200"
-                           placeholder="Empresa o proveedor de transporte" />
-
-                    <span asp-validation-for="TransportistaExterno"></span>
-
-                </div>
-
-                <div class="col-6g">
-
-                    <label asp-for="ChoferExterno"
-                           class="form-label">
-                        Chofer
-                    </label>
-
-                    <input asp-for="ChoferExterno"
-                           class="form-control"
-                           maxlength="200"
-                           placeholder="Nombre del chofer" />
-
-                    <span asp-validation-for="ChoferExterno"></span>
-
-                </div>
-
-                <div class="col-6g">
-
-                    <label asp-for="UnidadExterna"
-                           class="form-label">
-                        Unidad externa
-                    </label>
-
-                    <input asp-for="UnidadExterna"
-                           class="form-control"
-                           maxlength="100"
-                           placeholder="Número económico o descripción" />
-
-                    <span asp-validation-for="UnidadExterna"></span>
-
-                </div>
-
-                <div class="col-6g">
-
-                    <label asp-for="PlacasExternas"
-                           class="form-label">
-                        Placas
-                    </label>
-
-                    <input asp-for="PlacasExternas"
-                           class="form-control"
-                           maxlength="100"
-                           placeholder="Placas de la unidad" />
-
-                    <span asp-validation-for="PlacasExternas"></span>
-
-                </div>
-
-            </div>
-
         </div>
 
         <div class="form-section">
-
-            <div class="form-section-title">
-                Observaciones
-            </div>
-
+            <div class="form-section-title">Observaciones</div>
             <div class="form-grid">
-
                 <div class="col-12g">
-
-                    <label asp-for="Observaciones"
-                           class="form-label">
-                        Observaciones
-                    </label>
-
-                    <textarea asp-for="Observaciones"
-                              class="form-control"
-                              maxlength="1200"
-                              placeholder="Información adicional del viaje"></textarea>
-
-                    <div class="form-text">
-                        Máximo 1,200 caracteres.
-                    </div>
-
+                    <label asp-for="Observaciones" class="form-label">Observaciones</label>
+                    <textarea asp-for="Observaciones" class="form-control" maxlength="1200" placeholder="Información adicional del viaje"></textarea>
+                    <div class="form-text">Máximo 1,200 caracteres.</div>
                     <span asp-validation-for="Observaciones"></span>
-
                 </div>
-
             </div>
-
         </div>
 
         <div class="form-actions">
-
-            <a asp-controller="LogisticaViajes"
-               asp-action="Detalle"
-               asp-route-id="@Model.ViajeID"
-               class="btn btn-outline-secondary">
-                Cancelar
-            </a>
-
-            <button type="submit"
-                    class="btn btn-primary">
-                <i class="fa-solid fa-floppy-disk me-1"></i>
-                Guardar preparación
-            </button>
-
+            <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar preparación</button>
         </div>
-
     </form>
-
 </div>
 
 @section Scripts {
-
     <partial name="_ValidationScriptsPartial" />
-
-    <script>
-        (() => {
-
-            const tipoTransporte =
-                document.getElementById('TipoTransporte');
-
-            const camposInternos =
-                document.querySelector('.internal-fields');
-
-            const camposExternos =
-                document.querySelector('.external-fields');
-
-            function actualizarTransporte() {
-
-                if (!tipoTransporte) {
-                    return;
-                }
-
-                const esExterno =
-                    tipoTransporte.value === 'Externo';
-
-                if (camposInternos) {
-                    camposInternos.style.display =
-                        esExterno
-                            ? 'none'
-                            : '';
-                }
-
-                if (camposExternos) {
-                    camposExternos.style.display =
-                        esExterno
-                            ? ''
-                            : 'none';
-                }
-            }
-
-            if (tipoTransporte) {
-                tipoTransporte.value = 'Interno';
-
-                tipoTransporte.addEventListener(
-                    'change',
-                    actualizarTransporte
-                );
-
-                actualizarTransporte();
-            }
-
-        })();
-    </script>
-
 }

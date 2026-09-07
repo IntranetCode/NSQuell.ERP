@@ -56,49 +56,38 @@ public sealed class LogisticaEmbarquesController : Controller
     {
         var acceso = await ValidarAccesoAsync("Tablero de Logística");
         if (acceso != null) return acceso;
-
         var vm = new LogisticaIndexVm();
         await using var cn = await AbrirAsync(cancellationToken);
-
         if (!await TieneFase1Async(cn, cancellationToken))
         {
-            ViewBag.ErrorConfiguracion = "Falta ejecutar 29_LOGISTICA_FASE1_RELEASE_TEST_v1.0.sql.";
+            ViewBag.ErrorConfiguracion = "Falta ejecutar la estructura de Logística Fase 1.";
             return View(vm);
         }
-
         var hoy = DateTime.Today;
         periodo = (periodo ?? "hoy").Trim().ToLowerInvariant();
-        var periodosPermitidos = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "hoy","semana","mes","seleccionar_mes","vencidos"
-    };
+        var periodosPermitidos = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "hoy", "semana", "mes", "seleccionar_mes", "vencidos" };
         if (!periodosPermitidos.Contains(periodo)) periodo = "hoy";
-
         DateTime? fechaDesde;
         DateTime? fechaHasta;
         string tituloPeriodo;
-
         switch (periodo)
         {
             case "vencidos":
                 fechaDesde = null;
                 fechaHasta = hoy.AddDays(-1);
-                tituloPeriodo = "Vencidos por programar";
+                tituloPeriodo = "Expeditados por programar";
                 break;
-
             case "semana":
                 var diferenciaLunes = ((int)hoy.DayOfWeek + 6) % 7;
                 fechaDesde = hoy.AddDays(-diferenciaLunes);
                 fechaHasta = fechaDesde.Value.AddDays(6);
                 tituloPeriodo = $"Esta semana · {fechaDesde:dd/MM/yyyy} al {fechaHasta:dd/MM/yyyy}";
                 break;
-
             case "mes":
                 fechaDesde = new DateTime(hoy.Year, hoy.Month, 1);
                 fechaHasta = fechaDesde.Value.AddMonths(1).AddDays(-1);
                 tituloPeriodo = $"Este mes · {fechaDesde:MMMM yyyy}";
                 break;
-
             case "seleccionar_mes":
                 var anioSeleccionado = anio.HasValue && anio.Value >= 2020 && anio.Value <= 2100 ? anio.Value : hoy.Year;
                 var mesSeleccionado = mes.HasValue && mes.Value >= 1 && mes.Value <= 12 ? mes.Value : hoy.Month;
@@ -108,7 +97,6 @@ public sealed class LogisticaEmbarquesController : Controller
                 anio = anioSeleccionado;
                 tituloPeriodo = $"Programación · {fechaDesde:MMMM yyyy}";
                 break;
-
             default:
                 periodo = "hoy";
                 fechaDesde = hoy;
@@ -116,31 +104,14 @@ public sealed class LogisticaEmbarquesController : Controller
                 tituloPeriodo = $"Próximos a programar hoy · {hoy:dd/MM/yyyy}";
                 break;
         }
-
         vm.Demandas = await CargarDemandasAsync(cn, null, fechaDesde, fechaHasta, true, null, cancellationToken);
-
         const string sqlEmbarques = @"
-SELECT TOP (300)
-    EmbarqueID,
-    ISNULL(Folio,N'') AS Folio,
-    ISNULL(ClienteNombreSnapshot,N'') AS Cliente,
-    ISNULL(Destino,N'') AS Destino,
-    FechaCargaProgramada,
-    HoraCargaProgramada,
-    FechaEntregaProgramada,
-    HoraEntregaProgramada,
-    ISNULL(Estatus,N'') AS Estatus,
-    ISNULL(TieneIncidencia,0) AS TieneIncidencia,
-    TotalPartidas,
-    TotalCajas,
-    TotalPiezasSolicitadas,
-    TotalPiezasDespachadas
+SELECT TOP(300)
+EmbarqueID,ISNULL(Folio,N'') AS Folio,ISNULL(ClienteNombreSnapshot,N'') AS Cliente,ISNULL(Destino,N'') AS Destino,
+FechaCargaProgramada,HoraCargaProgramada,FechaEntregaProgramada,ISNULL(Estatus,N'') AS Estatus,ISNULL(TieneIncidencia,0) AS TieneIncidencia,
+TotalPartidas,TotalCajas,TotalPiezasSolicitadas,TotalPiezasDespachadas
 FROM dbo.vw_Logistica_Tablero
-ORDER BY
-    CASE WHEN Estatus IN(N'Entregado',N'Cancelado') THEN 1 ELSE 0 END,
-    COALESCE(FechaCargaProgramada,FechaProgramada),
-    EmbarqueID DESC;";
-
+ORDER BY CASE WHEN Estatus IN(N'Entregado',N'Cancelado') THEN 1 ELSE 0 END,COALESCE(FechaCargaProgramada,FechaProgramada),EmbarqueID DESC;";
         await using (var cmd = new SqlCommand(sqlEmbarques, cn))
         {
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
@@ -155,7 +126,6 @@ ORDER BY
                     FechaCargaProgramada = Fecha(rd, "FechaCargaProgramada"),
                     HoraCargaProgramada = Hora(rd, "HoraCargaProgramada"),
                     FechaEntregaProgramada = Fecha(rd, "FechaEntregaProgramada"),
-                    HoraEntregaProgramada = Hora(rd, "HoraEntregaProgramada"),
                     Estatus = Texto(rd, "Estatus"),
                     TieneIncidencia = Booleano(rd, "TieneIncidencia"),
                     TotalPartidas = Entero(rd, "TotalPartidas"),
@@ -165,13 +135,12 @@ ORDER BY
                 });
             }
         }
-
         vm.DemandasPendientes = vm.Demandas.Count(x => x.PendienteProgramar > 0);
         vm.PiezasPendientes = vm.Demandas.Sum(x => (long)x.PendienteProgramar);
         vm.PiezasPTListas = vm.Demandas.Sum(x => x.PiezasPTDisponibles);
         vm.EmbarquesActivos = vm.Embarques.Count(x => x.Estatus is not "Entregado" and not "Cancelado");
         vm.CargasHoy = vm.Embarques.Count(x => x.FechaCargaProgramada?.Date == hoy);
-        vm.EntregasAtrasadas = vm.Embarques.Count(x => x.Estatus is not "Entregado" and not "Cancelado" && x.FechaEntregaProgramada.HasValue && x.FechaEntregaProgramada.Value.Date < hoy);
+        vm.EntregasAtrasadas = vm.Embarques.Count(x => x.Estatus is not "Entregado" and not "Cancelado" && x.FechaCargaProgramada.HasValue && x.FechaCargaProgramada.Value.Date < hoy);
         vm.EmbarquesPreparados = vm.Embarques.Count(x => x.Estatus == "Preparado");
         vm.EmbarquesCargados = vm.Embarques.Count(x => x.Estatus == "Cargado");
         vm.EmbarquesEnRuta = vm.Embarques.Count(x => x.Estatus == "En ruta");
@@ -179,51 +148,43 @@ ORDER BY
         vm.EmbarquesConIncidencia = vm.Embarques.Count(x => x.TieneIncidencia);
         vm.CajasMovilizadas = vm.Embarques.Where(x => x.Estatus is "Cargado" or "En ruta" or "Entregado").Sum(x => (long)x.TotalCajas);
         vm.PiezasMovilizadas = vm.Embarques.Sum(x => (long)x.TotalPiezasDespachadas);
-
         var inicioPeriodo = new DateTime(hoy.Year, hoy.Month, 1);
         var finPeriodo = inicioPeriodo.AddMonths(1);
-
         const string sqlResumenClientes = @"
-SELECT
-    e.ClienteID,
-    ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente') AS Cliente,
-    COUNT_BIG(*) AS TotalEmbarques,
-    SUM(CASE WHEN e.Estatus=N'Preparado' THEN 1 ELSE 0 END) AS Preparados,
-    SUM(CASE WHEN e.Estatus=N'Cargado' THEN 1 ELSE 0 END) AS Cargados,
-    SUM(CASE WHEN e.Estatus=N'En ruta' THEN 1 ELSE 0 END) AS EnRuta,
-    SUM(CASE WHEN e.Estatus=N'Entregado' THEN 1 ELSE 0 END) AS Entregados,
-    SUM(CASE WHEN ISNULL(e.TieneIncidencia,0)=1 THEN 1 ELSE 0 END) AS ConIncidencia,
-    ISNULL(SUM(CASE WHEN e.Estatus IN(N'Cargado',N'En ruta',N'Entregado') THEN ISNULL(c.TotalCajas,0) ELSE 0 END),0) AS TotalCajas,
-    ISNULL(SUM(ISNULL(d.TotalPiezasDespachadas,0)),0) AS TotalPiezas,
-    SUM(CASE WHEN e.Estatus=N'Entregado' AND e.FechaEntrega IS NOT NULL AND e.FechaEntregaProgramada IS NOT NULL AND CAST(e.FechaEntrega AS date)<=e.FechaEntregaProgramada THEN 1 ELSE 0 END) AS EntregasATiempo,
-    SUM(CASE WHEN e.Estatus=N'Entregado' AND e.FechaEntrega IS NOT NULL AND e.FechaEntregaProgramada IS NOT NULL AND CAST(e.FechaEntrega AS date)>e.FechaEntregaProgramada THEN 1 ELSE 0 END) AS EntregasAtrasadas
+SELECT e.ClienteID,ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente') AS Cliente,
+COUNT_BIG(*) AS TotalEmbarques,
+SUM(CASE WHEN e.Estatus=N'Preparado' THEN 1 ELSE 0 END) AS Preparados,
+SUM(CASE WHEN e.Estatus=N'Cargado' THEN 1 ELSE 0 END) AS Cargados,
+SUM(CASE WHEN e.Estatus=N'En ruta' THEN 1 ELSE 0 END) AS EnRuta,
+SUM(CASE WHEN e.Estatus=N'Entregado' THEN 1 ELSE 0 END) AS Entregados,
+SUM(CASE WHEN ISNULL(e.TieneIncidencia,0)=1 THEN 1 ELSE 0 END) AS ConIncidencia,
+ISNULL(SUM(CASE WHEN e.Estatus IN(N'Cargado',N'En ruta',N'Entregado') THEN ISNULL(c.TotalCajas,0) ELSE 0 END),0) AS TotalCajas,
+ISNULL(SUM(ISNULL(d.TotalPiezasDespachadas,0)),0) AS TotalPiezas,
+SUM(CASE WHEN e.FechaCarga IS NOT NULL AND e.FechaCargaProgramada IS NOT NULL AND e.FechaCarga<=DATEADD(DAY,1,CAST(e.FechaCargaProgramada AS datetime2)) THEN 1 ELSE 0 END) AS EntregasATiempo,
+SUM(CASE WHEN e.FechaCarga IS NOT NULL AND e.FechaCargaProgramada IS NOT NULL AND CAST(e.FechaCarga AS date)>e.FechaCargaProgramada THEN 1 ELSE 0 END) AS EntregasAtrasadas
 FROM dbo.Logistica_Embarques e
 OUTER APPLY
 (
     SELECT COUNT_BIG(*) AS TotalCajas
     FROM dbo.Logistica_EmbarqueCajas ec
-    WHERE ec.EmbarqueID=e.EmbarqueID
-      AND ec.EstatusSeleccion=N'Despachada'
+    WHERE ec.EmbarqueID=e.EmbarqueID AND ec.EstatusSeleccion=N'Despachada'
 ) c
 OUTER APPLY
 (
     SELECT ISNULL(SUM(ed.CantidadDespachada),0) AS TotalPiezasDespachadas
     FROM dbo.Logistica_EmbarqueDetalle ed
-    WHERE ed.EmbarqueID=e.EmbarqueID
-      AND ed.Activo=1
+    WHERE ed.EmbarqueID=e.EmbarqueID AND ed.Activo=1
 ) d
 WHERE e.Activo=1
-  AND COALESCE(e.FechaEntregaProgramada,e.FechaCargaProgramada,e.FechaProgramada)>=@InicioPeriodo
-  AND COALESCE(e.FechaEntregaProgramada,e.FechaCargaProgramada,e.FechaProgramada)<@FinPeriodo
+AND COALESCE(e.FechaCargaProgramada,e.FechaProgramada)>=@InicioPeriodo
+AND COALESCE(e.FechaCargaProgramada,e.FechaProgramada)<@FinPeriodo
 GROUP BY e.ClienteID,ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'Sin cliente')
 ORDER BY COUNT_BIG(*) DESC,Cliente;";
-
         await using (var cmd = new SqlCommand(sqlResumenClientes, cn))
         {
             cmd.Parameters.Add("@InicioPeriodo", SqlDbType.Date).Value = inicioPeriodo;
             cmd.Parameters.Add("@FinPeriodo", SqlDbType.Date).Value = finPeriodo;
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-
             while (await rd.ReadAsync(cancellationToken))
             {
                 vm.ResumenClientes.Add(new LogisticaResumenClienteVm
@@ -243,7 +204,6 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
                 });
             }
         }
-
         ViewBag.Periodo = periodo;
         ViewBag.PeriodoProgramacion = tituloPeriodo;
         ViewBag.FechaDesdeProgramacion = fechaDesde;
@@ -251,7 +211,6 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
         ViewBag.MesSeleccionado = mes ?? hoy.Month;
         ViewBag.AnioSeleccionado = anio ?? hoy.Year;
         ViewBag.PeriodoResumen = inicioPeriodo.ToString("MMMM yyyy");
-
         return View(vm);
     }
 
@@ -328,7 +287,10 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
         if (acceso != null) return acceso;
         vm.Destino = vm.Destino?.Trim() ?? string.Empty;
         vm.DireccionEntrega = vm.DireccionEntrega?.Trim();
-        vm.OperadorTexto = vm.OperadorTexto?.Trim();
+        vm.ChoferNombreSnapshot = vm.ChoferNombreSnapshot?.Trim();
+        vm.ChoferExterno = vm.ChoferExterno?.Trim();
+        vm.UnidadExterna = vm.UnidadExterna?.Trim();
+        vm.PlacasExternas = vm.PlacasExternas?.Trim();
         vm.Observaciones = vm.Observaciones?.Trim();
         vm.Transportista = vm.Transportista?.Trim();
         vm.GuiaReferencia = vm.GuiaReferencia?.Trim();
@@ -345,35 +307,45 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
             if (partida.ReleaseDetalleID <= 0) ModelState.AddModelError(nameof(vm.Partidas), "Existe una entrega seleccionada no válida.");
             if (partida.CantidadSolicitada <= 0) ModelState.AddModelError(nameof(vm.Partidas), $"La cantidad de la entrega {partida.ReleaseDetalleID} debe ser mayor a cero.");
         }
-        // Una caja fisica puede participar en mas de un Release, siempre que cada reserva capture
-        // una cantidad exacta y la suma activa no exceda el residual fisico. Esa regla se valida
-        // nuevamente en BD por la Fase 2 de Logistica.
         if (string.IsNullOrWhiteSpace(vm.TipoOperacion)) ModelState.AddModelError(nameof(vm.TipoOperacion), "Selecciona Nacional o Exportación.");
-        if (string.IsNullOrWhiteSpace(vm.FormaEnvio)) ModelState.AddModelError(nameof(vm.FormaEnvio), "Selecciona Entrega interna/local o Paquetería/Transportista.");
+        if (string.IsNullOrWhiteSpace(vm.FormaEnvio)) ModelState.AddModelError(nameof(vm.FormaEnvio), "Selecciona Interno, Cliente recoge o Paquetería.");
         if (string.IsNullOrWhiteSpace(vm.Destino)) ModelState.AddModelError(nameof(vm.Destino), "El destino es obligatorio.");
         if (vm.Destino.Length > 300) ModelState.AddModelError(nameof(vm.Destino), "El destino no puede exceder 300 caracteres.");
         if (vm.FechaCargaProgramada == default) ModelState.AddModelError(nameof(vm.FechaCargaProgramada), "La fecha de carga es obligatoria.");
-        if (vm.FechaEntregaProgramada == default) ModelState.AddModelError(nameof(vm.FechaEntregaProgramada), "La fecha de entrega es obligatoria.");
-        if (vm.FechaCargaProgramada != default && vm.FechaEntregaProgramada != default && vm.FechaEntregaProgramada.Date < vm.FechaCargaProgramada.Date) ModelState.AddModelError(nameof(vm.FechaEntregaProgramada), "La fecha de entrega no puede ser anterior a la fecha de carga.");
+        if (!vm.HoraCargaProgramada.HasValue) ModelState.AddModelError(nameof(vm.HoraCargaProgramada), "La hora de carga es obligatoria.");
         if (vm.TipoOperacion == "Nacional") vm.PasaAduana = null;
         if (vm.TipoOperacion == "Exportacion" && !vm.PasaAduana.HasValue) ModelState.AddModelError(nameof(vm.PasaAduana), "Indica si la exportación pasa por aduana.");
         if (vm.FormaEnvio == "Interno")
         {
             if (!vm.RutaID.HasValue || vm.RutaID.Value <= 0) ModelState.AddModelError(nameof(vm.RutaID), "Selecciona una ruta.");
             if (!vm.UnidadID.HasValue || vm.UnidadID.Value <= 0) ModelState.AddModelError(nameof(vm.UnidadID), "Selecciona una unidad.");
-            if (string.IsNullOrWhiteSpace(vm.OperadorTexto)) ModelState.AddModelError(nameof(vm.OperadorTexto), "Captura el operador.");
+            if (!vm.ChoferUsuarioID.HasValue || vm.ChoferUsuarioID.Value <= 0) ModelState.AddModelError(nameof(vm.ChoferUsuarioID), "Selecciona un chofer.");
             vm.ModalidadEnvio = null;
             vm.Transportista = null;
             vm.GuiaReferencia = null;
+            vm.ChoferExterno = null;
+            vm.UnidadExterna = null;
+            vm.PlacasExternas = null;
+        }
+        else if (vm.FormaEnvio == "Cliente")
+        {
+            vm.RutaID = null;
+            vm.UnidadID = null;
+            vm.ChoferUsuarioID = null;
+            vm.ChoferNombreSnapshot = null;
+            vm.ModalidadEnvio = null;
+            vm.Transportista = null;
+            vm.GuiaReferencia = null;
+            if (string.IsNullOrWhiteSpace(vm.ChoferExterno)) ModelState.AddModelError(nameof(vm.ChoferExterno), "Captura el nombre de la persona o transportista que recoge.");
         }
         else if (vm.FormaEnvio == "Paqueteria")
         {
             vm.RutaID = null;
             vm.UnidadID = null;
-            vm.OperadorTexto = null;
+            vm.ChoferUsuarioID = null;
+            vm.ChoferNombreSnapshot = null;
             if (string.IsNullOrWhiteSpace(vm.ModalidadEnvio)) ModelState.AddModelError(nameof(vm.ModalidadEnvio), "Selecciona modalidad Terrestre, Aérea o Marítima.");
-            if (string.IsNullOrWhiteSpace(vm.Transportista)) ModelState.AddModelError(nameof(vm.Transportista), "Captura la compañía o transportista.");
-            if (vm.TipoOperacion == "Exportacion" && vm.PasaAduana == false && string.IsNullOrWhiteSpace(vm.GuiaReferencia)) ModelState.AddModelError(nameof(vm.GuiaReferencia), "Captura la guía o referencia de la exportación.");
+            if (string.IsNullOrWhiteSpace(vm.Transportista)) ModelState.AddModelError(nameof(vm.Transportista), "Captura la compañía o paquetería.");
         }
         await using var cn = await AbrirAsync(cancellationToken);
         vm.Clientes = await CargarClientesPendientesAsync(cn, cancellationToken);
@@ -400,11 +372,20 @@ ORDER BY COUNT_BIG(*) DESC,Cliente;";
             if (demandasValidadas.Count == 0) throw new InvalidOperationException("Selecciona al menos una entrega.");
             var cliente = demandasValidadas[0].Demanda.Cliente?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(cliente)) throw new InvalidOperationException("El cliente seleccionado no tiene un nombre válido.");
+            var fechaEntregaVisual = demandasValidadas.Min(x => x.Demanda.FechaEntrega).Date;
+            string? choferTexto = null;
+            if (vm.FormaEnvio == "Interno" && vm.ChoferUsuarioID.HasValue)
+            {
+                choferTexto = await ObtenerNombreChoferAsync(cn, tx, vm.ChoferUsuarioID.Value, cancellationToken);
+                vm.ChoferNombreSnapshot = choferTexto;
+            }
+            else if (vm.FormaEnvio == "Cliente") choferTexto = vm.ChoferExterno;
+            else if (vm.FormaEnvio == "Paqueteria") choferTexto = string.IsNullOrWhiteSpace(vm.ChoferExterno) ? vm.Transportista : vm.ChoferExterno;
             const string sqlHeader = @"
 INSERT dbo.Logistica_Embarques
 (Folio,ClienteID,ClienteNombreSnapshot,Destino,DireccionEntrega,TipoOperacion,FormaEnvio,ModalidadEnvio,Transportista,GuiaReferencia,PasaAduana,FechaProgramada,FechaCargaProgramada,HoraCargaProgramada,FechaEntregaProgramada,HoraEntregaProgramada,Estatus,RutaID,UnidadID,OperadorTexto,ResponsableUsuarioID,ResponsableNombreSnapshot,Observaciones,FechaCreacion,CreadoPor,Activo)
 VALUES
-(NULL,@ClienteID,@ClienteNombre,@Destino,@DireccionEntrega,@TipoOperacion,@FormaEnvio,@ModalidadEnvio,@Transportista,@GuiaReferencia,@PasaAduana,@FechaCarga,@FechaCarga,@HoraCarga,@FechaEntrega,@HoraEntrega,N'Programado',@RutaID,@UnidadID,@OperadorTexto,@UsuarioID,@UsuarioNombre,@Observaciones,SYSDATETIME(),@UsuarioNombre,1);
+(NULL,@ClienteID,@ClienteNombre,@Destino,@DireccionEntrega,@TipoOperacion,@FormaEnvio,@ModalidadEnvio,@Transportista,@GuiaReferencia,@PasaAduana,@FechaCarga,@FechaCarga,@HoraCarga,@FechaEntrega,NULL,N'Programado',@RutaID,@UnidadID,@OperadorTexto,@UsuarioID,@UsuarioNombre,@Observaciones,SYSDATETIME(),@UsuarioNombre,1);
 SELECT CONVERT(int,SCOPE_IDENTITY());";
             int embarqueId;
             await using (var cmd = new SqlCommand(sqlHeader, cn, tx))
@@ -420,12 +401,11 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 cmd.Parameters.Add("@GuiaReferencia", SqlDbType.NVarChar, 150).Value = Db(vm.GuiaReferencia);
                 cmd.Parameters.Add("@PasaAduana", SqlDbType.Bit).Value = Db(vm.PasaAduana);
                 cmd.Parameters.Add("@FechaCarga", SqlDbType.Date).Value = vm.FechaCargaProgramada.Date;
-                cmd.Parameters.Add("@HoraCarga", SqlDbType.Time).Value = Db(vm.HoraCargaProgramada);
-                cmd.Parameters.Add("@FechaEntrega", SqlDbType.Date).Value = vm.FechaEntregaProgramada.Date;
-                cmd.Parameters.Add("@HoraEntrega", SqlDbType.Time).Value = Db(vm.HoraEntregaProgramada);
+                cmd.Parameters.Add("@HoraCarga", SqlDbType.Time).Value = vm.HoraCargaProgramada!.Value;
+                cmd.Parameters.Add("@FechaEntrega", SqlDbType.Date).Value = fechaEntregaVisual;
                 cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = Db(vm.RutaID);
                 cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = Db(vm.UnidadID);
-                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = Db(vm.OperadorTexto);
+                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = Db(choferTexto);
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                 cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = Db(vm.Observaciones);
@@ -439,10 +419,9 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 await InsertarDetalleAsync(cn, tx, embarqueId, item.Demanda, item.Formulario.CantidadSolicitada, cancellationToken);
                 totalPiezas += item.Formulario.CantidadSolicitada;
             }
-            const string estadoInicial = "Programado";
-            await InsertarHistorialAsync(cn, tx, embarqueId, "PROGRAMACION_CREADA", null, estadoInicial, $"Programación creada por cliente. Cliente: {cliente}. Partidas: {demandasValidadas.Count:N0}. Piezas: {totalPiezas:N0}. Las cajas PT se asignan por Release y por cantidad exacta desde el detalle. Forma de envío: {vm.FormaEnvio}. Destino: {vm.Destino}.", cancellationToken);
+            await InsertarHistorialAsync(cn, tx, embarqueId, "PROGRAMACION_CREADA", null, "Programado", $"Programación creada por cliente. Cliente: {cliente}. Partidas: {demandasValidadas.Count:N0}. Piezas: {totalPiezas:N0}. Fecha de carga: {vm.FechaCargaProgramada:dd/MM/yyyy} {vm.HoraCargaProgramada.Value:hh\\:mm}. Forma de envío: {vm.FormaEnvio}. Destino: {vm.Destino}.", cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = $"{folio} creado con {demandasValidadas.Count:N0} partida(s) y {totalPiezas:N0} piezas. Ahora asigna las cantidades exactas por caja y Release.";
+            TempData["LogisticaOk"] = $"{folio} creado con {demandasValidadas.Count:N0} partida(s) y {totalPiezas:N0} piezas.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
         catch (Exception ex)
@@ -454,8 +433,6 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
             return View(vm);
         }
     }
-
-    // LOGISTICA_PT_FIRST_AUTO_RELEASE_V2
     private static async Task<List<LogisticaCajaPtCrearVm>> CargarCajasPtClienteAsync(
         SqlConnection cn,
         int clienteId,
@@ -692,20 +669,18 @@ SELECT CASE
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CrearDesdePT(LogisticaCrearVm vm, bool confirmarSalidaPT, CancellationToken cancellationToken)
     {
-        // LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4
-        // Este endpoint SOLO programa/reserva. La salida fisica PT se confirma en Detalle.
         confirmarSalidaPT = false;
         var acceso = await ValidarAccesoAsync("Nuevo embarque");
         if (acceso != null) return acceso;
-
-        // Este flujo no usa la seleccion manual de Release del formulario anterior.
         ModelState.Remove(nameof(vm.ReleaseDetalleID));
         ModelState.Remove(nameof(vm.CantidadSolicitada));
         ModelState.Remove(nameof(vm.Partidas));
-
         vm.Destino = vm.Destino?.Trim() ?? string.Empty;
         vm.DireccionEntrega = vm.DireccionEntrega?.Trim();
-        vm.OperadorTexto = vm.OperadorTexto?.Trim();
+        vm.ChoferNombreSnapshot = vm.ChoferNombreSnapshot?.Trim();
+        vm.ChoferExterno = vm.ChoferExterno?.Trim();
+        vm.UnidadExterna = vm.UnidadExterna?.Trim();
+        vm.PlacasExternas = vm.PlacasExternas?.Trim();
         vm.Observaciones = vm.Observaciones?.Trim();
         vm.Transportista = vm.Transportista?.Trim();
         vm.GuiaReferencia = vm.GuiaReferencia?.Trim();
@@ -713,71 +688,54 @@ SELECT CASE
         vm.FormaEnvio = NormalizarFormaEnvio(vm.FormaEnvio);
         vm.ModalidadEnvio = NormalizarModalidadEnvio(vm.ModalidadEnvio);
         vm.CajasPT ??= new List<LogisticaCajaPtCrearVm>();
-
         var cajasSeleccionadas = vm.CajasPT.Where(x => x.Seleccionada).ToList();
-
-        if (!vm.ClienteID.HasValue || vm.ClienteID.Value <= 0)
-            ModelState.AddModelError(nameof(vm.ClienteID), "Selecciona un cliente.");
-
-        if (cajasSeleccionadas.Count == 0)
-            ModelState.AddModelError(nameof(vm.CajasPT), "Selecciona al menos una caja de Producto Terminado.");
-
-        if (cajasSeleccionadas.Where(x => x.CajaID > 0).GroupBy(x => x.CajaID).Any(g => g.Count() > 1))
-            ModelState.AddModelError(nameof(vm.CajasPT), "Una misma caja PT no puede enviarse dos veces en la misma seleccion.");
-
+        if (!vm.ClienteID.HasValue || vm.ClienteID.Value <= 0) ModelState.AddModelError(nameof(vm.ClienteID), "Selecciona un cliente.");
+        if (cajasSeleccionadas.Count == 0) ModelState.AddModelError(nameof(vm.CajasPT), "Selecciona al menos una caja de Producto Terminado.");
+        if (cajasSeleccionadas.Where(x => x.CajaID > 0).GroupBy(x => x.CajaID).Any(g => g.Count() > 1)) ModelState.AddModelError(nameof(vm.CajasPT), "Una misma caja PT no puede enviarse dos veces en la misma selección.");
         foreach (var caja in cajasSeleccionadas)
-        {
-            if (caja.CajaID <= 0)
-                ModelState.AddModelError(nameof(vm.CajasPT), "Existe una caja seleccionada no valida.");
-        }
-
-        if (string.IsNullOrWhiteSpace(vm.TipoOperacion))
-            ModelState.AddModelError(nameof(vm.TipoOperacion), "Selecciona Nacional o Exportacion.");
-        if (string.IsNullOrWhiteSpace(vm.FormaEnvio))
-            ModelState.AddModelError(nameof(vm.FormaEnvio), "Selecciona Entrega interna/local o Paqueteria/Transportista.");
-        if (string.IsNullOrWhiteSpace(vm.Destino))
-            ModelState.AddModelError(nameof(vm.Destino), "El destino es obligatorio.");
-        if (vm.Destino.Length > 300)
-            ModelState.AddModelError(nameof(vm.Destino), "El destino no puede exceder 300 caracteres.");
-        if (vm.FechaCargaProgramada == default)
-            ModelState.AddModelError(nameof(vm.FechaCargaProgramada), "La fecha de carga es obligatoria.");
-        if (vm.FechaEntregaProgramada == default)
-            ModelState.AddModelError(nameof(vm.FechaEntregaProgramada), "La fecha de entrega es obligatoria.");
-        if (vm.FechaCargaProgramada != default && vm.FechaEntregaProgramada != default && vm.FechaEntregaProgramada.Date < vm.FechaCargaProgramada.Date)
-            ModelState.AddModelError(nameof(vm.FechaEntregaProgramada), "La fecha de entrega no puede ser anterior a la fecha de carga.");
-
+            if (caja.CajaID <= 0) ModelState.AddModelError(nameof(vm.CajasPT), "Existe una caja seleccionada no válida.");
+        if (string.IsNullOrWhiteSpace(vm.TipoOperacion)) ModelState.AddModelError(nameof(vm.TipoOperacion), "Selecciona Nacional o Exportación.");
+        if (string.IsNullOrWhiteSpace(vm.FormaEnvio)) ModelState.AddModelError(nameof(vm.FormaEnvio), "Selecciona Interno, Cliente recoge o Paquetería.");
+        if (string.IsNullOrWhiteSpace(vm.Destino)) ModelState.AddModelError(nameof(vm.Destino), "El destino es obligatorio.");
+        if (vm.Destino.Length > 300) ModelState.AddModelError(nameof(vm.Destino), "El destino no puede exceder 300 caracteres.");
+        if (vm.FechaCargaProgramada == default) ModelState.AddModelError(nameof(vm.FechaCargaProgramada), "La fecha de carga es obligatoria.");
+        if (!vm.HoraCargaProgramada.HasValue) ModelState.AddModelError(nameof(vm.HoraCargaProgramada), "La hora de carga es obligatoria.");
         if (vm.TipoOperacion == "Nacional") vm.PasaAduana = null;
-        if (vm.TipoOperacion == "Exportacion" && !vm.PasaAduana.HasValue)
-            ModelState.AddModelError(nameof(vm.PasaAduana), "Indica si la exportacion pasa por aduana.");
-
+        if (vm.TipoOperacion == "Exportacion" && !vm.PasaAduana.HasValue) ModelState.AddModelError(nameof(vm.PasaAduana), "Indica si la exportación pasa por aduana.");
         if (vm.FormaEnvio == "Interno")
         {
-            if (!vm.RutaID.HasValue || vm.RutaID.Value <= 0)
-                ModelState.AddModelError(nameof(vm.RutaID), "Selecciona una ruta.");
-            if (!vm.UnidadID.HasValue || vm.UnidadID.Value <= 0)
-                ModelState.AddModelError(nameof(vm.UnidadID), "Selecciona una unidad.");
-            if (string.IsNullOrWhiteSpace(vm.OperadorTexto))
-                ModelState.AddModelError(nameof(vm.OperadorTexto), "Captura el operador.");
+            if (!vm.RutaID.HasValue || vm.RutaID.Value <= 0) ModelState.AddModelError(nameof(vm.RutaID), "Selecciona una ruta.");
+            if (!vm.UnidadID.HasValue || vm.UnidadID.Value <= 0) ModelState.AddModelError(nameof(vm.UnidadID), "Selecciona una unidad.");
+            if (!vm.ChoferUsuarioID.HasValue || vm.ChoferUsuarioID.Value <= 0) ModelState.AddModelError(nameof(vm.ChoferUsuarioID), "Selecciona un chofer.");
             vm.ModalidadEnvio = null;
             vm.Transportista = null;
             vm.GuiaReferencia = null;
+            vm.ChoferExterno = null;
+            vm.UnidadExterna = null;
+            vm.PlacasExternas = null;
+        }
+        else if (vm.FormaEnvio == "Cliente")
+        {
+            vm.RutaID = null;
+            vm.UnidadID = null;
+            vm.ChoferUsuarioID = null;
+            vm.ChoferNombreSnapshot = null;
+            vm.ModalidadEnvio = null;
+            vm.Transportista = null;
+            vm.GuiaReferencia = null;
+            if (string.IsNullOrWhiteSpace(vm.ChoferExterno)) ModelState.AddModelError(nameof(vm.ChoferExterno), "Captura el nombre de la persona o transportista que recoge.");
         }
         else if (vm.FormaEnvio == "Paqueteria")
         {
             vm.RutaID = null;
             vm.UnidadID = null;
-            vm.OperadorTexto = null;
-            if (string.IsNullOrWhiteSpace(vm.ModalidadEnvio))
-                ModelState.AddModelError(nameof(vm.ModalidadEnvio), "Selecciona modalidad Terrestre, Aerea o Maritima.");
-            if (string.IsNullOrWhiteSpace(vm.Transportista))
-                ModelState.AddModelError(nameof(vm.Transportista), "Captura la compania o transportista.");
-            if (vm.TipoOperacion == "Exportacion" && vm.PasaAduana == false && string.IsNullOrWhiteSpace(vm.GuiaReferencia))
-                ModelState.AddModelError(nameof(vm.GuiaReferencia), "Captura la guia o referencia de la exportacion.");
+            vm.ChoferUsuarioID = null;
+            vm.ChoferNombreSnapshot = null;
+            if (string.IsNullOrWhiteSpace(vm.ModalidadEnvio)) ModelState.AddModelError(nameof(vm.ModalidadEnvio), "Selecciona modalidad Terrestre, Aérea o Marítima.");
+            if (string.IsNullOrWhiteSpace(vm.Transportista)) ModelState.AddModelError(nameof(vm.Transportista), "Captura la compañía o paquetería.");
         }
-
         await using var cn = await AbrirAsync(cancellationToken);
         vm.Clientes = await CargarClientesPendientesAsync(cn, cancellationToken);
-
         if (!ModelState.IsValid)
         {
             if (vm.ClienteID.HasValue && vm.ClienteID.Value > 0)
@@ -789,84 +747,47 @@ SELECT CASE
             ViewBag.PuedeSalidaPtV3 = await TieneSalidaPtV3Async(cn, null, cancellationToken);
             return View("ConfirmarDesdePT", vm);
         }
-
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
             var clienteId = vm.ClienteID!.Value;
-
             string cliente;
-            await using (var cmdCliente = new SqlCommand(
-                "SELECT TOP (1) ISNULL(Nombre,N'') FROM dbo.ERP_Clientes WITH (HOLDLOCK) WHERE ClienteID=@ClienteID;",
-                cn,
-                tx))
+            await using (var cmdCliente = new SqlCommand("SELECT TOP(1) ISNULL(Nombre,N'') FROM dbo.ERP_Clientes WITH(HOLDLOCK) WHERE ClienteID=@ClienteID;", cn, tx))
             {
                 cmdCliente.Parameters.Add("@ClienteID", SqlDbType.Int).Value = clienteId;
                 cliente = Convert.ToString(await cmdCliente.ExecuteScalarAsync(cancellationToken))?.Trim() ?? string.Empty;
             }
-            if (string.IsNullOrWhiteSpace(cliente))
-                throw new InvalidOperationException("El cliente seleccionado ya no existe o no tiene nombre valido.");
-
-            // 1) Releer y bloquear cada caja. No se modifica AlmacenPT_Cajas ni se genera movimiento PT.
+            if (string.IsNullOrWhiteSpace(cliente)) throw new InvalidOperationException("El cliente seleccionado ya no existe o no tiene nombre válido.");
             var cajasValidadas = new List<LogisticaCajaPtCrearVm>();
             foreach (var seleccion in cajasSeleccionadas.OrderBy(x => x.CajaID))
             {
                 const string sqlCaja = @"
-SELECT
-    c.CajaID,
-    c.ParteID,
-    p.ClienteID,
-    ISNULL(p.NumeroParte,N'') AS NumeroParte,
-    ISNULL(p.Descripcion,N'') AS Descripcion,
-    ISNULL(c.Etiqueta,N'') AS Etiqueta,
-    ISNULL(c.NumeroCaja,0) AS NumeroCaja,
-    ISNULL(c.CantidadInicial,0) AS CantidadInicial,
-    ISNULL(c.NumeroOF,N'') AS NumeroOF,
-    c.SolicitudProduccionID,
-    ISNULL(c.LoteEtiqueta,N'') AS Lote,
-    ISNULL(c.EstadoCalidad,N'') AS EstadoCalidad,
-    c.FechaEntrada,
-    ISNULL(inv.Retenido,0) AS Retenido,
-    CONVERT(int,
-        CASE
-            WHEN CONVERT(bigint,ISNULL(inv.Disponible,0)) - ISNULL(res.Reservado,0) > 0
-                THEN CONVERT(bigint,ISNULL(inv.Disponible,0)) - ISNULL(res.Reservado,0)
-            ELSE 0
-        END
-    ) AS Disponible
-FROM dbo.AlmacenPT_Cajas c WITH (UPDLOCK,HOLDLOCK)
-INNER JOIN dbo.ERP_Partes p
-    ON p.ParteID=c.ParteID
-INNER JOIN dbo.vw_AlmacenPTInventarioCaja inv
-    ON inv.CajaID=c.CajaID
+SELECT c.CajaID,c.ParteID,p.ClienteID,ISNULL(p.NumeroParte,N'') AS NumeroParte,ISNULL(p.Descripcion,N'') AS Descripcion,
+ISNULL(c.Etiqueta,N'') AS Etiqueta,ISNULL(c.NumeroCaja,0) AS NumeroCaja,ISNULL(c.CantidadInicial,0) AS CantidadInicial,
+ISNULL(c.NumeroOF,N'') AS NumeroOF,c.SolicitudProduccionID,ISNULL(c.LoteEtiqueta,N'') AS Lote,ISNULL(c.EstadoCalidad,N'') AS EstadoCalidad,
+c.FechaEntrada,ISNULL(inv.Retenido,0) AS Retenido,
+CONVERT(int,CASE WHEN CONVERT(bigint,ISNULL(inv.Disponible,0))-ISNULL(res.Reservado,0)>0 THEN CONVERT(bigint,ISNULL(inv.Disponible,0))-ISNULL(res.Reservado,0) ELSE 0 END) AS Disponible
+FROM dbo.AlmacenPT_Cajas c WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.ERP_Partes p ON p.ParteID=c.ParteID
+INNER JOIN dbo.vw_AlmacenPTInventarioCaja inv ON inv.CajaID=c.CajaID
 OUTER APPLY
 (
     SELECT SUM(CONVERT(bigint,ec.CantidadAsignada)) AS Reservado
-    FROM dbo.Logistica_EmbarqueCajas ec WITH (UPDLOCK,HOLDLOCK)
-    WHERE ec.CajaID=c.CajaID
-      AND ec.Activo=1
+    FROM dbo.Logistica_EmbarqueCajas ec WITH(UPDLOCK,HOLDLOCK)
+    WHERE ec.CajaID=c.CajaID AND ec.Activo=1
 ) res
-WHERE c.CajaID=@CajaID
-  AND c.Activo=1;";
-
+WHERE c.CajaID=@CajaID AND c.Activo=1;";
                 await using var cmdCaja = new SqlCommand(sqlCaja, cn, tx);
                 cmdCaja.Parameters.Add("@CajaID", SqlDbType.Int).Value = seleccion.CajaID;
                 await using var rdCaja = await cmdCaja.ExecuteReaderAsync(cancellationToken);
-                if (!await rdCaja.ReadAsync(cancellationToken))
-                    throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no existe o esta inactiva.");
-
+                if (!await rdCaja.ReadAsync(cancellationToken)) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no existe o está inactiva.");
                 var cajaClienteId = Entero(rdCaja, "ClienteID");
                 var retenido = Entero(rdCaja, "Retenido");
                 var calidad = Texto(rdCaja, "EstadoCalidad");
                 var disponible = Entero(rdCaja, "Disponible");
-
-                if (cajaClienteId != clienteId)
-                    throw new InvalidOperationException($"La caja PT {seleccion.CajaID} no pertenece al cliente seleccionado.");
-                if (!string.Equals(calidad, "Liberado", StringComparison.OrdinalIgnoreCase) || retenido > 0)
-                    throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no esta liberada para embarque.");
-                if (disponible <= 0)
-                    throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no tiene saldo disponible.");
-
+                if (cajaClienteId != clienteId) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} no pertenece al cliente seleccionado.");
+                if (!string.Equals(calidad, "Liberado", StringComparison.OrdinalIgnoreCase) || retenido > 0) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no está liberada para embarque.");
+                if (disponible <= 0) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no tiene saldo disponible.");
                 cajasValidadas.Add(new LogisticaCajaPtCrearVm
                 {
                     Seleccionada = true,
@@ -887,23 +808,15 @@ WHERE c.CajaID=@CajaID
                     CantidadTomar = disponible
                 });
             }
-
-            if (cajasValidadas.Count == 0)
-                throw new InvalidOperationException("No quedaron cajas PT validas para crear el embarque.");
-
-            // 2) Bloquear Releases de las partes seleccionadas y leer su pendiente real dentro de la misma transaccion.
+            if (cajasValidadas.Count == 0) throw new InvalidOperationException("No quedaron cajas PT válidas para crear el embarque.");
             var demandas = new List<LogisticaDemandaVm>();
             foreach (var parteId in cajasValidadas.Select(x => x.ParteID).Distinct().OrderBy(x => x))
             {
                 const string sqlLockRelease = @"
 SELECT d.ReleaseDetalleID
-FROM dbo.Planeacion_ReleaseDetalle d WITH (UPDLOCK,HOLDLOCK)
-INNER JOIN dbo.Planeacion_Releases r WITH (UPDLOCK,HOLDLOCK)
-    ON r.ReleaseID=d.ReleaseID
-WHERE d.Activo=1
-  AND r.Activo=1
-  AND r.ClienteID=@ClienteID
-  AND d.ParteID=@ParteID
+FROM dbo.Planeacion_ReleaseDetalle d WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Planeacion_Releases r WITH(UPDLOCK,HOLDLOCK) ON r.ReleaseID=d.ReleaseID
+WHERE d.Activo=1 AND r.Activo=1 AND r.ClienteID=@ClienteID AND d.ParteID=@ParteID
 ORDER BY d.ReleaseDetalleID;";
                 await using (var cmdLock = new SqlCommand(sqlLockRelease, cn, tx))
                 {
@@ -912,100 +825,68 @@ ORDER BY d.ReleaseDetalleID;";
                     await using var rdLock = await cmdLock.ExecuteReaderAsync(cancellationToken);
                     while (await rdLock.ReadAsync(cancellationToken)) { }
                 }
-
                 const string sqlDemandas = @"
-SELECT
-    ReleaseDetalleID,ReleaseID,ISNULL(FolioRelease,N'') AS FolioRelease,ClienteID,
-    ISNULL(Cliente,N'') AS Cliente,ParteID,ISNULL(NumeroParte,N'') AS NumeroParte,
-    ISNULL(Descripcion,N'') AS Descripcion,SecuenciaEntrega,FechaCarga,FechaRequerida,
-    CantidadRequerida,CantidadProgramadaLogistica,PendienteProgramar,SolicitudProduccionID,
-    ISNULL(NumeroOF,N'') AS NumeroOF,CajasPTDisponibles,PiezasPTDisponibles
+SELECT ReleaseDetalleID,ReleaseID,ISNULL(FolioRelease,N'') AS FolioRelease,ClienteID,ISNULL(Cliente,N'') AS Cliente,ParteID,
+ISNULL(NumeroParte,N'') AS NumeroParte,ISNULL(Descripcion,N'') AS Descripcion,SecuenciaEntrega,FechaCarga,FechaRequerida,
+CantidadRequerida,CantidadProgramadaLogistica,PendienteProgramar,SolicitudProduccionID,ISNULL(NumeroOF,N'') AS NumeroOF,
+CajasPTDisponibles,PiezasPTDisponibles
 FROM dbo.vw_Logistica_DemandaRelease
-WHERE ClienteID=@ClienteID
-  AND ParteID=@ParteID
-  AND PendienteProgramar>0
-ORDER BY
-    COALESCE(FechaCarga,DATEADD(DAY,-1,FechaRequerida)),
-    FechaRequerida,
-    ISNULL(SecuenciaEntrega,2147483647),
-    ReleaseDetalleID;";
+WHERE ClienteID=@ClienteID AND ParteID=@ParteID AND PendienteProgramar>0
+ORDER BY COALESCE(FechaCarga,DATEADD(DAY,-1,FechaRequerida)),FechaRequerida,ISNULL(SecuenciaEntrega,2147483647),ReleaseDetalleID;";
                 await using var cmdDemandas = new SqlCommand(sqlDemandas, cn, tx);
                 cmdDemandas.Parameters.Add("@ClienteID", SqlDbType.Int).Value = clienteId;
                 cmdDemandas.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
                 await using var rdDemandas = await cmdDemandas.ExecuteReaderAsync(cancellationToken);
-                while (await rdDemandas.ReadAsync(cancellationToken))
-                    demandas.Add(MapDemanda(rdDemandas));
+                while (await rdDemandas.ReadAsync(cancellationToken)) demandas.Add(MapDemanda(rdDemandas));
             }
-
-            // 3) Distribuir cajas FIFO entre Releases. Misma OF es preferencia, no bloqueo.
             var pendientePorRelease = demandas.ToDictionary(x => x.ReleaseDetalleID, x => x.PendienteProgramar);
             var asignaciones = new List<(LogisticaCajaPtCrearVm Caja, LogisticaDemandaVm Demanda, int Cantidad, int PendienteDespues)>();
-
             foreach (var parte in cajasValidadas.GroupBy(x => x.ParteID).OrderBy(x => x.Min(c => c.FechaEntrada)))
             {
-                var demandasParte = demandas
-                    .Where(x => x.ParteID == parte.Key && x.PendienteProgramar > 0)
-                    .ToList();
-
-                if (demandasParte.Count == 0)
-                    throw new InvalidOperationException($"La parte {parte.First().NumeroParte} tiene PT disponible, pero ya no tiene Releases pendientes.");
-
+                var demandasParte = demandas.Where(x => x.ParteID == parte.Key && x.PendienteProgramar > 0).ToList();
+                if (demandasParte.Count == 0) throw new InvalidOperationException($"La parte {parte.First().NumeroParte} tiene PT disponible, pero ya no tiene Releases pendientes.");
                 var totalSeleccionadoParte = parte.Sum(x => (long)x.CantidadTomar);
                 var totalPendienteParte = demandasParte.Sum(x => (long)x.PendienteProgramar);
-                if (totalSeleccionadoParte > totalPendienteParte)
-                    throw new InvalidOperationException($"La parte {parte.First().NumeroParte} selecciono {totalSeleccionadoParte:N0} PZA en cajas completas, pero sus Releases solo tienen {totalPendienteParte:N0} PZA pendientes. Deselecciona una caja.");
-
+                if (totalSeleccionadoParte > totalPendienteParte) throw new InvalidOperationException($"La parte {parte.First().NumeroParte} seleccionó {totalSeleccionadoParte:N0} PZA en cajas completas, pero sus Releases solo tienen {totalPendienteParte:N0} PZA pendientes. Deselecciona una caja.");
                 foreach (var caja in parte.OrderBy(x => x.FechaEntrada).ThenBy(x => x.CajaID))
                 {
                     var restanteCaja = caja.CantidadTomar;
                     var ofCaja = NormalizarOF(caja.NumeroOF);
-
-                    var candidatos = demandasParte
-                        .Where(x => pendientePorRelease[x.ReleaseDetalleID] > 0)
-                        .OrderBy(x =>
-                            (caja.SolicitudProduccionID.HasValue && x.SolicitudProduccionID == caja.SolicitudProduccionID)
-                            || (!string.IsNullOrWhiteSpace(ofCaja) && string.Equals(NormalizarOF(x.NumeroOF), ofCaja, StringComparison.OrdinalIgnoreCase))
-                                ? 0 : 1)
+                    var candidatos = demandasParte.Where(x => pendientePorRelease[x.ReleaseDetalleID] > 0)
+                        .OrderBy(x => (caja.SolicitudProduccionID.HasValue && x.SolicitudProduccionID == caja.SolicitudProduccionID) || (!string.IsNullOrWhiteSpace(ofCaja) && string.Equals(NormalizarOF(x.NumeroOF), ofCaja, StringComparison.OrdinalIgnoreCase)) ? 0 : 1)
                         .ThenBy(x => x.FechaCarga ?? x.FechaEntrega.AddDays(-1))
                         .ThenBy(x => x.FechaEntrega)
                         .ThenBy(x => x.SecuenciaEntrega ?? int.MaxValue)
-                        .ThenBy(x => x.ReleaseDetalleID)
-                        .ToList();
-
+                        .ThenBy(x => x.ReleaseDetalleID).ToList();
                     foreach (var demanda in candidatos)
                     {
                         if (restanteCaja <= 0) break;
                         var pendiente = pendientePorRelease[demanda.ReleaseDetalleID];
                         if (pendiente <= 0) continue;
-
                         var asignar = Math.Min(restanteCaja, pendiente);
                         pendientePorRelease[demanda.ReleaseDetalleID] = pendiente - asignar;
                         restanteCaja -= asignar;
-
-                        asignaciones.Add((
-                            caja,
-                            demanda,
-                            asignar,
-                            pendientePorRelease[demanda.ReleaseDetalleID]
-                        ));
+                        asignaciones.Add((caja, demanda, asignar, pendientePorRelease[demanda.ReleaseDetalleID]));
                     }
-
-                    if (restanteCaja > 0)
-                        throw new InvalidOperationException($"No fue posible distribuir {restanteCaja:N0} PZA de la caja {caja.Etiqueta} entre Releases pendientes de la parte {caja.NumeroParte}.");
+                    if (restanteCaja > 0) throw new InvalidOperationException($"No fue posible distribuir {restanteCaja:N0} PZA de la caja {caja.Etiqueta} entre Releases pendientes de la parte {caja.NumeroParte}.");
                 }
             }
-
-            if (asignaciones.Count == 0)
-                throw new InvalidOperationException("No se genero ninguna asignacion Caja PT -> Release.");
-
-            // 4) Crear encabezado del embarque. Aun no existe salida fisica de PT.
+            if (asignaciones.Count == 0) throw new InvalidOperationException("No se generó ninguna asignación Caja PT -> Release.");
+            var fechaEntregaVisual = asignaciones.Min(x => x.Demanda.FechaEntrega).Date;
+            string? choferTexto = null;
+            if (vm.FormaEnvio == "Interno" && vm.ChoferUsuarioID.HasValue)
+            {
+                choferTexto = await ObtenerNombreChoferAsync(cn, tx, vm.ChoferUsuarioID.Value, cancellationToken);
+                vm.ChoferNombreSnapshot = choferTexto;
+            }
+            else if (vm.FormaEnvio == "Cliente") choferTexto = vm.ChoferExterno;
+            else if (vm.FormaEnvio == "Paqueteria") choferTexto = string.IsNullOrWhiteSpace(vm.ChoferExterno) ? vm.Transportista : vm.ChoferExterno;
             const string sqlHeader = @"
 INSERT dbo.Logistica_Embarques
 (Folio,ClienteID,ClienteNombreSnapshot,Destino,DireccionEntrega,TipoOperacion,FormaEnvio,ModalidadEnvio,Transportista,GuiaReferencia,PasaAduana,FechaProgramada,FechaCargaProgramada,HoraCargaProgramada,FechaEntregaProgramada,HoraEntregaProgramada,Estatus,RutaID,UnidadID,OperadorTexto,ResponsableUsuarioID,ResponsableNombreSnapshot,Observaciones,FechaCreacion,CreadoPor,Activo)
 VALUES
-(NULL,@ClienteID,@ClienteNombre,@Destino,@DireccionEntrega,@TipoOperacion,@FormaEnvio,@ModalidadEnvio,@Transportista,@GuiaReferencia,@PasaAduana,@FechaCarga,@FechaCarga,@HoraCarga,@FechaEntrega,@HoraEntrega,N'Preparando',@RutaID,@UnidadID,@OperadorTexto,@UsuarioID,@UsuarioNombre,@Observaciones,SYSDATETIME(),@UsuarioNombre,1);
+(NULL,@ClienteID,@ClienteNombre,@Destino,@DireccionEntrega,@TipoOperacion,@FormaEnvio,@ModalidadEnvio,@Transportista,@GuiaReferencia,@PasaAduana,@FechaCarga,@FechaCarga,@HoraCarga,@FechaEntrega,NULL,N'Preparando',@RutaID,@UnidadID,@OperadorTexto,@UsuarioID,@UsuarioNombre,@Observaciones,SYSDATETIME(),@UsuarioNombre,1);
 SELECT CONVERT(int,SCOPE_IDENTITY());";
-
             int embarqueId;
             await using (var cmd = new SqlCommand(sqlHeader, cn, tx))
             {
@@ -1020,27 +901,19 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 cmd.Parameters.Add("@GuiaReferencia", SqlDbType.NVarChar, 150).Value = Db(vm.GuiaReferencia);
                 cmd.Parameters.Add("@PasaAduana", SqlDbType.Bit).Value = Db(vm.PasaAduana);
                 cmd.Parameters.Add("@FechaCarga", SqlDbType.Date).Value = vm.FechaCargaProgramada.Date;
-                cmd.Parameters.Add("@HoraCarga", SqlDbType.Time).Value = Db(vm.HoraCargaProgramada);
-                cmd.Parameters.Add("@FechaEntrega", SqlDbType.Date).Value = vm.FechaEntregaProgramada.Date;
-                cmd.Parameters.Add("@HoraEntrega", SqlDbType.Time).Value = Db(vm.HoraEntregaProgramada);
+                cmd.Parameters.Add("@HoraCarga", SqlDbType.Time).Value = vm.HoraCargaProgramada!.Value;
+                cmd.Parameters.Add("@FechaEntrega", SqlDbType.Date).Value = fechaEntregaVisual;
                 cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = Db(vm.RutaID);
                 cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = Db(vm.UnidadID);
-                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = Db(vm.OperadorTexto);
+                cmd.Parameters.Add("@OperadorTexto", SqlDbType.NVarChar, 200).Value = Db(choferTexto);
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                 cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = Db(vm.Observaciones);
                 embarqueId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
             }
-
             var folio = $"LOG-{DateTime.Today:yyyy}-{embarqueId:000000}";
-            await EjecutarAsync(cn, tx,
-                "UPDATE dbo.Logistica_Embarques SET Folio=@Folio WHERE EmbarqueID=@EmbarqueID;",
-                cancellationToken,
-                ("@Folio", folio),
-                ("@EmbarqueID", embarqueId));
-
-            // 5) Crear un detalle por Release con la cantidad que realmente proviene de las cajas seleccionadas.
-            var detallePorRelease = new Dictionary<int,int>();
+            await EjecutarAsync(cn, tx, "UPDATE dbo.Logistica_Embarques SET Folio=@Folio WHERE EmbarqueID=@EmbarqueID;", cancellationToken, ("@Folio", folio), ("@EmbarqueID", embarqueId));
+            var detallePorRelease = new Dictionary<int, int>();
             foreach (var grupo in asignaciones.GroupBy(x => x.Demanda.ReleaseDetalleID).OrderBy(x => x.Key))
             {
                 var demanda = grupo.First().Demanda;
@@ -1048,22 +921,10 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 var detalleId = await InsertarDetalleAsync(cn, tx, embarqueId, demanda, cantidadRelease, cancellationToken);
                 detallePorRelease[demanda.ReleaseDetalleID] = detalleId;
             }
-
-            // 6) Reservar cantidades exactas. Esto SOLO escribe Logistica_EmbarqueCajas.
             const string sqlReserva = @"
 INSERT dbo.Logistica_EmbarqueCajas
-(
-    EmbarqueID,EmbarqueDetalleID,CajaID,CantidadAsignada,EstatusSeleccion,
-    FechaSeleccion,UsuarioSeleccionID,UsuarioSeleccionNombre,
-    Activo,FechaCreacion,CreadoPor
-)
-VALUES
-(
-    @EmbarqueID,@DetalleID,@CajaID,@Cantidad,N'Reservada',
-    SYSDATETIME(),@UsuarioID,@UsuarioNombre,
-    1,SYSDATETIME(),@UsuarioNombre
-);";
-
+(EmbarqueID,EmbarqueDetalleID,CajaID,CantidadAsignada,EstatusSeleccion,FechaSeleccion,UsuarioSeleccionID,UsuarioSeleccionNombre,Activo,FechaCreacion,CreadoPor)
+VALUES(@EmbarqueID,@DetalleID,@CajaID,@Cantidad,N'Reservada',SYSDATETIME(),@UsuarioID,@UsuarioNombre,1,SYSDATETIME(),@UsuarioNombre);";
             foreach (var asignacion in asignaciones)
             {
                 var detalleId = detallePorRelease[asignacion.Demanda.ReleaseDetalleID];
@@ -1077,59 +938,20 @@ VALUES
                     cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                     await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
-
-                await InsertarHistorialAsync(
-                    cn,
-                    tx,
-                    embarqueId,
-                    "CAJA_RESERVADA_AUTO",
-                    "Preparando",
-                    "Preparando",
-                    $"Cliente {cliente}. Parte {asignacion.Demanda.NumeroParte}. OF caja {(string.IsNullOrWhiteSpace(asignacion.Caja.NumeroOF) ? "-" : asignacion.Caja.NumeroOF)}. Release {asignacion.Demanda.FolioRelease}. Caja #{asignacion.Caja.NumeroCaja} / ID {asignacion.Caja.CajaID} / etiqueta {asignacion.Caja.Etiqueta} / lote {(string.IsNullOrWhiteSpace(asignacion.Caja.Lote) ? "-" : asignacion.Caja.Lote)}. Cantidad original caja {asignacion.Caja.CantidadInicial:N0} PZA. Residual antes de reservar {asignacion.Caja.Disponible:N0} PZA. Asignadas {asignacion.Cantidad:N0} PZA. Pendiente del Release despues de esta asignacion {asignacion.PendienteDespues:N0} PZA.",
-                    cancellationToken);
+                await InsertarHistorialAsync(cn, tx, embarqueId, "CAJA_RESERVADA_AUTO", "Preparando", "Preparando", $"Cliente {cliente}. Parte {asignacion.Demanda.NumeroParte}. OF caja {(string.IsNullOrWhiteSpace(asignacion.Caja.NumeroOF) ? "-" : asignacion.Caja.NumeroOF)}. Release {asignacion.Demanda.FolioRelease}. Caja #{asignacion.Caja.NumeroCaja} / ID {asignacion.Caja.CajaID} / etiqueta {asignacion.Caja.Etiqueta} / lote {(string.IsNullOrWhiteSpace(asignacion.Caja.Lote) ? "-" : asignacion.Caja.Lote)}. Cantidad original caja {asignacion.Caja.CantidadInicial:N0} PZA. Residual antes de reservar {asignacion.Caja.Disponible:N0} PZA. Asignadas {asignacion.Cantidad:N0} PZA. Pendiente del Release después de esta asignación {asignacion.PendienteDespues:N0} PZA.", cancellationToken);
             }
-
             var totalPiezas = asignaciones.Sum(x => (long)x.Cantidad);
             var totalCajas = cajasValidadas.Count;
             var totalReleases = detallePorRelease.Count;
-
-            await InsertarHistorialAsync(
-                cn,
-                tx,
-                embarqueId,
-                "PROGRAMACION_PT_AUTOMATICA",
-                null,
-                "Preparando",
-                $"Embarque creado desde Producto Terminado. Cliente {cliente}. Cajas completas seleccionadas {totalCajas:N0}. Releases asignados automaticamente {totalReleases:N0}. Piezas {totalPiezas:N0}.",
-                cancellationToken);
-
-            if (confirmarSalidaPT)
-            {
-                if (!await TieneSalidaPtV3Async(cn, tx, cancellationToken))
-                    throw new InvalidOperationException("La salida PT directa requiere ejecutar el SQL 44_LOGISTICA_SALIDA_PT_DESDE_EMBARQUE_V3.sql con @Aplicar=1.");
-
-                await using var cmdSalidaPt = new SqlCommand(
-                    "EXEC dbo.usp_Logistica_SacarPTParaEmbarque @EmbarqueID,@UsuarioID,@UsuarioNombre;",
-                    cn,
-                    tx);
-                cmdSalidaPt.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
-                cmdSalidaPt.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
-                cmdSalidaPt.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-                await cmdSalidaPt.ExecuteNonQueryAsync(cancellationToken);
-            }
-
+            await InsertarHistorialAsync(cn, tx, embarqueId, "PROGRAMACION_PT_AUTOMATICA", null, "Preparando", $"Embarque creado desde Producto Terminado. Cliente {cliente}. Cajas completas seleccionadas {totalCajas:N0}. Releases asignados automáticamente {totalReleases:N0}. Piezas {totalPiezas:N0}. Fecha de carga {vm.FechaCargaProgramada:dd/MM/yyyy} {vm.HoraCargaProgramada.Value:hh\\:mm}. Forma de envío {vm.FormaEnvio}.", cancellationToken);
             await tx.CommitAsync(cancellationToken);
-
-            TempData["LogisticaOk"] = confirmarSalidaPT
-                ? $"{folio} creado y salida PT confirmada: {totalCajas:N0} caja(s) completas, {totalPiezas:N0} PZA. El embarque quedo Cargado; iniciar ruta no volvera a descontar PT."
-                : $"{folio} creado desde PT: {totalCajas:N0} caja(s) completas, {totalPiezas:N0} PZA y {totalReleases:N0} Release(s) asignados automaticamente.";
+            TempData["LogisticaOk"] = $"{folio} creado desde PT: {totalCajas:N0} caja(s) completas, {totalPiezas:N0} PZA y {totalReleases:N0} Release(s) asignados automáticamente.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(cancellationToken);
             ModelState.AddModelError("", ex.Message);
-
             if (vm.ClienteID.HasValue && vm.ClienteID.Value > 0)
             {
                 vm.Partidas = await CargarPartidasClienteAsync(cn, vm.ClienteID.Value, null, cancellationToken);
@@ -1140,110 +962,85 @@ VALUES
             return View("ConfirmarDesdePT", vm);
         }
     }
-
-    // LOGISTICA_DETALLE_OPERATIVO_SALIDA_PT_V4
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ConfirmarSalidaViajeDesdePT(
-        int embarqueId,
-        List<int>? cajaIdsConfirmadas,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> ConfirmarSalidaViajeDesdePT(int embarqueId, List<int>? cajaIdsConfirmadas, CancellationToken cancellationToken)
     {
-        // LOGISTICA_FIX_PERMISO_SALIDA_PT_V4_1
-        // La confirmacion de salida pertenece al flujo operativo de Logistica.
-        // Se aceptan los dos permisos existentes del flujo; nunca se devuelve Forbid()
-        // para evitar redireccionar al inexistente /Account/AccessDenied.
-        if (!UsuarioID.HasValue)
-            return RedirectToAction("Login", "Login");
-
-        var puedeOperarSalida =
-            await _acceso.TienePermisoAsync(UsuarioID.Value, "Tablero de LogÃ­stica")
-            || await _acceso.TienePermisoAsync(UsuarioID.Value, "Nuevo embarque");
-
+        if (!UsuarioID.HasValue) return RedirectToAction("Login", "Login");
+        var puedeOperarSalida = await _acceso.TienePermisoAsync(UsuarioID.Value, "Tablero de Logística") || await _acceso.TienePermisoAsync(UsuarioID.Value, "Nuevo embarque");
         if (!puedeOperarSalida)
         {
             TempData["LogisticaError"] = "Tu usuario no tiene permiso para confirmar la salida de este embarque.";
             return RedirectToAction(nameof(Index));
         }
-
-        if (embarqueId <= 0)
-            return BadRequest();
-
+        if (embarqueId <= 0) return BadRequest();
         await using var cn = await AbrirAsync(cancellationToken);
         var detalle = await CargarDetalleAsync(cn, embarqueId, cancellationToken);
         if (detalle == null) return NotFound();
-
         if (detalle.Estatus != "Preparado")
         {
-            TempData["LogisticaError"] = "La salida de planta solo puede confirmarse cuando el embarque esta Preparado.";
+            TempData["LogisticaError"] = "La salida de planta solo puede confirmarse cuando el embarque está Preparado.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
         if (!detalle.PreparacionCompleta)
         {
-            TempData["LogisticaError"] = "La preparacion de piezas todavia no esta completa.";
+            TempData["LogisticaError"] = "La preparación de piezas todavía no está completa.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
         if (!detalle.DatosTransporteCompletos)
         {
-            TempData["LogisticaError"] = "Completa ruta, unidad y operador antes de confirmar la salida.";
+            TempData["LogisticaError"] = detalle.FormaEnvio switch
+            {
+                "Interno" => "Completa ruta, unidad y chofer antes de confirmar la salida.",
+                "Cliente" => "Captura los datos de la persona o transportista que recoge antes de confirmar la salida.",
+                "Paqueteria" => "Completa los datos de paquetería/transportista antes de confirmar la salida.",
+                _ => "Completa los datos de recolección o transporte antes de confirmar la salida."
+            };
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
         if (!detalle.DocumentacionCompleta)
         {
-            TempData["LogisticaError"] = "Falta documentacion obligatoria cargada y validada antes de la salida.";
+            TempData["LogisticaError"] = "Falta documentación obligatoria cargada y validada antes de la salida.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
         if (detalle.IncidenciasCriticas > 0)
         {
-            TempData["LogisticaError"] = "Existen incidencias criticas abiertas. No se puede iniciar el viaje.";
+            TempData["LogisticaError"] = "Existen incidencias críticas abiertas. No se puede confirmar la salida.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
-
         cajaIdsConfirmadas ??= new List<int>();
         var confirmadas = cajaIdsConfirmadas.Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
-
         const string sqlProc = @"
 SELECT CASE WHEN OBJECT_ID(N'dbo.usp_Logistica_SacarPTParaEmbarque',N'P') IS NOT NULL
-             AND OBJECT_ID(N'dbo.usp_Logistica_DespacharEmbarque',N'P') IS NOT NULL
-            THEN 1 ELSE 0 END;";
+AND OBJECT_ID(N'dbo.usp_Logistica_DespacharEmbarque',N'P') IS NOT NULL
+THEN 1 ELSE 0 END;";
         await using (var proc = new SqlCommand(sqlProc, cn))
         {
             if (Convert.ToInt32(await proc.ExecuteScalarAsync(cancellationToken) ?? 0) != 1)
             {
-                TempData["LogisticaError"] = "Falta aplicar la estructura SQL de salida PT de Logistica antes de confirmar el viaje.";
+                TempData["LogisticaError"] = "Falta aplicar la estructura SQL de salida PT de Logística antes de confirmar la salida.";
                 return RedirectToAction(nameof(Detalle), new { id = embarqueId });
             }
         }
-
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
             const string sqlCajas = @"
 SELECT DISTINCT ec.CajaID
-FROM dbo.Logistica_EmbarqueCajas ec WITH (UPDLOCK,HOLDLOCK)
-INNER JOIN dbo.Logistica_EmbarqueDetalle d WITH (UPDLOCK,HOLDLOCK)
-    ON d.EmbarqueDetalleID=ec.EmbarqueDetalleID
-   AND d.EmbarqueID=ec.EmbarqueID
-   AND d.Activo=1
-WHERE ec.EmbarqueID=@EmbarqueID
-  AND ec.Activo=1
+FROM dbo.Logistica_EmbarqueCajas ec WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Logistica_EmbarqueDetalle d WITH(UPDLOCK,HOLDLOCK)
+ON d.EmbarqueDetalleID=ec.EmbarqueDetalleID AND d.EmbarqueID=ec.EmbarqueID AND d.Activo=1
+WHERE ec.EmbarqueID=@EmbarqueID AND ec.Activo=1
 ORDER BY ec.CajaID;";
-
             var esperadas = new List<int>();
             await using (var cmd = new SqlCommand(sqlCajas, cn, tx))
             {
                 cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-                while (await rd.ReadAsync(cancellationToken))
-                    esperadas.Add(Convert.ToInt32(rd["CajaID"]));
+                while (await rd.ReadAsync(cancellationToken)) esperadas.Add(Convert.ToInt32(rd["CajaID"]));
             }
-
-            if (esperadas.Count == 0)
-                throw new InvalidOperationException("El embarque no tiene cajas PT activas para confirmar.");
-
-            if (confirmadas.Count != esperadas.Count || !confirmadas.SequenceEqual(esperadas))
-                throw new InvalidOperationException($"Debes escanear exactamente las {esperadas.Count:N0} caja(s) programadas antes de confirmar la salida de planta.");
-
+            if (esperadas.Count == 0) throw new InvalidOperationException("El embarque no tiene cajas PT activas para confirmar.");
+            if (confirmadas.Count != esperadas.Count || !confirmadas.SequenceEqual(esperadas)) throw new InvalidOperationException($"Debes escanear exactamente las {esperadas.Count:N0} caja(s) programadas antes de confirmar la salida de planta.");
             await using (var salida = new SqlCommand("dbo.usp_Logistica_SacarPTParaEmbarque", cn, tx))
             {
                 salida.CommandType = CommandType.StoredProcedure;
@@ -1251,10 +1048,8 @@ ORDER BY ec.CajaID;";
                 salida.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                 salida.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 await using var rd = await salida.ExecuteReaderAsync(cancellationToken);
-                if (!await rd.ReadAsync(cancellationToken))
-                    throw new InvalidOperationException("La salida PT termino sin devolver confirmacion.");
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("La salida PT terminó sin devolver confirmación.");
             }
-
             await using (var despacho = new SqlCommand("dbo.usp_Logistica_DespacharEmbarque", cn, tx))
             {
                 despacho.CommandType = CommandType.StoredProcedure;
@@ -1262,19 +1057,16 @@ ORDER BY ec.CajaID;";
                 despacho.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                 despacho.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                 await using var rd = await despacho.ExecuteReaderAsync(cancellationToken);
-                if (!await rd.ReadAsync(cancellationToken))
-                    throw new InvalidOperationException("El despacho termino sin devolver confirmacion.");
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El despacho terminó sin devolver confirmación.");
             }
-
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = $"Salida confirmada: {esperadas.Count:N0} caja(s) verificadas por escaner, salida PT registrada e inicio de viaje confirmado.";
+            TempData["LogisticaOk"] = $"Salida confirmada: {esperadas.Count:N0} caja(s) verificadas por escáner y salida PT registrada correctamente.";
         }
         catch (Exception ex)
         {
             try { await tx.RollbackAsync(cancellationToken); } catch { }
             TempData["LogisticaError"] = ex.Message;
         }
-
         return RedirectToAction(nameof(Detalle), new { id = embarqueId });
     }
 
@@ -1835,13 +1627,14 @@ WHERE EmbarqueID=@Id;",
 SELECT e.EmbarqueID,ISNULL(e.Estatus,N'') AS Estatus,e.ClienteID,ISNULL(NULLIF(LTRIM(RTRIM(e.ClienteNombreSnapshot)),N''),N'') AS Cliente,
 ISNULL(NULLIF(LTRIM(RTRIM(e.Destino)),N''),N'') AS Destino,ISNULL(NULLIF(LTRIM(RTRIM(e.TipoOperacion)),N''),N'Nacional') AS TipoOperacion,
 ISNULL(NULLIF(LTRIM(RTRIM(e.FormaEnvio)),N''),N'Interno') AS FormaEnvio,ISNULL(NULLIF(LTRIM(RTRIM(e.ModalidadEnvio)),N''),N'') AS ModalidadEnvio,
-ISNULL(NULLIF(LTRIM(RTRIM(e.Transportista)),N''),N'') AS Transportista,ISNULL(NULLIF(LTRIM(RTRIM(e.GuiaReferencia)),N''),N'') AS GuiaReferencia,e.PasaAduana,
-e.RutaID,e.UnidadID,ISNULL(NULLIF(LTRIM(RTRIM(e.OperadorTexto)),N''),N'') AS Operador,
+ISNULL(NULLIF(LTRIM(RTRIM(e.Transportista)),N''),N'') AS Transportista,ISNULL(NULLIF(LTRIM(RTRIM(e.GuiaReferencia)),N''),N'') AS GuiaReferencia,
+e.PasaAduana,e.RutaID,e.UnidadID,ISNULL(NULLIF(LTRIM(RTRIM(e.OperadorTexto)),N''),N'') AS Operador,
 ISNULL((SELECT SUM(d.CantidadSolicitada) FROM dbo.Logistica_EmbarqueDetalle d WHERE d.EmbarqueID=e.EmbarqueID AND d.Activo=1),0) AS TotalSolicitado,
 ISNULL((SELECT SUM(ec.CantidadAsignada) FROM dbo.Logistica_EmbarqueCajas ec WHERE ec.EmbarqueID=e.EmbarqueID AND ec.Activo=1),0) AS TotalAsignado,
 ISNULL((SELECT COUNT_BIG(*) FROM dbo.Logistica_EmbarqueCajas ec WHERE ec.EmbarqueID=e.EmbarqueID AND ec.Activo=1 AND ISNULL(ec.EstatusSeleccion,N'')<>N'Cargada'),0) AS CajasNoCargadas,
 ISNULL((SELECT COUNT_BIG(*) FROM dbo.Logistica_Incidencias i WHERE i.EmbarqueID=e.EmbarqueID AND i.Activo=1 AND i.Estatus IN(N'Abierta',N'En seguimiento') AND i.Severidad=N'Crítica'),0) AS IncidenciasCriticas
-FROM dbo.Logistica_Embarques e WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
+FROM dbo.Logistica_Embarques e
+WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
             string estatus, tipoOperacion, formaEnvio, modalidadEnvio, transportista, guia, operador, cliente, destino;
             int clienteId, totalSolicitado, totalAsignado;
             int? rutaId, unidadId;
@@ -1879,21 +1672,25 @@ FROM dbo.Logistica_Embarques e WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
                 if (string.IsNullOrWhiteSpace(destino)) throw new InvalidOperationException("El embarque no tiene un destino válido.");
                 if (formaEnvio == "Interno")
                 {
-                    if (!rutaId.HasValue) throw new InvalidOperationException("El embarque interno no tiene ruta asignada.");
-                    if (!unidadId.HasValue) throw new InvalidOperationException("El embarque interno no tiene unidad asignada.");
-                    if (string.IsNullOrWhiteSpace(operador)) throw new InvalidOperationException("El embarque interno no tiene operador asignado.");
+                    if (!rutaId.HasValue || rutaId.Value <= 0) throw new InvalidOperationException("El embarque interno no tiene ruta asignada.");
+                    if (!unidadId.HasValue || unidadId.Value <= 0) throw new InvalidOperationException("El embarque interno no tiene unidad asignada.");
+                    if (string.IsNullOrWhiteSpace(operador)) throw new InvalidOperationException("El embarque interno no tiene chofer asignado.");
+                }
+                else if (formaEnvio == "Cliente")
+                {
+                    if (string.IsNullOrWhiteSpace(operador)) throw new InvalidOperationException("Captura quién recoge la mercancía antes de confirmar la salida.");
                 }
                 else if (formaEnvio == "Paqueteria")
                 {
                     if (string.IsNullOrWhiteSpace(modalidadEnvio)) throw new InvalidOperationException("Selecciona la modalidad del envío.");
-                    if (string.IsNullOrWhiteSpace(transportista)) throw new InvalidOperationException("El envío no tiene compañía o transportista.");
-                    if (tipoOperacion == "Exportacion" && pasaAduana == false && string.IsNullOrWhiteSpace(guia)) throw new InvalidOperationException("La exportación sin aduana debe tener una guía o referencia.");
+                    if (string.IsNullOrWhiteSpace(transportista)) throw new InvalidOperationException("El embarque no tiene compañía o paquetería.");
                 }
+                else throw new InvalidOperationException("La forma de envío del embarque no es válida.");
                 if (totalSolicitado <= 0) throw new InvalidOperationException("El embarque no contiene piezas para despachar.");
                 if (totalAsignado != totalSolicitado) throw new InvalidOperationException($"La preparación está incompleta. Programado: {totalSolicitado:N0} PZA. Preparado: {totalAsignado:N0} PZA.");
                 if (cajasNoCargadas > 0) throw new InvalidOperationException(cajasNoCargadas == 1 ? "Existe una caja activa cuya carga física no está confirmada." : $"Existen {cajasNoCargadas:N0} cajas activas cuya carga física no está confirmada.");
                 if (incidenciasCriticas > 0) throw new InvalidOperationException("El embarque tiene incidencias críticas abiertas.");
-                var faltantes = await ObtenerDocumentosFaltantesAsync(cn, embarqueId, tipoOperacion, modalidadEnvio, pasaAduana, cancellationToken);
+                var faltantes = await ObtenerDocumentosFaltantesAsync(cn, embarqueId, tipoOperacion, formaEnvio, modalidadEnvio, pasaAduana, cancellationToken);
                 if (faltantes.Count > 0) throw new InvalidOperationException($"No se puede confirmar la salida. Faltan documentos obligatorios validados: {string.Join(", ", faltantes)}.");
             }
             await using var sp = new SqlCommand("dbo.usp_Logistica_DespacharEmbarque", cn) { CommandType = CommandType.StoredProcedure };
@@ -1919,267 +1716,74 @@ FROM dbo.Logistica_Embarques e WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Reprogramar(
-    LogisticaReprogramarVm model,
-    CancellationToken cancellationToken)
+    public async Task<IActionResult> Reprogramar(LogisticaReprogramarVm model, CancellationToken cancellationToken)
     {
-        var acceso =
-            await ValidarAccesoAsync("Tablero de Logística");
-
-        if (acceso != null)
-            return acceso;
-
-        if (model.FechaEntregaProgramada.Date <
-            model.FechaCargaProgramada.Date)
-        {
-            ModelState.AddModelError(
-                nameof(model.FechaEntregaProgramada),
-                "La fecha de entrega no puede ser anterior a la fecha de carga.");
-        }
-
-        model.Motivo =
-            model.Motivo?.Trim() ?? string.Empty;
-
-        model.Observaciones =
-            model.Observaciones?.Trim();
-
-        var motivosPermitidos = new HashSet<string>(
-            StringComparer.OrdinalIgnoreCase)
-    {
-        "Cliente",
-        "Producción",
-        "Producto no disponible",
-        "Calidad",
-        "Unidad no disponible",
-        "Operador",
-        "Transportista",
-        "Cambio de ruta",
-        "Retraso operativo",
-        "Otro"
-    };
-
-        if (!motivosPermitidos.Contains(model.Motivo))
-        {
-            ModelState.AddModelError(
-                nameof(model.Motivo),
-                "Selecciona un motivo de reprogramación válido.");
-        }
-
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        model.Motivo = model.Motivo?.Trim() ?? string.Empty;
+        model.Observaciones = model.Observaciones?.Trim();
+        var motivosPermitidos = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cliente", "Producción", "Producto no disponible", "Calidad", "Unidad no disponible", "Operador", "Transportista", "Cambio de ruta", "Retraso operativo", "Otro" };
+        if (model.EmbarqueID <= 0) ModelState.AddModelError(nameof(model.EmbarqueID), "El embarque no es válido.");
+        if (model.FechaCargaProgramada == default) ModelState.AddModelError(nameof(model.FechaCargaProgramada), "La fecha de carga es obligatoria.");
+        if (!model.HoraCargaProgramada.HasValue) ModelState.AddModelError(nameof(model.HoraCargaProgramada), "La hora de carga es obligatoria.");
+        if (!motivosPermitidos.Contains(model.Motivo)) ModelState.AddModelError(nameof(model.Motivo), "Selecciona un motivo de reprogramación válido.");
         if (!ModelState.IsValid)
         {
-            TempData["LogisticaError"] =
-                "Revisa los datos de la reprogramación.";
-
-            return RedirectToAction(
-                nameof(Detalle),
-                new { id = model.EmbarqueID });
+            TempData["LogisticaError"] = "Revisa los datos de la reprogramación.";
+            return RedirectToAction(nameof(Detalle), new { id = model.EmbarqueID });
         }
-
-        await using var cn =
-            await AbrirAsync(cancellationToken);
-
-        await using var tx =
-            (SqlTransaction)await cn.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
             const string sqlActual = @"
-SELECT
-    EmbarqueID,
-    ISNULL(Estatus,N'') AS Estatus,
-    FechaCargaProgramada,
-    HoraCargaProgramada,
-    FechaEntregaProgramada,
-    HoraEntregaProgramada
-FROM dbo.Logistica_Embarques WITH (UPDLOCK,HOLDLOCK)
-WHERE
-    EmbarqueID=@EmbarqueID
-    AND Activo=1;";
-
+SELECT EmbarqueID,ISNULL(Estatus,N'') AS Estatus,FechaCargaProgramada,HoraCargaProgramada
+FROM dbo.Logistica_Embarques WITH(UPDLOCK,HOLDLOCK)
+WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
             string estatus;
             DateTime? fechaCargaAnterior;
             TimeSpan? horaCargaAnterior;
-            DateTime? fechaEntregaAnterior;
-            TimeSpan? horaEntregaAnterior;
-
-            await using (var cmd =
-                new SqlCommand(sqlActual, cn, tx))
+            await using (var cmd = new SqlCommand(sqlActual, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@EmbarqueID",
-                    SqlDbType.Int).Value =
-                    model.EmbarqueID;
-
-                await using var rd =
-                    await cmd.ExecuteReaderAsync(
-                        cancellationToken);
-
-                if (!await rd.ReadAsync(cancellationToken))
-                {
-                    throw new InvalidOperationException(
-                        "El embarque no existe.");
-                }
-
-                estatus =
-                    Texto(rd, "Estatus");
-
-                fechaCargaAnterior =
-                    Fecha(rd, "FechaCargaProgramada");
-
-                horaCargaAnterior =
-                    Hora(rd, "HoraCargaProgramada");
-
-                fechaEntregaAnterior =
-                    Fecha(rd, "FechaEntregaProgramada");
-
-                horaEntregaAnterior =
-                    Hora(rd, "HoraEntregaProgramada");
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = model.EmbarqueID;
+                await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El embarque no existe.");
+                estatus = Texto(rd, "Estatus");
+                fechaCargaAnterior = Fecha(rd, "FechaCargaProgramada");
+                horaCargaAnterior = Hora(rd, "HoraCargaProgramada");
             }
-
-            if (estatus is "En ruta" or "Entregado" or "Cancelado")
-            {
-                throw new InvalidOperationException(
-                    $"No se puede reprogramar un embarque con estatus {estatus}.");
-            }
-
-            var sinCambios =
-                fechaCargaAnterior?.Date ==
-                    model.FechaCargaProgramada.Date
-                &&
-                horaCargaAnterior ==
-                    model.HoraCargaProgramada
-                &&
-                fechaEntregaAnterior?.Date ==
-                    model.FechaEntregaProgramada.Date
-                &&
-                horaEntregaAnterior ==
-                    model.HoraEntregaProgramada;
-
-            if (sinCambios)
-            {
-                throw new InvalidOperationException(
-                    "Las nuevas fechas y horas son iguales a la programación actual.");
-            }
-
+            if (estatus is "En ruta" or "Entregado" or "Cancelado") throw new InvalidOperationException($"No se puede reprogramar un embarque con estatus {estatus}.");
+            if (fechaCargaAnterior?.Date == model.FechaCargaProgramada.Date && horaCargaAnterior == model.HoraCargaProgramada) throw new InvalidOperationException("La nueva fecha y hora de carga son iguales a la programación actual.");
             const string sqlUpdate = @"
 UPDATE dbo.Logistica_Embarques
-SET
-    FechaProgramada = @FechaCarga,
-    FechaCargaProgramada = @FechaCarga,
-    HoraCargaProgramada = @HoraCarga,
-    FechaEntregaProgramada = @FechaEntrega,
-    HoraEntregaProgramada = @HoraEntrega,
-    FechaModificacion = SYSDATETIME(),
-    ActualizadoPor = @Usuario
-WHERE
-    EmbarqueID = @EmbarqueID
-    AND Activo = 1;";
-
-            await using (var cmd =
-                new SqlCommand(sqlUpdate, cn, tx))
+SET FechaProgramada=@FechaCarga,
+FechaCargaProgramada=@FechaCarga,
+HoraCargaProgramada=@HoraCarga,
+FechaModificacion=SYSDATETIME(),
+ActualizadoPor=@Usuario
+WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
+            await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
             {
-                cmd.Parameters.Add(
-                    "@FechaCarga",
-                    SqlDbType.Date).Value =
-                    model.FechaCargaProgramada.Date;
-
-                cmd.Parameters.Add(
-                    "@HoraCarga",
-                    SqlDbType.Time).Value =
-                    Db(model.HoraCargaProgramada);
-
-                cmd.Parameters.Add(
-                    "@FechaEntrega",
-                    SqlDbType.Date).Value =
-                    model.FechaEntregaProgramada.Date;
-
-                cmd.Parameters.Add(
-                    "@HoraEntrega",
-                    SqlDbType.Time).Value =
-                    Db(model.HoraEntregaProgramada);
-
-                cmd.Parameters.Add(
-                    "@Usuario",
-                    SqlDbType.NVarChar,
-                    200).Value =
-                    UsuarioNombre;
-
-                cmd.Parameters.Add(
-                    "@EmbarqueID",
-                    SqlDbType.Int).Value =
-                    model.EmbarqueID;
-
-                var afectados =
-                    await cmd.ExecuteNonQueryAsync(
-                        cancellationToken);
-
-                if (afectados == 0)
-                {
-                    throw new InvalidOperationException(
-                        "No fue posible actualizar la programación.");
-                }
+                cmd.Parameters.Add("@FechaCarga", SqlDbType.Date).Value = model.FechaCargaProgramada.Date;
+                cmd.Parameters.Add("@HoraCarga", SqlDbType.Time).Value = model.HoraCargaProgramada!.Value;
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = model.EmbarqueID;
+                if (await cmd.ExecuteNonQueryAsync(cancellationToken) == 0) throw new InvalidOperationException("No fue posible actualizar la programación.");
             }
-
-            var cargaAnterior =
-                FormatearFechaHoraLogistica(
-                    fechaCargaAnterior,
-                    horaCargaAnterior);
-
-            var cargaNueva =
-                FormatearFechaHoraLogistica(
-                    model.FechaCargaProgramada,
-                    model.HoraCargaProgramada);
-
-            var entregaAnterior =
-                FormatearFechaHoraLogistica(
-                    fechaEntregaAnterior,
-                    horaEntregaAnterior);
-
-            var entregaNueva =
-                FormatearFechaHoraLogistica(
-                    model.FechaEntregaProgramada,
-                    model.HoraEntregaProgramada);
-
-            var observacionHistorial =
-                $"Motivo: {model.Motivo}. " +
-                $"Carga: {cargaAnterior} → {cargaNueva}. " +
-                $"Entrega: {entregaAnterior} → {entregaNueva}.";
-
-            if (!string.IsNullOrWhiteSpace(
-                model.Observaciones))
-            {
-                observacionHistorial +=
-                    $" Observaciones: {model.Observaciones}";
-            }
-
-            await InsertarHistorialAsync(
-                cn,
-                tx,
-                model.EmbarqueID,
-                "REPROGRAMACION",
-                estatus,
-                estatus,
-                observacionHistorial,
-                cancellationToken);
-
+            var cargaAnterior = FormatearFechaHoraLogistica(fechaCargaAnterior, horaCargaAnterior);
+            var cargaNueva = FormatearFechaHoraLogistica(model.FechaCargaProgramada, model.HoraCargaProgramada);
+            var historial = $"Motivo: {model.Motivo}. Carga: {cargaAnterior} → {cargaNueva}.";
+            if (!string.IsNullOrWhiteSpace(model.Observaciones)) historial += $" Observaciones: {model.Observaciones}";
+            await InsertarHistorialAsync(cn, tx, model.EmbarqueID, "REPROGRAMACION", estatus, estatus, historial, cancellationToken);
             await tx.CommitAsync(cancellationToken);
-
-            TempData["LogisticaOk"] =
-                "El embarque fue reprogramado correctamente.";
+            TempData["LogisticaOk"] = "La fecha y hora de carga fueron reprogramadas correctamente.";
         }
         catch (Exception ex)
         {
             await tx.RollbackAsync(cancellationToken);
-
-            TempData["LogisticaError"] =
-                $"No fue posible reprogramar el embarque: {ex.Message}";
+            TempData["LogisticaError"] = $"No fue posible reprogramar el embarque: {ex.Message}";
         }
-
-        return RedirectToAction(
-            nameof(Detalle),
-            new { id = model.EmbarqueID });
+        return RedirectToAction(nameof(Detalle), new { id = model.EmbarqueID });
     }
 
     private async Task InsertarHistorialAsync(
@@ -2838,11 +2442,11 @@ VALUES
     private async Task<LogisticaDetalleVm?> CargarDetalleAsync(SqlConnection cn, int embarqueId, CancellationToken cancellationToken)
     {
         const string sqlHeader = @"
-SELECT e.EmbarqueID,ISNULL(e.Folio,N'') AS Folio,e.ClienteID,ISNULL(e.ClienteNombreSnapshot,N'') AS ClienteNombreSnapshot,ISNULL(e.Destino,N'') AS Destino,
-ISNULL(e.DireccionEntrega,N'') AS DireccionEntrega,ISNULL(e.TipoOperacion,N'Nacional') AS TipoOperacion,
+SELECT e.EmbarqueID,ISNULL(e.Folio,N'') AS Folio,e.ClienteID,ISNULL(e.ClienteNombreSnapshot,N'') AS ClienteNombreSnapshot,
+ISNULL(e.Destino,N'') AS Destino,ISNULL(e.DireccionEntrega,N'') AS DireccionEntrega,ISNULL(e.TipoOperacion,N'Nacional') AS TipoOperacion,
 ISNULL(e.FormaEnvio,N'Interno') AS FormaEnvio,ISNULL(e.ModalidadEnvio,N'') AS ModalidadEnvio,ISNULL(e.Transportista,N'') AS Transportista,
 ISNULL(e.GuiaReferencia,N'') AS GuiaReferencia,e.PasaAduana,ISNULL(e.Estatus,N'') AS Estatus,e.FechaCargaProgramada,e.HoraCargaProgramada,
-e.FechaEntregaProgramada,e.HoraEntregaProgramada,ISNULL(r.Codigo+N' - '+r.Nombre,N'') AS Ruta,
+e.FechaEntregaProgramada,ISNULL(r.Codigo+N' - '+r.Nombre,N'') AS Ruta,
 ISNULL(u.NumeroEconomico+CASE WHEN NULLIF(u.Placas,N'') IS NULL THEN N'' ELSE N' - '+u.Placas END,N'') AS Unidad,
 ISNULL(e.OperadorTexto,N'') AS Operador,ISNULL(e.Observaciones,N'') AS Observaciones,ISNULL(e.ReferenciaOperacion,N'') AS ReferenciaOperacion,
 e.FechaPreparacion,e.FechaCarga,e.FechaSalida,e.FechaEntrega,ISNULL(e.TieneIncidencia,0) AS TieneIncidencia
@@ -2874,10 +2478,11 @@ WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
             vm.FechaCargaProgramada = Fecha(rd, "FechaCargaProgramada");
             vm.HoraCargaProgramada = Hora(rd, "HoraCargaProgramada");
             vm.FechaEntregaProgramada = Fecha(rd, "FechaEntregaProgramada");
-            vm.HoraEntregaProgramada = Hora(rd, "HoraEntregaProgramada");
             vm.Ruta = Texto(rd, "Ruta");
             vm.Unidad = Texto(rd, "Unidad");
             vm.Operador = Texto(rd, "Operador");
+            if (vm.FormaEnvio == "Interno") vm.ChoferNombreSnapshot = vm.Operador;
+            else vm.ChoferExterno = vm.Operador;
             vm.Observaciones = Texto(rd, "Observaciones");
             vm.ReferenciaOperacion = Texto(rd, "ReferenciaOperacion");
             vm.FechaPreparacion = Fecha(rd, "FechaPreparacion");
@@ -2890,7 +2495,7 @@ WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
 SELECT d.EmbarqueDetalleID,d.ReleaseDetalleID,ISNULL(d.FolioReleaseSnapshot,N'') AS FolioRelease,
 ISNULL(d.NumeroParteSnapshot,N'') AS NumeroParteSnapshot,ISNULL(d.DescripcionParteSnapshot,N'') AS Descripcion,d.SolicitudProduccionID,
 ISNULL(d.NumeroOFSnapshot,N'') AS NumeroOF,d.FechaCargaReleaseSnapshot,d.FechaEntregaReleaseSnapshot,d.CantidadSolicitada,d.CantidadDespachada,
-ISNULL((SELECT SUM(ec.CantidadAsignada) FROM dbo.Logistica_EmbarqueCajas ec WHERE ec.EmbarqueDetalleID=d.EmbarqueDetalleID AND (ec.Activo=1 OR ec.EstatusSeleccion=N'Despachada')),0) AS CantidadAsignada
+ISNULL((SELECT SUM(ec.CantidadAsignada) FROM dbo.Logistica_EmbarqueCajas ec WHERE ec.EmbarqueDetalleID=d.EmbarqueDetalleID AND(ec.Activo=1 OR ec.EstatusSeleccion=N'Despachada')),0) AS CantidadAsignada
 FROM dbo.Logistica_EmbarqueDetalle d
 WHERE d.EmbarqueID=@EmbarqueID AND d.Activo=1
 ORDER BY d.EmbarqueDetalleID;";
@@ -2924,7 +2529,7 @@ ec.CantidadAsignada,ISNULL(ec.EstatusSeleccion,N'') AS EstatusSeleccion
 FROM dbo.Logistica_EmbarqueCajas ec
 INNER JOIN dbo.AlmacenPT_Cajas c ON c.CajaID=ec.CajaID
 INNER JOIN dbo.ERP_Partes p ON p.ParteID=c.ParteID
-WHERE ec.EmbarqueID=@EmbarqueID AND (ec.Activo=1 OR ec.EstatusSeleccion=N'Despachada')
+WHERE ec.EmbarqueID=@EmbarqueID AND(ec.Activo=1 OR ec.EstatusSeleccion=N'Despachada')
 ORDER BY ec.EmbarqueDetalleID,c.NumeroCaja;";
         await using (var cmd = new SqlCommand(sqlCajas, cn))
         {
@@ -3610,6 +3215,11 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
             TempData["LogisticaError"] = "Selecciona un tipo de documento válido.";
             return RedirectToAction(nameof(Detalle), new { id = embarqueId });
         }
+        if (tipoDocumento == "Remisión" && string.IsNullOrWhiteSpace(observaciones))
+        {
+            TempData["LogisticaError"] = "Cuando se utiliza Remisión en lugar de Factura debes indicar el motivo, por ejemplo cierre de mes o Finanzas fuera de servicio.";
+            return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        }
         if (archivo == null || archivo.Length <= 0)
         {
             TempData["LogisticaError"] = "Selecciona un archivo.";
@@ -3639,11 +3249,13 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
             if (header.Estatus == "Cancelado") throw new InvalidOperationException("No se pueden agregar documentos a un embarque cancelado.");
             const string sqlOperacion = @"
 SELECT ISNULL(NULLIF(LTRIM(RTRIM(TipoOperacion)),N''),N'Nacional') AS TipoOperacion,
+ISNULL(NULLIF(LTRIM(RTRIM(FormaEnvio)),N''),N'Interno') AS FormaEnvio,
 ISNULL(NULLIF(LTRIM(RTRIM(ModalidadEnvio)),N''),N'') AS ModalidadEnvio,
 PasaAduana
 FROM dbo.Logistica_Embarques WITH(UPDLOCK,HOLDLOCK)
 WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
             string tipoOperacion;
+            string formaEnvio;
             string modalidadEnvio;
             bool? pasaAduana;
             await using (var cmd = new SqlCommand(sqlOperacion, cn, tx))
@@ -3652,17 +3264,34 @@ WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
                 if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El embarque ya no está disponible.");
                 tipoOperacion = NormalizarTipoOperacion(Texto(rd, "TipoOperacion"));
+                formaEnvio = NormalizarFormaEnvio(Texto(rd, "FormaEnvio"));
                 modalidadEnvio = NormalizarModalidadEnvio(Texto(rd, "ModalidadEnvio"));
                 pasaAduana = rd.IsDBNull(rd.GetOrdinal("PasaAduana")) ? null : Convert.ToBoolean(rd["PasaAduana"]);
             }
             if (string.IsNullOrWhiteSpace(tipoOperacion)) tipoOperacion = "Nacional";
-            var definiciones = ObtenerDefinicionDocumentos(tipoOperacion, modalidadEnvio, pasaAduana);
+            if (string.IsNullOrWhiteSpace(formaEnvio)) formaEnvio = "Interno";
+            var definiciones = ObtenerDefinicionDocumentos(tipoOperacion, formaEnvio, modalidadEnvio, pasaAduana);
             var esObligatorio = false;
             var areaResponsable = ObtenerAreaDocumento(tipoDocumento);
-            if (tipoDocumento is "Commercial Invoice" or "Carta Porte")
+            if (tipoDocumento is "Factura" or "Remisión")
             {
+                var definicion = definiciones.FirstOrDefault(x => EsRequisitoFacturaORemision(x.TipoDocumento));
+                if (!string.IsNullOrWhiteSpace(definicion.TipoDocumento))
+                {
+                    esObligatorio = definicion.Obligatorio;
+                    areaResponsable = definicion.AreaResponsable;
+                }
+            }
+            else if (tipoDocumento is "Commercial Invoice" or "Carta Porte")
+            {
+                var definicionDirecta = definiciones.FirstOrDefault(x => string.Equals(x.TipoDocumento, tipoDocumento, StringComparison.OrdinalIgnoreCase));
                 var definicionAlternativa = definiciones.FirstOrDefault(x => x.TipoDocumento == "Commercial Invoice / Carta Porte");
-                if (!string.IsNullOrWhiteSpace(definicionAlternativa.TipoDocumento))
+                if (!string.IsNullOrWhiteSpace(definicionDirecta.TipoDocumento))
+                {
+                    esObligatorio = definicionDirecta.Obligatorio;
+                    areaResponsable = definicionDirecta.AreaResponsable;
+                }
+                else if (!string.IsNullOrWhiteSpace(definicionAlternativa.TipoDocumento))
                 {
                     esObligatorio = definicionAlternativa.Obligatorio;
                     areaResponsable = definicionAlternativa.AreaResponsable;
@@ -3677,7 +3306,12 @@ WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
                     areaResponsable = definicion.AreaResponsable;
                 }
             }
-            const string sqlDuplicado = @"SELECT COUNT_BIG(*) FROM dbo.Logistica_EmbarqueDocumentos WITH(UPDLOCK,HOLDLOCK) WHERE EmbarqueID=@EmbarqueID AND TipoDocumento=@TipoDocumento AND Activo=1;";
+            const string sqlDuplicado = @"
+SELECT COUNT_BIG(*)
+FROM dbo.Logistica_EmbarqueDocumentos WITH(UPDLOCK,HOLDLOCK)
+WHERE EmbarqueID=@EmbarqueID
+AND TipoDocumento=@TipoDocumento
+AND Activo=1;";
             await using (var cmd = new SqlCommand(sqlDuplicado, cn, tx))
             {
                 cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
@@ -3715,9 +3349,13 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                 cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = Db(string.IsNullOrWhiteSpace(observaciones) ? null : observaciones);
                 documentoId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
             }
-            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_AGREGADO", header.Estatus, header.Estatus, $"Documento DOC-{documentoId:000000} agregado. Tipo: {tipoDocumento}. Archivo: {nombreOriginal}. Responsable: {areaResponsable}.", cancellationToken);
+            var historial = $"Documento DOC-{documentoId:000000} agregado. Tipo: {tipoDocumento}. Archivo: {nombreOriginal}. Responsable: {areaResponsable}.";
+            if (tipoDocumento == "Remisión") historial += $" Remisión utilizada como excepción. Motivo: {observaciones}.";
+            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_AGREGADO", header.Estatus, header.Estatus, historial, cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = $"Documento DOC-{documentoId:000000} cargado correctamente. Queda pendiente de validación.";
+            TempData["LogisticaOk"] = tipoDocumento == "Remisión"
+                ? $"Remisión DOC-{documentoId:000000} cargada como sustituto temporal de Factura. Queda pendiente de validación."
+                : $"Documento DOC-{documentoId:000000} cargado correctamente. Queda pendiente de validación.";
         }
         catch (Exception ex)
         {
@@ -3742,33 +3380,69 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
             TempData["LogisticaError"] = "El documento indicado no es válido.";
             return embarqueId > 0 ? RedirectToAction(nameof(Detalle), new { id = embarqueId }) : RedirectToAction(nameof(Index));
         }
-
         await using var cn = await AbrirAsync(cancellationToken);
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
-            var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken)
-                ?? throw new InvalidOperationException("El embarque no existe.");
-
+            var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken) ?? throw new InvalidOperationException("El embarque no existe.");
+            const string sqlDocumento = @"
+SELECT d.TipoDocumento,ISNULL(d.Observaciones,N'') AS Observaciones,
+ISNULL(NULLIF(LTRIM(RTRIM(e.FormaEnvio)),N''),N'Interno') AS FormaEnvio
+FROM dbo.Logistica_EmbarqueDocumentos d WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Logistica_Embarques e WITH(UPDLOCK,HOLDLOCK) ON e.EmbarqueID=d.EmbarqueID
+WHERE d.EmbarqueDocumentoID=@DocumentoID
+AND d.EmbarqueID=@EmbarqueID
+AND d.Activo=1
+AND e.Activo=1;";
+            string tipoDocumento;
+            string observaciones;
+            string formaEnvio;
+            await using (var cmd = new SqlCommand(sqlDocumento, cn, tx))
+            {
+                cmd.Parameters.Add("@DocumentoID", SqlDbType.Int).Value = documentoId;
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+                await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El documento ya no existe.");
+                tipoDocumento = NormalizarTipoDocumento(Texto(rd, "TipoDocumento"));
+                observaciones = Texto(rd, "Observaciones");
+                formaEnvio = NormalizarFormaEnvio(Texto(rd, "FormaEnvio"));
+            }
+            if (tipoDocumento == "Remisión" && string.IsNullOrWhiteSpace(observaciones)) throw new InvalidOperationException("La Remisión no puede validarse sin registrar el motivo por el que sustituye temporalmente a la Factura.");
+            var confirmacion = tipoDocumento switch
+            {
+                "Factura" when formaEnvio == "Interno" => "Factura revisada como firmada y sellada.",
+                "Factura" when formaEnvio == "Cliente" => "Factura revisada como firmada por la persona o transportista que recoge.",
+                "Factura" when formaEnvio == "Paqueteria" => "Factura revisada como firmada por el transportista.",
+                "Remisión" => "Remisión validada como sustituto temporal de Factura.",
+                _ => $"Documento {tipoDocumento} revisado y validado."
+            };
             const string sql = @"
 UPDATE dbo.Logistica_EmbarqueDocumentos
-SET Validado=1,UsuarioValidaID=@UsuarioID,UsuarioValidaNombre=@UsuarioNombre,FechaValidacion=SYSDATETIME()
-WHERE EmbarqueDocumentoID=@DocumentoID AND EmbarqueID=@EmbarqueID AND Activo=1 AND Validado=0;
+SET Validado=1,
+UsuarioValidaID=@UsuarioID,
+UsuarioValidaNombre=@UsuarioNombre,
+FechaValidacion=SYSDATETIME(),
+Observaciones=CASE
+    WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN @Confirmacion
+    ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),@Confirmacion)
+END
+WHERE EmbarqueDocumentoID=@DocumentoID
+AND EmbarqueID=@EmbarqueID
+AND Activo=1
+AND Validado=0;
 SELECT @@ROWCOUNT;";
             await using (var cmd = new SqlCommand(sql, cn, tx))
             {
                 cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                 cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@Confirmacion", SqlDbType.NVarChar, 1000).Value = confirmacion;
                 cmd.Parameters.Add("@DocumentoID", SqlDbType.Int).Value = documentoId;
                 cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
-                    throw new InvalidOperationException("El documento no existe, ya fue validado o cambió durante la operación.");
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("El documento no existe, ya fue validado o cambió durante la operación.");
             }
-
-            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_VALIDADO", header.Estatus, header.Estatus,
-                $"Documento DOC-{documentoId:000000} validado por {UsuarioNombre}.", cancellationToken);
+            await InsertarHistorialAsync(cn, tx, embarqueId, "DOCUMENTO_VALIDADO", header.Estatus, header.Estatus, $"Documento DOC-{documentoId:000000} validado por {UsuarioNombre}. {confirmacion}", cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Documento validado correctamente.";
+            TempData["LogisticaOk"] = confirmacion;
         }
         catch (Exception ex)
         {
@@ -3897,17 +3571,9 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
                 });
             }
         }
-        foreach (var definicion in ObtenerDefinicionDocumentos(vm.TipoOperacion, vm.ModalidadEnvio, vm.PasaAduana))
+        foreach (var definicion in ObtenerDefinicionDocumentos(vm.TipoOperacion, vm.FormaEnvio, vm.ModalidadEnvio, vm.PasaAduana))
         {
-            LogisticaDocumentoVm? documento;
-            if (definicion.TipoDocumento == "Commercial Invoice / Carta Porte")
-            {
-                documento = vm.Documentos.Where(x => x.TipoDocumento.Equals("Commercial Invoice", StringComparison.OrdinalIgnoreCase) || x.TipoDocumento.Equals("Carta Porte", StringComparison.OrdinalIgnoreCase)).OrderByDescending(x => x.Validado).ThenByDescending(x => x.FechaCarga).FirstOrDefault();
-            }
-            else
-            {
-                documento = vm.Documentos.Where(x => x.TipoDocumento.Equals(definicion.TipoDocumento, StringComparison.OrdinalIgnoreCase)).OrderByDescending(x => x.Validado).ThenByDescending(x => x.FechaCarga).FirstOrDefault();
-            }
+            var documento = ObtenerDocumentoParaRequisito(vm.Documentos, definicion.TipoDocumento);
             vm.DocumentosRequeridos.Add(new LogisticaDocumentoRequeridoVm
             {
                 TipoDocumento = definicion.TipoDocumento,
@@ -3920,11 +3586,16 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
         }
     }
 
-    private static async Task<List<string>> ObtenerDocumentosFaltantesAsync(SqlConnection cn, int embarqueId, string tipoOperacion, string? modalidadEnvio, bool? pasaAduana, CancellationToken cancellationToken)
+    private static async Task<List<string>> ObtenerDocumentosFaltantesAsync(SqlConnection cn, int embarqueId, string tipoOperacion, string formaEnvio, string? modalidadEnvio, bool? pasaAduana, CancellationToken cancellationToken)
     {
-        var requeridos = ObtenerDefinicionDocumentos(tipoOperacion, modalidadEnvio, pasaAduana).Where(x => x.Obligatorio).ToList();
+        var requeridos = ObtenerDefinicionDocumentos(tipoOperacion, formaEnvio, modalidadEnvio, pasaAduana).Where(x => x.Obligatorio).ToList();
         var validados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        const string sql = @"SELECT DISTINCT ISNULL(TipoDocumento,N'') AS TipoDocumento FROM dbo.Logistica_EmbarqueDocumentos WHERE EmbarqueID=@EmbarqueID AND Activo=1 AND Validado=1;";
+        const string sql = @"
+SELECT DISTINCT ISNULL(TipoDocumento,N'') AS TipoDocumento
+FROM dbo.Logistica_EmbarqueDocumentos
+WHERE EmbarqueID=@EmbarqueID
+AND Activo=1
+AND Validado=1;";
         await using (var cmd = new SqlCommand(sql, cn))
         {
             cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
@@ -3937,40 +3608,40 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
         }
         var faltantes = new List<string>();
         foreach (var requerido in requeridos)
-        {
-            if (requerido.TipoDocumento == "Commercial Invoice / Carta Porte")
-            {
-                if (!validados.Contains("Commercial Invoice") && !validados.Contains("Carta Porte")) faltantes.Add("Commercial Invoice o Carta Porte");
-                continue;
-            }
-            if (!validados.Contains(requerido.TipoDocumento)) faltantes.Add(requerido.TipoDocumento);
-        }
+            if (!DocumentoCumpleRequisito(requerido.TipoDocumento, validados)) faltantes.Add(requerido.TipoDocumento);
         return faltantes;
     }
-
-    private static List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)> ObtenerDefinicionDocumentos(string? tipoOperacion, string? modalidadEnvio = null, bool? pasaAduana = null)
+    private static List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)> ObtenerDefinicionDocumentos(string? tipoOperacion, string? formaEnvio, string? modalidadEnvio = null, bool? pasaAduana = null)
     {
         var tipo = NormalizarTipoOperacion(tipoOperacion);
+        var forma = NormalizarFormaEnvio(formaEnvio);
         var modalidad = NormalizarModalidadEnvio(modalidadEnvio);
+        if (string.IsNullOrWhiteSpace(tipo)) tipo = "Nacional";
+        if (string.IsNullOrWhiteSpace(forma)) forma = "Interno";
         var documentos = new List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)>();
-        if (tipo == "Nacional")
+        if (forma == "Interno") documentos.Add(("Factura firmada y sellada / Remisión", "Finanzas", true));
+        else if (forma == "Cliente") documentos.Add(("Factura firmada por transportista / Remisión", "Finanzas", true));
+        else if (forma == "Paqueteria")
         {
-            documentos.Add(("Factura", "Finanzas", true));
-            documentos.Add(("Remisión", "Almacén", false));
-            return documentos;
+            documentos.Add(("Factura firmada por transportista / Remisión", "Finanzas", true));
+            documentos.Add(("Guía", "Logística", true));
+            documentos.Add(("Packing List", "Planeación", true));
+            documentos.Add(("Carta Porte", "Planeación", true));
         }
         if (tipo == "Exportacion")
         {
-            documentos.Add(("Commercial Invoice / Carta Porte", "Planeación", true));
-            documentos.Add(("Packing List", "Planeación", true));
-            documentos.Add(("Factura", "Finanzas", true));
+            if (forma != "Paqueteria")
+            {
+                documentos.Add(("Commercial Invoice / Carta Porte", "Planeación", true));
+                documentos.Add(("Packing List", "Planeación", true));
+            }
             if (pasaAduana == true && (modalidad == "Aereo" || modalidad == "Maritimo")) documentos.Add(("Carta de instrucciones", "Planeación", true));
-            if (pasaAduana == false) documentos.Add(("Guía", "Logística", true));
+            if (pasaAduana == false && forma != "Paqueteria") documentos.Add(("Guía", "Logística", true));
             documentos.Add(("XML", "Finanzas", false));
             documentos.Add(("Booking", "Planeación", false));
             documentos.Add(("Pedimento", "Aduanas", false));
         }
-        return documentos;
+        return documentos.GroupBy(x => x.TipoDocumento, StringComparer.OrdinalIgnoreCase).Select(x => x.First()).ToList();
     }
 
     private static readonly HashSet<string> TiposDocumentoPermitidos = new(StringComparer.OrdinalIgnoreCase)
@@ -3978,6 +3649,32 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
     "Commercial Invoice","Carta Porte","Packing List","Factura","Remisión","Guía","XML","Carta de instrucciones","Booking","Pedimento","Otro"
 };
 
+    private static bool EsRequisitoFacturaORemision(string tipoDocumento)
+    {
+        return tipoDocumento.Equals("Factura firmada y sellada / Remisión", StringComparison.OrdinalIgnoreCase)
+            || tipoDocumento.Equals("Factura firmada por transportista / Remisión", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool DocumentoCumpleRequisito(string requisito, IReadOnlyCollection<string> documentosValidados)
+    {
+        if (EsRequisitoFacturaORemision(requisito))
+            return documentosValidados.Contains("Factura", StringComparer.OrdinalIgnoreCase) || documentosValidados.Contains("Remisión", StringComparer.OrdinalIgnoreCase);
+        if (requisito.Equals("Commercial Invoice / Carta Porte", StringComparison.OrdinalIgnoreCase))
+            return documentosValidados.Contains("Commercial Invoice", StringComparer.OrdinalIgnoreCase) || documentosValidados.Contains("Carta Porte", StringComparer.OrdinalIgnoreCase);
+        return documentosValidados.Contains(requisito, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static LogisticaDocumentoVm? ObtenerDocumentoParaRequisito(IEnumerable<LogisticaDocumentoVm> documentos, string requisito)
+    {
+        IEnumerable<LogisticaDocumentoVm> candidatos;
+        if (EsRequisitoFacturaORemision(requisito))
+            candidatos = documentos.Where(x => x.TipoDocumento.Equals("Factura", StringComparison.OrdinalIgnoreCase) || x.TipoDocumento.Equals("Remisión", StringComparison.OrdinalIgnoreCase));
+        else if (requisito.Equals("Commercial Invoice / Carta Porte", StringComparison.OrdinalIgnoreCase))
+            candidatos = documentos.Where(x => x.TipoDocumento.Equals("Commercial Invoice", StringComparison.OrdinalIgnoreCase) || x.TipoDocumento.Equals("Carta Porte", StringComparison.OrdinalIgnoreCase));
+        else
+            candidatos = documentos.Where(x => x.TipoDocumento.Equals(requisito, StringComparison.OrdinalIgnoreCase));
+        return candidatos.OrderByDescending(x => x.Validado).ThenByDescending(x => x.FechaCarga).FirstOrDefault();
+    }
     private static string NormalizarTipoDocumento(string? valor)
     {
         valor = valor?.Trim() ?? string.Empty;
@@ -4021,10 +3718,10 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
     {
         valor = valor?.Trim() ?? string.Empty;
         if (valor.Equals("Interno", StringComparison.OrdinalIgnoreCase) || valor.Equals("Interna", StringComparison.OrdinalIgnoreCase) || valor.Equals("Local", StringComparison.OrdinalIgnoreCase)) return "Interno";
+        if (valor.Equals("Cliente", StringComparison.OrdinalIgnoreCase) || valor.Equals("Recolecta", StringComparison.OrdinalIgnoreCase) || valor.Equals("Recoleccion", StringComparison.OrdinalIgnoreCase) || valor.Equals("Recolección", StringComparison.OrdinalIgnoreCase) || valor.Equals("Cliente recoge", StringComparison.OrdinalIgnoreCase)) return "Cliente";
         if (valor.Equals("Paqueteria", StringComparison.OrdinalIgnoreCase) || valor.Equals("Paquetería", StringComparison.OrdinalIgnoreCase) || valor.Equals("Transportista", StringComparison.OrdinalIgnoreCase)) return "Paqueteria";
         return string.Empty;
     }
-
     private static string NormalizarModalidadEnvio(string? valor)
     {
         valor = valor?.Trim() ?? string.Empty;
@@ -4060,7 +3757,6 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
         vm.TotalCajasAsignadas = vm.CajasAsignadas.Count;
         vm.TotalCajasCargadas = vm.CajasAsignadas.Count(x => string.Equals(x.Estatus, "Cargada", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Estatus, "Despachada", StringComparison.OrdinalIgnoreCase));
         vm.FechaHoraCargaProgramada = CombinarFechaHora(vm.FechaCargaProgramada, vm.HoraCargaProgramada);
-        vm.FechaHoraEntregaProgramada = CombinarFechaHora(vm.FechaEntregaProgramada, vm.HoraEntregaProgramada);
         vm.PorcentajeAvance = vm.Estatus switch
         {
             "Programado" => 10,
@@ -4092,7 +3788,12 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
                 break;
             case "Preparado":
                 vm.ProximaAccion = "Confirmar carga física";
-                vm.ProximaAccionDetalle = vm.FormaEnvio == "Paqueteria" ? "El producto está preparado y puede entregarse al transportista." : "El producto está preparado y puede cargarse en la unidad.";
+                vm.ProximaAccionDetalle = vm.FormaEnvio switch
+                {
+                    "Paqueteria" => "El producto está preparado para entregarse a la paquetería o transportista.",
+                    "Cliente" => "El producto está preparado para la recolección del cliente.",
+                    _ => "El producto está preparado y puede cargarse en la unidad."
+                };
                 break;
             case "Cargado":
                 vm.ProximaAccion = vm.DocumentacionCompleta ? "Validar salida" : "Completar documentación";
@@ -4100,7 +3801,7 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
                 break;
             case "En ruta":
                 vm.ProximaAccion = "Confirmar entrega";
-                vm.ProximaAccionDetalle = "El embarque se encuentra en tránsito hacia el cliente.";
+                vm.ProximaAccionDetalle = "El embarque ya salió de planta y se encuentra pendiente de confirmar entrega.";
                 break;
             case "Entregado":
                 if (vm.FormaEnvio == "Interno" && !vm.UnidadRetornada && !string.IsNullOrWhiteSpace(vm.Unidad))
@@ -4111,7 +3812,7 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
                 else
                 {
                     vm.ProximaAccion = "Proceso completado";
-                    vm.ProximaAccionDetalle = vm.UnidadRetornada ? $"Entrega completada y unidad retornada el {vm.FechaRetornoUnidad:dd/MM/yyyy HH:mm}." : "El embarque ya fue recibido por el cliente.";
+                    vm.ProximaAccionDetalle = vm.UnidadRetornada ? $"Entrega completada y unidad retornada el {vm.FechaRetornoUnidad:dd/MM/yyyy HH:mm}." : "El embarque ya fue recibido.";
                 }
                 break;
             case "Cancelado":
@@ -4123,38 +3824,27 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
                 vm.ProximaAccionDetalle = "Estatus no reconocido.";
                 break;
         }
+        vm.CargaAtrasada = false;
+        vm.MinutosParaCarga = null;
+        vm.EnRiesgo = false;
+        vm.MensajeRiesgo = string.Empty;
         if (vm.FechaHoraCargaProgramada.HasValue)
         {
             vm.MinutosParaCarga = (int)Math.Round((vm.FechaHoraCargaProgramada.Value - ahora).TotalMinutes);
             vm.CargaAtrasada = vm.Estatus is "Programado" or "Preparando" or "Preparado" && ahora > vm.FechaHoraCargaProgramada.Value;
         }
-        if (vm.FechaHoraEntregaProgramada.HasValue)
+        if (vm.Estatus is not "Entregado" and not "Cancelado")
         {
-            vm.MinutosParaEntrega = (int)Math.Round((vm.FechaHoraEntregaProgramada.Value - ahora).TotalMinutes);
-            vm.EntregaAtrasada = vm.Estatus is not "Entregado" and not "Cancelado" && ahora > vm.FechaHoraEntregaProgramada.Value;
-        }
-        vm.EnRiesgo = false;
-        vm.MensajeRiesgo = string.Empty;
-        if (vm.Estatus is "Entregado" or "Cancelado")
-        {
-        }
-        else if (vm.EntregaAtrasada)
-        {
-            vm.MensajeRiesgo = "Entrega Expeditada: la fecha u hora comprometida de entrega ya fue superada y requiere atención prioritaria.";
-        }
-        else if (vm.CargaAtrasada)
-        {
-            vm.MensajeRiesgo = "La hora programada de carga ya fue superada.";
-        }
-        else if (vm.FechaHoraCargaProgramada.HasValue && vm.MinutosParaCarga.HasValue && vm.MinutosParaCarga.Value <= 60 && vm.Estatus is "Programado" or "Preparando")
-        {
-            vm.EnRiesgo = true;
-            vm.MensajeRiesgo = vm.PiezasPendientesPreparar > 0 ? $"La carga está próxima y faltan {vm.PiezasPendientesPreparar:N0} piezas por preparar." : "La carga está próxima y todavía no se ha confirmado la preparación.";
-        }
-        else if (vm.FechaHoraEntregaProgramada.HasValue && vm.MinutosParaEntrega.HasValue && vm.MinutosParaEntrega.Value <= 120 && vm.Estatus != "En ruta")
-        {
-            vm.EnRiesgo = true;
-            vm.MensajeRiesgo = "La entrega está próxima y el embarque todavía no se encuentra en ruta.";
+            if (vm.CargaAtrasada)
+            {
+                vm.EnRiesgo = true;
+                vm.MensajeRiesgo = "La fecha u hora programada de carga ya fue superada.";
+            }
+            else if (vm.FechaHoraCargaProgramada.HasValue && vm.MinutosParaCarga.HasValue && vm.MinutosParaCarga.Value >= 0 && vm.MinutosParaCarga.Value <= 60 && vm.Estatus is "Programado" or "Preparando")
+            {
+                vm.EnRiesgo = true;
+                vm.MensajeRiesgo = vm.PiezasPendientesPreparar > 0 ? $"La carga está próxima y faltan {vm.PiezasPendientesPreparar:N0} piezas por preparar." : "La carga está próxima y todavía no se ha confirmado la preparación.";
+            }
         }
         if (vm.Estatus == "Cancelado")
         {
@@ -4167,12 +3857,6 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
             vm.EstadoGeneral = "Entregado";
             vm.EstadoGeneralClase = "success";
             vm.EstadoGeneralIcono = "fa-circle-check";
-        }
-        else if (vm.EntregaAtrasada)
-        {
-            vm.EstadoGeneral = "Expeditado";
-            vm.EstadoGeneralClase = "danger";
-            vm.EstadoGeneralIcono = "fa-bolt";
         }
         else if (vm.CargaAtrasada)
         {
@@ -4195,77 +3879,27 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
         vm.Checklist = new List<LogisticaChecklistVm>();
         if (vm.FormaEnvio == "Interno")
         {
-            vm.Checklist.Add(new LogisticaChecklistVm
-            {
-                Codigo = "RUTA",
-                Concepto = "Ruta asignada",
-                Descripcion = vm.TieneRuta ? vm.Ruta : "El embarque todavía no tiene ruta.",
-                Completo = vm.TieneRuta
-            });
-            vm.Checklist.Add(new LogisticaChecklistVm
-            {
-                Codigo = "UNIDAD",
-                Concepto = "Unidad asignada",
-                Descripcion = vm.TieneUnidad ? vm.Unidad : "El embarque todavía no tiene unidad.",
-                Completo = vm.TieneUnidad
-            });
-            vm.Checklist.Add(new LogisticaChecklistVm
-            {
-                Codigo = "OPERADOR",
-                Concepto = "Operador asignado",
-                Descripcion = vm.TieneOperador ? vm.Operador : "El embarque todavía no tiene operador.",
-                Completo = vm.TieneOperador
-            });
+            vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "RUTA", Concepto = "Ruta asignada", Descripcion = vm.TieneRuta ? vm.Ruta : "El embarque todavía no tiene ruta.", Completo = vm.TieneRuta });
+            vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "UNIDAD", Concepto = "Unidad asignada", Descripcion = vm.TieneUnidad ? vm.Unidad : "El embarque todavía no tiene unidad.", Completo = vm.TieneUnidad });
+            vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "CHOFER", Concepto = "Chofer asignado", Descripcion = vm.TieneOperador ? vm.ChoferMostrar : "El embarque todavía no tiene chofer.", Completo = vm.TieneOperador });
         }
-        else
+        else if (vm.FormaEnvio == "Cliente")
+        {
+            var tieneRecolector = !string.IsNullOrWhiteSpace(vm.ChoferMostrar) && !string.Equals(vm.ChoferMostrar, "Sin registrar", StringComparison.OrdinalIgnoreCase);
+            vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "RECOLECTA", Concepto = "Persona / transportista que recoge", Descripcion = tieneRecolector ? vm.ChoferMostrar : "Falta indicar quién recoge la mercancía.", Completo = tieneRecolector });
+        }
+        else if (vm.FormaEnvio == "Paqueteria")
         {
             var modalidadCorrecta = !string.IsNullOrWhiteSpace(vm.ModalidadEnvio);
             var transportistaCorrecto = !string.IsNullOrWhiteSpace(vm.Transportista);
-            vm.Checklist.Add(new LogisticaChecklistVm
-            {
-                Codigo = "MODALIDAD",
-                Concepto = "Modalidad de envío",
-                Descripcion = modalidadCorrecta ? vm.ModalidadEnvio : "Falta seleccionar Terrestre, Aérea o Marítima.",
-                Completo = modalidadCorrecta
-            });
-            vm.Checklist.Add(new LogisticaChecklistVm
-            {
-                Codigo = "TRANSPORTISTA",
-                Concepto = "Transportista / compañía",
-                Descripcion = transportistaCorrecto ? vm.Transportista : "Falta indicar la compañía o transportista.",
-                Completo = transportistaCorrecto
-            });
+            vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "MODALIDAD", Concepto = "Modalidad de envío", Descripcion = modalidadCorrecta ? vm.ModalidadEnvio : "Falta seleccionar Terrestre, Aérea o Marítima.", Completo = modalidadCorrecta });
+            vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "PAQUETERIA", Concepto = "Paquetería / transportista", Descripcion = transportistaCorrecto ? vm.Transportista : "Falta indicar la compañía o paquetería.", Completo = transportistaCorrecto });
         }
-        vm.Checklist.Add(new LogisticaChecklistVm
-        {
-            Codigo = "PRODUCTO",
-            Concepto = "Producto preparado",
-            Descripcion = $"{vm.TotalPiezasPreparadas:N0} de {vm.TotalPiezasSolicitadas:N0} piezas",
-            Completo = vm.PreparacionCompleta
-        });
-        vm.Checklist.Add(new LogisticaChecklistVm
-        {
-            Codigo = "CARGA",
-            Concepto = "Carga física confirmada",
-            Descripcion = vm.CargaCompleta ? "Carga completa." : "La carga física todavía no se ha confirmado.",
-            Completo = vm.CargaCompleta
-        });
-        vm.Checklist.Add(new LogisticaChecklistVm
-        {
-            Codigo = "DOCUMENTOS",
-            Concepto = "Documentación completa",
-            Descripcion = vm.DocumentacionCompleta ? $"{vm.DocumentosObligatoriosCompletos} de {vm.DocumentosObligatorios} documentos obligatorios validados." : $"{vm.DocumentosFaltantes} documento(s) obligatorio(s) pendiente(s) de carga o validación.",
-            Completo = vm.DocumentacionCompleta
-        });
-        vm.Checklist.Add(new LogisticaChecklistVm
-        {
-            Codigo = "INCIDENCIAS",
-            Concepto = "Sin incidencias críticas",
-            Descripcion = vm.IncidenciasCriticas == 0 ? "Sin bloqueos críticos." : $"{vm.IncidenciasCriticas} incidencia(s) crítica(s) abierta(s).",
-            Completo = vm.IncidenciasCriticas == 0
-        });
+        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "PRODUCTO", Concepto = "Producto preparado", Descripcion = $"{vm.TotalPiezasPreparadas:N0} de {vm.TotalPiezasSolicitadas:N0} piezas", Completo = vm.PreparacionCompleta });
+        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "CARGA", Concepto = "Carga física confirmada", Descripcion = vm.CargaCompleta ? "Carga completa." : "La carga física todavía no se ha confirmado.", Completo = vm.CargaCompleta });
+        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "DOCUMENTOS", Concepto = "Documentación completa", Descripcion = vm.DocumentacionCompleta ? $"{vm.DocumentosObligatoriosCompletos} de {vm.DocumentosObligatorios} documentos obligatorios validados." : $"{vm.DocumentosFaltantes} documento(s) obligatorio(s) pendiente(s) de carga o validación.", Completo = vm.DocumentacionCompleta });
+        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "INCIDENCIAS", Concepto = "Sin incidencias críticas", Descripcion = vm.IncidenciasCriticas == 0 ? "Sin bloqueos críticos." : $"{vm.IncidenciasCriticas} incidencia(s) crítica(s) abierta(s).", Completo = vm.IncidenciasCriticas == 0 });
     }
-
     private static DateTime? CombinarFechaHora(
     DateTime? fecha,
     TimeSpan? hora)
@@ -5246,19 +4880,40 @@ WHERE EmbarqueID=@EmbarqueID
 
     private async Task CargarCatalogosAsync(LogisticaCrearVm vm, SqlConnection cn, CancellationToken cancellationToken)
     {
+        vm.Rutas.Clear();
+        vm.Unidades.Clear();
+        vm.Choferes.Clear();
         const string sql = @"
-SELECT RutaID,Codigo + N' - ' + Nombre AS Texto FROM dbo.Logistica_Rutas WHERE Activo=1 ORDER BY Codigo;
-SELECT UnidadID,NumeroEconomico + CASE WHEN NULLIF(Placas,N'') IS NULL THEN N'' ELSE N' - ' + Placas END AS Texto
-FROM dbo.Logistica_Unidades WHERE Activo=1 ORDER BY NumeroEconomico;";
+SELECT RutaID,Codigo+N' - '+Nombre AS Texto
+FROM dbo.Logistica_Rutas
+WHERE Activo=1
+ORDER BY Codigo;
+
+SELECT UnidadID,NumeroEconomico+CASE WHEN NULLIF(Placas,N'') IS NULL THEN N'' ELSE N' - '+Placas END AS Texto
+FROM dbo.Logistica_Unidades
+WHERE Activo=1
+ORDER BY NumeroEconomico;
+
+SELECT U.UsuarioID,
+LTRIM(RTRIM(CONCAT(ISNULL(P.Nombre,N''),N' ',ISNULL(P.ApellidoPaterno,N''),N' ',ISNULL(P.ApellidoMaterno,N'')))) AS Texto
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%'
+ORDER BY Texto;";
         await using var cmd = new SqlCommand(sql, cn);
         await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await rd.ReadAsync(cancellationToken))
             vm.Rutas.Add(new LogisticaSelectVm { Id = Entero(rd, "RutaID"), Texto = Texto(rd, "Texto") });
         if (await rd.NextResultAsync(cancellationToken))
-        {
             while (await rd.ReadAsync(cancellationToken))
                 vm.Unidades.Add(new LogisticaSelectVm { Id = Entero(rd, "UnidadID"), Texto = Texto(rd, "Texto") });
-        }
+        if (await rd.NextResultAsync(cancellationToken))
+            while (await rd.ReadAsync(cancellationToken))
+                vm.Choferes.Add(new LogisticaSelectVm { Id = Entero(rd, "UsuarioID"), Texto = Texto(rd, "Texto") });
     }
 
     private static async Task<(int ClienteID, string Cliente, string Destino, string Estatus)?> ObtenerHeaderAsync(
@@ -5317,6 +4972,27 @@ ORDER BY Cliente;";
             });
         }
         return resultado;
+    }
+
+    private static async Task<string> ObtenerNombreChoferAsync(SqlConnection cn, SqlTransaction tx, int usuarioId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TOP(1)
+LTRIM(RTRIM(CONCAT(ISNULL(P.Nombre,N''),N' ',ISNULL(P.ApellidoPaterno,N''),N' ',ISNULL(P.ApellidoMaterno,N''))))
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.UsuarioID=@UsuarioID
+AND U.Activo=1
+AND D.Activo=1
+AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+        var resultado = await cmd.ExecuteScalarAsync(cancellationToken);
+        var nombre = resultado == null || resultado == DBNull.Value ? string.Empty : Convert.ToString(resultado)?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(nombre)) throw new InvalidOperationException("El chofer seleccionado no pertenece al departamento de Logística o no tiene puesto de Chofer.");
+        return nombre;
     }
 
     private async Task<List<LogisticaCrearPartidaVm>> CargarPartidasClienteAsync(SqlConnection cn, int clienteId, IReadOnlyCollection<LogisticaCrearPartidaVm>? seleccionActual, CancellationToken cancellationToken)
@@ -5387,6 +5063,7 @@ ORDER BY Cliente;";
         var i = rd.GetOrdinal(columna);
         return rd.IsDBNull(i) ? 0L : Convert.ToInt64(rd.GetValue(i));
     }
+
 
     private static DateTime? Fecha(SqlDataReader rd, string columna)
     {

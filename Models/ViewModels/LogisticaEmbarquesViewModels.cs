@@ -57,7 +57,7 @@ public sealed class LogisticaEmbarqueResumenVm
     public DateTime? FechaCargaProgramada { get; set; }
     public TimeSpan? HoraCargaProgramada { get; set; }
     public DateTime? FechaEntregaProgramada { get; set; }
-    public TimeSpan? HoraEntregaProgramada { get; set; }
+
     public string Estatus { get; set; } = string.Empty;
     public string TipoOperacion { get; set; } = string.Empty;
     public bool TieneIncidencia { get; set; }
@@ -83,7 +83,7 @@ public sealed class LogisticaResumenClienteVm
     public int EntregasAtrasadas { get; set; }
     public decimal PorcentajeCumplimiento => Entregados <= 0 ? 0 : Math.Round((decimal)EntregasATiempo / Entregados * 100m, 1);
 }
- 
+
 public sealed class LogisticaCrearVm
 {
     [Required]
@@ -94,40 +94,39 @@ public sealed class LogisticaCrearVm
     public int CantidadSolicitada { get; set; }
 
     [Required, StringLength(300)]
+    [Display(Name = "Destino")]
     public string Destino { get; set; } = string.Empty;
 
     [StringLength(600)]
     [Display(Name = "Dirección de entrega")]
     public string? DireccionEntrega { get; set; }
 
-    [Required, DataType(DataType.Date)]
+    [Required(ErrorMessage = "La fecha de carga es obligatoria.")]
+    [DataType(DataType.Date)]
     [Display(Name = "Fecha de carga")]
     public DateTime FechaCargaProgramada { get; set; }
 
+    [Required(ErrorMessage = "La hora de carga es obligatoria.")]
     [Display(Name = "Hora de carga")]
     public TimeSpan? HoraCargaProgramada { get; set; }
 
-    [Required, DataType(DataType.Date)]
-    [Display(Name = "Fecha de entrega")]
-    public DateTime FechaEntregaProgramada { get; set; }
-
-    [Display(Name = "Hora de entrega")]
-    public TimeSpan? HoraEntregaProgramada { get; set; }
+    [Display(Name = "Fecha de entrega del Release")]
+    public DateTime? FechaEntregaProgramada { get; set; }
 
     [Required, StringLength(30)]
     [Display(Name = "Tipo de operación")]
     public string TipoOperacion { get; set; } = "Nacional";
 
     [Required, StringLength(30)]
-    [Display(Name = "Forma de envío")]
+    [Display(Name = "¿Quién realiza la recolección?")]
     public string FormaEnvio { get; set; } = "Interno";
 
     [StringLength(30)]
-    [Display(Name = "Modalidad de envío")]
+    [Display(Name = "Modalidad")]
     public string? ModalidadEnvio { get; set; }
 
     [StringLength(200)]
-    [Display(Name = "Compañía / transportista")]
+    [Display(Name = "Compañía / paquetería")]
     public string? Transportista { get; set; }
 
     [StringLength(150)]
@@ -137,27 +136,46 @@ public sealed class LogisticaCrearVm
     [Display(Name = "¿Pasa por aduana?")]
     public bool? PasaAduana { get; set; }
 
+    [Display(Name = "Ruta")]
     public int? RutaID { get; set; }
+
+    [Display(Name = "Unidad")]
     public int? UnidadID { get; set; }
 
+    [Display(Name = "Chofer interno")]
+    public int? ChoferUsuarioID { get; set; }
+
     [StringLength(200)]
-    public string? OperadorTexto { get; set; }
+    [Display(Name = "Chofer")]
+    public string? ChoferNombreSnapshot { get; set; }
+
+    [StringLength(200)]
+    [Display(Name = "Persona que recoge")]
+    public string? ChoferExterno { get; set; }
+
+    [StringLength(100)]
+    [Display(Name = "Unidad / vehículo externo")]
+    public string? UnidadExterna { get; set; }
+
+    [StringLength(100)]
+    [Display(Name = "Placas")]
+    public string? PlacasExternas { get; set; }
 
     [StringLength(1200)]
     public string? Observaciones { get; set; }
+
     public int? ClienteID { get; set; }
     public List<LogisticaSelectVm> Clientes { get; set; } = new();
     public List<LogisticaCrearPartidaVm> Partidas { get; set; } = new();
     public List<LogisticaCajaPtCrearVm> CajasPT { get; set; } = new();
-
     public LogisticaDemandaVm? Demanda { get; set; }
     public List<LogisticaDemandaVm> Demandas { get; set; } = new();
     public List<LogisticaCajaDisponibleVm> CajasDisponibles { get; set; } = new();
     public List<int> CajaIDs { get; set; } = new();
     public List<LogisticaSelectVm> Rutas { get; set; } = new();
     public List<LogisticaSelectVm> Unidades { get; set; } = new();
+    public List<LogisticaSelectVm> Choferes { get; set; } = new();
 }
-
 public sealed class LogisticaCrearPartidaVm
 {
     public bool Seleccionada { get; set; }
@@ -212,10 +230,17 @@ public sealed class LogisticaDetalleVm
     public DateTime? FechaCargaProgramada { get; set; }
     public TimeSpan? HoraCargaProgramada { get; set; }
     public DateTime? FechaEntregaProgramada { get; set; }
-    public TimeSpan? HoraEntregaProgramada { get; set; }
+
     public string Ruta { get; set; } = string.Empty;
     public string Unidad { get; set; } = string.Empty;
     public string Operador { get; set; } = string.Empty;
+
+    public int? ChoferUsuarioID { get; set; }
+    public string ChoferNombreSnapshot { get; set; } = string.Empty;
+    public string ChoferExterno { get; set; } = string.Empty;
+    public string UnidadExterna { get; set; } = string.Empty;
+    public string PlacasExternas { get; set; } = string.Empty;
+
     public string Observaciones { get; set; } = string.Empty;
     public string ReferenciaOperacion { get; set; } = string.Empty;
     public DateTime? FechaPreparacion { get; set; }
@@ -274,9 +299,22 @@ public sealed class LogisticaDetalleVm
     public bool DocumentacionCompleta => DocumentosObligatorios > 0 && DocumentosFaltantes == 0;
     public decimal PorcentajeDocumentacion => DocumentosObligatorios <= 0 ? 0 : Math.Round((decimal)DocumentosObligatoriosCompletos / DocumentosObligatorios * 100m, 1);
 
-    public bool DatosTransporteCompletos => FormaEnvio == "Paqueteria"
-    ? !string.IsNullOrWhiteSpace(ModalidadEnvio) && !string.IsNullOrWhiteSpace(Transportista)
-    : TieneRuta && TieneUnidad && TieneOperador;
+    public bool DatosTransporteCompletos
+    {
+        get
+        {
+            if (EsRecoleccionInterna)
+                return TieneRuta && TieneUnidad && !string.IsNullOrWhiteSpace(ChoferMostrar);
+
+            if (RecogeCliente)
+                return !string.IsNullOrWhiteSpace(ChoferExterno);
+
+            if (EsPaqueteria)
+                return !string.IsNullOrWhiteSpace(Transportista);
+
+            return false;
+        }
+    }
 
     public bool PuedeSalir => DatosTransporteCompletos && PreparacionCompleta && CargaCompleta && DocumentacionCompleta && IncidenciasCriticas <= 0;
     public int IncidenciasAbiertas { get; set; }
@@ -289,6 +327,40 @@ public sealed class LogisticaDetalleVm
     public int? KilometrajeRetorno { get; set; }
     public string ObservacionesRetorno { get; set; } = string.Empty;
     public string UsuarioRetorno { get; set; } = string.Empty;
+
+    public bool EsRecoleccionInterna => string.Equals(FormaEnvio, "Interno", StringComparison.OrdinalIgnoreCase);
+    public bool RecogeCliente => string.Equals(FormaEnvio, "Cliente", StringComparison.OrdinalIgnoreCase);
+    public bool EsPaqueteria => string.Equals(FormaEnvio, "Paqueteria", StringComparison.OrdinalIgnoreCase);
+
+    public string ChoferMostrar
+    {
+        get
+        {
+            if (EsRecoleccionInterna)
+                return !string.IsNullOrWhiteSpace(ChoferNombreSnapshot) ? ChoferNombreSnapshot : Operador;
+
+            return string.IsNullOrWhiteSpace(ChoferExterno) ? "Sin registrar" : ChoferExterno;
+        }
+    }
+
+    public string VehiculoMostrar
+    {
+        get
+        {
+            if (EsRecoleccionInterna)
+                return string.IsNullOrWhiteSpace(Unidad) ? "Sin unidad" : Unidad;
+
+            var datos = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(UnidadExterna))
+                datos.Add(UnidadExterna);
+
+            if (!string.IsNullOrWhiteSpace(PlacasExternas))
+                datos.Add(PlacasExternas);
+
+            return datos.Count > 0 ? string.Join(" · ", datos) : "Sin registrar";
+        }
+    }
 }
 
 public sealed class LogisticaDocumentoVm
@@ -447,27 +519,22 @@ public sealed class LogisticaReprogramarVm
     [Required]
     public int EmbarqueID { get; set; }
 
-    [Required, DataType(DataType.Date)]
+    [Required(ErrorMessage = "La nueva fecha de carga es obligatoria.")]
+    [DataType(DataType.Date)]
     [Display(Name = "Nueva fecha de carga")]
     public DateTime FechaCargaProgramada { get; set; }
 
+    [Required(ErrorMessage = "La nueva hora de carga es obligatoria.")]
     [Display(Name = "Nueva hora de carga")]
     public TimeSpan? HoraCargaProgramada { get; set; }
 
-    [Required, DataType(DataType.Date)]
-    [Display(Name = "Nueva fecha de entrega")]
-    public DateTime FechaEntregaProgramada { get; set; }
-
-    [Display(Name = "Nueva hora de entrega")]
-    public TimeSpan? HoraEntregaProgramada { get; set; }
-
-    [Required, StringLength(80)]
+    [Required(ErrorMessage = "El motivo de reprogramación es obligatorio.")]
+    [StringLength(80)]
     public string Motivo { get; set; } = string.Empty;
 
     [StringLength(1200)]
     public string? Observaciones { get; set; }
 }
-
 public sealed class LogisticaChecklistVm
 {
     public string Codigo { get; set; } = string.Empty;

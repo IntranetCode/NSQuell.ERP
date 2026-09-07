@@ -8632,7 +8632,6 @@ ORDER BY p.FechaInicioParo DESC,p.ParoID DESC;";
         private async Task<List<ProduccionEjecucionVm>> ObtenerEjecucionesPanelAsync(int? estatusId, int? maquinaId, string? busqueda, DateTime? fechaDesde, DateTime? fechaHasta, SqlConnection cn)
         {
             var lista = new List<ProduccionEjecucionVm>();
-
             const string sql = @"
 SELECT
     e.EjecucionProduccionID,
@@ -8641,6 +8640,8 @@ SELECT
     e.SolicitudProduccionDetalleID,
     e.ReleaseID,
     e.ReleaseDetalleID,
+    s.FolioSolicitud,
+    s.NumeroOFRecibida,
     e.MaquinaID,
     e.MaquinaCodigo,
     e.MaquinaNombre,
@@ -8673,7 +8674,6 @@ SELECT
     e.UsuarioModificacionID,
     e.FechaModificacion,
     e.Activo,
-
     ci.InspeccionID AS InspeccionCalidadID,
     ci.Estado AS EstadoCalidad,
     ci.ResultadoCalidad,
@@ -8684,92 +8684,37 @@ SELECT
     ci.FechaNotificacionCalidad,
     histArranque.FechaMovimiento AS FechaAutorizacionPrearranque,
     histLiberacion.FechaMovimiento AS FechaLiberacionProduccion,
-
-    CASE
-        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
-             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
-            THEN NULL
-        ELSE rel.ReliberacionID
-    END AS ReliberacionID,
-
-    CASE
-        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
-             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
-            THEN NULL
-        ELSE rel.NumeroReliberacion
-    END AS NumeroReliberacion,
-
-    CASE
-        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
-             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
-            THEN NULL
-        ELSE rel.Resultado
-    END AS ResultadoReliberacion,
-
-    CASE
-        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
-             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
-            THEN NULL
-        ELSE rel.FechaSolicitud
-    END AS FechaSolicitudReliberacion,
-
-    CASE
-        WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA'
-             AND confirmacionReinicio.FechaMovimiento IS NOT NULL
-            THEN NULL
-        ELSE rel.FechaValidacion
-    END AS FechaValidacionReliberacion,
-
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA' AND confirmacionReinicio.FechaMovimiento IS NOT NULL THEN NULL ELSE rel.ReliberacionID END AS ReliberacionID,
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA' AND confirmacionReinicio.FechaMovimiento IS NOT NULL THEN NULL ELSE rel.NumeroReliberacion END AS NumeroReliberacion,
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA' AND confirmacionReinicio.FechaMovimiento IS NOT NULL THEN NULL ELSE rel.Resultado END AS ResultadoReliberacion,
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA' AND confirmacionReinicio.FechaMovimiento IS NOT NULL THEN NULL ELSE rel.FechaSolicitud END AS FechaSolicitudReliberacion,
+    CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(rel.Resultado,N''))))=N'AUTORIZADA' AND confirmacionReinicio.FechaMovimiento IS NOT NULL THEN NULL ELSE rel.FechaValidacion END AS FechaValidacionReliberacion,
     CAST(CASE WHEN paro.ParoID IS NULL THEN 0 ELSE 1 END AS BIT) AS TieneParoAbierto,
     paro.ParoID AS ParoAbiertoID,
     paro.FechaInicioParo AS FechaInicioParoAbierto,
-    CAST(
-        CASE
-            WHEN paro.ParoID IS NULL THEN 0
-            WHEN ISNULL(paro.EsMayorA15Minutos,0)=1 THEN 1
-            WHEN DATEDIFF(MINUTE,paro.FechaInicioParo,GETDATE())>15 THEN 1
-            ELSE 0
-        END
-    AS BIT) AS ParoAbiertoMayorA15Minutos
-
+    CAST(CASE WHEN paro.ParoID IS NULL THEN 0 WHEN ISNULL(paro.EsMayorA15Minutos,0)=1 THEN 1 WHEN DATEDIFF(MINUTE,paro.FechaInicioParo,GETDATE())>15 THEN 1 ELSE 0 END AS BIT) AS ParoAbiertoMayorA15Minutos
 FROM dbo.Produccion_Ejecucion e
-
+LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=e.SolicitudProduccionID AND s.Activo=1
 OUTER APPLY
 (
-    SELECT TOP (1)
-        ci0.InspeccionID,
-        ci0.Estado,
-        ci0.ResultadoCalidad,
-        ci0.Etiqueta,
-        ci0.Liberado,
-        ci0.RequiereReliberacion,
-        ci0.ConfiguracionInvalidada,
-        ci0.FechaNotificacionCalidad
+    SELECT TOP(1) ci0.InspeccionID,ci0.Estado,ci0.ResultadoCalidad,ci0.Etiqueta,ci0.Liberado,ci0.RequiereReliberacion,ci0.ConfiguracionInvalidada,ci0.FechaNotificacionCalidad
     FROM dbo.Calidad_Inspecciones ci0
     WHERE ci0.EjecucionProduccionID=e.EjecucionProduccionID
       AND ISNULL(ci0.Estado,N'')<>N'CERRADA'
     ORDER BY ci0.InspeccionID DESC
 ) ci
-
 OUTER APPLY
 (
-    SELECT TOP (1)
-        r.ReliberacionID,
-        r.NumeroReliberacion,
-        r.Resultado,
-        r.FechaSolicitud,
-        r.FechaValidacion
+    SELECT TOP(1) r.ReliberacionID,r.NumeroReliberacion,r.Resultado,r.FechaSolicitud,r.FechaValidacion
     FROM dbo.Calidad_Reliberaciones r
     WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
       AND r.InspeccionID=ci.InspeccionID
       AND r.Activo=1
     ORDER BY r.NumeroReliberacion DESC,r.ReliberacionID DESC
 ) rel
-
 OUTER APPLY
 (
-    SELECT TOP (1)
-        h.FechaMovimiento
+    SELECT TOP(1) h.FechaMovimiento
     FROM dbo.Calidad_InspeccionHistorial h
     WHERE h.InspeccionID=ci.InspeccionID
       AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
@@ -8777,40 +8722,31 @@ OUTER APPLY
       AND h.FechaMovimiento>=COALESCE(rel.FechaValidacion,rel.FechaSolicitud)
     ORDER BY h.FechaMovimiento DESC
 ) confirmacionReinicio
-
 OUTER APPLY
 (
-    SELECT TOP (1)
-        h.FechaMovimiento
+    SELECT TOP(1) h.FechaMovimiento
     FROM dbo.Calidad_InspeccionHistorial h
     WHERE h.InspeccionID=ci.InspeccionID
       AND h.EstadoNuevo=N'ARRANQUE_AUTORIZADO'
     ORDER BY h.FechaMovimiento DESC
 ) histArranque
-
 OUTER APPLY
 (
-    SELECT TOP (1)
-        h.FechaMovimiento
+    SELECT TOP(1) h.FechaMovimiento
     FROM dbo.Calidad_InspeccionHistorial h
     WHERE h.InspeccionID=ci.InspeccionID
       AND h.EstadoNuevo=N'PRODUCCION_LIBERADA'
     ORDER BY h.FechaMovimiento DESC
 ) histLiberacion
-
 OUTER APPLY
 (
-    SELECT TOP (1)
-        p.ParoID,
-        p.FechaInicioParo,
-        p.EsMayorA15Minutos
+    SELECT TOP(1) p.ParoID,p.FechaInicioParo,p.EsMayorA15Minutos
     FROM dbo.Produccion_Paros p
     WHERE p.EjecucionProduccionID=e.EjecucionProduccionID
       AND p.Activo=1
       AND p.FechaFinParo IS NULL
     ORDER BY p.FechaInicioParo DESC,p.ParoID DESC
 ) paro
-
 WHERE e.Activo=1
   AND e.EstatusID IN(@Pendiente,@EnPreparacion,@EnProduccion,@Pausado)
   AND (@MaquinaID IS NULL OR e.MaquinaID=@MaquinaID)
@@ -8820,6 +8756,8 @@ WHERE e.Activo=1
   AND
   (
       @Busqueda IS NULL
+      OR s.NumeroOFRecibida LIKE N'%'+@Busqueda+N'%'
+      OR s.FolioSolicitud LIKE N'%'+@Busqueda+N'%'
       OR e.MaquinaCodigo LIKE N'%'+@Busqueda+N'%'
       OR e.MaquinaNombre LIKE N'%'+@Busqueda+N'%'
       OR e.NumeroParte LIKE N'%'+@Busqueda+N'%'
@@ -8834,9 +8772,7 @@ WHERE e.Activo=1
       OR CONVERT(NVARCHAR(30),e.SolicitudProduccionID) LIKE N'%'+@Busqueda+N'%'
   )
 ORDER BY e.FechaCreacion DESC,e.EjecucionProduccionID DESC;";
-
             await using var cmd = new SqlCommand(sql, cn);
-
             cmd.Parameters.Add("@Pendiente", SqlDbType.Int).Value = ProduccionEstatus.Pendiente;
             cmd.Parameters.Add("@EnPreparacion", SqlDbType.Int).Value = ProduccionEstatus.EnPreparacion;
             cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = ProduccionEstatus.EnProduccion;
@@ -8846,20 +8782,10 @@ ORDER BY e.FechaCreacion DESC,e.EjecucionProduccionID DESC;";
             cmd.Parameters.Add("@FechaDesde", SqlDbType.Date).Value = fechaDesde.HasValue ? fechaDesde.Value.Date : DBNull.Value;
             cmd.Parameters.Add("@FechaHasta", SqlDbType.Date).Value = fechaHasta.HasValue ? fechaHasta.Value.Date : DBNull.Value;
             cmd.Parameters.Add("@Busqueda", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(busqueda) ? DBNull.Value : busqueda.Trim();
-
             await using var rd = await cmd.ExecuteReaderAsync();
-
-            while (await rd.ReadAsync())
-                lista.Add(MapearEjecucion(rd));
-
-            return lista
-                .OrderBy(x => x.EstadoOperativoPrioridad)
-                .ThenBy(x => x.MaquinaCodigo)
-                .ThenByDescending(x => x.FechaCreacion)
-                .ThenByDescending(x => x.EjecucionProduccionID)
-                .ToList();
+            while (await rd.ReadAsync()) lista.Add(MapearEjecucion(rd));
+            return lista.OrderBy(x => x.EstadoOperativoPrioridad).ThenBy(x => x.MaquinaCodigo).ThenBy(x => x.TextoOF).ThenByDescending(x => x.FechaCreacion).ThenByDescending(x => x.EjecucionProduccionID).ToList();
         }
-
         [HttpGet]
         public async Task<IActionResult> PanelProximos(
        int? maquinaId = null,
@@ -10136,6 +10062,8 @@ SELECT @@ROWCOUNT;";
                 SolicitudProduccionDetalleID = NullableEntero(rd, "SolicitudProduccionDetalleID"),
                 ReleaseID = NullableEntero(rd, "ReleaseID"),
                 ReleaseDetalleID = NullableEntero(rd, "ReleaseDetalleID"),
+                FolioSolicitud = TieneColumna(rd, "FolioSolicitud") ? TextoNullable(rd, "FolioSolicitud") : null,
+                NumeroOFRecibida = TieneColumna(rd, "NumeroOFRecibida") ? TextoNullable(rd, "NumeroOFRecibida") : null,
                 MaquinaID = NullableEntero(rd, "MaquinaID"),
                 MaquinaCodigo = TextoNullable(rd, "MaquinaCodigo"),
                 MaquinaNombre = TextoNullable(rd, "MaquinaNombre"),
@@ -10168,7 +10096,6 @@ SELECT @@ROWCOUNT;";
                 UsuarioModificacionID = NullableEntero(rd, "UsuarioModificacionID"),
                 FechaModificacion = NullableFecha(rd, "FechaModificacion"),
                 Activo = Booleano(rd, "Activo"),
-
                 InspeccionCalidadID = TieneColumna(rd, "InspeccionCalidadID") ? NullableEntero(rd, "InspeccionCalidadID") : null,
                 EstadoCalidad = TieneColumna(rd, "EstadoCalidad") ? TextoNullable(rd, "EstadoCalidad") : null,
                 ResultadoCalidad = TieneColumna(rd, "ResultadoCalidad") ? TextoNullable(rd, "ResultadoCalidad") : null,
@@ -10179,13 +10106,11 @@ SELECT @@ROWCOUNT;";
                 FechaNotificacionCalidad = TieneColumna(rd, "FechaNotificacionCalidad") ? NullableFecha(rd, "FechaNotificacionCalidad") : null,
                 FechaAutorizacionPrearranque = TieneColumna(rd, "FechaAutorizacionPrearranque") ? NullableFecha(rd, "FechaAutorizacionPrearranque") : null,
                 FechaLiberacionProduccion = TieneColumna(rd, "FechaLiberacionProduccion") ? NullableFecha(rd, "FechaLiberacionProduccion") : null,
-
                 ReliberacionID = TieneColumna(rd, "ReliberacionID") ? NullableEntero(rd, "ReliberacionID") : null,
                 NumeroReliberacion = TieneColumna(rd, "NumeroReliberacion") ? NullableEntero(rd, "NumeroReliberacion") : null,
                 ResultadoReliberacion = TieneColumna(rd, "ResultadoReliberacion") ? TextoNullable(rd, "ResultadoReliberacion") : null,
                 FechaSolicitudReliberacion = TieneColumna(rd, "FechaSolicitudReliberacion") ? NullableFecha(rd, "FechaSolicitudReliberacion") : null,
                 FechaValidacionReliberacion = TieneColumna(rd, "FechaValidacionReliberacion") ? NullableFecha(rd, "FechaValidacionReliberacion") : null,
-
                 TieneParoAbierto = TieneColumna(rd, "TieneParoAbierto") && Booleano(rd, "TieneParoAbierto"),
                 ParoAbiertoID = TieneColumna(rd, "ParoAbiertoID") ? NullableEntero(rd, "ParoAbiertoID") : null,
                 FechaInicioParoAbierto = TieneColumna(rd, "FechaInicioParoAbierto") ? NullableFecha(rd, "FechaInicioParoAbierto") : null,
