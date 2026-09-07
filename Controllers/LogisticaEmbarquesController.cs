@@ -785,6 +785,8 @@ WHERE c.CajaID=@CajaID AND c.Activo=1;";
                 var retenido = Entero(rdCaja, "Retenido");
                 var calidad = Texto(rdCaja, "EstadoCalidad");
                 var disponible = Entero(rdCaja, "Disponible");
+                throw new InvalidOperationException(
+    $"DEBUG Caja {seleccion.CajaID} | Disponible={disponible} | Retenido={retenido} | Calidad={calidad} | ClienteCaja={cajaClienteId} | ClienteSeleccionado={clienteId}");
                 if (cajaClienteId != clienteId) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} no pertenece al cliente seleccionado.");
                 if (!string.Equals(calidad, "Liberado", StringComparison.OrdinalIgnoreCase) || retenido > 0) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no está liberada para embarque.");
                 if (disponible <= 0) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no tiene saldo disponible.");
