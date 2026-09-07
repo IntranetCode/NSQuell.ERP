@@ -1,5 +1,4 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm
-
 @{
     ViewData["Title"] = $"Viaje {Model.Folio}";
     Layout = "_Layout";
@@ -31,672 +30,445 @@
     };
 
     var faltantesPreparacion = new List<string>();
-    if (string.IsNullOrWhiteSpace(Model.TipoViaje)) faltantesPreparacion.Add("tipo de viaje");
+    if (string.IsNullOrWhiteSpace(Model.TipoViaje)) faltantesPreparacion.Add("tipo de salida");
     if (string.IsNullOrWhiteSpace(Model.Origen)) faltantesPreparacion.Add("origen");
     if (string.IsNullOrWhiteSpace(Model.Destino)) faltantesPreparacion.Add("destino");
     if (string.IsNullOrWhiteSpace(Model.Motivo)) faltantesPreparacion.Add("motivo");
     if (Model.FechaProgramada == default) faltantesPreparacion.Add("fecha programada");
-    if (Model.EsTransporteInterno)
-    {
-        if (!Model.RutaID.HasValue) faltantesPreparacion.Add("ruta");
-        if (!Model.UnidadID.HasValue) faltantesPreparacion.Add("unidad");
-        if (!Model.OperadorUsuarioID.HasValue) faltantesPreparacion.Add("operador");
-    }
-    else if (Model.EsTransporteExterno)
-    {
-        if (string.IsNullOrWhiteSpace(Model.TransportistaExterno)) faltantesPreparacion.Add("transportista");
-        if (string.IsNullOrWhiteSpace(Model.UnidadExterna)) faltantesPreparacion.Add("unidad externa");
-        if (string.IsNullOrWhiteSpace(Model.PlacasExternas)) faltantesPreparacion.Add("placas");
-        if (string.IsNullOrWhiteSpace(Model.ChoferExterno)) faltantesPreparacion.Add("chofer");
-    }
+    if (!Model.HoraSalidaProgramada.HasValue) faltantesPreparacion.Add("hora de salida");
+    if (!Model.RutaID.HasValue || Model.RutaID.Value <= 0) faltantesPreparacion.Add("ruta");
+    if (!Model.UnidadID.HasValue || Model.UnidadID.Value <= 0) faltantesPreparacion.Add("unidad");
+    if (!Model.OperadorUsuarioID.HasValue || Model.OperadorUsuarioID.Value <= 0) faltantesPreparacion.Add("chofer");
+
     var preparacionCompleta = faltantesPreparacion.Count == 0;
-
     var ahora = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+    var incidenciasAbiertas = Model.Incidencias?.Count(x => x.EstaAbierta) ?? 0;
+    var totalEvidencias = Model.Evidencias?.Count ?? 0;
 }
-
 <style>
-    .viaje-detalle-page {
-        padding: 18px 20px 30px;
+    :root {
+        --lv-blue: #173a7a;
+        --lv-text: #172033;
+        --lv-muted: #6d7888;
+        --lv-border: #dce4ee;
+        --lv-soft: #f6f8fb;
+        --lv-shadow: 0 8px 24px rgba(22,42,75,.06)
     }
 
-    .detalle-header {
+    .viaje-page {
+        max-width: 1680px;
+        margin: 0 auto;
+        padding: 16px 18px 28px;
+        color: var(--lv-text)
+    }
+
+    .viaje-head {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 12px;
         flex-wrap: wrap;
-        margin-bottom: 14px;
-    }
-
-    .detalle-title {
-        margin: 0;
-        font-size: 1.35rem;
-        font-weight: 700;
-    }
-
-    .detalle-subtitle {
-        margin: 3px 0 0;
-        color: #6c757d;
-        font-size: .88rem;
-    }
-
-    .header-actions {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-
-    .estado-strip {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-        flex-wrap: wrap;
-        padding: 10px 0 12px;
-        border-top: 1px solid #e9ecef;
-        border-bottom: 1px solid #e9ecef;
-        margin-bottom: 16px;
-    }
-
-    .estado-item {
-        display: flex;
-        gap: 6px;
-        align-items: baseline;
-        white-space: nowrap;
-    }
-
-        .estado-item strong {
-            font-size: .9rem;
-        }
-
-        .estado-item span {
-            color: #6c757d;
-            font-size: .78rem;
-        }
-
-    .section {
-        padding: 14px 0;
-        border-bottom: 1px solid #e9ecef;
-    }
-
-    .section-title {
+        padding: 14px 16px;
         margin-bottom: 10px;
-        font-size: .87rem;
-        font-weight: 700;
-        color: #343a40;
+        border: 1px solid var(--lv-border);
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow)
+    }
+
+    .viaje-title {
+        margin: 0;
+        font-size: 1.42rem;
+        font-weight: 800;
+        letter-spacing: -.02em
+    }
+
+        .viaje-title i {
+            color: var(--lv-blue)
+        }
+
+    .viaje-sub {
+        margin: 3px 0 0;
+        color: var(--lv-muted);
+        font-size: .84rem
+    }
+
+    .head-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+        .head-actions .btn {
+            min-height: 34px;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center
+        }
+
+    .summary {
+        display: grid;
+        grid-template-columns: repeat(6,minmax(120px,1fr));
+        gap: 7px;
+        margin-bottom: 10px
+    }
+
+    .summary-item {
+        padding: 8px 10px;
+        border: 1px solid var(--lv-border);
+        border-radius: 9px;
+        background: #fff
+    }
+
+        .summary-item span {
+            display: block;
+            color: var(--lv-muted);
+            font-size: .65rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .summary-item strong {
+            display: block;
+            margin-top: 2px;
+            font-size: .84rem;
+            font-weight: 800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+    .workflow {
+        display: grid;
+        grid-template-columns: repeat(4,1fr);
+        gap: 6px;
+        margin-bottom: 10px
+    }
+
+    .workflow-step {
+        padding: 8px 10px;
+        border: 1px solid var(--lv-border);
+        border-radius: 9px;
+        background: #fafbfd
+    }
+
+        .workflow-step span {
+            display: block;
+            color: #7a8796;
+            font-size: .61rem;
+            text-transform: uppercase
+        }
+
+        .workflow-step strong {
+            display: block;
+            margin-top: 2px;
+            font-size: .74rem
+        }
+
+        .workflow-step.done {
+            border-color: #b9d7ca;
+            background: #f4fbf7
+        }
+
+            .workflow-step.done strong {
+                color: #17633a
+            }
+
+        .workflow-step.current {
+            border-color: #7fa0cf;
+            background: #f1f6fd;
+            box-shadow: inset 3px 0 0 var(--lv-blue)
+        }
+
+            .workflow-step.current strong {
+                color: var(--lv-blue)
+            }
+
+    .stage {
+        margin-bottom: 10px;
+        padding: 13px 14px;
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow)
+    }
+
+    .stage-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e8edf3
+    }
+
+    .stage-title {
+        margin: 0;
+        font-size: .95rem;
+        font-weight: 800
+    }
+
+    .stage-sub {
+        margin: 2px 0 0;
+        color: var(--lv-muted);
+        font-size: .73rem
+    }
+
+    .stage-badge {
+        font-size: .69rem;
+        font-weight: 800
+    }
+
+    .stage-grid {
+        display: grid;
+        grid-template-columns: repeat(12,1fr);
+        gap: 8px;
+        align-items: end
+    }
+
+    .s2 {
+        grid-column: span 2
+    }
+
+    .s3 {
+        grid-column: span 3
+    }
+
+    .s4 {
+        grid-column: span 4
+    }
+
+    .s6 {
+        grid-column: span 6
+    }
+
+    .s8 {
+        grid-column: span 8
+    }
+
+    .s12 {
+        grid-column: span 12
+    }
+
+    .stage label {
+        display: block;
+        margin-bottom: 3px;
+        color: #495057;
+        font-size: .72rem;
+        font-weight: 700
+    }
+
+    .required:after {
+        content: " *";
+        color: #b42318;
+        font-weight: 900
+    }
+
+    .stage .form-control, .stage .form-select {
+        min-height: 37px;
+        border-radius: 8px;
+        border-color: #d4dde7;
+        font-size: .81rem
+    }
+
+    .missing {
+        padding: 9px 11px;
+        border: 1px solid #f2d38a;
+        border-radius: 8px;
+        background: #fff9e8;
+        color: #6f5800;
+        font-size: .75rem
+    }
+
+    .success-box {
+        padding: 9px 11px;
+        border: 1px solid #b9d8c7;
+        border-radius: 8px;
+        background: #f4fbf7;
+        color: #17633a;
+        font-size: .75rem
+    }
+
+    .tabs-shell {
+        border: 1px solid var(--lv-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: var(--lv-shadow);
+        overflow: hidden
+    }
+
+    .nav-tabs {
+        padding: 0 10px;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--lv-border)
+    }
+
+        .nav-tabs .nav-link {
+            padding: .7rem .8rem;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            color: #687386;
+            font-size: .78rem;
+            font-weight: 700
+        }
+
+            .nav-tabs .nav-link.active {
+                color: var(--lv-blue);
+                background: transparent;
+                border-bottom-color: var(--lv-blue)
+            }
+
+    .tab-content {
+        padding: 12px
     }
 
     .info-grid {
         display: grid;
-        grid-template-columns: repeat(12, 1fr);
-        gap: 12px 18px;
+        grid-template-columns: repeat(12,1fr);
+        gap: 8px
     }
 
-    .info-2 {
-        grid-column: span 2;
+    .i3 {
+        grid-column: span 3
     }
 
-    .info-3 {
-        grid-column: span 3;
+    .i4 {
+        grid-column: span 4
     }
 
-    .info-4 {
-        grid-column: span 4;
+    .i6 {
+        grid-column: span 6
     }
 
-    .info-6 {
-        grid-column: span 6;
+    .i12 {
+        grid-column: span 12
     }
 
-    .info-8 {
-        grid-column: span 8;
-    }
-
-    .info-12 {
-        grid-column: span 12;
+    .info-box {
+        padding: 8px 10px;
+        border: 1px solid #edf1f5;
+        border-radius: 8px;
+        background: #fbfcfd
     }
 
     .info-label {
-        font-size: .72rem;
-        color: #6c757d;
         margin-bottom: 2px;
-        text-transform: uppercase;
-        letter-spacing: .02em;
+        color: #7a8492;
+        font-size: .64rem;
+        font-weight: 800;
+        text-transform: uppercase
     }
 
     .info-value {
-        font-size: .86rem;
-        font-weight: 500;
-        word-break: break-word;
+        font-size: .82rem;
+        font-weight: 650;
+        word-break: break-word
     }
 
-    .action-block {
-        padding: 14px 0;
-        border-bottom: 1px solid #e9ecef;
+    .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px
     }
 
-    .action-title {
-        font-size: .86rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
+        .section-head h3 {
+            margin: 0;
+            font-size: .9rem;
+            font-weight: 800
+        }
+
+        .section-head .btn {
+            border-radius: 7px;
+            font-weight: 700
+        }
 
     .compact-form {
         display: grid;
-        grid-template-columns: repeat(12, 1fr);
+        grid-template-columns: repeat(12,1fr);
         gap: 8px;
-        align-items: end;
+        align-items: end
     }
 
-    .form-2 {
-        grid-column: span 2;
+    .f2 {
+        grid-column: span 2
     }
 
-    .form-3 {
-        grid-column: span 3;
+    .f3 {
+        grid-column: span 3
     }
 
-    .form-4 {
-        grid-column: span 4;
+    .f4 {
+        grid-column: span 4
     }
 
-    .form-5 {
-        grid-column: span 5;
+    .f6 {
+        grid-column: span 6
     }
 
-    .form-6 {
-        grid-column: span 6;
+    .f8 {
+        grid-column: span 8
     }
 
-    .form-8 {
-        grid-column: span 8;
+    .f10 {
+        grid-column: span 10
     }
 
-    .form-12 {
-        grid-column: span 12;
+    .f12 {
+        grid-column: span 12
     }
 
     .compact-form label {
         display: block;
-        font-size: .73rem;
-        font-weight: 600;
-        color: #495057;
         margin-bottom: 3px;
+        color: #495057;
+        font-size: .71rem;
+        font-weight: 700
     }
 
-    .compact-form .form-control,
-    .compact-form .form-select {
+    .compact-form .form-control, .compact-form .form-select {
         min-height: 36px;
-        font-size: .82rem;
-    }
-
-    .compact-form textarea.form-control {
-        min-height: 68px;
-        resize: vertical;
+        border-radius: 8px;
+        border-color: #d4dde7;
+        font-size: .8rem
     }
 
     .table-wrap {
         width: 100%;
         overflow-x: auto;
+        border: 1px solid #e1e7ee;
+        border-radius: 9px
     }
 
     .compact-table {
-        margin-bottom: 0;
-        font-size: .8rem;
-        vertical-align: middle;
+        margin: 0;
+        font-size: .78rem
     }
 
-        .compact-table thead th {
-            background: #f8f9fa;
-            color: #495057;
-            font-size: .71rem;
+        .compact-table th {
+            padding: .5rem;
+            background: #f3f6f9;
+            color: #536072;
+            font-size: .68rem;
             text-transform: uppercase;
-            letter-spacing: .02em;
-            white-space: nowrap;
+            white-space: nowrap
         }
 
         .compact-table td {
-            vertical-align: middle;
+            padding: .5rem;
+            vertical-align: middle
         }
 
     .badge-mini {
-        font-size: .7rem;
+        font-size: .68rem;
         padding: .35em .55em;
-        font-weight: 600;
+        font-weight: 700
     }
-
-    .history-row {
-        display: grid;
-        grid-template-columns: 145px 160px 1fr 150px;
-        gap: 12px;
-        padding: 8px 4px;
-        border-bottom: 1px solid #f1f3f5;
-        font-size: .8rem;
-    }
-
-        .history-row:last-child {
-            border-bottom: 0;
-        }
-
-    .history-date,
-    .history-user {
-        color: #6c757d;
-    }
-
-    .history-event {
-        font-weight: 600;
-    }
-
-    .empty {
-        padding: 25px 10px;
-        color: #6c757d;
-        text-align: center;
-        font-size: .82rem;
-    }
-
-    .danger-zone {
-        padding-top: 14px;
-    }
-
-    @@media (max-width: 900px) {
-        .info-2,
-        .info-3,
-        .info-4,
-        .info-6,
-        .info-8 {
-            grid-column: span 6;
-        }
-
-        .form-2,
-        .form-3,
-        .form-4,
-        .form-5,
-        .form-6,
-        .form-8 {
-            grid-column: span 6;
-        }
-
-        .history-row {
-            grid-template-columns: 130px 140px 1fr;
-        }
-
-        .history-user {
-            display: none;
-        }
-    }
-
-    @@media (max-width: 600px) {
-        .viaje-detalle-page {
-            padding: 14px 10px 24px;
-        }
-
-        .info-2,
-        .info-3,
-        .info-4,
-        .info-6,
-        .info-8,
-        .info-12,
-        .form-2,
-        .form-3,
-        .form-4,
-        .form-5,
-        .form-6,
-        .form-8,
-        .form-12 {
-            grid-column: span 12;
-        }
-
-        .header-actions {
-            width: 100%;
-        }
-
-            .header-actions .btn {
-                flex: 1;
-            }
-
-        .history-row {
-            display: block;
-        }
-
-        .history-date,
-        .history-event,
-        .history-user {
-            display: block;
-            margin-bottom: 3px;
-        }
-    }
-
-    /* =========================================================
-           DETALLE VIAJE - MEJORA VISUAL SIN CARDS
-           Más presencia, jerarquía y legibilidad manteniendo lógica.
-           ========================================================= */
-
-    .viaje-detalle-page {
-        position: relative;
-    }
-
-    .detalle-header {
-        padding: 6px 0 12px;
-        border-bottom: 1px solid #dbe4ee;
-    }
-
-    .detalle-title {
-        color: #172033;
-        letter-spacing: -.02em;
-        font-size: 1.5rem;
-    }
-
-        .detalle-title i {
-            color: #173a7a;
-        }
-
-    .detalle-subtitle {
-        color: #6f7b8d;
-        font-weight: 500;
-    }
-
-    .header-actions .btn {
-        min-height: 35px;
-        border-radius: 8px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .estado-strip {
-        gap: 0;
-        padding: 0;
-        margin-top: 12px;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.78);
-        box-shadow: 0 5px 16px rgba(25,47,80,.045);
-        overflow: hidden;
-    }
-
-    .estado-item {
-        min-height: 50px;
-        padding: 8px 14px;
-        border-right: 1px solid #e5eaf0;
-    }
-
-        .estado-item:last-child {
-            border-right: 0;
-        }
-
-        .estado-item strong {
-            color: #172033;
-            font-size: .95rem;
-        }
-
-        .estado-item span {
-            color: #6f7988;
-            font-size: .73rem;
-        }
-
-    .section,
-    .action-block {
-        position: relative;
-        margin-bottom: 14px;
-        padding: 14px 14px 12px;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.76);
-        box-shadow: 0 6px 18px rgba(25,47,80,.04);
-    }
-
-    .section {
-        border-bottom: 1px solid #dce5ef;
-    }
-
-    .section-title,
-    .action-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 12px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #e8edf3;
-        color: #172033;
-        font-size: .96rem;
-        letter-spacing: -.01em;
-    }
-
-        .section-title::before,
-        .action-title::before {
-            content: "";
-            width: 4px;
-            height: 18px;
-            border-radius: 8px;
-            background: #173a7a;
-            flex: 0 0 auto;
-        }
-
-        .action-title i,
-        .section-title i {
-            color: #173a7a;
-        }
-
-    .info-grid {
-        gap: 10px;
-    }
-
-        .info-grid > div {
-            min-height: 58px;
-            padding: 8px 10px;
-            border-bottom: 1px solid #edf1f5;
-            background: transparent;
-        }
-
-    .info-label {
-        color: #7a8492;
-        font-weight: 700;
-    }
-
-    .info-value {
-        margin-top: 2px;
-        color: #172033;
-        font-size: .86rem;
-        font-weight: 600;
-    }
-
-    .compact-form {
-        gap: 10px;
-    }
-
-        .compact-form label {
-            color: #465164;
-            font-weight: 700;
-        }
-
-        .compact-form .form-control,
-        .compact-form .form-select {
-            min-height: 38px;
-            border-radius: 8px;
-            border-color: #d4dde7;
-            background: #fff;
-            box-shadow: none;
-            transition: border-color .15s ease, box-shadow .15s ease;
-        }
-
-            .compact-form .form-control:focus,
-            .compact-form .form-select:focus {
-                border-color: #8ba5d4;
-                box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-            }
-
-    .table-wrap {
-        border: 1px solid #e1e7ee;
-        border-radius: 10px;
-        background: #fff;
-        box-shadow: 0 4px 14px rgba(25,47,80,.025);
-    }
-
-    .compact-table {
-        background: #fff;
-    }
-
-        .compact-table thead th {
-            background: #f3f6f9;
-            color: #4c5868;
-            padding-top: .54rem;
-            padding-bottom: .54rem;
-            border-bottom: 1px solid #d8e1ea;
-        }
-
-        .compact-table tbody td {
-            padding-top: .52rem;
-            padding-bottom: .52rem;
-            border-color: #edf0f4;
-        }
-
-        .compact-table tbody tr:nth-child(even) td {
-            background: #fbfcfd;
-        }
-
-        .compact-table tbody tr:hover td {
-            background: #f4f8fc;
-        }
-
-    .badge-mini {
-        border-radius: 6px;
-        box-shadow: 0 2px 5px rgba(0,0,0,.06);
-    }
-
-    .history-row {
-        margin: 0;
-        padding: 9px 8px;
-        border-bottom: 1px solid #e9edf2;
-    }
-
-        .history-row:nth-child(even) {
-            background: #fbfcfd;
-        }
-
-    .history-date,
-    .history-user {
-        color: #798394;
-    }
-
-    .history-event {
-        color: #172033;
-        font-weight: 700;
-    }
-
-    .empty {
-        border: 1px dashed #d8e0e8;
-        border-radius: 9px;
-        background: #fbfcfd;
-    }
-
-    .danger-zone {
-        margin-top: 14px;
-        padding: 14px;
-        border: 1px solid #efc5ca;
-        border-radius: 12px;
-        background: #fff8f8;
-    }
-
-        .danger-zone .section-title {
-            border-bottom: 1px solid #f3d7da;
-        }
-
-    .action-block .btn-success,
-    .section .btn-success {
-        font-weight: 700;
-        border-radius: 7px;
-    }
-
-    .section .btn,
-    .action-block .btn {
-        border-radius: 7px;
-        font-weight: 700;
-    }
-
-    @@media (max-width: 900px) {
-        .estado-item {
-            min-width: calc(33.333% - 1px);
-            flex: 1 1 30%;
-            border-bottom: 1px solid #e5eaf0;
-        }
-
-            .estado-item:nth-child(3n) {
-                border-right: 0;
-            }
-
-        .info-grid > div {
-            min-height: auto;
-        }
-
-        .form-1,
-        .form-2,
-        .form-3,
-        .form-4,
-        .form-5,
-        .form-6,
-        .form-8,
-        .form-10 {
-            grid-column: span 6;
-        }
-    }
-
-    @@media (max-width: 600px) {
-        .section,
-        .action-block,
-        .danger-zone {
-            padding: 11px 9px 9px;
-            border-radius: 10px;
-        }
-
-        .estado-item {
-            min-width: 50%;
-            flex-basis: 50%;
-            border-right: 1px solid #e5eaf0;
-        }
-
-            .estado-item:nth-child(even) {
-                border-right: 0;
-            }
-
-        .form-1,
-        .form-2,
-        .form-3,
-        .form-4,
-        .form-5,
-        .form-6,
-        .form-8,
-        .form-10,
-        .form-12 {
-            grid-column: span 12;
-        }
-    }
-
-
-    .prep-alert {
-        border: 1px solid #ffc107;
-        background: #fff8e1;
-        padding: 10px 12px;
-        border-radius: 7px;
-        margin-bottom: 12px;
-        display: flex;
-        gap: 10px;
-        align-items: flex-start
-    }
-
-        .prep-alert.pulse {
-            animation: prepPulse 1.6s ease-in-out infinite
-        }
-
-        .prep-alert strong {
-            display: block;
-            font-size: .84rem
-        }
-
-        .prep-alert small {
-            display: block;
-            color: #6c757d;
-            font-size: .74rem;
-            margin-top: 2px
-        }
 
     .evidence-grid {
         display: grid;
@@ -705,947 +477,499 @@
     }
 
     .evidence-item {
-        border: 1px solid #e9ecef;
-        border-radius: 7px;
         padding: 9px;
-        background: #fff
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        background: #fbfcfd
     }
 
     .evidence-name {
         font-size: .78rem;
-        font-weight: 600;
+        font-weight: 700;
         word-break: break-word
     }
 
     .evidence-meta {
-        font-size: .7rem;
+        margin-top: 3px;
         color: #6c757d;
-        margin-top: 3px
+        font-size: .69rem
     }
 
-    @@keyframes prepPulse {
-        0%, 100% {
-            box-shadow: 0 0 0 0 rgba(255,193,7,.18)
+    .history-row {
+        display: grid;
+        grid-template-columns: 145px 155px 1fr 150px;
+        gap: 10px;
+        padding: 8px;
+        border-bottom: 1px solid #e9edf2;
+        font-size: .78rem
+    }
+
+        .history-row:nth-child(even) {
+            background: #fbfcfd
         }
 
-        50% {
-            box-shadow: 0 0 0 6px rgba(255,193,7,.06)
+    .history-date, .history-user {
+        color: #798394
+    }
+
+    .history-event {
+        font-weight: 700
+    }
+
+    .empty {
+        padding: 24px 10px;
+        border: 1px dashed #d8e0e8;
+        border-radius: 8px;
+        background: #fbfcfd;
+        color: #6c757d;
+        text-align: center;
+        font-size: .8rem
+    }
+
+    .danger-box {
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid #efc5ca;
+        border-radius: 9px;
+        background: #fff8f8
+    }
+
+    html[data-nsq-theme="dark"] .viaje-page {
+        color: #e7edf6
+    }
+
+    html[data-nsq-theme="dark"] .viaje-head, html[data-nsq-theme="dark"] .summary-item, html[data-nsq-theme="dark"] .stage, html[data-nsq-theme="dark"] .tabs-shell {
+        background: #111b2d;
+        border-color: #2a3a50;
+        box-shadow: none
+    }
+
+    html[data-nsq-theme="dark"] .nav-tabs {
+        background: #162237;
+        border-color: #2a3a50
+    }
+
+    html[data-nsq-theme="dark"] .info-box, html[data-nsq-theme="dark"] .evidence-item {
+        background: #162237;
+        border-color: #2a3a50
+    }
+
+    @@media(max-width:1100px) {
+        .summary {
+            grid-template-columns: repeat(3,1fr)
+        }
+
+        .workflow {
+            grid-template-columns: repeat(2,1fr)
         }
     }
 
-    @@media(max-width:800px) {
+    @@media(max-width:850px) {
+        .s2, .s3, .s4, .s6, .s8, .f2, .f3, .f4, .f6, .f8, .f10, .i3, .i4, .i6 {
+            grid-column: span 6
+        }
+
         .evidence-grid {
             grid-template-columns: 1fr
         }
+
+        .history-row {
+            grid-template-columns: 130px 140px 1fr
+        }
+
+        .history-user {
+            display: none
+        }
+    }
+
+    @@media(max-width:600px) {
+        .viaje-page {
+            padding: 12px 9px 22px
+        }
+
+        .summary, .workflow {
+            grid-template-columns: repeat(2,1fr)
+        }
+
+        .head-actions {
+            width: 100%
+        }
+
+            .head-actions .btn {
+                flex: 1
+            }
+
+        .s2, .s3, .s4, .s6, .s8, .s12, .f2, .f3, .f4, .f6, .f8, .f10, .f12, .i3, .i4, .i6, .i12 {
+            grid-column: span 12
+        }
+
+        .history-row {
+            display: block
+        }
+
+        .history-date, .history-event, .history-user {
+            display: block;
+            margin-bottom: 3px
+        }
+
+        .nav-tabs {
+            overflow-x: auto;
+            flex-wrap: nowrap
+        }
+
+            .nav-tabs .nav-link {
+                white-space: nowrap
+            }
     }
 </style>
 
-<div class="viaje-detalle-page">
-
-    <div class="detalle-header">
-
+<div class="viaje-page">
+    <div class="viaje-head">
         <div>
-            <h1 class="detalle-title">
-                <i class="fa-solid fa-route me-1"></i>
-                @Model.Folio
-            </h1>
-
-            <div class="detalle-subtitle">
-                @Model.TipoViaje · @Model.Origen → @Model.Destino
-            </div>
+            <h1 class="viaje-title"><i class="fa-solid fa-route me-1"></i>@Model.Folio</h1>
+            <div class="viaje-sub">@Model.TipoViaje · @Model.Origen → @Model.Destino</div>
         </div>
-
-        <div class="header-actions">
-
-            <a asp-controller="LogisticaViajes"
-               asp-action="Index"
-               class="btn btn-outline-secondary btn-sm">
-                <i class="fa-solid fa-arrow-left me-1"></i>
-                Regresar
-            </a>
-
+        <div class="head-actions">
+            <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Viajes</a>
             @if (Model.PuedeEditar)
             {
-                <a asp-controller="LogisticaViajes"
-                   asp-action="Editar"
-                   asp-route-id="@Model.ViajeID"
-                   class="btn btn-outline-primary btn-sm">
-                    <i class="fa-solid fa-screwdriver-wrench me-1"></i>
-                    Completar preparación
-                </a>
+                <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
             }
-
         </div>
-
     </div>
 
     @if (TempData["LogisticaOk"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3">
-            <i class="fa-solid fa-circle-check me-1"></i>
-            @TempData["LogisticaOk"]
-
-            <button type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"></button>
-        </div>
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-2"><i class="fa-solid fa-circle-check me-1"></i>@TempData["LogisticaOk"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     }
-
     @if (TempData["LogisticaError"] != null)
     {
-        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3">
-            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-            @TempData["LogisticaError"]
-
-            <button type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"></button>
-        </div>
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     }
 
-    <div class="estado-strip">
-
-        <div class="estado-item">
-            <span>Estatus</span>
-
-            <strong>
-                <span class="badge badge-mini @BadgeEstatus(Model.Estatus)">
-                    @Model.Estatus
-                </span>
-            </strong>
-        </div>
-
-        <div class="estado-item">
-            <span>Programado</span>
-
-            <strong>
-                @Model.FechaProgramada.ToString("dd/MM/yyyy")
-
-                @if (Model.HoraSalidaProgramada.HasValue)
-                {
-                    @Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm")
-                }
-            </strong>
-        </div>
-
-        <div class="estado-item">
-            <span>Transporte</span>
-            <strong>@Model.TipoTransporte</strong>
-        </div>
-
-        <div class="estado-item">
-            <span>Unidad</span>
-            <strong>@Model.RecursoTransporte</strong>
-        </div>
-
-        <div class="estado-item">
-            <span>Operador</span>
-            <strong>@Model.OperadorMostrar</strong>
-        </div>
-
-        @if (Model.TieneIncidencia)
-        {
-            <div class="estado-item text-danger">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <strong>Con incidencia</strong>
-            </div>
-        }
-
+    <div class="summary">
+        <div class="summary-item"><span>Estatus</span><strong><span class="badge badge-mini @BadgeEstatus(Model.Estatus)">@Model.Estatus</span></strong></div>
+        <div class="summary-item"><span>Programado</span><strong>@Model.FechaProgramada.ToString("dd/MM/yyyy") @(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm"):"")</strong></div>
+        <div class="summary-item"><span>Ruta</span><strong title="@Model.Ruta">@(Model.TieneRuta? Model.Ruta: "Pendiente")</strong></div>
+        <div class="summary-item"><span>Unidad</span><strong>@Model.UnidadMostrar</strong></div>
+        <div class="summary-item"><span>Chofer</span><strong>@Model.ChoferMostrar</strong></div>
+        <div class="summary-item"><span>KM usados</span><strong>@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") + " km":"-")</strong></div>
     </div>
 
-    @if (Model.Estatus == "Programado")
-    {
-        if (!preparacionCompleta)
+    <div class="workflow">
+        <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : "current")"><span>Paso 1</span><strong>Programado</strong></div>
+        <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : Model.Estatus == "Programado" && preparacionCompleta ? "current" : "")"><span>Paso 2</span><strong>Preparación</strong></div>
+        <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : Model.Estatus == "En curso" ? "current" : "")"><span>Paso 3</span><strong>En curso</strong></div>
+        <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : "")"><span>Paso 4</span><strong>Regreso / cierre</strong></div>
+    </div>
+
+    <div class="stage">
+        @if (Model.Estatus == "Programado")
         {
-            <div class="prep-alert pulse">
-                <i class="fa-solid fa-triangle-exclamation text-warning mt-1"></i>
+            <div class="stage-head">
                 <div>
-                    <strong>Faltan datos antes de iniciar el viaje</strong>
-                    <small>Completa: @string.Join(", ", faltantesPreparacion).</small>
-                    <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm mt-2">
-                        <i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación
-                    </a>
+                    <h2 class="stage-title">Etapa actual: preparar e iniciar viaje</h2>
+                    <div class="stage-sub">Primero completa la preparación. Después registra la salida y el kilometraje inicial.</div>
                 </div>
+                <span class="badge bg-primary stage-badge">Programado</span>
             </div>
+            if (!preparacionCompleta)
+            {
+                <div class="missing mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>Falta completar:</strong> @string.Join(", ", faltantesPreparacion).</div>
+                <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
+            }
+            else
+            {
+                <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Preparación completa. Ya puedes iniciar el viaje.</div>
+                <form asp-controller="LogisticaViajes" asp-action="RegistrarSalida" method="post" class="stage-grid">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                    <div class="s4"><label class="required">Fecha y hora de salida</label><input type="datetime-local" name="FechaSalida" value="@ahora" class="form-control" required /></div>
+                    <div class="s3"><label class="required">Kilometraje inicial</label><input type="number" name="KilometrajeSalida" min="0" step="1" class="form-control" required placeholder="Ej. 125430" /></div>
+                    <div class="s4"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1000" class="form-control" placeholder="Opcional" /></div>
+                    <div class="s1"><button type="submit" class="btn btn-success btn-sm w-100" onclick="return confirm('¿Confirmar la salida de este viaje?');"><i class="fa-solid fa-play me-1"></i>Iniciar</button></div>
+                </form>
+            }
         }
-        else
+        else if (Model.Estatus == "En curso")
         {
-            <div class="prep-alert">
-                <i class="fa-solid fa-circle-check text-success mt-1"></i>
+            <div class="stage-head">
                 <div>
-                    <strong>Viaje listo para iniciar</strong>
-                    <small>La preparación cuenta con los datos requeridos de transporte.</small>
+                    <h2 class="stage-title">Etapa actual: registrar regreso</h2>
+                    <div class="stage-sub">La salida ya fue registrada. Captura el kilometraje final para cerrar el viaje.</div>
                 </div>
+                <span class="badge bg-warning text-dark stage-badge">En curso</span>
             </div>
+            <div class="stage-grid mb-2">
+                <div class="s4"><div class="info-box"><div class="info-label">Salida real</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm"):"-")</div></div></div>
+                <div class="s4"><div class="info-box"><div class="info-label">Kilometraje inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0") + " km":"-")</div></div></div>
+                <div class="s4"><div class="info-box"><div class="info-label">Destino</div><div class="info-value">@Model.Destino</div></div></div>
+            </div>
+            @if (Model.PuedeRegistrarRegreso)
+            {
+                <form asp-controller="LogisticaViajes" asp-action="RegistrarRetorno" method="post" class="stage-grid">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                    <div class="s3"><label class="required">Fecha y hora de regreso</label><input type="datetime-local" name="FechaRegreso" value="@ahora" class="form-control" required /></div>
+                    <div class="s3"><label class="required">Kilometraje final</label><input type="number" name="KilometrajeRegreso" min="@(Model.KilometrajeSalida ?? 0)" step="1" class="form-control" required placeholder="Ej. 125612" /></div>
+                    <div class="s2"><label>Pago de gasolina</label><input type="number" name="PagoGasolina" min="0" step="0.01" class="form-control" placeholder="Opcional" /></div>
+                    <div class="s3"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1000" class="form-control" placeholder="Opcional" /></div>
+                    <div class="s1"><button type="submit" class="btn btn-success btn-sm w-100" onclick="return confirm('¿Confirmar el regreso y cerrar el viaje?');"><i class="fa-solid fa-flag-checkered me-1"></i>Cerrar</button></div>
+                </form>
+            }
         }
-    }
-
-    <div class="section">
-
-        <div class="section-title">
-            Datos del viaje
-        </div>
-
-        <div class="info-grid">
-
-            <div class="info-3">
-                <div class="info-label">Tipo de viaje</div>
-                <div class="info-value">@Model.TipoViaje</div>
-            </div>
-
-            <!-- LOGISTICA_VIAJES_CHOFERES_V5: tipo de transporte oculto del flujo visible -->
-
-            <div class="info-3">
-                <div class="info-label">Fecha programada</div>
-                <div class="info-value">
-                    @Model.FechaProgramada.ToString("dd/MM/yyyy")
-                </div>
-            </div>
-
-            <div class="info-3">
-                <div class="info-label">Salida programada</div>
-
-                <div class="info-value">
-                    @(Model.HoraSalidaProgramada.HasValue
-                                        ? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm")
-                                        : "-")
-                </div>
-            </div>
-
-            <div class="info-6">
-                <div class="info-label">Origen</div>
-                <div class="info-value">@Model.Origen</div>
-            </div>
-
-            <div class="info-6">
-                <div class="info-label">Destino</div>
-                <div class="info-value">@Model.Destino</div>
-            </div>
-
-            <div class="info-8">
-                <div class="info-label">Motivo</div>
-                <div class="info-value">@Model.Motivo</div>
-            </div>
-
-            <div class="info-4">
-                <div class="info-label">Ruta</div>
-
-                <div class="info-value">
-                    @(string.IsNullOrWhiteSpace(Model.Ruta)
-                                        ? "Sin ruta específica"
-                                        : Model.Ruta)
-                </div>
-            </div>
-
-        </div>
-
-    </div>
-
-    <div class="section">
-
-        <div class="section-title">
-            Unidad y chofer
-        </div>
-
-        @if (Model.EsTransporteInterno)
+        else if (Model.Estatus == "Completado")
         {
-            <div class="info-grid">
-
-                <div class="info-6">
-                    <div class="info-label">Unidad</div>
-                    <div class="info-value">
-                        @(string.IsNullOrWhiteSpace(Model.Unidad)
-                                            ? "-"
-                                            : Model.Unidad)
-                                                       </div>
-                                                   </div>
-
-                <div class="info-6">
-                    <div class="info-label">Operador / chofer</div>
-                    <div class="info-value">
-                        @(string.IsNullOrWhiteSpace(Model.Operador)
-                                            ? "-"
-                                            : Model.Operador)
+            <div class="stage-head">
+                <div>
+                    <h2 class="stage-title">Viaje completado</h2>
+                    <div class="stage-sub">El recorrido quedó cerrado. Los datos capturados permanecen disponibles abajo.</div>
                 </div>
+                <span class="badge bg-success stage-badge">Completado</span>
             </div>
-
+            <div class="stage-grid">
+                <div class="s3"><div class="info-box"><div class="info-label">Salida</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm"):"-")</div></div></div>
+                <div class="s3"><div class="info-box"><div class="info-label">Regreso</div><div class="info-value">@(Model.FechaRegresoReal.HasValue? Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm"):"-")</div></div></div>
+                <div class="s2"><div class="info-box"><div class="info-label">KM inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0"):"-")</div></div></div>
+                <div class="s2"><div class="info-box"><div class="info-label">KM final</div><div class="info-value">@(Model.KilometrajeRegreso.HasValue? Model.KilometrajeRegreso.Value.ToString("N0"):"-")</div></div></div>
+                <div class="s2"><div class="info-box"><div class="info-label">KM usados</div><div class="info-value">@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0"):"-")</div></div></div>
             </div>
-                }
-        else
-        {
-            <div class="info-grid">
-
-                <div class="info-3">
-                    <div class="info-label">Transportista</div>
-                    <div class="info-value">
-                        @(string.IsNullOrWhiteSpace(Model.TransportistaExterno)
-                                            ? "-"
-                                            : Model.TransportistaExterno)
-                                                                     </div>
-                                                                 </div>
-
-                <div class="info-3">
-                    <div class="info-label">Unidad</div>
-                    <div class="info-value">
-                        @(string.IsNullOrWhiteSpace(Model.UnidadExterna)
-                                            ? "-"
-                                            : Model.UnidadExterna)
-                                                              </div>
-                                                          </div>
-
-                <div class="info-3">
-                    <div class="info-label">Placas</div>
-                    <div class="info-value">
-                        @(string.IsNullOrWhiteSpace(Model.PlacasExternas)
-                                            ? "-"
-                                            : Model.PlacasExternas)
-                                                               </div>
-                                                           </div>
-
-                <div class="info-3">
-                    <div class="info-label">Chofer</div>
-                    <div class="info-value">
-                        @(string.IsNullOrWhiteSpace(Model.ChoferExterno)
-                                            ? "-"
-                                            : Model.ChoferExterno)
-                </div>
-            </div>
-
-            </div>
-                }
-
-    </div>
-
-    <div class="section">
-
-        <div class="section-title">
-            Seguimiento
-        </div>
-
-        <div class="info-grid">
-
-            <div class="info-3">
-                <div class="info-label">Salida real</div>
-
-                <div class="info-value">
-                    @(Model.FechaSalidaReal.HasValue
-                                        ? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm")
-                                        : "Pendiente")
-                </div>
-            </div>
-
-            <!-- Regreso estimado retirado del flujo V5 -->
-
-            <div class="info-3">
-                <div class="info-label">Regreso real</div>
-
-                <div class="info-value">
-                    @(Model.FechaRegresoReal.HasValue
-                                        ? Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm")
-                                        : "Pendiente")
-                </div>
-            </div>
-
-            <div class="info-3">
-                <div class="info-label">Estado operativo</div>
-
-                <div class="info-value">
-                    @if (Model.RetornoPendiente)
-                    {
-                        <span class="text-warning">
-                            <i class="fa-solid fa-clock me-1"></i>
-                            Retorno pendiente
-                        </span>
-                    }
-                    else if (Model.Estatus == "Completado")
-                    {
-                        <span class="text-success">
-                            <i class="fa-solid fa-circle-check me-1"></i>
-                            Viaje cerrado
-                        </span>
-                    }
-                    else
-                    {
-                        @Model.Estatus
-                    }
-                </div>
-            </div>
-
-            <!-- Kilometrajes conservados en BD solo para historicos; no forman parte del flujo visible V5. -->
-            <div class="info-3">
-                <div class="info-label">Pago de gasolina</div>
-                <div class="info-value">@(Model.PagoGasolina.HasValue ? $"${Model.PagoGasolina.Value:N2}" : "-")</div>
-            </div>
-
-        </div>
-
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
-    {
-        <div class="section">
-
-            <div class="section-title">
-                Observaciones
-            </div>
-
-            <div class="info-value"
-                 style="white-space:pre-line">
-                @Model.Observaciones
-            </div>
-
-        </div>
-    }
-
-    @if (Model.PuedeRegistrarSalida && preparacionCompleta)
-    {
-        <div class="action-block">
-
-            <div class="action-title">
-                <i class="fa-solid fa-play me-1"></i>
-                Iniciar viaje
-            </div>
-
-            <form asp-controller="LogisticaViajes"
-                  asp-action="RegistrarSalida"
-                  method="post"
-                  class="compact-form">
-
-                @Html.AntiForgeryToken()
-
-                <input type="hidden"
-                       name="ViajeID"
-                       value="@Model.ViajeID" />
-
-                <div class="form-4">
-                    <label>Fecha y hora de salida</label>
-
-                    <input type="datetime-local"
-                           name="FechaSalida"
-                           value="@ahora"
-                           class="form-control"
-                           required />
-                </div>
-
-                <input type="hidden" name="KilometrajeSalida" value="" />
-
-                <div class="form-3">
-                    <label>Pago de gasolina</label>
-                    <input type="number" name="PagoGasolina" min="0" step="0.01" class="form-control" placeholder="Opcional" />
-                </div>
-                <div class="form-4">
-                    <label>Observaciones</label>
-                    <input type="text" name="Observaciones" maxlength="1000" class="form-control" placeholder="Opcional" />
-                </div>
-
-                <div class="form-1">
-                    <button type="submit"
-                            class="btn btn-success btn-sm w-100"
-                            onclick="return confirm('¿Confirmar la salida de este viaje?');">
-                        <i class="fa-solid fa-play"></i>
-                        Salir
-                    </button>
-                </div>
-
-            </form>
-
-        </div>
-    }
-
-    @if (Model.PuedeRegistrarRegreso)
-    {
-        <div class="action-block">
-
-            <div class="action-title">
-                <i class="fa-solid fa-flag-checkered me-1"></i>
-                Registrar regreso
-            </div>
-
-            <form asp-controller="LogisticaViajes"
-                  asp-action="RegistrarRetorno"
-                  method="post"
-                  class="compact-form">
-
-                @Html.AntiForgeryToken()
-
-                <input type="hidden"
-                       name="ViajeID"
-                       value="@Model.ViajeID" />
-
-                <div class="form-4">
-                    <label>Fecha y hora de regreso</label>
-
-                    <input type="datetime-local"
-                           name="FechaRegreso"
-                           value="@ahora"
-                           class="form-control"
-                           required />
-                </div>
-
-                <input type="hidden" name="KilometrajeRegreso" value="" />
-
-                <div class="form-4">
-                    <label>Observaciones</label>
-
-                    <input type="text"
-                           name="Observaciones"
-                           maxlength="1000"
-                           class="form-control"
-                           placeholder="Opcional" />
-                </div>
-
-                <div class="form-1">
-                    <button type="submit"
-                            class="btn btn-success btn-sm w-100"
-                            onclick="return confirm('¿Confirmar el regreso y cerrar el viaje?');">
-                        <i class="fa-solid fa-flag-checkered"></i>
-                        Regresar
-                    </button>
-                </div>
-
-            </form>
-
-        </div>
-    }
-
-    @if (Model.Estatus != "Cancelado")
-    {
-        <div class="section">
-
-            <div class="section-title">
-                <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                Registrar incidencia
-            </div>
-
-            <form asp-controller="LogisticaViajes"
-                  asp-action="RegistrarIncidencia"
-                  method="post"
-                  class="compact-form">
-
-                @Html.AntiForgeryToken()
-
-                <input type="hidden"
-                       name="ViajeID"
-                       value="@Model.ViajeID" />
-
-                <div class="form-3">
-                    <label>Tipo</label>
-
-                    <select name="Tipo"
-                            class="form-select"
-                            required>
-                        <option value="">Selecciona...</option>
-                        <option value="Unidad">Unidad</option>
-                        <option value="Operador">Operador</option>
-                        <option value="Tráfico">Tráfico</option>
-                        <option value="Retraso">Retraso</option>
-                        <option value="Ruta">Ruta</option>
-                        <option value="Material">Material</option>
-                        <option value="Recolección">Recolección</option>
-                        <option value="Cliente / destino">Cliente / destino</option>
-                        <option value="Seguridad">Seguridad</option>
-                        <option value="Otro">Otro</option>
-                    </select>
-                </div>
-
-                <div class="form-2">
-                    <label>Severidad</label>
-
-                    <select name="Severidad"
-                            class="form-select"
-                            required>
-                        <option value="Baja">Baja</option>
-                        <option value="Media" selected>Media</option>
-                        <option value="Alta">Alta</option>
-                        <option value="Crítica">Crítica</option>
-                    </select>
-                </div>
-
-                <div class="form-3">
-                    <label>Responsable</label>
-
-                    <input type="text"
-                           name="Responsable"
-                           maxlength="200"
-                           class="form-control"
-                           placeholder="Opcional" />
-                </div>
-
-                <div class="form-4">
-                    <label>Descripción</label>
-
-                    <input type="text"
-                           name="Descripcion"
-                           maxlength="1200"
-                           class="form-control"
-                           required
-                           placeholder="Describe la incidencia" />
-                </div>
-
-                <div class="form-12 text-end">
-                    <button type="submit"
-                            class="btn btn-outline-danger btn-sm">
-                        <i class="fa-solid fa-plus me-1"></i>
-                        Registrar incidencia
-                    </button>
-                </div>
-
-            </form>
-
-        </div>
-    }
-
-    <div class="section">
-        <div class="section-title">Evidencias del viaje</div>
-        @if (Model.Estatus != "Cancelado")
-        {
-            <form asp-controller="LogisticaViajes" asp-action="SubirEvidencia" method="post" enctype="multipart/form-data" class="compact-form mb-3">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
-                <div class="form-3">
-                    <label>Tipo</label>
-                    <select name="tipoEvidencia" class="form-select">
-                        <option value="General">General</option>
-                        <option value="Salida">Salida</option>
-                        <option value="Unidad">Unidad</option>
-                        <option value="Ruta">Ruta</option>
-                        <option value="Gasolina">Gasolina</option>
-                        <option value="Regreso">Regreso</option>
-                        <option value="Incidencia">Incidencia</option>
-                    </select>
-                </div>
-                <div class="form-4">
-                    <label>Fotografía / archivo</label>
-                    <input type="file" name="archivo" class="form-control" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required />
-                </div>
-                <div class="form-4">
-                    <label>Observaciones</label>
-                    <input type="text" name="observaciones" maxlength="1000" class="form-control" placeholder="Opcional" />
-                </div>
-                <div class="form-1">
-                    <button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="fa-solid fa-camera me-1"></i>Agregar</button>
-                </div>
-            </form>
-        }
-        @if (Model.Evidencias == null || Model.Evidencias.Count == 0)
-        {
-            <div class="empty">Sin evidencias registradas.</div>
         }
         else
         {
-            <div class="evidence-grid">
-                @foreach (var evidencia in Model.Evidencias)
+            <div class="stage-head">
+                <div><h2 class="stage-title">Viaje cancelado</h2><div class="stage-sub">El viaje ya no tiene acciones operativas pendientes.</div></div>
+                <span class="badge bg-secondary stage-badge">Cancelado</span>
+            </div>
+        }
+    </div>
+
+    <div class="tabs-shell">
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDatos" type="button"><i class="fa-solid fa-circle-info me-1"></i>Datos</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencias @if(incidenciasAbiertas>0){
+            <span class="badge bg-danger ms-1">@incidenciasAbiertas</span>
+                        }
+</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabEvidencias" type="button"><i class="fa-solid fa-paperclip me-1"></i>Evidencias <span class="badge bg-secondary ms-1">@totalEvidencias</span></button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabHistorial" type="button"><i class="fa-solid fa-clock-rotate-left me-1"></i>Historial</button></li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="tabDatos">
+                <div class="section-head"><h3>Información del viaje</h3></div>
+                <div class="info-grid">
+                    <div class="i3 info-box"><div class="info-label">Tipo de salida</div><div class="info-value">@Model.TipoViaje</div></div>
+                    <div class="i3 info-box"><div class="info-label">Fecha programada</div><div class="info-value">@Model.FechaProgramada.ToString("dd/MM/yyyy")</div></div>
+                    <div class="i3 info-box"><div class="info-label">Hora programada</div><div class="info-value">@(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm"):"Pendiente")</div></div>
+                    <div class="i3 info-box"><div class="info-label">Ruta</div><div class="info-value">@(Model.TieneRuta? Model.Ruta: "Pendiente")</div></div>
+                    <div class="i6 info-box"><div class="info-label">Origen</div><div class="info-value">@Model.Origen</div></div>
+                    <div class="i6 info-box"><div class="info-label">Destino</div><div class="info-value">@Model.Destino</div></div>
+                    <div class="i6 info-box"><div class="info-label">Unidad</div><div class="info-value">@Model.UnidadMostrar</div></div>
+                    <div class="i6 info-box"><div class="info-label">Chofer</div><div class="info-value">@Model.ChoferMostrar</div></div>
+                    <div class="i12 info-box"><div class="info-label">Motivo / objetivo</div><div class="info-value">@Model.Motivo</div></div>
+                </div>
+
+                <div class="section-head mt-3"><h3>Seguimiento capturado</h3></div>
+                <div class="info-grid">
+                    <div class="i3 info-box"><div class="info-label">Salida real</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm"):"Pendiente")</div></div>
+                    <div class="i3 info-box"><div class="info-label">KM inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0") + " km":"Pendiente")</div></div>
+                    <div class="i3 info-box"><div class="info-label">Regreso real</div><div class="info-value">@(Model.FechaRegresoReal.HasValue? Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm"):"Pendiente")</div></div>
+                    <div class="i3 info-box"><div class="info-label">KM final</div><div class="info-value">@(Model.KilometrajeRegreso.HasValue? Model.KilometrajeRegreso.Value.ToString("N0") + " km":"Pendiente")</div></div>
+                    <div class="i3 info-box"><div class="info-label">KM utilizados</div><div class="info-value">@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") + " km":"-")</div></div>
+                    <div class="i3 info-box"><div class="info-label">Pago gasolina</div><div class="info-value">@(Model.PagoGasolina.HasValue ? $"${Model.PagoGasolina.Value:N2}" : "-")</div></div>
+                    <div class="i6 info-box"><div class="info-label">Observaciones</div><div class="info-value" style="white-space:pre-line">@(string.IsNullOrWhiteSpace(Model.Observaciones) ? "-" : Model.Observaciones)</div></div>
+                </div>
+
+                <div class="section-head mt-3"><h3>Registro</h3></div>
+                <div class="info-grid">
+                    <div class="i4 info-box"><div class="info-label">Responsable</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.UsuarioResponsable) ? "-" : Model.UsuarioResponsable)</div></div>
+                    <div class="i4 info-box"><div class="info-label">Creado por</div><div class="info-value">@(string.IsNullOrWhiteSpace(Model.CreadoPor) ? "-" : Model.CreadoPor)</div></div>
+                    <div class="i4 info-box"><div class="info-label">Fecha creación</div><div class="info-value">@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div></div>
+                </div>
+
+                @if (Model.PuedeCancelar)
                 {
-                    <div class="evidence-item">
-                        <div class="d-flex justify-content-between gap-2">
-                            <div>
-                                <div class="evidence-name">@evidencia.NombreOriginal</div>
-                                <div class="evidence-meta">@evidencia.TipoEvidencia · @evidencia.FechaCarga.ToString("dd/MM/yyyy HH:mm")</div>
-                                @if (!string.IsNullOrWhiteSpace(evidencia.Observaciones))
-                                {
-                                    <div class="evidence-meta">@evidencia.Observaciones</div>
-                                }
-                            </div>
-                            <div class="d-flex gap-1">
-                                <a asp-controller="LogisticaViajes" asp-action="VerEvidencia" asp-route-id="@evidencia.ViajeEvidenciaID" class="btn btn-outline-primary btn-sm" title="Ver evidencia">
-                                    <i class="fa-solid fa-eye"></i>
-                                </a>
-                                @if (Model.Estatus != "Cancelado")
-                                {
-                                    <form asp-controller="LogisticaViajes" asp-action="EliminarEvidencia" method="post" onsubmit="return confirm('¿Retirar esta evidencia?');">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="viajeId" value="@Model.ViajeID" />
-                                        <input type="hidden" name="evidenciaId" value="@evidencia.ViajeEvidenciaID" />
-                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
-                                    </form>
-                                }
-                            </div>
+                    <div class="danger-box">
+                        <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#cancelarViaje"><i class="fa-solid fa-ban me-1"></i>Cancelar viaje</button>
+                        <div class="collapse mt-2" id="cancelarViaje">
+                            <form asp-controller="LogisticaViajes" asp-action="Cancelar" method="post" class="compact-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                                <div class="f10"><label class="required">Motivo de cancelación</label><input type="text" name="Motivo" maxlength="1000" class="form-control" required placeholder="Indica por qué se cancela el viaje" /></div>
+                                <div class="f2"><button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('¿Seguro que deseas cancelar este viaje?');">Confirmar</button></div>
+                            </form>
                         </div>
                     </div>
                 }
             </div>
-        }
-    </div>
 
-    <div class="section">
-
-        <div class="section-title">
-            Incidencias
-        </div>
-
-        <div class="table-wrap">
-
-            <table class="table table-sm table-hover compact-table">
-
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Fecha</th>
-                        <th>Tipo</th>
-                        <th>Severidad</th>
-                        <th>Descripción</th>
-                        <th>Responsable</th>
-                        <th>Estatus</th>
-                        <th></th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    @if (Model.Incidencias == null ||
-                                        Model.Incidencias.Count == 0)
+            <div class="tab-pane fade" id="tabIncidencias">
+                <div class="section-head">
+                    <h3>Incidencias del viaje</h3>
+                    @if (Model.Estatus != "Cancelado")
                     {
-                        <tr>
-                            <td colspan="8">
-                                <div class="empty">
-                                    Sin incidencias registradas.
+                        <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nuevaIncidencia"><i class="fa-solid fa-plus me-1"></i>Nueva incidencia</button>
+                    }
+                </div>
+
+                @if (Model.Estatus != "Cancelado")
+                {
+                    <div class="collapse mb-3" id="nuevaIncidencia">
+                        <form asp-controller="LogisticaViajes" asp-action="RegistrarIncidencia" method="post" class="compact-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                            <div class="f3"><label class="required">Tipo</label><select name="Tipo" class="form-select" required><option value="">Selecciona...</option><option value="Unidad">Unidad</option><option value="Operador">Operador</option><option value="Tráfico">Tráfico</option><option value="Retraso">Retraso</option><option value="Ruta">Ruta</option><option value="Material">Material</option><option value="Recolección">Recolección</option><option value="Cliente / destino">Cliente / destino</option><option value="Seguridad">Seguridad</option><option value="Otro">Otro</option></select></div>
+                            <div class="f2"><label class="required">Severidad</label><select name="Severidad" class="form-select" required><option value="Baja">Baja</option><option value="Media" selected>Media</option><option value="Alta">Alta</option><option value="Crítica">Crítica</option></select></div>
+                            <div class="f3"><label>Responsable</label><input type="text" name="Responsable" maxlength="200" class="form-control" placeholder="Opcional" /></div>
+                            <div class="f4"><label class="required">Descripción</label><input type="text" name="Descripcion" maxlength="1200" class="form-control" required placeholder="Describe la incidencia" /></div>
+                            <div class="f12 text-end"><button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-plus me-1"></i>Registrar</button></div>
+                        </form>
+                    </div>
+                }
+
+                <div class="table-wrap">
+                    <table class="table table-sm compact-table">
+                        <thead><tr><th>ID</th><th>Fecha</th><th>Tipo</th><th>Severidad</th><th>Descripción</th><th>Responsable</th><th>Estatus</th><th></th></tr></thead>
+                        <tbody>
+                            @if (Model.Incidencias == null || Model.Incidencias.Count == 0)
+                            {
+                                <tr><td colspan="8"><div class="empty">Sin incidencias registradas.</div></td></tr>
+                            }
+                            else
+                            {
+                                foreach (var incidencia in Model.Incidencias)
+                                {
+                                    <tr>
+                                        <td>VINC-@incidencia.ViajeIncidenciaID.ToString("000000")</td>
+                                        <td class="text-nowrap">@incidencia.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@incidencia.Tipo</td>
+                                        <td><span class="badge badge-mini @BadgeSeveridad(incidencia.Severidad)">@incidencia.Severidad</span></td>
+                                        <td style="min-width:220px">@incidencia.Descripcion</td>
+                                        <td>@(string.IsNullOrWhiteSpace(incidencia.Responsable) ? "-" : incidencia.Responsable)</td>
+                                        <td><span class="badge badge-mini @BadgeIncidencia(incidencia.Estatus)">@incidencia.Estatus</span></td>
+                                        <td style="min-width:220px">
+                                            @if (incidencia.EstaAbierta)
+                                            {
+                                                <form asp-controller="LogisticaViajes" asp-action="CerrarIncidencia" method="post" class="d-flex gap-1">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                                                    <input type="hidden" name="ViajeIncidenciaID" value="@incidencia.ViajeIncidenciaID" />
+                                                    <input type="text" name="Solucion" maxlength="1200" class="form-control form-control-sm" placeholder="Solución aplicada" required />
+                                                    <button type="submit" class="btn btn-outline-success btn-sm"><i class="fa-solid fa-check"></i></button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Cerrada</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tabEvidencias">
+                <div class="section-head">
+                    <h3>Evidencias del viaje</h3>
+                    @if (Model.Estatus != "Cancelado")
+                    {
+                        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nuevaEvidencia"><i class="fa-solid fa-plus me-1"></i>Agregar evidencia</button>
+                    }
+                </div>
+
+                @if (Model.Estatus != "Cancelado")
+                {
+                    <div class="collapse mb-3" id="nuevaEvidencia">
+                        <form asp-controller="LogisticaViajes" asp-action="SubirEvidencia" method="post" enctype="multipart/form-data" class="compact-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                            <div class="f3"><label>Tipo</label><select name="tipoEvidencia" class="form-select"><option value="General">General</option><option value="Salida">Salida</option><option value="Unidad">Unidad</option><option value="Ruta">Ruta</option><option value="Gasolina">Gasolina</option><option value="Regreso">Regreso</option><option value="Incidencia">Incidencia</option></select></div>
+                            <div class="f4"><label class="required">Fotografía / archivo</label><input type="file" name="archivo" class="form-control" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required /></div>
+                            <div class="f4"><label>Observaciones</label><input type="text" name="observaciones" maxlength="1000" class="form-control" placeholder="Opcional" /></div>
+                            <div class="f1"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="fa-solid fa-camera me-1"></i>Agregar</button></div>
+                        </form>
+                    </div>
+                }
+
+                @if (Model.Evidencias == null || Model.Evidencias.Count == 0)
+                {
+                    <div class="empty">Sin evidencias registradas.</div>
+                }
+                else
+                {
+                    <div class="evidence-grid">
+                        @foreach (var evidencia in Model.Evidencias)
+                        {
+                            <div class="evidence-item">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div>
+                                        <div class="evidence-name">@evidencia.NombreOriginal</div>
+                                        <div class="evidence-meta">@evidencia.TipoEvidencia · @evidencia.FechaCarga.ToString("dd/MM/yyyy HH:mm")</div>
+                                        @if (!string.IsNullOrWhiteSpace(evidencia.Observaciones))
+                                        {
+                                            <div class="evidence-meta">@evidencia.Observaciones</div>
+                                        }
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <a asp-controller="LogisticaViajes" asp-action="VerEvidencia" asp-route-id="@evidencia.ViajeEvidenciaID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye"></i></a>
+                                        @if (Model.Estatus != "Cancelado")
+                                        {
+                                            <form asp-controller="LogisticaViajes" asp-action="EliminarEvidencia" method="post" onsubmit="return confirm('¿Retirar esta evidencia?');">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                <input type="hidden" name="evidenciaId" value="@evidencia.ViajeEvidenciaID" />
+                                                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
+                                            </form>
+                                        }
+                                    </div>
                                 </div>
-                            </td>
-                        </tr>
-                    }
-                    else
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="tab-pane fade" id="tabHistorial">
+                <div class="section-head"><h3>Historial del viaje</h3></div>
+                @if (Model.Historial == null || Model.Historial.Count == 0)
+                {
+                    <div class="empty">Sin movimientos registrados.</div>
+                }
+                else
+                {
+                    foreach (var movimiento in Model.Historial)
                     {
-                        foreach (var incidencia in Model.Incidencias)
-                        {
-                            <tr>
-
-                                <td>
-                                    VINC-@incidencia.ViajeIncidenciaID.ToString("000000")
-                                </td>
-
-                                <td class="text-nowrap">
-                                    @incidencia.FechaRegistro.ToString("dd/MM/yyyy HH:mm")
-                                </td>
-
-                                <td>
-                                    @incidencia.Tipo
-                                </td>
-
-                                <td>
-                                    <span class="badge badge-mini @BadgeSeveridad(incidencia.Severidad)">
-                                        @incidencia.Severidad
-                                    </span>
-                                </td>
-
-                                <td style="min-width:220px">
-                                    @incidencia.Descripcion
-                                </td>
-
-                                <td>
-                                    @(string.IsNullOrWhiteSpace(incidencia.Responsable)
-                                                                ? "-"
-                                                                : incidencia.Responsable)
-                        </td>
-
-                                <td>
-                                    <span class="badge badge-mini @BadgeIncidencia(incidencia.Estatus)">
-                                        @incidencia.Estatus
-                                    </span>
-                                </td>
-
-                                <td style="min-width:220px">
-
-                            @if (incidencia.EstaAbierta)
-                                    {
-                                        <form asp-controller="LogisticaViajes"
-                                              asp-action="CerrarIncidencia"
-                                              method="post"
-                                              class="d-flex gap-1">
-
-                                            @Html.AntiForgeryToken()
-
-                                            <input type="hidden"
-                                                   name="ViajeID"
-                                                   value="@Model.ViajeID" />
-
-                                            <input type="hidden"
-                                                   name="ViajeIncidenciaID"
-                                                   value="@incidencia.ViajeIncidenciaID" />
-
-                                            <input type="text"
-                                                   name="Solucion"
-                                                   maxlength="1200"
-                                                   class="form-control form-control-sm"
-                                                   placeholder="Solución aplicada"
-                                                   required />
-
-                                            <button type="submit"
-                                                    class="btn btn-outline-success btn-sm"
-                                                    title="Cerrar incidencia">
-                                                <i class="fa-solid fa-check"></i>
-                                            </button>
-
-                                        </form>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-success">
-                                            <i class="fa-solid fa-circle-check me-1"></i>
-                                            Cerrada
-                                        </span>
-                                    }
-
-                                </td>
-
-                            </tr>
-                        }
+                        <div class="history-row">
+                            <div class="history-date">@movimiento.FechaEvento.ToString("dd/MM/yyyy HH:mm")</div>
+                            <div class="history-event">@movimiento.Evento.Replace("_", " ")</div>
+                            <div>
+                                @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior) || !string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
+                                {
+                                    <div class="mb-1">
+                                        @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior))
+                                        {
+                                            <span>@movimiento.EstadoAnterior</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
+                                        {
+                                            <span> → @movimiento.EstadoNuevo</span>
+                                        }
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(movimiento.Observaciones))
+                                {
+                                    <div class="text-muted">@movimiento.Observaciones</div>
+                                }
+                            </div>
+                            <div class="history-user">@movimiento.Usuario</div>
+                        </div>
                     }
-
-                </tbody>
-
-            </table>
-
+                }
+            </div>
         </div>
-
     </div>
-
-    <div class="section">
-
-        <div class="section-title">
-            Historial
-        </div>
-
-        @if (Model.Historial == null ||
-                Model.Historial.Count == 0)
-        {
-            <div class="empty">
-                Sin movimientos registrados.
-            </div>
-        }
-        else
-        {
-            foreach (var movimiento in Model.Historial)
-            {
-                <div class="history-row">
-
-                    <div class="history-date">
-                        @movimiento.FechaEvento.ToString("dd/MM/yyyy HH:mm")
-                    </div>
-
-                    <div class="history-event">
-                        @movimiento.Evento.Replace("_", " ")
-                    </div>
-
-                    <div>
-                        @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior) ||
-                                        !string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
-                        {
-                            <div class="mb-1">
-                                @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior))
-                                {
-                                    <span>@movimiento.EstadoAnterior</span>
-                                }
-
-                                @if (!string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
-                                {
-                                    <span>
-                                        →
-                                        @movimiento.EstadoNuevo
-                                    </span>
-                                }
-                            </div>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(movimiento.Observaciones))
-                        {
-                            <div class="text-muted">
-                                @movimiento.Observaciones
-                            </div>
-                        }
-                    </div>
-
-                    <div class="history-user">
-                        @movimiento.Usuario
-                    </div>
-
-                </div>
-            }
-        }
-
-    </div>
-
-    <div class="section">
-
-        <div class="section-title">
-            Registro
-        </div>
-
-        <div class="info-grid">
-
-            <div class="info-4">
-                <div class="info-label">Responsable</div>
-
-                <div class="info-value">
-                    @(string.IsNullOrWhiteSpace(Model.UsuarioResponsable)
-                                        ? "-"
-                                        : Model.UsuarioResponsable)
-                </div>
-            </div>
-
-            <div class="info-4">
-                <div class="info-label">Creado por</div>
-
-                <div class="info-value">
-                    @(string.IsNullOrWhiteSpace(Model.CreadoPor)
-                                        ? "-"
-                                        : Model.CreadoPor)
-                </div>
-            </div>
-
-            <div class="info-4">
-                <div class="info-label">Fecha de creación</div>
-
-                <div class="info-value">
-                    @Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
-                </div>
-            </div>
-
-        </div>
-
-    </div>
-
-    @if (Model.PuedeCancelar)
-    {
-        <div class="danger-zone">
-
-            <div class="section-title text-danger">
-                Cancelar viaje
-            </div>
-
-            <form asp-controller="LogisticaViajes"
-                  asp-action="Cancelar"
-                  method="post"
-                  class="compact-form">
-
-                @Html.AntiForgeryToken()
-
-                <input type="hidden"
-                       name="ViajeID"
-                       value="@Model.ViajeID" />
-
-                <div class="form-10">
-                    <label>Motivo de cancelación</label>
-
-                    <input type="text"
-                           name="Motivo"
-                           maxlength="1000"
-                           class="form-control"
-                           required
-                           placeholder="Indica por qué se cancela el viaje" />
-                </div>
-
-                <div class="form-2">
-                    <button type="submit"
-                            class="btn btn-outline-danger btn-sm w-100"
-                            onclick="return confirm('¿Seguro que deseas cancelar este viaje?');">
-                        <i class="fa-solid fa-ban me-1"></i>
-                        Cancelar viaje
-                    </button>
-                </div>
-
-            </form>
-
-        </div>
-    }
-
 </div>

@@ -228,9 +228,18 @@ ViewBag.MaquinasOcupadas as HashSet<int>
         font-weight: 950
     }
 
-    .cola-program {
+    .cola-of-main {
         color: var(--cola-blue);
-        font-weight: 950
+        font-size: 1.02rem;
+        font-weight: 950;
+        line-height: 1.12
+    }
+
+    .cola-program {
+        margin-top: 4px;
+        color: #667085;
+        font-size: .69rem;
+        font-weight: 750
     }
 
     .cola-of {
@@ -423,7 +432,7 @@ ViewBag.MaquinasOcupadas as HashSet<int>
     html[data-nsq-theme="dark"] .cola-title,
     html[data-nsq-theme="dark"] .cola-selected-machine,
     html[data-nsq-theme="dark"] .cola-machine-code,
-    html[data-nsq-theme="dark"] .cola-program,
+    html[data-nsq-theme="dark"] .cola-of-main,
     html[data-nsq-theme="dark"] .cola-part,
     html[data-nsq-theme="dark"] .cola-meta-value,
     html[data-nsq-theme="dark"] .cola-operator {
@@ -432,6 +441,7 @@ ViewBag.MaquinasOcupadas as HashSet<int>
 
     html[data-nsq-theme="dark"] .cola-sub,
     html[data-nsq-theme="dark"] .cola-machine-name,
+    html[data-nsq-theme="dark"] .cola-program,
     html[data-nsq-theme="dark"] .cola-of,
     html[data-nsq-theme="dark"] .cola-description,
     html[data-nsq-theme="dark"] .cola-meta-label,
@@ -513,9 +523,9 @@ ViewBag.MaquinasOcupadas as HashSet<int>
 
 
     /* ==========================================================
-           AJUSTES FINALES DARK V4
-           Corrige contrastes puntuales de la cola sin alterar layout.
-           ========================================================== */
+               AJUSTES FINALES DARK V4
+               Corrige contrastes puntuales de la cola sin alterar layout.
+               ========================================================== */
     html[data-nsq-theme="dark"] .cola-operator {
         background: #243247;
         border: 1px solid #3b4d66;
@@ -602,7 +612,7 @@ ViewBag.MaquinasOcupadas as HashSet<int>
         {
             <div class="cola-no-machine">
                 <i class="bi bi-exclamation-triangle me-1"></i>
-                @programasSinMaquina.Count programa(s) todavía no tienen máquina asignada.
+                @programasSinMaquina.Count OF(s) todavía no tienen máquina asignada.
             </div>
         }
     </aside>
@@ -634,7 +644,7 @@ ViewBag.MaquinasOcupadas as HashSet<int>
         {
             <div class="cola-empty">
                 <i class="bi bi-calendar-check"></i>
-                <strong>No hay programas pendientes para esta máquina.</strong>
+                <strong>No hay OF pendientes para esta máquina.</strong>
                 <div class="mt-1">Selecciona otra máquina del panel izquierdo.</div>
             </div>
         }
@@ -669,18 +679,21 @@ ViewBag.MaquinasOcupadas as HashSet<int>
                     item.MaquinaID.HasValue &&
                     !maquinaOcupada;
 
+                    var numeroOF =
+                    !string.IsNullOrWhiteSpace(item.NumeroOFRecibida)
+                    ? item.NumeroOFRecibida.Trim()
+                    : !string.IsNullOrWhiteSpace(item.FolioSolicitud)
+                    ? item.FolioSolicitud.Trim()
+                    : "Sin OF";
+
+                    var tituloOF = "OF " + numeroOF;
+
                     <article class="cola-card">
                         <div><div class="cola-order">@orden</div></div>
 
                         <div class="cola-main">
-                            <div class="cola-program">Programa @item.ProgramaProduccionID</div>
-                            <div class="cola-of">
-                                @Txt(item.TituloPrograma)
-                                @if (item.SolicitudProduccionID.HasValue)
-                                {
-                                    <span>· OF ID @item.SolicitudProduccionID</span>
-                                }
-                            </div>
+                            <div class="cola-of-main">OF @numeroOF</div>
+                            <div class="cola-program">Programa interno #@item.ProgramaProduccionID</div>
                             @if (item.ReleaseID.HasValue)
                             {
                                 <div class="cola-of">Release @item.ReleaseID</div>
@@ -723,7 +736,7 @@ ViewBag.MaquinasOcupadas as HashSet<int>
                                         data-bs-toggle="modal"
                                         data-bs-target="#modalIniciarPreparacion"
                                         data-programa-id="@item.ProgramaProduccionID"
-                                        data-titulo="@Data(item.TituloPrograma)"
+                                        data-titulo="@Data(tituloOF)"
                                         data-maquina="@Data(item.MaquinaCodigo) @Data(item.MaquinaNombre)"
                                         data-maquina-id="@(item.MaquinaID?.ToString() ?? "")"
                                         data-parte-id="@(item.ParteID?.ToString() ?? "")"

@@ -1,13 +1,10 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajesIndexVm
-
 @{
     ViewData["Title"] = "Viajes";
     Layout = "_Layout";
-
     var paginaActual = ViewBag.PaginaActual is int p ? p : 1;
     var totalPaginas = ViewBag.TotalPaginas is int tp ? tp : 1;
     var totalRegistros = ViewBag.TotalRegistros is long tr ? tr : 0L;
-
     string BadgeEstatus(string estatus) => estatus switch
     {
         "Programado" => "bg-primary",
@@ -16,576 +13,86 @@
         "Cancelado" => "bg-secondary",
         _ => "bg-light text-dark"
     };
-
-    string BadgeTransporte(string tipo) => tipo switch
-    {
-        "Interno" => "bg-info text-dark",
-        "Externo" => "bg-dark",
-        _ => "bg-light text-dark"
-    };
 }
-
 <style>
-    .viajes-page {
-        padding: 18px 20px 30px;
-    }
-
-    .viajes-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 14px;
-        flex-wrap: wrap;
-    }
-
-    .viajes-title {
-        margin: 0;
-        font-size: 1.35rem;
-        font-weight: 700;
-    }
-
-    .viajes-subtitle {
-        margin: 3px 0 0;
-        color: #6c757d;
-        font-size: .9rem;
-    }
-
-    .resumen-strip {
-        display: flex;
-        gap: 18px;
-        flex-wrap: wrap;
-        align-items: center;
-        padding: 10px 0 12px;
-        border-top: 1px solid #e9ecef;
-        border-bottom: 1px solid #e9ecef;
-        margin-bottom: 14px;
-    }
-
-    .resumen-item {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-        white-space: nowrap;
-    }
-
-        .resumen-item strong {
-            font-size: 1rem;
-        }
-
-        .resumen-item span {
-            font-size: .82rem;
-            color: #6c757d;
-        }
-
-    .filtros {
-        display: grid;
-        grid-template-columns: minmax(210px, 2fr) repeat(5, minmax(130px, 1fr)) auto auto;
-        gap: 8px;
-        margin-bottom: 14px;
-        align-items: end;
-    }
-
-        .filtros label {
-            display: block;
-            font-size: .76rem;
-            font-weight: 600;
-            margin-bottom: 3px;
-            color: #495057;
-        }
-
-        .filtros .form-control,
-        .filtros .form-select {
-            min-height: 36px;
-            font-size: .84rem;
-        }
-
-    .table-wrap {
-        width: 100%;
-        overflow-x: auto;
-    }
-
-    .viajes-table {
-        margin-bottom: 0;
-        font-size: .82rem;
-        vertical-align: middle;
-    }
-
-        .viajes-table thead th {
-            white-space: nowrap;
-            font-size: .74rem;
-            text-transform: uppercase;
-            letter-spacing: .02em;
-            color: #495057;
-            background: #f8f9fa;
-            border-bottom-width: 1px;
-        }
-
-        .viajes-table td {
-            vertical-align: middle;
-        }
-
-        .viajes-table .folio {
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .viajes-table .ruta {
-            min-width: 160px;
-            max-width: 230px;
-        }
-
-        .viajes-table .texto-corto {
-            display: block;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 230px;
-        }
-
-    .badge-mini {
-        font-size: .72rem;
-        font-weight: 600;
-        padding: .35em .55em;
-    }
-
-    .acciones {
-        white-space: nowrap;
-        text-align: right;
-    }
-
-        .acciones .btn {
-            padding: .25rem .45rem;
-            font-size: .76rem;
-        }
-
-    .tabla-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        padding-top: 12px;
-        flex-wrap: wrap;
-        font-size: .82rem;
-        color: #6c757d;
-    }
-
-    .empty-state {
-        padding: 34px 15px;
-        text-align: center;
-        color: #6c757d;
-    }
-
-    @@media (max-width: 1200px) {
-        .filtros {
-            grid-template-columns: repeat(4, minmax(150px, 1fr));
-        }
-    }
-
-    @@media (max-width: 768px) {
-        .viajes-page {
-            padding: 14px 10px 24px;
-        }
-
-        .viajes-header {
-            align-items: flex-start;
-        }
-
-            .viajes-header .btn {
-                width: 100%;
-            }
-
-        .resumen-strip {
-            gap: 10px 16px;
-        }
-
-        .filtros {
-            grid-template-columns: 1fr 1fr;
-        }
-
-            .filtros .filtro-busqueda {
-                grid-column: 1 / -1;
-            }
-
-            .filtros .btn {
-                width: 100%;
-            }
-    }
-
-    @@media (max-width: 480px) {
-        .filtros {
-            grid-template-columns: 1fr;
-        }
-
-            .filtros .filtro-busqueda {
-                grid-column: auto;
-            }
-    }
-
-    /* =========================================================
-               VIAJES - MEJORA VISUAL SIN CARDS
-               Conserva filtros, tabla, paginación y funcionalidad.
-               ========================================================= */
-
-    .viajes-page {
-        position: relative;
-    }
-
-    .viajes-header {
-        padding: 6px 0 12px;
-        border-bottom: 1px solid #dbe4ee;
-    }
-
-    .viajes-title {
-        color: #172033;
-        letter-spacing: -.02em;
-        font-size: 1.48rem;
-    }
-
-        .viajes-title i {
-            color: #173a7a;
-        }
-
-    .viajes-subtitle {
-        color: #6f7b8d;
-        font-weight: 500;
-    }
-
-    .viajes-header > .btn {
-        min-height: 36px;
-        padding-left: .85rem;
-        padding-right: .85rem;
-        border-radius: 8px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-        box-shadow: 0 3px 8px rgba(35,63,128,.10);
-        background: #233f80;
-        border-color: #233f80;
-    }
-
-    .resumen-strip {
-        gap: 0;
-        padding: 0;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.78);
-        box-shadow: 0 5px 16px rgba(25,47,80,.045);
-        overflow: hidden;
-    }
-
-    .resumen-item {
-        min-height: 52px;
-        padding: 8px 15px;
-        border-right: 1px solid #e5eaf0;
-        flex: 0 1 auto;
-    }
-
-        .resumen-item:last-child {
-            border-right: 0;
-        }
-
-        .resumen-item strong {
-            font-size: 1.08rem;
-            color: #172033;
-        }
-
-        .resumen-item span {
-            color: #687386;
-            font-size: .76rem;
-        }
-
-        .resumen-item:nth-child(2) strong {
-            color: #345cc4;
-        }
-
-        .resumen-item:nth-child(3) strong {
-            color: #b66b00;
-        }
-
-        .resumen-item:nth-child(4) strong {
-            color: #237a46;
-        }
-
-        .resumen-item:nth-child(6) strong {
-            color: #c0392b;
-        }
-
-    .filtros {
-        position: relative;
-        margin: 0 0 14px;
-        padding: 12px;
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: rgba(255,255,255,.76);
-        box-shadow: 0 5px 16px rgba(25,47,80,.035);
-    }
-
-        .filtros::before {
-            content: "Filtros de búsqueda";
-            position: absolute;
-            top: -9px;
-            left: 12px;
-            padding: 0 7px;
-            background: #f6f8fb;
-            color: #6d7889;
-            font-size: .67rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
-        .filtros label {
-            color: #465164;
-            font-weight: 700;
-        }
-
-        .filtros .form-control,
-        .filtros .form-select {
-            min-height: 38px;
-            border-radius: 8px;
-            border-color: #d4dde7;
-            background: #fff;
-            box-shadow: none;
-            transition: border-color .15s ease, box-shadow .15s ease;
-        }
-
-            .filtros .form-control:focus,
-            .filtros .form-select:focus {
-                border-color: #8ba5d4;
-                box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-            }
-
-        .filtros .btn {
-            min-height: 38px;
-            border-radius: 8px;
-            font-weight: 700;
-        }
-
-    .table-wrap {
-        border: 1px solid #dce5ef;
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: 0 6px 18px rgba(25,47,80,.04);
-    }
-
-    .viajes-table {
-        background: #fff;
-    }
-
-        .viajes-table thead th {
-            background: #f3f6f9;
-            color: #4c5868;
-            padding-top: .58rem;
-            padding-bottom: .58rem;
-            border-bottom: 1px solid #d8e1ea;
-            letter-spacing: .025em;
-        }
-
-        .viajes-table tbody td {
-            padding-top: .56rem;
-            padding-bottom: .56rem;
-            border-color: #edf0f4;
-        }
-
-        .viajes-table tbody tr:nth-child(even) td {
-            background: #fbfcfd;
-        }
-
-        .viajes-table tbody tr:hover td {
-            background: #f4f8fc;
-        }
-
-        .viajes-table .folio {
-            color: #173a7a;
-            font-weight: 800;
-        }
-
-        .viajes-table .ruta {
-            min-width: 150px;
-        }
-
-    .badge-mini {
-        border-radius: 6px;
-        box-shadow: 0 2px 5px rgba(0,0,0,.06);
-    }
-
-    .acciones .btn {
-        min-width: 31px;
-        min-height: 29px;
-        border-radius: 7px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-    }
-
-    .empty-state {
-        min-height: 160px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background: #fbfcfd;
-        color: #7a8492;
-    }
-
-        .empty-state i {
-            color: #aeb8c6;
-        }
-
-    .tabla-footer {
-        margin-top: 10px;
-        padding: 10px 4px 0;
-        border-top: 1px solid #e5eaf0;
-    }
-
-    .pagination .page-link {
-        border-radius: 6px;
-        margin: 0 2px;
-        color: #314d86;
-        border-color: #dbe3ec;
-        font-weight: 600;
-    }
-
-    .pagination .page-item.active .page-link {
-        background: #233f80;
-        border-color: #233f80;
-    }
-
-    @@media (max-width: 1200px) {
-        .resumen-strip {
-            gap: 0;
-        }
-
-        .resumen-item {
-            flex: 1 1 30%;
-            border-bottom: 1px solid #e5eaf0;
-        }
-
-            .resumen-item:nth-child(3n) {
-                border-right: 0;
-            }
-    }
-
-    @@media (max-width: 768px) {
-        .viajes-header > .btn {
-            width: 100%;
-            justify-content: center;
-        }
-
-        .resumen-item {
-            flex: 1 1 50%;
-            border-right: 1px solid #e5eaf0;
-        }
-
-            .resumen-item:nth-child(even) {
-                border-right: 0;
-            }
-
-        .filtros {
-            padding: 14px 10px 10px;
-        }
-
-        .table-wrap {
-            border-radius: 10px;
-        }
-    }
-
-    @@media (max-width: 480px) {
-        .resumen-item {
-            flex-basis: 100%;
-            border-right: 0;
-        }
-
-        .tabla-footer {
-            align-items: flex-start;
-        }
-    }
-
-
-
     :root {
         --lv-blue: #173a7a;
-        --lv-blue-2: #2f63ad;
         --lv-text: #172033;
         --lv-muted: #6d7888;
         --lv-border: #dce4ee;
         --lv-soft: #f6f8fb;
-        --lv-shadow: 0 8px 24px rgba(22,42,75,.06);
+        --lv-shadow: 0 8px 24px rgba(22,42,75,.06)
     }
 
-    /* =========================================================
-           LOGISTICA VIAJES ERP - CAPA VISUAL
-           Conserva filtros, tabla, paginacion y comportamiento.
-           ========================================================= */
     .viajes-page {
         max-width: 1720px;
         margin: 0 auto;
-        color: var(--lv-text);
+        padding: 18px 20px 30px;
+        color: var(--lv-text)
     }
 
     .viajes-header {
+        display: flex;
+        justify-content: space-between;
         align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
         padding: 15px 17px;
         margin-bottom: 14px;
         border: 1px solid var(--lv-border);
         border-left: 4px solid var(--lv-blue);
         border-radius: 12px;
         background: #fff;
-        box-shadow: var(--lv-shadow);
+        box-shadow: var(--lv-shadow)
     }
 
     .viajes-title {
+        margin: 0;
         color: var(--lv-text);
         font-size: 1.48rem;
         font-weight: 800;
-        letter-spacing: -.02em;
+        letter-spacing: -.02em
     }
 
         .viajes-title i {
-            color: var(--lv-blue);
+            color: var(--lv-blue)
         }
 
     .viajes-subtitle {
+        margin: 3px 0 0;
         color: var(--lv-muted);
-        font-weight: 500;
+        font-size: .88rem;
+        font-weight: 500
     }
 
-    .viajes-header > .btn {
-        min-height: 35px;
-        padding-left: .9rem;
-        padding-right: .9rem;
-        border-radius: 8px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 3px 9px rgba(35,63,128,.10);
-        background: #233f80;
-        border-color: #233f80;
+    .header-actions {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap
     }
+
+        .header-actions .btn {
+            min-height: 35px;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center
+        }
 
     .resumen-strip {
         display: grid;
         grid-template-columns: repeat(6,minmax(130px,1fr));
         gap: 8px;
-        padding: 0;
-        border: 0;
-        margin-bottom: 14px;
-        background: transparent;
-        box-shadow: none;
-        overflow: visible;
+        margin-bottom: 14px
     }
 
     .resumen-item {
-        display: block;
         min-height: 72px;
         padding: 10px 12px;
         border: 1px solid var(--lv-border);
         border-radius: 10px;
         background: #fff;
-        box-shadow: 0 4px 13px rgba(22,42,75,.035);
+        box-shadow: 0 4px 13px rgba(22,42,75,.035)
     }
 
         .resumen-item strong {
@@ -593,94 +100,64 @@
             margin-bottom: 3px;
             color: var(--lv-blue);
             font-size: 1.22rem;
-            font-weight: 800;
-            line-height: 1.15;
+            font-weight: 800
         }
 
         .resumen-item span {
             display: block;
             color: var(--lv-muted);
             font-size: .7rem;
-            font-weight: 700;
-            letter-spacing: .01em;
-        }
-
-        .resumen-item:nth-child(2) strong {
-            color: #345cc4;
-        }
-
-        .resumen-item:nth-child(3) strong {
-            color: #b66b00;
-        }
-
-        .resumen-item:nth-child(4) strong {
-            color: #237a46;
-        }
-
-        .resumen-item:nth-child(6) strong {
-            color: #c0392b;
+            font-weight: 700
         }
 
     .filtros {
-        position: relative;
-        margin: 0 0 14px;
+        display: grid;
+        grid-template-columns: minmax(230px,2fr) repeat(4,minmax(135px,1fr)) auto auto;
+        gap: 8px;
+        align-items: end;
+        margin-bottom: 14px;
         padding: 14px 12px 12px;
         border: 1px solid var(--lv-border);
         border-radius: 12px;
         background: #fff;
-        box-shadow: 0 5px 16px rgba(25,47,80,.035);
+        box-shadow: 0 5px 16px rgba(25,47,80,.035)
     }
 
-        .filtros::before {
-            content: "Filtros de viajes";
-            position: absolute;
-            top: -9px;
-            left: 12px;
-            padding: 0 7px;
-            background: #f6f8fb;
-            color: #6d7889;
-            font-size: .67rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-        }
-
         .filtros label {
+            display: block;
+            margin-bottom: 3px;
             color: #465164;
-            font-weight: 700;
+            font-size: .76rem;
+            font-weight: 700
         }
 
-        .filtros .form-control,
-        .filtros .form-select {
+        .filtros .form-control, .filtros .form-select {
             min-height: 38px;
             border-radius: 8px;
             border-color: #d4dde7;
-            background: #fff;
-            box-shadow: none;
+            font-size: .84rem
         }
-
-            .filtros .form-control:focus,
-            .filtros .form-select:focus {
-                border-color: #8ba5d4;
-                box-shadow: 0 0 0 .18rem rgba(23,58,122,.08);
-            }
 
         .filtros .btn {
             min-height: 38px;
             border-radius: 8px;
-            font-weight: 700;
+            font-weight: 700
         }
 
     .table-wrap {
+        width: 100%;
+        overflow-x: auto;
         border: 1px solid var(--lv-border);
         border-radius: 12px;
         background: #fff;
-        box-shadow: var(--lv-shadow);
-        overflow-x: auto;
+        box-shadow: var(--lv-shadow)
     }
 
     .viajes-table {
+        margin-bottom: 0;
         background: #fff;
+        font-size: .81rem;
+        vertical-align: middle
     }
 
         .viajes-table thead th {
@@ -688,43 +165,79 @@
             color: #4c5868;
             background: #f3f6f9;
             border-bottom: 1px solid #d8e1ea;
+            font-size: .7rem;
             font-weight: 800;
-            letter-spacing: .025em;
+            text-transform: uppercase;
+            white-space: nowrap
         }
 
         .viajes-table tbody td {
             padding: .56rem;
             border-color: #edf0f4;
-            vertical-align: middle;
+            vertical-align: middle
         }
 
         .viajes-table tbody tr:nth-child(even) td {
-            background: #fbfcfd;
+            background: #fbfcfd
         }
 
         .viajes-table tbody tr:hover td {
-            background: #f4f8fc;
+            background: #f4f8fc
         }
 
-        .viajes-table .folio {
-            color: var(--lv-blue);
-            font-weight: 800;
-        }
+    .folio {
+        color: var(--lv-blue);
+        font-weight: 800;
+        white-space: nowrap
+    }
+
+    .ruta {
+        min-width: 150px;
+        max-width: 230px
+    }
+
+    .texto-corto {
+        display: block;
+        overflow: hidden;
+        max-width: 230px;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
 
     .badge-mini {
-        border-radius: 6px;
-        box-shadow: 0 2px 5px rgba(0,0,0,.06);
+        font-size: .7rem;
+        padding: .35em .55em;
+        font-weight: 600
     }
 
-    .acciones .btn {
-        min-width: 31px;
-        min-height: 29px;
-        border-radius: 7px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
+    .acciones {
+        white-space: nowrap;
+        text-align: right
     }
+
+        .acciones .btn {
+            min-width: 31px;
+            min-height: 29px;
+            padding: .25rem .45rem;
+            border-radius: 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center
+        }
+
+    .state-note {
+        margin-top: 2px;
+        font-size: .66rem;
+        font-weight: 600
+    }
+
+        .state-note.warning {
+            color: #a06600
+        }
+
+        .state-note.info {
+            color: #345cc4
+        }
 
     .empty-state {
         min-height: 160px;
@@ -732,282 +245,210 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: #fbfcfd;
         color: #7a8492;
+        background: #fbfcfd
     }
 
-        .empty-state i {
-            color: #aeb8c6;
-        }
-
     .tabla-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
         margin-top: 10px;
         padding: 10px 4px 0;
         border-top: 1px solid #e5eaf0;
+        color: #6c757d;
+        font-size: .82rem
     }
 
     .pagination .page-link {
-        border-radius: 6px;
         margin: 0 2px;
+        border-radius: 6px;
         color: #314d86;
         border-color: #dbe3ec;
-        font-weight: 600;
+        font-weight: 600
     }
 
     .pagination .page-item.active .page-link {
         background: #233f80;
-        border-color: #233f80;
+        border-color: #233f80
     }
 
     html[data-nsq-theme="dark"] .viajes-page {
-        color: #e7edf6;
+        color: #e7edf6
     }
 
-    html[data-nsq-theme="dark"] .viajes-header,
-    html[data-nsq-theme="dark"] .resumen-item,
-    html[data-nsq-theme="dark"] .filtros,
-    html[data-nsq-theme="dark"] .table-wrap {
+    html[data-nsq-theme="dark"] .viajes-header, html[data-nsq-theme="dark"] .resumen-item, html[data-nsq-theme="dark"] .filtros, html[data-nsq-theme="dark"] .table-wrap {
         background: #111b2d;
         border-color: #2a3a50;
-        box-shadow: none;
+        box-shadow: none
     }
 
     html[data-nsq-theme="dark"] .viajes-title {
-        color: #eef4fb;
+        color: #eef4fb
     }
 
-    html[data-nsq-theme="dark"] .viajes-subtitle,
-    html[data-nsq-theme="dark"] .resumen-item span {
-        color: #9eacbf;
-    }
-
-    html[data-nsq-theme="dark"] .filtros::before {
-        background: #0b1220;
-        color: #9eacbf;
+    html[data-nsq-theme="dark"] .viajes-subtitle, html[data-nsq-theme="dark"] .resumen-item span {
+        color: #9eacbf
     }
 
     html[data-nsq-theme="dark"] .filtros label {
-        color: #c7d3e2;
+        color: #c7d3e2
     }
 
-    html[data-nsq-theme="dark"] .filtros .form-control,
-    html[data-nsq-theme="dark"] .filtros .form-select {
+    html[data-nsq-theme="dark"] .filtros .form-control, html[data-nsq-theme="dark"] .filtros .form-select {
         background: #0d1727;
         color: #eef4fb;
-        border-color: #314158;
+        border-color: #314158
     }
 
     html[data-nsq-theme="dark"] .viajes-table {
-        background: #111b2d;
+        background: #111b2d
     }
 
         html[data-nsq-theme="dark"] .viajes-table thead th {
             background: #162237;
             border-color: #2a3a50;
-            color: #cbd7e6;
+            color: #cbd7e6
         }
 
         html[data-nsq-theme="dark"] .viajes-table tbody td {
-            border-color: #243349;
+            border-color: #243349
         }
 
         html[data-nsq-theme="dark"] .viajes-table tbody tr:nth-child(even) td {
-            background: #101a2a;
+            background: #101a2a
         }
 
         html[data-nsq-theme="dark"] .viajes-table tbody tr:hover td {
-            background: #17253a;
+            background: #17253a
         }
 
-    html[data-nsq-theme="dark"] .empty-state {
-        background: #101a2a;
-        color: #9eacbf;
-    }
-
-    @@media (max-width:1100px) {
+    @@media(max-width:1200px) {
         .resumen-strip {
-            grid-template-columns: repeat(3,minmax(0,1fr));
+            grid-template-columns: repeat(3,minmax(0,1fr))
         }
+
+        .filtros {
+            grid-template-columns: repeat(4,minmax(150px,1fr))
+        }
+
+            .filtros .filtro-busqueda {
+                grid-column: span 2
+            }
     }
 
-    @@media (max-width:650px) {
+    @@media(max-width:768px) {
+        .viajes-page {
+            padding: 14px 10px 24px
+        }
+
+        .header-actions {
+            width: 100%
+        }
+
+            .header-actions .btn {
+                flex: 1
+            }
+
         .resumen-strip {
-            grid-template-columns: repeat(2,minmax(0,1fr));
+            grid-template-columns: repeat(2,minmax(0,1fr))
         }
 
-        .viajes-header {
-            padding: 12px;
+        .filtros {
+            grid-template-columns: 1fr 1fr
         }
+
+            .filtros .filtro-busqueda {
+                grid-column: 1/-1
+            }
+
+            .filtros .btn {
+                width: 100%
+            }
     }
 
+    @@media(max-width:480px) {
+        .resumen-strip, .filtros {
+            grid-template-columns: 1fr
+        }
+
+            .filtros .filtro-busqueda {
+                grid-column: auto
+            }
+    }
 </style>
 
 <div class="viajes-page">
-
     <div class="viajes-header">
         <div>
-            <h1 class="viajes-title">
-                <i class="fa-solid fa-route me-1"></i>
-                Viajes
-            </h1>
-            <p class="viajes-subtitle">
-                Programación y seguimiento de rutas de personal, recolecciones y traslados.
-            </p>
+            <h1 class="viajes-title"><i class="fa-solid fa-route me-1"></i>Viajes</h1>
+            <p class="viajes-subtitle">Programación y seguimiento de rutas de personal, recolecciones, traslados y entregas operativas.</p>
         </div>
-
-        <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <div class="header-actions">
             <a asp-controller="LogisticaViajes" asp-action="Choferes" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-id-card me-1"></i>Choferes</a>
+            <a asp-controller="LogisticaViajes" asp-action="Calendario" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-calendar-days me-1"></i>Calendario</a>
             <a asp-controller="LogisticaViajes" asp-action="Crear" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus me-1"></i>Nuevo viaje</a>
         </div>
     </div>
 
     @if (TempData["LogisticaOk"] != null)
     {
-        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3" role="alert">
-            <i class="fa-solid fa-circle-check me-1"></i>
-            @TempData["LogisticaOk"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
+        <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3" role="alert"><i class="fa-solid fa-circle-check me-1"></i>@TempData["LogisticaOk"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     }
-
     @if (TempData["LogisticaError"] != null)
     {
-        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3" role="alert">
-            <i class="fa-solid fa-triangle-exclamation me-1"></i>
-            @TempData["LogisticaError"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3" role="alert"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     }
 
     <div class="resumen-strip">
-        <div class="resumen-item">
-            <strong>@Model.TotalViajes</strong>
-            <span>Total</span>
-        </div>
-
-        <div class="resumen-item">
-            <strong>@Model.Programados</strong>
-            <span>Programados</span>
-        </div>
-
-        <div class="resumen-item">
-            <strong>@Model.EnCurso</strong>
-            <span>En curso</span>
-        </div>
-
-        <div class="resumen-item">
-            <strong>@Model.Completados</strong>
-            <span>Completados</span>
-        </div>
-
-        <div class="resumen-item">
-            <strong>@Model.ViajesHoy</strong>
-            <span>Hoy</span>
-        </div>
-
-        <div class="resumen-item">
-            <strong>@Model.RetornosPendientes</strong>
-            <span>Retornos pendientes</span>
-        </div>
+        <div class="resumen-item"><strong>@Model.TotalViajes</strong><span>Total viajes</span></div>
+        <div class="resumen-item"><strong>@Model.Programados</strong><span>Programados</span></div>
+        <div class="resumen-item"><strong>@Model.EnCurso</strong><span>En curso</span></div>
+        <div class="resumen-item"><strong>@Model.Completados</strong><span>Completados</span></div>
+        <div class="resumen-item"><strong>@Model.ViajesHoy</strong><span>Programados hoy</span></div>
+        <div class="resumen-item"><strong>@Model.RetornosPendientes</strong><span>Retornos pendientes</span></div>
     </div>
 
-    <form asp-controller="LogisticaViajes"
-          asp-action="Index"
-          method="get"
-          class="filtros">
-
+    <form asp-controller="LogisticaViajes" asp-action="Index" method="get" class="filtros">
         <div class="filtro-busqueda">
             <label>Buscar</label>
-            <input type="text"
-                   name="q"
-                   value="@Model.Busqueda"
-                   class="form-control"
-                   placeholder="Folio, origen, destino, motivo u operador" />
+            <input type="text" name="q" value="@Model.Busqueda" class="form-control" placeholder="Folio, origen, destino, motivo o chofer" />
         </div>
-
         <div>
             <label>Estatus</label>
             <select name="estatus" class="form-select">
                 <option value="">Todos</option>
-                <option value="Programado" selected="@(Model.Estatus == "Programado")">
-                    Programado
-                </option>
-                <option value="En curso" selected="@(Model.Estatus == "En curso")">
-                    En curso
-                </option>
-                <option value="Completado" selected="@(Model.Estatus == "Completado")">
-                    Completado
-                </option>
-                <option value="Cancelado" selected="@(Model.Estatus == "Cancelado")">
-                    Cancelado
-                </option>
+                <option value="Programado" selected="@(Model.Estatus == "Programado")">Programado</option>
+                <option value="En curso" selected="@(Model.Estatus == "En curso")">En curso</option>
+                <option value="Completado" selected="@(Model.Estatus == "Completado")">Completado</option>
+                <option value="Cancelado" selected="@(Model.Estatus == "Cancelado")">Cancelado</option>
             </select>
         </div>
-
         <div>
-            <label>Tipo de viaje</label>
+            <label>Tipo de salida</label>
             <select name="tipoViaje" class="form-select">
                 <option value="">Todos</option>
-                <option value="Ruta de personal"
-                        selected="@(Model.TipoViaje == "Ruta de personal")">
-                    Ruta de personal
-                </option>
-                <option value="Recolección de MP"
-                        selected="@(Model.TipoViaje == "Recolección de MP")">
-                    Recolección de MP
-                </option>
-                <option value="Traslado entre plantas"
-                        selected="@(Model.TipoViaje == "Traslado entre plantas")">
-                    Traslado entre plantas
-                </option>
-                <option value="Recolección de material"
-                        selected="@(Model.TipoViaje == "Recolección de material")">
-                    Recolección de material
-                </option>
-                <option value="Entrega / recolección especial"
-                        selected="@(Model.TipoViaje == "Entrega / recolección especial")">
-                    Entrega / recolección especial
-                </option>
-                <option value="Otro"
-                        selected="@(Model.TipoViaje == "Otro")">
-                    Otro
-                </option>
+                <option value="Entrega PT" selected="@(Model.TipoViaje == "Entrega PT")">Entrega PT</option>
+                <option value="Ruta de personal" selected="@(Model.TipoViaje == "Ruta de personal")">Ruta de personal</option>
+                <option value="Recolección de MP" selected="@(Model.TipoViaje == "Recolección de MP")">Recolección de MP</option>
+                <option value="Traslado entre plantas" selected="@(Model.TipoViaje == "Traslado entre plantas")">Traslado entre plantas</option>
+                <option value="Recolección de material" selected="@(Model.TipoViaje == "Recolección de material")">Recolección de material</option>
+                <option value="Entrega / recolección especial" selected="@(Model.TipoViaje == "Entrega / recolección especial")">Entrega / recolección especial</option>
+                <option value="Otro" selected="@(Model.TipoViaje == "Otro")">Otro</option>
             </select>
         </div>
-
-        <!-- LOGISTICA_VIAJES_CHOFERES_V5: el transporte no es una decision operativa visible. -->
-
         <div>
             <label>Desde</label>
-            <input type="date"
-                   name="fechaDesde"
-                   value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
-                   class="form-control" />
+            <input type="date" name="fechaDesde" value="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))" class="form-control" />
         </div>
-
         <div>
             <label>Hasta</label>
-            <input type="date"
-                   name="fechaHasta"
-                   value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))"
-                   class="form-control" />
+            <input type="date" name="fechaHasta" value="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))" class="form-control" />
         </div>
-
-        <div>
-            <button type="submit"
-                    class="btn btn-dark btn-sm w-100">
-                <i class="fa-solid fa-magnifying-glass me-1"></i>
-                Filtrar
-            </button>
-        </div>
-
-        <div>
-            <a asp-controller="LogisticaViajes"
-               asp-action="Index"
-               class="btn btn-outline-secondary btn-sm w-100">
-                Limpiar
-            </a>
-        </div>
+        <div><button type="submit" class="btn btn-dark btn-sm w-100"><i class="fa-solid fa-magnifying-glass me-1"></i>Filtrar</button></div>
+        <div><a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary btn-sm w-100">Limpiar</a></div>
     </form>
 
     <div class="table-wrap">
@@ -1015,215 +456,98 @@
             <thead>
                 <tr>
                     <th>Folio</th>
-                    <th>Fecha</th>
+                    <th>Fecha / hora</th>
                     <th>Tipo</th>
                     <th>Origen</th>
                     <th>Destino</th>
                     <th>Unidad</th>
-                    <th>Operador</th>
+                    <th>Chofer</th>
                     <th>Estatus</th>
                     <th>Inc.</th>
                     <th class="text-end">Acción</th>
                 </tr>
             </thead>
-
             <tbody>
                 @if (Model.Viajes == null || Model.Viajes.Count == 0)
                 {
-                    <tr>
-                        <td colspan="10">
-                            <div class="empty-state">
-                                <i class="fa-solid fa-route fa-2x mb-2"></i>
-                                <div>No hay viajes que coincidan con los filtros.</div>
-                            </div>
-                        </td>
-                    </tr>
+                    <tr><td colspan="10"><div class="empty-state"><i class="fa-solid fa-route fa-2x mb-2"></i><div>No hay viajes que coincidan con los filtros.</div></div></td></tr>
                 }
                 else
                 {
                     foreach (var viaje in Model.Viajes)
                     {
                         <tr>
-                            <td>
-                                <span class="folio">@viaje.Folio</span>
-                            </td>
+                            <td><span class="folio">@viaje.Folio</span></td>
+                            <td class="text-nowrap"><div>@viaje.FechaProgramada.ToString("dd/MM/yyyy")</div>@if(viaje.HoraSalidaProgramada.HasValue){
+                            <small class="text-muted">@viaje.HoraSalidaProgramada.Value.ToString(@"hh\:mm")</small>
+                        }else
+                        {
 
-                            <td class="text-nowrap">
-                                <div>@viaje.FechaProgramada.ToString("dd/MM/yyyy")</div>
+                            <small class="state-note warning">Hora pendiente</small>
+                        }
+    </td>
+                        <td><span class="texto-corto" title="@viaje.TipoViaje">@viaje.TipoViaje</span></td>
+                        <td class="ruta"><span class="texto-corto" title="@viaje.Origen">@viaje.Origen</span></td>
+                        <td class="ruta"><span class="texto-corto" title="@viaje.Destino">@viaje.Destino</span></td>
+                        <td><span class="texto-corto" title="@viaje.Unidad">@(string.IsNullOrWhiteSpace(viaje.Unidad) ? "Pendiente" : viaje.Unidad)</span></td>
+                        <td><span class="texto-corto" title="@viaje.Operador">@(string.IsNullOrWhiteSpace(viaje.Operador) ? "Pendiente" : viaje.Operador)</span></td>
+                        <td>
+                            <span class="badge badge-mini @BadgeEstatus(viaje.Estatus)">@viaje.Estatus</span>
+                            @if (viaje.Estatus == "Programado")
+                            {
+                                <div class="state-note info">Pendiente de iniciar</div>
+                            }
+                            @if (viaje.RetornoPendiente)
+                            {
+                                <div class="state-note warning">Regreso pendiente</div>
+                            }
+                        </td>
+                        <td class="text-center">@if(viaje.TieneIncidencia){
+                        <span class="text-danger" title="Tiene incidencias"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    }else
+                    {
 
-                                @if (viaje.HoraSalidaProgramada.HasValue)
-                                {
-                                    <small class="text-muted">
-                                        @viaje.HoraSalidaProgramada.Value.ToString(@"hh\:mm")
-                                    </small>
-                                }
-                    </td>
-
-                    <td>
-                        <span class="texto-corto"
-                              title="@viaje.TipoViaje">
-                            @viaje.TipoViaje
-                        </span>
-                    </td>
-
-                    <td class="ruta">
-                        <span class="texto-corto"
-                              title="@viaje.Origen">
-                            @viaje.Origen
-                        </span>
-                    </td>
-
-                    <td class="ruta">
-                        <span class="texto-corto"
-                              title="@viaje.Destino">
-                            @viaje.Destino
-                        </span>
-                    </td>
-
-                    <td>
-                        <span class="texto-corto"
-                              title="@viaje.Unidad">
-                            @(string.IsNullOrWhiteSpace(viaje.Unidad)
-                                                        ? "-"
-                                                        : viaje.Unidad)
-                                                                   </span>
-                                                               </td>
-
-                    <td>
-                        <span class="texto-corto"
-                              title="@viaje.Operador">
-                            @(string.IsNullOrWhiteSpace(viaje.Operador)
-                                                        ? "-"
-                                                        : viaje.Operador)
-                        </span>
-                    </td>
-
-                            <td>
-                                <span class="badge badge-mini @BadgeEstatus(viaje.Estatus)">
-                                    @viaje.Estatus
-                                </span>
-                        @if (viaje.Estatus == "Programado")
-                                {
-                                    <div><small class="text-primary">Pendiente de iniciar</small></div>
-                                }
-
-                                @if (viaje.RetornoPendiente)
-                                {
-                                    <div>
-                                        <small class="text-warning">
-                                            Regreso pendiente
-                                        </small>
-                                    </div>
-                                }
-                            </td>
-
-                            <td class="text-center">
-                                @if (viaje.TieneIncidencia)
-                                {
-                                    <span class="text-danger"
-                                          title="Tiene incidencias">
-                                        <i class="fa-solid fa-triangle-exclamation"></i>
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">-</span>
-                                }
-                            </td>
-
-                            <td class="acciones">
-                                <a asp-controller="LogisticaViajes"
-                                   asp-action="Detalle"
-                                   asp-route-id="@viaje.ViajeID"
-                                   class="btn btn-outline-primary btn-sm"
-                                   title="Ver detalle">
-                                    <i class="fa-solid fa-eye"></i>
-                                </a>
-
-                                @if (viaje.Estatus == "Programado")
-                                {
-                                    <a asp-controller="LogisticaViajes"
-                                       asp-action="Editar"
-                                       asp-route-id="@viaje.ViajeID"
-                                       class="btn btn-outline-warning btn-sm"
-                                       title="Completar preparación">
-                                        <i class="fa-solid fa-screwdriver-wrench"></i>
-                                    </a>
-                                }
-                            </td>
-                        </tr>
+                        <span class="text-muted">-</span>
                     }
-                }
+</td>
+                    <td class="acciones">
+                        <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@viaje.ViajeID" class="btn btn-outline-primary btn-sm" title="Ver detalle"><i class="fa-solid fa-eye"></i></a>
+                        @if (viaje.Estatus == "Programado")
+                        {
+                            <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@viaje.ViajeID" class="btn btn-outline-warning btn-sm" title="Completar preparación"><i class="fa-solid fa-screwdriver-wrench"></i></a>
+                        }
+                    </td>
+                </tr>
+                                }
+                                }
             </tbody>
         </table>
     </div>
 
     <div class="tabla-footer">
-        <div>
-            @totalRegistros.ToString("N0") registro(s)
-        </div>
-
+        <div>@totalRegistros.ToString("N0") registro(s)</div>
         @if (totalPaginas > 1)
         {
             <nav>
                 <ul class="pagination pagination-sm mb-0">
-
                     <li class="page-item @(paginaActual <= 1 ? "disabled" : "")">
-                        <a class="page-link"
-                           asp-controller="LogisticaViajes"
-                           asp-action="Index"
-                           asp-route-pagina="@(paginaActual - 1)"
-                           asp-route-q="@Model.Busqueda"
-                           asp-route-estatus="@Model.Estatus"
-                           asp-route-tipoViaje="@Model.TipoViaje"
-                           asp-route-tipoTransporte="@Model.TipoTransporte"
-                           asp-route-fechaDesde="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
-                           asp-route-fechaHasta="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))">
-                            Anterior
-                        </a>
+                        <a class="page-link" asp-controller="LogisticaViajes" asp-action="Index" asp-route-pagina="@(paginaActual - 1)" asp-route-q="@Model.Busqueda" asp-route-estatus="@Model.Estatus" asp-route-tipoViaje="@Model.TipoViaje" asp-route-fechaDesde="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))" asp-route-fechaHasta="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))">Anterior</a>
                     </li>
-
                     @{
                         var inicio = Math.Max(1, paginaActual - 2);
                         var fin = Math.Min(totalPaginas, paginaActual + 2);
                     }
-
                     @for (var i = inicio; i <= fin; i++)
                     {
                         <li class="page-item @(i == paginaActual ? "active" : "")">
-                            <a class="page-link"
-                               asp-controller="LogisticaViajes"
-                               asp-action="Index"
-                               asp-route-pagina="@i"
-                               asp-route-q="@Model.Busqueda"
-                               asp-route-estatus="@Model.Estatus"
-                               asp-route-tipoViaje="@Model.TipoViaje"
-                               asp-route-tipoTransporte="@Model.TipoTransporte"
-                               asp-route-fechaDesde="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
-                               asp-route-fechaHasta="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))">
-                                @i
-                            </a>
+                            <a class="page-link" asp-controller="LogisticaViajes" asp-action="Index" asp-route-pagina="@i" asp-route-q="@Model.Busqueda" asp-route-estatus="@Model.Estatus" asp-route-tipoViaje="@Model.TipoViaje" asp-route-fechaDesde="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))" asp-route-fechaHasta="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))">@i</a>
                         </li>
                     }
-
                     <li class="page-item @(paginaActual >= totalPaginas ? "disabled" : "")">
-                        <a class="page-link"
-                           asp-controller="LogisticaViajes"
-                           asp-action="Index"
-                           asp-route-pagina="@(paginaActual + 1)"
-                           asp-route-q="@Model.Busqueda"
-                           asp-route-estatus="@Model.Estatus"
-                           asp-route-tipoViaje="@Model.TipoViaje"
-                           asp-route-tipoTransporte="@Model.TipoTransporte"
-                           asp-route-fechaDesde="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))"
-                           asp-route-fechaHasta="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))">
-                            Siguiente
-                        </a>
+                        <a class="page-link" asp-controller="LogisticaViajes" asp-action="Index" asp-route-pagina="@(paginaActual + 1)" asp-route-q="@Model.Busqueda" asp-route-estatus="@Model.Estatus" asp-route-tipoViaje="@Model.TipoViaje" asp-route-fechaDesde="@(Model.FechaDesde?.ToString("yyyy-MM-dd"))" asp-route-fechaHasta="@(Model.FechaHasta?.ToString("yyyy-MM-dd"))">Siguiente</a>
                     </li>
-
                 </ul>
             </nav>
         }
     </div>
-
 </div>

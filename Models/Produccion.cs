@@ -237,6 +237,8 @@ public sealed class ProduccionEjecucionVm
     public int? ReleaseID { get; set; }
     public int? ReleaseDetalleID { get; set; }
 
+    public string? FolioSolicitud { get; set; }
+    public string? NumeroOFRecibida { get; set; }
     public int? MaquinaID { get; set; }
     public string? MaquinaCodigo { get; set; }
     public string? MaquinaNombre { get; set; }
@@ -286,9 +288,6 @@ public sealed class ProduccionEjecucionVm
     public string? MotivoCambioOperadores { get; set; }
     public bool EsCambioMolde { get; set; }
 
-    // =========================================================
-    // CALIDAD - INSPECCIÓN ACTUAL / MÁS RECIENTE DE LA EJECUCIÓN
-    // =========================================================
     public int? InspeccionCalidadID { get; set; }
     public string? EstadoCalidad { get; set; }
     public string? ResultadoCalidad { get; set; }
@@ -302,26 +301,18 @@ public sealed class ProduccionEjecucionVm
     public DateTime? FechaAutorizacionPrearranque { get; set; }
     public DateTime? FechaLiberacionProduccion { get; set; }
 
-    // =========================================================
-    // CALIDAD - ÚLTIMA RELIBERACIÓN
-    // =========================================================
+
     public int? ReliberacionID { get; set; }
     public int? NumeroReliberacion { get; set; }
     public string? ResultadoReliberacion { get; set; }
     public DateTime? FechaSolicitudReliberacion { get; set; }
     public DateTime? FechaValidacionReliberacion { get; set; }
 
-    // =========================================================
-    // PARO ACTUAL
-    // =========================================================
     public bool TieneParoAbierto { get; set; }
     public int? ParoAbiertoID { get; set; }
     public DateTime? FechaInicioParoAbierto { get; set; }
     public bool ParoAbiertoMayorA15Minutos { get; set; }
 
-    // =========================================================
-    // ESTADO GENERAL DE PRODUCCIÓN
-    // =========================================================
     public string EstatusNombre =>
         ProduccionEstatus.Nombre(EstatusID);
 
@@ -671,6 +662,16 @@ public sealed class ProduccionEjecucionVm
                 CantidadPlaneada.Value *
                 100m,
                 2);
+        }
+    }
+
+    public string TextoOF
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(NumeroOFRecibida)) return NumeroOFRecibida.Trim();
+            if (!string.IsNullOrWhiteSpace(FolioSolicitud)) return FolioSolicitud.Trim();
+            return "Sin OF";
         }
     }
 
