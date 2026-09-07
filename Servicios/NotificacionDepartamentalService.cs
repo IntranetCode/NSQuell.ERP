@@ -368,7 +368,8 @@ ORDER BY
             tablaOrigen: Recortar(controller, 40),
             urlDestino: rutaDestino,
             fechaEvento: DateTime.Now,
-            eventoUnico: false);
+            eventoUnico: false,
+            enviarCorreo: false);
     }
 
     private async Task PublicarMovimientoMpAsync(
@@ -1001,7 +1002,8 @@ ORDER BY
         string tablaOrigen,
         string? urlDestino,
         DateTime fechaEvento,
-        bool eventoUnico)
+        bool eventoUnico,
+        bool enviarCorreo = true)
     {
         area =
             (area ?? string.Empty).Trim();
@@ -1204,7 +1206,18 @@ END;
                 area,
                 urlDestino ?? "(sin acceso directo exacto)");
 
-            // NSQ_NOTIFICACIONES_CORREO_V10
+            // NSQ_NOTIFICACIONES_CORREO_V11
+            // El navbar conserva cobertura amplia, pero el correo real se reserva
+            // para eventos detallados/accionables. El fallback generico no debe
+            // llenar los buzones por cada POST exitoso del ERP.
+            if (!enviarCorreo)
+            {
+                _logger.LogInformation(
+                    "Correo omitido para evento generico {CodigoEvento}; la notificacion interna si fue publicada.",
+                    codigoEvento);
+                return;
+            }
+
             // El correo usa exactamente el titulo/mensaje/UrlDestino ya publicados en el navbar.
             // Un fallo SMTP nunca revierte la operacion de negocio ni la notificacion interna.
             try

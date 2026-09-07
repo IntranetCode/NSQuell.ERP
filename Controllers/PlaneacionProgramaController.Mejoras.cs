@@ -462,6 +462,9 @@ END;";
     }
 
     // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
+    // NSQ_PLANEACION_AUMENTO_LHRH_FILAS_RELEASE_V1_3
+    // El aumento usa exactamente el ReleaseDetalle de contraparte detectado
+    // en la vista para que no se ajuste una entrega y se programe otra.
     private sealed class ParejaLhRhVistaCandidata
     {
         public int ReleaseDetalleID { get; set; }
@@ -702,6 +705,11 @@ SELECT TOP (1)
 FROM dbo.Planeacion_ReleaseDetalle d
 WHERE d.ReleaseID = @ReleaseID
   AND d.ParteID = @ParteParejaID
+  AND
+  (
+        @ReleaseDetalleParejaID IS NULL
+        OR d.ReleaseDetalleID = @ReleaseDetalleParejaID
+  )
   AND d.Activo = 1
   AND d.ProgramaProduccionID IS NULL
   AND d.EstatusID NOT IN (9,99)
@@ -718,6 +726,8 @@ ORDER BY
                 principal.ReleaseID.Value;
             cmd.Parameters.Add("@ParteParejaID", SqlDbType.Int).Value =
                 parteParejaId.Value;
+            cmd.Parameters.Add("@ReleaseDetalleParejaID", SqlDbType.Int).Value =
+                (object?)principal.ParejaLhRhReleaseDetalleID ?? DBNull.Value;
 
             var result = await cmd.ExecuteScalarAsync();
 

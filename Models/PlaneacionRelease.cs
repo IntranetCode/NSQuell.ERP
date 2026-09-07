@@ -201,6 +201,9 @@ namespace ERP.NSQuell.Models
 
         public List<PlaneacionReleaseDetalleRenglonVm> Detalles { get; set; } = new();
 
+        // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
+        public List<PlaneacionReleaseTransferenciaCantidadVm> TransferenciasCantidad { get; set; } = new();
+
         public int TotalRenglones => Detalles.Count;
         public int TotalPiezasRequeridas => Detalles.Sum(x => x.CantidadRequerida);
         public int TotalPiezasDesdePT => Detalles.Sum(x => x.PiezasDesdePT ?? 0);
@@ -209,6 +212,31 @@ namespace ERP.NSQuell.Models
         public decimal TotalHorasNecesarias => Detalles.Sum(x => x.HorasNecesarias ?? 0);
     }
 
+    public class PlaneacionReleaseTransferenciaCantidadVm
+    {
+        public int TransferenciaID { get; set; }
+        public int ReleaseDetalleOrigenID { get; set; }
+        public int ReleaseDetalleDestinoID { get; set; }
+
+        public string FolioReleaseOrigen { get; set; } = string.Empty;
+        public int RenglonOrigen { get; set; }
+
+        public string FolioReleaseDestino { get; set; } = string.Empty;
+        public int RenglonDestino { get; set; }
+
+        public int CantidadPiezas { get; set; }
+        public int PiezasPorCaja { get; set; }
+        public int CajasTransferidas { get; set; }
+
+        public int CantidadOrigenAntes { get; set; }
+        public int CantidadOrigenDespues { get; set; }
+        public int CantidadDestinoAntes { get; set; }
+        public int CantidadDestinoDespues { get; set; }
+
+        public int? ProgramaProduccionDestinoID { get; set; }
+        public string? Usuario { get; set; }
+        public DateTime FechaTransferencia { get; set; }
+    }
     public class PlaneacionReleaseDetalleRenglonVm
     {
         public int ReleaseDetalleID { get; set; }

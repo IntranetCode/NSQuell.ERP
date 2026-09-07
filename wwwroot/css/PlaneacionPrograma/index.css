@@ -734,9 +734,15 @@
                 display: none !important;
             }
 
+        /* NSQ_PLANEACION_PROGRAMA_INDEX_MINIMIZAR_NAVBAR_V1
+           El panel expandido debe comenzar debajo del navbar global.
+           La variable se calcula en tiempo real desde Index.cshtml. */
         .client-panel.is-fullscreen {
             position: fixed;
-            inset: 10px;
+            top: var(--nsq-programa-fullscreen-top, 112px);
+            right: 10px;
+            bottom: 10px;
+            left: 10px;
             z-index: 1020;
             display: flex !important;
             flex-direction: column;
@@ -749,6 +755,8 @@
 
             .client-panel.is-fullscreen .client-panel-head {
                 flex: 0 0 auto;
+                position: relative;
+                z-index: 4;
                 background: linear-gradient(135deg,#ffffff,#f6faff);
                 border-bottom: 1px solid #e6eef9;
                 padding: 18px 20px;

@@ -352,12 +352,37 @@
                 clients.forEach(client => client.classList.remove("is-fullscreen"));
             }
 
+            // NSQ_PLANEACION_PROGRAMA_INDEX_MINIMIZAR_NAVBAR_V1
+            // El navbar global tiene z-index superior al panel fullscreen.
+            // Calculamos su borde inferior real para que nunca tape el
+            // encabezado del cliente, que es el control para minimizar.
+            function actualizarOffsetFullscreenCliente() {
+                const navbar = document.querySelector(".top-navbar");
+                const margen = 10;
+
+                let top = margen;
+
+                if (navbar) {
+                    const rect = navbar.getBoundingClientRect();
+                    top = Math.max(
+                        margen,
+                        Math.ceil(rect.bottom) + margen
+                    );
+                }
+
+                document.documentElement.style.setProperty(
+                    "--nsq-programa-fullscreen-top",
+                    `${top}px`
+                );
+            }
+
             function activarPantallaCompletaCliente(collapseEl) {
                 const client = collapseEl.closest("[data-client]");
                 const section = collapseEl.closest("[data-section]");
 
                 if (!client || !section) return;
 
+                actualizarOffsetFullscreenCliente();
                 limpiarPantallaCompletaCliente();
 
                 document.body.classList.add("client-focus");
@@ -473,6 +498,12 @@
                         limpiarPantallaCompletaCliente();
                     }
                 });
+            });
+
+            window.addEventListener("resize", function () {
+                if (document.body.classList.contains("client-focus")) {
+                    actualizarOffsetFullscreenCliente();
+                }
             });
 
             document.addEventListener("keydown", function (event) {

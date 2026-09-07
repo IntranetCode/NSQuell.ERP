@@ -14,6 +14,7 @@ public sealed class ProduccionBloqueoCorreoService
         string Codigo,
         int InspeccionID,
         int EjecucionProduccionID,
+        int? ChecklistArranqueID,
         string Departamento,
         string Titulo,
         string Mensaje,
@@ -150,6 +151,7 @@ Base AS
     SELECT
         ci.InspeccionID,
         ci.EjecucionProduccionID,
+        ci.ChecklistArranqueID,
         UPPER(LTRIM(RTRIM(ISNULL(ci.Estado,N'')))) AS Estado,
         ISNULL(NULLIF(LTRIM(RTRIM(ci.OrdenTrabajo)),N''), CONCAT(N'Inspección #',ci.InspeccionID)) AS OrdenTrabajo,
         ISNULL(NULLIF(LTRIM(RTRIM(ci.NumeroParte)),N''),N'Sin número de parte') AS NumeroParte,
@@ -190,6 +192,7 @@ Base AS
 SELECT
     InspeccionID,
     EjecucionProduccionID,
+    ChecklistArranqueID,
     Estado,
     OrdenTrabajo,
     NumeroParte,
@@ -221,6 +224,10 @@ FROM Base;
         {
             var inspeccionId = Convert.ToInt32(rd["InspeccionID"]);
             var ejecucionId = Convert.ToInt32(rd["EjecucionProduccionID"]);
+            var checklistArranqueId =
+                rd["ChecklistArranqueID"] == DBNull.Value
+                    ? (int?)null
+                    : Convert.ToInt32(rd["ChecklistArranqueID"]);
             var estado = rd["Estado"]?.ToString()?.Trim() ?? string.Empty;
             var orden = rd["OrdenTrabajo"]?.ToString()?.Trim() ?? $"Inspección #{inspeccionId}";
             var parte = rd["NumeroParte"]?.ToString()?.Trim() ?? "Sin número de parte";
@@ -230,9 +237,19 @@ FROM Base;
             var fechaInicio = Convert.ToDateTime(rd["FechaInicioBloqueo"]);
 
             var responsableCalidad = departamento.Equals("Calidad", StringComparison.OrdinalIgnoreCase);
-            var url = responsableCalidad
-                ? $"/Calidad/Detalle/{inspeccionId}"
-                : $"/Produccion/Detalle/{ejecucionId}";
+
+            var url = estado switch
+            {
+                "DEVUELTO_PREARRANQUE"
+                    when checklistArranqueId.HasValue
+                         && checklistArranqueId.Value > 0
+                    => $"/Produccion/ChecklistFormato/{checklistArranqueId.Value}",
+
+                _ when responsableCalidad
+                    => $"/Calidad/Detalle/{inspeccionId}",
+
+                _ => $"/Produccion/Detalle/{ejecucionId}"
+            };
 
             var (codigo, titulo, mensaje) = estado switch
             {
@@ -277,6 +294,7 @@ FROM Base;
                 Codigo: codigo,
                 InspeccionID: inspeccionId,
                 EjecucionProduccionID: ejecucionId,
+                ChecklistArranqueID: checklistArranqueId,
                 Departamento: departamento,
                 Titulo: titulo,
                 Mensaje: mensaje,

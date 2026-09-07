@@ -171,12 +171,44 @@ namespace ERP.NSQuell.Models
 
         public List<SelectListItem> Operadores { get; set; } = new();
 
+        // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
+        // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1_2 - origen por ReleaseID + Cliente, no por ParteID.
+        // Cantidad adicional que se transfiere desde otro renglon de Release.
+        // Compatibilidad con el flujo V1_1..V1_3. El V1_4 procesa AumentosRelease.
+        public int? ReleaseDetalleOrigenAumentoID { get; set; }
+        public int CantidadAumentoPiezas { get; set; }
+        public List<PlaneacionProgramaAumentoOrigenVm> OrigenesAumento { get; set; } = new();
+
+        // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
+        // Permite tomar cajas desde mas de una entrega/fila del mismo renglon Release.
+        public List<PlaneacionProgramaAumentoLineaVm> AumentosRelease { get; set; } = new();
 
         public List<SelectListItem> Maquinas { get; set; } = new();
         public List<SelectListItem> Moldes { get; set; } = new();
         public List<SelectListItem> Condiciones { get; set; } = new();
     }
 
+    public class PlaneacionProgramaAumentoLineaVm
+    {
+        public int? ReleaseDetalleOrigenAumentoID { get; set; }
+        public int CantidadPiezas { get; set; }
+    }
+    public class PlaneacionProgramaAumentoOrigenVm
+    {
+        // NSQ_PLANEACION_AUMENTO_LHRH_FILAS_RELEASE_V1_3
+        public int ReleaseDetalleID { get; set; }
+        public int ReleaseID { get; set; }
+        public int? ReleaseRenglonID { get; set; }
+        public int Renglon { get; set; }
+        public int? SecuenciaEntrega { get; set; }
+        public string FolioRelease { get; set; } = string.Empty;
+        public string NumeroParte { get; set; } = string.Empty;
+        public string DesignacionDescripcionSAP { get; set; } = string.Empty;
+        public DateTime FechaRequerida { get; set; }
+        public int CantidadRequerida { get; set; }
+        public int CantidadComprometida { get; set; }
+        public int CantidadTransferible { get; set; }
+    }
     public class PlaneacionProgramaMaquinaVm
     {
         public int? MaquinaID { get; set; }

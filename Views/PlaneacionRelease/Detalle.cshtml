@@ -392,6 +392,89 @@
             </div>
         }
 
+        @* NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1 *@
+        @if (Model.TransferenciasCantidad.Any())
+        {
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div>
+                        <div class="fw-bold">
+                            <i class="fa-solid fa-right-left me-1"></i>
+                            Ajustes por aumento de piezas
+                        </div>
+                        <div class="small text-muted">
+                            Transferencias de demanda realizadas desde Programa Cambio de Molde.
+                        </div>
+                    </div>
+                    <span class="badge text-bg-warning">
+                        @Model.TransferenciasCantidad.Count movimiento(s)
+                    </span>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Origen</th>
+                                <th>Destino</th>
+                                <th class="text-end">Piezas</th>
+                                <th class="text-end">Cajas</th>
+                                <th>Programa</th>
+                                <th>Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var mov in Model.TransferenciasCantidad)
+                            {
+                                <tr>
+                                    <td>@mov.FechaTransferencia.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        <strong>@mov.FolioReleaseOrigen</strong>
+                                        <div class="small text-muted">
+                                            Fila @mov.RenglonOrigen · Detalle #@mov.ReleaseDetalleOrigenID
+                                        </div>
+                                        <div class="small">
+                                            @mov.CantidadOrigenAntes.ToString("N0")
+                                            →
+                                            @mov.CantidadOrigenDespues.ToString("N0")
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <strong>@mov.FolioReleaseDestino</strong>
+                                        <div class="small text-muted">
+                                            Fila @mov.RenglonDestino · Detalle #@mov.ReleaseDetalleDestinoID
+                                        </div>
+                                        <div class="small">
+                                            @mov.CantidadDestinoAntes.ToString("N0")
+                                            →
+                                            @mov.CantidadDestinoDespues.ToString("N0")
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="badge text-bg-success">
+                                            +@mov.CantidadPiezas.ToString("N0")
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        @mov.CajasTransferidas.ToString("N0")
+                                        <div class="small text-muted">
+                                            @mov.PiezasPorCaja.ToString("N0") pzas/caja
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @(mov.ProgramaProduccionDestinoID.HasValue
+                                            ? "#" + mov.ProgramaProduccionDestinoID.Value
+                                            : "Pendiente")
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(mov.Usuario) ? "Sistema" : mov.Usuario)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
         <div class="sticky-actions">
             <div class="d-flex justify-content-between gap-2 flex-wrap">
                 <a asp-controller="PlaneacionRelease" asp-action="Index" class="btn btn-erp-light">
