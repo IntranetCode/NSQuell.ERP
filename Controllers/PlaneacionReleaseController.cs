@@ -1887,6 +1887,10 @@ WHERE rr.ReleaseID = @ReleaseID
             if (vm == null)
                 return NotFound();
 
+            // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
+            vm.TransferenciasCantidad =
+                await ObtenerTransferenciasCantidadAsync(id);
+
             return View(vm);
         }
 
@@ -4165,6 +4169,180 @@ ORDER BY ParteID;";
         // ORIGEN: PlaneacionReleaseEdicionController.cs
         // FUNCION: Editar Releases guardados y controlar el impacto sobre
         // programas de produccion vinculados.
+        // ============================================================
+        // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
+        // Historial visible de transferencias que afectaron este Release.
+        // ============================================================
+        private async Task<List<PlaneacionReleaseTransferenciaCantidadVm>>
+            ObtenerTransferenciasCantidadAsync(int releaseId)
+        {
+            var lista =
+                new List<PlaneacionReleaseTransferenciaCantidadVm>();
+
+            if (releaseId <= 0)
+                return lista;
+
+            await using var cn =
+                new SqlConnection(ConnectionString);
+
+            await cn.OpenAsync();
+
+            const string sqlExiste = @"
+SELECT OBJECT_ID(
+    N'dbo.Planeacion_ReleaseTransferenciasCantidad',
+    N'U');";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlExiste,
+                    cn))
+            {
+                var objectId =
+                    await cmd.ExecuteScalarAsync();
+
+                if (objectId == null ||
+                    objectId == DBNull.Value)
+                {
+                    return lista;
+                }
+            }
+
+            const string sql = @"
+SELECT
+    t.TransferenciaID,
+    t.ReleaseDetalleOrigenID,
+    t.ReleaseDetalleDestinoID,
+    t.ProgramaProduccionDestinoID,
+    ISNULL(ro.FolioRelease,N'SIN FOLIO')
+        AS FolioReleaseOrigen,
+    do.Renglon AS RenglonOrigen,
+    ISNULL(rd.FolioRelease,N'SIN FOLIO')
+        AS FolioReleaseDestino,
+    dd.Renglon AS RenglonDestino,
+    t.CantidadPiezas,
+    t.PiezasPorCaja,
+    t.CajasTransferidas,
+    t.CantidadOrigenAntes,
+    t.CantidadOrigenDespues,
+    t.CantidadDestinoAntes,
+    t.CantidadDestinoDespues,
+    u.Username AS Usuario,
+    t.FechaTransferencia
+FROM dbo.Planeacion_ReleaseTransferenciasCantidad t
+INNER JOIN dbo.Planeacion_ReleaseDetalle do
+    ON do.ReleaseDetalleID=t.ReleaseDetalleOrigenID
+INNER JOIN dbo.Planeacion_Releases ro
+    ON ro.ReleaseID=do.ReleaseID
+INNER JOIN dbo.Planeacion_ReleaseDetalle dd
+    ON dd.ReleaseDetalleID=t.ReleaseDetalleDestinoID
+INNER JOIN dbo.Planeacion_Releases rd
+    ON rd.ReleaseID=dd.ReleaseID
+LEFT JOIN dbo.Usuarios u
+    ON u.UsuarioID=t.UsuarioID
+WHERE t.Activo=1
+  AND
+  (
+       do.ReleaseID=@ReleaseID
+       OR dd.ReleaseID=@ReleaseID
+  )
+ORDER BY
+    t.FechaTransferencia DESC,
+    t.TransferenciaID DESC;";
+
+            await using var cmdHist =
+                new SqlCommand(
+                    sql,
+                    cn);
+
+            cmdHist.Parameters.Add(
+                "@ReleaseID",
+                SqlDbType.Int).Value =
+                releaseId;
+
+            await using var reader =
+                await cmdHist.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                lista.Add(
+                    new PlaneacionReleaseTransferenciaCantidadVm
+                    {
+                        TransferenciaID =
+                            Convert.ToInt32(
+                                reader["TransferenciaID"]),
+
+                        ReleaseDetalleOrigenID =
+                            Convert.ToInt32(
+                                reader["ReleaseDetalleOrigenID"]),
+
+                        ReleaseDetalleDestinoID =
+                            Convert.ToInt32(
+                                reader["ReleaseDetalleDestinoID"]),
+
+                        ProgramaProduccionDestinoID =
+                            reader["ProgramaProduccionDestinoID"] == DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    reader["ProgramaProduccionDestinoID"]),
+
+                        FolioReleaseOrigen =
+                            reader["FolioReleaseOrigen"]?.ToString()
+                            ?? "SIN FOLIO",
+
+                        RenglonOrigen =
+                            Convert.ToInt32(
+                                reader["RenglonOrigen"]),
+
+                        FolioReleaseDestino =
+                            reader["FolioReleaseDestino"]?.ToString()
+                            ?? "SIN FOLIO",
+
+                        RenglonDestino =
+                            Convert.ToInt32(
+                                reader["RenglonDestino"]),
+
+                        CantidadPiezas =
+                            Convert.ToInt32(
+                                reader["CantidadPiezas"]),
+
+                        PiezasPorCaja =
+                            Convert.ToInt32(
+                                reader["PiezasPorCaja"]),
+
+                        CajasTransferidas =
+                            Convert.ToInt32(
+                                reader["CajasTransferidas"]),
+
+                        CantidadOrigenAntes =
+                            Convert.ToInt32(
+                                reader["CantidadOrigenAntes"]),
+
+                        CantidadOrigenDespues =
+                            Convert.ToInt32(
+                                reader["CantidadOrigenDespues"]),
+
+                        CantidadDestinoAntes =
+                            Convert.ToInt32(
+                                reader["CantidadDestinoAntes"]),
+
+                        CantidadDestinoDespues =
+                            Convert.ToInt32(
+                                reader["CantidadDestinoDespues"]),
+
+                        Usuario =
+                            reader["Usuario"] == DBNull.Value
+                                ? null
+                                : reader["Usuario"]?.ToString(),
+
+                        FechaTransferencia =
+                            Convert.ToDateTime(
+                                reader["FechaTransferencia"])
+                    });
+            }
+
+            return lista;
+        }
+
         // ============================================================
         // RELEASE_EDICION_FLUJO_V1_0
         [HttpGet]

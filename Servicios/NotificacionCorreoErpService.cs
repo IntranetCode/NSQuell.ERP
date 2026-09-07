@@ -49,9 +49,12 @@ public sealed class NotificacionCorreoErpService
         if (ids.Count == 0)
             return new ServicioNotificaciones.ResultadoEnvio();
 
+        var entorno = ResolverEntornoErp();
+        var prefijoEntorno = entorno == "TEST" ? "[TEST]" : string.Empty;
+
         var asunto = urgente
-            ? $"[URGENTE][NS QUELL] {titulo}"
-            : $"[NS QUELL] {titulo}";
+            ? $"{prefijoEntorno}[URGENTE][NS QUELL] {titulo}"
+            : $"{prefijoEntorno}[NS QUELL] {titulo}";
 
         var urlAbsoluta = ConstruirUrlAbsoluta(urlDestino);
         var boton = string.IsNullOrWhiteSpace(textoBoton)
@@ -65,7 +68,8 @@ public sealed class NotificacionCorreoErpService
             codigoEvento,
             urlAbsoluta,
             boton,
-            urgente);
+            urgente,
+            entorno);
 
         try
         {
@@ -191,28 +195,68 @@ ORDER BY u.UsuarioID;
             return null;
 
         var destino = urlDestino.Trim();
+        var baseUrl = ResolverBaseUrlErp();
 
         if (Uri.TryCreate(destino, UriKind.Absolute, out var absoluta)
             && (absoluta.Scheme == Uri.UriSchemeHttp || absoluta.Scheme == Uri.UriSchemeHttps))
         {
+            if (absoluta.IsLoopback
+                || absoluta.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || absoluta.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+            {
+                return baseUrl + absoluta.PathAndQuery + absoluta.Fragment;
+            }
+
             return absoluta.ToString();
         }
 
         if (!destino.StartsWith('/') || destino.StartsWith("//", StringComparison.Ordinal))
             return null;
 
-        var baseUrl =
+        return baseUrl + destino;
+    }
+
+    private string ResolverBaseUrlErp()
+    {
+        var configurada =
             Environment.GetEnvironmentVariable("NSQ_ERP_BASE_URL")
             ?? _configuration["CorreoNotificaciones:BaseUrlERP"];
 
-        if (string.IsNullOrWhiteSpace(baseUrl))
+        if (!string.IsNullOrWhiteSpace(configurada)
+            && Uri.TryCreate(configurada.Trim(), UriKind.Absolute, out var uriConfigurada)
+            && (uriConfigurada.Scheme == Uri.UriSchemeHttps
+                || uriConfigurada.Scheme == Uri.UriSchemeHttp))
         {
-            baseUrl = _environment.IsDevelopment()
-                ? "http://localhost:5053"
-                : "https://erp.quell.nsgroup.com.mx";
+            return configurada.Trim().TrimEnd('/');
         }
 
-        return baseUrl.TrimEnd('/') + destino;
+        var cs =
+            _configuration.GetConnectionString("DefaultConnection")
+            ?? string.Empty;
+
+        if (cs.Contains("ERP_PROD", StringComparison.OrdinalIgnoreCase))
+            return "https://erp.quell.nsgroup.com.mx";
+
+        if (cs.Contains("ERP_TEST", StringComparison.OrdinalIgnoreCase)
+            || cs.Contains("INTRANET_DEV_DB", StringComparison.OrdinalIgnoreCase))
+        {
+            return "https://erpnsqt.nsgroup.com.mx";
+        }
+
+        return _environment.IsProduction()
+            ? "https://erp.quell.nsgroup.com.mx"
+            : "https://erpnsqt.nsgroup.com.mx";
+    }
+
+    private string ResolverEntornoErp()
+    {
+        var baseUrl = ResolverBaseUrlErp();
+
+        return baseUrl.Contains(
+            "erpnsqt.nsgroup.com.mx",
+            StringComparison.OrdinalIgnoreCase)
+                ? "TEST"
+                : "PRODUCCION";
     }
 
     private static string ResolverTextoBoton(string? codigoEvento)
@@ -237,53 +281,165 @@ ORDER BY u.UsuarioID;
         string? codigoEvento,
         string? urlAbsoluta,
         string textoBoton,
-        bool urgente)
+        bool urgente,
+        string entorno)
     {
         var tituloHtml = WebUtility.HtmlEncode(titulo ?? string.Empty);
         var mensajeHtml = WebUtility.HtmlEncode(mensaje ?? string.Empty)
             .Replace("\r\n", "<br>")
             .Replace("\n", "<br>");
-        var departamentoHtml = WebUtility.HtmlEncode(departamento ?? string.Empty);
-        var codigoHtml = WebUtility.HtmlEncode(codigoEvento ?? string.Empty);
+
+        var departamentoHtml =
+            WebUtility.HtmlEncode(
+                string.IsNullOrWhiteSpace(departamento)
+                    ? "No especificado"
+                    : departamento.Trim());
+
+        var codigoHtml =
+            WebUtility.HtmlEncode(
+                string.IsNullOrWhiteSpace(codigoEvento)
+                    ? "SIN_CODIGO"
+                    : codigoEvento.Trim());
+
+        var entornoHtml = WebUtility.HtmlEncode(entorno);
+        var fechaHtml = WebUtility.HtmlEncode(
+            DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
+
         var botonHtml = WebUtility.HtmlEncode(textoBoton);
         var urlHtml = WebUtility.HtmlEncode(urlAbsoluta ?? string.Empty);
 
+        var etiqueta = urgente
+            ? "<span style=\"display:inline-block;padding:6px 10px;border-radius:999px;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:800;letter-spacing:.5px\">ATENCION REQUERIDA</span>"
+            : "<span style=\"display:inline-block;padding:6px 10px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:11px;font-weight:800;letter-spacing:.5px\">NOTIFICACION ERP</span>";
+
         var alerta = urgente
-            ? "<div style=\"margin:0 0 16px;padding:12px 14px;border-radius:10px;background:#fff3cd;color:#7a4d00;font-weight:700\">Producción está detenida o en riesgo de detenerse. Atiende esta tarea cuanto antes.</div>"
+            ? """
+              <tr>
+                <td style="padding:0 28px 18px 28px">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                         style="background:#fff7ed;border-left:4px solid #f97316;border-radius:8px">
+                    <tr>
+                      <td style="padding:13px 15px;color:#9a3412;font-size:14px;line-height:1.45;font-weight:700">
+                        La operacion requiere atencion del departamento responsable.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              """
             : string.Empty;
 
         var cta = string.IsNullOrWhiteSpace(urlAbsoluta)
-            ? string.Empty
-            : $"<p style=\"margin:22px 0 8px\"><a href=\"{urlHtml}\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#f47b20;color:#ffffff;text-decoration:none;font-weight:800\">{botonHtml}</a></p>";
-
-        var departamentoFila = string.IsNullOrWhiteSpace(departamento)
-            ? string.Empty
-            : $"<div style=\"margin-top:10px;color:#64748b;font-size:13px\"><strong>Departamento responsable:</strong> {departamentoHtml}</div>";
-
-        var codigoFila = string.IsNullOrWhiteSpace(codigoEvento)
-            ? string.Empty
-            : $"<div style=\"margin-top:4px;color:#94a3b8;font-size:12px\">Evento: {codigoHtml}</div>";
+            ? """
+              <tr>
+                <td style="padding:4px 28px 22px 28px;color:#64748b;font-size:12px">
+                  Este evento no tiene un acceso directo seguro. Ingresa al ERP desde tu menu habitual.
+                </td>
+              </tr>
+              """
+            : $"""
+              <tr>
+                <td style="padding:4px 28px 24px 28px">
+                  <a href="{urlHtml}"
+                     style="display:inline-block;background:#f47b20;color:#ffffff;text-decoration:none;font-size:14px;font-weight:800;padding:12px 18px;border-radius:8px">
+                    {botonHtml}
+                  </a>
+                </td>
+              </tr>
+              """;
 
         return $"""
 <!doctype html>
 <html>
-<body style="margin:0;padding:24px;background:#f5f7fb;font-family:Segoe UI,Arial,sans-serif;color:#172033">
-  <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
-    <div style="padding:18px 22px;background:#0f172a;color:#ffffff">
-      <div style="font-size:13px;color:#ffb86b;font-weight:800">NS QUELL ERP</div>
-      <div style="margin-top:4px;font-size:22px;font-weight:800">{tituloHtml}</div>
-    </div>
-    <div style="padding:22px">
-      {alerta}
-      <div style="font-size:15px;line-height:1.55">{mensajeHtml}</div>
-      {departamentoFila}
-      {codigoFila}
-      {cta}
-      <div style="margin-top:22px;padding-top:14px;border-top:1px solid #e5e7eb;color:#94a3b8;font-size:12px">
-        Notificación generada automáticamente por NS Quell ERP.
-      </div>
-    </div>
-  </div>
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;font-family:Segoe UI,Arial,sans-serif;color:#172033">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+         style="width:100%;background:#eef2f7;margin:0;padding:0">
+    <tr>
+      <td align="center" style="padding:28px 12px">
+        <table role="presentation" width="680" cellspacing="0" cellpadding="0" border="0"
+               style="width:100%;max-width:680px;background:#ffffff;border:1px solid #dbe2ea;border-radius:14px;overflow:hidden">
+
+          <tr>
+            <td style="background:#0b2341;padding:20px 28px;border-bottom:4px solid #f47b20">
+              <div style="font-size:12px;font-weight:800;letter-spacing:1px;color:#fdba74">
+                NS QUELL ERP
+              </div>
+              <div style="margin-top:10px">{etiqueta}</div>
+              <div style="margin-top:10px;font-size:22px;line-height:1.25;font-weight:800;color:#ffffff">
+                {tituloHtml}
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:24px 28px 18px 28px">
+              <div style="font-size:15px;line-height:1.65;color:#334155">
+                {mensajeHtml}
+              </div>
+            </td>
+          </tr>
+
+          {alerta}
+          {cta}
+
+          <tr>
+            <td style="padding:0 28px 24px 28px">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                     style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+                <tr>
+                  <td style="padding:15px 16px">
+                    <div style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:10px">
+                      Detalles
+                    </div>
+
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                           style="font-size:12px;color:#64748b">
+                      <tr>
+                        <td style="padding:3px 0;width:180px;font-weight:700;color:#475569">
+                          Departamento responsable
+                        </td>
+                        <td style="padding:3px 0">{departamentoHtml}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:3px 0;font-weight:700;color:#475569">
+                          Evento
+                        </td>
+                        <td style="padding:3px 0">{codigoHtml}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:3px 0;font-weight:700;color:#475569">
+                          Entorno
+                        </td>
+                        <td style="padding:3px 0">{entornoHtml}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:3px 0;font-weight:700;color:#475569">
+                          Fecha
+                        </td>
+                        <td style="padding:3px 0">{fechaHtml}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:14px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px">
+              Notificacion automatica de NS Quell ERP. No es necesario responder a este correo.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 """;

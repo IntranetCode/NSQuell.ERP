@@ -358,20 +358,6 @@ public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
             }
         }
 
-        if (idOrigen > 0
-            && TieneAccion(
-                executed.Controller.GetType(),
-                "Detalle"))
-        {
-            var url =
-                mvc.Url.Action(
-                    "Detalle",
-                    controller,
-                    new { id = idOrigen });
-
-            if (EsRutaLocal(url))
-                return url;
-        }
 
         return null;
     }

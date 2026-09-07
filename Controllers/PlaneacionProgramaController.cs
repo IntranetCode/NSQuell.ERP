@@ -982,6 +982,64 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             ModelState.Remove(nameof(vm.OperadorPrincipalID));
             ModelState.Remove(nameof(vm.OperadorAuxiliarID));
 
+            // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
+            vm.AumentosRelease ??= new List<PlaneacionProgramaAumentoLineaVm>();
+            vm.AumentosRelease = vm.AumentosRelease
+                .Where(x => x != null &&
+                    ((x.ReleaseDetalleOrigenAumentoID ?? 0) > 0 || x.CantidadPiezas != 0))
+                .ToList();
+
+            for (var i = 0; i < vm.AumentosRelease.Count; i++)
+            {
+                var linea = vm.AumentosRelease[i];
+
+                if (!linea.ReleaseDetalleOrigenAumentoID.HasValue ||
+                    linea.ReleaseDetalleOrigenAumentoID.Value <= 0)
+                {
+                    ModelState.AddModelError(
+                        $"AumentosRelease[{i}].ReleaseDetalleOrigenAumentoID",
+                        "Selecciona la entrega del Release de la cual se descontaran las piezas.");
+                }
+
+                if (linea.CantidadPiezas <= 0)
+                {
+                    ModelState.AddModelError(
+                        $"AumentosRelease[{i}].CantidadPiezas",
+                        "La cantidad de piezas a transferir debe ser mayor que cero.");
+                }
+            }
+
+            var origenesDuplicados = vm.AumentosRelease
+                .Where(x => x.ReleaseDetalleOrigenAumentoID.HasValue)
+                .GroupBy(x => x.ReleaseDetalleOrigenAumentoID!.Value)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (origenesDuplicados.Count > 0)
+            {
+                ModelState.AddModelError(
+                    nameof(vm.AumentosRelease),
+                    "No puedes seleccionar la misma entrega del Release mas de una vez.");
+            }
+
+            var totalAumentoLong = vm.AumentosRelease
+                .Where(x => x.CantidadPiezas > 0)
+                .Sum(x => (long)x.CantidadPiezas);
+
+            if (totalAumentoLong > int.MaxValue)
+            {
+                ModelState.AddModelError(
+                    nameof(vm.AumentosRelease),
+                    "La suma de piezas extra supera el limite permitido.");
+            }
+
+            vm.CantidadAumentoPiezas = totalAumentoLong > int.MaxValue
+                ? 0
+                : Convert.ToInt32(totalAumentoLong);
+            vm.ReleaseDetalleOrigenAumentoID = vm.AumentosRelease
+                .Select(x => x.ReleaseDetalleOrigenAumentoID)
+                .FirstOrDefault(x => x.HasValue && x.Value > 0);
             vm.OperadorPrincipalID = null;
             vm.OperadorAuxiliarID = null;
 
@@ -1003,14 +1061,9 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                         vm.Cambio);
             }
 
-            var minimoPermitido = RedondearSiguienteBloque(DateTime.Now, 15);
-
-            if (vm.FechaInicioProgramada.HasValue &&
-                vm.FechaInicioProgramada.Value < minimoPermitido)
-            {
-                vm.FechaInicioProgramada = minimoPermitido;
-                vm.Cambio = minimoPermitido.TimeOfDay;
-            }
+            // V1_5: se permite capturar una programacion en horario pasado.
+            // El servidor conserva exactamente la fecha/hora indicada por Planeacion.
+            // La vista muestra una advertencia, pero NO se mueve al horario actual.
 
             var trabajarDomingo =
                 string.Equals(
@@ -1043,6 +1096,8 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             try
             {
                 var sqlTx = (SqlTransaction)tx;
+                var transferenciasAumentoIds = new List<int>();
+                var transferenciasAumentoParejaIds = new List<int>();
 
                 etapaSql =
                     "Validar si el ReleaseDetalle ya está programado";
@@ -1061,6 +1116,82 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                     return RedirectToAction(nameof(Index));
                 }
 
+                // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
+                var totalAumentoAplicado = 0;
+                var primerOrigenAumentoId = (int?)null;
+
+                foreach (var lineaAumento in vm.AumentosRelease)
+                {
+                    if (!lineaAumento.ReleaseDetalleOrigenAumentoID.HasValue ||
+                        lineaAumento.ReleaseDetalleOrigenAumentoID.Value <= 0 ||
+                        lineaAumento.CantidadPiezas <= 0)
+                    {
+                        continue;
+                    }
+
+                    primerOrigenAumentoId ??= lineaAumento.ReleaseDetalleOrigenAumentoID.Value;
+                    vm.ReleaseDetalleOrigenAumentoID = lineaAumento.ReleaseDetalleOrigenAumentoID.Value;
+                    vm.CantidadAumentoPiezas = lineaAumento.CantidadPiezas;
+
+                    etapaSql =
+                        "Transferir aumento desde una entrega del mismo renglon Release";
+
+                    var transferenciaAumentoId =
+                        await AplicarAumentoReleaseAsync(
+                            vm,
+                            usuarioId,
+                            cn,
+                            sqlTx,
+                            "Aumento aplicado a la pieza principal desde Programa Cambio de Molde.");
+
+                    if (transferenciaAumentoId.HasValue)
+                        transferenciasAumentoIds.Add(transferenciaAumentoId.Value);
+
+                    if (vm.ProgramarParejaLhRh)
+                    {
+                        if (!vm.ParejaLhRhReleaseDetalleID.HasValue ||
+                            vm.ParejaLhRhReleaseDetalleID.Value <= 0)
+                        {
+                            throw new InvalidOperationException(
+                                "Se solicito programar LH/RH juntas, pero no se encontro el ReleaseDetalle destino de la contraparte.");
+                        }
+
+                        var origenParejaId =
+                            await ResolverOrigenParejaAumentoAsync(
+                                vm.ParejaLhRhReleaseDetalleID.Value,
+                                lineaAumento.ReleaseDetalleOrigenAumentoID.Value,
+                                cn,
+                                sqlTx);
+
+                        var aumentoPareja =
+                            new PlaneacionProgramaCrearDesdeNecesidadVm
+                            {
+                                ReleaseDetalleID = vm.ParejaLhRhReleaseDetalleID.Value,
+                                ReleaseDetalleOrigenAumentoID = origenParejaId,
+                                CantidadAumentoPiezas = lineaAumento.CantidadPiezas
+                            };
+
+                        var transferenciaAumentoParejaId =
+                            await AplicarAumentoReleaseAsync(
+                                aumentoPareja,
+                                usuarioId,
+                                cn,
+                                sqlTx,
+                                "Aumento automatico replicado a la contraparte LH/RH.");
+
+                        if (transferenciaAumentoParejaId.HasValue)
+                            transferenciasAumentoParejaIds.Add(transferenciaAumentoParejaId.Value);
+                    }
+
+                    checked
+                    {
+                        totalAumentoAplicado += lineaAumento.CantidadPiezas;
+                    }
+                }
+
+                // Se conservan para compatibilidad con calculos/mensajes previos.
+                vm.CantidadAumentoPiezas = totalAumentoAplicado;
+                vm.ReleaseDetalleOrigenAumentoID = primerOrigenAumentoId;
                 etapaSql =
                     "Recalcular cantidades del programa";
 
@@ -1097,14 +1228,97 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                         return View(vm);
                     }
                 }
+                // NSQ_PLANEACION_DISENO_HORARIO_ESTRICTO_V1_5
+                // El POST ya NO reacomoda silenciosamente el horario solicitado.
+                // Si maquina o molde estan ocupados, no se guarda nada y se informa
+                // exactamente que recurso bloquea y hasta que hora esta ocupado.
+                etapaSql =
+                    "Calcular horario exacto solicitado";
+
+                var inicioSolicitado =
+                    vm.FechaInicioProgramada!.Value;
+
+                var arranqueSolicitado =
+                    CalcularFechaHoraDesdeHora(
+                        inicioSolicitado.Date,
+                        vm.Arranque);
+
+                if (arranqueSolicitado < inicioSolicitado)
+                    arranqueSolicitado = arranqueSolicitado.AddDays(1);
+
+                vm.FechaFinProgramada =
+                    SumarHorasOperativasPlaneacion(
+                        arranqueSolicitado,
+                        vm.HorasProgramadas.Value,
+                        trabajarDomingo);
+
+                etapaSql =
+                    "Validar disponibilidad exacta de maquina y molde";
+
+                var conflictoHorario =
+                    await ObtenerConflictoHorarioProgramaAsync(
+                        vm.MaquinaID!.Value,
+                        vm.MoldeID,
+                        inicioSolicitado,
+                        vm.FechaFinProgramada.Value,
+                        cn,
+                        sqlTx);
+
+                if (conflictoHorario.TieneConflicto)
+                {
+                    await tx.RollbackAsync();
+
+                    var mensajeConflicto =
+                        conflictoHorario.ConstruirMensaje(
+                            inicioSolicitado,
+                            vm.FechaFinProgramada.Value);
+
+                    ModelState.AddModelError(
+                        nameof(vm.FechaInicioProgramada),
+                        mensajeConflicto);
+
+                    ModelState.AddModelError(
+                        string.Empty,
+                        mensajeConflicto);
+
+                    ViewBag.MostrarModalConflictoHorario = true;
+                    ViewBag.ConflictoHorarioSolicitado =
+                        $"{inicioSolicitado:dd/MM/yyyy HH:mm} - {vm.FechaFinProgramada.Value:dd/MM/yyyy HH:mm}";
+
+                    ViewBag.ConflictoMaquinaTitulo =
+                        conflictoHorario.MaquinaOcupada
+                            ? "MAQUINA OCUPADA"
+                            : "MAQUINA DISPONIBLE";
+
+                    ViewBag.ConflictoMaquinaDetalle =
+                        conflictoHorario.MaquinaOcupada
+                            ? conflictoHorario.MaquinaDetalle
+                            : "La maquina no presenta cruce en el horario solicitado.";
+
+                    ViewBag.ConflictoMoldeTitulo =
+                        conflictoHorario.MoldeOcupado
+                            ? "MOLDE OCUPADO"
+                            : "MOLDE DISPONIBLE";
+
+                    ViewBag.ConflictoMoldeDetalle =
+                        conflictoHorario.MoldeOcupado
+                            ? conflictoHorario.MoldeDetalle
+                            : "El molde no presenta cruce en otra maquina durante el horario solicitado.";
+
+                    ViewBag.ConflictoSiguienteDisponible =
+                        conflictoHorario.SiguienteDisponible.HasValue
+                            ? conflictoHorario.SiguienteDisponible.Value.ToString("dd/MM/yyyy HH:mm")
+                            : "Revisar calendario";
+
+                    await CargarCatalogosAsync(vm);
+                    return View(vm);
+                }
+
+                // Se conserva el contexto existente porque la pareja LH/RH comparte
+                // maquina, molde y horario de forma intencional. La validacion anterior
+                // bloquea cruces contra PROGRAMAS YA EXISTENTES, no contra la pareja
+                // que se creara dentro de esta misma transaccion.
                 await ActivarReacomodoPlaneacionAsync(cn, sqlTx);
-                var sugeridaTx = await ObtenerSiguienteCambioDisponibleAsync(vm.MaquinaID!.Value, vm.FechaInicioProgramada!.Value, vm.ParteID, vm.MoldeID, cn, sqlTx, trabajarDomingo);
-                vm.FechaInicioProgramada = sugeridaTx.Cambio;
-                vm.Cambio = sugeridaTx.Cambio.TimeOfDay;
-                vm.Arranque = sugeridaTx.Arranque.TimeOfDay;
-                vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(sugeridaTx.Arranque, vm.HorasProgramadas.Value, trabajarDomingo);
-                var textoSugerencia = $"Programación colocada automáticamente en cola. Cambio: {sugeridaTx.Cambio:dd/MM/yyyy HH:mm}. Arranque: {sugeridaTx.Arranque:dd/MM/yyyy HH:mm}. {sugeridaTx.Motivo}";
-                vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? textoSugerencia : vm.Observaciones.Trim() + Environment.NewLine + textoSugerencia;
                 // NSQ_OPERADORES_SOLO_PRODUCCION_V1
                 // Planeacion no decide personal. Fecha + Turno + Maquina se resuelve
                 // en Produccion mediante DDP.
@@ -1113,6 +1327,20 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
 await CompletarDatosProgramaAsync(vm, cn, sqlTx);
                 await CompletarVinculoOFExistenteAsync(vm, cn, sqlTx);
                 var programaId = await InsertarProgramaAsync(vm, usuarioId, cn, sqlTx);
+
+                foreach (var transferenciaAumentoId in transferenciasAumentoIds)
+                {
+                    etapaSql =
+                        "Vincular transferencia de aumento con programa";
+
+                    await VincularTransferenciaAProgramaAsync(
+                        transferenciaAumentoId,
+                        programaId,
+                        vm.ReleaseDetalleID,
+                        cn,
+                        sqlTx);
+                }
+
                 // NSQ_OPERADORES_SOLO_PRODUCCION_V1 - no persistir personal desde Planeacion.
                 await MarcarReleaseDetalleProgramadoAsync(vm.ReleaseDetalleID, programaId, usuarioId, cn, sqlTx);
                 // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
@@ -1133,6 +1361,19 @@ await CompletarDatosProgramaAsync(vm, cn, sqlTx);
                     {
                         throw new InvalidOperationException(
                             "Se solicito programar la contraparte LH/RH, pero ya no existe una necesidad pendiente compatible dentro del mismo Release.");
+                    }
+
+                    foreach (var transferenciaAumentoParejaId in transferenciasAumentoParejaIds)
+                    {
+                        etapaSql =
+                            "Vincular transferencia de aumento LH/RH con programa contraparte";
+
+                        await VincularTransferenciaAProgramaAsync(
+                            transferenciaAumentoParejaId,
+                            programaParejaLhRhId.Value,
+                            vm.ParejaLhRhReleaseDetalleID!.Value,
+                            cn,
+                            sqlTx);
                     }
                 }
                 if (vm.SolicitudProduccionID.HasValue && vm.SolicitudProduccionDetalleID.HasValue)
@@ -2101,6 +2342,283 @@ ORDER BY
             return false;
         }
 
+        // ============================================================
+        // NSQ_PLANEACION_DISENO_HORARIO_ESTRICTO_V1_5
+        // Conflicto de horario sin reacomodar automaticamente.
+        // ============================================================
+        private sealed class ConflictoHorarioPrograma
+        {
+            public bool MaquinaOcupada { get; set; }
+            public DateTime? MaquinaDisponible { get; set; }
+            public string MaquinaDetalle { get; set; } = string.Empty;
+
+            public bool MoldeOcupado { get; set; }
+            public DateTime? MoldeDisponible { get; set; }
+            public string MoldeDetalle { get; set; } = string.Empty;
+
+            public bool TieneConflicto =>
+                MaquinaOcupada || MoldeOcupado;
+
+            public DateTime? SiguienteDisponible
+            {
+                get
+                {
+                    if (MaquinaDisponible.HasValue &&
+                        MoldeDisponible.HasValue)
+                    {
+                        return MaquinaDisponible.Value >= MoldeDisponible.Value
+                            ? MaquinaDisponible
+                            : MoldeDisponible;
+                    }
+
+                    return MaquinaDisponible ?? MoldeDisponible;
+                }
+            }
+
+            public string ConstruirMensaje(
+                DateTime inicioSolicitado,
+                DateTime finSolicitado)
+            {
+                var partes = new List<string>
+                {
+                    $"No se guardo la programacion de {inicioSolicitado:dd/MM/yyyy HH:mm} a {finSolicitado:dd/MM/yyyy HH:mm}."
+                };
+
+                if (MaquinaOcupada &&
+                    !string.IsNullOrWhiteSpace(MaquinaDetalle))
+                {
+                    partes.Add(MaquinaDetalle);
+                }
+
+                if (MoldeOcupado &&
+                    !string.IsNullOrWhiteSpace(MoldeDetalle))
+                {
+                    partes.Add(MoldeDetalle);
+                }
+
+                if (SiguienteDisponible.HasValue)
+                {
+                    partes.Add(
+                        $"El recurso bloqueante con mayor duracion queda libre el {SiguienteDisponible.Value:dd/MM/yyyy HH:mm}. Revisa ese horario antes de volver a guardar.");
+                }
+
+                return string.Join(" ", partes);
+            }
+        }
+
+        private static async Task<ConflictoHorarioPrograma>
+            ObtenerConflictoHorarioProgramaAsync(
+                int maquinaId,
+                int? moldeId,
+                DateTime inicio,
+                DateTime fin,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            if (fin <= inicio)
+            {
+                throw new InvalidOperationException(
+                    "El fin estimado debe ser posterior al inicio programado.");
+            }
+
+            var resultado =
+                new ConflictoHorarioPrograma();
+
+            const string sqlMaquina = @"
+SELECT TOP (1)
+    pp.ProgramaProduccionID,
+    COALESCE(NULLIF(pp.MaquinaCodigo,N''),NULLIF(m.Codigo,N''),N'Maquina') AS MaquinaTexto,
+    COALESCE(NULLIF(pp.NumeroParte,N''),NULLIF(pp.ReferenciaSAP,N''),N'Sin parte') AS ParteTexto,
+    pp.FechaInicioProgramada AS Inicio,
+    ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
+            pp.FechaInicioProgramada)
+    ) AS Fin
+FROM dbo.Planeacion_ProgramaProduccion pp WITH (UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.ERP_Maquinas m
+    ON m.MaquinaID=pp.MaquinaID
+WHERE pp.Activo=1
+  AND pp.MaquinaID=@MaquinaID
+  AND ISNULL(pp.EstatusID,1) NOT IN (5,9,99)
+  AND pp.FechaInicioProgramada IS NOT NULL
+  AND pp.FechaInicioProgramada < @Fin
+  AND ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
+            pp.FechaInicioProgramada)
+      ) > @Inicio
+ORDER BY
+    ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
+            pp.FechaInicioProgramada)
+    ) DESC,
+    pp.ProgramaProduccionID DESC;";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlMaquina,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@MaquinaID",
+                    SqlDbType.Int).Value =
+                    maquinaId;
+
+                cmd.Parameters.Add(
+                    "@Inicio",
+                    SqlDbType.DateTime).Value =
+                    inicio;
+
+                cmd.Parameters.Add(
+                    "@Fin",
+                    SqlDbType.DateTime).Value =
+                    fin;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
+                if (await rd.ReadAsync())
+                {
+                    resultado.MaquinaOcupada = true;
+                    resultado.MaquinaDisponible =
+                        Convert.ToDateTime(rd["Fin"]);
+
+                    var programaId =
+                        Convert.ToInt32(
+                            rd["ProgramaProduccionID"]);
+
+                    var maquinaTexto =
+                        rd["MaquinaTexto"]?.ToString()
+                        ?? $"Maquina #{maquinaId}";
+
+                    var parteTexto =
+                        rd["ParteTexto"]?.ToString()
+                        ?? "Sin parte";
+
+                    var inicioExistente =
+                        Convert.ToDateTime(rd["Inicio"]);
+
+                    resultado.MaquinaDetalle =
+                        $"La maquina {maquinaTexto} ya esta ocupada por el Programa #{programaId} ({parteTexto}) desde {inicioExistente:dd/MM/yyyy HH:mm} hasta {resultado.MaquinaDisponible.Value:dd/MM/yyyy HH:mm}.";
+                }
+            }
+
+            if (moldeId.HasValue &&
+                moldeId.Value > 0)
+            {
+                const string sqlMolde = @"
+SELECT TOP (1)
+    pp.ProgramaProduccionID,
+    COALESCE(NULLIF(pp.MoldeCodigo,N''),NULLIF(mol.CodigoMolde,N''),N'Molde') AS MoldeTexto,
+    COALESCE(NULLIF(pp.MaquinaCodigo,N''),NULLIF(maq.Codigo,N''),N'Otra maquina') AS MaquinaTexto,
+    COALESCE(NULLIF(pp.NumeroParte,N''),NULLIF(pp.ReferenciaSAP,N''),N'Sin parte') AS ParteTexto,
+    pp.FechaInicioProgramada AS Inicio,
+    ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
+            pp.FechaInicioProgramada)
+    ) AS Fin
+FROM dbo.Planeacion_ProgramaProduccion pp WITH (UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.ERP_Moldes mol
+    ON mol.MoldeID=pp.MoldeID
+LEFT JOIN dbo.ERP_Maquinas maq
+    ON maq.MaquinaID=pp.MaquinaID
+WHERE pp.Activo=1
+  AND pp.MoldeID=@MoldeID
+  AND ISNULL(pp.EstatusID,1) NOT IN (5,9,99)
+  AND pp.FechaInicioProgramada IS NOT NULL
+  AND ISNULL(pp.MaquinaID,0)<>@MaquinaID
+  AND pp.FechaInicioProgramada < @Fin
+  AND ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
+            pp.FechaInicioProgramada)
+      ) > @Inicio
+ORDER BY
+    ISNULL(
+        pp.FechaFinProgramada,
+        DATEADD(
+            MINUTE,
+            CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
+            pp.FechaInicioProgramada)
+    ) DESC,
+    pp.ProgramaProduccionID DESC;";
+
+                await using var cmd =
+                    new SqlCommand(
+                        sqlMolde,
+                        cn,
+                        tx);
+
+                cmd.Parameters.Add(
+                    "@MoldeID",
+                    SqlDbType.Int).Value =
+                    moldeId.Value;
+
+                cmd.Parameters.Add(
+                    "@MaquinaID",
+                    SqlDbType.Int).Value =
+                    maquinaId;
+
+                cmd.Parameters.Add(
+                    "@Inicio",
+                    SqlDbType.DateTime).Value =
+                    inicio;
+
+                cmd.Parameters.Add(
+                    "@Fin",
+                    SqlDbType.DateTime).Value =
+                    fin;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
+                if (await rd.ReadAsync())
+                {
+                    resultado.MoldeOcupado = true;
+                    resultado.MoldeDisponible =
+                        Convert.ToDateTime(rd["Fin"]);
+
+                    var programaId =
+                        Convert.ToInt32(
+                            rd["ProgramaProduccionID"]);
+
+                    var moldeTexto =
+                        rd["MoldeTexto"]?.ToString()
+                        ?? $"Molde #{moldeId.Value}";
+
+                    var maquinaTexto =
+                        rd["MaquinaTexto"]?.ToString()
+                        ?? "otra maquina";
+
+                    var parteTexto =
+                        rd["ParteTexto"]?.ToString()
+                        ?? "Sin parte";
+
+                    var inicioExistente =
+                        Convert.ToDateTime(rd["Inicio"]);
+
+                    resultado.MoldeDetalle =
+                        $"El molde {moldeTexto} ya esta ocupado en {maquinaTexto} por el Programa #{programaId} ({parteTexto}) desde {inicioExistente:dd/MM/yyyy HH:mm} hasta {resultado.MoldeDisponible.Value:dd/MM/yyyy HH:mm}.";
+                }
+            }
+
+            return resultado;
+        }
+
         private static async Task ActivarReacomodoPlaneacionAsync(SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"EXEC sys.sp_set_session_context @key = N'PlaneacionPermitirReacomodo', @value = 1;";
@@ -2121,6 +2639,1045 @@ END;";
             await cmd.ExecuteNonQueryAsync();
         }
 
+
+        // ============================================================
+        // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
+        // Transferencia controlada de demanda entre renglones Release.
+        // Solo se permite transferir saldo NO comprometido.
+        // ============================================================
+        private sealed class RenglonAumentoDb
+        {
+            public int ReleaseDetalleID { get; set; }
+            public int ReleaseID { get; set; }
+            public int? ReleaseRenglonID { get; set; }
+            public int Renglon { get; set; }
+            public int? SecuenciaEntrega { get; set; }
+            public DateTime FechaRequerida { get; set; }
+            public int? ClienteID { get; set; }
+            public int? ParteID { get; set; }
+            public int CantidadRequerida { get; set; }
+            public int CantidadComprometida { get; set; }
+            public int? PiezasPorCaja { get; set; }
+
+            public int DisponibleLibre =>
+                Math.Max(
+                    0,
+                    CantidadRequerida - CantidadComprometida);
+        }
+        private static async Task<List<PlaneacionProgramaAumentoOrigenVm>>
+            CargarOrigenesAumentoAsync(
+                int releaseDetalleDestinoId,
+                int? releaseId,
+                int? clienteId,
+                SqlConnection cn)
+        {
+            var lista =
+                new List<PlaneacionProgramaAumentoOrigenVm>();
+
+            if (releaseDetalleDestinoId <= 0 ||
+                !releaseId.HasValue ||
+                releaseId.Value <= 0)
+            {
+                return lista;
+            }
+
+            // NSQ_PLANEACION_AUMENTO_LHRH_FILAS_RELEASE_V1_3
+            // ReleaseID + Cliente identifican el documento.
+            // ReleaseRenglonID (o Renglon como fallback) identifica LA MISMA
+            // pieza/renglon dentro de ese Release. Se listan solamente sus
+            // otras entregas, nunca las piezas de otros renglones.
+            const string sql = @"
+SELECT
+    d.ReleaseDetalleID,
+    d.ReleaseID,
+    d.ReleaseRenglonID,
+    d.Renglon,
+    d.SecuenciaEntrega,
+    ISNULL(r.FolioRelease,N'SIN FOLIO') AS FolioRelease,
+    ISNULL(d.NumeroParte,N'') AS NumeroParte,
+    ISNULL(d.DesignacionDescripcionSAP,N'') AS DesignacionDescripcionSAP,
+    d.FechaRequerida,
+    ISNULL(d.CantidadRequerida,0) AS CantidadRequerida,
+    CASE
+        WHEN ISNULL(prog.CantidadComprometida,0)
+             >= ISNULL(ofc.CantidadComprometida,0)
+            THEN ISNULL(prog.CantidadComprometida,0)
+        ELSE ISNULL(ofc.CantidadComprometida,0)
+    END AS CantidadComprometida
+FROM dbo.Planeacion_ReleaseDetalle d
+INNER JOIN dbo.Planeacion_Releases r
+    ON r.ReleaseID=d.ReleaseID
+   AND r.Activo=1
+INNER JOIN dbo.Planeacion_ReleaseDetalle destino
+    ON destino.ReleaseDetalleID=@ReleaseDetalleDestinoID
+   AND destino.Activo=1
+OUTER APPLY
+(
+    SELECT
+        ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0)
+            AS CantidadComprometida
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
+      AND pp.Activo=1
+      AND ISNULL(pp.EstatusID,1)<>99
+) prog
+OUTER APPLY
+(
+    SELECT
+        ISNULL(SUM(ISNULL(sd.CantidadPiezas,0)),0)
+            AS CantidadComprometida
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle sd
+        ON sd.SolicitudProduccionID=s.SolicitudProduccionID
+       AND sd.Activo=1
+    WHERE s.Activo=1
+      AND ISNULL(s.EstatusID,1)<>99
+      AND
+      (
+            s.ReleaseDetalleID=d.ReleaseDetalleID
+         OR s.SolicitudProduccionID=d.SolicitudProduccionID
+      )
+      AND
+      (
+            sd.ParteID=d.ParteID
+         OR (sd.ParteID IS NULL AND d.ParteID IS NULL)
+      )
+) ofc
+WHERE d.Activo=1
+  AND d.ReleaseDetalleID<>destino.ReleaseDetalleID
+  AND d.ReleaseID=@ReleaseID
+  AND (@ClienteID IS NULL OR r.ClienteID=@ClienteID)
+  AND
+  (
+        (
+            destino.ReleaseRenglonID IS NOT NULL
+            AND d.ReleaseRenglonID=destino.ReleaseRenglonID
+        )
+        OR
+        (
+            destino.ReleaseRenglonID IS NULL
+            AND d.Renglon=destino.Renglon
+        )
+  )
+ORDER BY
+    ISNULL(d.SecuenciaEntrega,2147483647),
+    d.FechaRequerida,
+    d.ReleaseDetalleID;";
+
+            await using var cmd =
+                new SqlCommand(sql, cn);
+
+            cmd.Parameters.Add(
+                "@ReleaseDetalleDestinoID",
+                SqlDbType.Int).Value =
+                releaseDetalleDestinoId;
+
+            cmd.Parameters.Add(
+                "@ReleaseID",
+                SqlDbType.Int).Value =
+                releaseId.Value;
+
+            cmd.Parameters.Add(
+                "@ClienteID",
+                SqlDbType.Int).Value =
+                (object?)clienteId
+                ?? DBNull.Value;
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            while (await rd.ReadAsync())
+            {
+                var cantidadRequerida =
+                    Convert.ToInt32(
+                        rd["CantidadRequerida"]);
+
+                var comprometida =
+                    Convert.ToInt32(
+                        rd["CantidadComprometida"]);
+
+                var libre =
+                    Math.Max(
+                        0,
+                        cantidadRequerida - comprometida);
+
+                if (libre <= 0)
+                    continue;
+
+                lista.Add(
+                    new PlaneacionProgramaAumentoOrigenVm
+                    {
+                        ReleaseDetalleID =
+                            Convert.ToInt32(
+                                rd["ReleaseDetalleID"]),
+
+                        ReleaseID =
+                            Convert.ToInt32(
+                                rd["ReleaseID"]),
+
+                        ReleaseRenglonID =
+                            rd["ReleaseRenglonID"] == DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd["ReleaseRenglonID"]),
+
+                        Renglon =
+                            Convert.ToInt32(
+                                rd["Renglon"]),
+
+                        SecuenciaEntrega =
+                            rd["SecuenciaEntrega"] == DBNull.Value
+                                ? null
+                                : Convert.ToInt32(
+                                    rd["SecuenciaEntrega"]),
+
+                        FolioRelease =
+                            rd["FolioRelease"]?.ToString()
+                            ?? "SIN FOLIO",
+
+                        NumeroParte =
+                            rd["NumeroParte"]?.ToString()
+                            ?? string.Empty,
+
+                        DesignacionDescripcionSAP =
+                            rd["DesignacionDescripcionSAP"]?.ToString()
+                            ?? string.Empty,
+
+                        FechaRequerida =
+                            Convert.ToDateTime(
+                                rd["FechaRequerida"]),
+
+                        CantidadRequerida =
+                            cantidadRequerida,
+
+                        CantidadComprometida =
+                            comprometida,
+
+                        CantidadTransferible =
+                            libre
+                    });
+            }
+
+            return lista;
+        }
+        private static async Task<RenglonAumentoDb?>
+            ObtenerRenglonAumentoDbAsync(
+                int releaseDetalleId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT
+    d.ReleaseDetalleID,
+    d.ReleaseID,
+    d.ReleaseRenglonID,
+    d.Renglon,
+    d.SecuenciaEntrega,
+    d.FechaRequerida,
+    r.ClienteID,
+    d.ParteID,
+    ISNULL(d.CantidadRequerida,0)
+        AS CantidadRequerida,
+    COALESCE(
+        NULLIF(dt.PiezasPorCaja,0),
+        TRY_CONVERT(int,NULLIF(d.PiezasPorEmbalaje,0)),
+        TRY_CONVERT(int,NULLIF(dt.PiezasPorEmbalaje,0)),
+        0
+    ) AS PiezasPorCaja,
+    CASE
+        WHEN ISNULL(prog.CantidadComprometida,0)
+             >= ISNULL(ofc.CantidadComprometida,0)
+            THEN ISNULL(prog.CantidadComprometida,0)
+        ELSE ISNULL(ofc.CantidadComprometida,0)
+    END AS CantidadComprometida
+FROM dbo.Planeacion_ReleaseDetalle d
+INNER JOIN dbo.Planeacion_Releases r
+    ON r.ReleaseID=d.ReleaseID
+   AND r.Activo=1
+LEFT JOIN dbo.ERP_ParteDatosTecnicos dt
+    ON dt.ParteID=d.ParteID
+   AND dt.Activo=1
+OUTER APPLY
+(
+    SELECT
+        ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0)
+            AS CantidadComprometida
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
+      AND pp.Activo=1
+      AND ISNULL(pp.EstatusID,1)<>99
+) prog
+OUTER APPLY
+(
+    SELECT
+        ISNULL(SUM(ISNULL(sd.CantidadPiezas,0)),0)
+            AS CantidadComprometida
+    FROM dbo.SolicitudesProduccion s
+    INNER JOIN dbo.SolicitudesProduccionDetalle sd
+        ON sd.SolicitudProduccionID=s.SolicitudProduccionID
+       AND sd.Activo=1
+    WHERE s.Activo=1
+      AND ISNULL(s.EstatusID,1)<>99
+      AND
+      (
+            s.ReleaseDetalleID=d.ReleaseDetalleID
+         OR s.SolicitudProduccionID=d.SolicitudProduccionID
+      )
+      AND
+      (
+            sd.ParteID=d.ParteID
+         OR (sd.ParteID IS NULL AND d.ParteID IS NULL)
+      )
+) ofc
+WHERE d.ReleaseDetalleID=@ReleaseDetalleID
+  AND d.Activo=1;";
+
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
+
+            cmd.Parameters.Add(
+                "@ReleaseDetalleID",
+                SqlDbType.Int).Value =
+                releaseDetalleId;
+
+            await using var rd =
+                await cmd.ExecuteReaderAsync();
+
+            if (!await rd.ReadAsync())
+                return null;
+
+            return new RenglonAumentoDb
+            {
+                ReleaseDetalleID =
+                    Convert.ToInt32(
+                        rd["ReleaseDetalleID"]),
+
+                ReleaseID =
+                    Convert.ToInt32(
+                        rd["ReleaseID"]),
+
+                ReleaseRenglonID =
+                    rd["ReleaseRenglonID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["ReleaseRenglonID"]),
+
+                Renglon =
+                    Convert.ToInt32(
+                        rd["Renglon"]),
+
+                SecuenciaEntrega =
+                    rd["SecuenciaEntrega"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["SecuenciaEntrega"]),
+
+                FechaRequerida =
+                    Convert.ToDateTime(
+                        rd["FechaRequerida"]),
+
+                ClienteID =
+                    rd["ClienteID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["ClienteID"]),
+
+                ParteID =
+                    rd["ParteID"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["ParteID"]),
+
+                CantidadRequerida =
+                    Convert.ToInt32(
+                        rd["CantidadRequerida"]),
+
+                CantidadComprometida =
+                    Convert.ToInt32(
+                        rd["CantidadComprometida"]),
+
+                PiezasPorCaja =
+                    rd["PiezasPorCaja"] == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(
+                            rd["PiezasPorCaja"])
+            };
+        }
+        private static async Task<int?>
+            AplicarAumentoReleaseAsync(
+                PlaneacionProgramaCrearDesdeNecesidadVm vm,
+                int usuarioId,
+                SqlConnection cn,
+                SqlTransaction tx,
+                string motivoTransferencia)
+        {
+            if (vm.CantidadAumentoPiezas <= 0)
+                return null;
+
+            if (!vm.ReleaseDetalleOrigenAumentoID.HasValue ||
+                vm.ReleaseDetalleOrigenAumentoID.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "Selecciona la entrega del Release de la cual se descontaran las piezas.");
+            }
+
+            if (vm.ReleaseDetalleOrigenAumentoID.Value ==
+                vm.ReleaseDetalleID)
+            {
+                throw new InvalidOperationException(
+                    "La entrega origen y destino no pueden ser la misma.");
+            }
+
+            const string sqlExisteTabla = @"
+SELECT OBJECT_ID(
+    N'dbo.Planeacion_ReleaseTransferenciasCantidad',
+    N'U');";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlExisteTabla,
+                    cn,
+                    tx))
+            {
+                var objectId =
+                    await cmd.ExecuteScalarAsync();
+
+                if (objectId == null ||
+                    objectId == DBNull.Value)
+                {
+                    throw new InvalidOperationException(
+                        "Falta dbo.Planeacion_ReleaseTransferenciasCantidad.");
+                }
+            }
+
+            var destino =
+                await ObtenerRenglonAumentoDbAsync(
+                    vm.ReleaseDetalleID,
+                    cn,
+                    tx)
+                ?? throw new InvalidOperationException(
+                    "No se encontro la entrega destino del Release.");
+
+            var origen =
+                await ObtenerRenglonAumentoDbAsync(
+                    vm.ReleaseDetalleOrigenAumentoID.Value,
+                    cn,
+                    tx)
+                ?? throw new InvalidOperationException(
+                    "No se encontro la entrega origen del Release.");
+
+            if (destino.ReleaseID != origen.ReleaseID)
+            {
+                throw new InvalidOperationException(
+                    "La entrega origen debe pertenecer al mismo Release.");
+            }
+
+            if (destino.ClienteID != origen.ClienteID)
+            {
+                throw new InvalidOperationException(
+                    "La entrega origen debe pertenecer al mismo cliente.");
+            }
+
+            var mismaLinea =
+                destino.ReleaseRenglonID.HasValue
+                    ? origen.ReleaseRenglonID.HasValue &&
+                      origen.ReleaseRenglonID.Value ==
+                      destino.ReleaseRenglonID.Value
+                    : origen.Renglon == destino.Renglon;
+
+            if (!mismaLinea)
+            {
+                throw new InvalidOperationException(
+                    "La entrega origen pertenece a otro renglon/pieza del Release. Selecciona otra entrega de la misma linea.");
+            }
+
+            if (destino.ParteID.HasValue &&
+                origen.ParteID.HasValue &&
+                destino.ParteID.Value != origen.ParteID.Value)
+            {
+                throw new InvalidOperationException(
+                    "El renglon del Release tiene una inconsistencia de ParteID entre sus entregas.");
+            }
+
+            var piezasPorCaja =
+                destino.PiezasPorCaja ?? 0;
+
+            if (piezasPorCaja <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La pieza destino no tiene capacidad de caja/embalaje configurada.");
+            }
+
+            if (vm.CantidadAumentoPiezas %
+                piezasPorCaja != 0)
+            {
+                throw new InvalidOperationException(
+                    $"El aumento debe completar cajas. 1 caja = {piezasPorCaja:N0} piezas; {vm.CantidadAumentoPiezas:N0} no es multiplo exacto.");
+            }
+
+            var disponibleOrigen =
+                origen.DisponibleLibre;
+
+            if (disponibleOrigen <= 0)
+            {
+                throw new InvalidOperationException(
+                    "La entrega seleccionada ya no tiene piezas libres para transferir.");
+            }
+
+            if (vm.CantidadAumentoPiezas >
+                disponibleOrigen)
+            {
+                throw new InvalidOperationException(
+                    $"La entrega origen solo tiene {disponibleOrigen:N0} pieza(s) libres.");
+            }
+
+            var cajas =
+                vm.CantidadAumentoPiezas /
+                piezasPorCaja;
+
+            var origenAntes =
+                origen.CantidadRequerida;
+
+            var destinoAntes =
+                destino.CantidadRequerida;
+
+            var origenDespues =
+                origenAntes -
+                vm.CantidadAumentoPiezas;
+
+            var destinoDespues =
+                destinoAntes +
+                vm.CantidadAumentoPiezas;
+
+            if (origenDespues <
+                origen.CantidadComprometida)
+            {
+                throw new InvalidOperationException(
+                    "El descuento invadiria cantidad ya comprometida por Programa u OF.");
+            }
+
+            const string sqlActualizar = @"
+UPDATE dbo.Planeacion_ReleaseDetalle
+SET
+    CantidadRequerida=@CantidadOrigen,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE ReleaseDetalleID=@OrigenID
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51020, 'No se pudo actualizar la entrega origen.', 1;
+
+UPDATE dbo.Planeacion_ReleaseDetalle
+SET
+    CantidadRequerida=@CantidadDestino,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+WHERE ReleaseDetalleID=@DestinoID
+  AND Activo=1;
+
+IF @@ROWCOUNT<>1
+    THROW 51021, 'No se pudo actualizar la entrega destino.', 1;";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlActualizar,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@CantidadOrigen",
+                    SqlDbType.Int).Value =
+                    origenDespues;
+
+                cmd.Parameters.Add(
+                    "@CantidadDestino",
+                    SqlDbType.Int).Value =
+                    destinoDespues;
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId;
+
+                cmd.Parameters.Add(
+                    "@OrigenID",
+                    SqlDbType.Int).Value =
+                    origen.ReleaseDetalleID;
+
+                cmd.Parameters.Add(
+                    "@DestinoID",
+                    SqlDbType.Int).Value =
+                    destino.ReleaseDetalleID;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await RecalcularDerivadosReleaseAumentoAsync(
+                origen.ReleaseDetalleID,
+                usuarioId,
+                cn,
+                tx);
+
+            await RecalcularDerivadosReleaseAumentoAsync(
+                destino.ReleaseDetalleID,
+                usuarioId,
+                cn,
+                tx);
+
+            const string sqlPadres = @"
+UPDATE r
+SET
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+FROM dbo.Planeacion_Releases r
+WHERE r.ReleaseID IN (@ReleaseOrigenID,@ReleaseDestinoID)
+  AND r.Activo=1;";
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlPadres,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId;
+
+                cmd.Parameters.Add(
+                    "@ReleaseOrigenID",
+                    SqlDbType.Int).Value =
+                    origen.ReleaseID;
+
+                cmd.Parameters.Add(
+                    "@ReleaseDestinoID",
+                    SqlDbType.Int).Value =
+                    destino.ReleaseID;
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string sqlHistorial = @"
+INSERT INTO dbo.Planeacion_ReleaseTransferenciasCantidad
+(
+    ReleaseDetalleOrigenID,
+    ReleaseDetalleDestinoID,
+    ProgramaProduccionDestinoID,
+    ParteID,
+    PiezasPorCaja,
+    CajasTransferidas,
+    CantidadPiezas,
+    CantidadOrigenAntes,
+    CantidadOrigenDespues,
+    CantidadDestinoAntes,
+    CantidadDestinoDespues,
+    Motivo,
+    UsuarioID,
+    FechaTransferencia,
+    Activo
+)
+OUTPUT INSERTED.TransferenciaID
+VALUES
+(
+    @OrigenID,
+    @DestinoID,
+    NULL,
+    @ParteID,
+    @PiezasPorCaja,
+    @CajasTransferidas,
+    @CantidadPiezas,
+    @CantidadOrigenAntes,
+    @CantidadOrigenDespues,
+    @CantidadDestinoAntes,
+    @CantidadDestinoDespues,
+    @Motivo,
+    @UsuarioID,
+    SYSDATETIME(),
+    1
+);";
+
+            int transferenciaId;
+
+            await using (var cmd =
+                new SqlCommand(
+                    sqlHistorial,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@OrigenID",
+                    SqlDbType.Int).Value =
+                    origen.ReleaseDetalleID;
+
+                cmd.Parameters.Add(
+                    "@DestinoID",
+                    SqlDbType.Int).Value =
+                    destino.ReleaseDetalleID;
+
+                cmd.Parameters.Add(
+                    "@ParteID",
+                    SqlDbType.Int).Value =
+                    destino.ParteID
+                    ?? throw new InvalidOperationException(
+                        "La entrega destino no tiene ParteID.");
+
+                cmd.Parameters.Add(
+                    "@PiezasPorCaja",
+                    SqlDbType.Int).Value =
+                    piezasPorCaja;
+
+                cmd.Parameters.Add(
+                    "@CajasTransferidas",
+                    SqlDbType.Int).Value =
+                    cajas;
+
+                cmd.Parameters.Add(
+                    "@CantidadPiezas",
+                    SqlDbType.Int).Value =
+                    vm.CantidadAumentoPiezas;
+
+                cmd.Parameters.Add(
+                    "@CantidadOrigenAntes",
+                    SqlDbType.Int).Value =
+                    origenAntes;
+
+                cmd.Parameters.Add(
+                    "@CantidadOrigenDespues",
+                    SqlDbType.Int).Value =
+                    origenDespues;
+
+                cmd.Parameters.Add(
+                    "@CantidadDestinoAntes",
+                    SqlDbType.Int).Value =
+                    destinoAntes;
+
+                cmd.Parameters.Add(
+                    "@CantidadDestinoDespues",
+                    SqlDbType.Int).Value =
+                    destinoDespues;
+
+                cmd.Parameters.Add(
+                    "@Motivo",
+                    SqlDbType.NVarChar,
+                    500).Value =
+                    string.IsNullOrWhiteSpace(
+                        motivoTransferencia)
+                        ? "Aumento desde Programa Cambio de Molde."
+                        : motivoTransferencia.Trim();
+
+                cmd.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId;
+
+                transferenciaId =
+                    Convert.ToInt32(
+                        await cmd.ExecuteScalarAsync());
+            }
+
+            vm.CantidadRequerida =
+                destinoDespues;
+
+            var nota =
+                $"Aumento Release: +{vm.CantidadAumentoPiezas:N0} pzas ({cajas:N0} caja(s)) desde entrega #{origen.ReleaseDetalleID}.";
+
+            vm.Observaciones =
+                string.IsNullOrWhiteSpace(
+                    vm.Observaciones)
+                    ? nota
+                    : vm.Observaciones.Trim() +
+                      Environment.NewLine +
+                      nota;
+
+            if (vm.Observaciones.Length > 500)
+            {
+                vm.Observaciones =
+                    vm.Observaciones.Substring(
+                        0,
+                        500);
+            }
+
+            return transferenciaId;
+        }
+
+        private static async Task<int>
+            ResolverOrigenParejaAumentoAsync(
+                int releaseDetalleParejaDestinoId,
+                int releaseDetalleOrigenPrincipalId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            var origenPrincipal =
+                await ObtenerRenglonAumentoDbAsync(
+                    releaseDetalleOrigenPrincipalId,
+                    cn,
+                    tx)
+                ?? throw new InvalidOperationException(
+                    "No se encontro la entrega origen seleccionada de la pieza principal.");
+
+            var destinoPareja =
+                await ObtenerRenglonAumentoDbAsync(
+                    releaseDetalleParejaDestinoId,
+                    cn,
+                    tx)
+                ?? throw new InvalidOperationException(
+                    "No se encontro la entrega destino de la contraparte LH/RH.");
+
+            var mismaRelease =
+                origenPrincipal.ReleaseID ==
+                destinoPareja.ReleaseID;
+
+            if (!mismaRelease)
+            {
+                throw new InvalidOperationException(
+                    "La contraparte LH/RH detectada no pertenece al mismo Release. Se cancelo el aumento para no cruzar documentos.");
+            }
+
+            const string sql = @"
+SELECT
+    d.ReleaseDetalleID
+FROM dbo.Planeacion_ReleaseDetalle d
+WHERE d.ReleaseID=@ReleaseID
+  AND d.ReleaseDetalleID<>@ReleaseDetalleDestinoID
+  AND d.Activo=1
+  AND
+  (
+        (
+            @ReleaseRenglonID IS NOT NULL
+            AND d.ReleaseRenglonID=@ReleaseRenglonID
+        )
+        OR
+        (
+            @ReleaseRenglonID IS NULL
+            AND d.Renglon=@Renglon
+        )
+  )
+  AND
+  (
+        (
+            @SecuenciaEntrega IS NOT NULL
+            AND d.SecuenciaEntrega=@SecuenciaEntrega
+        )
+        OR
+        (
+            @SecuenciaEntrega IS NULL
+            AND CONVERT(date,d.FechaRequerida)=@FechaRequerida
+        )
+  )
+ORDER BY d.ReleaseDetalleID;";
+
+            var candidatos =
+                new List<int>();
+
+            await using (var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx))
+            {
+                cmd.Parameters.Add(
+                    "@ReleaseID",
+                    SqlDbType.Int).Value =
+                    destinoPareja.ReleaseID;
+
+                cmd.Parameters.Add(
+                    "@ReleaseDetalleDestinoID",
+                    SqlDbType.Int).Value =
+                    destinoPareja.ReleaseDetalleID;
+
+                cmd.Parameters.Add(
+                    "@ReleaseRenglonID",
+                    SqlDbType.Int).Value =
+                    (object?)destinoPareja.ReleaseRenglonID
+                    ?? DBNull.Value;
+
+                cmd.Parameters.Add(
+                    "@Renglon",
+                    SqlDbType.Int).Value =
+                    destinoPareja.Renglon;
+
+                cmd.Parameters.Add(
+                    "@SecuenciaEntrega",
+                    SqlDbType.Int).Value =
+                    (object?)origenPrincipal.SecuenciaEntrega
+                    ?? DBNull.Value;
+
+                cmd.Parameters.Add(
+                    "@FechaRequerida",
+                    SqlDbType.Date).Value =
+                    origenPrincipal.FechaRequerida.Date;
+
+                await using var rd =
+                    await cmd.ExecuteReaderAsync();
+
+                while (await rd.ReadAsync())
+                {
+                    candidatos.Add(
+                        Convert.ToInt32(
+                            rd["ReleaseDetalleID"]));
+                }
+            }
+
+            if (candidatos.Count == 0)
+            {
+                var referencia =
+                    origenPrincipal.SecuenciaEntrega.HasValue
+                        ? $"entrega {origenPrincipal.SecuenciaEntrega.Value}"
+                        : $"fecha {origenPrincipal.FechaRequerida:dd/MM/yyyy}";
+
+                throw new InvalidOperationException(
+                    $"No se encontro en la contraparte LH/RH la {referencia} equivalente para descontar el mismo aumento.");
+            }
+
+            if (candidatos.Count > 1)
+            {
+                throw new InvalidOperationException(
+                    "Se encontraron varias entregas equivalentes en la contraparte LH/RH. Corrige el Release antes de aplicar el aumento.");
+            }
+
+            return candidatos[0];
+        }
+        private static async Task
+            RecalcularDerivadosReleaseAumentoAsync(
+                int releaseDetalleId,
+                int usuarioId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            const string sql = @"
+;WITH Base AS
+(
+    SELECT
+        d.ReleaseDetalleID,
+        CASE
+            WHEN ISNULL(d.CantidadRequerida,0)
+                 - ISNULL(prog.ProgramadoPendiente,0) > 0
+                THEN ISNULL(d.CantidadRequerida,0)
+                     - ISNULL(prog.ProgramadoPendiente,0)
+            ELSE 0
+        END AS PiezasPendientes,
+        COALESCE(
+            d.PesoBrutoPieza,
+            dt.PesoBrutoPieza) AS PesoBrutoPieza,
+        COALESCE(
+            d.PiezasPorEmbalaje,
+            dt.PiezasPorEmbalaje) AS PiezasPorEmbalaje
+    FROM dbo.Planeacion_ReleaseDetalle d
+    LEFT JOIN dbo.ERP_ParteDatosTecnicos dt
+        ON dt.ParteID=d.ParteID
+       AND dt.Activo=1
+    OUTER APPLY
+    (
+        SELECT
+            ISNULL(
+                SUM(
+                    ISNULL(pp.CantidadProgramada,0)
+                    - ISNULL(pp.CantidadProducida,0)),
+                0) AS ProgramadoPendiente
+        FROM dbo.Planeacion_ProgramaProduccion pp
+        WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
+          AND pp.Activo=1
+          AND ISNULL(pp.EstatusID,1) NOT IN (5,9,99)
+    ) prog
+    WHERE d.ReleaseDetalleID=@ReleaseDetalleID
+      AND d.Activo=1
+)
+UPDATE d
+SET
+    PiezasAProducir=b.PiezasPendientes,
+    MPRequeridaKg=
+        CASE
+            WHEN b.PiezasPendientes>0
+             AND ISNULL(b.PesoBrutoPieza,0)>0
+                THEN ROUND(
+                    b.PiezasPendientes
+                    * b.PesoBrutoPieza,
+                    4)
+            ELSE 0
+        END,
+    EmbalajeRequerido=
+        CASE
+            WHEN b.PiezasPendientes>0
+             AND ISNULL(b.PiezasPorEmbalaje,0)>0
+                THEN CEILING(
+                    b.PiezasPendientes
+                    / b.PiezasPorEmbalaje)
+            ELSE 0
+        END,
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=GETDATE()
+FROM dbo.Planeacion_ReleaseDetalle d
+INNER JOIN Base b
+    ON b.ReleaseDetalleID=d.ReleaseDetalleID;";
+
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
+
+            cmd.Parameters.Add(
+                "@ReleaseDetalleID",
+                SqlDbType.Int).Value =
+                releaseDetalleId;
+
+            cmd.Parameters.Add(
+                "@UsuarioID",
+                SqlDbType.Int).Value =
+                usuarioId;
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        private static async Task
+            VincularTransferenciaAProgramaAsync(
+                int transferenciaId,
+                int programaProduccionId,
+                int releaseDetalleDestinoId,
+                SqlConnection cn,
+                SqlTransaction tx)
+        {
+            const string sql = @"
+UPDATE dbo.Planeacion_ReleaseTransferenciasCantidad
+SET ProgramaProduccionDestinoID=@ProgramaProduccionID
+WHERE TransferenciaID=@TransferenciaID
+  AND ReleaseDetalleDestinoID=@ReleaseDetalleDestinoID
+  AND Activo=1;";
+
+            await using var cmd =
+                new SqlCommand(
+                    sql,
+                    cn,
+                    tx);
+
+            cmd.Parameters.Add(
+                "@ProgramaProduccionID",
+                SqlDbType.Int).Value =
+                programaProduccionId;
+
+            cmd.Parameters.Add(
+                "@TransferenciaID",
+                SqlDbType.Int).Value =
+                transferenciaId;
+
+            cmd.Parameters.Add(
+                "@ReleaseDetalleDestinoID",
+                SqlDbType.Int).Value =
+                releaseDetalleDestinoId;
+
+            var afectados =
+                await cmd.ExecuteNonQueryAsync();
+
+            if (afectados != 1)
+            {
+                throw new InvalidOperationException(
+                    "No fue posible vincular la transferencia de aumento con el programa creado.");
+            }
+        }
 
         private async Task CargarCatalogosAsync(PlaneacionProgramaCrearDesdeNecesidadVm vm)
         {
@@ -2184,6 +3741,18 @@ END;";
                     PlaneacionProgramaCondicion.InterrumpirProduccion,
                     StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+            vm.OrigenesAumento =
+                await CargarOrigenesAumentoAsync(
+                    vm.ReleaseDetalleID,
+                    vm.ReleaseID,
+                    vm.ClienteID,
+                    cn);
+
+            // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
+            vm.AumentosRelease ??= new List<PlaneacionProgramaAumentoLineaVm>();
+            if (vm.AumentosRelease.Count == 0)
+                vm.AumentosRelease.Add(new PlaneacionProgramaAumentoLineaVm());
         }
 
 
@@ -2362,7 +3931,7 @@ ORDER BY
                 {
                     Value = id.ToString(),
                     Text = ocupada
-                        ? texto + "  — OCUPADA: se respetará la cola"
+                        ? texto + "  — OCUPADA EN ESTE HORARIO"
                         : texto + "  — LIBRE",
                     Disabled = false,
                     Selected = maquinaSeleccionadaId.HasValue &&
