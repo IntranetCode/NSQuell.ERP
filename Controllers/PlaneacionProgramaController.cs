@@ -958,16 +958,15 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             vm.HorasProgramadas = objetivoHora > 0 ? Math.Ceiling(cantidadProgramada / (decimal)objetivoHora) : 0;
         }
 
-      
 
-                [HttpPost]
+
+        [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Crear(PlaneacionProgramaCrearDesdeNecesidadVm vm)
         {
             var usuarioId = ObtenerUsuarioID();
             vm.TipoOF = "RELEASE";
             vm.MotivoTipoOF = null;
-
             if (usuarioId <= 0) ModelState.AddModelError("", "No se pudo identificar el usuario de la sesión.");
             if (vm.ReleaseDetalleID <= 0) ModelState.AddModelError("", "No se recibió el renglón de release.");
             if (!vm.MaquinaID.HasValue) ModelState.AddModelError(nameof(vm.MaquinaID), "Selecciona la máquina.");
@@ -976,250 +975,95 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             if (!vm.FechaInicioProgramada.HasValue) ModelState.AddModelError(nameof(vm.FechaInicioProgramada), "Captura la fecha y hora de cambio.");
             if (!vm.Cambio.HasValue) ModelState.AddModelError(nameof(vm.Cambio), "Captura la hora de cambio de molde.");
             if (!vm.Arranque.HasValue) ModelState.AddModelError(nameof(vm.Arranque), "Captura la hora de arranque.");
-
             ModelState.Remove(nameof(vm.CantidadProgramada));
             ModelState.Remove(nameof(vm.HorasProgramadas));
             ModelState.Remove(nameof(vm.OperadorPrincipalID));
             ModelState.Remove(nameof(vm.OperadorAuxiliarID));
-
-            // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
             vm.AumentosRelease ??= new List<PlaneacionProgramaAumentoLineaVm>();
-            vm.AumentosRelease = vm.AumentosRelease
-                .Where(x => x != null &&
-                    ((x.ReleaseDetalleOrigenAumentoID ?? 0) > 0 || x.CantidadPiezas != 0))
-                .ToList();
-
+            vm.AumentosRelease = vm.AumentosRelease.Where(x => x != null && ((x.ReleaseDetalleOrigenAumentoID ?? 0) > 0 || x.CantidadPiezas != 0)).ToList();
             for (var i = 0; i < vm.AumentosRelease.Count; i++)
             {
                 var linea = vm.AumentosRelease[i];
-
-                if (!linea.ReleaseDetalleOrigenAumentoID.HasValue ||
-                    linea.ReleaseDetalleOrigenAumentoID.Value <= 0)
-                {
-                    ModelState.AddModelError(
-                        $"AumentosRelease[{i}].ReleaseDetalleOrigenAumentoID",
-                        "Selecciona la entrega del Release de la cual se descontaran las piezas.");
-                }
-
-                if (linea.CantidadPiezas <= 0)
-                {
-                    ModelState.AddModelError(
-                        $"AumentosRelease[{i}].CantidadPiezas",
-                        "La cantidad de piezas a transferir debe ser mayor que cero.");
-                }
+                if (!linea.ReleaseDetalleOrigenAumentoID.HasValue || linea.ReleaseDetalleOrigenAumentoID.Value <= 0) ModelState.AddModelError($"AumentosRelease[{i}].ReleaseDetalleOrigenAumentoID", "Selecciona la entrega del Release de la cual se descontaran las piezas.");
+                if (linea.CantidadPiezas <= 0) ModelState.AddModelError($"AumentosRelease[{i}].CantidadPiezas", "La cantidad de piezas a transferir debe ser mayor que cero.");
             }
-
-            var origenesDuplicados = vm.AumentosRelease
-                .Where(x => x.ReleaseDetalleOrigenAumentoID.HasValue)
-                .GroupBy(x => x.ReleaseDetalleOrigenAumentoID!.Value)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToList();
-
-            if (origenesDuplicados.Count > 0)
-            {
-                ModelState.AddModelError(
-                    nameof(vm.AumentosRelease),
-                    "No puedes seleccionar la misma entrega del Release mas de una vez.");
-            }
-
-            var totalAumentoLong = vm.AumentosRelease
-                .Where(x => x.CantidadPiezas > 0)
-                .Sum(x => (long)x.CantidadPiezas);
-
-            if (totalAumentoLong > int.MaxValue)
-            {
-                ModelState.AddModelError(
-                    nameof(vm.AumentosRelease),
-                    "La suma de piezas extra supera el limite permitido.");
-            }
-
-            vm.CantidadAumentoPiezas = totalAumentoLong > int.MaxValue
-                ? 0
-                : Convert.ToInt32(totalAumentoLong);
-            vm.ReleaseDetalleOrigenAumentoID = vm.AumentosRelease
-                .Select(x => x.ReleaseDetalleOrigenAumentoID)
-                .FirstOrDefault(x => x.HasValue && x.Value > 0);
+            var origenesDuplicados = vm.AumentosRelease.Where(x => x.ReleaseDetalleOrigenAumentoID.HasValue).GroupBy(x => x.ReleaseDetalleOrigenAumentoID!.Value).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            if (origenesDuplicados.Count > 0) ModelState.AddModelError(nameof(vm.AumentosRelease), "No puedes seleccionar la misma entrega del Release mas de una vez.");
+            var totalAumentoLong = vm.AumentosRelease.Where(x => x.CantidadPiezas > 0).Sum(x => (long)x.CantidadPiezas);
+            if (totalAumentoLong > int.MaxValue) ModelState.AddModelError(nameof(vm.AumentosRelease), "La suma de piezas extra supera el limite permitido.");
+            vm.CantidadAumentoPiezas = totalAumentoLong > int.MaxValue ? 0 : Convert.ToInt32(totalAumentoLong);
+            vm.ReleaseDetalleOrigenAumentoID = vm.AumentosRelease.Select(x => x.ReleaseDetalleOrigenAumentoID).FirstOrDefault(x => x.HasValue && x.Value > 0);
             vm.OperadorPrincipalID = null;
             vm.OperadorAuxiliarID = null;
-
-            if (string.Equals(
-                    vm.CondicionProduccion,
-                    PlaneacionProgramaCondicion.InterrumpirProduccion,
-                    StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(vm.CondicionProduccion, PlaneacionProgramaCondicion.InterrumpirProduccion, StringComparison.OrdinalIgnoreCase))
             {
-                ModelState.AddModelError(
-                    nameof(vm.CondicionProduccion),
-                    "La opción I.P. / Interrumpir producción estará disponible cuando el módulo de Producción esté terminado y contabilizando avance real.");
+                ModelState.AddModelError(nameof(vm.CondicionProduccion), "La opción I.P. / Interrumpir producción estará disponible cuando el módulo de Producción esté terminado y contabilizando avance real.");
             }
-
             if (vm.FechaInicioProgramada.HasValue && vm.Cambio.HasValue)
             {
-                vm.FechaInicioProgramada =
-                    CalcularFechaHoraDesdeHora(
-                        vm.FechaInicioProgramada.Value.Date,
-                        vm.Cambio);
+                vm.FechaInicioProgramada = CalcularFechaHoraDesdeHora(vm.FechaInicioProgramada.Value.Date, vm.Cambio);
             }
-
-            // V1_5: se permite capturar una programacion en horario pasado.
-            // El servidor conserva exactamente la fecha/hora indicada por Planeacion.
-            // La vista muestra una advertencia, pero NO se mueve al horario actual.
-
-            var trabajarDomingo =
-                string.Equals(
-                    Request.Form["TrabajarDomingo"].ToString(),
-                    "true",
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(
-                    Request.Form["TrabajarDomingo"].ToString(),
-                    "on",
-                    StringComparison.OrdinalIgnoreCase);
-
+            var trabajarDomingo = string.Equals(Request.Form["TrabajarDomingo"].ToString(), "true", StringComparison.OrdinalIgnoreCase) || string.Equals(Request.Form["TrabajarDomingo"].ToString(), "on", StringComparison.OrdinalIgnoreCase);
             if (!ModelState.IsValid)
             {
                 await CargarCatalogosAsync(vm);
                 return View(vm);
             }
-
-            await using var cn =
-                new SqlConnection(ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
-            await using var tx =
-                await cn.BeginTransactionAsync(
-                    IsolationLevel.Serializable);
-
-            var etapaSql =
-                "Inicio de transacción"; // NSQ_SQL_ETAPA_PROGRAMAR_MOLDE_V2
-
+            await using var tx = await cn.BeginTransactionAsync(IsolationLevel.Serializable);
+            var etapaSql = "Inicio de transacción";
             try
             {
                 var sqlTx = (SqlTransaction)tx;
                 var transferenciasAumentoIds = new List<int>();
                 var transferenciasAumentoParejaIds = new List<int>();
-
-                etapaSql =
-                    "Validar si el ReleaseDetalle ya está programado";
-
-                var existe =
-                    await ReleaseDetalleYaProgramadoAsync(
-                        vm.ReleaseDetalleID,
-                        cn,
-                        sqlTx);
-
+                etapaSql = "Validar si el ReleaseDetalle ya está programado";
+                var existe = await ReleaseDetalleYaProgramadoAsync(vm.ReleaseDetalleID, cn, sqlTx);
                 if (existe)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] =
-                        "Ese renglón de release ya fue programado.";
+                    TempData["Error"] = "Ese renglón de release ya fue programado.";
                     return RedirectToAction(nameof(Index));
                 }
-
-                // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
                 var totalAumentoAplicado = 0;
                 var primerOrigenAumentoId = (int?)null;
-
                 foreach (var lineaAumento in vm.AumentosRelease)
                 {
-                    if (!lineaAumento.ReleaseDetalleOrigenAumentoID.HasValue ||
-                        lineaAumento.ReleaseDetalleOrigenAumentoID.Value <= 0 ||
-                        lineaAumento.CantidadPiezas <= 0)
-                    {
-                        continue;
-                    }
-
+                    if (!lineaAumento.ReleaseDetalleOrigenAumentoID.HasValue || lineaAumento.ReleaseDetalleOrigenAumentoID.Value <= 0 || lineaAumento.CantidadPiezas <= 0) continue;
                     primerOrigenAumentoId ??= lineaAumento.ReleaseDetalleOrigenAumentoID.Value;
                     vm.ReleaseDetalleOrigenAumentoID = lineaAumento.ReleaseDetalleOrigenAumentoID.Value;
                     vm.CantidadAumentoPiezas = lineaAumento.CantidadPiezas;
-
-                    etapaSql =
-                        "Transferir aumento desde una entrega del mismo renglon Release";
-
-                    var transferenciaAumentoId =
-                        await AplicarAumentoReleaseAsync(
-                            vm,
-                            usuarioId,
-                            cn,
-                            sqlTx,
-                            "Aumento aplicado a la pieza principal desde Programa Cambio de Molde.");
-
-                    if (transferenciaAumentoId.HasValue)
-                        transferenciasAumentoIds.Add(transferenciaAumentoId.Value);
-
+                    etapaSql = "Transferir aumento desde una entrega del mismo renglon Release";
+                    var transferenciaAumentoId = await AplicarAumentoReleaseAsync(vm, usuarioId, cn, sqlTx, "Aumento aplicado a la pieza principal desde Programa Cambio de Molde.");
+                    if (transferenciaAumentoId.HasValue) transferenciasAumentoIds.Add(transferenciaAumentoId.Value);
                     if (vm.ProgramarParejaLhRh)
                     {
-                        if (!vm.ParejaLhRhReleaseDetalleID.HasValue ||
-                            vm.ParejaLhRhReleaseDetalleID.Value <= 0)
+                        if (!vm.ParejaLhRhReleaseDetalleID.HasValue || vm.ParejaLhRhReleaseDetalleID.Value <= 0) throw new InvalidOperationException("Se solicito programar LH/RH juntas, pero no se encontro el ReleaseDetalle destino de la contraparte.");
+                        var origenParejaId = await ResolverOrigenParejaAumentoAsync(vm.ParejaLhRhReleaseDetalleID.Value, lineaAumento.ReleaseDetalleOrigenAumentoID.Value, cn, sqlTx);
+                        var aumentoPareja = new PlaneacionProgramaCrearDesdeNecesidadVm
                         {
-                            throw new InvalidOperationException(
-                                "Se solicito programar LH/RH juntas, pero no se encontro el ReleaseDetalle destino de la contraparte.");
-                        }
-
-                        var origenParejaId =
-                            await ResolverOrigenParejaAumentoAsync(
-                                vm.ParejaLhRhReleaseDetalleID.Value,
-                                lineaAumento.ReleaseDetalleOrigenAumentoID.Value,
-                                cn,
-                                sqlTx);
-
-                        var aumentoPareja =
-                            new PlaneacionProgramaCrearDesdeNecesidadVm
-                            {
-                                ReleaseDetalleID = vm.ParejaLhRhReleaseDetalleID.Value,
-                                ReleaseDetalleOrigenAumentoID = origenParejaId,
-                                CantidadAumentoPiezas = lineaAumento.CantidadPiezas
-                            };
-
-                        var transferenciaAumentoParejaId =
-                            await AplicarAumentoReleaseAsync(
-                                aumentoPareja,
-                                usuarioId,
-                                cn,
-                                sqlTx,
-                                "Aumento automatico replicado a la contraparte LH/RH.");
-
-                        if (transferenciaAumentoParejaId.HasValue)
-                            transferenciasAumentoParejaIds.Add(transferenciaAumentoParejaId.Value);
+                            ReleaseDetalleID = vm.ParejaLhRhReleaseDetalleID.Value,
+                            ReleaseDetalleOrigenAumentoID = origenParejaId,
+                            CantidadAumentoPiezas = lineaAumento.CantidadPiezas
+                        };
+                        var transferenciaAumentoParejaId = await AplicarAumentoReleaseAsync(aumentoPareja, usuarioId, cn, sqlTx, "Aumento automatico replicado a la contraparte LH/RH.");
+                        if (transferenciaAumentoParejaId.HasValue) transferenciasAumentoParejaIds.Add(transferenciaAumentoParejaId.Value);
                     }
-
                     checked
                     {
                         totalAumentoAplicado += lineaAumento.CantidadPiezas;
                     }
                 }
-
-                // Se conservan para compatibilidad con calculos/mensajes previos.
                 vm.CantidadAumentoPiezas = totalAumentoAplicado;
                 vm.ReleaseDetalleOrigenAumentoID = primerOrigenAumentoId;
-                etapaSql =
-                    "Recalcular cantidades del programa";
-
-                await RecalcularCantidadesProgramaAsync(
-                    vm,
-                    cn,
-                    sqlTx);
-
-                if (vm.CantidadProgramada <= 0 ||
-                    !vm.HorasProgramadas.HasValue ||
-                    vm.HorasProgramadas.Value <= 0)
-                {
-                    throw new InvalidOperationException(
-                        "La cantidad u horas de producción recalculadas no son válidas.");
-                }
-
+                etapaSql = "Recalcular cantidades del programa";
+                await RecalcularCantidadesProgramaAsync(vm, cn, sqlTx);
+                if (vm.CantidadProgramada <= 0 || !vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0) throw new InvalidOperationException("La cantidad u horas de producción recalculadas no son válidas.");
                 if (vm.MaquinaID.HasValue)
                 {
-                    etapaSql =
-                        "Validar máquina compatible con la parte";
-
-                    var maquinaCompatible =
-                        await MaquinaCompatibleConParteAsync(
-                            vm.ParteID,
-                            vm.MaquinaID.Value,
-                            cn,
-                            sqlTx);
-
+                    etapaSql = "Validar máquina compatible con la parte";
+                    var maquinaCompatible = await MaquinaCompatibleConParteAsync(vm.ParteID, vm.MaquinaID.Value, cn, sqlTx);
                     if (!maquinaCompatible)
                     {
                         await tx.RollbackAsync();
@@ -1228,156 +1072,56 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                         return View(vm);
                     }
                 }
-                // NSQ_PLANEACION_DISENO_HORARIO_ESTRICTO_V1_5
-                // El POST ya NO reacomoda silenciosamente el horario solicitado.
-                // Si maquina o molde estan ocupados, no se guarda nada y se informa
-                // exactamente que recurso bloquea y hasta que hora esta ocupado.
-                etapaSql =
-                    "Calcular horario exacto solicitado";
-
-                var inicioSolicitado =
-                    vm.FechaInicioProgramada!.Value;
-
-                var arranqueSolicitado =
-                    CalcularFechaHoraDesdeHora(
-                        inicioSolicitado.Date,
-                        vm.Arranque);
-
-                if (arranqueSolicitado < inicioSolicitado)
-                    arranqueSolicitado = arranqueSolicitado.AddDays(1);
-
-                vm.FechaFinProgramada =
-                    SumarHorasOperativasPlaneacion(
-                        arranqueSolicitado,
-                        vm.HorasProgramadas.Value,
-                        trabajarDomingo);
-
-                etapaSql =
-                    "Validar disponibilidad exacta de maquina y molde";
-
-                var conflictoHorario =
-                    await ObtenerConflictoHorarioProgramaAsync(
-                        vm.MaquinaID!.Value,
-                        vm.MoldeID,
-                        inicioSolicitado,
-                        vm.FechaFinProgramada.Value,
-                        cn,
-                        sqlTx);
-
+                etapaSql = "Calcular horario exacto solicitado";
+                var inicioSolicitado = vm.FechaInicioProgramada!.Value;
+                var arranqueSolicitado = CalcularFechaHoraDesdeHora(inicioSolicitado.Date, vm.Arranque);
+                if (arranqueSolicitado < inicioSolicitado) arranqueSolicitado = arranqueSolicitado.AddDays(1);
+                vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(arranqueSolicitado, vm.HorasProgramadas.Value, trabajarDomingo);
+                etapaSql = "Validar disponibilidad exacta de maquina y molde";
+                var conflictoHorario = await ObtenerConflictoHorarioProgramaAsync(vm.MaquinaID!.Value, vm.MoldeID, inicioSolicitado, vm.FechaFinProgramada.Value, cn, sqlTx);
                 if (conflictoHorario.TieneConflicto)
                 {
                     await tx.RollbackAsync();
-
-                    var mensajeConflicto =
-                        conflictoHorario.ConstruirMensaje(
-                            inicioSolicitado,
-                            vm.FechaFinProgramada.Value);
-
-                    ModelState.AddModelError(
-                        nameof(vm.FechaInicioProgramada),
-                        mensajeConflicto);
-
-                    ModelState.AddModelError(
-                        string.Empty,
-                        mensajeConflicto);
-
+                    var mensajeConflicto = conflictoHorario.ConstruirMensaje(inicioSolicitado, vm.FechaFinProgramada.Value);
+                    ModelState.AddModelError(nameof(vm.FechaInicioProgramada), mensajeConflicto);
+                    ModelState.AddModelError(string.Empty, mensajeConflicto);
                     ViewBag.MostrarModalConflictoHorario = true;
-                    ViewBag.ConflictoHorarioSolicitado =
-                        $"{inicioSolicitado:dd/MM/yyyy HH:mm} - {vm.FechaFinProgramada.Value:dd/MM/yyyy HH:mm}";
-
-                    ViewBag.ConflictoMaquinaTitulo =
-                        conflictoHorario.MaquinaOcupada
-                            ? "MAQUINA OCUPADA"
-                            : "MAQUINA DISPONIBLE";
-
-                    ViewBag.ConflictoMaquinaDetalle =
-                        conflictoHorario.MaquinaOcupada
-                            ? conflictoHorario.MaquinaDetalle
-                            : "La maquina no presenta cruce en el horario solicitado.";
-
-                    ViewBag.ConflictoMoldeTitulo =
-                        conflictoHorario.MoldeOcupado
-                            ? "MOLDE OCUPADO"
-                            : "MOLDE DISPONIBLE";
-
-                    ViewBag.ConflictoMoldeDetalle =
-                        conflictoHorario.MoldeOcupado
-                            ? conflictoHorario.MoldeDetalle
-                            : "El molde no presenta cruce en otra maquina durante el horario solicitado.";
-
-                    ViewBag.ConflictoSiguienteDisponible =
-                        conflictoHorario.SiguienteDisponible.HasValue
-                            ? conflictoHorario.SiguienteDisponible.Value.ToString("dd/MM/yyyy HH:mm")
-                            : "Revisar calendario";
-
+                    ViewBag.ConflictoHorarioSolicitado = $"{inicioSolicitado:dd/MM/yyyy HH:mm} - {vm.FechaFinProgramada.Value:dd/MM/yyyy HH:mm}";
+                    ViewBag.ConflictoMaquinaTitulo = conflictoHorario.MaquinaOcupada ? "MAQUINA OCUPADA" : "MAQUINA DISPONIBLE";
+                    ViewBag.ConflictoMaquinaDetalle = conflictoHorario.MaquinaOcupada ? conflictoHorario.MaquinaDetalle : "La maquina no presenta cruce en el horario solicitado.";
+                    ViewBag.ConflictoMoldeTitulo = conflictoHorario.MoldeOcupado ? "MOLDE OCUPADO" : "MOLDE DISPONIBLE";
+                    ViewBag.ConflictoMoldeDetalle = conflictoHorario.MoldeOcupado ? conflictoHorario.MoldeDetalle : "El molde no presenta cruce en otra maquina durante el horario solicitado.";
+                    ViewBag.ConflictoSiguienteDisponible = conflictoHorario.SiguienteDisponible.HasValue ? conflictoHorario.SiguienteDisponible.Value.ToString("dd/MM/yyyy HH:mm") : "Revisar calendario";
                     await CargarCatalogosAsync(vm);
                     return View(vm);
                 }
-
-                // Se conserva el contexto existente porque la pareja LH/RH comparte
-                // maquina, molde y horario de forma intencional. La validacion anterior
-                // bloquea cruces contra PROGRAMAS YA EXISTENTES, no contra la pareja
-                // que se creara dentro de esta misma transaccion.
                 await ActivarReacomodoPlaneacionAsync(cn, sqlTx);
-                // NSQ_OPERADORES_SOLO_PRODUCCION_V1
-                // Planeacion no decide personal. Fecha + Turno + Maquina se resuelve
-                // en Produccion mediante DDP.
                 vm.OperadorPrincipalID = null;
                 vm.OperadorAuxiliarID = null;
-await CompletarDatosProgramaAsync(vm, cn, sqlTx);
+                await CompletarDatosProgramaAsync(vm, cn, sqlTx, trabajarDomingo);
                 await CompletarVinculoOFExistenteAsync(vm, cn, sqlTx);
                 var programaId = await InsertarProgramaAsync(vm, usuarioId, cn, sqlTx);
-
+                await ActualizarTrabajarDomingoProgramaAsync(programaId, trabajarDomingo, cn, sqlTx);
                 foreach (var transferenciaAumentoId in transferenciasAumentoIds)
                 {
-                    etapaSql =
-                        "Vincular transferencia de aumento con programa";
-
-                    await VincularTransferenciaAProgramaAsync(
-                        transferenciaAumentoId,
-                        programaId,
-                        vm.ReleaseDetalleID,
-                        cn,
-                        sqlTx);
+                    etapaSql = "Vincular transferencia de aumento con programa";
+                    await VincularTransferenciaAProgramaAsync(transferenciaAumentoId, programaId, vm.ReleaseDetalleID, cn, sqlTx);
                 }
-
-                // NSQ_OPERADORES_SOLO_PRODUCCION_V1 - no persistir personal desde Planeacion.
                 await MarcarReleaseDetalleProgramadoAsync(vm.ReleaseDetalleID, programaId, usuarioId, cn, sqlTx);
-                // NSQ_LHRH_PROGRAMACION_CONJUNTA_V3
                 int? programaParejaLhRhId = null;
-
                 if (vm.ProgramarParejaLhRh)
                 {
                     etapaSql = "Programar contraparte LH/RH";
-                    programaParejaLhRhId =
-                        await ProgramarParejaLhRhAsync(
-                            programaId,
-                            vm,
-                            usuarioId,
-                            cn,
-                            sqlTx);
-
-                    if (!programaParejaLhRhId.HasValue)
-                    {
-                        throw new InvalidOperationException(
-                            "Se solicito programar la contraparte LH/RH, pero ya no existe una necesidad pendiente compatible dentro del mismo Release.");
-                    }
-
+                    programaParejaLhRhId = await ProgramarParejaLhRhAsync(programaId, vm, usuarioId, cn, sqlTx);
+                    if (!programaParejaLhRhId.HasValue) throw new InvalidOperationException("Se solicito programar la contraparte LH/RH, pero ya no existe una necesidad pendiente compatible dentro del mismo Release.");
+                    await ActualizarTrabajarDomingoProgramaAsync(programaParejaLhRhId.Value, trabajarDomingo, cn, sqlTx);
                     foreach (var transferenciaAumentoParejaId in transferenciasAumentoParejaIds)
                     {
-                        etapaSql =
-                            "Vincular transferencia de aumento LH/RH con programa contraparte";
-
-                        await VincularTransferenciaAProgramaAsync(
-                            transferenciaAumentoParejaId,
-                            programaParejaLhRhId.Value,
-                            vm.ParejaLhRhReleaseDetalleID!.Value,
-                            cn,
-                            sqlTx);
+                        etapaSql = "Vincular transferencia de aumento LH/RH con programa contraparte";
+                        await VincularTransferenciaAProgramaAsync(transferenciaAumentoParejaId, programaParejaLhRhId.Value, vm.ParejaLhRhReleaseDetalleID!.Value, cn, sqlTx);
                     }
                 }
-                if (vm.SolicitudProduccionID.HasValue && vm.SolicitudProduccionDetalleID.HasValue)
-                    await VincularOFManualConProgramaAsync(programaId, vm, usuarioId, cn, sqlTx);
+                if (vm.SolicitudProduccionID.HasValue && vm.SolicitudProduccionDetalleID.HasValue) await VincularOFManualConProgramaAsync(programaId, vm, usuarioId, cn, sqlTx);
                 await DesactivarReacomodoPlaneacionAsync(cn, sqlTx);
                 await tx.CommitAsync();
                 TempData["Success"] = programaParejaLhRhId.HasValue
@@ -1385,19 +1129,16 @@ await CompletarDatosProgramaAsync(vm, cn, sqlTx);
                     : vm.ProductoIncompletoApartado > 0
                         ? $"Cambio de molde programado correctamente. Se usaran {vm.ProductoIncompletoApartado:N0} pieza(s) de etiqueta blanca y se produciran {vm.CantidadProgramada:N0}."
                         : "Cambio de molde programado correctamente.";
-                return RedirectToAction(nameof(Index)); // NSQ_REDIRECT_INDEX_V1
+                return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                ModelState.AddModelError(
-                    "",
-                    $"Error al programar cambio de molde [{etapaSql}]: {ex.Message}");
+                ModelState.AddModelError("", $"Error al programar cambio de molde [{etapaSql}]: {ex.Message}");
                 await CargarCatalogosAsync(vm);
                 return View(vm);
             }
         }
-
 
 
         [HttpPost]
@@ -1646,10 +1387,7 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1 AND r.Activo=1;";
             };
         }
 
-        private async Task CompletarDatosProgramaAsync(
-            PlaneacionProgramaCrearDesdeNecesidadVm vm,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task CompletarDatosProgramaAsync(PlaneacionProgramaCrearDesdeNecesidadVm vm, SqlConnection cn, SqlTransaction tx, bool trabajarDomingo = false)
         {
             if (vm.MaquinaID.HasValue)
             {
@@ -1658,57 +1396,49 @@ SELECT TOP 1
     Codigo,
     Nombre
 FROM dbo.ERP_Maquinas
-WHERE MaquinaID = @MaquinaID;";
-
+WHERE MaquinaID=@MaquinaID;";
                 await using var cmd = new SqlCommand(sqlMaq, cn, tx);
                 cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = vm.MaquinaID.Value;
-
                 await using var rd = await cmd.ExecuteReaderAsync();
-
                 if (await rd.ReadAsync())
                 {
                     vm.MaquinaCodigo = rd["Codigo"] as string;
                     vm.MaquinaNombre = rd["Nombre"] as string;
                 }
             }
-
             if (vm.MoldeID.HasValue)
             {
                 const string sqlMolde = @"
 SELECT TOP 1
     CodigoMolde
 FROM dbo.ERP_Moldes
-WHERE MoldeID = @MoldeID;";
-
+WHERE MoldeID=@MoldeID;";
                 await using var cmd = new SqlCommand(sqlMolde, cn, tx);
                 cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = vm.MoldeID.Value;
-
                 await using var rd = await cmd.ExecuteReaderAsync();
-
-                if (await rd.ReadAsync())
-                {
-                    vm.MoldeCodigo = rd["CodigoMolde"] as string;
-                }
+                if (await rd.ReadAsync()) vm.MoldeCodigo = rd["CodigoMolde"] as string;
             }
-
-            if (vm.FechaInicioProgramada.HasValue &&
-                vm.Arranque.HasValue &&
-                vm.HorasProgramadas.HasValue &&
-                vm.HorasProgramadas.Value > 0)
+            if (vm.FechaInicioProgramada.HasValue && vm.Arranque.HasValue && vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0)
             {
-                var fechaArranque = CalcularFechaHoraDesdeHora(
-                    vm.FechaInicioProgramada.Value.Date,
-                    vm.Arranque
-                );
-
-                if (fechaArranque < vm.FechaInicioProgramada.Value)
-                    fechaArranque = fechaArranque.AddDays(1);
-
-                vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(
-                    fechaArranque,
-                    vm.HorasProgramadas.Value
-                );
+                var fechaArranque = CalcularFechaHoraDesdeHora(vm.FechaInicioProgramada.Value.Date, vm.Arranque);
+                if (fechaArranque < vm.FechaInicioProgramada.Value) fechaArranque = fechaArranque.AddDays(1);
+                vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(fechaArranque, vm.HorasProgramadas.Value, trabajarDomingo);
             }
+        }
+
+        private static async Task ActualizarTrabajarDomingoProgramaAsync(int programaProduccionId, bool trabajarDomingo, SqlConnection cn, SqlTransaction tx)
+        {
+            if (programaProduccionId <= 0) throw new ArgumentOutOfRangeException(nameof(programaProduccionId));
+            const string sql = @"
+UPDATE dbo.Planeacion_ProgramaProduccion
+SET TrabajarDomingo=@TrabajarDomingo
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@TrabajarDomingo", SqlDbType.Bit).Value = trabajarDomingo;
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            var filas = await cmd.ExecuteNonQueryAsync();
+            if (filas != 1) throw new InvalidOperationException($"No fue posible guardar la configuración de domingo para el programa {programaProduccionId}.");
         }
 
         private static async Task CompletarVinculoOFExistenteAsync(

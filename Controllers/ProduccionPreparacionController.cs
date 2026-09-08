@@ -2167,9 +2167,10 @@ ORDER BY Codigo,Nombre;";
                 EsSMED;
 
             public bool PuedeGestionarSecado =>
-                PuedeVerTodo ||
-                EsTecnicoProduccion ||
-                EsSMED;
+     PuedeVerTodo ||
+     EsTecnicoProduccion ||
+     EsSMED ||
+     EsAuxiliarProduccion;
 
             public bool PuedeGestionarEmbalaje =>
                 PuedeVerTodo ||
@@ -2226,18 +2227,8 @@ WHERE u.UsuarioID=@UsuarioID
             if (!permisos.EsDepartamentoProduccion)
                 return permisos;
 
-            /*
-                El DEPARTAMENTO define que pertenece al modulo Produccion.
-                Persona.Puesto define las reglas internas.
-
-                Ejemplos reales soportados:
-                  - Tecnico de Inyeccion
-                  - ENCARGADO DE PRODUCCION
-                  - Auxiliares de Produccion
-                  - OPERADOR
-
-                Se conserva SMED por compatibilidad con la logica existente.
-            */
+      
+           
             permisos.EsEncargadoProduccion =
                 puestoNormalizado.Contains("ENCARGAD");
 
@@ -2257,9 +2248,7 @@ WHERE u.UsuarioID=@UsuarioID
             return permisos;
         }
 
-        // ============================================================
-        // DETECCION DE CAMBIO REAL DE MOLDE
-        // ============================================================
+     
 
         private static bool DeterminarCambioMoldePreparacion(
             int? moldeAnteriorId,

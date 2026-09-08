@@ -935,154 +935,426 @@
     </script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const endpointProyeccion =
-                '@Url.Action("ProyeccionInterrupcionesActivas", "PlaneacionCalendarioMaquinas")';
+                document.addEventListener('DOMContentLoaded', function () {
+                    const endpointProyeccion =
+                        '@Url.Action("ProyeccionInterrupcionesActivas", "PlaneacionCalendarioMaquinas")';
 
-            const inicioPeriodoProyeccion =
-                new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+                    const inicioPeriodoProyeccion =
+                        new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
 
-            const finPeriodoProyeccion =
-                new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+                    const finPeriodoProyeccion =
+                        new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
 
-            const totalMinutosProyeccion =
-                Math.max(
-                    1,
-                    (finPeriodoProyeccion - inicioPeriodoProyeccion) / 60000);
+                    const totalMinutosProyeccion =
+                        Math.max(
+                            1,
+                            (finPeriodoProyeccion - inicioPeriodoProyeccion) / 60000);
 
-            const panel =
-                document.getElementById(
-                    'proyeccionInterrupcionesPanel');
+                    const panel =
+                        document.getElementById(
+                            'proyeccionInterrupcionesPanel');
 
-            const totalElement =
-                document.getElementById(
-                    'proyeccionInterrupcionesTotal');
+                    const totalElement =
+                        document.getElementById(
+                            'proyeccionInterrupcionesTotal');
 
-            const fechaElement =
-                document.getElementById(
-                    'proyeccionInterrupcionesFecha');
+                    const fechaElement =
+                        document.getElementById(
+                            'proyeccionInterrupcionesFecha');
 
-            const domingo =
-                document.getElementById(
-                    'trabajarDomingoCalendario');
+                    const domingo =
+                        document.getElementById(
+                            'trabajarDomingoCalendario');
 
-            let consultando = false;
+                    let consultando = false;
 
-            function parseFecha(value) {
-                if (!value)
-                    return null;
+                    function parseFecha(value) {
+                        if (!value)
+                            return null;
 
-                const fecha =
-                    new Date(value);
+                        const fecha =
+                            new Date(value);
 
-                if (Number.isNaN(fecha.getTime()))
-                    return null;
+                        if (Number.isNaN(fecha.getTime()))
+                            return null;
 
-                return fecha;
-            }
+                        return fecha;
+                    }
 
-            function textoFecha(value) {
-    const fecha =
-        value instanceof Date
-            ? value
-            : parseFecha(value);
+                    function textoFecha(value) {
+            const fecha =
+                value instanceof Date
+                    ? value
+                    : parseFecha(value);
 
-    if (!fecha)
-        return '-';
+            if (!fecha)
+                return '-';
 
-    const pad =
-        value =>
-            String(value).padStart(2, '0');
+            const pad =
+                value =>
+                    String(value).padStart(2, '0');
 
-    return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
-}
-            function posicionarBloque(
-                bloque,
-                inicio,
-                fin) {
+            return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
+        }
+                    function crearMascaraOperativaBloque(inicio, fin, trabajarDomingo) {
+                        if (!inicio || !fin || fin <= inicio) return 'none';
 
-                if (!bloque ||
-                    !inicio ||
-                    !fin) {
-                    return;
-                }
+                        const inicioMs = inicio.getTime();
+                        const finMs = fin.getTime();
+                        const segmentos = [];
+                        const dia = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate(), 0, 0, 0, 0);
+                        const ultimoDia = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate(), 0, 0, 0, 0);
 
-                if (fin <= inicioPeriodoProyeccion ||
-                    inicio >= finPeriodoProyeccion) {
+                        while (dia <= ultimoDia) {
+                            const dow = dia.getDay();
+                            let apertura = new Date(dia);
+                            let cierre = new Date(dia);
 
-                    bloque.style.display =
-                        'none';
+                            if (dow === 0) {
+                                if (!trabajarDomingo) {
+                                    dia.setDate(dia.getDate() + 1);
+                                    continue;
+                                }
+                                cierre.setDate(cierre.getDate() + 1);
+                            }
+                            else if (dow === 1) {
+                                apertura.setHours(7, 0, 0, 0);
+                                cierre.setDate(cierre.getDate() + 1);
+                            }
+                            else if (dow === 6) {
+                                cierre.setHours(22, 30, 0, 0);
+                            }
+                            else {
+                                cierre.setDate(cierre.getDate() + 1);
+                            }
 
-                    return;
-                }
+                            const segmentoInicio = Math.max(apertura.getTime(), inicioMs);
+                            const segmentoFin = Math.min(cierre.getTime(), finMs);
 
-                bloque.style.display =
-                    '';
+                            if (segmentoFin > segmentoInicio) {
+                                const ultimo = segmentos.length ? segmentos[segmentos.length - 1] : null;
 
-                const inicioVisible =
-                    inicio < inicioPeriodoProyeccion
-                        ? inicioPeriodoProyeccion
-                        : inicio;
+                                if (ultimo && segmentoInicio <= ultimo.fin) {
+                                    ultimo.fin = Math.max(ultimo.fin, segmentoFin);
+                                } else {
+                                    segmentos.push({ inicio: segmentoInicio, fin: segmentoFin });
+                                }
+                            }
 
-                const finVisible =
-                    fin > finPeriodoProyeccion
-                        ? finPeriodoProyeccion
-                        : fin;
+                            dia.setDate(dia.getDate() + 1);
+                        }
 
-                const left =
-                    (inicioVisible -
-                     inicioPeriodoProyeccion) /
-                    60000 /
-                    totalMinutosProyeccion *
-                    100;
+                        if (!segmentos.length)
+                            return 'linear-gradient(to right,transparent 0%,transparent 100%)';
 
-                const width =
-                    Math.max(
-                        .35,
-                        (finVisible -
-                         inicioVisible) /
-                        60000 /
-                        totalMinutosProyeccion *
-                        100);
+                        if (segmentos.length === 1 &&
+                            segmentos[0].inicio <= inicioMs &&
+                            segmentos[0].fin >= finMs) {
+                            return 'none';
+                        }
 
-                bloque.style.left =
-                    `${left}%`;
+                        const total = finMs - inicioMs;
+                        const paradas = ['transparent 0%'];
+                        const pct = valor => Math.max(0, Math.min(100, valor)).toFixed(4);
 
-                bloque.style.width =
-                    `${width}%`;
-            }
+                        segmentos.forEach(segmento => {
+                            const desde = (segmento.inicio - inicioMs) / total * 100;
+                            const hasta = (segmento.fin - inicioMs) / total * 100;
+                            paradas.push(`transparent ${pct(desde)}%`);
+                            paradas.push(`#000 ${pct(desde)}%`);
+                            paradas.push(`#000 ${pct(hasta)}%`);
+                            paradas.push(`transparent ${pct(hasta)}%`);
+                        });
 
-            function limpiarProyeccion() {
-                document
-                    .querySelectorAll(
-                        '.block[data-programa-id]')
-                    .forEach(bloque => {
+                        paradas.push('transparent 100%');
+                        return `linear-gradient(to right,${paradas.join(',')})`;
+                    }
 
-                        const inicioOficial =
-                            parseFecha(
+                    function aplicarMascaraOperativaBloque(bloque, inicio, fin) {
+                        if (!bloque || !inicio || !fin || fin <= inicio) return;
+
+                        const trabajarDomingo =
+                            String(bloque.dataset.trabajarDomingo || 'false')
+                                .toLowerCase() === 'true';
+
+                        const mascara =
+                            crearMascaraOperativaBloque(inicio, fin, trabajarDomingo);
+
+                        bloque.style.webkitMaskImage = mascara;
+                        bloque.style.maskImage = mascara;
+                        bloque.style.webkitMaskRepeat = 'no-repeat';
+                        bloque.style.maskRepeat = 'no-repeat';
+                        bloque.style.webkitMaskSize = '100% 100%';
+                        bloque.style.maskSize = '100% 100%';
+                    }
+
+                    function aplicarMascarasOperativasIniciales() {
+                        document
+                            .querySelectorAll('.block[data-programa-id]')
+                            .forEach(bloque => {
+                                const inicio =
+                                    parseFecha(bloque.dataset.inicioProyectado) ||
+                                    parseFecha(bloque.dataset.inicioOficial);
+
+                                const fin =
+                                    parseFecha(bloque.dataset.finProyectado) ||
+                                    parseFecha(bloque.dataset.finOficial);
+
+                                if (!inicio || !fin ||
+                                    fin <= inicioPeriodoProyeccion ||
+                                    inicio >= finPeriodoProyeccion) {
+                                    return;
+                                }
+
+                                const inicioVisible =
+                                    inicio < inicioPeriodoProyeccion
+                                        ? inicioPeriodoProyeccion
+                                        : inicio;
+
+                                const finVisible =
+                                    fin > finPeriodoProyeccion
+                                        ? finPeriodoProyeccion
+                                        : fin;
+
+                                aplicarMascaraOperativaBloque(
+                                    bloque,
+                                    inicioVisible,
+                                    finVisible);
+                            });
+                    }
+
+                    function posicionarBloque(
+                        bloque,
+                        inicio,
+                        fin) {
+
+                        if (!bloque ||
+                            !inicio ||
+                            !fin) {
+                            return;
+                        }
+
+                        if (fin <= inicioPeriodoProyeccion ||
+                            inicio >= finPeriodoProyeccion) {
+
+                            bloque.style.display =
+                                'none';
+
+                            return;
+                        }
+
+                        bloque.style.display =
+                            '';
+
+                        const inicioVisible =
+                            inicio < inicioPeriodoProyeccion
+                                ? inicioPeriodoProyeccion
+                                : inicio;
+
+                        const finVisible =
+                            fin > finPeriodoProyeccion
+                                ? finPeriodoProyeccion
+                                : fin;
+
+                        const left =
+                            (inicioVisible -
+                             inicioPeriodoProyeccion) /
+                            60000 /
+                            totalMinutosProyeccion *
+                            100;
+
+                        const width =
+                            Math.max(
+                                .35,
+                                (finVisible -
+                                 inicioVisible) /
+                                60000 /
+                                totalMinutosProyeccion *
+                                100);
+
+                        bloque.style.left =
+                            `${left}%`;
+
+                        bloque.style.width =
+                            `${width}%`;
+
+                        aplicarMascaraOperativaBloque(
+                            bloque,
+                            inicioVisible,
+                            finVisible);
+                    }
+
+                    function limpiarProyeccion() {
+                        document
+                            .querySelectorAll(
+                                '.block[data-programa-id]')
+                            .forEach(bloque => {
+
+                                const inicioOficial =
+                                    parseFecha(
+                                        bloque.dataset
+                                            .inicioOficial);
+
+                                const finOficial =
+                                    parseFecha(
+                                        bloque.dataset
+                                            .finOficial);
+
+                                posicionarBloque(
+                                    bloque,
+                                    inicioOficial,
+                                    finOficial);
+
+                                bloque.classList.remove(
+                                    'has-live-projection',
+                                    'projection-root',
+                                    'projection-shifted');
+
                                 bloque.dataset
-                                    .inicioOficial);
+                                    .inicioProyectado = '';
 
-                        const finOficial =
-                            parseFecha(
                                 bloque.dataset
-                                    .finOficial);
+                                    .finProyectado = '';
+
+                                const indicador =
+                                    bloque.querySelector(
+                                        '[data-projection-indicator]');
+
+                                if (indicador) {
+                                    indicador
+                                        .classList
+                                        .add('d-none');
+                                }
+
+                                const linea =
+                                    bloque.querySelector(
+                                        '[data-projection-line]');
+
+                                if (linea) {
+                                    linea
+                                        .classList
+                                        .add('d-none');
+
+                                    linea.textContent =
+                                        '';
+                                }
+
+                                const programaId =
+                                    bloque.dataset
+                                        .programaId;
+
+                                const modal =
+                                    document.querySelector(
+                                        `[data-projection-modal="${programaId}"]`);
+
+                                if (modal) {
+                                    modal
+                                        .classList
+                                        .add('d-none');
+                                }
+                            });
+                    }
+
+                    function actualizarPanel(data) {
+                        if (!panel)
+                            return;
+
+                        const total =
+                            Number(
+                                data?.totalInterrupcionesActivas ||
+                                0);
+
+                        panel.classList.toggle(
+                            'd-none',
+                            total <= 0);
+
+                        if (totalElement) {
+                            totalElement.textContent =
+                                String(total);
+                        }
+
+                        if (fechaElement) {
+                            fechaElement.textContent =
+                                data?.fechaCalculo
+                                    ? textoFecha(
+                                        data.fechaCalculo)
+                                    : '-';
+                        }
+                    }
+
+                    function aplicarPrograma(
+                        programa) {
+
+                        const programaId =
+                            Number(
+                                programa
+                                    ?.programaProduccionID ||
+                                0);
+
+                        if (!programaId)
+                            return;
+
+                        const bloque =
+                            document.querySelector(
+                                `.block[data-programa-id="${programaId}"]`);
+
+                        if (!bloque)
+                            return;
+
+                        const inicio =
+                            parseFecha(
+                                programa
+                                    .inicioProyectado);
+
+                        const fin =
+                            parseFecha(
+                                programa
+                                    .finProyectado);
+
+                        if (!inicio ||
+                            !fin) {
+                            return;
+                        }
 
                         posicionarBloque(
                             bloque,
-                            inicioOficial,
-                            finOficial);
+                            inicio,
+                            fin);
 
-                        bloque.classList.remove(
-                            'has-live-projection',
+                        bloque.dataset
+                            .inicioProyectado =
+                            programa.inicioProyectado ||
+                            '';
+
+                        bloque.dataset
+                            .finProyectado =
+                            programa.finProyectado ||
+                            '';
+
+                        bloque.classList.add(
+                            'has-live-projection');
+
+                        const esRaiz =
+                            programa
+                                .esProgramaRaizInterrupcion ===
+                            true;
+
+                        bloque.classList.toggle(
                             'projection-root',
-                            'projection-shifted');
+                            esRaiz);
 
-                        bloque.dataset
-                            .inicioProyectado = '';
+                        bloque.classList.toggle(
+                            'projection-shifted',
+                            !esRaiz);
 
-                        bloque.dataset
-                            .finProyectado = '';
+                        const minutos =
+                            Number(
+                                esRaiz
+                                    ? programa
+                                        .minutosImpactoInterrupcion
+                                    : programa
+                                        .minutosDesplazamiento ||
+                                      0);
 
                         const indicador =
                             bloque.querySelector(
@@ -1091,7 +1363,12 @@
                         if (indicador) {
                             indicador
                                 .classList
-                                .add('d-none');
+                                .remove('d-none');
+
+                            indicador.innerHTML =
+                                esRaiz
+                                    ? `<i class="fa-solid fa-pause"></i><span>PARO +${minutos} min</span>`
+                                    : `<i class="fa-solid fa-clock-rotate-left"></i><span>PROY +${minutos} min</span>`;
                         }
 
                         const linea =
@@ -1101,470 +1378,326 @@
                         if (linea) {
                             linea
                                 .classList
-                                .add('d-none');
+                                .remove('d-none');
 
                             linea.textContent =
-                                '';
+                                esRaiz
+                                    ? `Fin proyectado: ${textoFecha(fin)}`
+                                    : `Proyección: ${textoFecha(inicio)} - ${textoFecha(fin)}`;
                         }
-
-                        const programaId =
-                            bloque.dataset
-                                .programaId;
 
                         const modal =
                             document.querySelector(
                                 `[data-projection-modal="${programaId}"]`);
 
-                        if (modal) {
-                            modal
-                                .classList
-                                .add('d-none');
-                        }
-                    });
-            }
-
-            function actualizarPanel(data) {
-                if (!panel)
-                    return;
-
-                const total =
-                    Number(
-                        data?.totalInterrupcionesActivas ||
-                        0);
-
-                panel.classList.toggle(
-                    'd-none',
-                    total <= 0);
-
-                if (totalElement) {
-                    totalElement.textContent =
-                        String(total);
-                }
-
-                if (fechaElement) {
-                    fechaElement.textContent =
-                        data?.fechaCalculo
-                            ? textoFecha(
-                                data.fechaCalculo)
-                            : '-';
-                }
-            }
-
-            function aplicarPrograma(
-                programa) {
-
-                const programaId =
-                    Number(
-                        programa
-                            ?.programaProduccionID ||
-                        0);
-
-                if (!programaId)
-                    return;
-
-                const bloque =
-                    document.querySelector(
-                        `.block[data-programa-id="${programaId}"]`);
-
-                if (!bloque)
-                    return;
-
-                const inicio =
-                    parseFecha(
-                        programa
-                            .inicioProyectado);
-
-                const fin =
-                    parseFecha(
-                        programa
-                            .finProyectado);
-
-                if (!inicio ||
-                    !fin) {
-                    return;
-                }
-
-                posicionarBloque(
-                    bloque,
-                    inicio,
-                    fin);
-
-                bloque.dataset
-                    .inicioProyectado =
-                    programa.inicioProyectado ||
-                    '';
-
-                bloque.dataset
-                    .finProyectado =
-                    programa.finProyectado ||
-                    '';
-
-                bloque.classList.add(
-                    'has-live-projection');
-
-                const esRaiz =
-                    programa
-                        .esProgramaRaizInterrupcion ===
-                    true;
-
-                bloque.classList.toggle(
-                    'projection-root',
-                    esRaiz);
-
-                bloque.classList.toggle(
-                    'projection-shifted',
-                    !esRaiz);
-
-                const minutos =
-                    Number(
-                        esRaiz
-                            ? programa
-                                .minutosImpactoInterrupcion
-                            : programa
-                                .minutosDesplazamiento ||
-                              0);
-
-                const indicador =
-                    bloque.querySelector(
-                        '[data-projection-indicator]');
-
-                if (indicador) {
-                    indicador
-                        .classList
-                        .remove('d-none');
-
-                    indicador.innerHTML =
-                        esRaiz
-                            ? `<i class="fa-solid fa-pause"></i><span>PARO +${minutos} min</span>`
-                            : `<i class="fa-solid fa-clock-rotate-left"></i><span>PROY +${minutos} min</span>`;
-                }
-
-                const linea =
-                    bloque.querySelector(
-                        '[data-projection-line]');
-
-                if (linea) {
-                    linea
-                        .classList
-                        .remove('d-none');
-
-                    linea.textContent =
-                        esRaiz
-                            ? `Fin proyectado: ${textoFecha(fin)}`
-                            : `Proyección: ${textoFecha(inicio)} - ${textoFecha(fin)}`;
-                }
-
-                const modal =
-                    document.querySelector(
-                        `[data-projection-modal="${programaId}"]`);
-
-                if (!modal)
-                    return;
-
-                modal
-                    .classList
-                    .remove('d-none');
-
-                const tipo =
-                    modal.querySelector(
-                        '[data-projection-modal-tipo]');
-
-                const motivo =
-                    modal.querySelector(
-                        '[data-projection-modal-motivo]');
-
-                const inicioModal =
-                    modal.querySelector(
-                        '[data-projection-modal-inicio]');
-
-                const finModal =
-                    modal.querySelector(
-                        '[data-projection-modal-fin]');
-
-                const impacto =
-                    modal.querySelector(
-                        '[data-projection-modal-impacto]');
-
-                if (tipo) {
-                    tipo.textContent =
-                        esRaiz
-                            ? 'Interrupción activa en esta OF'
-                            : 'Impacto de una interrupción anterior';
-                }
-
-                if (motivo) {
-                    motivo.textContent =
-                        programa.motivoParo ||
-                        (
-                            esRaiz
-                                ? 'Paro de Producción'
-                                : 'Recorrido por secuencia de máquina / molde'
-                        );
-                }
-
-                if (inicioModal) {
-                    inicioModal.textContent =
-                        textoFecha(inicio);
-                }
-
-                if (finModal) {
-                    finModal.textContent =
-                        textoFecha(fin);
-                }
-
-                if (impacto) {
-                    impacto.textContent =
-                        `+${minutos} min`;
-                }
-            }
-
-            async function actualizar() {
-                if (consultando)
-                    return;
-
-                consultando = true;
-
-                try {
-                    const parametros =
-                        new URLSearchParams(
-                            {
-                                rangoInicio:
-                                    '@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")',
-
-                                rangoFin:
-                                    '@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")',
-
-                                trabajarDomingo:
-                                    (
-                                        !!domingo?.checked
-                                    ).toString()
-                            });
-
-                    const response =
-                        await fetch(
-                            `${endpointProyeccion}?${parametros.toString()}`,
-                            {
-                                method: 'GET',
-                                headers: {
-                                    'Accept':
-                                        'application/json'
-                                },
-                                cache: 'no-store'
-                            });
-
-                    if (!response.ok) {
-                        throw new Error(
-                            `HTTP ${response.status}`);
-                    }
-
-                    const data =
-                        await response.json();
-
-                    if (!data?.ok) {
-                        if (data?.sesionExpirada)
+                        if (!modal)
                             return;
 
-                        throw new Error(
-                            data?.mensaje ||
-                            'No fue posible calcular la proyección.');
+                        modal
+                            .classList
+                            .remove('d-none');
+
+                        const tipo =
+                            modal.querySelector(
+                                '[data-projection-modal-tipo]');
+
+                        const motivo =
+                            modal.querySelector(
+                                '[data-projection-modal-motivo]');
+
+                        const inicioModal =
+                            modal.querySelector(
+                                '[data-projection-modal-inicio]');
+
+                        const finModal =
+                            modal.querySelector(
+                                '[data-projection-modal-fin]');
+
+                        const impacto =
+                            modal.querySelector(
+                                '[data-projection-modal-impacto]');
+
+                        if (tipo) {
+                            tipo.textContent =
+                                esRaiz
+                                    ? 'Interrupción activa en esta OF'
+                                    : 'Impacto de una interrupción anterior';
+                        }
+
+                        if (motivo) {
+                            motivo.textContent =
+                                programa.motivoParo ||
+                                (
+                                    esRaiz
+                                        ? 'Paro de Producción'
+                                        : 'Recorrido por secuencia de máquina / molde'
+                                );
+                        }
+
+                        if (inicioModal) {
+                            inicioModal.textContent =
+                                textoFecha(inicio);
+                        }
+
+                        if (finModal) {
+                            finModal.textContent =
+                                textoFecha(fin);
+                        }
+
+                        if (impacto) {
+                            impacto.textContent =
+                                `+${minutos} min`;
+                        }
                     }
 
-                    limpiarProyeccion();
-                    actualizarPanel(data);
+                    async function actualizar() {
+                        if (consultando)
+                            return;
 
-                    (
-                        data.programas ||
-                        []
-                    ).forEach(
-                        aplicarPrograma);
-                }
-                catch (error) {
-                    console.warn(
-                        'No fue posible actualizar la proyección de interrupciones:',
-                        error);
-                }
-                finally {
-                    consultando = false;
-                }
-            }
+                        consultando = true;
 
-            actualizar();
+                        try {
+                            const parametros =
+                                new URLSearchParams(
+                                    {
+                                        rangoInicio:
+                                            '@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")',
 
-            const timer =
-                window.setInterval(
-                    actualizar,
-                    30000);
+                                        rangoFin:
+                                            '@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")',
 
-            domingo?.addEventListener(
-                'change',
-                actualizar);
+                                        trabajarDomingo:
+                                            (
+                                                !!domingo?.checked
+                                            ).toString()
+                                    });
 
-            document.addEventListener(
-                'visibilitychange',
-                function () {
-                    if (!document.hidden) {
-                        actualizar();
+                            const response =
+                                await fetch(
+                                    `${endpointProyeccion}?${parametros.toString()}`,
+                                    {
+                                        method: 'GET',
+                                        headers: {
+                                            'Accept':
+                                                'application/json'
+                                        },
+                                        cache: 'no-store'
+                                    });
+
+                            if (!response.ok) {
+                                throw new Error(
+                                    `HTTP ${response.status}`);
+                            }
+
+                            const data =
+                                await response.json();
+
+                            if (!data?.ok) {
+                                if (data?.sesionExpirada)
+                                    return;
+
+                                throw new Error(
+                                    data?.mensaje ||
+                                    'No fue posible calcular la proyección.');
+                            }
+
+                            limpiarProyeccion();
+                            actualizarPanel(data);
+
+                            (
+                                data.programas ||
+                                []
+                            ).forEach(
+                                aplicarPrograma);
+                        }
+                        catch (error) {
+                            console.warn(
+                                'No fue posible actualizar la proyección de interrupciones:',
+                                error);
+                        }
+                        finally {
+                            consultando = false;
+                        }
                     }
-                });
 
-            window.addEventListener(
-                'beforeunload',
-                function () {
-                    window.clearInterval(
-                        timer);
+                    aplicarMascarasOperativasIniciales();
+                    actualizar();
+
+                    const timer =
+                        window.setInterval(
+                            actualizar,
+                            30000);
+
+                    domingo?.addEventListener(
+                        'change',
+                        actualizar);
+
+                    document.addEventListener(
+                        'visibilitychange',
+                        function () {
+                            if (!document.hidden) {
+                                actualizar();
+                            }
+                        });
+
+                    window.addEventListener(
+                        'beforeunload',
+                        function () {
+                            window.clearInterval(
+                                timer);
+                        });
                 });
-        });
     </script>
 
     <script>
-    // NSQ_CAMBIO_OPERADOR_CALENDARIO_V1
-    document.addEventListener('DOMContentLoaded', function () {
-        if (!modoProduccion) return;
+        // NSQ_CAMBIO_OPERADOR_CALENDARIO_V1
+        document.addEventListener('DOMContentLoaded', function () {
+            if (!modoProduccion) return;
 
-        const modalEl = document.getElementById('modalCambioOperadorCalendario');
-        if (!modalEl) return;
+            const modalEl = document.getElementById('modalCambioOperadorCalendario');
+            if (!modalEl) return;
 
-        const modalCambio = bootstrap.Modal.getOrCreateInstance(modalEl);
-        const programaInput = document.getElementById('coProgramaID');
-        const operadorActual = document.getElementById('coOperadorActual');
-        const turnoTexto = document.getElementById('coTurno');
-        const operadorSelect = document.getElementById('coOperadorNuevo');
-        const alcance = document.getElementById('coAlcance');
-        const motivo = document.getElementById('coMotivo');
-        const justificacion = document.getElementById('coJustificacion');
-        const feedback = document.getElementById('coFeedback');
-        const btnGuardar = document.getElementById('coGuardar');
+            const modalCambio = bootstrap.Modal.getOrCreateInstance(modalEl);
+            const programaInput = document.getElementById('coProgramaID');
+            const operadorActual = document.getElementById('coOperadorActual');
+            const turnoTexto = document.getElementById('coTurno');
+            const operadorSelect = document.getElementById('coOperadorNuevo');
+            const alcance = document.getElementById('coAlcance');
+            const motivo = document.getElementById('coMotivo');
+            const justificacion = document.getElementById('coJustificacion');
+            const feedback = document.getElementById('coFeedback');
+            const btnGuardar = document.getElementById('coGuardar');
 
-        function feedbackSet(texto, tipo) {
-            feedback.className = `alert py-2 px-3 small ${tipo || 'alert-light'}`;
-            feedback.textContent = texto || '';
-            feedback.classList.toggle('d-none', !texto);
-        }
+            function feedbackSet(texto, tipo) {
+                feedback.className = `alert py-2 px-3 small ${tipo || 'alert-light'}`;
+                feedback.textContent = texto || '';
+                feedback.classList.toggle('d-none', !texto);
+            }
 
-        async function abrirCambio(programaId) {
-            feedbackSet('', '');
-            operadorSelect.innerHTML = '<option value="">Cargando...</option>';
-            programaInput.value = programaId;
-            justificacion.value = '';
-            motivo.value = '';
-            alcance.value = 'SOLO_OF';
-            modalCambio.show();
+            async function abrirCambio(programaId) {
+                feedbackSet('', '');
+                operadorSelect.innerHTML = '<option value="">Cargando...</option>';
+                programaInput.value = programaId;
+                justificacion.value = '';
+                motivo.value = '';
+                alcance.value = 'SOLO_OF';
+                modalCambio.show();
 
-            try {
-                const url =
-                    '@Url.Action("PersonalPrograma","PlaneacionCalendarioMaquinas")' +
-                    '?programaProduccionId=' + encodeURIComponent(programaId);
+                try {
+                    const url =
+                        '@Url.Action("PersonalPrograma", "PlaneacionCalendarioMaquinas")' +
+                        '?programaProduccionId=' + encodeURIComponent(programaId);
 
-                const response = await fetch(url, {
-                    headers: { 'Accept': 'application/json' }
+                    const response = await fetch(url, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok || !data?.ok) {
+                        throw new Error(data?.mensaje || `HTTP ${response.status}`);
+                    }
+
+                    operadorActual.textContent =
+                        data.operadorRealNombre ||
+                        data.operadorPlaneadoNombre ||
+                        'Sin operador';
+
+                    turnoTexto.textContent = data.turno || 'Sin turno';
+
+                    operadorSelect.innerHTML =
+                        '<option value="">-- Seleccionar sustituto --</option>';
+
+                    (data.candidatos || []).forEach(x => {
+                        const option = document.createElement('option');
+                        option.value = String(x.personaID);
+                        option.textContent =
+                            x.nombre + (x.nivel ? ` · N${x.nivel}` : '');
+                        operadorSelect.appendChild(option);
+                    });
+                }
+                catch (error) {
+                    operadorSelect.innerHTML =
+                        '<option value="">No disponible</option>';
+                    feedbackSet(
+                        error.message || 'No fue posible cargar candidatos.',
+                        'alert-danger'
+                    );
+                }
+            }
+
+            document.querySelectorAll('[data-cambiar-operador]').forEach(btn => {
+                btn.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    abrirCambio(btn.dataset.programaId);
                 });
-                const data = await response.json();
+            });
 
-                if (!response.ok || !data?.ok) {
-                    throw new Error(data?.mensaje || `HTTP ${response.status}`);
+            btnGuardar?.addEventListener('click', async function () {
+                const payload = {
+                    programaProduccionID: Number(programaInput.value || 0),
+                    operadorSustitutoID: Number(operadorSelect.value || 0),
+                    alcance: alcance.value,
+                    motivo: motivo.value,
+                    justificacion: justificacion.value.trim()
+                };
+
+                if (!payload.operadorSustitutoID) {
+                    feedbackSet('Selecciona el operador sustituto.', 'alert-warning');
+                    return;
                 }
 
-                operadorActual.textContent =
-                    data.operadorRealNombre ||
-                    data.operadorPlaneadoNombre ||
-                    'Sin operador';
+                if (!payload.motivo) {
+                    feedbackSet('Selecciona el motivo del cambio.', 'alert-warning');
+                    return;
+                }
 
-                turnoTexto.textContent = data.turno || 'Sin turno';
+                if (payload.justificacion.length < 5) {
+                    feedbackSet(
+                        'Escribe una justificación clara del cambio.',
+                        'alert-warning'
+                    );
+                    return;
+                }
 
-                operadorSelect.innerHTML =
-                    '<option value="">-- Seleccionar sustituto --</option>';
+                try {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerHTML =
+                        '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
 
-                (data.candidatos || []).forEach(x => {
-                    const option = document.createElement('option');
-                    option.value = String(x.personaID);
-                    option.textContent =
-                        x.nombre + (x.nivel ? ` · N${x.nivel}` : '');
-                    operadorSelect.appendChild(option);
-                });
-            }
-            catch (error) {
-                operadorSelect.innerHTML =
-                    '<option value="">No disponible</option>';
-                feedbackSet(
-                    error.message || 'No fue posible cargar candidatos.',
-                    'alert-danger'
-                );
-            }
-        }
+                    const response = await fetch(
+                        '@Url.Action("CambiarOperador", "PlaneacionCalendarioMaquinas")',
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'RequestVerificationToken': token
+                            },
+                            body: JSON.stringify(payload)
+                        });
 
-        document.querySelectorAll('[data-cambiar-operador]').forEach(btn => {
-            btn.addEventListener('click', function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                abrirCambio(btn.dataset.programaId);
+                    const data = await response.json();
+
+                    if (!response.ok || !data?.ok) {
+                        throw new Error(data?.mensaje || `HTTP ${response.status}`);
+                    }
+
+                    feedbackSet(data.mensaje || 'Cambio aplicado.', 'alert-success');
+                    setTimeout(() => window.location.reload(), 700);
+                }
+                catch (error) {
+                    feedbackSet(
+                        error.message || 'No fue posible guardar el cambio.',
+                        'alert-danger'
+                    );
+                }
+                finally {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerHTML =
+                        '<i class="fa-solid fa-user-check me-1"></i> Aplicar cambio';
+                }
             });
         });
-
-        btnGuardar?.addEventListener('click', async function () {
-            const payload = {
-                programaProduccionID: Number(programaInput.value || 0),
-                operadorSustitutoID: Number(operadorSelect.value || 0),
-                alcance: alcance.value,
-                motivo: motivo.value,
-                justificacion: justificacion.value.trim()
-            };
-
-            if (!payload.operadorSustitutoID) {
-                feedbackSet('Selecciona el operador sustituto.', 'alert-warning');
-                return;
-            }
-
-            if (!payload.motivo) {
-                feedbackSet('Selecciona el motivo del cambio.', 'alert-warning');
-                return;
-            }
-
-            if (payload.justificacion.length < 5) {
-                feedbackSet(
-                    'Escribe una justificación clara del cambio.',
-                    'alert-warning'
-                );
-                return;
-            }
-
-            try {
-                btnGuardar.disabled = true;
-                btnGuardar.innerHTML =
-                    '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
-
-                const response = await fetch(
-                    '@Url.Action("CambiarOperador","PlaneacionCalendarioMaquinas")',
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'RequestVerificationToken': token
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                const data = await response.json();
-
-                if (!response.ok || !data?.ok) {
-                    throw new Error(data?.mensaje || `HTTP ${response.status}`);
-                }
-
-                feedbackSet(data.mensaje || 'Cambio aplicado.', 'alert-success');
-                setTimeout(() => window.location.reload(), 700);
-            }
-            catch (error) {
-                feedbackSet(
-                    error.message || 'No fue posible guardar el cambio.',
-                    'alert-danger'
-                );
-            }
-            finally {
-                btnGuardar.disabled = false;
-                btnGuardar.innerHTML =
-                    '<i class="fa-solid fa-user-check me-1"></i> Aplicar cambio';
-            }
-        });
-    });
     </script>
 
     <script src="~/js/PlaneacionPrograma/calendario-abrir-tablero-maquina-v1.js" asp-append-version="true"></script>
@@ -1655,17 +1788,15 @@
             z-index: 25 !important;
             animation: reprogramRequestPulse .8s ease-in-out infinite alternate
         }
+
         @@keyframes reprogramRequestPulse {
-            from
+            from {
+                box-shadow: 0 0 0 3px rgba(255,193,7,.25)
+            }
 
-        {
-            box-shadow: 0 0 0 3px rgba(255,193,7,.25)
-        }
-
-        to {
-            box-shadow: 0 0 0 9px rgba(255,193,7,.08)
-        }
-
+            to {
+                box-shadow: 0 0 0 9px rgba(255,193,7,.08)
+            }
         }
 
         html[data-bs-theme="dark"] .reprogram-alert-panel, body.dark-mode .reprogram-alert-panel {
@@ -1690,9 +1821,9 @@
             cursor: pointer !important;
         }
 
-        .production-calendar-readonly .block.no-drag {
-            opacity: 1;
-        }
+            .production-calendar-readonly .block.no-drag {
+                opacity: 1;
+            }
 
         .production-calendar-readonly .calendar-status.success {
             border-color: rgba(34, 197, 94, .35);
@@ -1782,8 +1913,8 @@
             background: rgba(255,193,7,.08);
             border-color: rgba(255,193,7,.35);
         }
-            </style>
-            }
+    </style>
+}
 
 
 @* PLANEACION_NAVBAR_INJECT_V1_0 *@
@@ -1803,9 +1934,9 @@ else
 <!-- NSQ_PRODUCCION_CALENDARIO_BACK_DEDUP_V1_START -->
 <style id="NSQ_PRODUCCION_CALENDARIO_BACK_DEDUP_V1">
     /*
-     * La ruta global ya contiene un unico boton Regresar.
-     * El boton local se conserva en markup por compatibilidad, pero no se duplica.
-     */
+         * La ruta global ya contiene un unico boton Regresar.
+         * El boton local se conserva en markup por compatibilidad, pero no se duplica.
+         */
     .nsq-production-calendar-extra-back-v1 {
         display: none !important;
     }
@@ -1974,20 +2105,20 @@ else
 
         @if (!modoProduccion)
         {
-<div class="mt-3 p-3 rounded-4 border bg-light">
-            <div class="form-check form-switch m-0">
-                <input class="form-check-input"
-                       type="checkbox"
-                       role="switch"
-                       id="trabajarDomingoCalendario" />
-                <label class="form-check-label fw-bold" for="trabajarDomingoCalendario">
-                    Considerar domingo como día operativo para movimientos
-                </label>
-                <div class="small text-muted mt-1">
-                    Déjalo apagado para que el sistema corte sábado a las 22:30 y continúe lunes 07:00. Actívalo solo cuando autoricen trabajar domingo.
+            <div class="mt-3 p-3 rounded-4 border bg-light">
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           role="switch"
+                           id="trabajarDomingoCalendario" />
+                    <label class="form-check-label fw-bold" for="trabajarDomingoCalendario">
+                        Considerar domingo como día operativo para movimientos
+                    </label>
+                    <div class="small text-muted mt-1">
+                        Déjalo apagado para que el sistema corte sábado a las 22:30 y continúe lunes 07:00. Actívalo solo cuando autoricen trabajar domingo.
+                    </div>
                 </div>
             </div>
-        </div>
         }
 
         <form id="formRangoCalendario"
@@ -2100,10 +2231,10 @@ else
                 <span><i data-nsq-style-id="nsq-si-31d8aa2278"></i>Ya producido</span>
                 <span><i data-nsq-style-id="nsq-si-e71927bd00"></i>Cerrado / cancelado</span>
 
-                    <span>
-                        <i class="fa-solid fa-border-all text-warning"></i>
-                        Contorno punteado = proyección por interrupción
-                    </span>
+                <span>
+                    <i class="fa-solid fa-border-all text-warning"></i>
+                    Contorno punteado = proyección por interrupción
+                </span>
 
             </div>
         </div>
@@ -2172,164 +2303,165 @@ else
                             }
 
 
-                                @foreach (var bloque in maquina.Bloques)
+                            @foreach (var bloque in maquina.Bloques)
+                            {
+                                var inicioVisualBloque = bloque.InicioVisual;
+                                var finVisualBloque = bloque.FinVisual;
+
+                                var visibleInicio = inicioVisualBloque < inicioPeriodo
+                                ? inicioPeriodo
+                                : inicioVisualBloque;
+
+                                var visibleFin = finVisualBloque > finPeriodo
+                                ? finPeriodo
+                                : finVisualBloque;
+
+                                var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
+
+                                var width = Math.Max(
+                                .35,
+                                (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
+
+                                var top = 8 + bloque.Carril * 48;
+                                var puedeMover = !modoProduccion && bloque.PuedeMoverCalendario;
+
+                                var tituloBloqueo = modoProduccion
+                                ? "Vista de solo lectura para Produccion."
+                                : puedeMover
+                                ? "Arrastra para mandar a cola de otra máquina compatible."
+                                : bloque.MotivoBloqueoMovimiento;
+
+                                var textoOperador = bloque.TextoOperadorVisible;
+                                var origenOperador = bloque.TieneOperadorReal
+                                ? "Real"
+                                : "Planeado";
+
+                                var textoTurno = bloque.TextoTurnoProgramado;
+                                var textoCalidad = bloque.EstadoCalidadTexto;
+
+                                var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
+                                ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
+                                : 0;
+
+                                var mostrarAlertaNoInicio =
+                                bloque.EstatusID == 1 &&
+                                minutosAtrasoInicio >= 10 &&
+                                bloque.EstatusProduccionID != 3;
+
+                                var textoAlertaNoInicio = mostrarAlertaNoInicio
+                                ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
+                                : string.Empty;
+
+                                var solicitudReprogramacionPendiente =
+                                solicitudesReprogramacion.FirstOrDefault(x =>
+                                x.ProgramaProduccionID == bloque.ProgramaProduccionID);
+
+                                var tieneSolicitudReprogramacion =
+                                solicitudReprogramacionPendiente != null;
+
+                                var claseColorBloque =
+                                bloque.ClaseSemaforoCalendario;
+
+                                var estaEnParo =
+                                bloque.EstatusProduccionID == 4;
+
+                                var estaEnReliberacion =
+                                bloque.RequiereReliberacion ||
+                                bloque.ConfiguracionCalidadInvalidada;
+
+                                var estadoCalidadNormalizado =
+                                (bloque.EstadoCalidad ?? string.Empty)
+                                .Trim()
+                                .ToUpperInvariant();
+
+                                var estaEnCalidad =
+                                bloque.InspeccionCalidadID.HasValue &&
+                                !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
+                                estadoCalidadNormalizado != "CERRADA";
+
+                                if (estaEnParo)
                                 {
-                                    var inicioVisualBloque = bloque.InicioVisual;
-                                    var finVisualBloque = bloque.FinVisual;
+                                    claseColorBloque = "bloque-paro";
+                                }
+                                else if (estaEnReliberacion)
+                                {
+                                    claseColorBloque = "bloque-reliberacion";
+                                }
+                                else if (estaEnCalidad)
+                                {
+                                    claseColorBloque = "bloque-calidad";
+                                }
+                                else if (bloque.EstatusProduccionID == 3)
+                                {
+                                    claseColorBloque = "bloque-produciendo";
+                                }
 
-                                    var visibleInicio = inicioVisualBloque < inicioPeriodo
-                                    ? inicioPeriodo
-                                    : inicioVisualBloque;
+                                <button type="button"
+                                        class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "") @(tieneSolicitudReprogramacion ? "has-reprogram-request" : "") @(bloque.TieneProyeccionInterrupcion ? "has-live-projection" : "") @(bloque.EsProgramaRaizInterrupcion ? "projection-root" : bloque.TieneProyeccionInterrupcion ? "projection-shifted" : "")"
+                                        draggable="@(puedeMover ? "true" : "false")"
+                                        data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
+                                        data-programa-id="@bloque.ProgramaProduccionID"
+                                        data-trabajar-domingo="@(bloque.TrabajarDomingo ? "true" : "false")"
+                                        data-maquina-id="@bloque.MaquinaID"
+                                        data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-inicio-oficial="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-fin-oficial="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-inicio-proyectado="@(bloque.InicioProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                        data-fin-proyectado="@(bloque.FinProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                        data-puede-mover="@(puedeMover ? "true" : "false")"
+                                        data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                        title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
 
-                                    var visibleFin = finVisualBloque > finPeriodo
-                                    ? finPeriodo
-                                    : finVisualBloque;
-
-                                    var left = (visibleInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
-
-                                    var width = Math.Max(
-                                    .35,
-                                    (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
-
-                                    var top = 8 + bloque.Carril * 48;
-                                    var puedeMover = !modoProduccion && bloque.PuedeMoverCalendario;
-
-                                    var tituloBloqueo = modoProduccion
-                                    ? "Vista de solo lectura para Produccion."
-                                    : puedeMover
-                                    ? "Arrastra para mandar a cola de otra máquina compatible."
-                                    : bloque.MotivoBloqueoMovimiento;
-
-                                    var textoOperador = bloque.TextoOperadorVisible;
-                                    var origenOperador = bloque.TieneOperadorReal
-                                    ? "Real"
-                                    : "Planeado";
-
-                                    var textoTurno = bloque.TextoTurnoProgramado;
-                                    var textoCalidad = bloque.EstadoCalidadTexto;
-
-                                    var minutosAtrasoInicio = bloque.Inicio < Model.Ahora
-                                    ? Math.Max(0, (int)Math.Floor((Model.Ahora - bloque.Inicio).TotalMinutes))
-                                    : 0;
-
-                                    var mostrarAlertaNoInicio =
-                                    bloque.EstatusID == 1 &&
-                                    minutosAtrasoInicio >= 10 &&
-                                    bloque.EstatusProduccionID != 3;
-
-                                    var textoAlertaNoInicio = mostrarAlertaNoInicio
-                                    ? $"Producción no inició a la hora programada. Atraso: {minutosAtrasoInicio} min."
-                                    : string.Empty;
-
-                                    var solicitudReprogramacionPendiente =
-                                    solicitudesReprogramacion.FirstOrDefault(x =>
-                                    x.ProgramaProduccionID == bloque.ProgramaProduccionID);
-
-                                    var tieneSolicitudReprogramacion =
-                                    solicitudReprogramacionPendiente != null;
-
-                                    var claseColorBloque =
-                                    bloque.ClaseSemaforoCalendario;
-
-                                    var estaEnParo =
-                                    bloque.EstatusProduccionID == 4;
-
-                                    var estaEnReliberacion =
-                                    bloque.RequiereReliberacion ||
-                                    bloque.ConfiguracionCalidadInvalidada;
-
-                                    var estadoCalidadNormalizado =
-                                    (bloque.EstadoCalidad ?? string.Empty)
-                                    .Trim()
-                                    .ToUpperInvariant();
-
-                                    var estaEnCalidad =
-                                    bloque.InspeccionCalidadID.HasValue &&
-                                    !string.IsNullOrWhiteSpace(estadoCalidadNormalizado) &&
-                                    estadoCalidadNormalizado != "CERRADA";
-
-                                    if (estaEnParo)
+                                    @if (mostrarAlertaNoInicio)
                                     {
-                                        claseColorBloque = "bloque-paro";
-                                    }
-                                    else if (estaEnReliberacion)
-                                    {
-                                        claseColorBloque = "bloque-reliberacion";
-                                    }
-                                    else if (estaEnCalidad)
-                                    {
-                                        claseColorBloque = "bloque-calidad";
-                                    }
-                                    else if (bloque.EstatusProduccionID == 3)
-                                    {
-                                        claseColorBloque = "bloque-produciendo";
+                                        <span class="start-delay-alert"
+                                              title="@textoAlertaNoInicio">
+                                            <i class="fa-solid fa-bell"></i>
+                                        </span>
                                     }
 
-                                    <button type="button"
-                                            class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "") @(tieneSolicitudReprogramacion ? "has-reprogram-request" : "") @(bloque.TieneProyeccionInterrupcion ? "has-live-projection" : "") @(bloque.EsProgramaRaizInterrupcion ? "projection-root" : bloque.TieneProyeccionInterrupcion ? "projection-shifted" : "")"
-                                            draggable="@(puedeMover ? "true" : "false")"
-                                            data-nsq-style="left:@Pct(left)%;width:@Pct(width)%;top:@(top)px"
-                                            data-programa-id="@bloque.ProgramaProduccionID"
-                                            data-maquina-id="@bloque.MaquinaID"
-                                            data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                            data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                            data-inicio-oficial="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                            data-fin-oficial="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                            data-inicio-proyectado="@(bloque.InicioProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
-                                            data-fin-proyectado="@(bloque.FinProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
-                                            data-puede-mover="@(puedeMover ? "true" : "false")"
-                                            data-motivo-bloqueo="@bloque.MotivoBloqueoMovimiento"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
-                                            title="@bloque.OFTexto · @bloque.ParteTexto · @bloque.EstadoSemaforoTexto · @bloque.Inicio.ToString("dd/MM HH:mm") - @bloque.Fin.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad · Máquina sugerida: @bloque.MaquinaSugeridaTexto · @(mostrarAlertaNoInicio? textoAlertaNoInicio + " · " : "")@tituloBloqueo">
+                                    @if (tieneSolicitudReprogramacion)
+                                    {
+                                        <span class="reprogram-request-indicator"
+                                              title="Producción solicitó reprogramación">
+                                            <i class="fa-solid fa-calendar-arrow-down"></i>
+                                        </span>
+                                    }
 
-                                        @if (mostrarAlertaNoInicio)
-                                        {
-                                            <span class="start-delay-alert"
-                                                  title="@textoAlertaNoInicio">
-                                                <i class="fa-solid fa-bell"></i>
-                                            </span>
-                                        }
-
-                                        @if (tieneSolicitudReprogramacion)
-                                        {
-                                            <span class="reprogram-request-indicator"
-                                                  title="Producción solicitó reprogramación">
-                                                <i class="fa-solid fa-calendar-arrow-down"></i>
-                                            </span>
-                                        }
-
-                                    <span class="projection-live-indicator @(bloque.TieneProyeccionInterrupcion ? "" : "d-none")"
-                                          data-projection-indicator>
-                                        <i class="fa-solid @(bloque.EsProgramaRaizInterrupcion ? "fa-pause" : "fa-clock-rotate-left")"></i>
-                                        <span>
-                                            @(bloque.EsProgramaRaizInterrupcion
-                                                                                ? $"PARO +{bloque.MinutosImpactoInterrupcion} min"
-                                                                                : $"PROY +{bloque.MinutosDesplazamientoProyectado} min")
-                                                                                                                                    </span>
-                                                                                                                                </span>
-
-                                    <strong>
-                                        @bloque.OFTexto · @bloque.ParteTexto
-                                    </strong>
-
+                                <span class="projection-live-indicator @(bloque.TieneProyeccionInterrupcion ? "" : "d-none")"
+                                      data-projection-indicator>
+                                    <i class="fa-solid @(bloque.EsProgramaRaizInterrupcion ? "fa-pause" : "fa-clock-rotate-left")"></i>
                                     <span>
-                                        @(bloque.ClienteNombre ?? "Sin cliente") ·
-                                        @bloque.EstadoSemaforoTexto
-                                    </span>
+                                        @(bloque.EsProgramaRaizInterrupcion
+                                                                            ? $"PARO +{bloque.MinutosImpactoInterrupcion} min"
+                                                                            : $"PROY +{bloque.MinutosDesplazamientoProyectado} min")
+                                                                                                                                </span>
+                                                                                                                            </span>
 
-                                    <span class="operator-line">
-                                        <i class="fa-solid fa-user-gear"></i>
-                                        @origenOperador: @textoOperador · @textoTurno
-                                    </span>
+                                <strong>
+                                    @bloque.OFTexto · @bloque.ParteTexto
+                                </strong>
 
-                                    <span class="projection-line @(bloque.TieneProyeccionInterrupcion ? "" : "d-none")"
-                                          data-projection-line>
-                                        @(bloque.TieneProyeccionInterrupcion
-                                                                        ? bloque.EsProgramaRaizInterrupcion
-                                                                        ? $"Fin proyectado: {bloque.FinVisual:dd/MM HH:mm}"
-                                                                        : $"Proyección: {bloque.InicioVisual:dd/MM HH:mm} - {bloque.FinVisual:dd/MM HH:mm}"
-                                                                        : "")
+                                <span>
+                                    @(bloque.ClienteNombre ?? "Sin cliente") ·
+                                    @bloque.EstadoSemaforoTexto
+                                </span>
+
+                                <span class="operator-line">
+                                    <i class="fa-solid fa-user-gear"></i>
+                                    @origenOperador: @textoOperador · @textoTurno
+                                </span>
+
+                                <span class="projection-line @(bloque.TieneProyeccionInterrupcion ? "" : "d-none")"
+                                      data-projection-line>
+                                    @(bloque.TieneProyeccionInterrupcion
+                                                                    ? bloque.EsProgramaRaizInterrupcion
+                                                                    ? $"Fin proyectado: {bloque.FinVisual:dd/MM HH:mm}"
+                                                                    : $"Proyección: {bloque.InicioVisual:dd/MM HH:mm} - {bloque.FinVisual:dd/MM HH:mm}"
+                                                                    : "")
                             </span>
                         </button>
                                                 }
@@ -2441,7 +2573,7 @@ else
                                 <strong class="d-block">@textoOperadorModal</strong>
                                 <span class="small text-muted">Auxiliar: @textoAuxiliarModal</span>
 
-                                @if (modoProduccion)
+                            @if (modoProduccion)
                                 {
                                     <button type="button"
                                             class="btn btn-sm btn-outline-warning fw-bold mt-2"
@@ -2683,22 +2815,22 @@ else
                         </a>
                     }
                     @if (!modoProduccion && bloque.PuedeMoverCalendario)
-{
-    <button type="button"
-            class="btn btn-danger fw-bold"
-            data-interrupcion-urgente
-            data-programa-id="@bloque.ProgramaProduccionID"
-            data-of="@bloque.OFTexto"
-            data-parte="@bloque.ParteTexto"
-            data-descripcion="@bloque.Descripcion"
-            data-molde="@bloque.MoldeCodigo"
-            data-maquina-id="@bloque.MaquinaID"
-            data-maquina-codigo="@bloque.MaquinaCodigo"
-            title="Primero se mostrará una simulación. No se modificarán datos todavía.">
-        <i class="fa-solid fa-bolt me-1"></i>
-        Interrumpir por urgente
-    </button>
-}
+                    {
+                        <button type="button"
+                                class="btn btn-danger fw-bold"
+                                data-interrupcion-urgente
+                                data-programa-id="@bloque.ProgramaProduccionID"
+                                data-of="@bloque.OFTexto"
+                                data-parte="@bloque.ParteTexto"
+                                data-descripcion="@bloque.Descripcion"
+                                data-molde="@bloque.MoldeCodigo"
+                                data-maquina-id="@bloque.MaquinaID"
+                                data-maquina-codigo="@bloque.MaquinaCodigo"
+                                title="Primero se mostrará una simulación. No se modificarán datos todavía.">
+                            <i class="fa-solid fa-bolt me-1"></i>
+                            Interrumpir por urgente
+                        </button>
+                    }
                     <button type="button"
                             class="btn btn-outline-secondary fw-bold"
                             data-bs-dismiss="modal">
@@ -2729,15 +2861,15 @@ else
                 <div class="modal-body">
                     <input type="hidden" id="iuProgramaID" />
 
-                   <div class="alert alert-danger border-0 rounded-4">
-    <div class="d-flex gap-3 align-items-start">
-        <i class="fa-solid fa-triangle-exclamation fs-4 mt-1"></i>
-        <div>
-            <div class="fw-bold">Primero simula el impacto antes de confirmar.</div>
-            <div class="small mt-1">Calcular impacto no modifica ningún dato. Al presionar <strong>Confirmar e interrumpir Producción</strong>, la OF actualmente producida quedará pausada y la OF seleccionada quedará priorizada para iniciar su preparación.</div>
-        </div>
-    </div>
-</div>
+                    <div class="alert alert-danger border-0 rounded-4">
+                        <div class="d-flex gap-3 align-items-start">
+                            <i class="fa-solid fa-triangle-exclamation fs-4 mt-1"></i>
+                            <div>
+                                <div class="fw-bold">Primero simula el impacto antes de confirmar.</div>
+                                <div class="small mt-1">Calcular impacto no modifica ningún dato. Al presionar <strong>Confirmar e interrumpir Producción</strong>, la OF actualmente producida quedará pausada y la OF seleccionada quedará priorizada para iniciar su preparación.</div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
@@ -2788,13 +2920,13 @@ else
                                 Motivo de la urgencia
                             </label>
                             <textarea id="iuMotivo"
-                                      class="form-control"
-                                      rows="2"
-                                      maxlength="500"
-                                      placeholder="Ej. Prioridad de cliente, riesgo de paro de línea, requerimiento extraordinario..."></textarea>
-                           <div class="form-text">
-    El motivo es obligatorio para confirmar la interrupción urgente y quedará registrado en el historial.
-</div>
+                                  class="form-control"
+                                  rows="2"
+                                  maxlength="500"
+                                  placeholder="Ej. Prioridad de cliente, riesgo de paro de línea, requerimiento extraordinario..."></textarea>
+                            <div class="form-text">
+                                El motivo es obligatorio para confirmar la interrupción urgente y quedará registrado en el historial.
+                            </div>
                         </div>
 
                         <div class="col-12">
@@ -2950,16 +3082,16 @@ else
                     </div>
                 </div>
 
-               <div class="modal-footer border-0">
-    <span class="small text-muted me-auto" id="iuEstadoConfirmacion">
-        Calcula primero el impacto para habilitar la confirmación.
-    </span>
-    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
-    <button type="button" id="iuConfirmar" class="btn btn-danger fw-bold" disabled>
-        <i class="fa-solid fa-bolt me-1"></i>
-        Confirmar e interrumpir Producción
-    </button>
-</div>
+                <div class="modal-footer border-0">
+                    <span class="small text-muted me-auto" id="iuEstadoConfirmacion">
+                        Calcula primero el impacto para habilitar la confirmación.
+                    </span>
+                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="iuConfirmar" class="btn btn-danger fw-bold" disabled>
+                        <i class="fa-solid fa-bolt me-1"></i>
+                        Confirmar e interrumpir Producción
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -2967,108 +3099,108 @@ else
 
 @if (modoProduccion)
 {
-<div class="modal fade"
-     id="modalCambioOperadorCalendario"
-     tabindex="-1"
-     aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 rounded-4 shadow">
-            <div class="modal-header border-0 bg-primary text-white">
-                <div>
-                    <div class="small text-uppercase fw-bold opacity-75">
-                        Producción / Excepción operativa
+    <div class="modal fade"
+         id="modalCambioOperadorCalendario"
+         tabindex="-1"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-0 bg-primary text-white">
+                    <div>
+                        <div class="small text-uppercase fw-bold opacity-75">
+                            Producción / Excepción operativa
+                        </div>
+                        <h5 class="modal-title fw-bold mb-0">
+                            <i class="fa-solid fa-user-pen me-1"></i>
+                            Cambiar operador
+                        </h5>
                     </div>
-                    <h5 class="modal-title fw-bold mb-0">
-                        <i class="fa-solid fa-user-pen me-1"></i>
-                        Cambiar operador
-                    </h5>
+                    <button type="button"
+                            class="btn-close btn-close-white"
+                            data-bs-dismiss="modal"></button>
                 </div>
-                <button type="button"
-                        class="btn-close btn-close-white"
-                        data-bs-dismiss="modal"></button>
-            </div>
 
-            <div class="modal-body">
-                <input type="hidden" id="coProgramaID" />
+                <div class="modal-body">
+                    <input type="hidden" id="coProgramaID" />
 
-                <div class="row g-2 mb-3">
-                    <div class="col-7">
-                        <div class="border rounded-3 p-3 h-100">
-                            <small class="text-muted fw-bold">OPERADOR ACTUAL</small>
-                            <strong id="coOperadorActual" class="d-block mt-1">-</strong>
+                    <div class="row g-2 mb-3">
+                        <div class="col-7">
+                            <div class="border rounded-3 p-3 h-100">
+                                <small class="text-muted fw-bold">OPERADOR ACTUAL</small>
+                                <strong id="coOperadorActual" class="d-block mt-1">-</strong>
+                            </div>
+                        </div>
+                        <div class="col-5">
+                            <div class="border rounded-3 p-3 h-100">
+                                <small class="text-muted fw-bold">TURNO</small>
+                                <strong id="coTurno" class="d-block mt-1">-</strong>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-5">
-                        <div class="border rounded-3 p-3 h-100">
-                            <small class="text-muted fw-bold">TURNO</small>
-                            <strong id="coTurno" class="d-block mt-1">-</strong>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nuevo operador</label>
+                        <select id="coOperadorNuevo" class="form-select">
+                            <option value="">-- Seleccionar sustituto --</option>
+                        </select>
+                        <div class="form-text">
+                            Si existe matriz, sólo aparecen operadores con polivalencia N1-N4 para la parte.
                         </div>
                     </div>
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Nuevo operador</label>
-                    <select id="coOperadorNuevo" class="form-select">
-                        <option value="">-- Seleccionar sustituto --</option>
-                    </select>
-                    <div class="form-text">
-                        Si existe matriz, sólo aparecen operadores con polivalencia N1-N4 para la parte.
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Aplicar cambio a</label>
+                        <select id="coAlcance" class="form-select">
+                            <option value="SOLO_OF">Sólo esta OF</option>
+                            <option value="RESTO_TURNO">Resto del turno en esta máquina</option>
+                        </select>
                     </div>
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Aplicar cambio a</label>
-                    <select id="coAlcance" class="form-select">
-                        <option value="SOLO_OF">Sólo esta OF</option>
-                        <option value="RESTO_TURNO">Resto del turno en esta máquina</option>
-                    </select>
-                </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Motivo</label>
+                        <select id="coMotivo" class="form-select">
+                            <option value="">-- Seleccionar --</option>
+                            <option value="AUSENCIA">Ausencia</option>
+                            <option value="INCAPACIDAD">Incapacidad</option>
+                            <option value="PERMISO">Permiso / salida</option>
+                            <option value="COBERTURA">Cobertura operativa</option>
+                            <option value="CAMBIO_DE_PRIORIDAD">Cambio de prioridad</option>
+                            <option value="OTRO">Otro</option>
+                        </select>
+                    </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Motivo</label>
-                    <select id="coMotivo" class="form-select">
-                        <option value="">-- Seleccionar --</option>
-                        <option value="AUSENCIA">Ausencia</option>
-                        <option value="INCAPACIDAD">Incapacidad</option>
-                        <option value="PERMISO">Permiso / salida</option>
-                        <option value="COBERTURA">Cobertura operativa</option>
-                        <option value="CAMBIO_DE_PRIORIDAD">Cambio de prioridad</option>
-                        <option value="OTRO">Otro</option>
-                    </select>
-                </div>
-
-                <div class="mb-2">
-                    <label class="form-label fw-bold">
-                        Justificación <span class="text-danger">*</span>
-                    </label>
-                    <textarea id="coJustificacion"
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">
+                            Justificación <span class="text-danger">*</span>
+                        </label>
+                        <textarea id="coJustificacion"
                               class="form-control"
                               rows="3"
                               maxlength="500"
                               placeholder="Ej. El operador planeado reportó ausencia al inicio del turno."></textarea>
+                    </div>
+
+                    <div id="coFeedback"
+                         class="alert d-none mt-3 mb-0"></div>
                 </div>
 
-                <div id="coFeedback"
-                     class="alert d-none mt-3 mb-0"></div>
-            </div>
+                <div class="modal-footer border-0">
+                    <button type="button"
+                            class="btn btn-outline-secondary fw-bold"
+                            data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
 
-            <div class="modal-footer border-0">
-                <button type="button"
-                        class="btn btn-outline-secondary fw-bold"
-                        data-bs-dismiss="modal">
-                    Cancelar
-                </button>
-
-                <button type="button"
-                        id="coGuardar"
-                        class="btn btn-primary fw-bold">
-                    <i class="fa-solid fa-user-check me-1"></i>
-                    Aplicar cambio
-                </button>
+                    <button type="button"
+                            id="coGuardar"
+                            class="btn btn-primary fw-bold">
+                        <i class="fa-solid fa-user-check me-1"></i>
+                        Aplicar cambio
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 }
 
 <div class="modal fade" id="modalSolicitudesReprogramacion" tabindex="-1" aria-hidden="true">
@@ -3269,6 +3401,7 @@ else
         background: #eef4fb;
         border-top: 1px solid #d7e1ee;
     }
+
     .timeline-header .days .nsq-hour-cell-v30 {
         min-width: 0;
         padding: 4px 0;
@@ -3279,11 +3412,13 @@ else
         font-weight: 900;
         line-height: 1;
     }
-    .timeline-header .days .nsq-hour-cell-v30.day-start {
-        border-left: 2px solid #7d8da6;
-        color: #004aad;
-        background: #e4efff;
-    }
+
+        .timeline-header .days .nsq-hour-cell-v30.day-start {
+            border-left: 2px solid #7d8da6;
+            color: #004aad;
+            background: #e4efff;
+        }
+
     .nsq-drop-hour-v30 {
         position: fixed;
         z-index: 99999;
@@ -3297,6 +3432,7 @@ else
         font-weight: 900;
         box-shadow: 0 8px 24px rgba(16,42,86,.28);
     }
+
     .nsq-month-hint-v30 {
         grid-column: 1 / -1;
         padding: 5px 8px;
@@ -3309,83 +3445,83 @@ else
     }
 </style>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const vista = '@Model.VistaNormalizada'.toLowerCase();
-    const totalDiasV30 = @totalDias;
-    const inicioV30 = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
-    const finV30 = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
-    const days = document.querySelector('.timeline-header .days');
-    const timeline = document.querySelector('.timeline');
-    const machineHead = document.querySelector('.timeline-header .machine-head');
+    document.addEventListener('DOMContentLoaded', function () {
+        const vista = '@Model.VistaNormalizada'.toLowerCase();
+        const totalDiasV30 = @totalDias;
+        const inicioV30 = new Date('@inicioPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+        const finV30 = new Date('@finPeriodo.ToString("yyyy-MM-ddTHH:mm:ss")');
+        const days = document.querySelector('.timeline-header .days');
+        const timeline = document.querySelector('.timeline');
+        const machineHead = document.querySelector('.timeline-header .machine-head');
 
-    document.querySelectorAll('.nsq-hour-ruler-v30,.nsq-month-hint-v30').forEach(x => x.remove());
+        document.querySelectorAll('.nsq-hour-ruler-v30,.nsq-month-hint-v30').forEach(x => x.remove());
 
-    const mostrarHoras = vista === 'dia' || vista === 'semana' || (vista === 'rango' && totalDiasV30 <= 7);
+        const mostrarHoras = vista === 'dia' || vista === 'semana' || (vista === 'rango' && totalDiasV30 <= 7);
 
-    if (days && mostrarHoras) {
-        const totalHoras = Math.max(24, totalDiasV30 * 24);
-        const ruler = document.createElement('div');
-        ruler.className = 'nsq-hour-ruler-v30';
-        ruler.style.gridTemplateColumns = `repeat(${totalHoras}, minmax(34px, 1fr))`;
+        if (days && mostrarHoras) {
+            const totalHoras = Math.max(24, totalDiasV30 * 24);
+            const ruler = document.createElement('div');
+            ruler.className = 'nsq-hour-ruler-v30';
+            ruler.style.gridTemplateColumns = `repeat(${totalHoras}, minmax(34px, 1fr))`;
 
-        for (let index = 0; index < totalHoras; index++) {
-            const hour = index % 24;
-            const cell = document.createElement('span');
-            cell.className = 'nsq-hour-cell-v30' + (hour === 0 ? ' day-start' : '');
-            cell.textContent = String(hour).padStart(2, '0');
-            cell.title = `${String(hour).padStart(2, '0')}:00`;
-            ruler.appendChild(cell);
+            for (let index = 0; index < totalHoras; index++) {
+                const hour = index % 24;
+                const cell = document.createElement('span');
+                cell.className = 'nsq-hour-cell-v30' + (hour === 0 ? ' day-start' : '');
+                cell.textContent = String(hour).padStart(2, '0');
+                cell.title = `${String(hour).padStart(2, '0')}:00`;
+                ruler.appendChild(cell);
+            }
+            days.appendChild(ruler);
+
+            if (timeline && machineHead) {
+                const machineWidth = Math.max(150, Math.ceil(machineHead.getBoundingClientRect().width));
+                const hourWidth = vista === 'dia' ? 48 : 34;
+                timeline.style.minWidth = `${machineWidth + (totalHoras * hourWidth)}px`;
+            }
         }
-        days.appendChild(ruler);
-
-        if (timeline && machineHead) {
-            const machineWidth = Math.max(150, Math.ceil(machineHead.getBoundingClientRect().width));
-            const hourWidth = vista === 'dia' ? 48 : 34;
-            timeline.style.minWidth = `${machineWidth + (totalHoras * hourWidth)}px`;
+        else if (days && vista === 'mes') {
+            const hint = document.createElement('div');
+            hint.className = 'nsq-month-hint-v30';
+            hint.textContent = 'Vista mensual: puedes arrastrar una OF a otra máquina y fecha; la posición horizontal define la hora y se ajusta a bloques de 60 minutos.'; // NSQ_MES_DRAG_HINT_V1
+            days.appendChild(hint);
         }
-    }
-    else if (days && vista === 'mes') {
-        const hint = document.createElement('div');
-        hint.className = 'nsq-month-hint-v30';
-        hint.textContent = 'Vista mensual: puedes arrastrar una OF a otra máquina y fecha; la posición horizontal define la hora y se ajusta a bloques de 60 minutos.'; // NSQ_MES_DRAG_HINT_V1
-        days.appendChild(hint);
-    }
 
-    const badge = document.createElement('div');
-    badge.className = 'nsq-drop-hour-v30';
-    document.body.appendChild(badge);
+        const badge = document.createElement('div');
+        badge.className = 'nsq-drop-hour-v30';
+        document.body.appendChild(badge);
 
-    function snappedDate(track, event) {
-        const rect = track.getBoundingClientRect();
-        if (!rect.width) return null;
-        const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
-        const pct = x / rect.width;
-        const raw = new Date(inicioV30.getTime() + pct * (finV30 - inicioV30));
-        const base = new Date(raw.getFullYear(), raw.getMonth(), raw.getDate(), raw.getHours(), 0, 0, 0);
-        if (raw.getMinutes() >= 30) base.setHours(base.getHours() + 1);
-        return base;
-    }
-
-    document.addEventListener('dragover', function (event) {
-        // NSQ_MES_DRAG_BADGE_V1: en vista mensual tambien mostramos la previsualizacion de hora.
-        const track = event.target?.closest?.('.track');
-        if (!track) {
-            badge.style.display = 'none';
-            return;
+        function snappedDate(track, event) {
+            const rect = track.getBoundingClientRect();
+            if (!rect.width) return null;
+            const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+            const pct = x / rect.width;
+            const raw = new Date(inicioV30.getTime() + pct * (finV30 - inicioV30));
+            const base = new Date(raw.getFullYear(), raw.getMonth(), raw.getDate(), raw.getHours(), 0, 0, 0);
+            if (raw.getMinutes() >= 30) base.setHours(base.getHours() + 1);
+            return base;
         }
-        const date = snappedDate(track, event);
-        if (!date) return;
-        const pad = n => String(n).padStart(2, '0');
-        badge.textContent = `${pad(date.getDate())}/${pad(date.getMonth()+1)} ${pad(date.getHours())}:00`;
-        badge.style.left = `${Math.min(window.innerWidth - 150, event.clientX + 14)}px`;
-        badge.style.top = `${Math.max(8, event.clientY - 42)}px`;
-        badge.style.display = 'block';
+
+        document.addEventListener('dragover', function (event) {
+            // NSQ_MES_DRAG_BADGE_V1: en vista mensual tambien mostramos la previsualizacion de hora.
+            const track = event.target?.closest?.('.track');
+            if (!track) {
+                badge.style.display = 'none';
+                return;
+            }
+            const date = snappedDate(track, event);
+            if (!date) return;
+            const pad = n => String(n).padStart(2, '0');
+            badge.textContent = `${pad(date.getDate())}/${pad(date.getMonth()+1)} ${pad(date.getHours())}:00`;
+            badge.style.left = `${Math.min(window.innerWidth - 150, event.clientX + 14)}px`;
+            badge.style.top = `${Math.max(8, event.clientY - 42)}px`;
+            badge.style.display = 'block';
+        });
+
+        ['drop','dragend'].forEach(name => {
+            document.addEventListener(name, () => { badge.style.display = 'none'; });
+        });
     });
-
-    ['drop','dragend'].forEach(name => {
-        document.addEventListener(name, () => { badge.style.display = 'none'; });
-    });
-});
 </script>
 @* NSQ_WEEK_COMPACT_HOURS_V31 *@
 <style>
@@ -3396,6 +3532,7 @@ document.addEventListener('DOMContentLoaded', function () {
         border-top: 1px solid #d7e1ee;
         overflow: hidden;
     }
+
     .timeline-header .days .nsq-hour-cell-v31 {
         min-width: 0;
         padding: 2px 0;
@@ -3407,659 +3544,661 @@ document.addEventListener('DOMContentLoaded', function () {
         line-height: 1;
         overflow: hidden;
     }
-    .timeline-header .days .nsq-hour-cell-v31.day-start {
-        border-left: 2px solid #7d8da6;
-        color: #004aad;
-        background: #e4efff;
-    }
+
+        .timeline-header .days .nsq-hour-cell-v31.day-start {
+            border-left: 2px solid #7d8da6;
+            color: #004aad;
+            background: #e4efff;
+        }
 </style>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const vista31 = '@Model.VistaNormalizada'.toLowerCase();
-    const dias31 = @totalDias;
-    const days31 = document.querySelector('.timeline-header .days');
-    const timeline31 = document.querySelector('.timeline');
-    const machine31 = document.querySelector('.timeline-header .machine-head');
+    document.addEventListener('DOMContentLoaded', function () {
+        const vista31 = '@Model.VistaNormalizada'.toLowerCase();
+        const dias31 = @totalDias;
+        const days31 = document.querySelector('.timeline-header .days');
+        const timeline31 = document.querySelector('.timeline');
+        const machine31 = document.querySelector('.timeline-header .machine-head');
 
-    document.querySelectorAll('.nsq-hour-ruler-v30,.nsq-hour-ruler-v31').forEach(x => x.remove());
+        document.querySelectorAll('.nsq-hour-ruler-v30,.nsq-hour-ruler-v31').forEach(x => x.remove());
 
-    const mostrar31 = vista31 === 'dia' || vista31 === 'semana' || (vista31 === 'rango' && dias31 <= 7);
-    if (!days31 || !mostrar31) return;
+        const mostrar31 = vista31 === 'dia' || vista31 === 'semana' || (vista31 === 'rango' && dias31 <= 7);
+        if (!days31 || !mostrar31) return;
 
-    const totalHoras31 = Math.max(24, dias31 * 24);
-    const ruler31 = document.createElement('div');
-    ruler31.className = 'nsq-hour-ruler-v31';
-    ruler31.style.gridTemplateColumns = `repeat(${totalHoras31}, minmax(0, 1fr))`;
+        const totalHoras31 = Math.max(24, dias31 * 24);
+        const ruler31 = document.createElement('div');
+        ruler31.className = 'nsq-hour-ruler-v31';
+        ruler31.style.gridTemplateColumns = `repeat(${totalHoras31}, minmax(0, 1fr))`;
 
-    for (let i=0; i<totalHoras31; i++) {
-        const h=i%24;
-        const cell=document.createElement('span');
-        cell.className='nsq-hour-cell-v31'+(h===0?' day-start':'');
-        cell.textContent=String(h).padStart(2,'0');
-        cell.title=String(h).padStart(2,'0')+':00';
-        ruler31.appendChild(cell);
-    }
-    days31.appendChild(ruler31);
-
-    if (timeline31) {
-        if (vista31 === 'dia' && machine31) {
-            const mw=Math.max(150,Math.ceil(machine31.getBoundingClientRect().width));
-            timeline31.style.minWidth=`${mw + (24 * 48)}px`;
-        } else {
-            // Semana vuelve al ancho natural anterior; 168 horas se comprimen.
-            timeline31.style.minWidth='';
+        for (let i=0; i<totalHoras31; i++) {
+            const h=i%24;
+            const cell=document.createElement('span');
+            cell.className='nsq-hour-cell-v31'+(h===0?' day-start':'');
+            cell.textContent=String(h).padStart(2,'0');
+            cell.title=String(h).padStart(2,'0')+':00';
+            ruler31.appendChild(cell);
         }
-    }
-});
+        days31.appendChild(ruler31);
+
+        if (timeline31) {
+            if (vista31 === 'dia' && machine31) {
+                const mw=Math.max(150,Math.ceil(machine31.getBoundingClientRect().width));
+                timeline31.style.minWidth=`${mw + (24 * 48)}px`;
+            } else {
+                // Semana vuelve al ancho natural anterior; 168 horas se comprimen.
+                timeline31.style.minWidth='';
+            }
+        }
+    });
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const esModoProduccion = @(modoProduccion ? "true" : "false");
-    if (esModoProduccion) return;
+    document.addEventListener('DOMContentLoaded', function () {
+        const esModoProduccion = @(modoProduccion ? "true" : "false");
+        if (esModoProduccion) return;
 
-    const modalEl = document.getElementById('modalInterrupcionUrgente');
-    if (!modalEl) return;
+        const modalEl = document.getElementById('modalInterrupcionUrgente');
+        if (!modalEl) return;
 
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    const programaInput = document.getElementById('iuProgramaID');
-    const programaTexto = document.getElementById('iuProgramaTexto');
-    const parteTexto = document.getElementById('iuParteTexto');
-    const descripcionTexto = document.getElementById('iuDescripcionTexto');
-    const moldeTexto = document.getElementById('iuMoldeTexto');
-    const maquinaSelect = document.getElementById('iuMaquina');
-    const motivoInput = document.getElementById('iuMotivo');
-        const destinoInterrupcion=document.getElementById('iuDestinoInterrupcion');
-    const bloqueMotivoTerminacionParcial=document.getElementById('iuBloqueMotivoTerminacionParcial');
-    const motivoTerminacionParcialInput=document.getElementById('iuMotivoTerminacionParcial');
-    const btnCalcular = document.getElementById('iuCalcular');
-    const btnConfirmar = document.getElementById('iuConfirmar');
-    const estadoConfirmacion = document.getElementById('iuEstadoConfirmacion');
-    const feedback = document.getElementById('iuFeedback');
-    const preview = document.getElementById('iuPreview');
-    const endpointMaquinas = '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")';
-    const endpointPreview = '@Url.Action("PrevisualizarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
-    const endpointConfirmar = '@Url.Action("ConfirmarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
-    const tokenInterrupcion = document.querySelector('#antiForgeryToken input[name="__RequestVerificationToken"]')?.value || document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-    let maquinaInicialID = 0;
-    let consultando = false;
-    let confirmando = false;
-    let simulacionValida = false;
-    let programaSimuladoID = 0;
-    let maquinaSimuladaID = 0;
-        let terminacionParcialSimulada=false;
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const programaInput = document.getElementById('iuProgramaID');
+        const programaTexto = document.getElementById('iuProgramaTexto');
+        const parteTexto = document.getElementById('iuParteTexto');
+        const descripcionTexto = document.getElementById('iuDescripcionTexto');
+        const moldeTexto = document.getElementById('iuMoldeTexto');
+        const maquinaSelect = document.getElementById('iuMaquina');
+        const motivoInput = document.getElementById('iuMotivo');
+            const destinoInterrupcion=document.getElementById('iuDestinoInterrupcion');
+        const bloqueMotivoTerminacionParcial=document.getElementById('iuBloqueMotivoTerminacionParcial');
+        const motivoTerminacionParcialInput=document.getElementById('iuMotivoTerminacionParcial');
+        const btnCalcular = document.getElementById('iuCalcular');
+        const btnConfirmar = document.getElementById('iuConfirmar');
+        const estadoConfirmacion = document.getElementById('iuEstadoConfirmacion');
+        const feedback = document.getElementById('iuFeedback');
+        const preview = document.getElementById('iuPreview');
+        const endpointMaquinas = '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")';
+        const endpointPreview = '@Url.Action("PrevisualizarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+        const endpointConfirmar = '@Url.Action("ConfirmarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+        const tokenInterrupcion = document.querySelector('#antiForgeryToken input[name="__RequestVerificationToken"]')?.value || document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        let maquinaInicialID = 0;
+        let consultando = false;
+        let confirmando = false;
+        let simulacionValida = false;
+        let programaSimuladoID = 0;
+        let maquinaSimuladaID = 0;
+            let terminacionParcialSimulada=false;
 
-    function feedbackSet(texto, tipo) {
-        feedback.className = `alert mt-3 mb-0 ${tipo || 'alert-light'}`;
-        feedback.textContent = texto || '';
-        feedback.classList.toggle('d-none', !texto);
-    }
-
-       function actualizarEstadoConfirmacion() {
-        const motivoValido=(motivoInput?.value||'').trim().length>=5;
-        const esParcial=esTerminacionParcialSeleccionada();
-        const motivoParcial=(motivoTerminacionParcialInput?.value||'').trim();
-        const motivoParcialValido=!esParcial||motivoParcial.length>=5;
-        const destinoCoincide=simulacionValida&&terminacionParcialSimulada===esParcial;
-        const habilitado=simulacionValida&&motivoValido&&motivoParcialValido&&destinoCoincide&&!confirmando;
-
-        if(btnConfirmar)
-            btnConfirmar.disabled=!habilitado;
-
-        if(!estadoConfirmacion)
-            return;
-
-        if(!simulacionValida)
-        {
-            estadoConfirmacion.textContent='Calcula primero el impacto para habilitar la confirmación.';
-            return;
+        function feedbackSet(texto, tipo) {
+            feedback.className = `alert mt-3 mb-0 ${tipo || 'alert-light'}`;
+            feedback.textContent = texto || '';
+            feedback.classList.toggle('d-none', !texto);
         }
 
-        if(!destinoCoincide)
-        {
-            estadoConfirmacion.textContent='Cambió la decisión sobre la OF interrumpida. Calcula nuevamente el impacto.';
-            return;
-        }
+           function actualizarEstadoConfirmacion() {
+            const motivoValido=(motivoInput?.value||'').trim().length>=5;
+            const esParcial=esTerminacionParcialSeleccionada();
+            const motivoParcial=(motivoTerminacionParcialInput?.value||'').trim();
+            const motivoParcialValido=!esParcial||motivoParcial.length>=5;
+            const destinoCoincide=simulacionValida&&terminacionParcialSimulada===esParcial;
+            const habilitado=simulacionValida&&motivoValido&&motivoParcialValido&&destinoCoincide&&!confirmando;
 
-        if(!motivoValido)
-        {
-            estadoConfirmacion.textContent='La simulación es válida. Escribe un motivo de al menos 5 caracteres para confirmar.';
-            return;
-        }
+            if(btnConfirmar)
+                btnConfirmar.disabled=!habilitado;
 
-        if(esParcial&&!motivoParcialValido)
-        {
-            estadoConfirmacion.textContent='Planeación debe escribir el motivo de la terminación parcial.';
-            return;
-        }
+            if(!estadoConfirmacion)
+                return;
 
-        estadoConfirmacion.textContent=esParcial
-            ?'Simulación validada. Planeación está autorizando la terminación parcial de la OF interrumpida.'
-            :'Simulación validada. La OF interrumpida regresará después de la urgente.';
-    }
-
-       function invalidarSimulacion() {
-        simulacionValida=false;
-        programaSimuladoID=0;
-        maquinaSimuladaID=0;
-        terminacionParcialSimulada=false;
-        actualizarEstadoConfirmacion();
-    }
-
-        function esTerminacionParcialSeleccionada() {
-        return destinoInterrupcion?.value === 'TERMINACION_PARCIAL';
-    }
-
-    function actualizarDestinoInterrupcion() {
-        const parcial = esTerminacionParcialSeleccionada();
-
-        bloqueMotivoTerminacionParcial?.classList.toggle(
-            'd-none',
-            !parcial
-        );
-
-        if (!parcial && motivoTerminacionParcialInput) {
-            motivoTerminacionParcialInput.value = '';
-        }
-    }
-
-    function limpiarPreview() {
-        preview.classList.add('d-none');
-        document.getElementById('iuAdvertencias').innerHTML = '';
-        invalidarSimulacion();
-    }
-
-    function textoOF(solicitudId, programaId) {
-        const solicitud = Number(solicitudId || 0);
-        const programa = Number(programaId || 0);
-        return solicitud > 0 ? `OF ${solicitud}` : `Programa ${programa}`;
-    }
-
-    function formatearFecha(value) {
-        if (!value) return '-';
-        const fecha = new Date(value);
-        if (Number.isNaN(fecha.getTime())) return '-';
-        const pad = n => String(n).padStart(2, '0');
-        return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
-    }
-
-    async function cargarMaquinas(programaId) {
-        maquinaSelect.disabled = true;
-        maquinaSelect.innerHTML = '<option value="">Cargando máquinas compatibles...</option>';
-        try {
-            const url = `${endpointMaquinas}?programaProduccionId=${encodeURIComponent(programaId)}`;
-            const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-            const data = await response.json();
-            if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
-
-            maquinaSelect.innerHTML = '<option value="">-- Seleccionar máquina compatible --</option>';
-            (data.maquinas || []).forEach(x => {
-                const option = document.createElement('option');
-                option.value = String(x.maquinaID || 0);
-                option.textContent = `${x.codigo || '-'}${x.nombre ? ' - ' + x.nombre : ''}`;
-                maquinaSelect.appendChild(option);
-            });
-
-            if (maquinaInicialID > 0) {
-                const existeActual = Array.from(maquinaSelect.options).some(x => Number(x.value || 0) === maquinaInicialID);
-                if (existeActual) maquinaSelect.value = String(maquinaInicialID);
-            }
-
-            if (!(data.maquinas || []).length)
-                feedbackSet('No se encontraron máquinas compatibles para esta OF.', 'alert-warning');
-            else
-                feedbackSet('Selecciona la máquina que actualmente está produciendo y calcula el impacto.', 'alert-info');
-        }
-        catch (error) {
-            maquinaSelect.innerHTML = '<option value="">No disponible</option>';
-            feedbackSet(error.message || 'No fue posible consultar las máquinas compatibles.', 'alert-danger');
-        }
-        finally {
-            maquinaSelect.disabled = false;
-        }
-    }
-
-       function abrirInterrupcionUrgente(btn) {
-        const programaId=Number(btn.dataset.programaId||0);
-
-        if(!programaId)
-        {
-            feedbackSet('No fue posible identificar el programa urgente.','alert-danger');
-            return;
-        }
-
-        programaInput.value=String(programaId);
-        programaTexto.textContent=btn.dataset.of||`Programa ${programaId}`;
-        parteTexto.textContent=btn.dataset.parte||'-';
-        descripcionTexto.textContent=btn.dataset.descripcion||'';
-        moldeTexto.textContent=btn.dataset.molde||'Sin molde';
-        maquinaInicialID=Number(btn.dataset.maquinaId||0);
-
-        motivoInput.value='';
-
-        if(destinoInterrupcion)
-            destinoInterrupcion.value='PAUSA_RETORNO';
-
-        if(motivoTerminacionParcialInput)
-            motivoTerminacionParcialInput.value='';
-
-        actualizarDestinoInterrupcion();
-        limpiarPreview();
-        feedbackSet('','');
-
-        const modalOrigenEl=btn.closest('.modal');
-
-        if(modalOrigenEl)
-        {
-            const modalOrigen=bootstrap.Modal.getOrCreateInstance(modalOrigenEl);
-
-            modalOrigenEl.addEventListener('hidden.bs.modal',function(){
-                modal.show();
-            },{once:true});
-
-            modalOrigen.hide();
-        }
-        else
-        {
-            modal.show();
-        }
-
-        cargarMaquinas(programaId);
-        actualizarEstadoConfirmacion();
-    }
-
-        function pintarResultado(data) {
-        const interrumpida=data.programaInterrumpido||{};
-        const urgente=data.programaUrgente||{};
-        const interrupcion=data.interrupcion||{};
-        const maquina=data.maquina||{};
-
-        terminacionParcialSimulada=!!data.terminacionParcialAutorizada;
-
-        document.getElementById('iuImpactoBadge').textContent=
-            `+${Number(interrupcion.minutosImpactoTotal||0).toLocaleString('es-MX')} min`;
-
-        document.getElementById('iuInterrumpidaOF').textContent=
-            textoOF(interrumpida.solicitudProduccionID,interrumpida.programaProduccionID);
-
-        document.getElementById('iuInterrumpidaParte').textContent=
-            `${interrumpida.parte||'-'}${interrumpida.descripcion?' · '+interrumpida.descripcion:''}`;
-
-        document.getElementById('iuUrgenteOFResultado').textContent=
-            textoOF(urgente.solicitudProduccionID,urgente.programaProduccionID);
-
-        document.getElementById('iuUrgenteParteResultado').textContent=
-            `${urgente.parte||'-'}${urgente.descripcion?' · '+urgente.descripcion:''}`;
-
-        document.getElementById('iuMaquinaResultado').textContent=
-            `${maquina.codigo||'-'}${maquina.nombre?' - '+maquina.nombre:''}`;
-
-        document.getElementById('iuMoldeResultado').textContent=
-            interrupcion.cambiaMolde
-                ?`${interrumpida.molde||'Sin molde'} → ${urgente.molde||'Sin molde'}`
-                :`Sin cambio · ${urgente.molde||'Sin molde'}`;
-
-        document.getElementById('iuPosterioresResultado').textContent=
-            Number(interrupcion.programasPosterioresImpactados||0).toLocaleString('es-MX');
-
-        document.getElementById('iuFechaInterrupcion').textContent=
-            formatearFecha(interrupcion.fechaInterrupcion);
-
-        document.getElementById('iuArranqueUrgente').textContent=
-            formatearFecha(interrupcion.fechaArranqueUrgente);
-
-        document.getElementById('iuFinUrgente').textContent=
-            formatearFecha(interrupcion.fechaFinUrgente);
-
-        document.getElementById('iuReinicioOriginal').textContent=
-            terminacionParcialSimulada
-                ?'No aplica · cierre parcial'
-                :formatearFecha(interrupcion.fechaReinicioOriginal);
-
-        document.getElementById('iuFinOriginalActual').textContent=
-            formatearFecha(interrumpida.finProgramado);
-
-        document.getElementById('iuFinOriginalProyectado').textContent=
-            terminacionParcialSimulada
-                ?`Cierre al interrumpir · ${formatearFecha(interrumpida.finProyectado)}`
-                :formatearFecha(interrumpida.finProyectado);
-
-        document.getElementById('iuMensajeResultado').textContent=
-            data.mensaje||data.motivoResumen||'Simulación calculada.';
-
-        const advertencias=document.getElementById('iuAdvertencias');
-        advertencias.innerHTML='';
-
-        const lista=Array.isArray(data.advertencias)?data.advertencias:[];
-
-        if(!lista.length)
-        {
-            const li=document.createElement('li');
-            li.textContent='No se detectaron advertencias adicionales.';
-            advertencias.appendChild(li);
-        }
-        else
-        {
-            lista.forEach(texto=>{
-                const li=document.createElement('li');
-                li.textContent=texto;
-                advertencias.appendChild(li);
-            });
-        }
-
-        simulacionValida=true;
-        programaSimuladoID=Number(programaInput.value||0);
-        maquinaSimuladaID=Number(maquinaSelect.value||0);
-
-        preview.classList.remove('d-none');
-        actualizarEstadoConfirmacion();
-        preview.scrollIntoView({behavior:'smooth',block:'nearest'});
-    }
-
-        async function calcularImpacto() {
-        if(consultando||confirmando)
-            return;
-
-        const programaUrgenteId=Number(programaInput.value||0);
-        const maquinaId=Number(maquinaSelect.value||0);
-        const autorizaTerminacionParcial=esTerminacionParcialSeleccionada();
-
-        limpiarPreview();
-
-        if(!programaUrgenteId)
-        {
-            feedbackSet('No se pudo identificar la OF urgente.','alert-warning');
-            return;
-        }
-
-        if(!maquinaId)
-        {
-            feedbackSet('Selecciona la máquina donde se realizará la interrupción.','alert-warning');
-            maquinaSelect.focus();
-            return;
-        }
-
-        consultando=true;
-        btnCalcular.disabled=true;
-        btnCalcular.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Calculando...';
-
-        feedbackSet(
-            autorizaTerminacionParcial
-                ?'Calculando la interrupción con terminación parcial de la OF actual...'
-                :'Calculando el impacto con retorno posterior de la OF actual...',
-            'alert-info'
-        );
-
-        try
-        {
-            const parametros=new URLSearchParams({
-                programaUrgenteId:programaUrgenteId.toString(),
-                maquinaId:maquinaId.toString(),
-                trabajarDomingo:(!!document.getElementById('trabajarDomingoCalendario')?.checked).toString(),
-                autorizaTerminacionParcial:autorizaTerminacionParcial.toString()
-            });
-
-            const response=await fetch(
-                `${endpointPreview}?${parametros.toString()}`,
-                {
-                    method:'GET',
-                    headers:{'Accept':'application/json'},
-                    cache:'no-store'
-                });
-
-            const data=await response.json();
-
-            if(!response.ok||!data?.ok)
+            if(!simulacionValida)
             {
-                feedbackSet(
-                    data?.mensaje||`No fue posible calcular el impacto. HTTP ${response.status}`,
-                    'alert-warning');
-
+                estadoConfirmacion.textContent='Calcula primero el impacto para habilitar la confirmación.';
                 return;
             }
 
-            pintarResultado(data);
+            if(!destinoCoincide)
+            {
+                estadoConfirmacion.textContent='Cambió la decisión sobre la OF interrumpida. Calcula nuevamente el impacto.';
+                return;
+            }
+
+            if(!motivoValido)
+            {
+                estadoConfirmacion.textContent='La simulación es válida. Escribe un motivo de al menos 5 caracteres para confirmar.';
+                return;
+            }
+
+            if(esParcial&&!motivoParcialValido)
+            {
+                estadoConfirmacion.textContent='Planeación debe escribir el motivo de la terminación parcial.';
+                return;
+            }
+
+            estadoConfirmacion.textContent=esParcial
+                ?'Simulación validada. Planeación está autorizando la terminación parcial de la OF interrumpida.'
+                :'Simulación validada. La OF interrumpida regresará después de la urgente.';
+        }
+
+           function invalidarSimulacion() {
+            simulacionValida=false;
+            programaSimuladoID=0;
+            maquinaSimuladaID=0;
+            terminacionParcialSimulada=false;
+            actualizarEstadoConfirmacion();
+        }
+
+            function esTerminacionParcialSeleccionada() {
+            return destinoInterrupcion?.value === 'TERMINACION_PARCIAL';
+        }
+
+        function actualizarDestinoInterrupcion() {
+            const parcial = esTerminacionParcialSeleccionada();
+
+            bloqueMotivoTerminacionParcial?.classList.toggle(
+                'd-none',
+                !parcial
+            );
+
+            if (!parcial && motivoTerminacionParcialInput) {
+                motivoTerminacionParcialInput.value = '';
+            }
+        }
+
+        function limpiarPreview() {
+            preview.classList.add('d-none');
+            document.getElementById('iuAdvertencias').innerHTML = '';
+            invalidarSimulacion();
+        }
+
+        function textoOF(solicitudId, programaId) {
+            const solicitud = Number(solicitudId || 0);
+            const programa = Number(programaId || 0);
+            return solicitud > 0 ? `OF ${solicitud}` : `Programa ${programa}`;
+        }
+
+        function formatearFecha(value) {
+            if (!value) return '-';
+            const fecha = new Date(value);
+            if (Number.isNaN(fecha.getTime())) return '-';
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
+        }
+
+        async function cargarMaquinas(programaId) {
+            maquinaSelect.disabled = true;
+            maquinaSelect.innerHTML = '<option value="">Cargando máquinas compatibles...</option>';
+            try {
+                const url = `${endpointMaquinas}?programaProduccionId=${encodeURIComponent(programaId)}`;
+                const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                const data = await response.json();
+                if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+                maquinaSelect.innerHTML = '<option value="">-- Seleccionar máquina compatible --</option>';
+                (data.maquinas || []).forEach(x => {
+                    const option = document.createElement('option');
+                    option.value = String(x.maquinaID || 0);
+                    option.textContent = `${x.codigo || '-'}${x.nombre ? ' - ' + x.nombre : ''}`;
+                    maquinaSelect.appendChild(option);
+                });
+
+                if (maquinaInicialID > 0) {
+                    const existeActual = Array.from(maquinaSelect.options).some(x => Number(x.value || 0) === maquinaInicialID);
+                    if (existeActual) maquinaSelect.value = String(maquinaInicialID);
+                }
+
+                if (!(data.maquinas || []).length)
+                    feedbackSet('No se encontraron máquinas compatibles para esta OF.', 'alert-warning');
+                else
+                    feedbackSet('Selecciona la máquina que actualmente está produciendo y calcula el impacto.', 'alert-info');
+            }
+            catch (error) {
+                maquinaSelect.innerHTML = '<option value="">No disponible</option>';
+                feedbackSet(error.message || 'No fue posible consultar las máquinas compatibles.', 'alert-danger');
+            }
+            finally {
+                maquinaSelect.disabled = false;
+            }
+        }
+
+           function abrirInterrupcionUrgente(btn) {
+            const programaId=Number(btn.dataset.programaId||0);
+
+            if(!programaId)
+            {
+                feedbackSet('No fue posible identificar el programa urgente.','alert-danger');
+                return;
+            }
+
+            programaInput.value=String(programaId);
+            programaTexto.textContent=btn.dataset.of||`Programa ${programaId}`;
+            parteTexto.textContent=btn.dataset.parte||'-';
+            descripcionTexto.textContent=btn.dataset.descripcion||'';
+            moldeTexto.textContent=btn.dataset.molde||'Sin molde';
+            maquinaInicialID=Number(btn.dataset.maquinaId||0);
+
+            motivoInput.value='';
+
+            if(destinoInterrupcion)
+                destinoInterrupcion.value='PAUSA_RETORNO';
+
+            if(motivoTerminacionParcialInput)
+                motivoTerminacionParcialInput.value='';
+
+            actualizarDestinoInterrupcion();
+            limpiarPreview();
+            feedbackSet('','');
+
+            const modalOrigenEl=btn.closest('.modal');
+
+            if(modalOrigenEl)
+            {
+                const modalOrigen=bootstrap.Modal.getOrCreateInstance(modalOrigenEl);
+
+                modalOrigenEl.addEventListener('hidden.bs.modal',function(){
+                    modal.show();
+                },{once:true});
+
+                modalOrigen.hide();
+            }
+            else
+            {
+                modal.show();
+            }
+
+            cargarMaquinas(programaId);
+            actualizarEstadoConfirmacion();
+        }
+
+            function pintarResultado(data) {
+            const interrumpida=data.programaInterrumpido||{};
+            const urgente=data.programaUrgente||{};
+            const interrupcion=data.interrupcion||{};
+            const maquina=data.maquina||{};
+
+            terminacionParcialSimulada=!!data.terminacionParcialAutorizada;
+
+            document.getElementById('iuImpactoBadge').textContent=
+                `+${Number(interrupcion.minutosImpactoTotal||0).toLocaleString('es-MX')} min`;
+
+            document.getElementById('iuInterrumpidaOF').textContent=
+                textoOF(interrumpida.solicitudProduccionID,interrumpida.programaProduccionID);
+
+            document.getElementById('iuInterrumpidaParte').textContent=
+                `${interrumpida.parte||'-'}${interrumpida.descripcion?' · '+interrumpida.descripcion:''}`;
+
+            document.getElementById('iuUrgenteOFResultado').textContent=
+                textoOF(urgente.solicitudProduccionID,urgente.programaProduccionID);
+
+            document.getElementById('iuUrgenteParteResultado').textContent=
+                `${urgente.parte||'-'}${urgente.descripcion?' · '+urgente.descripcion:''}`;
+
+            document.getElementById('iuMaquinaResultado').textContent=
+                `${maquina.codigo||'-'}${maquina.nombre?' - '+maquina.nombre:''}`;
+
+            document.getElementById('iuMoldeResultado').textContent=
+                interrupcion.cambiaMolde
+                    ?`${interrumpida.molde||'Sin molde'} → ${urgente.molde||'Sin molde'}`
+                    :`Sin cambio · ${urgente.molde||'Sin molde'}`;
+
+            document.getElementById('iuPosterioresResultado').textContent=
+                Number(interrupcion.programasPosterioresImpactados||0).toLocaleString('es-MX');
+
+            document.getElementById('iuFechaInterrupcion').textContent=
+                formatearFecha(interrupcion.fechaInterrupcion);
+
+            document.getElementById('iuArranqueUrgente').textContent=
+                formatearFecha(interrupcion.fechaArranqueUrgente);
+
+            document.getElementById('iuFinUrgente').textContent=
+                formatearFecha(interrupcion.fechaFinUrgente);
+
+            document.getElementById('iuReinicioOriginal').textContent=
+                terminacionParcialSimulada
+                    ?'No aplica · cierre parcial'
+                    :formatearFecha(interrupcion.fechaReinicioOriginal);
+
+            document.getElementById('iuFinOriginalActual').textContent=
+                formatearFecha(interrumpida.finProgramado);
+
+            document.getElementById('iuFinOriginalProyectado').textContent=
+                terminacionParcialSimulada
+                    ?`Cierre al interrumpir · ${formatearFecha(interrumpida.finProyectado)}`
+                    :formatearFecha(interrumpida.finProyectado);
+
+            document.getElementById('iuMensajeResultado').textContent=
+                data.mensaje||data.motivoResumen||'Simulación calculada.';
+
+            const advertencias=document.getElementById('iuAdvertencias');
+            advertencias.innerHTML='';
+
+            const lista=Array.isArray(data.advertencias)?data.advertencias:[];
+
+            if(!lista.length)
+            {
+                const li=document.createElement('li');
+                li.textContent='No se detectaron advertencias adicionales.';
+                advertencias.appendChild(li);
+            }
+            else
+            {
+                lista.forEach(texto=>{
+                    const li=document.createElement('li');
+                    li.textContent=texto;
+                    advertencias.appendChild(li);
+                });
+            }
+
+            simulacionValida=true;
+            programaSimuladoID=Number(programaInput.value||0);
+            maquinaSimuladaID=Number(maquinaSelect.value||0);
+
+            preview.classList.remove('d-none');
+            actualizarEstadoConfirmacion();
+            preview.scrollIntoView({behavior:'smooth',block:'nearest'});
+        }
+
+            async function calcularImpacto() {
+            if(consultando||confirmando)
+                return;
+
+            const programaUrgenteId=Number(programaInput.value||0);
+            const maquinaId=Number(maquinaSelect.value||0);
+            const autorizaTerminacionParcial=esTerminacionParcialSeleccionada();
+
+            limpiarPreview();
+
+            if(!programaUrgenteId)
+            {
+                feedbackSet('No se pudo identificar la OF urgente.','alert-warning');
+                return;
+            }
+
+            if(!maquinaId)
+            {
+                feedbackSet('Selecciona la máquina donde se realizará la interrupción.','alert-warning');
+                maquinaSelect.focus();
+                return;
+            }
+
+            consultando=true;
+            btnCalcular.disabled=true;
+            btnCalcular.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Calculando...';
 
             feedbackSet(
                 autorizaTerminacionParcial
-                    ?'Simulación calculada. La OF interrumpida quedará autorizada para terminación parcial y no se proyecta su regreso.'
-                    :'Simulación calculada correctamente. Revisa el impacto antes de confirmar.',
-                'alert-success');
-        }
-        catch(error)
-        {
-            feedbackSet(
-                error.message||'No fue posible calcular la interrupción urgente.',
-                'alert-danger');
-        }
-        finally
-        {
-            consultando=false;
-            btnCalcular.disabled=false;
-            btnCalcular.innerHTML='<i class="fa-solid fa-calculator me-1"></i> Calcular impacto';
-            actualizarEstadoConfirmacion();
-        }
-    }
-
-        async function confirmarInterrupcion() {
-        if(consultando||confirmando)
-            return;
-
-        const programaUrgenteId=Number(programaInput.value||0);
-        const maquinaId=Number(maquinaSelect.value||0);
-        const motivo=(motivoInput.value||'').trim();
-        const autorizaTerminacionParcial=esTerminacionParcialSeleccionada();
-        const motivoTerminacionParcial=(motivoTerminacionParcialInput?.value||'').trim();
-
-        if(!simulacionValida)
-        {
-            feedbackSet('Debes calcular nuevamente el impacto antes de confirmar.','alert-warning');
-            return;
-        }
-
-        if(
-            !programaUrgenteId
-            ||programaUrgenteId!==programaSimuladoID
-            ||!maquinaId
-            ||maquinaId!==maquinaSimuladaID
-            ||autorizaTerminacionParcial!==terminacionParcialSimulada)
-        {
-            invalidarSimulacion();
-            feedbackSet('La OF, máquina o decisión sobre la OF interrumpida cambió después de la simulación. Calcula nuevamente el impacto.','alert-warning');
-            return;
-        }
-
-        if(motivo.length<5)
-        {
-            feedbackSet('Escribe un motivo claro de al menos 5 caracteres para confirmar la urgencia.','alert-warning');
-            motivoInput.focus();
-            return;
-        }
-
-        if(motivo.length>500)
-        {
-            feedbackSet('El motivo no puede superar 500 caracteres.','alert-warning');
-            motivoInput.focus();
-            return;
-        }
-
-        if(autorizaTerminacionParcial&&motivoTerminacionParcial.length<5)
-        {
-            feedbackSet('Escribe el motivo por el que Planeación autoriza terminar parcialmente la OF.','alert-warning');
-            motivoTerminacionParcialInput?.focus();
-            return;
-        }
-
-        if(motivoTerminacionParcial.length>500)
-        {
-            feedbackSet('El motivo de terminación parcial no puede superar 500 caracteres.','alert-warning');
-            motivoTerminacionParcialInput?.focus();
-            return;
-        }
-
-        confirmando=true;
-        btnConfirmar.disabled=true;
-        btnCalcular.disabled=true;
-        maquinaSelect.disabled=true;
-        motivoInput.readOnly=true;
-
-        if(destinoInterrupcion)
-            destinoInterrupcion.disabled=true;
-
-        if(motivoTerminacionParcialInput)
-            motivoTerminacionParcialInput.readOnly=true;
-
-        btnConfirmar.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Confirmando interrupción...';
-
-        if(estadoConfirmacion)
-            estadoConfirmacion.textContent='Registrando la orden de Planeación...';
-
-        feedbackSet('Confirmando la interrupción. No cierres esta ventana...','alert-danger');
-
-        try
-        {
-            const payload={
-                ProgramaUrgenteID:programaUrgenteId,
-                MaquinaID:maquinaId,
-                Motivo:motivo,
-                TrabajarDomingo:!!document.getElementById('trabajarDomingoCalendario')?.checked,
-                AutorizaTerminacionParcial:autorizaTerminacionParcial,
-                MotivoTerminacionParcial:autorizaTerminacionParcial
-                    ?motivoTerminacionParcial
-                    :null
-            };
-
-            const response=await fetch(
-                endpointConfirmar,
-                {
-                    method:'POST',
-                    headers:{
-                        'Content-Type':'application/json',
-                        'Accept':'application/json',
-                        'RequestVerificationToken':tokenInterrupcion
-                    },
-                    body:JSON.stringify(payload)
-                });
-
-            let data=null;
+                    ?'Calculando la interrupción con terminación parcial de la OF actual...'
+                    :'Calculando el impacto con retorno posterior de la OF actual...',
+                'alert-info'
+            );
 
             try
             {
-                data=await response.json();
+                const parametros=new URLSearchParams({
+                    programaUrgenteId:programaUrgenteId.toString(),
+                    maquinaId:maquinaId.toString(),
+                    trabajarDomingo:(!!document.getElementById('trabajarDomingoCalendario')?.checked).toString(),
+                    autorizaTerminacionParcial:autorizaTerminacionParcial.toString()
+                });
+
+                const response=await fetch(
+                    `${endpointPreview}?${parametros.toString()}`,
+                    {
+                        method:'GET',
+                        headers:{'Accept':'application/json'},
+                        cache:'no-store'
+                    });
+
+                const data=await response.json();
+
+                if(!response.ok||!data?.ok)
+                {
+                    feedbackSet(
+                        data?.mensaje||`No fue posible calcular el impacto. HTTP ${response.status}`,
+                        'alert-warning');
+
+                    return;
+                }
+
+                pintarResultado(data);
+
+                feedbackSet(
+                    autorizaTerminacionParcial
+                        ?'Simulación calculada. La OF interrumpida quedará autorizada para terminación parcial y no se proyecta su regreso.'
+                        :'Simulación calculada correctamente. Revisa el impacto antes de confirmar.',
+                    'alert-success');
             }
-            catch
+            catch(error)
             {
-                data=null;
+                feedbackSet(
+                    error.message||'No fue posible calcular la interrupción urgente.',
+                    'alert-danger');
             }
-
-            if(!response.ok||!data?.ok)
+            finally
             {
-                throw new Error(
-                    data?.mensaje||
-                    `No fue posible confirmar la interrupción. HTTP ${response.status}`);
+                consultando=false;
+                btnCalcular.disabled=false;
+                btnCalcular.innerHTML='<i class="fa-solid fa-calculator me-1"></i> Calcular impacto';
+                actualizarEstadoConfirmacion();
             }
-
-            simulacionValida=false;
-
-            feedbackSet(
-                data.mensaje||'Interrupción urgente registrada correctamente.',
-                'alert-success');
-
-            if(estadoConfirmacion)
-            {
-                estadoConfirmacion.textContent=autorizaTerminacionParcial
-                    ?'Interrupción registrada. Planeación autorizó el cierre parcial de la OF interrumpida.'
-                    :'Interrupción registrada. La OF original regresará después de la urgente.';
-            }
-
-            btnConfirmar.innerHTML='<i class="fa-solid fa-circle-check me-1"></i> Interrupción registrada';
-
-            window.setTimeout(function(){
-                window.location.reload();
-            },1200);
         }
-        catch(error)
-        {
-            confirmando=false;
-            btnCalcular.disabled=false;
-            maquinaSelect.disabled=false;
-            motivoInput.readOnly=false;
+
+            async function confirmarInterrupcion() {
+            if(consultando||confirmando)
+                return;
+
+            const programaUrgenteId=Number(programaInput.value||0);
+            const maquinaId=Number(maquinaSelect.value||0);
+            const motivo=(motivoInput.value||'').trim();
+            const autorizaTerminacionParcial=esTerminacionParcialSeleccionada();
+            const motivoTerminacionParcial=(motivoTerminacionParcialInput?.value||'').trim();
+
+            if(!simulacionValida)
+            {
+                feedbackSet('Debes calcular nuevamente el impacto antes de confirmar.','alert-warning');
+                return;
+            }
+
+            if(
+                !programaUrgenteId
+                ||programaUrgenteId!==programaSimuladoID
+                ||!maquinaId
+                ||maquinaId!==maquinaSimuladaID
+                ||autorizaTerminacionParcial!==terminacionParcialSimulada)
+            {
+                invalidarSimulacion();
+                feedbackSet('La OF, máquina o decisión sobre la OF interrumpida cambió después de la simulación. Calcula nuevamente el impacto.','alert-warning');
+                return;
+            }
+
+            if(motivo.length<5)
+            {
+                feedbackSet('Escribe un motivo claro de al menos 5 caracteres para confirmar la urgencia.','alert-warning');
+                motivoInput.focus();
+                return;
+            }
+
+            if(motivo.length>500)
+            {
+                feedbackSet('El motivo no puede superar 500 caracteres.','alert-warning');
+                motivoInput.focus();
+                return;
+            }
+
+            if(autorizaTerminacionParcial&&motivoTerminacionParcial.length<5)
+            {
+                feedbackSet('Escribe el motivo por el que Planeación autoriza terminar parcialmente la OF.','alert-warning');
+                motivoTerminacionParcialInput?.focus();
+                return;
+            }
+
+            if(motivoTerminacionParcial.length>500)
+            {
+                feedbackSet('El motivo de terminación parcial no puede superar 500 caracteres.','alert-warning');
+                motivoTerminacionParcialInput?.focus();
+                return;
+            }
+
+            confirmando=true;
+            btnConfirmar.disabled=true;
+            btnCalcular.disabled=true;
+            maquinaSelect.disabled=true;
+            motivoInput.readOnly=true;
 
             if(destinoInterrupcion)
-                destinoInterrupcion.disabled=false;
+                destinoInterrupcion.disabled=true;
 
             if(motivoTerminacionParcialInput)
-                motivoTerminacionParcialInput.readOnly=false;
+                motivoTerminacionParcialInput.readOnly=true;
 
-            btnConfirmar.innerHTML='<i class="fa-solid fa-bolt me-1"></i> Confirmar e interrumpir Producción';
+            btnConfirmar.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Confirmando interrupción...';
+
+            if(estadoConfirmacion)
+                estadoConfirmacion.textContent='Registrando la orden de Planeación...';
+
+            feedbackSet('Confirmando la interrupción. No cierres esta ventana...','alert-danger');
+
+            try
+            {
+                const payload={
+                    ProgramaUrgenteID:programaUrgenteId,
+                    MaquinaID:maquinaId,
+                    Motivo:motivo,
+                    TrabajarDomingo:!!document.getElementById('trabajarDomingoCalendario')?.checked,
+                    AutorizaTerminacionParcial:autorizaTerminacionParcial,
+                    MotivoTerminacionParcial:autorizaTerminacionParcial
+                        ?motivoTerminacionParcial
+                        :null
+                };
+
+                const response=await fetch(
+                    endpointConfirmar,
+                    {
+                        method:'POST',
+                        headers:{
+                            'Content-Type':'application/json',
+                            'Accept':'application/json',
+                            'RequestVerificationToken':tokenInterrupcion
+                        },
+                        body:JSON.stringify(payload)
+                    });
+
+                let data=null;
+
+                try
+                {
+                    data=await response.json();
+                }
+                catch
+                {
+                    data=null;
+                }
+
+                if(!response.ok||!data?.ok)
+                {
+                    throw new Error(
+                        data?.mensaje||
+                        `No fue posible confirmar la interrupción. HTTP ${response.status}`);
+                }
+
+                simulacionValida=false;
+
+                feedbackSet(
+                    data.mensaje||'Interrupción urgente registrada correctamente.',
+                    'alert-success');
+
+                if(estadoConfirmacion)
+                {
+                    estadoConfirmacion.textContent=autorizaTerminacionParcial
+                        ?'Interrupción registrada. Planeación autorizó el cierre parcial de la OF interrumpida.'
+                        :'Interrupción registrada. La OF original regresará después de la urgente.';
+                }
+
+                btnConfirmar.innerHTML='<i class="fa-solid fa-circle-check me-1"></i> Interrupción registrada';
+
+                window.setTimeout(function(){
+                    window.location.reload();
+                },1200);
+            }
+            catch(error)
+            {
+                confirmando=false;
+                btnCalcular.disabled=false;
+                maquinaSelect.disabled=false;
+                motivoInput.readOnly=false;
+
+                if(destinoInterrupcion)
+                    destinoInterrupcion.disabled=false;
+
+                if(motivoTerminacionParcialInput)
+                    motivoTerminacionParcialInput.readOnly=false;
+
+                btnConfirmar.innerHTML='<i class="fa-solid fa-bolt me-1"></i> Confirmar e interrumpir Producción';
+
+                feedbackSet(
+                    error.message||'No fue posible confirmar la interrupción urgente.',
+                    'alert-danger');
+
+                actualizarEstadoConfirmacion();
+            }
+        }
+
+        document.querySelectorAll('[data-interrupcion-urgente]').forEach(btn => {
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                abrirInterrupcionUrgente(btn);
+            });
+        });
+
+           maquinaSelect.addEventListener('change',function(){
+            limpiarPreview();
+            feedbackSet('Máquina seleccionada. Calcula nuevamente para obtener la simulación.','alert-info');
+        });
+
+        destinoInterrupcion?.addEventListener('change',function(){
+            actualizarDestinoInterrupcion();
+            limpiarPreview();
 
             feedbackSet(
-                error.message||'No fue posible confirmar la interrupción urgente.',
-                'alert-danger');
-
-            actualizarEstadoConfirmacion();
-        }
-    }
-
-    document.querySelectorAll('[data-interrupcion-urgente]').forEach(btn => {
-        btn.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            abrirInterrupcionUrgente(btn);
+                esTerminacionParcialSeleccionada()
+                    ?'Planeación está seleccionando terminación parcial. Calcula nuevamente el impacto con esta decisión.'
+                    :'La OF regresará después de la urgente. Calcula nuevamente el impacto.',
+                'alert-info');
         });
-    });
 
-       maquinaSelect.addEventListener('change',function(){
-        limpiarPreview();
-        feedbackSet('Máquina seleccionada. Calcula nuevamente para obtener la simulación.','alert-info');
-    });
+        motivoInput.addEventListener('input',actualizarEstadoConfirmacion);
+        motivoTerminacionParcialInput?.addEventListener('input',actualizarEstadoConfirmacion);
+        btnCalcular.addEventListener('click',calcularImpacto);
+        btnConfirmar?.addEventListener('click',confirmarInterrupcion);
 
-    destinoInterrupcion?.addEventListener('change',function(){
-        actualizarDestinoInterrupcion();
-        limpiarPreview();
+        modalEl.addEventListener('hidden.bs.modal',function(){
+            if(confirmando)
+                return;
 
-        feedbackSet(
-            esTerminacionParcialSeleccionada()
-                ?'Planeación está seleccionando terminación parcial. Calcula nuevamente el impacto con esta decisión.'
-                :'La OF regresará después de la urgente. Calcula nuevamente el impacto.',
-            'alert-info');
-    });
+            limpiarPreview();
+            motivoInput.value='';
 
-    motivoInput.addEventListener('input',actualizarEstadoConfirmacion);
-    motivoTerminacionParcialInput?.addEventListener('input',actualizarEstadoConfirmacion);
-    btnCalcular.addEventListener('click',calcularImpacto);
-    btnConfirmar?.addEventListener('click',confirmarInterrupcion);
+            if(destinoInterrupcion)
+                destinoInterrupcion.value='PAUSA_RETORNO';
 
-    modalEl.addEventListener('hidden.bs.modal',function(){
-        if(confirmando)
-            return;
+            if(motivoTerminacionParcialInput)
+                motivoTerminacionParcialInput.value='';
 
-        limpiarPreview();
-        motivoInput.value='';
-
-        if(destinoInterrupcion)
-            destinoInterrupcion.value='PAUSA_RETORNO';
-
-        if(motivoTerminacionParcialInput)
-            motivoTerminacionParcialInput.value='';
+            actualizarDestinoInterrupcion();
+            feedbackSet('','');
+        });
 
         actualizarDestinoInterrupcion();
-        feedbackSet('','');
+        actualizarEstadoConfirmacion();
     });
-
-    actualizarDestinoInterrupcion();
-    actualizarEstadoConfirmacion();
-});
 </script>
 <style>
-/* NSQ_GENERAL_MACHINE_CLICK_STYLE_V1 */
-.machine-info[data-open-machine-board] {
-    cursor: pointer;
-    transition: background-color .15s ease, box-shadow .15s ease;
-}
-.machine-info[data-open-machine-board]:hover,
-.machine-info[data-open-machine-board]:focus-visible {
-    background: #eef6ff;
-    box-shadow: inset -3px 0 0 #0759a8;
-    outline: none;
-}
+    /* NSQ_GENERAL_MACHINE_CLICK_STYLE_V1 */
+    .machine-info[data-open-machine-board] {
+        cursor: pointer;
+        transition: background-color .15s ease, box-shadow .15s ease;
+    }
+
+        .machine-info[data-open-machine-board]:hover,
+        .machine-info[data-open-machine-board]:focus-visible {
+            background: #eef6ff;
+            box-shadow: inset -3px 0 0 #0759a8;
+            outline: none;
+        }
 </style>

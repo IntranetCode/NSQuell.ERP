@@ -184,7 +184,7 @@ namespace ERP.NSQuell.Models
 
         public int ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
-
+        public bool TrabajarDomingo { get; set; }
         public int MaquinaID { get; set; }
         public string MaquinaCodigo { get; set; }
 

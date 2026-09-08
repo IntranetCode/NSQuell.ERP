@@ -393,11 +393,10 @@
             if (dow === 6) {
                 const cierre = new Date(dia);
 
-                // CAMBIO RÁPIDO SÁBADO:
-                // Si te confirman otro horario, cambia este 18.
-                // Ejemplo: sábado hasta 15:00 => cierre.setHours(15, 0, 0, 0);
-                //          sábado hasta 20:00 => cierre.setHours(20, 0, 0, 0);
-                cierre.setHours(18, 0, 0, 0);
+                // Producción opera el sábado hasta las 22:30.
+                // Si domingo no está autorizado, después de este cierre
+                // el cálculo continúa el lunes a las 07:00.
+                cierre.setHours(22, 30, 0, 0);
 
                 return {
                     apertura: new Date(dia),
@@ -1021,17 +1020,17 @@
                         transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
                     }
 
-                    .lhrh-choice:hover {
-                        border-color: #7c63c5;
-                        box-shadow: 0 8px 22px rgba(79,54,148,.10);
-                        transform: translateY(-1px);
-                    }
+                        .lhrh-choice:hover {
+                            border-color: #7c63c5;
+                            box-shadow: 0 8px 22px rgba(79,54,148,.10);
+                            transform: translateY(-1px);
+                        }
 
-                    .lhrh-choice:has(.lhrh-choice-check:checked) {
-                        border-color: #27a968;
-                        background: linear-gradient(135deg,#f6fff9,#edfff4);
-                        box-shadow: 0 8px 22px rgba(31,143,87,.12);
-                    }
+                        .lhrh-choice:has(.lhrh-choice-check:checked) {
+                            border-color: #27a968;
+                            background: linear-gradient(135deg,#f6fff9,#edfff4);
+                            box-shadow: 0 8px 22px rgba(31,143,87,.12);
+                        }
 
                     .lhrh-choice-check {
                         width: 1.25rem;
@@ -1066,17 +1065,17 @@
                         gap: 3px;
                     }
 
-                    .lhrh-choice-copy strong {
-                        color: #1f2937;
-                        font-size: .96rem;
-                        line-height: 1.15;
-                    }
+                        .lhrh-choice-copy strong {
+                            color: #1f2937;
+                            font-size: .96rem;
+                            line-height: 1.15;
+                        }
 
-                    .lhrh-choice-copy small {
-                        color: #6b7280;
-                        font-size: .78rem;
-                        line-height: 1.25;
-                    }
+                        .lhrh-choice-copy small {
+                            color: #6b7280;
+                            font-size: .78rem;
+                            line-height: 1.25;
+                        }
 
                     .lhrh-choice-side {
                         flex: 0 0 auto;
