@@ -785,8 +785,7 @@ WHERE c.CajaID=@CajaID AND c.Activo=1;";
                 var retenido = Entero(rdCaja, "Retenido");
                 var calidad = Texto(rdCaja, "EstadoCalidad");
                 var disponible = Entero(rdCaja, "Disponible");
-                throw new InvalidOperationException(
-    $"DEBUG Caja {seleccion.CajaID} | Disponible={disponible} | Retenido={retenido} | Calidad={calidad} | ClienteCaja={cajaClienteId} | ClienteSeleccionado={clienteId}");
+               
                 if (cajaClienteId != clienteId) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} no pertenece al cliente seleccionado.");
                 if (!string.Equals(calidad, "Liberado", StringComparison.OrdinalIgnoreCase) || retenido > 0) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no está liberada para embarque.");
                 if (disponible <= 0) throw new InvalidOperationException($"La caja PT {seleccion.CajaID} ya no tiene saldo disponible.");
@@ -1061,6 +1060,7 @@ ORDER BY ec.CajaID;";
                 await using var rd = await despacho.ExecuteReaderAsync(cancellationToken);
                 if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El despacho terminó sin devolver confirmación.");
             }
+            await ActualizarListaCargaSalidaAsync(cn, tx, embarqueId, cancellationToken);
             await tx.CommitAsync(cancellationToken);
             TempData["LogisticaOk"] = $"Salida confirmada: {esperadas.Count:N0} caja(s) verificadas por escáner y salida PT registrada correctamente.";
         }
@@ -2429,6 +2429,43 @@ VALUES
         return reservadas;
     }
 
+    private async Task ActualizarListaCargaSalidaAsync(SqlConnection cn, SqlTransaction tx, int embarqueId, CancellationToken cancellationToken)
+    {
+        if (embarqueId <= 0) return;
+        const string sql = @"
+UPDATE x
+SET CantidadEnviada=x.CantidadAsignada,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+WHERE x.EmbarqueID=@EmbarqueID AND x.Activo=1;
+
+UPDATE p
+SET Estatus=
+CASE
+    WHEN ISNULL(t.Enviado,0)>=p.CantidadProgramada THEN N'Cumplida'
+    WHEN ISNULL(t.Enviado,0)>0 THEN N'Parcial'
+    WHEN ISNULL(t.Generado,0)>=p.CantidadProgramada THEN N'Generada'
+    ELSE N'Programada'
+END,
+FechaModificacion=SYSDATETIME(),
+ActualizadoPor=@Usuario
+FROM dbo.Logistica_ListaCargaProgramacion p
+OUTER APPLY
+(
+    SELECT SUM(x.CantidadAsignada) Generado,SUM(x.CantidadEnviada) Enviado
+    FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+    WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND x.Activo=1
+) t
+WHERE EXISTS
+(
+    SELECT 1
+    FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+    WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND x.EmbarqueID=@EmbarqueID AND x.Activo=1
+);";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+        cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
     private static string NormalizarOF(string? numeroOF)
     {
         if (string.IsNullOrWhiteSpace(numeroOF))
@@ -2468,10 +2505,13 @@ WHERE e.EmbarqueID=@EmbarqueID AND e.Activo=1;";
             vm.Cliente = Texto(rd, "ClienteNombreSnapshot");
             vm.Destino = Texto(rd, "Destino");
             vm.DireccionEntrega = Texto(rd, "DireccionEntrega");
+
             vm.TipoOperacion = NormalizarTipoOperacion(Texto(rd, "TipoOperacion"));
-            if (string.IsNullOrWhiteSpace(vm.TipoOperacion)) vm.TipoOperacion = "Nacional";
+            if (string.IsNullOrWhiteSpace(vm.TipoOperacion)) vm.TipoOperacion = "Pendiente";
             vm.FormaEnvio = NormalizarFormaEnvio(Texto(rd, "FormaEnvio"));
-            if (string.IsNullOrWhiteSpace(vm.FormaEnvio)) vm.FormaEnvio = "Interno";
+            if (string.IsNullOrWhiteSpace(vm.FormaEnvio)) vm.FormaEnvio = "Pendiente";
+            vm.ModalidadEnvio = NormalizarModalidadEnvio(Texto(rd, "ModalidadEnvio"));
+
             vm.ModalidadEnvio = NormalizarModalidadEnvio(Texto(rd, "ModalidadEnvio"));
             vm.Transportista = Texto(rd, "Transportista");
             vm.GuiaReferencia = Texto(rd, "GuiaReferencia");
@@ -3530,6 +3570,108 @@ SELECT @@ROWCOUNT;";
         return File(stream, string.IsNullOrWhiteSpace(tipoContenido) ? "application/octet-stream" : tipoContenido);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfigurarEnvio(LogisticaConfigurarEnvioVm model, CancellationToken cancellationToken)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        if (model.EmbarqueID <= 0) return BadRequest();
+        model.TipoOperacion = NormalizarTipoOperacion(model.TipoOperacion);
+        model.FormaEnvio = NormalizarFormaEnvio(model.FormaEnvio);
+        model.ModalidadEnvio = NormalizarModalidadEnvio(model.ModalidadEnvio);
+        model.Transportista = model.Transportista?.Trim();
+        model.GuiaReferencia = model.GuiaReferencia?.Trim();
+        model.ChoferExterno = model.ChoferExterno?.Trim();
+        model.UnidadExterna = model.UnidadExterna?.Trim();
+        model.PlacasExternas = model.PlacasExternas?.Trim();
+        if (model.TipoOperacion is not "Nacional" and not "Exportacion") ModelState.AddModelError(nameof(model.TipoOperacion), "Selecciona Nacional o Exportación.");
+        if (model.FormaEnvio is not "Interno" and not "Cliente" and not "Paqueteria") ModelState.AddModelError(nameof(model.FormaEnvio), "Selecciona Cliente recoge, Entrega NS o Paquetería.");
+        if (model.TipoOperacion == "Nacional") model.PasaAduana = null;
+        if (model.TipoOperacion == "Exportacion" && !model.PasaAduana.HasValue) ModelState.AddModelError(nameof(model.PasaAduana), "Indica si la exportación pasa por aduana.");
+        if (model.FormaEnvio == "Interno")
+        {
+            if (!model.RutaID.HasValue || model.RutaID.Value <= 0) ModelState.AddModelError(nameof(model.RutaID), "Selecciona una ruta.");
+            if (!model.UnidadID.HasValue || model.UnidadID.Value <= 0) ModelState.AddModelError(nameof(model.UnidadID), "Selecciona una unidad.");
+            if (!model.ChoferUsuarioID.HasValue || model.ChoferUsuarioID.Value <= 0) ModelState.AddModelError(nameof(model.ChoferUsuarioID), "Selecciona un chofer.");
+            model.ModalidadEnvio = null;
+            model.Transportista = null;
+            model.GuiaReferencia = null;
+            model.ChoferExterno = null;
+            model.UnidadExterna = null;
+            model.PlacasExternas = null;
+        }
+        else if (model.FormaEnvio == "Cliente")
+        {
+            if (string.IsNullOrWhiteSpace(model.ChoferExterno)) ModelState.AddModelError(nameof(model.ChoferExterno), "Captura quién recoge la mercancía.");
+            model.RutaID = null;
+            model.UnidadID = null;
+            model.ChoferUsuarioID = null;
+            model.ModalidadEnvio = null;
+            model.Transportista = null;
+            model.GuiaReferencia = null;
+        }
+        else if (model.FormaEnvio == "Paqueteria")
+        {
+            if (string.IsNullOrWhiteSpace(model.ModalidadEnvio)) ModelState.AddModelError(nameof(model.ModalidadEnvio), "Selecciona la modalidad de paquetería.");
+            if (string.IsNullOrWhiteSpace(model.Transportista)) ModelState.AddModelError(nameof(model.Transportista), "Captura la compañía o paquetería.");
+            model.RutaID = null;
+            model.UnidadID = null;
+            model.ChoferUsuarioID = null;
+        }
+        if (!ModelState.IsValid)
+        {
+            TempData["LogisticaError"] = string.Join(" ", ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage).Where(x => !string.IsNullOrWhiteSpace(x)));
+            return RedirectToAction(nameof(Detalle), new { id = model.EmbarqueID });
+        }
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var header = await ObtenerHeaderAsync(cn, tx, model.EmbarqueID, cancellationToken) ?? throw new InvalidOperationException("El embarque no existe.");
+            if (header.Estatus is "Cargado" or "En ruta" or "Entregado" or "Cancelado") throw new InvalidOperationException("La modalidad de salida ya no puede modificarse en el estado actual.");
+            string? operador = null;
+            if (model.FormaEnvio == "Interno" && model.ChoferUsuarioID.HasValue) operador = await ObtenerNombreChoferAsync(cn, tx, model.ChoferUsuarioID.Value, cancellationToken);
+            else if (model.FormaEnvio == "Cliente") operador = model.ChoferExterno;
+            else if (model.FormaEnvio == "Paqueteria") operador = string.IsNullOrWhiteSpace(model.ChoferExterno) ? model.Transportista : model.ChoferExterno;
+            const string sql = @"
+UPDATE dbo.Logistica_Embarques
+SET TipoOperacion=@TipoOperacion,FormaEnvio=@FormaEnvio,ModalidadEnvio=@ModalidadEnvio,Transportista=@Transportista,GuiaReferencia=@GuiaReferencia,PasaAduana=@PasaAduana,
+RutaID=@RutaID,UnidadID=@UnidadID,OperadorTexto=@Operador,ChoferUsuarioID=@ChoferUsuarioID,ChoferNombreSnapshot=@ChoferNombreSnapshot,
+ChoferExterno=@ChoferExterno,UnidadExterna=@UnidadExterna,PlacasExternas=@PlacasExternas,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE EmbarqueID=@EmbarqueID AND Activo=1;
+SELECT @@ROWCOUNT;";
+            await using (var cmd = new SqlCommand(sql, cn, tx))
+            {
+                cmd.Parameters.Add("@TipoOperacion", SqlDbType.NVarChar, 30).Value = model.TipoOperacion;
+                cmd.Parameters.Add("@FormaEnvio", SqlDbType.NVarChar, 30).Value = model.FormaEnvio;
+                cmd.Parameters.Add("@ModalidadEnvio", SqlDbType.NVarChar, 30).Value = Db(model.ModalidadEnvio);
+                cmd.Parameters.Add("@Transportista", SqlDbType.NVarChar, 200).Value = Db(model.Transportista);
+                cmd.Parameters.Add("@GuiaReferencia", SqlDbType.NVarChar, 150).Value = Db(model.GuiaReferencia);
+                cmd.Parameters.Add("@PasaAduana", SqlDbType.Bit).Value = Db(model.PasaAduana);
+                cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = Db(model.RutaID);
+                cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = Db(model.UnidadID);
+                cmd.Parameters.Add("@Operador", SqlDbType.NVarChar, 200).Value = Db(operador);
+                cmd.Parameters.Add("@ChoferUsuarioID", SqlDbType.Int).Value = Db(model.FormaEnvio == "Interno" ? model.ChoferUsuarioID : null);
+                cmd.Parameters.Add("@ChoferNombreSnapshot", SqlDbType.NVarChar, 200).Value = Db(model.FormaEnvio == "Interno" ? operador : null);
+                cmd.Parameters.Add("@ChoferExterno", SqlDbType.NVarChar, 200).Value = Db(model.FormaEnvio == "Interno" ? null : model.ChoferExterno);
+                cmd.Parameters.Add("@UnidadExterna", SqlDbType.NVarChar, 100).Value = Db(model.FormaEnvio == "Interno" ? null : model.UnidadExterna);
+                cmd.Parameters.Add("@PlacasExternas", SqlDbType.NVarChar, 100).Value = Db(model.FormaEnvio == "Interno" ? null : model.PlacasExternas);
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = model.EmbarqueID;
+                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) == 0) throw new InvalidOperationException("No fue posible actualizar el embarque.");
+            }
+            await InsertarHistorialAsync(cn, tx, model.EmbarqueID, "MODALIDAD_ENVIO_DEFINIDA", header.Estatus, header.Estatus, $"Modalidad definida: {model.FormaEnvio}. Tipo de operación: {model.TipoOperacion}.", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = "Datos de salida actualizados correctamente.";
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            TempData["LogisticaError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Detalle), new { id = model.EmbarqueID });
+    }
     private async Task CargarDocumentosAsync(SqlConnection cn, LogisticaDetalleVm vm, CancellationToken cancellationToken)
     {
         vm.Documentos.Clear();
@@ -3618,8 +3760,9 @@ AND Validado=1;";
         var tipo = NormalizarTipoOperacion(tipoOperacion);
         var forma = NormalizarFormaEnvio(formaEnvio);
         var modalidad = NormalizarModalidadEnvio(modalidadEnvio);
-        if (string.IsNullOrWhiteSpace(tipo)) tipo = "Nacional";
-        if (string.IsNullOrWhiteSpace(forma)) forma = "Interno";
+        if (string.IsNullOrWhiteSpace(tipo)) tipo = "Pendiente";
+        if (string.IsNullOrWhiteSpace(forma)) forma = "Pendiente";
+        if (tipo == "Pendiente" || forma == "Pendiente") return new List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)>();
         var documentos = new List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)>();
         if (forma == "Interno") documentos.Add(("Factura firmada y sellada / Remisión", "Finanzas", true));
         else if (forma == "Cliente") documentos.Add(("Factura firmada por transportista / Remisión", "Finanzas", true));
@@ -3713,12 +3856,14 @@ AND Validado=1;";
         valor = valor?.Trim() ?? string.Empty;
         if (valor.Equals("Nacional", StringComparison.OrdinalIgnoreCase)) return "Nacional";
         if (valor.Equals("Exportacion", StringComparison.OrdinalIgnoreCase) || valor.Equals("Exportación", StringComparison.OrdinalIgnoreCase)) return "Exportacion";
+        if (valor.Equals("Pendiente", StringComparison.OrdinalIgnoreCase) || valor.Equals("Por definir", StringComparison.OrdinalIgnoreCase)) return "Pendiente";
         return string.Empty;
     }
 
     private static string NormalizarFormaEnvio(string? valor)
     {
         valor = valor?.Trim() ?? string.Empty;
+        if (valor.Equals("Pendiente", StringComparison.OrdinalIgnoreCase) || valor.Equals("Por definir", StringComparison.OrdinalIgnoreCase)) return "Pendiente";
         if (valor.Equals("Interno", StringComparison.OrdinalIgnoreCase) || valor.Equals("Interna", StringComparison.OrdinalIgnoreCase) || valor.Equals("Local", StringComparison.OrdinalIgnoreCase)) return "Interno";
         if (valor.Equals("Cliente", StringComparison.OrdinalIgnoreCase) || valor.Equals("Recolecta", StringComparison.OrdinalIgnoreCase) || valor.Equals("Recoleccion", StringComparison.OrdinalIgnoreCase) || valor.Equals("Recolección", StringComparison.OrdinalIgnoreCase) || valor.Equals("Cliente recoge", StringComparison.OrdinalIgnoreCase)) return "Cliente";
         if (valor.Equals("Paqueteria", StringComparison.OrdinalIgnoreCase) || valor.Equals("Paquetería", StringComparison.OrdinalIgnoreCase) || valor.Equals("Transportista", StringComparison.OrdinalIgnoreCase)) return "Paqueteria";

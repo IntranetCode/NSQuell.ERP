@@ -696,3 +696,41 @@ public sealed class LogisticaSelectVm
     public int Id { get; set; }
     public string Texto { get; set; } = string.Empty;
 }
+
+public sealed class LogisticaConfigurarEnvioVm
+{
+    [Required]
+    public int EmbarqueID { get; set; }
+
+    [Required(ErrorMessage = "Selecciona Nacional o Exportación.")]
+    [StringLength(30)]
+    public string TipoOperacion { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Selecciona quién realizará el movimiento.")]
+    [StringLength(30)]
+    public string FormaEnvio { get; set; } = string.Empty;
+
+    [StringLength(30)]
+    public string? ModalidadEnvio { get; set; }
+
+    [StringLength(200)]
+    public string? Transportista { get; set; }
+
+    [StringLength(150)]
+    public string? GuiaReferencia { get; set; }
+
+    public bool? PasaAduana { get; set; }
+
+    public int? RutaID { get; set; }
+    public int? UnidadID { get; set; }
+    public int? ChoferUsuarioID { get; set; }
+
+    [StringLength(200)]
+    public string? ChoferExterno { get; set; }
+
+    [StringLength(100)]
+    public string? UnidadExterna { get; set; }
+
+    [StringLength(100)]
+    public string? PlacasExternas { get; set; }
+}
