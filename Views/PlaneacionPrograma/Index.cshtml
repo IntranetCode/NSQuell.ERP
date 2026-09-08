@@ -101,30 +101,22 @@
 
     public static bool ListoCambioMolde(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue &&
-               NecesitaProduccion(x) &&
-               DatosTecnicosOk(x) &&
-               StockOk(x);
+        return NecesitaProduccion(x) && DatosTecnicosOk(x) && StockOk(x);
     }
 
     public static bool PendienteAbasto(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue &&
-               NecesitaProduccion(x) &&
-               DatosTecnicosOk(x) &&
-               !StockOk(x);
+        return NecesitaProduccion(x) && DatosTecnicosOk(x) && !StockOk(x);
     }
 
     public static bool PendienteDatosTecnicos(PlaneacionProgramaNecesidadVm x)
     {
-        return !x.ProgramaProduccionID.HasValue &&
-               NecesitaProduccion(x) &&
-               !DatosTecnicosOk(x);
+        return NecesitaProduccion(x) && !DatosTecnicosOk(x);
     }
 
     public static bool CubiertoOProgramado(PlaneacionProgramaNecesidadVm x)
     {
-        return x.ProgramaProduccionID.HasValue || !NecesitaProduccion(x);
+        return !NecesitaProduccion(x);
     }
 
     public static string ClienteNombre(PlaneacionProgramaNecesidadVm x)
@@ -141,12 +133,21 @@
 
     public static string EstadoTexto(PlaneacionProgramaNecesidadVm x)
     {
-        if (x.ProgramaProduccionID.HasValue) return "Ya programado";
-        if (!NecesitaProduccion(x)) return "Cubierto";
-        if (ListoCambioMolde(x)) return "Listo para Cambio de Molde";
-        if (PendienteAbasto(x)) return "Pendiente de abastecimiento";
-        if (PendienteDatosTecnicos(x)) return "Pendiente de datos técnicos";
-        return "Pendiente de revisión";
+        if (!NecesitaProduccion(x))
+            return x.ProgramaProduccionID.HasValue ? "Completamente programado" : "Cubierto";
+
+        if (ListoCambioMolde(x))
+            return x.ProgramaProduccionID.HasValue
+                ? "Programado parcial - saldo pendiente"
+                : "Listo para Cambio de Molde";
+
+        if (PendienteAbasto(x))
+            return "Pendiente por Abasto";
+
+        if (PendienteDatosTecnicos(x))
+            return "Pendiente por Datos Tecnicos";
+
+        return "Pendiente";
     }
 
     public static string EstadoClase(PlaneacionProgramaNecesidadVm x)

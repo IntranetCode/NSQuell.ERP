@@ -10,11 +10,11 @@
 @section Scripts {
     <script>
         const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
-        const cantidadInput = document.getElementById('CantidadProgramada');
+        const cantidadInput = document.getElementById('CantidadBasePrograma');
 
         // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
         const cantidadBaseRelease = Number('@Model.PiezasAProducir');
-        const piezasPorCajaRelease = Number('@((Model.PiezasPorCaja ?? 0) > 0 ? Model.PiezasPorCaja!.Value : (Model.PiezasPorEmbalaje ?? 0) > 0 ? Convert.ToInt32(Model.PiezasPorEmbalaje!.Value) : 0)');
+        const piezasPorCajaRelease = Number('@((Model.PiezasPorEmbalaje ?? 0) > 0 ? Convert.ToInt32(Model.PiezasPorEmbalaje!.Value) : (Model.PiezasPorCaja ?? 0) > 0 ? Model.PiezasPorCaja!.Value : 0)');
         const aumentosReleaseFilas = document.getElementById('aumentosReleaseFilas');
         const aumentoReleaseTemplate = document.getElementById('aumentoReleaseTemplate');
         const btnAgregarAumentoRelease = document.getElementById('btnAgregarAumentoRelease');
@@ -155,14 +155,31 @@
             });
         }
 
-        function maximoValidoPorCaja(disponible) {
-            const libre = Math.max(0, Math.trunc(Number(disponible || 0)));
+                // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+        function cantidadBaseActual() {
+            return Math.max(0, Math.trunc(Number(cantidadInput?.value || 0)));
+        }
 
-            if (piezasPorCajaRelease <= 0) {
-                return libre;
-            }
+        function totalExtrasActual(excluirFila = null) {
+            let total = 0;
 
-            return Math.floor(libre / piezasPorCajaRelease) * piezasPorCajaRelease;
+            filasAumentoRelease().forEach(fila => {
+                if (fila === excluirFila) return;
+                const input = fila.querySelector('.js-aumento-cantidad');
+                total += Math.max(0, Math.trunc(Number(input?.value || 0)));
+            });
+
+            return total;
+        }
+
+        function cantidadTotalPrograma() {
+            return cantidadBaseActual() + totalExtrasActual();
+        }
+
+        function faltanteParaCerrarCaja(total) {
+            if (piezasPorCajaRelease <= 0) return 0;
+            const residuo = Math.max(0, Math.trunc(total)) % piezasPorCajaRelease;
+            return residuo === 0 ? 0 : piezasPorCajaRelease - residuo;
         }
 
         function textoNumero(value) {
@@ -178,7 +195,7 @@
 
             if (!select?.value || !opcion) {
                 info.textContent =
-                    'Selecciona una entrega para cargar su cantidad disponible automáticamente.';
+                    'Selecciona una entrega. El ERP sugerira solo las piezas que falten para cerrar la caja.';
                 info.classList.remove('text-danger', 'text-success', 'text-muted', 'is-ok', 'is-error', 'is-muted');
                 info.classList.add('is-muted');
                 return;
@@ -186,21 +203,14 @@
 
             const requerido = Number(opcion.dataset.requerido || 0);
             const disponible = Number(opcion.dataset.disponible || 0);
-            const maximoCaja = maximoValidoPorCaja(disponible);
-            const numeroParte = opcion.dataset.numeroParte || 'Sin número de parte';
+            const numeroParte = opcion.dataset.numeroParte || 'Sin numero de parte';
 
-            let mensaje =
+            info.textContent =
                 `Parte ${numeroParte} · requerido ${textoNumero(requerido)} pzas · ` +
                 `libre ${textoNumero(disponible)} pzas.`;
 
-            if (piezasPorCajaRelease > 0) {
-                mensaje +=
-                    ` Máximo válido en cajas completas: ${textoNumero(maximoCaja)} pzas.`;
-            }
-
-            info.textContent = mensaje;
             info.classList.remove('text-danger', 'text-success', 'text-muted', 'is-ok', 'is-error', 'is-muted');
-            info.classList.add(maximoCaja > 0 ? 'is-ok' : 'is-error');
+            info.classList.add(disponible > 0 ? 'is-ok' : 'is-error');
         }
 
         function validarFilaAumento(fila, seleccionados) {
@@ -220,7 +230,7 @@
 
             if (!origenId) {
                 select?.setCustomValidity(
-                    'Selecciona la entrega del Release de la cual se descontarán las piezas.'
+                    'Selecciona la entrega del Release de la cual se descontaran las piezas.'
                 );
                 return { valido: false, cantidad: Math.max(0, cantidad) };
             }
@@ -243,26 +253,55 @@
 
             if (cantidad > disponible) {
                 input?.setCustomValidity(
-                    `El aumento no puede ser mayor a las ${textoNumero(disponible)} piezas libres de esta fila del Release.`
+                    `No puedes tomar mas de las ${textoNumero(disponible)} piezas libres de esta entrega.`
                 );
                 return { valido: false, cantidad };
             }
 
-            if (piezasPorCajaRelease <= 0) {
-                input?.setCustomValidity(
-                    'La pieza no tiene configurada la capacidad de caja o embalaje.'
-                );
-                return { valido: false, cantidad };
-            }
-
-            if (cantidad % piezasPorCajaRelease !== 0) {
-                input?.setCustomValidity(
-                    `La cantidad debe ser múltiplo de ${textoNumero(piezasPorCajaRelease)} piezas, equivalente a una caja completa.`
-                );
-                return { valido: false, cantidad };
-            }
-
+            // Ya NO exigimos que cada fila extra sea un multiplo de caja.
+            // Puede aportar exactamente el remanente necesario para cerrar el total.
             return { valido: true, cantidad };
+        }
+
+        function validarCantidadBase(totalExtra) {
+            if (!cantidadInput) return true;
+
+            cantidadInput.setCustomValidity('');
+            const base = cantidadBaseActual();
+
+            if (base <= 0) {
+                cantidadInput.setCustomValidity('La cantidad base debe ser mayor que cero.');
+                return false;
+            }
+
+            if (base > cantidadBaseRelease) {
+                cantidadInput.setCustomValidity(
+                    `Solo quedan ${textoNumero(cantidadBaseRelease)} piezas pendientes en esta entrega.`
+                );
+                return false;
+            }
+
+            if (totalExtra > 0) {
+                if (piezasPorCajaRelease <= 0) {
+                    cantidadInput.setCustomValidity(
+                        'Para usar Aumento por cajas la pieza debe tener capacidad de caja/embalaje configurada.'
+                    );
+                    return false;
+                }
+
+                const totalFinal = base + totalExtra;
+                const faltante = faltanteParaCerrarCaja(totalFinal);
+
+                if (faltante > 0) {
+                    cantidadInput.setCustomValidity(
+                        `Con Aumento por cajas, Base + Piezas extra debe cerrar cajas completas. ` +
+                        `Total actual: ${textoNumero(totalFinal)}; faltan ${textoNumero(faltante)} pieza(s).`
+                    );
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         function recalcularAumentosRelease() {
@@ -277,28 +316,37 @@
                 if (!resultado.valido) todoValido = false;
             });
 
-            if (cantidadInput) {
-                cantidadInput.value = String(cantidadBaseRelease + totalExtra);
+            if (!validarCantidadBase(totalExtra)) {
+                todoValido = false;
             }
+
+            const base = cantidadBaseActual();
+            const totalFinal = base + totalExtra;
 
             if (aumentoPreview) {
                 if (totalExtra <= 0) {
                     aumentoPreview.textContent =
-                        'Sin aumento. Se programará únicamente la necesidad base.';
+                        `Base seleccionada: ${textoNumero(base)} pzas. Sin aumento por cajas.`;
                     aumentoPreview.classList.remove('text-danger', 'text-success', 'text-muted', 'is-ok', 'is-error', 'is-muted');
-                    aumentoPreview.classList.add('is-muted');
+                    aumentoPreview.classList.add(todoValido ? 'is-muted' : 'is-error');
                 }
                 else {
-                    const cajas = piezasPorCajaRelease > 0
-                        ? totalExtra / piezasPorCajaRelease
-                        : 0;
+                    const faltante = faltanteParaCerrarCaja(totalFinal);
 
-                    aumentoPreview.textContent =
-                        `Aumento total: ${textoNumero(totalExtra)} pzas` +
-                        (piezasPorCajaRelease > 0
-                            ? ` = ${Number(cajas).toLocaleString('es-MX')} caja(s).`
-                            : '.') +
-                        ` Total del programa: ${textoNumero(cantidadBaseRelease + totalExtra)} pzas.`;
+                    if (piezasPorCajaRelease > 0 && faltante === 0) {
+                        const cajas = totalFinal / piezasPorCajaRelease;
+                        aumentoPreview.textContent =
+                            `Base ${textoNumero(base)} + extra ${textoNumero(totalExtra)} = ` +
+                            `${textoNumero(totalFinal)} pzas = ${Number(cajas).toLocaleString('es-MX')} caja(s) completas.`;
+                    }
+                    else {
+                        aumentoPreview.textContent =
+                            `Base ${textoNumero(base)} + extra ${textoNumero(totalExtra)} = ` +
+                            `${textoNumero(totalFinal)} pzas. ` +
+                            (piezasPorCajaRelease > 0
+                                ? `Faltan ${textoNumero(faltante)} pieza(s) para cerrar la siguiente caja.`
+                                : 'Falta configurar la capacidad de caja/embalaje.');
+                    }
 
                     aumentoPreview.classList.remove('text-muted', 'text-danger', 'text-success', 'is-ok', 'is-error', 'is-muted');
                     aumentoPreview.classList.add(todoValido ? 'is-ok' : 'is-error');
@@ -324,13 +372,13 @@
                 return;
             }
 
-            const disponible = Number(opcion.dataset.disponible || 0);
-            const maximoCaja = maximoValidoPorCaja(disponible);
+            const disponible = Math.max(0, Math.trunc(Number(opcion.dataset.disponible || 0)));
+            const totalSinEstaFila = cantidadBaseActual() + totalExtrasActual(fila);
+            const faltante = faltanteParaCerrarCaja(totalSinEstaFila);
 
-            // Se carga el maximo que realmente puede transferirse sin romper
-            // la regla de caja completa. El texto informativo conserva el total
-            // requerido y el saldo libre real de la fila.
-            input.value = String(maximoCaja);
+            // Sugerimos solo lo necesario para cerrar la caja. Si una entrega no
+            // alcanza, puede agregarse otra fila para completar el faltante restante.
+            input.value = String(Math.min(disponible, faltante));
             recalcularAumentosRelease();
         }
 
@@ -346,7 +394,7 @@
         function recalcularHorasPorCantidad() {
             if (!cantidadInput || !horasInput || objetivoHora <= 0) return;
 
-            const cantidad = toDecimal(cantidadInput.value);
+            const cantidad = cantidadTotalPrograma();
             const horas = cantidad > 0 ? Math.ceil(cantidad / objetivoHora) : 0;
 
             if (horas > 0) {
@@ -518,8 +566,7 @@
         }
 
         cantidadInput?.addEventListener('input', function () {
-            recalcularHorasPorCantidad();
-            recalcularFin();
+            recalcularAumentosRelease();
         });
 
         aumentosReleaseFilas?.addEventListener('change', function (event) {
@@ -1300,18 +1347,20 @@
                         <div class="step-number">4</div>
                         <div class="w-100">
                             <label class="field-label">Cantidad base del programa (pzas)</label>
-                            <input asp-for="CantidadProgramada"
+                            <input asp-for="CantidadBasePrograma"
                                    type="number"
                                    min="1"
+                                   max="@Model.PiezasAProducir"
+                                   step="1"
+                                   inputmode="numeric"
                                    class="form-control"
-                                   id="CantidadProgramada"
-                                   readonly />
+                                   id="CantidadBasePrograma" />
                             <div class="small text-muted mt-1">
-                                Pendiente base del renglón actual:
+                                Pendiente disponible de esta entrega:
                                 <strong>@Model.PiezasAProducir.ToString("N0") pzas</strong>.
-                                La cantidad final se recalcula en servidor.
+                                Puedes programar una cantidad menor; el saldo no programado quedara disponible para otro Programa Cambio de Molde.
                             </div>
-                            <span asp-validation-for="CantidadProgramada" class="text-danger small"></span>
+                            <span asp-validation-for="CantidadBasePrograma" class="text-danger small"></span>
 
                             <div class="aumento-cajas-box">
                                 <div class="aumento-cajas-header">
@@ -1334,13 +1383,13 @@
 
                                     @* NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1_2 *@
                                     <span class="aumento-cajas-capacidad">
-                                        @if ((Model.PiezasPorCaja ?? 0) > 0)
-                                        {
-                                            <text>1 caja = @Model.PiezasPorCaja!.Value.ToString("N0") pzas</text>
-                                        }
-                                        else if ((Model.PiezasPorEmbalaje ?? 0) > 0)
+                                        @if ((Model.PiezasPorEmbalaje ?? 0) > 0)
                                         {
                                             <text>1 caja = @Convert.ToInt32(Model.PiezasPorEmbalaje!.Value).ToString("N0") pzas</text>
+                                        }
+                                        else if ((Model.PiezasPorCaja ?? 0) > 0)
+                                        {
+                                            <text>1 caja = @Model.PiezasPorCaja!.Value.ToString("N0") pzas</text>
                                         }
                                         else
                                         {
@@ -1373,7 +1422,7 @@
                                                     }
                                                 </select>
                                                 <div class="aumento-cajas-info is-muted js-aumento-info">
-                                                    Selecciona una entrega para cargar su cantidad disponible automaticamente.
+                                                    Selecciona una entrega. El ERP sugerira solo las piezas que falten para cerrar la caja.
                                                 </div>
                                                 <span asp-validation-for="AumentosRelease[i].ReleaseDetalleOrigenAumentoID"
                                                       class="text-danger small"></span>
@@ -1415,7 +1464,7 @@
 
                                     <div class="aumento-cajas-regla">
                                         <i class="fa-solid fa-circle-info"></i>
-                                        Cada entrega solo puede usarse una vez y nunca puede transferirse mas de su saldo libre.
+                                        Cada entrega solo puede usarse una vez. Las piezas extra pueden ser parciales; al usar aumento, Base + extras debe cerrar exactamente cajas/embalajes completos.
                                     </div>
                                 </div>
 
@@ -1440,7 +1489,7 @@
                                                 }
                                             </select>
                                             <div class="aumento-cajas-info is-muted js-aumento-info">
-                                                Selecciona una entrega para cargar su cantidad disponible automaticamente.
+                                                Selecciona una entrega. El ERP sugerira solo las piezas que falten para cerrar la caja.
                                             </div>
                                         </div>
 

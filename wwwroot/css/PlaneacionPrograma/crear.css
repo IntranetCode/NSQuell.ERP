@@ -981,9 +981,9 @@
 
 .aumento-cajas-fila {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(145px, 185px) 42px;
-    gap: 12px;
-    align-items: end;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 240px) 48px;
+    gap: 14px;
+    align-items: start;
     padding: 13px;
     border: 1px solid #e4ddf4;
     border-radius: 16px;
@@ -998,6 +998,12 @@
 .aumento-cajas-origen,
 .aumento-cajas-cantidad-wrap {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.aumento-cajas-cantidad-wrap .form-control {
+    min-height: 48px;
 }
 
 .aumento-cajas-origen .nsq-search-select,
@@ -1032,8 +1038,9 @@
 
 .aumento-cajas-acciones {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     justify-content: center;
+    padding-top: 27px;
 }
 
 .btn-aumento-quitar {

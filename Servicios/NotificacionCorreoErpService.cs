@@ -161,16 +161,25 @@ public sealed class NotificacionCorreoErpService
 SELECT DISTINCT
     u.UsuarioID
 FROM dbo.Usuarios u
-INNER JOIN dbo.Departamentos d
+LEFT JOIN dbo.Departamentos d
     ON d.DepartamentoID=u.DepartamentoID
 INNER JOIN dbo.Persona p
     ON p.PersonaID=u.PersonaID
 WHERE ISNULL(u.Activo,1)=1
-  AND ISNULL(d.Activo,1)=1
   AND p.Correo IS NOT NULL
   AND LTRIM(RTRIM(p.Correo))<>N''
-  AND d.NombreDepartamento COLLATE Latin1_General_100_CI_AI
-      = @Departamento COLLATE Latin1_General_100_CI_AI
+  AND
+  (
+      /* NSQ_NOTIFICACIONES_DEPARTAMENTO_ADMIN_CORREO_REAL_V12
+         Tambien incluye administradores activos con correo registrado. */
+      u.RolID=1
+      OR
+      (
+          ISNULL(d.Activo,1)=1
+          AND d.NombreDepartamento COLLATE Latin1_General_100_CI_AI
+              = @Departamento COLLATE Latin1_General_100_CI_AI
+      )
+  )
 ORDER BY u.UsuarioID;
 """;
 
