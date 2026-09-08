@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -90,6 +90,28 @@ OUTER APPLY
 LEFT JOIN dbo.ERP_Maquinas m
     ON m.MaquinaID = maquinaResumen.MaquinaID
 WHERE s.Activo = 1
+  -- NSQ_PLANEACION_EXTENSION_OF_V2: una OF permanece en Planeacion hasta despacho completo real.
+  AND NOT
+  (
+      (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(edEnv.CantidadDespachada,0))),0)
+       FROM dbo.Logistica_EmbarqueDetalle edEnv
+       INNER JOIN dbo.Logistica_Embarques eEnv
+           ON eEnv.EmbarqueID = edEnv.EmbarqueID
+          AND eEnv.Activo = 1
+       WHERE edEnv.SolicitudProduccionID = s.SolicitudProduccionID
+         AND edEnv.Activo = 1
+         AND eEnv.Estatus IN (N'En ruta', N'Entregado'))
+      >=
+      (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(sdEnv.CantidadPiezas,0))),0)
+       FROM dbo.SolicitudesProduccionDetalle sdEnv
+       WHERE sdEnv.SolicitudProduccionID = s.SolicitudProduccionID
+         AND sdEnv.Activo = 1)
+      AND
+      (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(sdEnv2.CantidadPiezas,0))),0)
+       FROM dbo.SolicitudesProduccionDetalle sdEnv2
+       WHERE sdEnv2.SolicitudProduccionID = s.SolicitudProduccionID
+         AND sdEnv2.Activo = 1) > 0
+  )
 GROUP BY
     s.SolicitudProduccionID,
     s.FolioSolicitud,
