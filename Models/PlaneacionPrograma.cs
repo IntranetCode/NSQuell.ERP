@@ -97,6 +97,11 @@ namespace ERP.NSQuell.Models
 
         public int PiezasAProducir { get; set; }
 
+        // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+        // Cantidad que Planeacion decide tomar del saldo pendiente de esta entrega.
+        // CantidadProgramada queda reservada para el total final = base + aumentos.
+        public int CantidadBasePrograma { get; set; }
+
         public int CantidadProgramada { get; set; }
 
         public int? MaquinaID { get; set; }

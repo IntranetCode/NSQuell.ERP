@@ -369,7 +369,10 @@ ORDER BY
             urlDestino: rutaDestino,
             fechaEvento: DateTime.Now,
             eventoUnico: false,
-            enviarCorreo: false);
+            // NSQ_NOTIFICACIONES_DEPARTAMENTO_ADMIN_CORREO_REAL_V12
+            // El usuario pidio que toda notificacion departamental tambien
+            // llegue por correo a los destinatarios reales.
+            enviarCorreo: true);
     }
 
     private async Task PublicarMovimientoMpAsync(
@@ -1353,12 +1356,22 @@ END;
 SELECT DISTINCT
     u.UsuarioID
 FROM dbo.Usuarios u
-INNER JOIN dbo.Departamentos d
+LEFT JOIN dbo.Departamentos d
     ON d.DepartamentoID=u.DepartamentoID
 WHERE ISNULL(u.Activo,1)=1
-  AND ISNULL(d.Activo,1)=1
-  AND d.NombreDepartamento COLLATE Latin1_General_100_CI_AI
-      = @Area COLLATE Latin1_General_100_CI_AI
+  AND
+  (
+      /* NSQ_NOTIFICACIONES_DEPARTAMENTO_ADMIN_CORREO_REAL_V12
+         El departamento recibe su evento y los administradores activos
+         reciben todos los eventos departamentales. */
+      u.RolID=1
+      OR
+      (
+          ISNULL(d.Activo,1)=1
+          AND d.NombreDepartamento COLLATE Latin1_General_100_CI_AI
+              = @Area COLLATE Latin1_General_100_CI_AI
+      )
+  )
 ORDER BY u.UsuarioID;
 """;
 

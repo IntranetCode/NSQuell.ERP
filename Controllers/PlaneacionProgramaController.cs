@@ -165,9 +165,11 @@ OUTER APPLY
 )emb
 OUTER APPLY
 (
-    SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)-ISNULL(pp.CantidadProducida,0)),0) AS ProgramadoPendiente
+    SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0) AS ProgramadoPendiente
     FROM dbo.Planeacion_ProgramaProduccion pp
-    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID AND pp.Activo=1 AND ISNULL(pp.EstatusID,1) NOT IN(5,9,99)
+    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
+      AND pp.Activo=1
+      AND ISNULL(pp.EstatusID,1)<>99
 )prog
 OUTER APPLY
 (
@@ -891,6 +893,7 @@ VALUES
             var vm = await ObtenerNecesidadParaProgramaAsync(releaseDetalleId);
             if (vm == null) { TempData["Error"] = "No se encontró la necesidad seleccionada."; return RedirectToAction(nameof(Index)); }
             if (vm.PiezasAProducir <= 0) { TempData["Error"] = "La necesidad seleccionada ya no tiene piezas pendientes por producir."; return RedirectToAction(nameof(Index)); }
+            vm.CantidadBasePrograma = vm.PiezasAProducir;
             vm.CantidadProgramada = vm.PiezasAProducir;
             var horaBase = RedondearSiguienteHora(DateTime.Now);
             vm.FechaInicioProgramada = horaBase;
@@ -914,51 +917,142 @@ VALUES
             await CargarCatalogosAsync(vm);
             return View("Crear", vm);
         }
-
-       
-
-        private async Task RecalcularCantidadesProgramaAsync(PlaneacionProgramaCrearDesdeNecesidadVm vm, SqlConnection cn, SqlTransaction tx)
+        // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+        private async Task RecalcularCantidadesProgramaAsync(
+            PlaneacionProgramaCrearDesdeNecesidadVm vm,
+            int cantidadBaseSolicitada,
+            int totalAumentoAplicado,
+            SqlConnection cn,
+            SqlTransaction tx)
         {
+            if (cantidadBaseSolicitada <= 0)
+                throw new InvalidOperationException("La cantidad base del programa debe ser mayor que cero.");
+
+            if (totalAumentoAplicado < 0)
+                throw new InvalidOperationException("La cantidad de aumento no puede ser negativa.");
+
             const string sql = @"
 SELECT
     d.CantidadRequerida,
     COALESCE(d.PesoBrutoPieza,t.PesoBrutoPieza) AS PesoBrutoPieza,
     COALESCE(d.PiezasPorEmbalaje,t.PiezasPorEmbalaje) AS PiezasPorEmbalaje,
     COALESCE(t.ObjetivoHora,0) AS ObjetivoHora,
-    ISNULL(prog.ProgramadoPendiente,0) AS ProgramadoPendiente
+    COALESCE(
+        TRY_CONVERT(int,NULLIF(d.PiezasPorEmbalaje,0)),
+        TRY_CONVERT(int,NULLIF(t.PiezasPorEmbalaje,0)),
+        NULLIF(t.PiezasPorCaja,0),
+        0
+    ) AS CapacidadCaja,
+    ISNULL(prog.CantidadProgramadaAcumulada,0) AS CantidadProgramadaAcumulada
 FROM dbo.Planeacion_ReleaseDetalle d WITH(UPDLOCK,HOLDLOCK)
-LEFT JOIN dbo.ERP_ParteDatosTecnicos t ON t.ParteID=d.ParteID AND t.Activo=1
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+    ON t.ParteID=d.ParteID
+   AND t.Activo=1
 OUTER APPLY
 (
-    SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)-ISNULL(pp.CantidadProducida,0)),0) AS ProgramadoPendiente
+    SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0) AS CantidadProgramadaAcumulada
     FROM dbo.Planeacion_ProgramaProduccion pp
-    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID AND pp.Activo=1 AND ISNULL(pp.EstatusID,1) NOT IN(5,9,99)
-)prog
-WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
+    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
+      AND pp.Activo=1
+      AND ISNULL(pp.EstatusID,1)<>99
+) prog
+WHERE d.ReleaseDetalleID=@ReleaseDetalleID
+  AND d.Activo=1;";
+
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
+
             await using var rd = await cmd.ExecuteReaderAsync();
-            if (!await rd.ReadAsync()) throw new InvalidOperationException("No se encontró el renglón de Release para recalcular la programación.");
-            var cantidadRequerida = rd["CantidadRequerida"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadRequerida"]);
-            var programadoPendiente = rd["ProgramadoPendiente"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ProgramadoPendiente"]);
-            var pesoBruto = rd["PesoBrutoPieza"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PesoBrutoPieza"]);
-            var piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
-            var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? 0 : Convert.ToInt32(rd["ObjetivoHora"]);
-            var cantidadProgramada = Math.Max(0, cantidadRequerida - programadoPendiente);
-            if (cantidadProgramada <= 0) throw new InvalidOperationException("La necesidad ya no tiene cantidad pendiente por programar.");
+            if (!await rd.ReadAsync())
+                throw new InvalidOperationException("No se encontro el renglon de Release para recalcular la programacion.");
+
+            var cantidadRequerida = rd["CantidadRequerida"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["CantidadRequerida"]);
+
+            var cantidadProgramadaAcumulada = rd["CantidadProgramadaAcumulada"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["CantidadProgramadaAcumulada"]);
+
+            var pesoBruto = rd["PesoBrutoPieza"] == DBNull.Value
+                ? (decimal?)null
+                : Convert.ToDecimal(rd["PesoBrutoPieza"]);
+
+            var piezasPorEmbalaje = rd["PiezasPorEmbalaje"] == DBNull.Value
+                ? (decimal?)null
+                : Convert.ToDecimal(rd["PiezasPorEmbalaje"]);
+
+            var objetivoHora = rd["ObjetivoHora"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["ObjetivoHora"]);
+
+            var capacidadCaja = rd["CapacidadCaja"] == DBNull.Value
+                ? 0
+                : Convert.ToInt32(rd["CapacidadCaja"]);
+
+            // En este punto el aumento ya movio demanda hacia la entrega destino.
+            // Para validar la base elegida por Planeacion reconstruimos primero el
+            // saldo que existia ANTES de sumar los extras.
+            var pendienteActual = Math.Max(0, cantidadRequerida - cantidadProgramadaAcumulada);
+            var pendienteAntesAumento = pendienteActual - totalAumentoAplicado;
+
+            if (pendienteAntesAumento < 0)
+                throw new InvalidOperationException("El saldo de la entrega cambio durante la operacion. Recarga la pantalla y vuelve a intentar.");
+
+            if (cantidadBaseSolicitada > pendienteAntesAumento)
+            {
+                throw new InvalidOperationException(
+                    $"La cantidad base solicitada ({cantidadBaseSolicitada:N0}) supera el saldo disponible de esta entrega ({pendienteAntesAumento:N0}).");
+            }
+
+            int cantidadFinal;
+            checked
+            {
+                cantidadFinal = cantidadBaseSolicitada + totalAumentoAplicado;
+            }
+
+            if (cantidadFinal <= 0 || cantidadFinal > pendienteActual)
+                throw new InvalidOperationException("La cantidad final del programa no es valida para el saldo actual del Release.");
+
+            // La regla de caja se aplica al TOTAL FINAL, no a cada renglon de piezas extra.
+            if (totalAumentoAplicado > 0)
+            {
+                if (capacidadCaja <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "Para usar Aumento por cajas la pieza debe tener capacidad de caja/embalaje configurada.");
+                }
+
+                if (cantidadFinal % capacidadCaja != 0)
+                {
+                    var faltante = capacidadCaja - (cantidadFinal % capacidadCaja);
+                    throw new InvalidOperationException(
+                        $"Con Aumento por cajas el total final debe cerrar cajas completas. " +
+                        $"Total actual: {cantidadFinal:N0}; 1 caja = {capacidadCaja:N0} piezas; faltan {faltante:N0} pieza(s) para cerrar la siguiente caja.");
+                }
+            }
+
             vm.CantidadRequerida = cantidadRequerida;
-            vm.CantidadOriginalAProducir = cantidadProgramada;
-            vm.PiezasAProducir = cantidadProgramada;
-            vm.CantidadProgramada = cantidadProgramada;
+            vm.CantidadOriginalAProducir = pendienteAntesAumento;
+            vm.PiezasAProducir = pendienteAntesAumento;
+            vm.CantidadBasePrograma = cantidadBaseSolicitada;
+            vm.CantidadProgramada = cantidadFinal;
             vm.PesoBrutoPieza = pesoBruto;
             vm.PiezasPorEmbalaje = piezasPorEmbalaje;
             vm.ObjetivoHora = objetivoHora > 0 ? objetivoHora : null;
-            vm.CantidadMpKg = pesoBruto.HasValue && pesoBruto.Value > 0 ? Math.Round(cantidadProgramada * pesoBruto.Value, 4) : 0;
-            vm.CantidadEmbalajes = piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0 ? Math.Ceiling(cantidadProgramada / piezasPorEmbalaje.Value) : 0;
-            vm.HorasProgramadas = objetivoHora > 0 ? Math.Ceiling(cantidadProgramada / (decimal)objetivoHora) : 0;
+
+            vm.CantidadMpKg = pesoBruto.HasValue && pesoBruto.Value > 0
+                ? Math.Round(cantidadFinal * pesoBruto.Value, 4)
+                : 0;
+
+            vm.CantidadEmbalajes = piezasPorEmbalaje.HasValue && piezasPorEmbalaje.Value > 0
+                ? Math.Ceiling(cantidadFinal / piezasPorEmbalaje.Value)
+                : 0;
+
+            vm.HorasProgramadas = objetivoHora > 0
+                ? Math.Ceiling(cantidadFinal / (decimal)objetivoHora)
+                : 0;
         }
-
-
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -976,6 +1070,14 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
             if (!vm.Cambio.HasValue) ModelState.AddModelError(nameof(vm.Cambio), "Captura la hora de cambio de molde.");
             if (!vm.Arranque.HasValue) ModelState.AddModelError(nameof(vm.Arranque), "Captura la hora de arranque.");
             ModelState.Remove(nameof(vm.CantidadProgramada));
+
+            if (vm.CantidadBasePrograma <= 0)
+            {
+                ModelState.AddModelError(
+                    nameof(vm.CantidadBasePrograma),
+                    "Captura una cantidad base mayor que cero.");
+            }
+
             ModelState.Remove(nameof(vm.HorasProgramadas));
             ModelState.Remove(nameof(vm.OperadorPrincipalID));
             ModelState.Remove(nameof(vm.OperadorAuxiliarID));
@@ -1018,14 +1120,11 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                 var sqlTx = (SqlTransaction)tx;
                 var transferenciasAumentoIds = new List<int>();
                 var transferenciasAumentoParejaIds = new List<int>();
-                etapaSql = "Validar si el ReleaseDetalle ya está programado";
-                var existe = await ReleaseDetalleYaProgramadoAsync(vm.ReleaseDetalleID, cn, sqlTx);
-                if (existe)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "Ese renglón de release ya fue programado.";
-                    return RedirectToAction(nameof(Index));
-                }
+                // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+                // Un ReleaseDetalle puede generar varios programas parciales.
+                // El saldo se controla por la suma de CantidadProgramada no cancelada.
+
+                // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
                 var totalAumentoAplicado = 0;
                 var primerOrigenAumentoId = (int?)null;
                 foreach (var lineaAumento in vm.AumentosRelease)
@@ -1057,9 +1156,24 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1;";
                 }
                 vm.CantidadAumentoPiezas = totalAumentoAplicado;
                 vm.ReleaseDetalleOrigenAumentoID = primerOrigenAumentoId;
-                etapaSql = "Recalcular cantidades del programa";
-                await RecalcularCantidadesProgramaAsync(vm, cn, sqlTx);
-                if (vm.CantidadProgramada <= 0 || !vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0) throw new InvalidOperationException("La cantidad u horas de producción recalculadas no son válidas.");
+                etapaSql =
+                    "Recalcular cantidades del programa";
+
+                await RecalcularCantidadesProgramaAsync(
+                    vm,
+                    vm.CantidadBasePrograma,
+                    totalAumentoAplicado,
+                    cn,
+                    sqlTx);
+
+                if (vm.CantidadProgramada <= 0 ||
+                    !vm.HorasProgramadas.HasValue ||
+                    vm.HorasProgramadas.Value <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "La cantidad u horas de producción recalculadas no son válidas.");
+                }
+
                 if (vm.MaquinaID.HasValue)
                 {
                     etapaSql = "Validar máquina compatible con la parte";
@@ -1296,7 +1410,11 @@ OUTER APPLY
 OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenPTInventario WHERE ParteID=d.ParteID)pt
 OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenMPInventario WHERE MaterialID=t.MaterialID AND TipoMP=N'V' ORDER BY OrdenTipo)mp
 OUTER APPLY(SELECT TOP(1)ISNULL(Disponible,0) AS Disponible FROM dbo.vw_AlmacenEmbalajesInventario WHERE Codigo=t.EmbalajeCodigo)emb
-OUTER APPLY(SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)-ISNULL(pp.CantidadProducida,0)),0) AS ProgramadoPendiente FROM dbo.Planeacion_ProgramaProduccion pp WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID AND pp.Activo=1 AND ISNULL(pp.EstatusID,1) NOT IN(5,9,99))prog
+OUTER APPLY(SELECT ISNULL(SUM(ISNULL(pp.CantidadProgramada,0)),0) AS ProgramadoPendiente
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    WHERE pp.ReleaseDetalleID=d.ReleaseDetalleID
+      AND pp.Activo=1
+      AND ISNULL(pp.EstatusID,1)<>99)prog
 OUTER APPLY(SELECT ISNULL(SUM(a.CantidadApartada),0) AS CantidadApartada FROM dbo.Planeacion_PT_Apartado a WHERE a.ParteID=d.ParteID AND a.ReleaseDetalleID<>d.ReleaseDetalleID AND a.Activo=1 AND a.EstatusID=1)aptOtros
 WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1 AND r.Activo=1;";
             await using var ownedConnection =
@@ -1315,7 +1433,9 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID AND d.Activo=1 AND r.Activo=1;";
             cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = releaseDetalleId;
             await using var rd = await cmd.ExecuteReaderAsync();
             if (!await rd.ReadAsync()) return null;
-            if (rd["ProgramaProduccionID"] != DBNull.Value) return null;
+            // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+            // ProgramaProduccionID es solo el ultimo vinculo del renglon; no bloquea
+            // una nueva programacion si aun existe saldo pendiente.
             var cantidadRequerida = rd["CantidadRequerida"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadRequerida"]);
             var stockDisponible = rd["PTDisponible"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTDisponible"]);
             var ptApartadoOtros = rd["PTApartadoOtros"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PTApartadoOtros"]);
@@ -1420,12 +1540,22 @@ WHERE MoldeID=@MoldeID;";
             }
             if (vm.FechaInicioProgramada.HasValue && vm.Arranque.HasValue && vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0)
             {
-                var fechaArranque = CalcularFechaHoraDesdeHora(vm.FechaInicioProgramada.Value.Date, vm.Arranque);
-                if (fechaArranque < vm.FechaInicioProgramada.Value) fechaArranque = fechaArranque.AddDays(1);
-                vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(fechaArranque, vm.HorasProgramadas.Value, trabajarDomingo);
+                var fechaArranque = CalcularFechaHoraDesdeHora(
+                    vm.FechaInicioProgramada.Value.Date,
+                    vm.Arranque
+                );
+
+                if (fechaArranque < vm.FechaInicioProgramada.Value)
+                    fechaArranque = fechaArranque.AddDays(1);
+
+                vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(
+                    fechaArranque,
+                    vm.HorasProgramadas.Value
+                );
             }
         }
 
+                // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
         private static async Task ActualizarTrabajarDomingoProgramaAsync(int programaProduccionId, bool trabajarDomingo, SqlConnection cn, SqlTransaction tx)
         {
             if (programaProduccionId <= 0) throw new ArgumentOutOfRangeException(nameof(programaProduccionId));
@@ -1438,7 +1568,7 @@ WHERE ProgramaProduccionID=@ProgramaProduccionID
             cmd.Parameters.Add("@TrabajarDomingo", SqlDbType.Bit).Value = trabajarDomingo;
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
             var filas = await cmd.ExecuteNonQueryAsync();
-            if (filas != 1) throw new InvalidOperationException($"No fue posible guardar la configuración de domingo para el programa {programaProduccionId}.");
+            if (filas != 1) throw new InvalidOperationException($"No fue posible guardar la configuracion de domingo para el programa {programaProduccionId}.");
         }
 
         private static async Task CompletarVinculoOFExistenteAsync(
@@ -1446,6 +1576,28 @@ WHERE ProgramaProduccionID=@ProgramaProduccionID
             SqlConnection cn,
             SqlTransaction tx)
         {
+            const string sqlProgramasPrevios = @"
+SELECT COUNT(1)
+FROM dbo.Planeacion_ProgramaProduccion
+WHERE ReleaseDetalleID=@ReleaseDetalleID
+  AND Activo=1
+  AND ISNULL(EstatusID,1)<>99;";
+
+            await using (var cmd = new SqlCommand(sqlProgramasPrevios, cn, tx))
+            {
+                cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
+                var programasPrevios = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+
+                if (programasPrevios > 0)
+                {
+                    // El renglon ya tuvo otro programa parcial. La nueva programacion
+                    // debe generar/vincular su propia OF y no reutilizar la anterior.
+                    vm.SolicitudProduccionID = null;
+                    vm.SolicitudProduccionDetalleID = null;
+                    return;
+                }
+            }
+
             const string sql = @"
 SELECT TOP (1)
     d.SolicitudProduccionID,
@@ -1465,10 +1617,10 @@ OUTER APPLY
 WHERE d.ReleaseDetalleID = @ReleaseDetalleID
   AND d.Activo = 1;";
 
-            await using var cmd = new SqlCommand(sql, cn, tx);
-            cmd.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
+            await using var cmdVinculo = new SqlCommand(sql, cn, tx);
+            cmdVinculo.Parameters.Add("@ReleaseDetalleID", SqlDbType.Int).Value = vm.ReleaseDetalleID;
 
-            await using var rd = await cmd.ExecuteReaderAsync();
+            await using var rd = await cmdVinculo.ExecuteReaderAsync();
             if (!await rd.ReadAsync())
                 return;
 
@@ -2609,9 +2761,9 @@ SELECT
     ISNULL(d.CantidadRequerida,0)
         AS CantidadRequerida,
     COALESCE(
-        NULLIF(dt.PiezasPorCaja,0),
         TRY_CONVERT(int,NULLIF(d.PiezasPorEmbalaje,0)),
         TRY_CONVERT(int,NULLIF(dt.PiezasPorEmbalaje,0)),
+        NULLIF(dt.PiezasPorCaja,0),
         0
     ) AS PiezasPorCaja,
     CASE
@@ -2841,13 +2993,9 @@ SELECT OBJECT_ID(
                     "La pieza destino no tiene capacidad de caja/embalaje configurada.");
             }
 
-            if (vm.CantidadAumentoPiezas %
-                piezasPorCaja != 0)
-            {
-                throw new InvalidOperationException(
-                    $"El aumento debe completar cajas. 1 caja = {piezasPorCaja:N0} piezas; {vm.CantidadAumentoPiezas:N0} no es multiplo exacto.");
-            }
-
+            // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+            // Una fila de aumento puede aportar solo las piezas faltantes para cerrar
+            // la caja. El multiplo se valida despues sobre CantidadBase + total extras.
             var disponibleOrigen =
                 origen.DisponibleLibre;
 
@@ -2864,9 +3012,9 @@ SELECT OBJECT_ID(
                     $"La entrega origen solo tiene {disponibleOrigen:N0} pieza(s) libres.");
             }
 
-            var cajas =
-                vm.CantidadAumentoPiezas /
-                piezasPorCaja;
+            var cajasCompletas = vm.CantidadAumentoPiezas % piezasPorCaja == 0
+                ? vm.CantidadAumentoPiezas / piezasPorCaja
+                : 0;
 
             var origenAntes =
                 origen.CantidadRequerida;
@@ -3063,7 +3211,7 @@ VALUES
                 cmd.Parameters.Add(
                     "@CajasTransferidas",
                     SqlDbType.Int).Value =
-                    cajas;
+                    cajasCompletas;
 
                 cmd.Parameters.Add(
                     "@CantidadPiezas",
@@ -3112,8 +3260,9 @@ VALUES
             vm.CantidadRequerida =
                 destinoDespues;
 
-            var nota =
-                $"Aumento Release: +{vm.CantidadAumentoPiezas:N0} pzas ({cajas:N0} caja(s)) desde entrega #{origen.ReleaseDetalleID}.";
+            var nota = cajasCompletas > 0
+                ? $"Ajuste Release: +{vm.CantidadAumentoPiezas:N0} pzas ({cajasCompletas:N0} caja(s) completas) desde entrega #{origen.ReleaseDetalleID}."
+                : $"Ajuste Release: +{vm.CantidadAumentoPiezas:N0} pzas desde entrega #{origen.ReleaseDetalleID} para completar el cierre de caja del programa.";
 
             vm.Observaciones =
                 string.IsNullOrWhiteSpace(
