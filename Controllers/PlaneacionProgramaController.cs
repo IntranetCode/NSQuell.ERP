@@ -1556,6 +1556,21 @@ WHERE MoldeID=@MoldeID;";
         }
 
                 // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
+        private static async Task ActualizarTrabajarDomingoProgramaAsync(int programaProduccionId, bool trabajarDomingo, SqlConnection cn, SqlTransaction tx)
+        {
+            if (programaProduccionId <= 0) throw new ArgumentOutOfRangeException(nameof(programaProduccionId));
+            const string sql = @"
+UPDATE dbo.Planeacion_ProgramaProduccion
+SET TrabajarDomingo=@TrabajarDomingo
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1;";
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@TrabajarDomingo", SqlDbType.Bit).Value = trabajarDomingo;
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            var filas = await cmd.ExecuteNonQueryAsync();
+            if (filas != 1) throw new InvalidOperationException($"No fue posible guardar la configuracion de domingo para el programa {programaProduccionId}.");
+        }
+
         private static async Task CompletarVinculoOFExistenteAsync(
             PlaneacionProgramaCrearDesdeNecesidadVm vm,
             SqlConnection cn,
