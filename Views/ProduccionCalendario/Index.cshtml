@@ -1902,6 +1902,24 @@
                                     Ver OF completa
                                 </a>
                             }
+                            @* NSQ_CALENDARIOS_INTERRUPCION_V4 *@
+                            @if (bloque.PuedeMoverCalendario || bloque.EstaProduciendo)
+                            {
+                                <button type="button"
+                                        class="operativa-head-link text-danger border-0 bg-transparent p-0"
+                                        data-op-interrupcion-urgente
+                                        data-interrupcion-modo="@(bloque.EstaProduciendo ? "activa" : "urgente")"
+                                        data-programa-id="@bloque.ProgramaProduccionID"
+                                        data-of="@bloque.OFTexto"
+                                        data-parte="@bloque.ParteTexto"
+                                        data-descripcion="@bloque.Descripcion"
+                                        data-molde="@bloque.MoldeCodigo"
+                                        data-maquina-id="@bloque.MaquinaID"
+                                        data-maquina-codigo="@bloque.MaquinaCodigo">
+                                    <i class="fa-solid fa-bolt me-1"></i>
+                                    @(bloque.EstaProduciendo ? "Interrumpir esta produccion" : "Interrupcion urgente")
+                                </button>
+                            }
                         </div>
                     </div>
 
@@ -2179,6 +2197,123 @@
     </div>
 }
 
+<!-- NSQ_CALENDARIOS_INTERRUPCION_V4 -->
+<div class="modal fade" id="modalInterrupcionUrgenteOperativo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 bg-danger text-white">
+                <div>
+                    <div class="small text-uppercase fw-bold opacity-75">Produccion / Excepcion de prioridad</div>
+                    <h5 class="modal-title fw-bold mb-0">
+                        <i class="fa-solid fa-bolt me-1"></i>
+                        Interrupcion urgente de Produccion
+                    </h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div id="opIuAntiForgery" class="d-none">@Html.AntiForgeryToken()</div>
+                <input type="hidden" id="opIuProgramaUrgenteID" />
+
+                <div class="alert alert-danger border-0 rounded-4">
+                    <strong>Misma funcion de Planeacion.</strong>
+                    Primero calcula el impacto; confirmar usa el mismo controlador de interrupcion urgente, con sus validaciones y reacomodo canonico.
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <small class="text-muted" id="opIuSeleccionEtiqueta">OF SELECCIONADA</small>
+                            <strong id="opIuSeleccionOF" class="d-block">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <small class="text-muted">Parte</small>
+                            <strong id="opIuSeleccionParte" class="d-block">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <small class="text-muted">Maquina / molde</small>
+                            <strong id="opIuSeleccionMaquina" class="d-block">-</strong>
+                            <span id="opIuSeleccionMolde" class="small text-muted">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="opIuCandidatoWrap" class="d-none mb-3">
+                    <label class="form-label fw-bold">OF urgente que entrara</label>
+                    <select id="opIuCandidato" class="form-select">
+                        <option value="">-- Seleccionar OF urgente --</option>
+                    </select>
+                    <div id="opIuCandidatoInfo" class="form-text"></div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold">Maquina donde se realizara la interrupcion</label>
+                        <select id="opIuMaquina" class="form-select"></select>
+                    </div>
+
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Hora de interrupcion</label>
+                        <div class="form-control bg-light fw-bold text-danger" id="opIuHora">
+                            Se calculara con el servidor
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Motivo de la urgencia</label>
+                        <textarea id="opIuMotivo" class="form-control" rows="2" maxlength="500"></textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Que debe suceder con la OF interrumpida</label>
+                        <select id="opIuDestino" class="form-select">
+                            <option value="PAUSA_RETORNO">Pausar y regresar a la OF despues de terminar la urgente</option>
+                            <option value="TERMINACION_PARCIAL">Autorizar terminacion parcial de la OF interrumpida</option>
+                        </select>
+                    </div>
+
+                    <div class="col-12 d-none" id="opIuParcialWrap">
+                        <label class="form-label fw-bold">Motivo de la terminacion parcial</label>
+                        <textarea id="opIuMotivoParcial" class="form-control" rows="2" maxlength="500"></textarea>
+                    </div>
+
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="button" id="opIuCalcular" class="btn btn-danger fw-bold">
+                            <i class="fa-solid fa-calculator me-1"></i>
+                            Calcular impacto
+                        </button>
+                    </div>
+                </div>
+
+                <div id="opIuFeedback" class="alert d-none mt-3"></div>
+
+                <div id="opIuPreview" class="d-none border rounded-4 p-3 mt-3">
+                    <div class="row g-2">
+                        <div class="col-md-3"><small class="text-muted">OF interrumpida</small><strong id="opIuPreviewInterrumpida" class="d-block">-</strong></div>
+                        <div class="col-md-3"><small class="text-muted">OF urgente</small><strong id="opIuPreviewUrgente" class="d-block">-</strong></div>
+                        <div class="col-md-3"><small class="text-muted">Hora exacta de interrupcion</small><strong id="opIuPreviewHora" class="d-block text-danger">-</strong></div>
+                        <div class="col-md-3"><small class="text-muted">Fin urgente</small><strong id="opIuPreviewFin" class="d-block">-</strong></div>
+                    </div>
+                    <div id="opIuPreviewMensaje" class="alert alert-warning mt-3 mb-0"></div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <span class="small text-muted me-auto" id="opIuEstado">Calcula el impacto antes de confirmar.</span>
+                <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="opIuConfirmar" class="btn btn-danger fw-bold" disabled>
+                    <i class="fa-solid fa-bolt me-1"></i>
+                    Confirmar e interrumpir Produccion
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @section Scripts {
     <script>
         (() => {
@@ -2708,6 +2843,490 @@
                 setTimeout(ajustarCalendarioAlViewport, 60);
             });
 
+            // NSQ_CALENDARIOS_INTERRUPCION_V4
+            const opIuModalEl = document.getElementById('modalInterrupcionUrgenteOperativo');
+            const opIuModal = opIuModalEl ? bootstrap.Modal.getOrCreateInstance(opIuModalEl) : null;
+            const opIuPrograma = document.getElementById('opIuProgramaUrgenteID');
+            const opIuCandidatoWrap = document.getElementById('opIuCandidatoWrap');
+            const opIuCandidato = document.getElementById('opIuCandidato');
+            const opIuCandidatoInfo = document.getElementById('opIuCandidatoInfo');
+            const opIuMaquina = document.getElementById('opIuMaquina');
+            const opIuMotivo = document.getElementById('opIuMotivo');
+            const opIuDestino = document.getElementById('opIuDestino');
+            const opIuParcialWrap = document.getElementById('opIuParcialWrap');
+            const opIuMotivoParcial = document.getElementById('opIuMotivoParcial');
+            const opIuCalcular = document.getElementById('opIuCalcular');
+            const opIuConfirmar = document.getElementById('opIuConfirmar');
+            const opIuPreview = document.getElementById('opIuPreview');
+            const opIuFeedback = document.getElementById('opIuFeedback');
+            const opIuEstado = document.getElementById('opIuEstado');
+            const opIuHora = document.getElementById('opIuHora');
+
+            const opEndpointMaquinas = '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")';
+            const opEndpointCandidatos = '@Url.Action("CandidatosInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+            const opEndpointPreview = '@Url.Action("PrevisualizarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+            const opEndpointConfirmar = '@Url.Action("ConfirmarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+            const opToken =
+                document.querySelector('#opIuAntiForgery input[name="__RequestVerificationToken"]')?.value || '';
+
+            let opCandidatos = [];
+            let opSimulacion = null;
+            let opProcesando = false;
+            let opModoActual = 'urgente';
+
+            function opFmtFecha(value) {
+                if (!value) return '-';
+                const d = new Date(value);
+                if (Number.isNaN(d.getTime())) return '-';
+                return textoFechaHoraLocal(d);
+            }
+
+            function opFeedback(texto, clase = 'alert-info') {
+                if (!opIuFeedback) return;
+                opIuFeedback.textContent = texto || '';
+                opIuFeedback.className = `alert mt-3 ${clase}`;
+                opIuFeedback.classList.toggle('d-none', !texto);
+            }
+
+            function opInvalidar() {
+                opSimulacion = null;
+                opIuPreview?.classList.add('d-none');
+                if (opIuConfirmar) opIuConfirmar.disabled = true;
+                if (opIuEstado) opIuEstado.textContent = 'Calcula el impacto antes de confirmar.';
+            }
+
+            function opActualizarParcial() {
+                const parcial = opIuDestino?.value === 'TERMINACION_PARCIAL';
+                opIuParcialWrap?.classList.toggle('d-none', !parcial);
+                if (!parcial && opIuMotivoParcial) opIuMotivoParcial.value = '';
+                opInvalidar();
+            }
+
+            async function opCargarMaquinas(programaId, maquinaInicialId) {
+                opIuMaquina.disabled = true;
+                opIuMaquina.innerHTML = '<option value="">Cargando maquinas...</option>';
+
+                try {
+                    const response = await fetch(
+                        `${opEndpointMaquinas}?programaProduccionId=${encodeURIComponent(programaId)}`,
+                        { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
+                    );
+
+                    const data = await response.json();
+                    if (!response.ok || !data?.ok)
+                        throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+                    opIuMaquina.innerHTML =
+                        '<option value="">-- Seleccionar maquina compatible --</option>';
+
+                    (data.maquinas || []).forEach(x => {
+                        const option = document.createElement('option');
+                        option.value = String(x.maquinaID || 0);
+                        option.textContent =
+                            `${x.codigo || '-'}${x.nombre ? ' - ' + x.nombre : ''}`;
+                        opIuMaquina.appendChild(option);
+                    });
+
+                    if (
+                        maquinaInicialId > 0 &&
+                        Array.from(opIuMaquina.options).some(
+                            x => Number(x.value || 0) === maquinaInicialId)
+                    ) {
+                        opIuMaquina.value = String(maquinaInicialId);
+                    }
+                }
+                catch(error) {
+                    opFeedback(
+                        error.message || 'No fue posible consultar maquinas compatibles.',
+                        'alert-danger'
+                    );
+                    opIuMaquina.innerHTML = '<option value="">No disponible</option>';
+                }
+                finally {
+                    opIuMaquina.disabled = false;
+                }
+            }
+
+            async function opCargarCandidatos(programaInterrumpidoId, maquinaId) {
+                opCandidatos = [];
+                opIuCandidato.disabled = true;
+                opIuCandidato.innerHTML =
+                    '<option value="">Cargando OF urgentes...</option>';
+
+                try {
+                    const qs = new URLSearchParams({
+                        maquinaId: String(maquinaId),
+                        programaInterrumpidoId: String(programaInterrumpidoId)
+                    });
+
+                    const response = await fetch(
+                        `${opEndpointCandidatos}?${qs.toString()}`,
+                        { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
+                    );
+
+                    const data = await response.json();
+                    if (!response.ok || !data?.ok)
+                        throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+                    opCandidatos =
+                        Array.isArray(data.candidatos) ? data.candidatos : [];
+
+                    opIuCandidato.innerHTML =
+                        '<option value="">-- Seleccionar OF urgente --</option>';
+
+                    opCandidatos.forEach(x => {
+                        const option = document.createElement('option');
+                        option.value = String(x.programaProduccionID || 0);
+                        option.textContent =
+                            `${x.of || 'Programa ' + x.programaProduccionID} · ${x.parte || '-'} · molde ${x.molde || '-'}`;
+                        opIuCandidato.appendChild(option);
+                    });
+
+                    if (!opCandidatos.length) {
+                        opFeedback(
+                            'No hay una OF pendiente compatible para sustituir temporalmente esta produccion.',
+                            'alert-warning'
+                        );
+                    }
+                }
+                catch(error) {
+                    opIuCandidato.innerHTML = '<option value="">No disponible</option>';
+                    opFeedback(
+                        error.message || 'No fue posible consultar candidatos urgentes.',
+                        'alert-danger'
+                    );
+                }
+                finally {
+                    opIuCandidato.disabled = false;
+                }
+            }
+
+            async function opAbrir(btn) {
+                if (!opIuModal) return;
+
+                const programaId = Number(btn.dataset.programaId || 0);
+                const maquinaId = Number(btn.dataset.maquinaId || 0);
+                const modo =
+                    (btn.dataset.interrupcionModo || 'urgente').toLowerCase();
+
+                if (!programaId || !maquinaId) return;
+
+                opModoActual = modo;
+                opIuPrograma.value =
+                    modo === 'activa' ? '' : String(programaId);
+
+                opIuMotivo.value = '';
+                opIuDestino.value = 'PAUSA_RETORNO';
+                opIuMotivoParcial.value = '';
+                opIuHora.textContent = 'Se calculara con el servidor';
+                opFeedback('');
+                opInvalidar();
+
+                document.getElementById('opIuSeleccionEtiqueta').textContent =
+                    modo === 'activa' ? 'OF A INTERRUMPIR' : 'OF URGENTE';
+                document.getElementById('opIuSeleccionOF').textContent =
+                    btn.dataset.of || `Programa ${programaId}`;
+                document.getElementById('opIuSeleccionParte').textContent =
+                    `${btn.dataset.parte || '-'}${btn.dataset.descripcion ? ' · ' + btn.dataset.descripcion : ''}`;
+                document.getElementById('opIuSeleccionMaquina').textContent =
+                    btn.dataset.maquinaCodigo || `Maquina ${maquinaId}`;
+                document.getElementById('opIuSeleccionMolde').textContent =
+                    `Molde: ${btn.dataset.molde || '-'}`;
+
+                opIuCandidatoWrap?.classList.toggle(
+                    'd-none',
+                    modo !== 'activa'
+                );
+
+                const sourceModal = btn.closest('.modal');
+                if (sourceModal) {
+                    const instance =
+                        bootstrap.Modal.getOrCreateInstance(sourceModal);
+
+                    sourceModal.addEventListener(
+                        'hidden.bs.modal',
+                        () => opIuModal.show(),
+                        { once: true }
+                    );
+
+                    instance.hide();
+                }
+                else {
+                    opIuModal.show();
+                }
+
+                if (modo === 'activa') {
+                    opIuMaquina.innerHTML =
+                        `<option value="${maquinaId}">${btn.dataset.maquinaCodigo || 'Maquina ' + maquinaId}</option>`;
+                    opIuMaquina.value = String(maquinaId);
+                    opIuMaquina.disabled = true;
+                    await opCargarCandidatos(programaId, maquinaId);
+                }
+                else {
+                    opIuCandidato.innerHTML =
+                        '<option value="">-- Seleccionar OF urgente --</option>';
+                    opIuMaquina.disabled = false;
+                    await opCargarMaquinas(programaId, maquinaId);
+                }
+
+                opActualizarParcial();
+            }
+
+            opIuCandidato?.addEventListener('change', () => {
+                const id = Number(opIuCandidato.value || 0);
+                opIuPrograma.value = id > 0 ? String(id) : '';
+
+                const c = opCandidatos.find(
+                    x => Number(x.programaProduccionID || 0) === id
+                );
+
+                opIuCandidatoInfo.textContent = c
+                    ? `${c.of || 'Programa ' + id} · ${c.parte || '-'} · ${c.descripcion || ''} · ${Number(c.horasProgramadas || 0).toLocaleString('es-MX')} h`
+                    : '';
+
+                opInvalidar();
+            });
+
+            opIuMaquina?.addEventListener('change', opInvalidar);
+            opIuDestino?.addEventListener('change', opActualizarParcial);
+
+            opIuMotivo?.addEventListener('input', () => {
+                if (!opSimulacion) return;
+
+                const valido =
+                    (opIuMotivo.value || '').trim().length >= 5;
+
+                opIuConfirmar.disabled = !valido;
+                opIuEstado.textContent = valido
+                    ? 'Simulacion calculada. Puedes confirmar.'
+                    : 'Escribe un motivo de al menos 5 caracteres.';
+            });
+
+            document.addEventListener('click', event => {
+                const btn =
+                    event.target?.closest?.('[data-op-interrupcion-urgente]');
+
+                if (!btn) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+                opAbrir(btn);
+            });
+
+            opIuCalcular?.addEventListener('click', async () => {
+                if (opProcesando) return;
+
+                const programaUrgenteId =
+                    Number(opIuPrograma.value || 0);
+                const maquinaId =
+                    Number(opIuMaquina.value || 0);
+                const parcial =
+                    opIuDestino.value === 'TERMINACION_PARCIAL';
+
+                if (!programaUrgenteId) {
+                    opFeedback('Selecciona la OF urgente.', 'alert-warning');
+                    return;
+                }
+
+                if (!maquinaId) {
+                    opFeedback('Selecciona la maquina.', 'alert-warning');
+                    return;
+                }
+
+                opProcesando = true;
+                opInvalidar();
+                opIuCalcular.disabled = true;
+
+                try {
+                    const qs = new URLSearchParams({
+                        programaUrgenteId: String(programaUrgenteId),
+                        maquinaId: String(maquinaId),
+                        trabajarDomingo: 'false',
+                        autorizaTerminacionParcial: String(parcial)
+                    });
+
+                    const response = await fetch(
+                        `${opEndpointPreview}?${qs.toString()}`,
+                        { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
+                    );
+
+                    const data = await response.json();
+                    if (!response.ok || !data?.ok)
+                        throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+                    opSimulacion = {
+                        programaUrgenteId,
+                        maquinaId,
+                        parcial
+                    };
+
+                    const interrumpida = data.programaInterrumpido || {};
+                    const urgente = data.programaUrgente || {};
+                    const interrupcion = data.interrupcion || {};
+
+                    document.getElementById('opIuPreviewInterrumpida').textContent =
+                        interrumpida.solicitudProduccionID
+                            ? `OF ${interrumpida.solicitudProduccionID}`
+                            : `Programa ${interrumpida.programaProduccionID || '-'}`;
+
+                    document.getElementById('opIuPreviewUrgente').textContent =
+                        urgente.solicitudProduccionID
+                            ? `OF ${urgente.solicitudProduccionID}`
+                            : `Programa ${urgente.programaProduccionID || '-'}`;
+
+                    document.getElementById('opIuPreviewHora').textContent =
+                        opFmtFecha(interrupcion.fechaInterrupcion);
+
+                    document.getElementById('opIuPreviewFin').textContent =
+                        opFmtFecha(interrupcion.fechaFinUrgente);
+
+                    document.getElementById('opIuPreviewMensaje').textContent =
+                        data.mensaje || data.motivoResumen || 'Simulacion calculada.';
+
+                    opIuHora.textContent =
+                        opFmtFecha(interrupcion.fechaInterrupcion);
+
+                    opIuPreview.classList.remove('d-none');
+
+                    opFeedback(
+                        'Impacto calculado. Revisa la hora antes de confirmar.',
+                        'alert-success'
+                    );
+
+                    const motivoValido =
+                        (opIuMotivo.value || '').trim().length >= 5;
+
+                    opIuConfirmar.disabled = !motivoValido;
+                    opIuEstado.textContent = motivoValido
+                        ? 'Simulacion calculada. Puedes confirmar.'
+                        : 'Escribe un motivo de al menos 5 caracteres para confirmar.';
+                }
+                catch(error) {
+                    opFeedback(
+                        error.message || 'No fue posible calcular la interrupcion.',
+                        'alert-danger'
+                    );
+                }
+                finally {
+                    opProcesando = false;
+                    opIuCalcular.disabled = false;
+                }
+            });
+
+            opIuConfirmar?.addEventListener('click', async () => {
+                if (opProcesando || !opSimulacion) return;
+
+                const motivo =
+                    (opIuMotivo.value || '').trim();
+
+                const parcial =
+                    opIuDestino.value === 'TERMINACION_PARCIAL';
+
+                const motivoParcial =
+                    (opIuMotivoParcial.value || '').trim();
+
+                if (motivo.length < 5) {
+                    opFeedback(
+                        'Escribe un motivo de al menos 5 caracteres.',
+                        'alert-warning'
+                    );
+                    return;
+                }
+
+                if (parcial && motivoParcial.length < 5) {
+                    opFeedback(
+                        'Explica el motivo de la terminacion parcial.',
+                        'alert-warning'
+                    );
+                    return;
+                }
+
+                const programaUrgenteId =
+                    Number(opIuPrograma.value || 0);
+                const maquinaId =
+                    Number(opIuMaquina.value || 0);
+
+                if (
+                    programaUrgenteId !== opSimulacion.programaUrgenteId ||
+                    maquinaId !== opSimulacion.maquinaId ||
+                    parcial !== opSimulacion.parcial
+                ) {
+                    opInvalidar();
+                    opFeedback(
+                        'La seleccion cambio despues de la simulacion. Calcula nuevamente.',
+                        'alert-warning'
+                    );
+                    return;
+                }
+
+                opProcesando = true;
+                opIuConfirmar.disabled = true;
+                opIuCalcular.disabled = true;
+
+                try {
+                    const payload = {
+                        ProgramaUrgenteID: programaUrgenteId,
+                        MaquinaID: maquinaId,
+                        Motivo: motivo,
+                        TrabajarDomingo: false,
+                        AutorizaTerminacionParcial: parcial,
+                        MotivoTerminacionParcial:
+                            parcial ? motivoParcial : null
+                    };
+
+                    const response = await fetch(
+                        opEndpointConfirmar,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'RequestVerificationToken': opToken
+                            },
+                            body: JSON.stringify(payload)
+                        }
+                    );
+
+                    const data = await response.json();
+                    if (!response.ok || !data?.ok)
+                        throw new Error(data?.mensaje || `HTTP ${response.status}`);
+
+                    const horaReal =
+                        opFmtFecha(data.fechaInterrupcion);
+
+                    opIuHora.textContent =
+                        `Registrada: ${horaReal}`;
+
+                    document.getElementById('opIuPreviewHora').textContent =
+                        horaReal;
+
+                    opFeedback(
+                        `${data.mensaje || 'Interrupcion registrada.'} Hora registrada: ${horaReal}.`,
+                        'alert-success'
+                    );
+
+                    opIuEstado.textContent =
+                        `Interrupcion registrada a las ${horaReal}.`;
+
+                    opIuConfirmar.innerHTML =
+                        '<i class="fa-solid fa-circle-check me-1"></i>Interrupcion registrada';
+
+                    window.setTimeout(
+                        () => window.location.reload(),
+                        1300
+                    );
+                }
+                catch(error) {
+                    opFeedback(
+                        error.message || 'No fue posible confirmar la interrupcion.',
+                        'alert-danger'
+                    );
+
+                    opIuConfirmar.disabled = false;
+                    opIuCalcular.disabled = false;
+                    opProcesando = false;
+                }
+            });
             /*
              * IMPORTANTE:
              * Esta vista NO registra dragstart, dragover, drop ni dragend.

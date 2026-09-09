@@ -68,7 +68,8 @@ public partial class PlaneacionProgramaController
         DateTime? fechaDesde,
         DateTime? fechaHasta,
         [FromServices] IWebHostEnvironment environment,
-        bool incluirActual = true)
+        bool incluirActual = true,
+        bool descargar = false)
     {
         if (!fechaDesde.HasValue || !fechaHasta.HasValue)
             return BadRequest("Debes indicar Fecha desde y Fecha hasta.");
@@ -138,33 +139,27 @@ public partial class PlaneacionProgramaController
             nombreRevisor).GeneratePdf();
 
         var fileName = $"Programa_Cambio_Moldes_{desde:yyyyMMdd}_{hasta:yyyyMMdd}.pdf";
-        Response.Headers["Content-Disposition"] = $"inline; filename=\"{fileName}\"";
+        var disposition = descargar ? "attachment" : "inline";
+
+        // NSQ_PDF_PROGRAMA_SERVER_V1_7
+        Response.Headers["Content-Disposition"] =
+            $"{disposition}; filename=\"{fileName}\"";
+        Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+
         return File(pdf, "application/pdf");
     }
 
-    // NSQ_PDF_PROGRAMA_LICENSE_V1_3
+    // NSQ_PDF_PROGRAMA_SERVER_V1_7
     private void ConfigurarLicenciaQuestPdf(IWebHostEnvironment environment)
     {
-        // En desarrollo local se permite Community para probar/evaluar el generador.
-        // En cualquier otro ambiente la licencia debe declararse explicitamente.
+        // La generacion no debe depender de ASPNETCORE_ENVIRONMENT.
+        // Si existe QuestPDF:License se respeta; si no, se usa Community.
+        // Si la entidad requiere Professional/Enterprise, basta configurar
+        // QuestPDF:License sin volver a modificar este controlador.
         var licenciaConfigurada = _configuration["QuestPDF:License"];
-
-        if (string.IsNullOrWhiteSpace(licenciaConfigurada))
-        {
-            if (string.Equals(
-                environment.EnvironmentName,
-                "Development",
-                StringComparison.OrdinalIgnoreCase))
-            {
-                QuestPDF.Settings.License = LicenseType.Community;
-                return;
-            }
-
-            throw new InvalidOperationException(
-                "Falta configurar QuestPDF:License para este ambiente. Usa Community, Professional o Enterprise segun la licencia que corresponda a la entidad.");
-        }
-
-        var licencia = licenciaConfigurada.Trim().ToUpperInvariant();
+        var licencia = string.IsNullOrWhiteSpace(licenciaConfigurada)
+            ? "COMMUNITY"
+            : licenciaConfigurada.Trim().ToUpperInvariant();
 
         QuestPDF.Settings.License = licencia switch
         {

@@ -5,12 +5,19 @@
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Programar Molde | ERP QUELL";
     var cantidadBase = Model.CantidadOriginalAProducir > 0 ? Model.CantidadOriginalAProducir : Model.PiezasAProducir;
+    // NSQ_PLANEACION_AUMENTO_EXTENSION_V4
+    var cantidadBaseCapturada = Model.CantidadBasePrograma > 0 ? Model.CantidadBasePrograma : cantidadBase;
+    var aumentoCapturado = Model.AumentosRelease == null
+        ? 0
+        : Model.AumentosRelease.Where(x => x != null && x.CantidadPiezas > 0).Sum(x => x.CantidadPiezas);
+    var totalVisualInicial = cantidadBaseCapturada + aumentoCapturado;
 }
 
 @section Scripts {
     <script>
         const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
         const cantidadInput = document.getElementById('CantidadBasePrograma');
+        const cantidadBaseServidorInput = document.getElementById('CantidadBaseProgramaServidor');
 
         // NSQ_PLANEACION_AUMENTO_POR_CAJAS_V1
         const cantidadBaseRelease = Number('@Model.PiezasAProducir');
@@ -157,7 +164,24 @@
 
                 // NSQ_PLANEACION_CANTIDAD_PARCIAL_CIERRE_CAJAS_V1_6
         function cantidadBaseActual() {
-            return Math.max(0, Math.trunc(Number(cantidadInput?.value || 0)));
+            return Math.max(0, Math.trunc(Number(
+                cantidadBaseServidorInput?.value ?? cantidadInput?.value ?? 0
+            )));
+        }
+
+        function sincronizarCantidadTotalVisible(totalForzado = null) {
+            if (!cantidadInput) return;
+            const total = totalForzado == null
+                ? cantidadBaseActual() + totalExtrasActual()
+                : Math.max(0, Math.trunc(Number(totalForzado || 0)));
+            cantidadInput.value = String(total);
+        }
+
+        function actualizarBaseDesdeTotalVisible() {
+            if (!cantidadInput || !cantidadBaseServidorInput) return;
+            const totalVisual = Math.max(0, Math.trunc(Number(cantidadInput.value || 0)));
+            const extras = totalExtrasActual();
+            cantidadBaseServidorInput.value = String(Math.max(0, totalVisual - extras));
         }
 
         function totalExtrasActual(excluirFila = null) {
@@ -322,6 +346,7 @@
 
             const base = cantidadBaseActual();
             const totalFinal = base + totalExtra;
+            sincronizarCantidadTotalVisible(totalFinal);
 
             if (aumentoPreview) {
                 if (totalExtra <= 0) {
@@ -566,6 +591,7 @@
         }
 
         cantidadInput?.addEventListener('input', function () {
+            actualizarBaseDesdeTotalVisible();
             recalcularAumentosRelease();
         });
 
@@ -1348,17 +1374,20 @@
                         <div class="w-100">
                             <label class="field-label">Cantidad base del programa (pzas)</label>
                             <input asp-for="CantidadBasePrograma"
-                                   type="number"
+                                   type="hidden"
+                                   id="CantidadBaseProgramaServidor" />
+                            <input type="number"
                                    min="1"
-                                   max="@Model.PiezasAProducir"
                                    step="1"
                                    inputmode="numeric"
                                    class="form-control"
-                                   id="CantidadBasePrograma" />
+                                   id="CantidadBasePrograma"
+                                   value="@totalVisualInicial" />
                             <div class="small text-muted mt-1">
-                                Pendiente disponible de esta entrega:
+                                <strong>Total del programa = base de esta entrega + piezas extra.</strong>
+                                Base disponible de esta entrega:
                                 <strong>@Model.PiezasAProducir.ToString("N0") pzas</strong>.
-                                Puedes programar una cantidad menor; el saldo no programado quedara disponible para otro Programa Cambio de Molde.
+                                Al agregar aumentos, el total visible se actualiza automaticamente; el servidor conserva la base por separado para no duplicar el aumento.
                             </div>
                             <span asp-validation-for="CantidadBasePrograma" class="text-danger small"></span>
 
@@ -1417,7 +1446,7 @@
                                                                 data-requerido="@origen.CantidadRequerida"
                                                                 data-numero-parte="@origen.NumeroParte"
                                                                 data-secuencia="@(origen.SecuenciaEntrega?.ToString() ?? "")">
-                                                            Entrega @(origen.SecuenciaEntrega?.ToString() ?? "-") · @origen.NumeroParte · @origen.FechaRequerida.ToString("dd/MM/yyyy") · requerido @origen.CantidadRequerida.ToString("N0") · libre @origen.CantidadTransferible.ToString("N0") pzas
+                                                            Entrega @(origen.SecuenciaEntrega?.ToString() ?? "-") · @origen.FechaRequerida.ToString("dd/MM/yyyy") · libre @origen.CantidadTransferible.ToString("N0") pzas
                                                         </option>
                                                     }
                                                 </select>

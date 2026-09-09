@@ -23,6 +23,8 @@ public partial class PlaneacionProgramaController
         public int CantidadAdicional { get; set; }
         public decimal? HorasAdicionales { get; set; }
         public int? ReleaseDetalleOrigenID { get; set; }
+        // NSQ_PLANEACION_AUMENTO_EXTENSION_V4
+        public List<PlaneacionProgramaAumentoLineaVm> AumentosRelease { get; set; } = new();
     }
 
     private sealed class PlaneacionExtensionContexto
@@ -115,21 +117,69 @@ public partial class PlaneacionProgramaController
         if (request.Motivo != ExtensionMotivoContinuidad && request.Motivo != ExtensionMotivoRelease)
             return BadRequest(new { ok = false, mensaje = "Selecciona un motivo de extension valido." });
 
-        if (request.CantidadAdicional <= 0)
-            return BadRequest(new { ok = false, mensaje = "Las piezas adicionales deben ser mayores a cero." });
+        request.AumentosRelease ??= new List<PlaneacionProgramaAumentoLineaVm>();
 
-        if (request.Motivo == ExtensionMotivoContinuidad &&
-            (!request.HorasAdicionales.HasValue || request.HorasAdicionales.Value <= 0))
+        if (request.Motivo == ExtensionMotivoContinuidad)
         {
-            return BadRequest(new { ok = false, mensaje = "Para continuar la maquina debes capturar horas adicionales mayores a cero." });
-        }
+            if (request.CantidadAdicional <= 0)
+                return BadRequest(new { ok = false, mensaje = "Las piezas adicionales deben ser mayores a cero." });
 
-        if (request.Motivo == ExtensionMotivoRelease &&
-            (!request.ReleaseDetalleOrigenID.HasValue || request.ReleaseDetalleOrigenID.Value <= 0))
+            if (!request.HorasAdicionales.HasValue || request.HorasAdicionales.Value <= 0)
+                return BadRequest(new { ok = false, mensaje = "Para continuar la maquina debes capturar horas adicionales mayores a cero." });
+
+            request.AumentosRelease.Clear();
+        }
+        else
         {
-            return BadRequest(new { ok = false, mensaje = "Selecciona la fila/entrega de Release de donde saldran las piezas adicionales." });
-        }
+            if (request.HorasAdicionales.HasValue && request.HorasAdicionales.Value < 0)
+                return BadRequest(new { ok = false, mensaje = "Las horas adicionales no pueden ser negativas. Para el motivo 2 se permite 0." });
 
+            request.HorasAdicionales ??= 0m;
+            request.AumentosRelease = request.AumentosRelease
+                .Where(x => x != null && ((x.ReleaseDetalleOrigenAumentoID ?? 0) > 0 || x.CantidadPiezas != 0))
+                .ToList();
+
+            if (request.AumentosRelease.Count == 0 &&
+                request.ReleaseDetalleOrigenID.HasValue &&
+                request.ReleaseDetalleOrigenID.Value > 0 &&
+                request.CantidadAdicional > 0)
+            {
+                request.AumentosRelease.Add(new PlaneacionProgramaAumentoLineaVm
+                {
+                    ReleaseDetalleOrigenAumentoID = request.ReleaseDetalleOrigenID,
+                    CantidadPiezas = request.CantidadAdicional
+                });
+            }
+
+            if (request.AumentosRelease.Count == 0)
+                return BadRequest(new { ok = false, mensaje = "Agrega al menos una fila Release con piezas." });
+
+            var duplicados = request.AumentosRelease
+                .Where(x => x.ReleaseDetalleOrigenAumentoID.HasValue)
+                .GroupBy(x => x.ReleaseDetalleOrigenAumentoID!.Value)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicados.Count > 0)
+                return BadRequest(new { ok = false, mensaje = "Una misma entrega Release no puede utilizarse mas de una vez." });
+
+            long total = 0;
+            for (var i = 0; i < request.AumentosRelease.Count; i++)
+            {
+                var linea = request.AumentosRelease[i];
+                if (!linea.ReleaseDetalleOrigenAumentoID.HasValue || linea.ReleaseDetalleOrigenAumentoID.Value <= 0)
+                    return BadRequest(new { ok = false, mensaje = $"Selecciona la entrega Release de la fila {i + 1}." });
+                if (linea.CantidadPiezas <= 0)
+                    return BadRequest(new { ok = false, mensaje = $"Las piezas de la fila {i + 1} deben ser mayores a cero." });
+                total += linea.CantidadPiezas;
+                if (total > int.MaxValue)
+                    return BadRequest(new { ok = false, mensaje = "La suma de piezas supera el limite permitido." });
+            }
+
+            request.CantidadAdicional = Convert.ToInt32(total);
+            request.ReleaseDetalleOrigenID = request.AumentosRelease[0].ReleaseDetalleOrigenAumentoID;
+        }
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
         await using var txBase = await cn.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -157,6 +207,7 @@ public partial class PlaneacionProgramaController
 
             decimal horasAdicionales;
             int? transferenciaId = null;
+            var transferenciasIds = new List<int>();
 
             if (request.Motivo == ExtensionMotivoContinuidad)
             {
@@ -165,54 +216,54 @@ public partial class PlaneacionProgramaController
             else
             {
                 if (!contexto.ReleaseDetalleID.HasValue || !contexto.ReleaseID.HasValue)
-                    throw new InvalidOperationException("Esta OF no tiene un ReleaseDetalle relacionado y no puede usar el motivo de adelanto Release.");
+                    throw new InvalidOperationException("Esta OF no tiene un ReleaseDetalle relacionado.");
 
-                if (!contexto.ObjetivoHora.HasValue || contexto.ObjetivoHora.Value <= 0)
-                    throw new InvalidOperationException("No existe Objetivo/Hora valido para calcular las horas de la extension Release.");
-
-                var aumentoVm = new PlaneacionProgramaCrearDesdeNecesidadVm
+                foreach (var linea in request.AumentosRelease)
                 {
-                    ReleaseDetalleID = contexto.ReleaseDetalleID.Value,
-                    ReleaseDetalleOrigenAumentoID = request.ReleaseDetalleOrigenID,
-                    CantidadAumentoPiezas = request.CantidadAdicional
-                };
+                    var aumentoVm = new PlaneacionProgramaCrearDesdeNecesidadVm
+                    {
+                        ReleaseDetalleID = contexto.ReleaseDetalleID.Value,
+                        ReleaseDetalleOrigenAumentoID = linea.ReleaseDetalleOrigenAumentoID,
+                        CantidadAumentoPiezas = linea.CantidadPiezas
+                    };
 
-                transferenciaId = await AplicarAumentoReleaseAsync(
-                    aumentoVm,
-                    usuarioId,
-                    cn,
-                    tx,
-                    "Extension de OF: adelanto/faltante de piezas solicitado desde Planeacion.");
-
-                if (transferenciaId.HasValue)
-                {
-                    await VincularTransferenciaAProgramaAsync(
-                        transferenciaId.Value,
-                        contexto.ProgramaProduccionID,
-                        contexto.ReleaseDetalleID.Value,
+                    var id = await AplicarAumentoReleaseAsync(
+                        aumentoVm,
+                        usuarioId,
                         cn,
-                        tx);
+                        tx,
+                        "Extension de OF: adelanto/faltante de piezas solicitado desde Planeacion.");
+
+                    if (id.HasValue)
+                    {
+                        transferenciasIds.Add(id.Value);
+                        transferenciaId ??= id.Value;
+                        await VincularTransferenciaAProgramaAsync(
+                            id.Value,
+                            contexto.ProgramaProduccionID,
+                            contexto.ReleaseDetalleID.Value,
+                            cn,
+                            tx);
+                    }
                 }
 
                 horasAdicionales = Math.Round(
-                    request.CantidadAdicional / contexto.ObjetivoHora.Value,
+                    request.HorasAdicionales ?? 0m,
                     4,
                     MidpointRounding.AwayFromZero);
-
-                if (horasAdicionales <= 0)
-                    throw new InvalidOperationException("Las horas calculadas para la extension no son validas.");
             }
-
             var nuevasHoras = Math.Round(
                 contexto.HorasActuales + horasAdicionales,
                 4,
                 MidpointRounding.AwayFromZero);
 
             var secuencia = new PlaneacionSecuenciaService();
-            var nuevoFin = secuencia.AjustarFechaFinOperativa(
-                contexto.FechaFinProgramada,
-                horasAdicionales,
-                contexto.TrabajarDomingo);
+            var nuevoFin = horasAdicionales > 0
+                ? secuencia.AjustarFechaFinOperativa(
+                    contexto.FechaFinProgramada,
+                    horasAdicionales,
+                    contexto.TrabajarDomingo)
+                : contexto.FechaFinProgramada;
 
             var motivoTexto = request.Motivo == ExtensionMotivoContinuidad
                 ? "No detener maquina, continuar con la produccion"
@@ -395,16 +446,20 @@ END;";
             }
 
             // 6) Calendario: reutiliza el servicio canonico que recorre cola de maquina/molde.
-            var recorridos = await secuencia.ReacomodarPorCambioDuracionAsync(
-                contexto.ProgramaProduccionID,
-                contexto.EjecucionProduccionID,
-                nuevoFin,
-                nuevasHoras,
-                usuarioId,
-                $"Extension OF {contexto.Folio}. Motivo: {motivoTexto}. Cantidad anterior: {contexto.CantidadActual:N0}. Extension: +{request.CantidadAdicional:N0}. Cantidad nueva: {nuevaCantidad:N0}. Horas adicionales: {horasAdicionales:0.####}.",
-                cn,
-                tx,
-                contexto.TrabajarDomingo);
+            var recorridos = 0;
+            if (horasAdicionales > 0)
+            {
+                recorridos = await secuencia.ReacomodarPorCambioDuracionAsync(
+                    contexto.ProgramaProduccionID,
+                    contexto.EjecucionProduccionID,
+                    nuevoFin,
+                    nuevasHoras,
+                    usuarioId,
+                    $"Extension OF {contexto.Folio}. Motivo: {motivoTexto}. Cantidad anterior: {contexto.CantidadActual:N0}. Extension: +{request.CantidadAdicional:N0}. Cantidad nueva: {nuevaCantidad:N0}. Horas adicionales: {horasAdicionales:0.####}.",
+                    cn,
+                    tx,
+                    contexto.TrabajarDomingo);
+            }
 
             // 7) Almacen: vuelve a calcular el surtimiento despues de aumentar MP/embalaje.
             await RecalcularAlmacenExtensionAsync(contexto.SolicitudProduccionID, cn, tx);
@@ -440,7 +495,7 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
                 $"Horas adicionales: {horasAdicionales:0.####}. Horas nuevas: {nuevasHoras:0.####}. " +
                 $"Fin anterior: {contexto.FechaFinProgramada:dd/MM/yyyy HH:mm}. Nuevo fin: {nuevoFin:dd/MM/yyyy HH:mm}. " +
                 $"Programas recorridos: {recorridos}. " +
-                (transferenciaId.HasValue ? $"Transferencia Release ID: {transferenciaId.Value}." : string.Empty);
+                (transferenciasIds.Count > 0 ? $"Transferencias Release ID: {string.Join(", ", transferenciasIds)}." : string.Empty);
 
             await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
             {
@@ -463,7 +518,8 @@ WHERE s.SolicitudProduccionID = @SolicitudProduccionID
                 horasNuevas = nuevasHoras,
                 nuevoFin,
                 programasRecorridos = recorridos,
-                transferenciaReleaseId = transferenciaId
+                transferenciaReleaseId = transferenciaId,
+                transferenciasReleaseIds = transferenciasIds
             });
         }
         catch (Exception ex)

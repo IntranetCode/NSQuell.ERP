@@ -180,22 +180,22 @@
 }
 
 
-    <!-- NSQ_PLANEACION_EXTENSION_OF_V2 -->
+    <!-- NSQ_PLANEACION_AUMENTO_EXTENSION_V4 -->
     <div class="modal fade" id="modalExtensionOF" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content border-0 rounded-4 shadow-lg">
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title fw-bold">Extension de Orden de Fabricacion</h5>
                         <div class="text-muted small">Actualiza la misma OF y propaga el cambio a Planeacion, Produccion, Calidad y Almacen.</div>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+
                 <div class="modal-body">
                     <form id="formExtensionOF">
                         @Html.AntiForgeryToken()
                         <input type="hidden" id="extSolicitudProduccionID" name="SolicitudProduccionID" />
-
                         <div id="extError" class="alert alert-danger d-none"></div>
 
                         <div class="row g-3 mb-3">
@@ -212,7 +212,7 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold" for="extMotivo">Motivo de la extension</label>
+                            <label class="form-label fw-semibold">Motivo de la extension</label>
                             <select class="form-select" id="extMotivo" name="Motivo" required>
                                 <option value="">Selecciona...</option>
                                 <option value="CONTINUIDAD_MAQUINA">1. No detener maquina, continuar con la produccion</option>
@@ -220,28 +220,70 @@
                             </select>
                         </div>
 
-                        <div id="extBloqueComun" class="row g-3 d-none">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold" for="extCantidadAdicional">Piezas adicionales</label>
-                                <input type="number" min="1" step="1" class="form-control" id="extCantidadAdicional" name="CantidadAdicional" />
-                            </div>
-                            <div class="col-md-6" id="extHorasWrap">
-                                <label class="form-label fw-semibold" for="extHorasAdicionales">Horas adicionales</label>
-                                <input type="number" min="0.0001" step="0.0001" class="form-control" id="extHorasAdicionales" name="HorasAdicionales" />
-                                <div class="form-text">Para continuidad de maquina se capturan manualmente.</div>
+                        <div id="extBloqueComun" class="d-none">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Horas adicionales</label>
+                                    <input type="number" step="0.0001" class="form-control" id="extHorasAdicionales" name="HorasAdicionales" />
+                                    <div id="extHorasAyuda" class="form-text"></div>
+                                </div>
+
+                                <div class="col-md-6" id="extContinuidadCantidadWrap">
+                                    <label class="form-label fw-semibold">Piezas adicionales</label>
+                                    <input type="number" min="1" step="1" class="form-control" id="extCantidadAdicional" name="CantidadAdicional" />
+                                </div>
                             </div>
                         </div>
 
                         <div id="extReleaseWrap" class="mt-3 d-none">
-                            <label class="form-label fw-semibold" for="extReleaseOrigen">Fila/entrega Release de origen</label>
-                            <select class="form-select" id="extReleaseOrigen" name="ReleaseDetalleOrigenID"></select>
-                            <div class="form-text">Solo aparecen entregas compatibles del mismo Release/renglon con cantidad libre.</div>
-                            <div id="extReleaseInfo" class="alert alert-info mt-2 mb-0 d-none"></div>
+                            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+                                <div>
+                                    <div class="fw-bold">Filas / entregas Release de origen</div>
+                                    <div class="form-text mt-0">Cada entrega se puede utilizar una sola vez.</div>
+                                </div>
+                                <button type="button" id="extAgregarFilaRelease" class="btn btn-outline-primary btn-sm fw-bold">
+                                    <i class="fa-solid fa-plus me-1"></i>Agregar fila
+                                </button>
+                            </div>
+
+                            <div id="extReleaseFilas" class="d-grid gap-2"></div>
+
+                            <template id="extReleaseFilaTemplate">
+                                <div class="border rounded-3 p-3 ext-release-fila">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-lg-7">
+                                            <label class="form-label fw-semibold mb-1">Descontar de entrega / fila</label>
+                                            <select class="form-select ext-release-origen">
+                                                <option value="">Selecciona una entrega...</option>
+                                            </select>
+                                            <div class="form-text ext-release-info">Selecciona una entrega compatible.</div>
+                                        </div>
+                                        <div class="col-lg-4">
+                                            <label class="form-label fw-semibold mb-1">Piezas de esta fila</label>
+                                            <input type="number" min="1" step="1" class="form-control ext-release-cantidad" />
+                                        </div>
+                                        <div class="col-lg-1 d-flex justify-content-lg-end">
+                                            <button type="button" class="btn btn-outline-danger ext-release-quitar">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
 
-                        <div id="extResumen" class="alert alert-secondary mt-3 d-none"></div>
+                        <div id="extResumen" class="mt-3 d-none">
+                            <div class="row g-2">
+                                <div class="col-6 col-lg-3"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Programado</small><strong id="extResumenActual" class="d-block fs-5">-</strong></div></div>
+                                <div class="col-6 col-lg-3"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Piezas nuevas</small><strong id="extResumenExtra" class="d-block fs-5 text-primary">-</strong></div></div>
+                                <div class="col-6 col-lg-3"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Nuevo total</small><strong id="extResumenNuevo" class="d-block fs-5">-</strong></div></div>
+                                <div class="col-6 col-lg-3"><div class="border rounded-3 p-3 h-100"><small class="text-muted">Horas totales</small><strong id="extResumenHoras" class="d-block fs-5">-</strong></div></div>
+                            </div>
+                            <div id="extResumenDetalle" class="alert alert-secondary mt-2 mb-0"></div>
+                        </div>
                     </form>
                 </div>
+
                 <div class="modal-footer">
                     <button type="button" class="btn-erp btn-erp-light" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" id="btnAplicarExtensionOF" class="btn-erp btn-erp-primary">
@@ -251,7 +293,6 @@
             </div>
         </div>
     </div>
-
 @section Scripts {
     <script>
         (() => {
@@ -389,18 +430,20 @@
             });
 
 
-            // NSQ_PLANEACION_EXTENSION_OF_V2
+            // NSQ_PLANEACION_AUMENTO_EXTENSION_V4
             const extModalElement = document.getElementById('modalExtensionOF');
             const extModal = extModalElement ? bootstrap.Modal.getOrCreateInstance(extModalElement) : null;
             const extForm = document.getElementById('formExtensionOF');
             const extMotivo = document.getElementById('extMotivo');
             const extCantidad = document.getElementById('extCantidadAdicional');
+            const extContinuidadWrap = document.getElementById('extContinuidadCantidadWrap');
             const extHoras = document.getElementById('extHorasAdicionales');
-            const extHorasWrap = document.getElementById('extHorasWrap');
-            const extReleaseWrap = document.getElementById('extReleaseWrap');
-            const extReleaseOrigen = document.getElementById('extReleaseOrigen');
-            const extReleaseInfo = document.getElementById('extReleaseInfo');
+            const extHorasAyuda = document.getElementById('extHorasAyuda');
             const extBloqueComun = document.getElementById('extBloqueComun');
+            const extReleaseWrap = document.getElementById('extReleaseWrap');
+            const extReleaseFilas = document.getElementById('extReleaseFilas');
+            const extReleaseTemplate = document.getElementById('extReleaseFilaTemplate');
+            const extAgregarFila = document.getElementById('extAgregarFilaRelease');
             const extResumen = document.getElementById('extResumen');
             const extError = document.getElementById('extError');
             const extAplicar = document.getElementById('btnAplicarExtensionOF');
@@ -408,74 +451,224 @@
 
             const extFmtNumber = value => Number(value || 0).toLocaleString('es-MX', { maximumFractionDigits: 4 });
             const extFmtDate = value => value ? new Date(value).toLocaleString('es-MX') : '-';
+            const extOrigenId = o => o.releaseDetalleID ?? o.ReleaseDetalleID ?? '';
+            const extDisponible = o => o.cantidadTransferible ?? o.CantidadTransferible ?? o.disponibleLibre ?? o.DisponibleLibre ?? 0;
+            const extFecha = o => o.fechaRequerida ?? o.FechaRequerida ?? null;
+            const extParte = o => o.numeroParte ?? o.NumeroParte ?? o.referenciaSAP ?? o.ReferenciaSAP ?? '';
+
             const extShowError = message => {
-                if (!extError) return;
                 extError.textContent = message || 'Ocurrio un error.';
                 extError.classList.remove('d-none');
             };
             const extClearError = () => extError?.classList.add('d-none');
+            const extFilas = () => Array.from(extReleaseFilas?.querySelectorAll('.ext-release-fila') || []);
 
-            const extOrigenId = o => o.releaseDetalleID ?? o.ReleaseDetalleID ?? '';
-            const extOrigenDisponible = o => o.cantidadTransferible ?? o.CantidadTransferible ?? o.disponibleLibre ?? o.DisponibleLibre ?? 0;
-            const extOrigenFecha = o => o.fechaRequerida ?? o.FechaRequerida ?? null;
-            const extOrigenParte = o => o.numeroParte ?? o.NumeroParte ?? o.referenciaSAP ?? o.ReferenciaSAP ?? '';
+            function extReindexar() {
+                extFilas().forEach((fila, index) => {
+                    const select = fila.querySelector('.ext-release-origen');
+                    const input = fila.querySelector('.ext-release-cantidad');
+                    if (select) select.name = `AumentosRelease[${index}].ReleaseDetalleOrigenAumentoID`;
+                    if (input) input.name = `AumentosRelease[${index}].CantidadPiezas`;
+                });
+            }
 
-            const extActualizarResumen = () => {
+            function extCargarOpciones(select) {
+                if (!select) return;
+                select.innerHTML = '<option value="">Selecciona una entrega...</option>';
+
+                (extData?.origenes || []).forEach(o => {
+                    const option = document.createElement('option');
+                    option.value = String(extOrigenId(o));
+                    option.dataset.disponible = String(extDisponible(o));
+                    option.dataset.parte = extParte(o);
+                    option.dataset.fecha = extFecha(o) || '';
+                    option.textContent =
+                        `Entrega ${extOrigenId(o)}${extFecha(o) ? ' | ' + extFmtDate(extFecha(o)).split(',')[0] : ''} | libre ${extFmtNumber(extDisponible(o))} pzas`;
+                    select.appendChild(option);
+                });
+            }
+
+            function extInfoFila(fila) {
+                const select = fila?.querySelector('.ext-release-origen');
+                const input = fila?.querySelector('.ext-release-cantidad');
+                const info = fila?.querySelector('.ext-release-info');
+                const option = select?.selectedOptions?.[0];
+
+                if (!select?.value || !option) {
+                    if (info) info.textContent = 'Selecciona una entrega compatible.';
+                    if (input) input.removeAttribute('max');
+                    return;
+                }
+
+                const disponible = Number(option.dataset.disponible || 0);
+                if (input) input.max = String(disponible);
+                if (info) {
+                    info.textContent =
+                        `Parte ${option.dataset.parte || '-'} · fecha ${option.dataset.fecha ? extFmtDate(option.dataset.fecha) : '-'} · libre ${extFmtNumber(disponible)} pzas.`;
+                }
+            }
+
+            function extAgregar() {
+                if (!extReleaseTemplate || !extReleaseFilas) return;
+                extReleaseFilas.insertAdjacentHTML('beforeend', extReleaseTemplate.innerHTML);
+                const fila = extFilas().slice(-1)[0];
+                extCargarOpciones(fila?.querySelector('.ext-release-origen'));
+                extReindexar();
+                extActualizarResumen();
+            }
+
+            function extTotalRelease() {
+                return extFilas().reduce((sum, fila) =>
+                    sum + Math.max(0, Math.trunc(Number(fila.querySelector('.ext-release-cantidad')?.value || 0))), 0);
+            }
+
+            function extValidarFilas() {
+                const usados = new Set();
+                let ok = true;
+
+                extFilas().forEach((fila, index) => {
+                    const select = fila.querySelector('.ext-release-origen');
+                    const input = fila.querySelector('.ext-release-cantidad');
+                    const option = select?.selectedOptions?.[0];
+                    const origen = select?.value || '';
+                    const cantidad = Math.trunc(Number(input?.value || 0));
+                    const disponible = Number(option?.dataset?.disponible || 0);
+
+                    select?.setCustomValidity('');
+                    input?.setCustomValidity('');
+
+                    if (!origen) {
+                        select?.setCustomValidity(`Selecciona la entrega de la fila ${index + 1}.`);
+                        ok = false;
+                        return;
+                    }
+                    if (usados.has(origen)) {
+                        select?.setCustomValidity('Esta entrega ya se utiliza en otra fila.');
+                        ok = false;
+                        return;
+                    }
+                    usados.add(origen);
+
+                    if (cantidad <= 0) {
+                        input?.setCustomValidity('Captura una cantidad mayor a cero.');
+                        ok = false;
+                    } else if (cantidad > disponible) {
+                        input?.setCustomValidity(`Solo hay ${extFmtNumber(disponible)} piezas libres.`);
+                        ok = false;
+                    }
+                });
+
+                return ok;
+            }
+
+            function extActualizarResumen() {
                 if (!extData || !extResumen) return;
-                const piezas = Number(extCantidad?.value || 0);
+
                 const motivo = extMotivo?.value || '';
-                if (piezas <= 0 || !motivo) {
+                if (!motivo) {
                     extResumen.classList.add('d-none');
                     return;
                 }
 
-                let horasExtra = Number(extHoras?.value || 0);
-                if (motivo === 'ADELANTO_RELEASE') {
-                    const objetivo = Number(extData.objetivoHora || 0);
-                    horasExtra = objetivo > 0 ? piezas / objetivo : 0;
-                }
-
-                const nueva = Number(extData.cantidadActual || 0) + piezas;
-                const horasNuevas = Number(extData.horasActuales || 0) + horasExtra;
-                extResumen.innerHTML = `<strong>Resultado:</strong> ${extFmtNumber(extData.cantidadActual)} + ${extFmtNumber(piezas)} = <strong>${extFmtNumber(nueva)} piezas</strong>. Horas adicionales: <strong>${extFmtNumber(horasExtra)}</strong>. Horas totales estimadas: <strong>${extFmtNumber(horasNuevas)}</strong>.`;
-                extResumen.classList.remove('d-none');
-            };
-
-            const extConfigurarMotivo = () => {
-                const motivo = extMotivo?.value || '';
-                extBloqueComun?.classList.toggle('d-none', !motivo);
-                extClearError();
-
                 const esRelease = motivo === 'ADELANTO_RELEASE';
+                const piezas = esRelease
+                    ? extTotalRelease()
+                    : Math.max(0, Math.trunc(Number(extCantidad?.value || 0)));
+                const horasExtra = Math.max(0, Number(extHoras?.value || 0));
+                const actual = Number(extData.cantidadActual || 0);
+                const horasActuales = Number(extData.horasActuales || 0);
+                const nuevo = actual + piezas;
+                const horasNuevas = horasActuales + horasExtra;
+                const objetivo = Number(extData.objetivoHora || 0);
+                const sugeridas = objetivo > 0 && piezas > 0 ? piezas / objetivo : 0;
+
+                document.getElementById('extResumenActual').textContent =
+                    `${extFmtNumber(actual)} pzas / ${extFmtNumber(horasActuales)} h`;
+                document.getElementById('extResumenExtra').textContent = `+${extFmtNumber(piezas)} pzas`;
+                document.getElementById('extResumenNuevo').textContent = `${extFmtNumber(nuevo)} pzas`;
+                document.getElementById('extResumenHoras').textContent = `${extFmtNumber(horasNuevas)} h`;
+
+                document.getElementById('extResumenDetalle').innerHTML = esRelease
+                    ? `<strong>Motivo 2:</strong> ${extFilas().length} fila(s) · piezas nuevas <strong>${extFmtNumber(piezas)}</strong> · horas adicionales <strong>${extFmtNumber(horasExtra)}</strong>${objetivo > 0 ? ` · referencia Objetivo/Hora ${extFmtNumber(sugeridas)} h` : ''}.`
+                    : `<strong>Continuidad:</strong> ${extFmtNumber(actual)} + ${extFmtNumber(piezas)} = <strong>${extFmtNumber(nuevo)} piezas</strong>.`;
+
+                extResumen.classList.remove('d-none');
+            }
+
+            function extConfigurarMotivo() {
+                const motivo = extMotivo?.value || '';
+                const esRelease = motivo === 'ADELANTO_RELEASE';
+                const esContinuidad = motivo === 'CONTINUIDAD_MAQUINA';
+
+                extClearError();
+                extBloqueComun?.classList.toggle('d-none', !motivo);
                 extReleaseWrap?.classList.toggle('d-none', !esRelease);
-                extHorasWrap?.classList.toggle('d-none', esRelease);
+                extContinuidadWrap?.classList.toggle('d-none', !esContinuidad);
+
+                if (extCantidad) {
+                    extCantidad.disabled = !esContinuidad;
+                    extCantidad.required = esContinuidad;
+                }
 
                 if (extHoras) {
-                    extHoras.required = motivo === 'CONTINUIDAD_MAQUINA';
-                    if (esRelease) extHoras.value = '';
+                    extHoras.disabled = !motivo;
+                    extHoras.required = !!motivo;
+                    extHoras.min = esRelease ? '0' : '0.0001';
+                    if (esRelease && extHoras.value === '') extHoras.value = '0';
                 }
-                if (extReleaseOrigen) extReleaseOrigen.required = esRelease;
+
+                if (extHorasAyuda) {
+                    extHorasAyuda.textContent = esRelease
+                        ? 'En el motivo 2 puedes capturar 0 si solo cambian las piezas y no la duracion.'
+                        : 'En continuidad de maquina las horas deben ser mayores a cero.';
+                }
+
+                extFilas().forEach(fila => {
+                    fila.querySelectorAll('select,input').forEach(c => c.disabled = !esRelease);
+                });
+
+                if (esRelease && extFilas().length === 0) extAgregar();
 
                 if (esRelease && extData && !extData.tieneRelease) {
-                    extShowError('Esta OF no tiene una fila Release relacionada. No puede usar el motivo 2.');
+                    extShowError('Esta OF no tiene Release relacionado.');
                 }
 
+                extReindexar();
                 extActualizarResumen();
-            };
+            }
 
             extMotivo?.addEventListener('change', extConfigurarMotivo);
             extCantidad?.addEventListener('input', extActualizarResumen);
             extHoras?.addEventListener('input', extActualizarResumen);
-            extReleaseOrigen?.addEventListener('change', () => {
-                const selected = (extData?.origenes || []).find(o => String(extOrigenId(o)) === String(extReleaseOrigen.value));
-                if (selected && extReleaseInfo) {
-                    extReleaseInfo.textContent = `Disponible para transferir: ${extFmtNumber(extOrigenDisponible(selected))} piezas.`;
-                    extReleaseInfo.classList.remove('d-none');
-                    if (extCantidad) extCantidad.max = String(extOrigenDisponible(selected));
+            extAgregarFila?.addEventListener('click', extAgregar);
+
+            extReleaseFilas?.addEventListener('change', event => {
+                const select = event.target?.closest?.('.ext-release-origen');
+                if (!select) return;
+                extInfoFila(select.closest('.ext-release-fila'));
+                extActualizarResumen();
+            });
+
+            extReleaseFilas?.addEventListener('input', event => {
+                if (event.target?.classList?.contains('ext-release-cantidad')) extActualizarResumen();
+            });
+
+            extReleaseFilas?.addEventListener('click', event => {
+                const btn = event.target?.closest?.('.ext-release-quitar');
+                if (!btn) return;
+                const fila = btn.closest('.ext-release-fila');
+
+                if (extFilas().length <= 1) {
+                    const select = fila.querySelector('.ext-release-origen');
+                    const input = fila.querySelector('.ext-release-cantidad');
+                    if (select) select.value = '';
+                    if (input) input.value = '';
+                    extInfoFila(fila);
                 } else {
-                    extReleaseInfo?.classList.add('d-none');
-                    if (extCantidad) extCantidad.removeAttribute('max');
+                    fila.remove();
                 }
+
+                extReindexar();
                 extActualizarResumen();
             });
 
@@ -484,27 +677,25 @@
                     extClearError();
                     extData = null;
                     extForm?.reset();
+                    if (extReleaseFilas) extReleaseFilas.innerHTML = '';
                     extBloqueComun?.classList.add('d-none');
                     extReleaseWrap?.classList.add('d-none');
                     extResumen?.classList.add('d-none');
-                    extReleaseInfo?.classList.add('d-none');
 
-                    if (extAplicar) {
-                        extAplicar.disabled = true;
-                        extAplicar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cargando...';
-                    }
-
+                    extAplicar.disabled = true;
+                    extAplicar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cargando...';
                     extModal?.show();
 
                     try {
                         const solicitudId = button.dataset.solicitudId;
                         const response = await fetch(`/PlaneacionPrograma/ObtenerExtensionOF?solicitudProduccionId=${encodeURIComponent(solicitudId)}`, {
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            cache: 'no-store'
                         });
                         const data = await response.json();
                         if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible cargar la OF.');
-                        extData = data;
 
+                        extData = data;
                         document.getElementById('extSolicitudProduccionID').value = data.solicitudProduccionId;
                         document.getElementById('extOF').textContent = data.folio || button.dataset.folio || '-';
                         document.getElementById('extMaquina').textContent = data.maquina || button.dataset.maquina || '-';
@@ -514,29 +705,12 @@
                         document.getElementById('extHorasActuales').textContent = `${extFmtNumber(data.horasActuales)} h`;
                         document.getElementById('extFinActual').textContent = extFmtDate(data.fechaFinProgramada);
 
-                        if (extReleaseOrigen) {
-                            extReleaseOrigen.innerHTML = '<option value="">Selecciona una entrega...</option>';
-                            (data.origenes || []).forEach(o => {
-                                const option = document.createElement('option');
-                                option.value = extOrigenId(o);
-                                const parte = extOrigenParte(o);
-                                const fecha = extOrigenFecha(o);
-                                const disponible = extOrigenDisponible(o);
-                                option.textContent = `Fila ${extOrigenId(o)}${parte ? ' | ' + parte : ''}${fecha ? ' | ' + extFmtDate(fecha) : ''} | Disponible: ${extFmtNumber(disponible)}`;
-                                extReleaseOrigen.appendChild(option);
-                            });
-                        }
-
-                        if (extAplicar) {
-                            extAplicar.disabled = false;
-                            extAplicar.innerHTML = '<i class="fa-solid fa-check"></i> Aplicar extension';
-                        }
+                        extAplicar.disabled = false;
+                        extAplicar.innerHTML = '<i class="fa-solid fa-check"></i> Aplicar extension';
                     } catch (error) {
                         extShowError(error.message || String(error));
-                        if (extAplicar) {
-                            extAplicar.disabled = true;
-                            extAplicar.innerHTML = '<i class="fa-solid fa-ban"></i> Extension bloqueada';
-                        }
+                        extAplicar.disabled = true;
+                        extAplicar.innerHTML = '<i class="fa-solid fa-ban"></i> Extension bloqueada';
                     }
                 });
             });
@@ -544,7 +718,6 @@
             extAplicar?.addEventListener('click', async () => {
                 extClearError();
                 if (!extForm || !extData) return;
-                if (!extForm.reportValidity()) return;
 
                 const motivo = extMotivo?.value || '';
                 if (!motivo) {
@@ -552,32 +725,48 @@
                     return;
                 }
 
-                const piezas = Number(extCantidad?.value || 0);
-                if (!Number.isInteger(piezas) || piezas <= 0) {
-                    extShowError('Captura una cantidad entera de piezas mayor a cero.');
+                const esRelease = motivo === 'ADELANTO_RELEASE';
+
+                if (esRelease) {
+                    if (!extData.tieneRelease) {
+                        extShowError('Esta OF no tiene Release relacionado.');
+                        return;
+                    }
+                    if (extFilas().length === 0 || !extValidarFilas()) {
+                        const invalido = extReleaseFilas?.querySelector(':invalid');
+                        extShowError(invalido?.validationMessage || 'Revisa las filas Release.');
+                        invalido?.focus?.();
+                        return;
+                    }
+                    if (extTotalRelease() <= 0) {
+                        extShowError('La suma de piezas debe ser mayor a cero.');
+                        return;
+                    }
+                } else if (Math.trunc(Number(extCantidad?.value || 0)) <= 0) {
+                    extShowError('Captura piezas adicionales mayores a cero.');
                     return;
                 }
 
-                if (motivo === 'ADELANTO_RELEASE') {
-                    const selected = (extData.origenes || []).find(o => String(extOrigenId(o)) === String(extReleaseOrigen?.value || ''));
-                    if (!selected) {
-                        extShowError('Selecciona una fila Release de origen.');
-                        return;
-                    }
-                    if (piezas > Number(extOrigenDisponible(selected) || 0)) {
-                        extShowError('La cantidad solicitada supera el pendiente libre de la fila Release seleccionada.');
-                        return;
-                    }
+                const horas = Number(extHoras?.value || 0);
+                if (!Number.isFinite(horas) || horas < 0) {
+                    extShowError('Las horas adicionales no pueden ser negativas.');
+                    return;
                 }
+                if (!esRelease && horas <= 0) {
+                    extShowError('Para continuidad las horas deben ser mayores a cero.');
+                    return;
+                }
+
+                extReindexar();
+                if (!extForm.reportValidity()) return;
 
                 extAplicar.disabled = true;
                 extAplicar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Aplicando...';
 
                 try {
-                    const formData = new FormData(extForm);
                     const response = await fetch('/PlaneacionPrograma/AplicarExtensionOF', {
                         method: 'POST',
-                        body: formData,
+                        body: new FormData(extForm),
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     });
                     const result = await response.json();

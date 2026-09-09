@@ -361,10 +361,10 @@
                         aria-label="Cerrar"></button>
             </div>
 
-            <form asp-controller="PlaneacionPrograma"
+            <form id="formPdfPrograma"
+                  asp-controller="PlaneacionPrograma"
                   asp-action="PdfPrograma"
-                  method="get"
-                  target="_blank">
+                  method="get">
                 <div class="modal-body pt-3">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -426,7 +426,243 @@
         </div>
     </div>
 </div>
+
+@* NSQ_PDF_PROGRAMA_VISOR_V1_7 *@
+<div class="modal fade"
+     id="modalPdfProgramaVisor"
+     tabindex="-1"
+     aria-labelledby="modalPdfProgramaVisorLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
+            <div class="modal-header border-0 bg-dark text-white">
+                <div>
+                    <div class="small text-uppercase fw-bold opacity-75">
+                        Planeacion / Programa de Cambio de Molde
+                    </div>
+                    <h5 class="modal-title fw-bold mb-0" id="modalPdfProgramaVisorLabel">
+                        <i class="fa-solid fa-file-pdf me-2 text-danger"></i>
+                        Vista previa del PDF
+                    </h5>
+                </div>
+                <button type="button"
+                        class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body p-0 position-relative bg-dark-subtle">
+                <div id="pdfProgramaVisorCargando"
+                     class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-body bg-opacity-75"
+                     style="z-index:3;min-height:70vh;">
+                    <div class="text-center p-4">
+                        <div class="spinner-border text-danger mb-3" role="status"></div>
+                        <div class="fw-bold">Generando Programa de Cambio de Molde...</div>
+                        <div class="small text-muted mt-1">El PDF se mostrara aqui mismo.</div>
+                    </div>
+                </div>
+
+                <div id="pdfProgramaVisorError"
+                     class="alert alert-danger rounded-0 border-0 d-none mb-0"></div>
+
+                <iframe id="pdfProgramaFrame"
+                        title="Programa de Cambio de Molde"
+                        src="about:blank"
+                        style="width:100%;height:76vh;border:0;background:#525659;"></iframe>
+            </div>
+
+            <div class="modal-footer border-0">
+                <span id="pdfProgramaVisorEstado"
+                      class="small text-muted me-auto">
+                    Preparando PDF...
+                </span>
+
+                <a id="btnPdfProgramaDescargar"
+                   class="btn btn-danger disabled"
+                   href="#"
+                   aria-disabled="true">
+                    <i class="fa-solid fa-download me-1"></i>
+                    Descargar PDF
+                </a>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @section Scripts {
+    <script id="NSQ_PDF_PROGRAMA_VISOR_V1_7">
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('formPdfPrograma');
+            const selectorEl = document.getElementById('modalPdfPrograma');
+            const visorEl = document.getElementById('modalPdfProgramaVisor');
+            const frame = document.getElementById('pdfProgramaFrame');
+            const loading = document.getElementById('pdfProgramaVisorCargando');
+            const errorBox = document.getElementById('pdfProgramaVisorError');
+            const estado = document.getElementById('pdfProgramaVisorEstado');
+            const descargar = document.getElementById('btnPdfProgramaDescargar');
+            const endpoint = '@Url.Action("PdfPrograma", "PlaneacionPrograma")';
+
+            if (!form || !visorEl || !frame) return;
+
+            const visor = bootstrap.Modal.getOrCreateInstance(visorEl);
+            const selector = selectorEl
+                ? bootstrap.Modal.getOrCreateInstance(selectorEl)
+                : null;
+
+            let blobUrl = null;
+            let generando = false;
+
+            function liberarBlob() {
+                if (blobUrl) {
+                    URL.revokeObjectURL(blobUrl);
+                    blobUrl = null;
+                }
+            }
+
+            function setLoading(activo) {
+                loading?.classList.toggle('d-none', !activo);
+            }
+
+            function setError(mensaje) {
+                if (!errorBox) return;
+                errorBox.textContent = mensaje || '';
+                errorBox.classList.toggle('d-none', !mensaje);
+            }
+
+            function habilitarDescarga(url, nombre) {
+                if (!descargar) return;
+                descargar.href = url || '#';
+                descargar.download = nombre || 'Programa_Cambio_Moldes.pdf';
+                descargar.classList.toggle('disabled', !url);
+                descargar.setAttribute('aria-disabled', url ? 'false' : 'true');
+            }
+
+            function abrirVisorDespuesDeSelector() {
+                if (!selectorEl || !selectorEl.classList.contains('show')) {
+                    visor.show();
+                    return;
+                }
+
+                let abierto = false;
+                const abrir = function () {
+                    if (abierto) return;
+                    abierto = true;
+                    window.setTimeout(function () { visor.show(); }, 40);
+                };
+
+                selectorEl.addEventListener('hidden.bs.modal', abrir, { once:true });
+                selector?.hide();
+
+                window.setTimeout(function () {
+                    if (!abierto && !selectorEl.classList.contains('show')) abrir();
+                }, 450);
+            }
+
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                if (generando) return;
+
+                const desde = document.getElementById('pdfProgramaFechaDesde')?.value || '';
+                const hasta = document.getElementById('pdfProgramaFechaHasta')?.value || '';
+                const incluirActual = !!document.getElementById('pdfProgramaIncluirActual')?.checked;
+
+                if (!desde || !hasta) {
+                    setError('Selecciona Fecha desde y Fecha hasta.');
+                    return;
+                }
+
+                const d1 = new Date(desde + 'T00:00:00');
+                const d2 = new Date(hasta + 'T00:00:00');
+
+                if (Number.isNaN(d1.getTime()) || Number.isNaN(d2.getTime()) || d2 < d1) {
+                    setError('El rango de fechas no es valido.');
+                    return;
+                }
+
+                const dias = Math.round((d2 - d1) / 86400000);
+                if (dias > 31) {
+                    setError('El rango maximo permitido es de 32 dias.');
+                    return;
+                }
+
+                generando = true;
+                liberarBlob();
+                frame.src = 'about:blank';
+                habilitarDescarga('', '');
+                setError('');
+                setLoading(true);
+                if (estado) estado.textContent = 'Generando PDF en el servidor...';
+
+                abrirVisorDespuesDeSelector();
+
+                try {
+                    const qs = new URLSearchParams({
+                        fechaDesde: desde,
+                        fechaHasta: hasta,
+                        incluirActual: incluirActual.toString()
+                    });
+
+                    const response = await fetch(`${endpoint}?${qs.toString()}`, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/pdf' },
+                        cache: 'no-store'
+                    });
+
+                    if (!response.ok) {
+                        let detalle = '';
+                        try {
+                            detalle = (await response.text()).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+                        }
+                        catch { }
+
+                        throw new Error(
+                            detalle
+                                ? `No fue posible generar el PDF. HTTP ${response.status}: ${detalle.substring(0,300)}`
+                                : `No fue posible generar el PDF. HTTP ${response.status}`
+                        );
+                    }
+
+                    const tipo = (response.headers.get('content-type') || '').toLowerCase();
+                    if (!tipo.includes('application/pdf')) {
+                        throw new Error('El servidor respondio, pero no devolvio un archivo PDF.');
+                    }
+
+                    const blob = await response.blob();
+                    blobUrl = URL.createObjectURL(blob);
+
+                    const nombre = `Programa_Cambio_Moldes_${desde.replaceAll('-','')}_${hasta.replaceAll('-','')}.pdf`;
+                    frame.src = blobUrl;
+                    habilitarDescarga(blobUrl,nombre);
+
+                    if (estado) {
+                        estado.textContent =
+                            `PDF listo: ${desde} a ${hasta}`;
+                    }
+                }
+                catch(error) {
+                    setError(error?.message || 'No fue posible generar el PDF.');
+                    if (estado) estado.textContent = 'Error al generar PDF.';
+                }
+                finally {
+                    generando = false;
+                    setLoading(false);
+                }
+            });
+
+            visorEl.addEventListener('hidden.bs.modal', function () {
+                frame.src = 'about:blank';
+                habilitarDescarga('', '');
+                liberarBlob();
+                setError('');
+                if (estado) estado.textContent = 'Preparando PDF...';
+            });
+        });
+    </script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const buscar = document.getElementById("txtBuscarPantalla");

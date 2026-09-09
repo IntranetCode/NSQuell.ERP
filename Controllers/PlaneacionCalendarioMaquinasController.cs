@@ -1270,6 +1270,10 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     ? programa.HorasProgramadas
                     : 1m;
 
+                // NSQ_CALENDARIO_ARRANQUE_CONFIGURADO_V2
+                // Conserva el intervalo Cambio -> Arranque que ya tiene programada la OF.
+                var horasCambioConfiguradas = CalcularHorasCambio(programa);
+
                 var anteriorCola = await ObtenerProgramaAnteriorPorPuntoAsync(
                     maquinaDestino.MaquinaID,
                     programa.ProgramaProduccionID,
@@ -1288,6 +1292,7 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                     anteriorCola == null ? null : anteriorCola.MoldeID,
                     puntoCola,
                     horasProduccion,
+                    horasCambioConfiguradas,
                     cn,
                     tx,
                     request.TrabajarDomingo);
@@ -2785,7 +2790,8 @@ SELECT TOP (1)
         pp.FechaFinProgramada,
         DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
     ) AS FechaFinProgramada,
-    ISNULL(pp.HorasProgramadas, 0) AS HorasProgramadas
+    ISNULL(pp.HorasProgramadas, 0) AS HorasProgramadas,
+    ISNULL(pp.TrabajarDomingo, 0) AS TrabajarDomingo
 FROM dbo.Planeacion_ProgramaProduccion pp WITH (UPDLOCK, HOLDLOCK)
 WHERE pp.Activo = 1
   AND pp.MaquinaID = @MaquinaID

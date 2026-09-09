@@ -1548,6 +1548,16 @@ VALUES
                         TempData["Error"] = "El operador principal seleccionado no está activo o su puesto no es OPERADOR.";
                         return RedirectToAction(nameof(Index));
                     }
+
+                    if (!await PersonaTieneCuentaOperadorActivaV2Async(
+                            operadorPrincipalFinalId.Value,
+                            cn,
+                            tx))
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] = "El operador seleccionado no tiene una cuenta ERP activa con rol Operador / Capturista. Corrige la identidad del colaborador antes de iniciar la preparación.";
+                        return RedirectToAction(nameof(Index));
+                    }
                 }
 
                 if (!personalInicioConfirmado && !operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
@@ -10337,6 +10347,14 @@ WHERE a.Activo = 1
         AND CAST(@FechaHora AS date) >= CAST(n.FechaInicio AS date)
         AND CAST(@FechaHora AS date) <= CAST(ISNULL(n.FechaFin, n.FechaInicio) AS date)
   )
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.Usuarios uOperador
+      WHERE uOperador.PersonaID=p.PersonaID
+        AND ISNULL(uOperador.Activo,0)=1
+        AND uOperador.RolID=4
+  )
 ORDER BY
     et.Orden,
     a.AsignacionID DESC;";
@@ -10422,41 +10440,65 @@ ORDER BY
 
         private async Task<List<SelectListItem>> CargarOperadoresProduccionAsync(SqlConnection cn)
         {
+            // NSQ_OPERADORES_CANONICOS_V1
+            // En Produccion solo se ofrecen operadores que puedan iniciar sesion
+            // realmente en ProduccionOperador: Persona activa + Puesto OPERADOR +
+            // una cuenta dbo.Usuarios activa con RolID 4 (Operador / Capturista).
             var lista = new List<SelectListItem>
-    {
-        new SelectListItem
-        {
-            Value="",
-            Text="-- Seleccionar operador --"
-        }
-    };
+            {
+                new SelectListItem
+                {
+                    Value = "",
+                    Text = "-- Seleccionar operador --"
+                }
+            };
+
             const string sql = @"
 SELECT
-    PersonaID,
+    p.PersonaID,
     LTRIM(RTRIM(
-        ISNULL(Nombre,N'')+N' '+
-        ISNULL(ApellidoPaterno,N'')+N' '+
-        ISNULL(ApellidoMaterno,N'')
-    )) AS NombreCompleto
-FROM dbo.Persona
-WHERE ISNULL(EsColaboradorActivo,1)=1
-  AND UPPER(LTRIM(RTRIM(ISNULL(Puesto,N''))))=N'OPERADOR'
+        ISNULL(p.Nombre,N'')+N' '+
+        ISNULL(p.ApellidoPaterno,N'')+N' '+
+        ISNULL(p.ApellidoMaterno,N'')
+    )) AS NombreCompleto,
+    cuenta.Username
+FROM dbo.Persona p
+CROSS APPLY
+(
+    SELECT TOP (1)
+        u.UsuarioID,
+        u.Username
+    FROM dbo.Usuarios u
+    WHERE u.PersonaID=p.PersonaID
+      AND ISNULL(u.Activo,0)=1
+      AND u.RolID=4
+    ORDER BY u.UsuarioID DESC
+) cuenta
+WHERE ISNULL(p.EsColaboradorActivo,1)=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
 ORDER BY
-    Nombre,
-    ApellidoPaterno,
-    ApellidoMaterno;";
+    p.Nombre,
+    p.ApellidoPaterno,
+    p.ApellidoMaterno,
+    p.PersonaID;";
+
             await using var cmd = new SqlCommand(sql, cn);
             await using var rd = await cmd.ExecuteReaderAsync();
             while (await rd.ReadAsync())
             {
                 var personaId = Entero(rd, "PersonaID");
                 var nombre = TextoNullable(rd, "NombreCompleto") ?? personaId.ToString();
+                var username = TextoNullable(rd, "Username");
+
                 lista.Add(new SelectListItem
                 {
                     Value = personaId.ToString(),
-                    Text = nombre
+                    Text = string.IsNullOrWhiteSpace(username)
+                        ? nombre
+                        : $"{nombre} (@{username})"
                 });
             }
+
             return lista;
         }
 
@@ -10620,6 +10662,22 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
 
                     TempData["Error"] =
                         "La persona seleccionada no existe o ya no está activa.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = ejecucionProduccionId });
+                }
+
+                if (tipoCambio == "PRINCIPAL" &&
+                    !await PersonaTieneCuentaOperadorActivaV2Async(
+                        personaNuevaId.Value,
+                        cn,
+                        tx))
+                {
+                    await tx.RollbackAsync();
+
+                    TempData["Error"] =
+                        "El operador seleccionado no tiene una cuenta ERP activa de Operador / Capturista vinculada a esta Persona. Selecciona el registro que tenga usuario.";
 
                     return RedirectToAction(
                         nameof(Detalle),
@@ -11049,12 +11107,28 @@ END;";
                     await cmd.ExecuteNonQueryAsync();
                 }
 
+                var parejaLhRhSincronizada =
+                    await SincronizarCambioOperadorParejaLhRhV2Async(
+                        ejecucionProduccionId,
+                        programaProduccionId,
+                        tipoCambio,
+                        personaNuevaId.Value,
+                        personaNuevaNombre.Trim(),
+                        motivoCambio,
+                        usuarioId,
+                        cn,
+                        tx);
+
                 await tx.CommitAsync();
 
                 TempData["Success"] =
-                    tipoCambio == "PRINCIPAL"
-                        ? "Operador principal actualizado correctamente."
-                        : "Auxiliar actualizado correctamente.";
+                    parejaLhRhSincronizada
+                        ? (tipoCambio == "PRINCIPAL"
+                            ? "Operador principal actualizado en ambas OF LH/RH correctamente."
+                            : "Auxiliar actualizado en ambas OF LH/RH correctamente.")
+                        : (tipoCambio == "PRINCIPAL"
+                            ? "Operador principal actualizado correctamente."
+                            : "Auxiliar actualizado correctamente.");
             }
             catch (Exception ex)
             {

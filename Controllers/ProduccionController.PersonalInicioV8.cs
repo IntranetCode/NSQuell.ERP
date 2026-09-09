@@ -10,6 +10,7 @@ public sealed partial class ProduccionController
     // Programacion de Personal es fuente de verdad.
     // Produccion solamente completa datos faltantes.
 
+    // NSQ_PERSONAL_INICIO_CATALOGO_V3_4
     [HttpGet]
     public async Task<IActionResult> ResponsablesApoyoInicioActivos()
     {
@@ -19,97 +20,119 @@ public sealed partial class ProduccionController
         await cn.OpenAsync();
 
         const string sql = @"
-WITH Roles AS
+;WITH Permitidos AS
 (
     SELECT
+        r.PersonaID,
+        r.TipoRol
+    FROM dbo.Produccion_PersonalRolesPermitidos r
+    WHERE r.Activo=1
+      AND r.TipoRol IN(N'TECNICO',N'SMED')
+
+    UNION
+
+    SELECT
         p.PersonaID,
-        ISNULL(p.NumeroControl,N'') AS NumeroControl,
-        LTRIM(RTRIM(CONCAT(
-            ISNULL(p.Nombre,N''),N' ',
-            ISNULL(p.ApellidoPaterno,N''),N' ',
-            ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
-        ISNULL(p.Puesto,N'') AS Puesto,
-        MAX(CASE WHEN
-            UPPER(ISNULL(p.Puesto,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%SMED%'
-            OR UPPER(ISNULL(f.Nombre,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%SMED%'
-            THEN 1 ELSE 0 END) AS EsSmed,
-        MAX(CASE WHEN
-            UPPER(ISNULL(p.Puesto,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%TECNIC%'
-            OR UPPER(ISNULL(f.Nombre,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%TECNIC%'
-            THEN 1 ELSE 0 END) AS EsTecnico
+        roles.TipoRol
     FROM dbo.Persona p
-    LEFT JOIN dbo.RRHH_EscalaAsignaciones a
-      ON a.PersonalID=p.PersonaID AND a.Activo=1
-    LEFT JOIN dbo.RRHH_FuncionesPersonal f
-      ON f.FuncionID=a.FuncionID AND f.Activo=1
+    CROSS JOIN
+    (
+        SELECT N'TECNICO' AS TipoRol
+        UNION ALL
+        SELECT N'SMED'
+    ) roles
     WHERE ISNULL(p.EsColaboradorActivo,1)=1
-    GROUP BY p.PersonaID,p.NumeroControl,p.Nombre,
-             p.ApellidoPaterno,p.ApellidoMaterno,p.Puesto
+      AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+            COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
 )
-SELECT PersonaID,NumeroControl,Nombre,Puesto,EsSmed,EsTecnico
-FROM Roles
-WHERE EsSmed=1 OR EsTecnico=1
-ORDER BY CASE WHEN EsSmed=1 THEN 0 ELSE 1 END,Nombre;";
+SELECT
+    p.PersonaID,
+    ISNULL(p.NumeroControl,N'') AS NumeroControl,
+    LTRIM(RTRIM(CONCAT(
+        ISNULL(p.Nombre,N''),N' ',
+        ISNULL(p.ApellidoPaterno,N''),N' ',
+        ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
+    ISNULL(p.Puesto,N'') AS Puesto,
+    x.TipoRol
+FROM Permitidos x
+INNER JOIN dbo.Persona p
+    ON p.PersonaID=x.PersonaID
+WHERE ISNULL(p.EsColaboradorActivo,1)=1
+ORDER BY
+    CASE x.TipoRol
+        WHEN N'TECNICO' THEN 1
+        WHEN N'SMED' THEN 2
+        ELSE 9
+    END,
+    Nombre,
+    p.PersonaID;";
 
         var lista = new List<object>();
+
         await using var cmd = new SqlCommand(sql,cn);
         await using var rd = await cmd.ExecuteReaderAsync();
+
         while(await rd.ReadAsync())
         {
-            var esSmed = Convert.ToInt32(rd["EsSmed"]) == 1;
             lista.Add(new
             {
                 personaID=Convert.ToInt32(rd["PersonaID"]),
                 numeroControl=rd["NumeroControl"]?.ToString()?.Trim() ?? string.Empty,
                 nombre=rd["Nombre"]?.ToString()?.Trim() ?? string.Empty,
                 puesto=rd["Puesto"]?.ToString()?.Trim() ?? string.Empty,
-                tipo=esSmed ? "SMED" : "TECNICO"
+                tipo=rd["TipoRol"]?.ToString()?.Trim() ?? string.Empty
             });
         }
+
         return Json(new { ok=true, opciones=lista });
     }
-
     private static async Task<(bool Valido,string? Nombre)>
         ValidarResponsableApoyoInicioV8Async(
             int personaId,string tipo,SqlConnection cn,SqlTransaction tx)
     {
         if(personaId<=0) return (false,null);
+
         tipo=(tipo??string.Empty).Trim().ToUpperInvariant();
-        if(tipo is not ("TECNICO" or "SMED")) return (false,null);
 
-        var condicion = tipo=="SMED"
-            ? @"(
-                UPPER(ISNULL(p.Puesto,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%SMED%'
-                OR UPPER(ISNULL(f.Nombre,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%SMED%'
-              )"
-            : @"(
-                UPPER(ISNULL(p.Puesto,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%TECNIC%'
-                OR UPPER(ISNULL(f.Nombre,N'')) COLLATE Modern_Spanish_CI_AI LIKE N'%TECNIC%'
-              )";
+        if(tipo is not ("TECNICO" or "SMED"))
+            return (false,null);
 
-        var sql=$@"
+        const string sql=@"
 SELECT TOP(1)
     LTRIM(RTRIM(CONCAT(
         ISNULL(p.Nombre,N''),N' ',
         ISNULL(p.ApellidoPaterno,N''),N' ',
         ISNULL(p.ApellidoMaterno,N''))))
 FROM dbo.Persona p
-LEFT JOIN dbo.RRHH_EscalaAsignaciones a
-  ON a.PersonalID=p.PersonaID AND a.Activo=1
-LEFT JOIN dbo.RRHH_FuncionesPersonal f
-  ON f.FuncionID=a.FuncionID AND f.Activo=1
 WHERE p.PersonaID=@PersonaID
   AND ISNULL(p.EsColaboradorActivo,1)=1
-  AND {condicion};";
+  AND
+  (
+      UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+            COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.Produccion_PersonalRolesPermitidos r
+          WHERE r.PersonaID=p.PersonaID
+            AND r.TipoRol=@TipoRol
+            AND r.Activo=1
+      )
+  );";
 
         await using var cmd=new SqlCommand(sql,cn,tx);
         cmd.Parameters.Add("@PersonaID",SqlDbType.Int).Value=personaId;
+        cmd.Parameters.Add("@TipoRol",SqlDbType.NVarChar,20).Value=tipo;
+
         var value=await cmd.ExecuteScalarAsync();
-        if(value==null || value==DBNull.Value || string.IsNullOrWhiteSpace(value.ToString()))
+
+        if(value==null ||
+           value==DBNull.Value ||
+           string.IsNullOrWhiteSpace(value.ToString()))
             return (false,null);
+
         return (true,value.ToString()!.Trim());
     }
-
     private static async Task SincronizarCoberturaFaltanteInicioV8Async(
         int programaProduccionId,DateTime momento,DateTime? alterno,
         int? tecnicoId,int? smedId,int? auxiliarId,int usuarioId,

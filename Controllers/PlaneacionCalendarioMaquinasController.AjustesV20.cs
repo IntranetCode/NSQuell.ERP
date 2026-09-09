@@ -31,6 +31,7 @@ public sealed partial class PlaneacionCalendarioMaquinasController
         int? moldeAnteriorId,
         DateTime inicioSolicitado,
         decimal horasProduccion,
+        decimal horasCambioConfiguradas,
         SqlConnection cn,
         SqlTransaction tx,
         bool trabajarDomingo)
@@ -62,10 +63,15 @@ public sealed partial class PlaneacionCalendarioMaquinasController
             moldeAnteriorId.HasValue &&
             moldeId.Value == moldeAnteriorId.Value;
 
-        var horasCambio =
-            !mismaParte && !mismoMolde
-                ? 1m
-                : 0m;
+        // NSQ_CALENDARIO_ARRANQUE_CONFIGURADO_V2
+        // Al mover una OF no perdemos el tiempo de preparacion que ya tenia programado.
+        // Si la nueva secuencia realmente exige cambio de parte/molde, mantenemos como minimo 1 h.
+        var requiereCambioPorSecuencia =
+            !mismaParte && !mismoMolde;
+
+        var horasCambio = Math.Max(
+            horasCambioConfiguradas < 0m ? 0m : horasCambioConfiguradas,
+            requiereCambioPorSecuencia ? 1m : 0m);
 
         var arranque =
             SumarHorasOperativas(

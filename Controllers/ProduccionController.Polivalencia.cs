@@ -223,6 +223,14 @@ OUTER APPLY
 ) escala
 WHERE v.ParteID=@ParteID
   AND v.Nivel BETWEEN 1 AND 4
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.Usuarios uOperador
+      WHERE uOperador.PersonaID=p.PersonaID
+        AND ISNULL(uOperador.Activo,0)=1
+        AND uOperador.RolID=4
+  )
   AND
   (
       UPPER(LTRIM(RTRIM(ISNULL(v.PuestoMatriz,N''))))=N'OPERADOR'
@@ -310,6 +318,14 @@ OUTER APPLY
     ORDER BY a.AsignacionID DESC
 ) escala
 WHERE ISNULL(p.EsColaboradorActivo,1)=1
+  AND EXISTS
+  (
+      SELECT 1
+      FROM dbo.Usuarios uOperador
+      WHERE uOperador.PersonaID=p.PersonaID
+        AND ISNULL(uOperador.Activo,0)=1
+        AND uOperador.RolID=4
+  )
   AND
   (
       UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
@@ -352,6 +368,59 @@ ORDER BY
             }
         }
 
+
+        // NSQ_PERSONAL_POLIVALENCIA_V3_4
+        // Los Encargados de Produccion pueden cubrir cualquier puesto operativo.
+        const string encargadosProduccionSql = @"
+SELECT
+    p.PersonaID AS PersonalID,
+    LTRIM(RTRIM(CONCAT(
+        ISNULL(p.Nombre,N''),N' ',
+        ISNULL(p.ApellidoPaterno,N''),N' ',
+        ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
+    ISNULL(p.Puesto,N'') AS Puesto
+FROM dbo.Persona p
+WHERE ISNULL(p.EsColaboradorActivo,1)=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+        COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
+ORDER BY Nombre,p.PersonaID;";
+
+        await using (var encargadoCmd = new SqlCommand(encargadosProduccionSql,cn))
+        {
+            await using var encargadoRd = await encargadoCmd.ExecuteReaderAsync();
+
+            while(await encargadoRd.ReadAsync())
+            {
+                var personaIdEncargado = Convert.ToInt32(encargadoRd["PersonalID"]);
+
+                var yaExiste = operadores.Any(x =>
+                {
+                    var prop = x.GetType().GetProperty("personaID");
+                    if (prop == null) return false;
+
+                    var raw = prop.GetValue(x);
+                    return raw != null &&
+                           Convert.ToInt32(raw) == personaIdEncargado;
+                });
+
+                if (yaExiste)
+                    continue;
+
+                operadores.Add(new
+                {
+                    personaID = personaIdEncargado,
+                    nombre = encargadoRd["Nombre"]?.ToString() ?? string.Empty,
+                    nivel = (int?)null,
+                    numeroControl = string.Empty,
+                    puesto = encargadoRd["Puesto"]?.ToString() ?? string.Empty,
+                    funcion = "ENCARGADO DE PRODUCCION",
+                    turnoNombre = string.Empty,
+                    turnoColor = string.Empty,
+                    maquinaCodigo = string.Empty,
+                    enEscala = false
+                });
+            }
+        }
         var fallbackOperadores = !tieneMatriz;
         /* ============================================================
            AUXILIAR
@@ -362,28 +431,25 @@ ORDER BY
         const string auxiliaresSql = @"
 ;WITH Candidatos AS
 (
-    SELECT DISTINCT p.PersonaID
+    SELECT r.PersonaID
+    FROM dbo.Produccion_PersonalRolesPermitidos r
+    WHERE r.TipoRol=N'AUXILIAR'
+      AND r.Activo=1
+
+    UNION
+
+    SELECT p.PersonaID
     FROM dbo.Persona p
     WHERE ISNULL(p.EsColaboradorActivo,1)=1
-      AND
-      (
-          UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
-          OR EXISTS
-          (
-              SELECT 1
-              FROM dbo.RRHH_EscalaAsignaciones a
-              INNER JOIN dbo.RRHH_FuncionesPersonal f
-                  ON f.FuncionID=a.FuncionID
-                 AND f.Activo=1
-              WHERE a.Activo=1
-                AND a.PersonalID=p.PersonaID
-                AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%AUXILIAR%'
-          )
-      )
+      AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+            COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
 )
 SELECT
     p.PersonaID AS PersonalID,
-    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
+    LTRIM(RTRIM(CONCAT(
+        ISNULL(p.Nombre,N''),N' ',
+        ISNULL(p.ApellidoPaterno,N''),N' ',
+        ISNULL(p.ApellidoMaterno,N'')))) AS Nombre,
     ISNULL(p.Puesto,N'') AS Puesto,
     escala.FuncionNombre,
     escala.TurnoNombre,
@@ -393,6 +459,7 @@ SELECT
 FROM Candidatos c
 INNER JOIN dbo.Persona p
     ON p.PersonaID=c.PersonaID
+   AND ISNULL(p.EsColaboradorActivo,1)=1
 OUTER APPLY
 (
     SELECT TOP (1)
@@ -402,7 +469,7 @@ OUTER APPLY
         et.Color AS TurnoColor,
         m.Codigo AS MaquinaCodigo
     FROM dbo.RRHH_EscalaAsignaciones a
-    INNER JOIN dbo.RRHH_FuncionesPersonal f
+    LEFT JOIN dbo.RRHH_FuncionesPersonal f
         ON f.FuncionID=a.FuncionID
        AND f.Activo=1
     LEFT JOIN dbo.RRHH_EscalaTurnos et
@@ -414,18 +481,12 @@ OUTER APPLY
       AND a.Activo=1
       AND a.EscalaID=@EscalaID
       AND a.PersonalID=p.PersonaID
-      AND
-      (
-          UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%AUXILIAR%'
-          OR UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
-      )
       AND CONVERT(date,@FechaHora) BETWEEN a.FechaInicio AND a.FechaFin
     ORDER BY a.AsignacionID DESC
 ) escala
 ORDER BY
     CASE WHEN escala.PersonalID IS NULL THEN 1 ELSE 0 END,
     Nombre;";
-
         await using (var cmd = new SqlCommand(auxiliaresSql, cn))
         {
             cmd.Parameters.Add("@EscalaID", SqlDbType.Int).Value = escalaId.HasValue ? (object)escalaId.Value : DBNull.Value;
@@ -603,6 +664,25 @@ ELSE
         SqlConnection cn,
         SqlTransaction tx)
     {
+        const string encargadoSql = @"
+SELECT CONVERT(bit,CASE WHEN EXISTS
+(
+    SELECT 1
+    FROM dbo.Persona p
+    WHERE p.PersonaID=@PersonalID
+      AND ISNULL(p.EsColaboradorActivo,1)=1
+      AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+            COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
+) THEN 1 ELSE 0 END);";
+
+        await using (var encargadoCmd = new SqlCommand(encargadoSql,cn,tx))
+        {
+            encargadoCmd.Parameters.Add("@PersonalID",SqlDbType.Int).Value=personaId;
+
+            if(Convert.ToBoolean(await encargadoCmd.ExecuteScalarAsync() ?? false))
+                return 4;
+        }
+
         const string sql = @"
 IF OBJECT_ID(N'dbo.vw_RRHH_PolivalenciaOperadoresParte',N'V') IS NULL
     SELECT CAST(NULL AS INT);
@@ -613,13 +693,16 @@ ELSE
       AND PersonalID=@PersonalID
     ORDER BY Nivel DESC;";
 
-        await using var cmd = new SqlCommand(sql, cn, tx);
-        cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
-        cmd.Parameters.Add("@PersonalID", SqlDbType.Int).Value = personaId;
-        var value = await cmd.ExecuteScalarAsync();
-        return value == null || value == DBNull.Value ? null : Convert.ToInt32(value);
-    }
+        await using var cmd = new SqlCommand(sql,cn,tx);
+        cmd.Parameters.Add("@ParteID",SqlDbType.Int).Value=parteId;
+        cmd.Parameters.Add("@PersonalID",SqlDbType.Int).Value=personaId;
 
+        var value = await cmd.ExecuteScalarAsync();
+
+        return value == null || value == DBNull.Value
+            ? null
+            : Convert.ToInt32(value);
+    }
     private async Task<int?> ResolverPartePolivalenciaProgramaAsync(
         int programaProduccionId,
         int? partePreferida,
@@ -850,6 +933,8 @@ SELECT CONVERT(bit,CASE WHEN EXISTS
       AND
       (
           UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
+          OR UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+                COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
           OR EXISTS
           (
               SELECT 1
@@ -864,11 +949,11 @@ SELECT CONVERT(bit,CASE WHEN EXISTS
       )
 ) THEN 1 ELSE 0 END);";
 
-        await using var cmd = new SqlCommand(sql, cn, tx);
-        cmd.Parameters.Add("@PersonalID", SqlDbType.Int).Value = personaId;
+        await using var cmd = new SqlCommand(sql,cn,tx);
+        cmd.Parameters.Add("@PersonalID",SqlDbType.Int).Value=personaId;
+
         return Convert.ToBoolean(await cmd.ExecuteScalarAsync() ?? false);
     }
-
     private async Task<bool> PersonaEsAuxiliarActivoProduccionAsync(
         int personaId,
         SqlConnection cn,
@@ -883,23 +968,22 @@ SELECT CONVERT(bit,CASE WHEN EXISTS
       AND ISNULL(p.EsColaboradorActivo,1)=1
       AND
       (
-          UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
+          UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))
+                COLLATE Modern_Spanish_CI_AI LIKE N'%ENCARGADO%PRODUC%'
           OR EXISTS
           (
               SELECT 1
-              FROM dbo.RRHH_EscalaAsignaciones a
-              INNER JOIN dbo.RRHH_FuncionesPersonal f
-                  ON f.FuncionID=a.FuncionID
-                 AND f.Activo=1
-              WHERE a.Activo=1
-                AND a.PersonalID=p.PersonaID
-                AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%AUXILIAR%'
+              FROM dbo.Produccion_PersonalRolesPermitidos r
+              WHERE r.PersonaID=p.PersonaID
+                AND r.TipoRol=N'AUXILIAR'
+                AND r.Activo=1
           )
       )
 ) THEN 1 ELSE 0 END);";
 
-        await using var cmd = new SqlCommand(sql, cn, tx);
-        cmd.Parameters.Add("@PersonalID", SqlDbType.Int).Value = personaId;
+        await using var cmd = new SqlCommand(sql,cn,tx);
+        cmd.Parameters.Add("@PersonalID",SqlDbType.Int).Value=personaId;
+
         return Convert.ToBoolean(await cmd.ExecuteScalarAsync() ?? false);
     }
 
