@@ -1,0 +1,3395 @@
+﻿@using ERP.NSQuell.Models.ViewModels.Logistica
+@using System.Globalization
+@model LogisticaOperacionIndexVm
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Centro Operativo de Logística";
+
+    var cultura = new CultureInfo("es-MX");
+    var dias = Model.DiasPeriodo.ToList();
+    var hoy = DateTime.Today;
+
+    string DiaCorto(DateTime f) => f.DayOfWeek switch
+    {
+        DayOfWeek.Monday => "LUN.",
+        DayOfWeek.Tuesday => "MAR.",
+        DayOfWeek.Wednesday => "MIÉ.",
+        DayOfWeek.Thursday => "JUE.",
+        DayOfWeek.Friday => "VIE.",
+        DayOfWeek.Saturday => "SÁB.",
+        DayOfWeek.Sunday => "DOM.",
+        _ => f.ToString("ddd", cultura).ToUpperInvariant()
+    };
+
+    string ClaseTipo(LogisticaOperacionEventoVm e)
+    {
+        if (e.EsRequerimiento) return e.EsExpeditado ? "evt-release evt-expeditado" : "evt-release";
+        if (e.EsProgramacion) return e.EsExpeditado ? "evt-programacion evt-expeditado" : "evt-programacion";
+        return e.EsExpeditado ? $"{e.ClaseEvento} evt-expeditado" : e.ClaseEvento;
+    }
+
+    string TextoTipo(LogisticaOperacionEventoVm e)
+    {
+        if (e.EsRequerimiento) return "REQUERIMIENTO";
+        if (e.EsProgramacion) return "PROGRAMACIÓN";
+        return "EMBARQUE";
+    }
+
+    string SubtituloEvento(LogisticaOperacionEventoVm e)
+    {
+        if (!string.IsNullOrWhiteSpace(e.NumeroParte)) return e.NumeroParte;
+        if (!string.IsNullOrWhiteSpace(e.NumeroParteResumen)) return e.NumeroParteResumen;
+        return e.Folio;
+    }
+
+    double LeftEvento(LogisticaOperacionEventoVm e)
+    {
+        if (!e.HoraProgramada.HasValue) return 0;
+        var min = e.HoraProgramada.Value.TotalMinutes;
+        var pct = min / 1440d * 100d;
+        return Math.Max(0d, Math.Min(94d, pct));
+    }
+
+    double LeftViaje(LogisticaOperacionUnidadEventoVm e)
+    {
+        var hora = e.FechaSalidaReal?.TimeOfDay ?? e.HoraSalidaProgramada;
+        if (!hora.HasValue) return 0;
+        var pct = hora.Value.TotalMinutes / 1440d * 100d;
+        return Math.Max(0d, Math.Min(94d, pct));
+    }
+
+    string ClaseViaje(LogisticaOperacionUnidadEventoVm e) => e.ClaseEstatus;
+    var columnasTiempo = Model.Vista == "Mes" ? Math.Max(1, dias.Count) : Math.Max(1, dias.Count);
+}
+@Html.AntiForgeryToken()
+
+<style>
+    :root {
+        --lg-bg: #eef3f8;
+        --lg-panel: #fff;
+        --lg-line: #d8e2ed;
+        --lg-line-strong: #bfcddd;
+        --lg-navy: #0d376d;
+        --lg-navy2: #183f73;
+        --lg-blue: #1f66c2;
+        --lg-text: #20324a;
+        --lg-muted: #77879a;
+        --lg-soft: #f7f9fc;
+        --lg-red: #d93636;
+        --lg-red-soft: #fff1f1;
+        --lg-amber: #d69216;
+        --lg-amber-soft: #fff7e8;
+        --lg-green: #14865e;
+        --lg-green-soft: #eaf8f2;
+        --lg-cyan: #0f8097;
+        --lg-cyan-soft: #e7f8fb;
+        --lg-purple: #7354c7;
+        --lg-purple-soft: #f1ecff;
+        --lg-shadow: 0 7px 22px rgba(24,55,96,.08);
+    }
+
+    .lg-page {
+        background: var(--lg-bg);
+        min-height: calc(100vh - 58px);
+        padding: 10px 12px 22px
+    }
+
+    .lg-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 8px
+    }
+
+    .lg-title {
+        display: flex;
+        align-items: center;
+        gap: 9px
+    }
+
+    .lg-title-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+        background: linear-gradient(135deg,var(--lg-navy),var(--lg-blue));
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center
+    }
+
+    .lg-title h1 {
+        font-size: 18px;
+        margin: 0;
+        color: var(--lg-navy);
+        font-weight: 900
+    }
+
+    .lg-title p {
+        font-size: 9px;
+        margin: 1px 0 0;
+        color: var(--lg-muted)
+    }
+
+    .lg-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .lg-btn {
+        height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--lg-navy);
+        font-size: 10px;
+        font-weight: 900;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer
+    }
+
+        .lg-btn:hover {
+            border-color: #9db4cf;
+            color: var(--lg-blue)
+        }
+
+    .lg-btn-primary {
+        background: var(--lg-navy);
+        border-color: var(--lg-navy);
+        color: #fff
+    }
+
+        .lg-btn-primary:hover {
+            color: #fff;
+            background: #154984
+        }
+
+    .lg-btn-success {
+        background: var(--lg-green);
+        border-color: var(--lg-green);
+        color: #fff
+    }
+
+    .lg-btn-danger {
+        background: var(--lg-red);
+        border-color: var(--lg-red);
+        color: #fff
+    }
+
+    .lg-segment {
+        display: inline-flex;
+        border: 1px solid var(--lg-line);
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden
+    }
+
+        .lg-segment a {
+            height: 30px;
+            padding: 0 11px;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            font-size: 9px;
+            font-weight: 900;
+            color: var(--lg-muted);
+            border-right: 1px solid var(--lg-line)
+        }
+
+            .lg-segment a:last-child {
+                border-right: 0
+            }
+
+            .lg-segment a.active {
+                background: var(--lg-navy);
+                color: #fff
+            }
+
+    .lg-filterbar {
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 9px;
+        padding: 7px 8px;
+        box-shadow: var(--lg-shadow);
+        display: grid;
+        grid-template-columns: 1.2fr .8fr .7fr .7fr auto;
+        gap: 6px;
+        align-items: end;
+        margin-bottom: 8px
+    }
+
+    .lg-field label {
+        display: block;
+        font-size: 7px;
+        text-transform: uppercase;
+        font-weight: 900;
+        color: var(--lg-muted);
+        margin: 0 0 3px
+    }
+
+    .lg-input, .lg-select {
+        height: 32px;
+        width: 100%;
+        border: 1px solid var(--lg-line);
+        border-radius: 7px;
+        background: #fff;
+        font-size: 10px;
+        color: var(--lg-text);
+        padding: 0 8px;
+        outline: none
+    }
+
+        .lg-input:focus, .lg-select:focus {
+            border-color: #88a6c8;
+            box-shadow: 0 0 0 3px rgba(31,102,194,.06)
+        }
+
+    .lg-filter-actions {
+        display: flex;
+        gap: 5px
+    }
+
+    .lg-checkline {
+        grid-column: 1/-1;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        padding-top: 1px
+    }
+
+        .lg-checkline label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 9px;
+            font-weight: 800;
+            color: var(--lg-text)
+        }
+
+        .lg-checkline input {
+            accent-color: var(--lg-blue)
+        }
+
+    .lg-strip {
+        height: 31px;
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 10px;
+        margin-bottom: 8px;
+        box-shadow: var(--lg-shadow);
+        font-size: 9px;
+        color: var(--lg-muted);
+        overflow: auto;
+        white-space: nowrap
+    }
+
+        .lg-strip strong {
+            color: var(--lg-navy)
+        }
+
+        .lg-strip .danger {
+            color: var(--lg-red);
+            font-weight: 900
+        }
+
+        .lg-strip .warn {
+            color: var(--lg-amber);
+            font-weight: 900
+        }
+
+    .lg-navperiod {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px
+    }
+
+    .lg-navleft {
+        display: flex;
+        align-items: center;
+        gap: 6px
+    }
+
+    .lg-period {
+        padding: 0 4px
+    }
+
+        .lg-period strong {
+            display: block;
+            color: var(--lg-navy);
+            font-size: 11px
+        }
+
+        .lg-period span {
+            font-size: 8px;
+            color: var(--lg-muted)
+        }
+
+    .lg-board {
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-radius: 10px;
+        box-shadow: var(--lg-shadow);
+        overflow: auto;
+        position: relative
+    }
+
+    .lg-grid-head, .lg-row {
+        display: grid;
+        grid-template-columns: 220px repeat(var(--dias),minmax(190px,1fr));
+        min-width: max-content
+    }
+
+    .lg-grid-head {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: #f7faff;
+        border-bottom: 1px solid var(--lg-line-strong)
+    }
+
+    .lg-head-client {
+        position: sticky;
+        left: 0;
+        z-index: 25;
+        background: #f7faff;
+        border-right: 1px solid var(--lg-line-strong);
+        padding: 10px 12px;
+        font-size: 10px;
+        font-weight: 900;
+        color: var(--lg-navy)
+    }
+
+    .lg-day-head {
+        min-width: 190px;
+        text-align: center;
+        padding: 8px 5px;
+        border-right: 1px solid var(--lg-line);
+        position: relative
+    }
+
+        .lg-day-head.today {
+            background: #eef5ff
+        }
+
+        .lg-day-head strong {
+            display: block;
+            color: var(--lg-navy);
+            font-size: 10px
+        }
+
+        .lg-day-head span {
+            font-size: 8px;
+            color: var(--lg-muted)
+        }
+
+        .lg-day-head .today-tag {
+            position: absolute;
+            right: 5px;
+            top: 4px;
+            background: var(--lg-blue);
+            color: #fff;
+            font-size: 6px;
+            font-weight: 900;
+            border-radius: 4px;
+            padding: 2px 4px
+        }
+
+    .lg-hours-head {
+        display: grid;
+        grid-template-columns: repeat(24,1fr);
+        margin-top: 5px;
+        border-top: 1px solid #dfe7f0
+    }
+
+        .lg-hours-head span {
+            font-size: 6px;
+            color: #8b99aa;
+            text-align: left;
+            border-right: 1px solid #e6edf5;
+            padding-top: 2px
+        }
+
+    .lg-row {
+        min-height: 154px;
+        border-bottom: 1px solid var(--lg-line)
+    }
+
+        .lg-row:last-child {
+            border-bottom: 0
+        }
+
+    .lg-client {
+        position: sticky;
+        left: 0;
+        z-index: 12;
+        background: #fbfcfe;
+        border-right: 1px solid var(--lg-line-strong);
+        padding: 12px 11px;
+        min-height: 154px
+    }
+
+    .lg-client-name {
+        font-size: 12px;
+        font-weight: 900;
+        color: var(--lg-navy);
+        line-height: 1.15
+    }
+
+    .lg-client-sub {
+        font-size: 8px;
+        color: var(--lg-muted);
+        margin-top: 3px
+    }
+
+    .lg-client-badges {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 8px
+    }
+
+    .lg-badge {
+        font-size: 7px;
+        font-weight: 900;
+        padding: 3px 5px;
+        border-radius: 999px;
+        background: #eef2f7;
+        color: #617285
+    }
+
+        .lg-badge.red {
+            background: var(--lg-red-soft);
+            color: var(--lg-red)
+        }
+
+        .lg-badge.amber {
+            background: var(--lg-amber-soft);
+            color: #9a6208
+        }
+
+        .lg-badge.blue {
+            background: #edf4ff;
+            color: #245a9d
+        }
+
+    .lg-cell {
+        min-width: 190px;
+        min-height: 154px;
+        position: relative;
+        border-right: 1px solid var(--lg-line);
+        background: repeating-linear-gradient(to right,transparent 0,transparent calc(100%/24 - 1px),rgba(196,209,223,.55) calc(100%/24 - 1px),rgba(196,209,223,.55) calc(100%/24)), repeating-linear-gradient(to bottom,transparent 0,transparent 37px,rgba(214,224,235,.5) 37px,rgba(214,224,235,.5) 38px),#fff
+    }
+
+        .lg-cell.today {
+            background: repeating-linear-gradient(to right,transparent 0,transparent calc(100%/24 - 1px),rgba(130,166,209,.5) calc(100%/24 - 1px),rgba(130,166,209,.5) calc(100%/24)), repeating-linear-gradient(to bottom,transparent 0,transparent 37px,rgba(200,216,235,.5) 37px,rgba(200,216,235,.5) 38px),#f7fbff
+        }
+
+        .lg-cell.drag-over {
+            outline: 2px dashed var(--lg-blue);
+            outline-offset: -4px;
+            background: #eef6ff
+        }
+
+    .lg-event {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        border-radius: 10px;
+        padding: 6px 7px;
+        border: 1px solid transparent;
+        box-shadow: 0 5px 14px rgba(18,48,85,.13);
+        cursor: pointer;
+        user-select: none;
+        z-index: 4;
+        overflow: hidden
+    }
+
+        .lg-event:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(18,48,85,.18)
+        }
+
+        .lg-event[draggable=true] {
+            cursor: grab
+        }
+
+        .lg-event.dragging {
+            opacity: .45;
+            cursor: grabbing
+        }
+
+    .evt-release {
+        background: #f4f7fb;
+        border-color: #b9c7d6;
+        color: #43566f
+    }
+
+    .evt-programacion {
+        background: #fff7e8;
+        border-color: #e5bd72;
+        color: #80520a
+    }
+
+    .op-programado {
+        background: #eaf3ff;
+        border-color: #8ab7ee;
+        color: #174b86
+    }
+
+    .op-preparando {
+        background: #fff7e1;
+        border-color: #e2be67;
+        color: #7f5409
+    }
+
+    .op-preparado {
+        background: #fff0e6;
+        border-color: #f0a96d;
+        color: #994700
+    }
+
+    .op-cargando, .op-cargado {
+        background: #f1edff;
+        border-color: #bca8ef;
+        color: #5b3caf
+    }
+
+    .op-enruta {
+        background: #e8f8fb;
+        border-color: #8fd6e3;
+        color: #0a687b
+    }
+
+    .op-entregado {
+        background: #eaf8f2;
+        border-color: #8ed6b7;
+        color: #0a6a49
+    }
+
+    .op-cancelado {
+        background: #f1f3f5;
+        border-color: #c9d0d7;
+        color: #68727e
+    }
+
+    .op-pendiente {
+        background: #f4f6f9;
+        border-color: #cbd3dc;
+        color: #5a6775
+    }
+
+    .evt-expeditado {
+        border-color: #ef8585 !important;
+        box-shadow: inset 4px 0 0 var(--lg-red),0 6px 16px rgba(217,54,54,.13)
+    }
+
+    .lg-event-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 5px
+    }
+
+    .lg-event-kind {
+        font-size: 6px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        opacity: .75
+    }
+
+    .lg-event-time {
+        font-size: 7px;
+        font-weight: 900
+    }
+
+    .lg-event-main {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 3px
+    }
+
+    .lg-event-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: rgba(255,255,255,.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        flex: 0 0 26px
+    }
+
+    .lg-event-data {
+        min-width: 0;
+        flex: 1
+    }
+
+        .lg-event-data strong {
+            display: block;
+            font-size: 9px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .lg-event-data span {
+            display: block;
+            font-size: 7px;
+            opacity: .8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+    .lg-event-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 5px;
+        margin-top: 4px
+    }
+
+    .lg-event-qty {
+        font-size: 8px;
+        font-weight: 900
+    }
+
+    .lg-event-tags {
+        display: flex;
+        gap: 3px;
+        flex-wrap: wrap
+    }
+
+    .lg-tag {
+        font-size: 6px;
+        font-weight: 900;
+        padding: 2px 4px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.6)
+    }
+
+        .lg-tag.red {
+            background: #fff;
+            color: var(--lg-red)
+        }
+
+    .lg-empty-cell {
+        font-size: 8px;
+        color: #9aa7b6;
+        padding: 10px
+    }
+
+    .lg-month .lg-grid-head, .lg-month .lg-row {
+        grid-template-columns: 220px repeat(var(--dias),minmax(72px,1fr))
+    }
+
+    .lg-month .lg-day-head, .lg-month .lg-cell {
+        min-width: 72px
+    }
+
+    .lg-month .lg-cell {
+        min-height: 118px;
+        background: #fff
+    }
+
+    .lg-month .lg-row {
+        min-height: 118px
+    }
+
+    .lg-month .lg-client {
+        min-height: 118px
+    }
+
+    .lg-month .lg-event {
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto !important;
+        margin: 4px 4px 0;
+        padding: 4px 5px;
+        min-height: 0 !important
+    }
+
+    .lg-month .lg-event-icon {
+        display: none
+    }
+
+    .lg-month .lg-event-data span {
+        display: none
+    }
+
+    .lg-month .lg-event-top {
+        display: none
+    }
+
+    .lg-month .lg-event-foot {
+        margin-top: 1px
+    }
+
+    .lg-month .lg-event-data strong {
+        font-size: 7px
+    }
+
+    .lg-month .lg-event-qty {
+        font-size: 7px
+    }
+
+    .lg-legend {
+        height: 31px;
+        border-top: 1px solid var(--lg-line);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 10px;
+        background: #fafbfd;
+        white-space: nowrap;
+        overflow: auto
+    }
+
+        .lg-legend span {
+            font-size: 7px;
+            font-weight: 800;
+            color: #64778d;
+            display: flex;
+            align-items: center;
+            gap: 4px
+        }
+
+    .lg-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 3px;
+        border: 1px solid #bbb
+    }
+
+    .lg-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(8,22,42,.46);
+        z-index: 2147483000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px
+    }
+
+        .lg-modal-backdrop.show {
+            display: flex
+        }
+
+    .lg-modal {
+        width: min(980px,96vw);
+        max-height: 92vh;
+        background: #fff;
+        border-radius: 13px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 24px 70px rgba(6,17,35,.32)
+    }
+
+    .lg-modal-sm {
+        width: min(620px,96vw)
+    }
+
+    .lg-modal-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--lg-line);
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        background: #f8fafc
+    }
+
+        .lg-modal-head h2 {
+            margin: 0;
+            color: var(--lg-navy);
+            font-size: 15px;
+            font-weight: 900
+        }
+
+        .lg-modal-head p {
+            margin: 2px 0 0;
+            color: var(--lg-muted);
+            font-size: 8px
+        }
+
+    .lg-close {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--lg-line);
+        border-radius: 7px;
+        background: #fff;
+        cursor: pointer
+    }
+
+    .lg-modal-body {
+        padding: 13px 14px;
+        overflow: auto
+    }
+
+    .lg-modal-foot {
+        padding: 9px 12px;
+        border-top: 1px solid var(--lg-line);
+        background: #fbfcfe;
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px
+    }
+
+    .lg-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(4,1fr);
+        gap: 6px;
+        margin-bottom: 9px
+    }
+
+    .lg-detail {
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        padding: 7px;
+        background: #fbfcfe
+    }
+
+        .lg-detail span {
+            display: block;
+            font-size: 6px;
+            text-transform: uppercase;
+            font-weight: 900;
+            color: var(--lg-muted)
+        }
+
+        .lg-detail strong {
+            font-size: 10px;
+            color: var(--lg-navy)
+        }
+
+    .lg-next {
+        background: #eef5ff;
+        border: 1px solid #a9c6e8;
+        border-radius: 9px;
+        padding: 8px 9px;
+        margin-bottom: 8px
+    }
+
+        .lg-next span {
+            font-size: 6px;
+            color: #6681a1;
+            font-weight: 900;
+            text-transform: uppercase
+        }
+
+        .lg-next strong {
+            display: block;
+            color: #174a82;
+            font-size: 11px;
+            margin-top: 2px
+        }
+
+        .lg-next p {
+            font-size: 8px;
+            color: #5b7390;
+            margin: 2px 0 0
+        }
+
+    .lg-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 7px
+    }
+
+    .lg-tab {
+        height: 29px;
+        border: 1px solid var(--lg-line);
+        background: #fff;
+        border-radius: 7px;
+        padding: 0 9px;
+        font-size: 8px;
+        font-weight: 900;
+        color: var(--lg-muted);
+        cursor: pointer
+    }
+
+        .lg-tab.active {
+            background: var(--lg-navy);
+            color: #fff;
+            border-color: var(--lg-navy)
+        }
+
+    .lg-tabpanel {
+        display: none
+    }
+
+        .lg-tabpanel.active {
+            display: block
+        }
+
+    .lg-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8px
+    }
+
+        .lg-table th {
+            background: #f5f8fb;
+            color: var(--lg-muted);
+            font-size: 6px;
+            text-transform: uppercase;
+            text-align: left;
+            padding: 6px;
+            border-bottom: 1px solid var(--lg-line)
+        }
+
+        .lg-table td {
+            padding: 6px;
+            border-bottom: 1px solid #edf1f5
+        }
+
+    .lg-history {
+        display: flex;
+        flex-direction: column;
+        gap: 5px
+    }
+
+    .lg-history-item {
+        border-left: 3px solid #b8c8d9;
+        background: #f8fafc;
+        border-radius: 0 7px 7px 0;
+        padding: 6px 8px
+    }
+
+        .lg-history-item strong {
+            font-size: 8px;
+            color: var(--lg-navy)
+        }
+
+        .lg-history-item small {
+            display: block;
+            font-size: 6px;
+            color: var(--lg-muted)
+        }
+
+        .lg-history-item p {
+            font-size: 7px;
+            margin: 3px 0 0
+        }
+
+    .lg-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2,1fr);
+        gap: 7px
+    }
+
+        .lg-form-grid .full {
+            grid-column: 1/-1
+        }
+
+    .lg-file {
+        border: 2px dashed #b9c8d8;
+        border-radius: 9px;
+        padding: 13px;
+        text-align: center;
+        background: #fafcff
+    }
+
+        .lg-file strong {
+            display: block;
+            font-size: 9px;
+            color: var(--lg-navy)
+        }
+
+        .lg-file small {
+            display: block;
+            font-size: 7px;
+            color: var(--lg-muted)
+        }
+
+    .lg-toast-wrap {
+        position: fixed;
+        right: 15px;
+        bottom: 15px;
+        z-index: 2147483100;
+        display: flex;
+        flex-direction: column;
+        gap: 6px
+    }
+
+    .lg-toast {
+        min-width: 260px;
+        max-width: 390px;
+        background: #fff;
+        border: 1px solid var(--lg-line);
+        border-left: 4px solid var(--lg-blue);
+        border-radius: 8px;
+        padding: 9px 10px;
+        box-shadow: 0 12px 30px rgba(15,28,50,.18);
+        font-size: 9px
+    }
+
+        .lg-toast.ok {
+            border-left-color: var(--lg-green)
+        }
+
+        .lg-toast.error {
+            border-left-color: var(--lg-red)
+        }
+
+
+    .lg-flow-modal {
+        width: min(1180px,97vw)
+    }
+
+    .lg-flow-summary {
+        display: grid;
+        grid-template-columns: 1.3fr repeat(4,.7fr);
+        gap: 6px;
+        margin-bottom: 10px
+    }
+
+        .lg-flow-summary .lg-detail {
+            padding: 8px 9px
+        }
+
+    .lg-timeline {
+        display: grid;
+        grid-template-columns: repeat(7,1fr);
+        gap: 0;
+        margin: 2px 0 12px;
+        position: relative
+    }
+
+        .lg-timeline:before {
+            content: "";
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            top: 18px;
+            height: 2px;
+            background: #d7e1ec;
+            z-index: 0
+        }
+
+    .lg-step {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        padding: 0 4px;
+        cursor: default
+    }
+
+    .lg-step-dot {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        margin: 0 auto 5px;
+        background: #fff;
+        border: 2px solid #c8d4e1;
+        color: #7d8da0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px
+    }
+
+    .lg-step.complete .lg-step-dot {
+        background: var(--lg-green);
+        border-color: var(--lg-green);
+        color: #fff
+    }
+
+    .lg-step.actual .lg-step-dot {
+        background: var(--lg-navy);
+        border-color: var(--lg-navy);
+        color: #fff;
+        box-shadow: 0 0 0 5px rgba(13,55,109,.08)
+    }
+
+    .lg-step.blocked .lg-step-dot {
+        background: #f1f4f7;
+        color: #a3afbb
+    }
+
+    .lg-step-title {
+        font-size: 7px;
+        font-weight: 900;
+        color: var(--lg-navy);
+        line-height: 1.15
+    }
+
+    .lg-step-state {
+        font-size: 6px;
+        color: var(--lg-muted);
+        margin-top: 2px
+    }
+
+    .lg-step.complete .lg-step-state {
+        color: var(--lg-green);
+        font-weight: 900
+    }
+
+    .lg-step.actual .lg-step-state {
+        color: var(--lg-blue);
+        font-weight: 900
+    }
+
+    .lg-flow-layout {
+        display: grid;
+        grid-template-columns: 230px minmax(0,1fr);
+        gap: 10px
+    }
+
+    .lg-flow-side {
+        border: 1px solid var(--lg-line);
+        border-radius: 9px;
+        background: #fafbfd;
+        padding: 8px;
+        align-self: start
+    }
+
+        .lg-flow-side h3 {
+            font-size: 9px;
+            color: var(--lg-navy);
+            margin: 0 0 6px;
+            font-weight: 900
+        }
+
+    .lg-flow-side-item {
+        padding: 7px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        margin-bottom: 5px
+    }
+
+        .lg-flow-side-item.active {
+            background: #eef5ff;
+            border-color: #b5cbe5
+        }
+
+        .lg-flow-side-item.complete {
+            background: #eef9f4;
+            border-color: #b7dfcc
+        }
+
+        .lg-flow-side-item.blocked {
+            opacity: .55
+        }
+
+        .lg-flow-side-item strong {
+            display: block;
+            font-size: 8px;
+            color: var(--lg-navy)
+        }
+
+        .lg-flow-side-item span {
+            display: block;
+            font-size: 7px;
+            color: var(--lg-muted);
+            margin-top: 2px
+        }
+
+    .lg-flow-main {
+        min-width: 0
+    }
+
+    .lg-stage {
+        display: none
+    }
+
+        .lg-stage.active {
+            display: block
+        }
+
+    .lg-stage-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--lg-line);
+        padding-bottom: 8px;
+        margin-bottom: 9px
+    }
+
+        .lg-stage-head h3 {
+            font-size: 13px;
+            margin: 0;
+            color: var(--lg-navy);
+            font-weight: 900
+        }
+
+        .lg-stage-head p {
+            font-size: 8px;
+            color: var(--lg-muted);
+            margin: 2px 0 0
+        }
+
+    .lg-stage-badge {
+        font-size: 7px;
+        font-weight: 900;
+        border-radius: 999px;
+        padding: 4px 7px;
+        background: #eef2f7;
+        color: #607286;
+        white-space: nowrap
+    }
+
+        .lg-stage-badge.ok {
+            background: var(--lg-green-soft);
+            color: var(--lg-green)
+        }
+
+        .lg-stage-badge.current {
+            background: #edf4ff;
+            color: var(--lg-blue)
+        }
+
+    .lg-helpbox {
+        border: 1px solid #bfd2e7;
+        background: #f4f8fd;
+        border-radius: 8px;
+        padding: 8px 9px;
+        font-size: 8px;
+        color: #58708d;
+        margin-bottom: 8px
+    }
+
+        .lg-helpbox strong {
+            color: var(--lg-navy)
+        }
+
+    .lg-flow-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        margin-top: 10px;
+        padding-top: 9px;
+        border-top: 1px solid var(--lg-line)
+    }
+
+    .lg-radio-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .lg-radio-card {
+        flex: 1 1 150px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        padding: 8px;
+        background: #fff;
+        cursor: pointer
+    }
+
+        .lg-radio-card:has(input:checked) {
+            border-color: #8cb1db;
+            background: #f2f7fd
+        }
+
+        .lg-radio-card input {
+            margin-right: 5px
+        }
+
+        .lg-radio-card strong {
+            font-size: 9px;
+            color: var(--lg-navy)
+        }
+
+        .lg-radio-card small {
+            display: block;
+            font-size: 7px;
+            color: var(--lg-muted);
+            margin-top: 2px
+        }
+
+    .lg-subsection {
+        border: 1px solid var(--lg-line);
+        border-radius: 9px;
+        padding: 9px;
+        background: #fbfcfe;
+        margin-top: 8px
+    }
+
+        .lg-subsection h4 {
+            font-size: 8px;
+            margin: 0 0 7px;
+            color: var(--lg-navy);
+            font-weight: 900
+        }
+
+    .lg-progress {
+        height: 7px;
+        background: #e7edf4;
+        border-radius: 999px;
+        overflow: hidden;
+        margin-top: 5px
+    }
+
+        .lg-progress span {
+            display: block;
+            height: 100%;
+            background: var(--lg-green);
+            border-radius: 999px
+        }
+
+    .lg-disabled-note {
+        border: 1px dashed #cbd7e3;
+        border-radius: 8px;
+        padding: 18px;
+        text-align: center;
+        color: var(--lg-muted);
+        font-size: 8px;
+        background: #fafbfd
+    }
+
+
+    .lg-client-row {
+        min-height: 118px
+    }
+
+        .lg-client-row .lg-client {
+            min-height: 118px
+        }
+
+    .lg-client-day {
+        min-width: 190px;
+        min-height: 118px;
+        position: relative;
+        border-right: 1px solid var(--lg-line);
+        padding: 7px;
+        background: #fff
+    }
+
+        .lg-client-day.today {
+            background: #f7fbff
+        }
+
+    .lg-client-day {
+        background: repeating-linear-gradient(to right,transparent 0,transparent calc(100%/24 - 1px),rgba(190,205,221,.55) calc(100%/24 - 1px),rgba(190,205,221,.55) calc(100%/24)),#fff
+    }
+
+        .lg-client-day.today {
+            background: repeating-linear-gradient(to right,transparent 0,transparent calc(100%/24 - 1px),rgba(119,161,209,.55) calc(100%/24 - 1px),rgba(119,161,209,.55) calc(100%/24)),#f7fbff
+        }
+
+    .lg-day-summary {
+        position: relative;
+        z-index: 5;
+        max-width: 310px
+    }
+
+    .lg-timed-layer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 42px;
+        bottom: 5px;
+        z-index: 3;
+        pointer-events: none
+    }
+
+    .lg-timed-event {
+        position: absolute;
+        width: clamp(78px,11%,135px);
+        min-height: 34px;
+        border-radius: 7px;
+        padding: 4px 5px;
+        border: 1px solid;
+        box-shadow: 0 3px 9px rgba(18,48,85,.10);
+        cursor: pointer;
+        pointer-events: auto;
+        overflow: hidden
+    }
+
+        .lg-timed-event.prog {
+            background: #fff7e8;
+            border-color: #e2bd70;
+            color: #80520a
+        }
+
+        .lg-timed-event.emb {
+            background: #eaf3ff;
+            border-color: #8ab7ee;
+            color: #174b86
+        }
+
+        .lg-timed-event.exp {
+            box-shadow: inset 3px 0 0 var(--lg-red),0 3px 9px rgba(217,54,54,.12)
+        }
+
+        .lg-timed-event strong {
+            display: block;
+            font-size: 7px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .lg-timed-event span {
+            display: block;
+            font-size: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 1px
+        }
+
+    .lg-drop-time-indicator {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--lg-blue);
+        z-index: 30;
+        pointer-events: none;
+        box-shadow: 0 0 0 1px rgba(31,102,194,.08)
+    }
+
+        .lg-drop-time-indicator span {
+            position: absolute;
+            top: 4px;
+            left: 5px;
+            background: var(--lg-navy);
+            color: #fff;
+            border-radius: 5px;
+            padding: 3px 5px;
+            font-size: 7px;
+            font-weight: 900;
+            white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(13,55,109,.18)
+        }
+
+    .lg-timed-event[draggable="true"] {
+        cursor: grab
+    }
+
+    .lg-timed-event.dragging {
+        opacity: .42 !important;
+        cursor: grabbing
+    }
+
+    .lg-client-day.drag-over {
+        outline: 2px dashed var(--lg-blue);
+        outline-offset: -3px;
+        background-color: #eef6ff !important
+    }
+
+    .lg-timed-event .time {
+        font-size: 6px;
+        font-weight: 900;
+        float: right
+    }
+
+    .lg-no-time-strip {
+        position: absolute;
+        left: 6px;
+        bottom: 5px;
+        display: flex;
+        gap: 4px;
+        z-index: 4
+    }
+
+    .lg-no-time-btn {
+        height: 23px;
+        border: 1px dashed #b8c5d4;
+        border-radius: 6px;
+        background: #fff;
+        padding: 0 6px;
+        font-size: 6px;
+        font-weight: 900;
+        color: #68798d;
+        cursor: pointer
+    }
+
+    .lg-client-row, .lg-client-row .lg-client {
+        min-height: 154px
+    }
+
+    .lg-client-day {
+        min-height: 154px
+    }
+
+    .lg-day-summary .lg-summary-btn {
+        max-width: 300px
+    }
+
+    .lg-month .lg-timed-layer {
+        position: static;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        margin-top: 4px
+    }
+
+    .lg-month .lg-timed-event {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: auto;
+        min-height: 26px
+    }
+
+    .lg-day-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        height: 100%;
+        justify-content: flex-start
+    }
+
+    .lg-summary-btn {
+        width: 100%;
+        min-height: 29px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 5px 7px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 7px;
+        cursor: pointer;
+        text-align: left;
+        color: var(--lg-text);
+        box-shadow: 0 2px 5px rgba(25,47,80,.04)
+    }
+
+        .lg-summary-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 11px rgba(25,47,80,.09)
+        }
+
+        .lg-summary-btn.req {
+            background: #f5f8fc;
+            border-color: #bdcad8
+        }
+
+            .lg-summary-btn.req.exp {
+                background: #fff3f3;
+                border-color: #ef9b9b
+            }
+
+        .lg-summary-btn.prog {
+            background: #fff8e9;
+            border-color: #e5c37f
+        }
+
+        .lg-summary-btn.emb {
+            background: #edf5ff;
+            border-color: #96bcea
+        }
+
+        .lg-summary-btn .left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0
+        }
+
+    .lg-summary-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        background: rgba(255,255,255,.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 24px;
+        font-size: 10px
+    }
+
+    .lg-summary-text {
+        min-width: 0
+    }
+
+        .lg-summary-text strong {
+            display: block;
+            font-size: 8px;
+            color: var(--lg-navy);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .lg-summary-text span {
+            display: block;
+            font-size: 6px;
+            color: var(--lg-muted);
+            margin-top: 1px
+        }
+
+    .lg-summary-count {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 7px;
+        font-weight: 900;
+        color: var(--lg-navy);
+        border: 1px solid rgba(23,58,122,.10)
+    }
+
+    .lg-summary-empty {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #b0bac6;
+        font-size: 7px
+    }
+
+    .lg-client-day-data {
+        display: none !important
+    }
+
+    .lg-day-modal {
+        width: min(1050px,97vw)
+    }
+
+    .lg-day-modal-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 7px 8px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #f8fafc;
+        margin-bottom: 8px
+    }
+
+    .lg-day-modal-tabs {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap
+    }
+
+    .lg-day-tab {
+        border: 1px solid var(--lg-line);
+        background: #fff;
+        color: var(--lg-muted);
+        height: 29px;
+        border-radius: 7px;
+        padding: 0 9px;
+        font-size: 8px;
+        font-weight: 900;
+        cursor: pointer
+    }
+
+        .lg-day-tab.active {
+            background: var(--lg-navy);
+            border-color: var(--lg-navy);
+            color: #fff
+        }
+
+    .lg-day-program-bar {
+        display: grid;
+        grid-template-columns: 1fr 120px 120px auto;
+        gap: 6px;
+        align-items: end;
+        padding: 8px;
+        border: 1px solid #c9d9ea;
+        border-radius: 8px;
+        background: #f4f8fd;
+        margin-bottom: 8px
+    }
+
+        .lg-day-program-bar .lg-field:first-child {
+            min-width: 0
+        }
+
+    .lg-day-list {
+        display: none
+    }
+
+        .lg-day-list.active {
+            display: block
+        }
+
+    .lg-day-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8px
+    }
+
+        .lg-day-table th {
+            text-align: left;
+            padding: 6px;
+            background: #f4f7fa;
+            border-bottom: 1px solid var(--lg-line);
+            color: var(--lg-muted);
+            font-size: 6px;
+            text-transform: uppercase
+        }
+
+        .lg-day-table td {
+            padding: 7px 6px;
+            border-bottom: 1px solid #edf1f5;
+            vertical-align: middle
+        }
+
+        .lg-day-table tr:hover td {
+            background: #fbfdff
+        }
+
+    .lg-row-title {
+        font-size: 8px;
+        font-weight: 900;
+        color: var(--lg-navy)
+    }
+
+    .lg-row-sub {
+        font-size: 6px;
+        color: var(--lg-muted);
+        margin-top: 2px
+    }
+
+    .lg-mini-status {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 2px 5px;
+        font-size: 6px;
+        font-weight: 900;
+        background: #eef2f7;
+        color: #607286
+    }
+
+        .lg-mini-status.red {
+            background: #fff0f0;
+            color: var(--lg-red)
+        }
+
+        .lg-mini-status.amber {
+            background: #fff7e8;
+            color: #96600b
+        }
+
+        .lg-mini-status.blue {
+            background: #edf4ff;
+            color: #245a9d
+        }
+
+    .lg-selected-count {
+        font-size: 8px;
+        color: var(--lg-muted)
+    }
+
+        .lg-selected-count strong {
+            color: var(--lg-navy)
+        }
+
+    @@media(max-width:900px) {
+        .lg-day-program-bar {
+            grid-template-columns: 1fr 1fr
+        }
+
+            .lg-day-program-bar .lg-field:first-child {
+                grid-column: 1/-1
+            }
+    }
+
+    .lg-section-divider {
+        min-height: 42px;
+        background: linear-gradient(90deg,#102f58,#174a82);
+        color: #fff;
+        border-top: 2px solid #0c2a4f;
+        border-bottom: 1px solid #0c2a4f
+    }
+
+        .lg-section-divider .lg-client {
+            min-height: 42px;
+            background: transparent;
+            color: #fff;
+            padding: 9px 11px;
+            border-right-color: rgba(255,255,255,.18);
+            display: flex;
+            align-items: center;
+            gap: 7px
+        }
+
+        .lg-section-divider .lg-client-name {
+            color: #fff;
+            font-size: 10px;
+            letter-spacing: .04em
+        }
+
+    .lg-section-divider-main {
+        grid-column: 2/-1;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 12px;
+        font-size: 8px;
+        color: rgba(255,255,255,.82)
+    }
+
+        .lg-section-divider-main strong {
+            color: #fff;
+            font-size: 9px
+        }
+
+    .lg-unit-row {
+        min-height: 132px;
+        background: #fbfdff
+    }
+
+        .lg-unit-row .lg-client {
+            min-height: 132px;
+            background: #f6f9fd
+        }
+
+    .lg-unit-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eaf3ff;
+        color: var(--lg-blue);
+        font-size: 15px;
+        margin-bottom: 7px
+    }
+
+    .lg-unit-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 7px;
+        border-radius: 999px;
+        padding: 3px 6px;
+        font-size: 7px;
+        font-weight: 900;
+        background: var(--lg-green-soft);
+        color: var(--lg-green)
+    }
+
+        .lg-unit-status.busy {
+            background: #edf4ff;
+            color: var(--lg-blue)
+        }
+
+    .lg-unit-cell {
+        min-width: 190px;
+        min-height: 132px;
+        position: relative;
+        border-right: 1px solid var(--lg-line);
+        background: repeating-linear-gradient(to right,transparent 0,transparent calc(100%/24 - 1px),rgba(196,209,223,.42) calc(100%/24 - 1px),rgba(196,209,223,.42) calc(100%/24)),#fbfdff
+    }
+
+        .lg-unit-cell.today {
+            background: repeating-linear-gradient(to right,transparent 0,transparent calc(100%/24 - 1px),rgba(130,166,209,.45) calc(100%/24 - 1px),rgba(130,166,209,.45) calc(100%/24)),#f4f9ff
+        }
+
+    .lg-unit-available {
+        position: absolute;
+        inset: 10px;
+        border: 1px dashed #a8d6c2;
+        border-radius: 9px;
+        background: #f1fbf6;
+        color: var(--lg-green);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 8px;
+        font-weight: 900
+    }
+
+    .lg-unit-event {
+        position: absolute;
+        width: clamp(82px,12%,145px);
+        min-height: 58px;
+        border-radius: 9px;
+        padding: 6px 7px;
+        border: 1px solid;
+        box-shadow: 0 5px 12px rgba(18,48,85,.10);
+        z-index: 5;
+        overflow: hidden;
+        cursor: pointer
+    }
+
+    .unidad-programada {
+        background: #eaf3ff;
+        border-color: #8ab7ee;
+        color: #174b86
+    }
+
+    .unidad-enruta {
+        background: #e7f8fb;
+        border-color: #78cbd9;
+        color: #086878
+    }
+
+    .unidad-finalizada {
+        background: #eaf8f2;
+        border-color: #8ed6b7;
+        color: #0a6a49
+    }
+
+    .unidad-cancelada {
+        background: #f1f3f5;
+        border-color: #c9d0d7;
+        color: #68727e
+    }
+
+    .lg-unit-event-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 5px;
+        font-size: 7px;
+        font-weight: 900
+    }
+
+    .lg-unit-event-main {
+        display: grid;
+        grid-template-columns: 25px minmax(0,1fr);
+        gap: 6px;
+        align-items: center;
+        margin-top: 4px
+    }
+
+        .lg-unit-event-main i {
+            width: 25px;
+            height: 25px;
+            border-radius: 7px;
+            background: rgba(255,255,255,.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px
+        }
+
+        .lg-unit-event-main strong {
+            display: block;
+            font-size: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .lg-unit-event-main span {
+            display: block;
+            font-size: 7px;
+            opacity: .82;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+    .lg-unit-event-foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 5px;
+        margin-top: 4px;
+        font-size: 6px;
+        font-weight: 900
+    }
+
+    .lg-unit-alert {
+        color: var(--lg-red)
+    }
+
+    .lg-month .lg-unit-cell {
+        min-width: 72px;
+        min-height: 100px;
+        background: #fbfdff
+    }
+
+    .lg-month .lg-unit-row {
+        min-height: 100px
+    }
+
+        .lg-month .lg-unit-row .lg-client {
+            min-height: 100px
+        }
+
+    .lg-month .lg-unit-event {
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto !important;
+        margin: 4px;
+        min-height: 0;
+        padding: 4px 5px
+    }
+
+    .lg-month .lg-unit-event-main i,
+    .lg-month .lg-unit-event-main span,
+    .lg-month .lg-unit-event-foot {
+        display: none
+    }
+
+    .lg-month .lg-unit-event-main {
+        grid-template-columns: 1fr;
+        margin-top: 1px
+    }
+
+    .lg-trip-modal-summary {
+        display: grid;
+        grid-template-columns: repeat(4,1fr);
+        gap: 6px
+    }
+
+    .lg-modal-backdrop {
+        z-index: 2147483000 !important
+    }
+
+    .lg-modal {
+        position: relative;
+        z-index: 2147483001
+    }
+
+    @@media(max-width:950px) {
+        .lg-flow-layout {
+            grid-template-columns: 1fr
+        }
+
+        .lg-flow-side {
+            display: none
+        }
+
+        .lg-timeline {
+            overflow: auto;
+            grid-template-columns: repeat(7,minmax(100px,1fr))
+        }
+
+        .lg-flow-summary {
+            grid-template-columns: repeat(2,1fr)
+        }
+    }
+
+    @@media(max-width:1200px) {
+        .lg-filterbar {
+            grid-template-columns: repeat(2,1fr)
+        }
+
+        .lg-filter-actions, .lg-checkline {
+            grid-column: 1/-1
+        }
+    }
+
+    @@media(max-width:850px) {
+        .lg-filterbar {
+            grid-template-columns: 1fr
+        }
+
+        .lg-detail-grid, .lg-trip-modal-summary {
+            grid-template-columns: repeat(2,1fr)
+        }
+    }
+</style>
+
+<div class="lg-page">
+    <div class="lg-toolbar">
+        <div class="lg-title">
+            <div class="lg-title-icon"><i class="fa-solid fa-truck-fast"></i></div>
+            <div>
+                <h1>Centro Operativo de Logística</h1>
+                <p>Requerimientos de Release, programación, embarques y seguimiento en una sola línea de tiempo.</p>
+            </div>
+        </div>
+        <div class="lg-actions">
+            <div class="lg-segment">
+                <a asp-action="Index" asp-route-vista="Dia" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="@(Model.Vista == "Dia" ? "active" : "")">Día</a>
+                <a asp-action="Index" asp-route-vista="Semana" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="@(Model.Vista == "Semana" ? "active" : "")">Semana</a>
+                <a asp-action="Index" asp-route-vista="Mes" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="@(Model.Vista == "Mes" ? "active" : "")">Mes</a>
+            </div>
+            <a class="lg-btn" asp-controller="LogisticaListaCarga" asp-action="Index"><i class="fa-solid fa-list-check"></i> Lista de carga</a>
+            <a class="lg-btn" asp-controller="LogisticaEmbarques" asp-action="Index"><i class="fa-solid fa-boxes-packing"></i> Embarques</a>
+        </div>
+    </div>
+
+    <form method="get" asp-action="Index" id="formFiltros" class="lg-filterbar">
+        <input type="hidden" name="vista" value="@Model.Vista" />
+        <input type="hidden" name="fecha" value="@Model.FechaReferencia.ToString("yyyy-MM-dd")" />
+        <div class="lg-field">
+            <label>Buscar</label>
+            <input class="lg-input" name="q" value="@Model.Busqueda" placeholder="Cliente, release, parte, OF, embarque..." />
+        </div>
+        <div class="lg-field">
+            <label>Cliente</label>
+            <select class="lg-select" name="clienteId">
+                <option value="">Todos</option>
+                @foreach (var c in Model.ClientesFiltro)
+                {
+                    <option value="@c.ClienteID" selected="@(Model.ClienteID == c.ClienteID)">@c.Cliente</option>
+                }
+            </select>
+        </div>
+        <div class="lg-field">
+            <label>Estatus</label>
+            <select class="lg-select" name="estatus">
+                <option value="">Todos</option>
+                @foreach (var s in new[] { "Requerido", "Sin programar", "Por generar", "Programado", "Preparando", "Preparado", "Cargado", "En ruta", "Entregado", "Cancelado" })
+                {
+                    <option value="@s" selected="@(Model.Estatus == s)">@s</option>
+                }
+            </select>
+        </div>
+        <div class="lg-field">
+            <label>Forma salida</label>
+            <select class="lg-select" name="formaEnvio">
+                <option value="">Todas</option>
+                <option value="Pendiente" selected="@(Model.FormaEnvio == "Pendiente")">Por definir</option>
+                <option value="Interno" selected="@(Model.FormaEnvio == "Interno")">Entrega NS</option>
+                <option value="Cliente" selected="@(Model.FormaEnvio == "Cliente")">Cliente recoge</option>
+                <option value="Paqueteria" selected="@(Model.FormaEnvio == "Paqueteria")">Paquetería</option>
+            </select>
+        </div>
+        <div class="lg-filter-actions">
+            <button class="lg-btn lg-btn-primary" type="submit"><i class="fa-solid fa-filter"></i> Aplicar</button>
+            <a class="lg-btn" asp-action="Index" asp-route-vista="@Model.Vista" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")">Limpiar</a>
+        </div>
+        <div class="lg-checkline">
+            <label><input type="checkbox" name="soloExpeditados" value="true" checked="@Model.SoloExpeditados" /> Solo expeditados</label>
+            <label><input type="checkbox" name="soloIncidencias" value="true" checked="@Model.SoloIncidencias" /> Solo con incidencias</label>
+        </div>
+    </form>
+
+    <div class="lg-strip">
+        <span><strong>@Model.PeriodoTexto</strong></span>
+        <span>@Model.TotalClientes clientes</span>
+        <span>@Model.TotalRequerimientos requerimientos</span>
+        <span>@Model.TotalProgramaciones programaciones</span>
+        <span>@Model.TotalEmbarques embarques</span>
+        <span>@Model.TotalPiezas.ToString("N0") PZA</span>
+        <span><strong>@Model.TotalUnidades</strong> unidades</span>
+        <span><strong>@Model.UnidadesDisponibles</strong> disponibles</span>
+        @if (Model.ViajesActivos > 0)
+        {
+            <span><strong>@Model.ViajesActivos</strong> viajes activos</span>
+        }
+        @if (Model.Expeditados > 0)
+        {
+            <span class="danger"><i class="fa-solid fa-triangle-exclamation"></i> @Model.Expeditados expeditados</span>
+        }
+        @if (Model.ConIncidencia > 0)
+        {
+            <span class="warn"><i class="fa-solid fa-circle-exclamation"></i> @Model.ConIncidencia incidencias</span>
+        }
+    </div>
+
+    <div class="lg-navperiod">
+        <div class="lg-navleft">
+            <a class="lg-btn" asp-action="Index" asp-route-vista="@Model.Vista" asp-route-fecha="@Model.FechaAnterior.ToString("yyyy-MM-dd")" asp-route-q="@Model.Busqueda" asp-route-clienteId="@Model.ClienteID" asp-route-estatus="@Model.Estatus" asp-route-formaEnvio="@Model.FormaEnvio" asp-route-soloExpeditados="@Model.SoloExpeditados" asp-route-soloIncidencias="@Model.SoloIncidencias"><i class="fa-solid fa-chevron-left"></i> Anterior</a>
+            <div class="lg-period">
+                <strong>@Model.PeriodoTexto</strong>
+                <span>@Model.RangoTexto</span>
+            </div>
+            <a class="lg-btn" asp-action="Index" asp-route-vista="@Model.Vista" asp-route-fecha="@Model.FechaSiguiente.ToString("yyyy-MM-dd")" asp-route-q="@Model.Busqueda" asp-route-clienteId="@Model.ClienteID" asp-route-estatus="@Model.Estatus" asp-route-formaEnvio="@Model.FormaEnvio" asp-route-soloExpeditados="@Model.SoloExpeditados" asp-route-soloIncidencias="@Model.SoloIncidencias">Siguiente <i class="fa-solid fa-chevron-right"></i></a>
+        </div>
+        <a class="lg-btn" asp-action="Index" asp-route-vista="@Model.Vista" asp-route-fecha="@DateTime.Today.ToString("yyyy-MM-dd")"><i class="fa-regular fa-calendar-check"></i> Hoy</a>
+    </div>
+
+    <section class="lg-board @(Model.Vista == "Mes" ? "lg-month" : "")" style="--dias:@dias.Count">
+        <div class="lg-grid-head">
+            <div class="lg-head-client">CLIENTE / OPERACIÓN</div>
+            @foreach (var dia in dias)
+            {
+                <div class="lg-day-head @(dia.Date == hoy ? "today" : "")">
+                    <strong>@DiaCorto(dia) @dia.Day.ToString("00")</strong>
+                    <span>@dia.ToString("MM/yyyy")</span>
+                    @if (dia.Date == hoy)
+                    {
+                        <span class="today-tag">HOY</span>
+                    }
+                    @if (Model.Vista != "Mes")
+                    {
+                        <div class="lg-hours-head">
+                            @for (int h = 0; h <= 23; h++)
+                            {
+                                <span>@h.ToString("00")</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (Model.Clientes.Count == 0)
+        {
+            <div style="padding:45px;text-align:center;color:var(--lg-muted)">
+                <i class="fa-solid fa-calendar-xmark" style="font-size:28px;opacity:.45"></i>
+                <div style="font-size:12px;font-weight:900;color:var(--lg-navy);margin-top:7px">Sin operación para este periodo</div>
+                <div style="font-size:8px;margin-top:2px">No hay requerimientos, programaciones o embarques con los filtros actuales.</div>
+            </div>
+        }
+        else
+        {
+            @foreach (var cliente in Model.Clientes)
+            {
+                <div class="lg-row lg-client-row" data-cliente-id="@cliente.ClienteID">
+                    <aside class="lg-client">
+                        <div class="lg-client-name">@cliente.Cliente</div>
+                        <div class="lg-client-sub">@cliente.TotalPiezas.ToString("N0") PZA visibles</div>
+                        <div class="lg-client-badges">
+                            @if (cliente.TotalRequerimientos > 0)
+                            {
+                                <span class="lg-badge blue">@cliente.TotalRequerimientos req.</span>
+                            }
+                            @if (cliente.TotalProgramaciones > 0)
+                            {
+                                <span class="lg-badge amber">@cliente.TotalProgramaciones prog.</span>
+                            }
+                            @if (cliente.TotalEmbarques > 0)
+                            {
+                                <span class="lg-badge">@cliente.TotalEmbarques 🚚</span>
+                            }
+                            @if (cliente.TieneExpeditados)
+                            {
+                                <span class="lg-badge red">Expeditado</span>
+                            }
+                            @if (cliente.TieneIncidencias)
+                            {
+                                <span class="lg-badge red">Incidencia</span>
+                            }
+                        </div>
+                    </aside>
+
+                    @foreach (var dia in dias)
+                    {
+                        var eventos = cliente.EventosDia(dia).ToList();
+                        var requerimientos = eventos.Where(x => x.EsRequerimiento).ToList();
+                        var programaciones = eventos.Where(x => x.EsProgramacion).ToList();
+                        var embarques = eventos.Where(x => x.EsEmbarque).ToList();
+                        var reqPiezas = requerimientos.Sum(x => (long)x.CantidadPendienteProgramar);
+                        var progPiezas = programaciones.Sum(x => (long)Math.Max(0, x.CantidadProgramada - x.CantidadGenerada));
+                        var embPiezas = embarques.Sum(x => (long)x.TotalPiezas);
+                        var reqExp = requerimientos.Count(x => x.EsExpeditado);
+
+                        <div class="lg-client-day @(dia.Date == hoy ? "today" : "")" data-cliente-id="@cliente.ClienteID" data-fecha="@dia.ToString("yyyy-MM-dd")">
+                            <div class="lg-day-summary">
+                                @if (!eventos.Any())
+                                {
+                                    <div class="lg-summary-empty">Sin operación</div>
+                                }
+                                else if (requerimientos.Any())
+                                {
+                                    <button type="button" class="lg-summary-btn req @(reqExp > 0 ? "exp" : "")" data-open-day="requerimientos">
+                                        <span class="left">
+                                            <span class="lg-summary-icon"><i class="fa-solid fa-clipboard-list"></i></span>
+                                            <span class="lg-summary-text">
+                                                <strong>@requerimientos.Count release@(requerimientos.Count == 1 ? "" : "s") por programar</strong>
+                                                <span>
+                                                    @reqPiezas.ToString("N0") PZA @if(reqExp>0){
+                                                    <text>· @reqExp exp.</text>
+                                                }
+                                            </span>
+                                        </span>
+                                    </span>
+                                    <span class="lg-summary-count">@requerimientos.Count</span>
+                                </button>
+                            }
+                        </div>
+
+                        @if (Model.Vista != "Mes")
+                        {
+                            var programadasConHora = programaciones.Where(x => x.HoraProgramada.HasValue).OrderBy(x => x.HoraProgramada).ToList();
+                            var embarquesConHora = embarques.Where(x => x.HoraProgramada.HasValue).OrderBy(x => x.HoraProgramada).ToList();
+                            var sinHoraProg = programaciones.Count(x => !x.HoraProgramada.HasValue);
+                            var sinHoraEmb = embarques.Count(x => !x.HoraProgramada.HasValue);
+                            <div class="lg-timed-layer">
+                                @{
+                                    var laneProg = 0;
+                                }
+                                @foreach (var e in programadasConHora)
+                                {
+                                    var left = LeftEvento(e);
+                                    var top = 2 + (laneProg % 2) * 38;
+                                    laneProg++;
+                                    <button type="button" draggable="true" class="lg-timed-event prog @(e.EsExpeditado ? "exp" : "")" style="left:@left.ToString("0.##", CultureInfo.InvariantCulture)%;top:@(top)px" data-open-day="programaciones" data-drag-type="programacion" data-programacion-id="@e.ListaCargaProgramacionID" data-cliente-id="@e.ClienteID" data-fecha="@e.FechaProgramada.ToString("yyyy-MM-dd")" data-hora="@(e.HoraProgramada?.ToString(@"hh\:mm") ?? "")" title="@e.HoraTexto · @(string.IsNullOrWhiteSpace(e.FolioRelease) ? e.Folio : e.FolioRelease) · Arrastra para reprogramar">
+                                        <span class="time">@e.HoraTexto</span>
+                                        <strong>@(string.IsNullOrWhiteSpace(e.FolioRelease) ? e.Folio : e.FolioRelease)</strong>
+                                        <span>@Math.Max(0, e.CantidadProgramada - e.CantidadGenerada).ToString("N0") PZA · Programación</span>
+                                    </button>
+                                }
+                                @{
+                                    var laneEmb = 0;
+                                }
+                                @foreach (var e in embarquesConHora)
+                                {
+                                    var left = LeftEvento(e);
+                                    var top = 80 + (laneEmb % 2) * 38;
+                                    laneEmb++;
+                                    <button type="button" draggable="@((e.Estatus == "Programado" || e.Estatus == "Preparando").ToString().ToLowerInvariant())" class="lg-timed-event emb @(e.EsExpeditado ? "exp" : "")" style="left:@left.ToString("0.##", CultureInfo.InvariantCulture)%;top:@(top)px" data-open-flow="@e.EmbarqueID" data-drag-type="embarque" data-embarque-id="@e.EmbarqueID" data-cliente-id="@e.ClienteID" data-fecha="@e.FechaProgramada.ToString("yyyy-MM-dd")" data-hora="@(e.HoraProgramada?.ToString(@"hh\:mm") ?? "")" data-row-version="@e.RowVersion" title="@e.HoraTexto · @e.Folio · @e.Estatus · Clic para abrir flujo">
+                                        <span class="time">@e.HoraTexto</span>
+                                        <strong>@e.Folio</strong>
+                                        <span>@e.TotalPiezas.ToString("N0") PZA · @e.Estatus</span>
+                                    </button>
+                                }
+                            </div>
+                            @if (sinHoraProg > 0 || sinHoraEmb > 0)
+                            {
+                                <div class="lg-no-time-strip">
+                                    @if (sinHoraProg > 0)
+                                    {
+                                        <button type="button" class="lg-no-time-btn" data-open-day="programaciones"><i class="fa-solid fa-cart-flatbed"></i> @sinHoraProg programación@(sinHoraProg == 1 ? "" : "es") sin hora</button>
+                                    }
+                                    @if (sinHoraEmb > 0)
+                                    {
+                                        <button type="button" class="lg-no-time-btn" data-open-day="embarques"><i class="fa-solid fa-truck"></i> @sinHoraEmb embarque@(sinHoraEmb == 1 ? "" : "s") sin hora</button>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
+                                @if (programaciones.Any())
+                                {
+                                    <button type="button" class="lg-summary-btn prog" data-open-day="programaciones"><span class="left"><span class="lg-summary-icon"><i class="fa-solid fa-cart-flatbed"></i></span><span class="lg-summary-text"><strong>@programaciones.Count programación@(programaciones.Count == 1 ? "" : "es")</strong><span>@progPiezas.ToString("N0") PZA</span></span></span><span class="lg-summary-count">@programaciones.Count</span></button>
+                                }
+                                @if (embarques.Any())
+                                {
+                                    <button type="button" class="lg-summary-btn emb" data-open-day="embarques"><span class="left"><span class="lg-summary-icon"><i class="fa-solid fa-truck"></i></span><span class="lg-summary-text"><strong>@embarques.Count embarque@(embarques.Count == 1 ? "" : "s")</strong><span>@embPiezas.ToString("N0") PZA</span></span></span><span class="lg-summary-count">@embarques.Count</span></button>
+                                }
+                            </div>
+                        }
+
+                        <div class="lg-client-day-data">
+                            @foreach (var e in eventos)
+                            {
+                                <span class="lg-day-event-data"
+                                      data-tipo="@(e.EsRequerimiento ? "requerimiento" : e.EsProgramacion ? "programacion" : "embarque")"
+                                      data-evento-id="@e.EventoID"
+                                      data-release-id="@e.ReleaseDetalleID"
+                                      data-programacion-id="@e.ListaCargaProgramacionID"
+                                      data-embarque-id="@e.EmbarqueID"
+                                      data-parte-id="@e.ParteID"
+                                      data-cliente-id="@e.ClienteID"
+                                      data-cliente="@e.Cliente"
+                                      data-folio="@(string.IsNullOrWhiteSpace(e.Folio) ? e.EventoKey : e.Folio)"
+                                      data-folio-release="@e.FolioRelease"
+                                      data-numero-parte="@(string.IsNullOrWhiteSpace(e.NumeroParte) ? e.NumeroParteResumen : e.NumeroParte)"
+                                      data-descripcion="@(string.IsNullOrWhiteSpace(e.DescripcionParte) ? e.DescripcionResumen : e.DescripcionParte)"
+                                      data-of="@e.NumeroOF"
+                                      data-cantidad="@(e.EsRequerimiento? e.CantidadPendienteProgramar: e.EsProgramacion? Math.Max(0, e.CantidadProgramada - e.CantidadGenerada):e.TotalPiezas)"
+                                      data-fecha-requerida="@e.FechaRequeridaTexto"
+                                      data-fecha-programada="@e.FechaProgramada.ToString("yyyy-MM-dd")"
+                                      data-hora="@(e.HoraProgramada?.ToString(@"hh\:mm") ?? "")"
+                                      data-estatus="@e.Estatus"
+                                      data-expeditado="@e.EsExpeditado.ToString().ToLowerInvariant()"
+                                      data-atraso="@e.AtrasoTexto"
+                                      data-incidencias="@e.IncidenciasAbiertas"
+                                      data-row-version="@e.RowVersion"></span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+                }
+
+        <div class="lg-row lg-section-divider">
+            <aside class="lg-client">
+                <i class="fa-solid fa-truck-moving"></i>
+                <div class="lg-client-name">FLOTA / VIAJES</div>
+            </aside>
+            <div class="lg-section-divider-main">
+                <span><strong>@Model.TotalUnidades</strong> unidades activas</span>
+                <span><strong>@Model.UnidadesDisponibles</strong> disponibles en el periodo</span>
+                <span><strong>@Model.ViajesActivos</strong> viajes activos</span>
+                <span>Salida, recorrido y regreso de las unidades de Logística</span>
+            </div>
+        </div>
+
+        @if (Model.Unidades.Count == 0)
+        {
+            <div class="lg-row lg-unit-row">
+                <aside class="lg-client">
+                    <div class="lg-unit-icon"><i class="fa-solid fa-truck"></i></div>
+                    <div class="lg-client-name">Sin unidades</div>
+                    <div class="lg-client-sub">No existen unidades activas en Logística.</div>
+                </aside>
+                <div class="lg-section-divider-main" style="grid-column:2/-1;color:var(--lg-muted);background:#fbfdff">
+                    No hay unidades activas para mostrar.
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var unidad in Model.Unidades)
+            {
+                <div class="lg-row lg-unit-row" data-unidad-id="@unidad.UnidadID">
+                    <aside class="lg-client">
+                        <div class="lg-unit-icon"><i class="fa-solid fa-truck"></i></div>
+                        <div class="lg-client-name">@unidad.UnidadTexto</div>
+                        <div class="lg-client-sub">@unidad.DescripcionUnidad</div>
+                        <div class="lg-client-badges">
+                            @if (unidad.CapacidadPiezas.HasValue)
+                            {
+                                <span class="lg-badge">@unidad.CapacidadPiezas.Value.ToString("N0") PZA</span>
+                            }
+                            @if (unidad.CapacidadPesoKg.HasValue)
+                            {
+                                <span class="lg-badge">@unidad.CapacidadPesoKg.Value.ToString("N0") kg</span>
+                            }
+                        </div>
+                        <span class="lg-unit-status @(unidad.Eventos.Any(x => x.EsViajeActivo) ? "busy" : "")">
+                            <i class="fa-solid @(unidad.Eventos.Any(x => x.EsViajeActivo) ? "fa-route" : "fa-circle-check")"></i>
+                            @unidad.EstadoActual
+                        </span>
+                    </aside>
+
+                    @foreach (var dia in dias)
+                    {
+                        var viajesDia = unidad.EventosDia(dia).ToList();
+                        <div class="lg-unit-cell @(dia.Date == hoy ? "today" : "")" data-unidad-id="@unidad.UnidadID" data-fecha="@dia.ToString("yyyy-MM-dd")">
+                            @if (!viajesDia.Any())
+                            {
+                                <div class="lg-unit-available"><i class="fa-solid fa-circle-check"></i> UNIDAD DISPONIBLE</div>
+                            }
+                            else
+                            {
+                                @foreach (var viaje in viajesDia)
+                                {
+                                    var leftViaje = LeftViaje(viaje);
+                                    <article class="lg-unit-event @ClaseViaje(viaje)"
+                                             style="left:@leftViaje.ToString("0.##", CultureInfo.InvariantCulture)%;top:8px"
+                                             data-viaje-id="@viaje.ViajeID"
+                                             data-folio="@viaje.Folio"
+                                             data-unidad="@unidad.UnidadTexto"
+                                             data-placas="@unidad.Placas"
+                                             data-operador="@viaje.Operador"
+                                             data-ruta="@viaje.Ruta"
+                                             data-origen="@viaje.Origen"
+                                             data-destino="@viaje.Destino"
+                                             data-cliente="@viaje.ClienteResumen"
+                                             data-estatus="@viaje.EstadoVisual"
+                                             data-salida="@viaje.FechaSalidaReal?.ToString("dd/MM/yyyy HH:mm")"
+                                             data-regreso="@viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm")"
+                                             data-km-salida="@viaje.KilometrajeSalida"
+                                             data-km-regreso="@viaje.KilometrajeRegreso"
+                                             data-km-recorridos="@viaje.KilometrosRecorridos"
+                                             data-evid-salida="@viaje.EvidenciasSalida"
+                                             data-evid-regreso="@viaje.EvidenciasRegreso"
+                                             data-evid-trayecto="@viaje.EvidenciasTrayecto"
+                                             data-evid-incidencia="@viaje.EvidenciasIncidencia"
+                                             data-incidencias="@viaje.IncidenciasAbiertas"
+                                             data-criticas="@viaje.IncidenciasCriticas"
+                                             data-embarques="@viaje.TotalEmbarques"
+                                             data-piezas="@viaje.TotalPiezas">
+                                        <div class="lg-unit-event-top">
+                                            <span>@(string.IsNullOrWhiteSpace(viaje.Folio) ? $"VIAJE {viaje.ViajeID}" : viaje.Folio)</span>
+                                            <span>@viaje.HoraTexto</span>
+                                        </div>
+                                        <div class="lg-unit-event-main">
+                                            <i class="fa-solid @viaje.Icono"></i>
+                                            <div>
+                                                <strong>@viaje.ClienteResumen</strong>
+                                                <span>@(string.IsNullOrWhiteSpace(viaje.Operador) ? "Chofer por definir" : viaje.Operador)</span>
+                                            </div>
+                                        </div>
+                                        <div class="lg-unit-event-foot">
+                                            <span>@viaje.EstadoVisual</span>
+                                            <span>@viaje.TotalEmbarques emb. · @viaje.TotalPiezas.ToString("N0") PZA</span>
+                                            @if (viaje.IncidenciasAbiertas > 0)
+                                            {
+                                                <span class="lg-unit-alert">⚠ @viaje.IncidenciasAbiertas</span>
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        <div class="lg-legend">
+            <span><i class="lg-dot" style="background:#f4f7fb;border-color:#b9c7d6"></i> Requerimiento Release</span>
+            <span><i class="lg-dot" style="background:#fff7e8;border-color:#e5bd72"></i> Programación</span>
+            <span><i class="lg-dot" style="background:#eaf3ff;border-color:#8ab7ee"></i> Programado</span>
+            <span><i class="lg-dot" style="background:#fff7e1;border-color:#e2be67"></i> Preparando</span>
+            <span><i class="lg-dot" style="background:#fff0e6;border-color:#f0a96d"></i> Preparado</span>
+            <span><i class="lg-dot" style="background:#f1edff;border-color:#bca8ef"></i> Cargado</span>
+            <span><i class="lg-dot" style="background:#e8f8fb;border-color:#8fd6e3"></i> En ruta</span>
+            <span><i class="lg-dot" style="background:#eaf8f2;border-color:#8ed6b7"></i> Entregado</span>
+            <span><i class="lg-dot" style="background:#fff1f1;border-color:#ef8585"></i> Expeditado</span>
+            <span><i class="lg-dot" style="background:#f1fbf6;border-color:#a8d6c2"></i> Unidad disponible</span>
+            <span><i class="lg-dot" style="background:#eaf3ff;border-color:#8ab7ee"></i> Viaje programado</span>
+            <span><i class="lg-dot" style="background:#e7f8fb;border-color:#78cbd9"></i> Unidad en ruta</span>
+        </div>
+    </section>
+</div>
+
+<div class="lg-modal-backdrop" id="modalClienteDia">
+    <div class="lg-modal lg-day-modal">
+        <div class="lg-modal-head">
+            <div><h2 id="dayTitulo">Operación del cliente</h2><p id="daySub">Releases, programaciones y embarques del día.</p></div>
+            <button class="lg-close" type="button" data-close="modalClienteDia">✕</button>
+        </div>
+        <div class="lg-modal-body">
+            <div class="lg-day-modal-toolbar">
+                <div class="lg-day-modal-tabs">
+                    <button type="button" class="lg-day-tab active" data-day-tab="requerimientos">Releases <span id="cntReq">0</span></button>
+                    <button type="button" class="lg-day-tab" data-day-tab="programaciones">Programaciones <span id="cntProg">0</span></button>
+                    <button type="button" class="lg-day-tab" data-day-tab="embarques">Embarques <span id="cntEmb">0</span></button>
+                </div>
+                <div class="lg-selected-count"><strong id="selectedReq">0</strong> release(s) seleccionados</div>
+            </div>
+
+            <div class="lg-day-program-bar" id="bulkProgramBar">
+                <div class="lg-field">
+                    <label>Programar releases seleccionados</label>
+                    <div style="font-size:8px;color:var(--lg-muted)">Usará la cantidad pendiente completa de cada Release.</div>
+                </div>
+                <div class="lg-field"><label>Fecha carga</label><input class="lg-input" type="date" id="bulkFecha" /></div>
+                <div class="lg-field"><label>Hora *</label><input class="lg-input" type="time" id="bulkHora" step="60" required /></div>
+                <button class="lg-btn lg-btn-primary" type="button" id="btnProgramarSeleccionados"><i class="fa-solid fa-calendar-plus"></i> Programar seleccionados</button>
+            </div>
+
+            <section class="lg-day-list active" data-day-list="requerimientos">
+                <table class="lg-day-table">
+                    <thead><tr><th style="width:30px"><input type="checkbox" id="checkAllReq" /></th><th>Release / Parte</th><th>Fecha requerida</th><th>Pendiente</th><th>Prioridad</th><th style="width:110px">Acción</th></tr></thead>
+                    <tbody id="dayReqBody"></tbody>
+                </table>
+            </section>
+
+            <section class="lg-day-list" data-day-list="programaciones">
+                <table class="lg-day-table">
+                    <thead><tr><th>Programación</th><th>Release / Parte</th><th>Fecha / Hora</th><th>Pendiente generar</th><th>Estatus</th><th style="width:120px">Acción</th></tr></thead>
+                    <tbody id="dayProgBody"></tbody>
+                </table>
+            </section>
+
+            <section class="lg-day-list" data-day-list="embarques">
+                <table class="lg-day-table">
+                    <thead><tr><th>Embarque</th><th>Parte / Cliente</th><th>Fecha / Hora</th><th>Piezas</th><th>Estatus</th><th style="width:110px">Acción</th></tr></thead>
+                    <tbody id="dayEmbBody"></tbody>
+                </table>
+            </section>
+        </div>
+        <div class="lg-modal-foot">
+            <button class="lg-btn" type="button" data-close="modalClienteDia">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+
+<div class="lg-modal-backdrop" id="modalAsignarHora">
+    <div class="lg-modal lg-modal-sm">
+        <div class="lg-modal-head">
+            <div><h2 id="horaTitulo">Asignar hora</h2><p id="horaSub">Define la hora operativa en la línea de tiempo.</p></div>
+            <button class="lg-close" type="button" data-close="modalAsignarHora">✕</button>
+        </div>
+        <form id="formAsignarHora">
+            <div class="lg-modal-body">
+                <input type="hidden" id="ahTipo" />
+                <input type="hidden" id="ahID" />
+                <input type="hidden" id="ahRowVersion" />
+                <div class="lg-form-grid">
+                    <div class="lg-field"><label>Fecha</label><input class="lg-input" type="date" id="ahFecha" required /></div>
+                    <div class="lg-field"><label>Hora *</label><input class="lg-input" type="time" id="ahHora" step="60" required /></div>
+                    <div class="lg-field full"><label>Observaciones</label><input class="lg-input" id="ahObs" maxlength="500" placeholder="Opcional" /></div>
+                </div>
+            </div>
+            <div class="lg-modal-foot">
+                <button class="lg-btn" type="button" data-close="modalAsignarHora">Cancelar</button>
+                <button class="lg-btn lg-btn-primary" type="submit"><i class="fa-regular fa-clock"></i> Guardar hora</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="lg-modal-backdrop" id="modalProgramar">
+    <div class="lg-modal lg-modal-sm">
+        <div class="lg-modal-head">
+            <div><h2>Programar requerimiento</h2><p id="progSub">Release seleccionado</p></div>
+            <button class="lg-close" type="button" data-close="modalProgramar">✕</button>
+        </div>
+        <form id="formProgramar">
+            <div class="lg-modal-body">
+                <input type="hidden" name="ReleaseDetalleID" id="pReleaseID" />
+                <input type="hidden" name="ClienteID" id="pClienteID" />
+                <input type="hidden" name="ParteID" id="pParteID" />
+                <div class="lg-form-grid">
+                    <div class="lg-field"><label>Cantidad *</label><input class="lg-input" type="number" min="1" name="Cantidad" id="pCantidad" required /></div>
+                    <div class="lg-field"><label>Fecha carga *</label><input class="lg-input" type="date" name="FechaProgramadaCarga" id="pFecha" required /></div>
+                    <div class="lg-field"><label>Hora</label><input class="lg-input" type="time" name="HoraProgramadaCarga" id="pHora" step="60" /></div>
+                    <div class="lg-field full"><label>Observaciones</label><textarea class="lg-input" style="height:65px;padding-top:7px" name="Observaciones" maxlength="500"></textarea></div>
+                </div>
+            </div>
+            <div class="lg-modal-foot">
+                <button class="lg-btn" type="button" data-close="modalProgramar">Cancelar</button>
+                <button class="lg-btn lg-btn-primary" type="submit">Guardar programación</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="lg-modal-backdrop" id="modalFlujo">
+    <div class="lg-modal lg-flow-modal">
+        <div class="lg-modal-head">
+            <div>
+                <h2 id="flowTitulo">Flujo operativo del embarque</h2>
+                <p id="flowSub">Cargando información...</p>
+            </div>
+            <button class="lg-close" type="button" data-close="modalFlujo">✕</button>
+        </div>
+        <div class="lg-modal-body">
+            <div id="flowLoading" style="text-align:center;padding:42px;color:var(--lg-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Cargando flujo operativo...</div>
+            <div id="flowBody" style="display:none">
+                <div class="lg-flow-summary">
+                    <div class="lg-detail"><span>Cliente</span><strong id="fCliente">—</strong></div>
+                    <div class="lg-detail"><span>Estatus</span><strong id="fEstatus">—</strong></div>
+                    <div class="lg-detail"><span>Carga programada</span><strong id="fCarga">—</strong></div>
+                    <div class="lg-detail"><span>Piezas</span><strong id="fPiezas">—</strong></div>
+                    <div class="lg-detail"><span>Preparadas</span><strong id="fPreparadas">—</strong></div>
+                </div>
+
+                <div class="lg-timeline" id="flowTimeline"></div>
+
+                <div class="lg-flow-layout">
+                    <aside class="lg-flow-side">
+                        <h3>ETAPAS DEL EMBARQUE</h3>
+                        <div id="flowSide"></div>
+                    </aside>
+
+                    <section class="lg-flow-main">
+                        <div class="lg-stage" data-stage="programacion">
+                            <div class="lg-stage-head">
+                                <div><h3>1. Programación</h3><p>Fecha, hora y cantidad que ya forman parte del embarque.</p></div>
+                                <span class="lg-stage-badge" id="badgeProgramacion">Pendiente</span>
+                            </div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Fecha carga</span><strong id="fpFecha">—</strong></div>
+                                <div class="lg-detail"><span>Hora carga</span><strong id="fpHora">—</strong></div>
+                                <div class="lg-detail"><span>Total piezas</span><strong id="fpPiezas">—</strong></div>
+                                <div class="lg-detail"><span>Entrega requerida</span><strong id="fpEntrega">—</strong></div>
+                            </div>
+                            <div class="lg-helpbox"><strong>Este paso es informativo.</strong> Si necesitas cambiar fecha u hora, puedes cerrar el modal y arrastrar el embarque en el calendario.</div>
+                            <div class="lg-flow-actions"><button class="lg-btn lg-btn-primary" type="button" data-next-stage="salida">Continuar</button></div>
+                        </div>
+
+                        <div class="lg-stage" data-stage="salida">
+                            <div class="lg-stage-head">
+                                <div><h3>2. Forma de salida</h3><p>Puedes guardar lo que lleves y continuar después sin avanzar de etapa.</p></div>
+                                <span class="lg-stage-badge" id="badgeSalida">Pendiente</span>
+                            </div>
+                            <form id="formSalida">
+                                <input type="hidden" name="EmbarqueID" id="fsEmbarqueID" />
+                                <input type="hidden" name="RowVersion" id="fsRowVersion" />
+                                <div class="lg-subsection">
+                                    <h4>TIPO DE OPERACIÓN</h4>
+                                    <div class="lg-radio-row">
+                                        <label class="lg-radio-card"><input type="radio" name="TipoOperacion" value="Nacional" /><strong>Nacional</strong><small>Entrega dentro de México.</small></label>
+                                        <label class="lg-radio-card"><input type="radio" name="TipoOperacion" value="Exportacion" /><strong>Exportación</strong><small>Operación de exportación.</small></label>
+                                    </div>
+                                </div>
+                                <div class="lg-subsection" id="bloqueAduana" style="display:none">
+                                    <h4>ADUANA</h4>
+                                    <div class="lg-radio-row">
+                                        <label class="lg-radio-card"><input type="radio" name="PasaAduana" value="true" /><strong>Sí pasa por aduana</strong></label>
+                                        <label class="lg-radio-card"><input type="radio" name="PasaAduana" value="false" /><strong>No pasa por aduana</strong></label>
+                                    </div>
+                                </div>
+                                <div class="lg-subsection">
+                                    <h4>FORMA DE SALIDA</h4>
+                                    <div class="lg-radio-row">
+                                        <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Interno" /><strong><i class="fa-solid fa-truck"></i> Entrega NS</strong><small>Ruta, unidad y chofer interno.</small></label>
+                                        <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Cliente" /><strong><i class="fa-solid fa-user-check"></i> Cliente recoge</strong><small>Persona o transportista que recoge.</small></label>
+                                        <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Paqueteria" /><strong><i class="fa-solid fa-box"></i> Paquetería</strong><small>Compañía y modalidad de envío.</small></label>
+                                    </div>
+                                </div>
+                                <div class="lg-subsection" id="salidaInterna" style="display:none">
+                                    <h4>ENTREGA NS</h4>
+                                    <div class="lg-form-grid">
+                                        <div class="lg-field"><label>Ruta</label><select class="lg-select" name="RutaID" id="fsRuta"><option value="">Selecciona...</option></select></div>
+                                        <div class="lg-field"><label>Unidad</label><select class="lg-select" name="UnidadID" id="fsUnidad"><option value="">Selecciona...</option></select></div>
+                                        <div class="lg-field full"><label>Chofer</label><select class="lg-select" name="ChoferUsuarioID" id="fsChofer"><option value="">Selecciona...</option></select></div>
+                                    </div>
+                                </div>
+                                <div class="lg-subsection" id="salidaCliente" style="display:none">
+                                    <h4>CLIENTE RECOGE</h4>
+                                    <div class="lg-form-grid">
+                                        <div class="lg-field full"><label>Persona / transportista que recoge</label><input class="lg-input" name="ChoferExterno" id="fsChoferExterno" maxlength="200" /></div>
+                                        <div class="lg-field"><label>Unidad / vehículo</label><input class="lg-input" name="UnidadExterna" id="fsUnidadExterna" maxlength="100" /></div>
+                                        <div class="lg-field"><label>Placas</label><input class="lg-input" name="PlacasExternas" id="fsPlacasExternas" maxlength="100" /></div>
+                                    </div>
+                                </div>
+                                <div class="lg-subsection" id="salidaPaqueteria" style="display:none">
+                                    <h4>PAQUETERÍA</h4>
+                                    <div class="lg-form-grid">
+                                        <div class="lg-field">
+                                            <label>Modalidad</label>
+                                            <select class="lg-select" name="ModalidadEnvio" id="fsModalidad">
+                                                <option value="">Selecciona...</option>
+                                                <option value="Terrestre">Terrestre</option>
+                                                <option value="Aereo">Aéreo</option>
+                                                <option value="Maritimo">Marítimo</option>
+                                            </select>
+                                        </div>
+                                        <div class="lg-field"><label>Compañía / paquetería</label><input class="lg-input" name="Transportista" id="fsTransportista" maxlength="200" /></div>
+                                        <div class="lg-field full"><label>Guía / referencia</label><input class="lg-input" name="GuiaReferencia" id="fsGuia" maxlength="150" /></div>
+                                        <div class="lg-field full"><label>Chofer / persona que recoge <small>(opcional)</small></label><input class="lg-input" id="fsChoferExternoPaq" maxlength="200" /></div>
+                                        <div class="lg-field"><label>Unidad externa <small>(opcional)</small></label><input class="lg-input" id="fsUnidadExternaPaq" maxlength="100" /></div>
+                                        <div class="lg-field"><label>Placas <small>(opcional)</small></label><input class="lg-input" id="fsPlacasExternasPaq" maxlength="100" /></div>
+                                    </div>
+                                </div>
+                                <div class="lg-flow-actions">
+                                    <button class="lg-btn" type="button" id="btnGuardarSalir"><i class="fa-regular fa-floppy-disk"></i> Guardar y cerrar</button>
+                                    <button class="lg-btn lg-btn-primary" type="button" id="btnGuardarContinuar"><i class="fa-solid fa-arrow-right"></i> Guardar y continuar</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="lg-stage" data-stage="preparacion">
+                            <div class="lg-stage-head">
+                                <div><h3>3. Preparación PT</h3><p>Asignación y preparación de cajas del embarque.</p></div>
+                                <span class="lg-stage-badge" id="badgePreparacion">Pendiente</span>
+                            </div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Total piezas</span><strong id="frTotal">—</strong></div>
+                                <div class="lg-detail"><span>Preparadas</span><strong id="frPreparadas">—</strong></div>
+                                <div class="lg-detail"><span>Cajas</span><strong id="frCajas">—</strong></div>
+                                <div class="lg-detail"><span>Avance</span><strong id="frAvance">—</strong></div>
+                            </div>
+                            <div class="lg-progress"><span id="frBar" style="width:0%"></span></div>
+                            <div class="lg-disabled-note" style="margin-top:10px"><i class="fa-solid fa-boxes-stacked"></i><br />La captura de cajas desde este modal se conectará en la siguiente etapa. Mientras tanto, la información se mantiene sincronizada con la vista actual de Embarques.</div>
+                            <div class="lg-flow-actions"><a class="lg-btn" id="btnPreparacionVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir vista actual</a><button class="lg-btn lg-btn-primary" type="button" data-next-stage="carga">Ver siguiente etapa</button></div>
+                        </div>
+
+                        <div class="lg-stage" data-stage="carga">
+                            <div class="lg-stage-head"><div><h3>4. Carga física</h3><p>Confirmación de las cajas cargadas y evidencia de carga.</p></div><span class="lg-stage-badge" id="badgeCarga">Pendiente</span></div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Cajas asignadas</span><strong id="fcCajas">—</strong></div>
+                                <div class="lg-detail"><span>Cajas cargadas</span><strong id="fcCargadas">—</strong></div>
+                                <div class="lg-detail"><span>Evidencias</span><strong id="fcEvidencias">—</strong></div>
+                                <div class="lg-detail"><span>Estatus</span><strong id="fcEstatus">—</strong></div>
+                            </div>
+                            <div class="lg-disabled-note"><i class="fa-solid fa-dolly"></i><br />Aquí conectaremos la confirmación de carga y la evidencia sin salir del calendario.</div>
+                        </div>
+
+                        <div class="lg-stage" data-stage="documentos">
+                            <div class="lg-stage-head"><div><h3>5. Documentación</h3><p>Documentos obligatorios definidos por la forma de salida.</p></div><span class="lg-stage-badge" id="badgeDocumentos">Pendiente</span></div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Faltantes</span><strong id="fdFaltantes">—</strong></div>
+                                <div class="lg-detail"><span>Forma salida</span><strong id="fdForma">—</strong></div>
+                                <div class="lg-detail"><span>Tipo operación</span><strong id="fdTipo">—</strong></div>
+                                <div class="lg-detail"><span>Evidencias</span><strong id="fdEvidencias">—</strong></div>
+                            </div>
+                            <div class="lg-disabled-note"><i class="fa-solid fa-file-circle-check"></i><br />La carga y validación de documentos se conectará al mismo modal respetando las reglas actuales de Factura/Remisión, Guía, Packing List, Carta Porte y exportación.</div>
+                        </div>
+
+                        <div class="lg-stage" data-stage="salidaPlanta">
+                            <div class="lg-stage-head"><div><h3>6. Salida de planta</h3><p>Confirmación de salida una vez preparada la carga y documentación.</p></div><span class="lg-stage-badge" id="badgeSalidaPlanta">Pendiente</span></div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Incidencias abiertas</span><strong id="fspInc">—</strong></div>
+                                <div class="lg-detail"><span>Críticas</span><strong id="fspCrit">—</strong></div>
+                                <div class="lg-detail"><span>Despachadas</span><strong id="fspDesp">—</strong></div>
+                                <div class="lg-detail"><span>Estatus</span><strong id="fspEst">—</strong></div>
+                            </div>
+                            <div class="lg-disabled-note"><i class="fa-solid fa-truck-fast"></i><br />La salida se conectará aquí con las mismas validaciones que hoy usa Embarques.</div>
+                        </div>
+
+                        <div class="lg-stage" data-stage="entrega">
+                            <div class="lg-stage-head"><div><h3>7. Entrega</h3><p>Cierre del embarque con receptor y evidencia obligatoria.</p></div><span class="lg-stage-badge" id="badgeEntrega">Pendiente</span></div>
+                            <div class="lg-helpbox"><strong>Esta etapa ya está conectada.</strong> Cuando el embarque esté En ruta podrás confirmar la entrega y adjuntar la evidencia desde aquí.</div>
+                            <div class="lg-flow-actions"><button class="lg-btn lg-btn-success" type="button" id="btnEntregaFlow" style="display:none"><i class="fa-solid fa-circle-check"></i> Confirmar entrega</button></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+        <div class="lg-modal-foot">
+            <button class="lg-btn" type="button" data-close="modalFlujo">Cerrar</button>
+            <a class="lg-btn" id="btnVistaCompletaFlow" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Vista completa</a>
+        </div>
+    </div>
+</div>
+
+
+<div class="lg-modal-backdrop" id="modalViaje">
+    <div class="lg-modal lg-modal-sm">
+        <div class="lg-modal-head">
+            <div><h2 id="viajeTitulo">Viaje</h2><p id="viajeSub">Resumen operativo de la unidad</p></div>
+            <button class="lg-close" type="button" data-close="modalViaje">✕</button>
+        </div>
+        <div class="lg-modal-body">
+            <div class="lg-trip-modal-summary">
+                <div class="lg-detail"><span>Unidad</span><strong id="vUnidad">—</strong></div>
+                <div class="lg-detail"><span>Estatus</span><strong id="vEstatus">—</strong></div>
+                <div class="lg-detail"><span>Chofer</span><strong id="vChofer">—</strong></div>
+                <div class="lg-detail"><span>Cliente / destino</span><strong id="vCliente">—</strong></div>
+                <div class="lg-detail"><span>Salida</span><strong id="vSalida">—</strong></div>
+                <div class="lg-detail"><span>Regreso</span><strong id="vRegreso">—</strong></div>
+                <div class="lg-detail"><span>KM inicial</span><strong id="vKmIni">—</strong></div>
+                <div class="lg-detail"><span>KM final</span><strong id="vKmFin">—</strong></div>
+                <div class="lg-detail"><span>KM recorridos</span><strong id="vKmRec">—</strong></div>
+                <div class="lg-detail"><span>Embarques</span><strong id="vEmbarques">—</strong></div>
+                <div class="lg-detail"><span>Piezas</span><strong id="vPiezas">—</strong></div>
+                <div class="lg-detail"><span>Incidencias</span><strong id="vIncidencias">—</strong></div>
+            </div>
+            <div class="lg-subsection">
+                <h4>RECORRIDO</h4>
+                <div class="lg-detail-grid">
+                    <div class="lg-detail"><span>Ruta</span><strong id="vRuta">—</strong></div>
+                    <div class="lg-detail"><span>Origen</span><strong id="vOrigen">—</strong></div>
+                    <div class="lg-detail"><span>Destino</span><strong id="vDestino">—</strong></div>
+                    <div class="lg-detail"><span>Placas</span><strong id="vPlacas">—</strong></div>
+                </div>
+            </div>
+            <div class="lg-subsection">
+                <h4>EVIDENCIAS DEL VIAJE</h4>
+                <div class="lg-detail-grid">
+                    <div class="lg-detail"><span>Salida</span><strong id="vEvSalida">0</strong></div>
+                    <div class="lg-detail"><span>Trayecto</span><strong id="vEvTrayecto">0</strong></div>
+                    <div class="lg-detail"><span>Regreso</span><strong id="vEvRegreso">0</strong></div>
+                    <div class="lg-detail"><span>Incidencia</span><strong id="vEvIncidencia">0</strong></div>
+                </div>
+            </div>
+            <div class="lg-helpbox"><strong>Siguiente integración:</strong> desde este mismo modal agregaremos inicio de viaje con KM inicial y fotos, evidencias durante el trayecto y regreso con KM final y fotos.</div>
+        </div>
+        <div class="lg-modal-foot"><button class="lg-btn" type="button" data-close="modalViaje">Cerrar</button></div>
+    </div>
+</div>
+
+<div class="lg-modal-backdrop" id="modalCerrar">
+    <div class="lg-modal lg-modal-sm">
+        <div class="lg-modal-head">
+            <div><h2>Confirmar entrega</h2><p>La evidencia es obligatoria para cerrar.</p></div>
+            <button class="lg-close" type="button" data-close="modalCerrar">✕</button>
+        </div>
+        <form id="formCerrar" enctype="multipart/form-data">
+            <div class="lg-modal-body">
+                <input type="hidden" name="EmbarqueID" id="cEmbarqueID" />
+                <input type="hidden" name="RowVersion" id="cRowVersion" />
+                <div class="lg-form-grid">
+                    <div class="lg-field"><label>Receptor *</label><input class="lg-input" name="ReceptorNombre" required maxlength="200" /></div>
+                    <div class="lg-field"><label>Fecha entrega *</label><input class="lg-input" type="datetime-local" name="FechaEntrega" id="cFecha" required /></div>
+                    <div class="lg-field"><label>Remisión</label><input class="lg-input" name="FolioRemision" maxlength="100" /></div>
+                    <div class="lg-field"><label>Observación evidencia</label><input class="lg-input" name="ObservacionesEvidencia" maxlength="500" /></div>
+                    <div class="lg-field full"><label>Observaciones</label><textarea class="lg-input" style="height:65px;padding-top:7px" name="Observaciones" maxlength="1200"></textarea></div>
+                    <div class="lg-field full"><label>Evidencia *</label><label class="lg-file"><strong><i class="fa-solid fa-cloud-arrow-up"></i> Adjuntar evidencia</strong><small>JPG, JPEG, PNG o PDF · Máx. 10 MB</small><input style="margin-top:8px;font-size:8px" type="file" name="Evidencia" accept=".jpg,.jpeg,.png,.pdf" required /></label></div>
+                </div>
+            </div>
+            <div class="lg-modal-foot"><button class="lg-btn" type="button" data-close="modalCerrar">Cancelar</button><button class="lg-btn lg-btn-success" type="submit">Confirmar entrega</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="lg-toast-wrap" id="toastWrap"></div>
+
+<script>
+    (() => {
+        const token=document.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+        const urlProgramar='@Url.Action("ProgramarRelease", "LogisticaOperacion")';
+        const urlProgramarSeleccionados='@Url.Action("ProgramarReleasesSeleccionados", "LogisticaOperacion")';
+        const urlMoverProg='@Url.Action("MoverProgramacion", "LogisticaOperacion")';
+        const urlMoverEmb='@Url.Action("ReprogramarDragDrop", "LogisticaOperacion")';
+        const urlFlujo='@Url.Action("ObtenerFlujo", "LogisticaOperacion")';
+        const urlGuardarSalida='@Url.Action("GuardarBorradorSalida", "LogisticaOperacion")';
+        const urlConfirmarSalida='@Url.Action("ConfirmarSalidaConfigurada", "LogisticaOperacion")';
+        const urlCerrar='@Url.Action("CerrarConEvidencia", "LogisticaOperacion")';
+        const urlDetalleEmb='@Url.Action("Detalle", "LogisticaEmbarques")';
+        const horaInicio=0;
+        const horaFin=1440;
+        let dragCard=null,flujoActual=null;
+
+        document.querySelectorAll('.lg-modal-backdrop').forEach(modal=>{
+            if(modal.parentElement!==document.body)document.body.appendChild(modal);
+        });
+
+        function toast(msg,tipo='ok'){const w=document.getElementById('toastWrap');const n=document.createElement('div');n.className=`lg-toast ${tipo}`;n.textContent=msg;w.appendChild(n);setTimeout(()=>n.remove(),4200)}
+        function openModal(id){document.getElementById(id)?.classList.add('show');document.body.style.overflow='hidden'}
+        function closeModal(id){document.getElementById(id)?.classList.remove('show');if(!document.querySelector('.lg-modal-backdrop.show'))document.body.style.overflow=''}
+        document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.close)));
+        document.querySelectorAll('.lg-modal-backdrop').forEach(m=>m.addEventListener('mousedown',e=>{if(e.target===m)closeModal(m.id)}));
+        function minutesFromDrop(cell,x){const r=cell.getBoundingClientRect();const pos=Math.max(0,Math.min(r.width,x-r.left));let min=horaInicio+(pos/Math.max(1,r.width))*(horaFin-horaInicio);min=Math.round(min/5)*5;return Math.max(horaInicio,Math.min(horaFin-5,min))}
+        function horaDesdeMinutos(min){const h=Math.floor(min/60);const m=min%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`}
+        function limpiarIndicadorDrop(){document.querySelectorAll('.lg-drop-time-indicator').forEach(x=>x.remove())}
+        function mostrarIndicadorDrop(cell,e){limpiarIndicadorDrop();const minutos=minutesFromDrop(cell,e.clientX);const r=cell.getBoundingClientRect();const pct=Math.max(0,Math.min(100,((minutos-horaInicio)/(horaFin-horaInicio))*100));const d=document.createElement('div');d.className='lg-drop-time-indicator';d.style.left=`${pct}%`;d.innerHTML=`<span>${horaDesdeMinutos(minutos)}</span>`;cell.appendChild(d);return minutos}
+        function hhmm(min){return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`}
+        function esc(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;")}
+        function number(v){return Number(v||0).toLocaleString('es-MX')}
+        function formaTexto(v){if(v==='Interno')return'Entrega NS';if(v==='Cliente')return'Cliente recoge';if(v==='Paqueteria')return'Paquetería';return'Por definir'}
+        function tipoTexto(v){return v==='Exportacion'?'Exportación':v==='Nacional'?'Nacional':'Por definir'}
+
+
+        let dayCellActual=null;
+
+        function dayEvents(cell){
+            return [...cell.querySelectorAll('.lg-day-event-data')].map(x=>({...x.dataset}));
+        }
+
+        function setDayTab(tab){
+            document.querySelectorAll('.lg-day-tab').forEach(x=>x.classList.toggle('active',x.dataset.dayTab===tab));
+            document.querySelectorAll('.lg-day-list').forEach(x=>x.classList.toggle('active',x.dataset.dayList===tab));
+            document.getElementById('bulkProgramBar').style.display=tab==='requerimientos'?'grid':'none';
+        }
+
+        function renderClienteDia(cell,tab='requerimientos'){
+            dayCellActual=cell;
+            const events=dayEvents(cell);
+            const req=events.filter(x=>x.tipo==='requerimiento');
+            const prog=events.filter(x=>x.tipo==='programacion');
+            const emb=events.filter(x=>x.tipo==='embarque');
+            const cliente=req[0]?.cliente||prog[0]?.cliente||emb[0]?.cliente||`Cliente ${cell.dataset.clienteId}`;
+            const fecha=cell.dataset.fecha||'';
+            document.getElementById('dayTitulo').textContent=cliente;
+            document.getElementById('daySub').textContent=`Operación del ${fecha} · selecciona los releases que quieras programar.`;
+            document.getElementById('bulkFecha').value=fecha;
+            document.getElementById('bulkHora').value='';
+            document.getElementById('cntReq').textContent=req.length;
+            document.getElementById('cntProg').textContent=prog.length;
+            document.getElementById('cntEmb').textContent=emb.length;
+            document.getElementById('selectedReq').textContent='0';
+            document.getElementById('checkAllReq').checked=false;
+
+            const rb=document.getElementById('dayReqBody');rb.innerHTML='';
+            if(!req.length)rb.innerHTML='<tr><td colspan="6" style="color:var(--lg-muted)">No hay Releases pendientes para este día.</td></tr>';
+            req.forEach(x=>{
+                const tr=document.createElement('tr');
+                tr.innerHTML=`<td><input type="checkbox" class="req-check" data-release-id="${esc(x.releaseId)}" data-cliente-id="${esc(x.clienteId)}" data-parte-id="${esc(x.parteId)}" data-cantidad="${esc(x.cantidad)}"></td>
+                <td><div class="lg-row-title">${esc(x.folioRelease||x.folio)}</div><div class="lg-row-sub">${esc(x.numeroParte||'Sin parte')} ${x.descripcion?`· ${esc(x.descripcion)}`:''}</div></td>
+                <td>${esc(x.fechaRequerida||'—')}</td>
+                <td><strong>${number(x.cantidad)} PZA</strong></td>
+                <td>${x.expeditado==='true'?`<span class="lg-mini-status red">${esc(x.atraso||'EXPEDITADO')}</span>`:'<span class="lg-mini-status">Requerido</span>'}</td>
+                <td><button type="button" class="lg-btn btn-program-one" data-release-id="${esc(x.releaseId)}" data-cliente-id="${esc(x.clienteId)}" data-parte-id="${esc(x.parteId)}" data-cantidad="${esc(x.cantidad)}" data-folio="${esc(x.folioRelease||x.folio)}">Programar</button></td>`;
+                rb.appendChild(tr);
+            });
+
+            const pb=document.getElementById('dayProgBody');pb.innerHTML='';
+            if(!prog.length)pb.innerHTML='<tr><td colspan="5" style="color:var(--lg-muted)">No hay programaciones pendientes de generar.</td></tr>';
+            prog.forEach(x=>{
+                const tr=document.createElement('tr');
+                tr.innerHTML=`<td><div class="lg-row-title">${esc(x.folio||`PROG-${x.programacionId}`)}</div></td>
+                <td><div class="lg-row-title">${esc(x.folioRelease||'—')}</div><div class="lg-row-sub">${esc(x.numeroParte||'Sin parte')}</div></td>
+                <td>${esc(x.fechaProgramada||'—')} ${x.hora?esc(x.hora):'<span class="lg-mini-status red">Sin hora</span>'}</td>
+                <td><strong>${number(x.cantidad)} PZA</strong></td>
+                <td><span class="lg-mini-status amber">${esc(x.estatus||'Por generar')}</span></td>
+                <td><button type="button" class="lg-btn btn-set-hour" data-tipo="programacion" data-id="${esc(x.programacionId)}" data-fecha="${esc(x.fechaProgramada||'')}" data-hora="${esc(x.hora||'')}">${x.hora?'Cambiar fecha/hora':'Asignar hora'}</button></td>`;
+                pb.appendChild(tr);
+            });
+
+            const eb=document.getElementById('dayEmbBody');eb.innerHTML='';
+            if(!emb.length)eb.innerHTML='<tr><td colspan="6" style="color:var(--lg-muted)">No hay embarques para este día.</td></tr>';
+            emb.forEach(x=>{
+                const tr=document.createElement('tr');
+                tr.innerHTML=`<td><div class="lg-row-title">${esc(x.folio||`Embarque ${x.embarqueId}`)}</div></td>
+                <td><div class="lg-row-title">${esc(x.numeroParte||'—')}</div><div class="lg-row-sub">${esc(x.cliente||'')}</div></td>
+                <td>${esc(x.fechaProgramada||'—')} ${esc(x.hora||'')}</td>
+                <td><strong>${number(x.cantidad)} PZA</strong></td>
+                <td><span class="lg-mini-status blue">${esc(x.estatus||'')}</span></td>
+                <td><div style="display:flex;gap:4px;flex-wrap:wrap"><button type="button" class="lg-btn btn-open-flow" data-embarque-id="${esc(x.embarqueId)}">Abrir flujo</button>${!x.hora?`<button type="button" class="lg-btn btn-set-hour" data-tipo="embarque" data-id="${esc(x.embarqueId)}" data-fecha="${esc(x.fechaProgramada||'')}" data-hora="" data-row-version="${esc(x.rowVersion||'')}">Asignar hora</button>`:''}</div></td>`;
+                eb.appendChild(tr);
+            });
+
+            rb.querySelectorAll('.req-check').forEach(x=>x.addEventListener('change',actualizarSeleccionReq));
+            rb.querySelectorAll('.btn-program-one').forEach(b=>b.addEventListener('click',()=>{
+                closeModal('modalClienteDia');
+                document.getElementById('pReleaseID').value=b.dataset.releaseId||'';
+                document.getElementById('pClienteID').value=b.dataset.clienteId||'';
+                document.getElementById('pParteID').value=b.dataset.parteId||'';
+                document.getElementById('pCantidad').value=b.dataset.cantidad||'';
+                document.getElementById('pFecha').value=fecha;
+                document.getElementById('pHora').value='';
+                document.getElementById('progSub').textContent=`${b.dataset.folio||'Release'} · ${number(b.dataset.cantidad)} PZA`;
+                openModal('modalProgramar');
+            }));
+            eb.querySelectorAll('.btn-open-flow').forEach(b=>b.addEventListener('click',()=>{closeModal('modalClienteDia');openFlujo(b.dataset.embarqueId)}));
+            [...pb.querySelectorAll('.btn-set-hour'),...eb.querySelectorAll('.btn-set-hour')].forEach(b=>b.addEventListener('click',()=>{
+                document.getElementById('ahTipo').value=b.dataset.tipo||'';
+                document.getElementById('ahID').value=b.dataset.id||'';
+                document.getElementById('ahFecha').value=b.dataset.fecha||fecha;
+                document.getElementById('ahHora').value=b.dataset.hora||'';
+                document.getElementById('ahRowVersion').value=b.dataset.rowVersion||'';
+                document.getElementById('ahObs').value='';
+                document.getElementById('horaTitulo').textContent=b.dataset.tipo==='embarque'?(b.dataset.hora?'Cambiar fecha/hora del embarque':'Asignar hora al embarque'):(b.dataset.hora?'Cambiar fecha/hora de la programación':'Asignar hora a la programación');
+                closeModal('modalClienteDia');
+                openModal('modalAsignarHora');
+            }));
+            setDayTab(tab);
+            openModal('modalClienteDia');
+        }
+
+        function actualizarSeleccionReq(){
+            const n=document.querySelectorAll('#dayReqBody .req-check:checked').length;
+            document.getElementById('selectedReq').textContent=n;
+            const all=document.querySelectorAll('#dayReqBody .req-check').length;
+            document.getElementById('checkAllReq').checked=all>0&&n===all;
+        }
+
+        document.addEventListener('click',e=>{
+            const flow=e.target.closest('[data-open-flow]');
+            if(flow){
+                e.preventDefault();
+                e.stopPropagation();
+                const embarqueId=flow.dataset.openFlow;
+                if(embarqueId)openFlujo(embarqueId);
+                return;
+            }
+            const btn=e.target.closest('[data-open-day]');
+            if(!btn)return;
+            const cell=btn.closest('.lg-client-day');
+            if(cell)renderClienteDia(cell,btn.dataset.openDay||'requerimientos');
+        });
+        document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('click',()=>setDayTab(btn.dataset.dayTab)));
+        document.getElementById('checkAllReq')?.addEventListener('change',e=>{
+            document.querySelectorAll('#dayReqBody .req-check').forEach(x=>x.checked=e.target.checked);
+            actualizarSeleccionReq();
+        });
+
+        document.getElementById('btnProgramarSeleccionados')?.addEventListener('click',async()=>{
+            const seleccion=[...document.querySelectorAll('#dayReqBody .req-check:checked')];
+            if(!seleccion.length){toast('Selecciona al menos un Release.','error');return}
+            const fecha=document.getElementById('bulkFecha').value;
+            const hora=document.getElementById('bulkHora').value;
+            if(!fecha){toast('Selecciona la fecha de carga.','error');return}
+            if(!hora){toast('Selecciona la hora de carga para colocar la programación en la línea de tiempo.','error');return}
+            const ids=[...new Set(seleccion.map(x=>Number(x.dataset.releaseId||0)).filter(x=>x>0))];
+            if(!ids.length){toast('No fue posible identificar los Releases seleccionados.','error');return}
+            const btn=document.getElementById('btnProgramarSeleccionados');
+            const textoOriginal=btn.innerHTML;
+            try{
+                btn.disabled=true;
+                btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Programando...';
+                const fd=new FormData();
+                fd.append('__RequestVerificationToken',token);
+                ids.forEach(id=>fd.append('releaseDetalleIds',String(id)));
+                fd.append('fechaProgramadaCarga',fecha);
+                fd.append('horaProgramadaCarga',hora);
+                const r=await fetch(urlProgramarSeleccionados,{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;
+                try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible programar los Releases seleccionados.');
+                closeModal('modalClienteDia');
+                toast(j.mensaje||`${ids.length} Release(s) programado(s) correctamente.`);
+                setTimeout(()=>location.reload(),650);
+            }catch(err){
+                toast(err.message||'Error al programar los Releases seleccionados.','error');
+            }finally{
+                btn.disabled=false;
+                btn.innerHTML=textoOriginal;
+            }
+        });
+
+
+
+        document.querySelectorAll('.lg-timed-event[draggable="true"]').forEach(card=>{
+            card.addEventListener('dragstart',e=>{
+                dragCard=card;
+                card.classList.add('dragging');
+                e.dataTransfer.effectAllowed='move';
+                e.dataTransfer.setData('text/plain',card.dataset.dragType||'operacion');
+            });
+            card.addEventListener('dragend',()=>{
+                card.classList.remove('dragging');
+                document.querySelectorAll('.lg-client-day.drag-over').forEach(x=>x.classList.remove('drag-over'));
+                limpiarIndicadorDrop();
+                setTimeout(()=>{dragCard=null},0);
+            });
+        });
+
+        document.querySelectorAll('.lg-client-day').forEach(cell=>{
+            cell.addEventListener('dragover',e=>{
+                if(!dragCard)return;
+                if(String(cell.dataset.clienteId)!==String(dragCard.dataset.clienteId))return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect='move';
+                cell.classList.add('drag-over');
+                mostrarIndicadorDrop(cell,e);
+            });
+            cell.addEventListener('dragleave',e=>{
+                if(!cell.contains(e.relatedTarget)){cell.classList.remove('drag-over');limpiarIndicadorDrop()}
+            });
+            cell.addEventListener('drop',async e=>{
+                if(!dragCard)return;
+                e.preventDefault();
+                cell.classList.remove('drag-over');
+                if(String(cell.dataset.clienteId)!==String(dragCard.dataset.clienteId)){toast('No puedes mover una operación a otro cliente.','error');return}
+                const fecha=cell.dataset.fecha;
+                const minutos=minutesFromDrop(cell,e.clientX);
+                const hora=horaDesdeMinutos(minutos);
+                limpiarIndicadorDrop();
+                const data=new URLSearchParams();
+                data.append('__RequestVerificationToken',token);
+                if(dragCard.dataset.dragType==='programacion'){
+                    data.append('ListaCargaProgramacionID',dragCard.dataset.programacionId||'');
+                    data.append('FechaProgramadaCarga',fecha);
+                    data.append('HoraProgramadaCarga',hora);
+                    await postMove(urlMoverProg,data,dragCard,cell,fecha,hora);
+                }else{
+                    data.append('EmbarqueID',dragCard.dataset.embarqueId||'');
+                    data.append('FechaCargaProgramada',fecha);
+                    data.append('HoraCargaProgramada',hora);
+                    data.append('RowVersion',dragCard.dataset.rowVersion||'');
+                    await postMove(urlMoverEmb,data,dragCard,cell,fecha,hora);
+                }
+            });
+        });
+
+        async function postMove(url,data,card,cell,fecha,hora){
+            try{
+                card.style.opacity='.45';card.style.pointerEvents='none';
+                const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},body:data.toString()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible mover la operación.');
+                if(j.rowVersion)card.dataset.rowVersion=j.rowVersion;
+                toast(j.mensaje||'Operación reprogramada.');
+                setTimeout(()=>location.reload(),450);
+            }catch(err){toast(err.message||'Error al reprogramar.','error')}
+            finally{card.style.opacity='';card.style.pointerEvents=''}
+        }
+
+        document.getElementById('formProgramar')?.addEventListener('submit',async e=>{
+            e.preventDefault();const fd=new FormData(e.currentTarget);fd.append('__RequestVerificationToken',token);
+            try{const r=await fetch(urlProgramar,{method:'POST',body:fd});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible programar.');closeModal('modalProgramar');toast(j.mensaje||'Programación guardada.');setTimeout(()=>location.reload(),650)}
+            catch(err){toast(err.message||'Error al programar.','error')}
+        });
+
+
+
+        document.querySelectorAll('.lg-unit-event').forEach(card=>{
+            card.addEventListener('click',()=>{
+                document.getElementById('viajeTitulo').textContent=card.dataset.folio||`Viaje ${card.dataset.viajeId||''}`;
+                document.getElementById('viajeSub').textContent=`${card.dataset.unidad||'Unidad'} · ${card.dataset.estatus||''}`;
+                document.getElementById('vUnidad').textContent=card.dataset.unidad||'—';
+                document.getElementById('vEstatus').textContent=card.dataset.estatus||'—';
+                document.getElementById('vChofer').textContent=card.dataset.operador||'Por definir';
+                document.getElementById('vCliente').textContent=card.dataset.cliente||card.dataset.destino||'—';
+                document.getElementById('vSalida').textContent=card.dataset.salida||'Pendiente';
+                document.getElementById('vRegreso').textContent=card.dataset.regreso||'Pendiente';
+                document.getElementById('vKmIni').textContent=card.dataset.kmSalida?`${number(card.dataset.kmSalida)} km`:'Pendiente';
+                document.getElementById('vKmFin').textContent=card.dataset.kmRegreso?`${number(card.dataset.kmRegreso)} km`:'Pendiente';
+                document.getElementById('vKmRec').textContent=card.dataset.kmRecorridos?`${number(card.dataset.kmRecorridos)} km`:'—';
+                document.getElementById('vEmbarques').textContent=number(card.dataset.embarques);
+                document.getElementById('vPiezas').textContent=`${number(card.dataset.piezas)} PZA`;
+                const inc=Number(card.dataset.incidencias||0),crit=Number(card.dataset.criticas||0);
+                document.getElementById('vIncidencias').textContent=crit>0?`${inc} abiertas · ${crit} críticas`:String(inc);
+                document.getElementById('vRuta').textContent=card.dataset.ruta||'—';
+                document.getElementById('vOrigen').textContent=card.dataset.origen||'—';
+                document.getElementById('vDestino').textContent=card.dataset.destino||'—';
+                document.getElementById('vPlacas').textContent=card.dataset.placas||'—';
+                document.getElementById('vEvSalida').textContent=number(card.dataset.evidSalida);
+                document.getElementById('vEvTrayecto').textContent=number(card.dataset.evidTrayecto);
+                document.getElementById('vEvRegreso').textContent=number(card.dataset.evidRegreso);
+                document.getElementById('vEvIncidencia').textContent=number(card.dataset.evidIncidencia);
+                openModal('modalViaje');
+            });
+        });
+
+        async function openFlujo(id){
+            if(!id)return;
+            openModal('modalFlujo');
+            document.getElementById('flowLoading').style.display='';
+            document.getElementById('flowBody').style.display='none';
+            try{
+                const r=await fetch(`${urlFlujo}?embarqueId=${encodeURIComponent(id)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||`Error HTTP ${r.status}.`);
+                flujoActual=j.flujo;
+                renderFlujo(flujoActual);
+                document.getElementById('flowLoading').style.display='none';
+                document.getElementById('flowBody').style.display='';
+            }catch(err){document.getElementById('flowLoading').innerHTML=`<div style="color:var(--lg-red)">${esc(err.message||'Error')}</div>`}
+        }
+
+        document.querySelectorAll('.lg-timed-event.emb[data-open-flow]').forEach(card=>{
+            card.addEventListener('click',e=>{
+                if(card.classList.contains('dragging'))return;
+                e.preventDefault();
+                e.stopPropagation();
+                openFlujo(card.dataset.openFlow);
+            });
+        });
+
+        function renderFlujo(f){
+            document.getElementById('flowTitulo').textContent=f.folio||`Embarque ${f.embarqueID}`;
+            document.getElementById('flowSub').textContent=`${f.cliente||''}${f.destino?` · ${f.destino}`:''}`;
+            document.getElementById('fCliente').textContent=f.cliente||'—';
+            document.getElementById('fEstatus').textContent=f.estatus||'—';
+            document.getElementById('fCarga').textContent=`${f.fechaCargaProgramada||'Sin fecha'} ${f.horaCargaProgramada||''}`.trim();
+            document.getElementById('fPiezas').textContent=`${number(f.totalPiezas)} PZA`;
+            document.getElementById('fPreparadas').textContent=`${number(f.totalPiezasPreparadas)} PZA`;
+            document.getElementById('btnVistaCompletaFlow').href=`${urlDetalleEmb}/${f.embarqueID}`;
+            document.getElementById('btnPreparacionVista').href=`${urlDetalleEmb}/${f.embarqueID}`;
+
+            renderTimeline(f.pasos||[]);
+            cargarSalidaForm(f);
+            document.getElementById('fpFecha').textContent=f.fechaCargaProgramada||'—';
+            document.getElementById('fpHora').textContent=f.horaCargaProgramada||'—';
+            document.getElementById('fpPiezas').textContent=`${number(f.totalPiezas)} PZA`;
+            document.getElementById('fpEntrega').textContent=f.fechaEntregaProgramada||'—';
+            document.getElementById('frTotal').textContent=`${number(f.totalPiezas)} PZA`;
+            document.getElementById('frPreparadas').textContent=`${number(f.totalPiezasPreparadas)} PZA`;
+            document.getElementById('frCajas').textContent=number(f.totalCajas);
+            const pct=f.totalPiezas>0?Math.min(100,Math.round((Number(f.totalPiezasPreparadas||0)*100)/Number(f.totalPiezas||1))):0;
+            document.getElementById('frAvance').textContent=`${pct}%`;document.getElementById('frBar').style.width=`${pct}%`;
+            document.getElementById('fcCajas').textContent=number(f.totalCajas);document.getElementById('fcCargadas').textContent=number(f.totalCajasCargadas);
+            document.getElementById('fcEvidencias').textContent=number(f.totalEvidencias);document.getElementById('fcEstatus').textContent=f.estatus||'—';
+            document.getElementById('fdFaltantes').textContent=number(f.documentosFaltantes);document.getElementById('fdForma').textContent=formaTexto(f.salida?.formaEnvio);
+            document.getElementById('fdTipo').textContent=tipoTexto(f.salida?.tipoOperacion);document.getElementById('fdEvidencias').textContent=number(f.totalEvidencias);
+            document.getElementById('fspInc').textContent=number(f.incidenciasAbiertas);document.getElementById('fspCrit').textContent=number(f.incidenciasCriticas);
+            document.getElementById('fspDesp').textContent=`${number(f.totalPiezasDespachadas)} PZA`;document.getElementById('fspEst').textContent=f.estatus||'—';
+            const btnEntrega=document.getElementById('btnEntregaFlow');btnEntrega.style.display=f.estatus==='En ruta'?'':'none';
+            const actual=(f.pasos||[]).find(x=>x.actual)||(f.pasos||[]).find(x=>x.disponible&&!x.completo)||(f.pasos||[])[0];
+            activateStage(actual?.clave||'programacion');
+            actualizarBadges(f.pasos||[]);
+        }
+
+        function renderTimeline(pasos){
+            const top=document.getElementById('flowTimeline'),side=document.getElementById('flowSide');top.innerHTML='';side.innerHTML='';
+            pasos.forEach(p=>{
+                const cls=p.completo?'complete':p.actual?'actual':!p.disponible?'blocked':'';
+                const d=document.createElement('div');d.className=`lg-step ${cls}`;d.innerHTML=`<div class="lg-step-dot"><i class="fa-solid ${esc(p.icono||'fa-circle')}"></i></div><div class="lg-step-title">${esc(p.numero)}. ${esc(p.titulo)}</div><div class="lg-step-state">${esc(p.estadoTexto)}</div>`;top.appendChild(d);
+                const s=document.createElement('div');s.className=`lg-flow-side-item ${p.completo?'complete':''} ${p.actual?'active':''} ${!p.disponible&&!p.completo?'blocked':''}`;s.dataset.stage=p.clave;s.innerHTML=`<strong>${esc(p.numero)}. ${esc(p.titulo)}</strong><span>${esc(p.descripcion)}</span>`;if(p.disponible||p.completo)s.addEventListener('click',()=>activateStage(p.clave));side.appendChild(s);
+            });
+        }
+
+        function actualizarBadges(pasos){
+            const map={programacion:'badgeProgramacion',salida:'badgeSalida',preparacion:'badgePreparacion',carga:'badgeCarga',documentos:'badgeDocumentos',salidaPlanta:'badgeSalidaPlanta',entrega:'badgeEntrega'};
+            pasos.forEach(p=>{const b=document.getElementById(map[p.clave]);if(!b)return;b.textContent=p.estadoTexto;b.className=`lg-stage-badge ${p.completo?'ok':p.actual?'current':''}`});
+        }
+
+        function activateStage(clave){
+            document.querySelectorAll('.lg-stage').forEach(x=>x.classList.toggle('active',x.dataset.stage===clave));
+            document.querySelectorAll('.lg-flow-side-item').forEach(x=>x.classList.toggle('active',x.dataset.stage===clave));
+        }
+        document.querySelectorAll('[data-next-stage]').forEach(b=>b.addEventListener('click',()=>activateStage(b.dataset.nextStage)));
+
+        function setRadio(name,value){
+            document.querySelectorAll(`#formSalida input[name="${name}"]`).forEach(x=>x.checked=String(x.value)===String(value??''));
+        }
+        function fillSelect(id,items,value){
+            const s=document.getElementById(id);s.innerHTML='<option value="">Selecciona...</option>';(items||[]).forEach(x=>{const o=document.createElement('option');o.value=x.id;o.textContent=x.texto;if(String(x.id)===String(value??''))o.selected=true;s.appendChild(o)});
+        }
+        function cargarSalidaForm(f){
+            const s=f.salida||{};
+            document.getElementById('fsEmbarqueID').value=f.embarqueID;
+            document.getElementById('fsRowVersion').value=s.rowVersion||f.rowVersion||'';
+            setRadio('TipoOperacion',s.tipoOperacion);setRadio('FormaEnvio',s.formaEnvio);
+            if(s.pasaAduana===true)setRadio('PasaAduana','true');else if(s.pasaAduana===false)setRadio('PasaAduana','false');else document.querySelectorAll('input[name="PasaAduana"]').forEach(x=>x.checked=false);
+            fillSelect('fsRuta',f.rutas,s.rutaID);fillSelect('fsUnidad',f.unidades,s.unidadID);fillSelect('fsChofer',f.choferes,s.choferUsuarioID);
+            document.getElementById('fsModalidad').value=s.modalidadEnvio||'';document.getElementById('fsTransportista').value=s.transportista||'';document.getElementById('fsGuia').value=s.guiaReferencia||'';
+            document.getElementById('fsChoferExterno').value=s.choferExterno||'';document.getElementById('fsUnidadExterna').value=s.unidadExterna||'';document.getElementById('fsPlacasExternas').value=s.placasExternas||'';
+            document.getElementById('fsChoferExternoPaq').value=s.choferExterno||'';document.getElementById('fsUnidadExternaPaq').value=s.unidadExterna||'';document.getElementById('fsPlacasExternasPaq').value=s.placasExternas||'';
+            syncSalidaVisibility();
+        }
+
+        function syncSalidaVisibility(){
+            const tipo=document.querySelector('input[name="TipoOperacion"]:checked')?.value||'';
+            const forma=document.querySelector('input[name="FormaEnvio"]:checked')?.value||'';
+            document.getElementById('bloqueAduana').style.display=tipo==='Exportacion'?'':'none';
+            document.getElementById('salidaInterna').style.display=forma==='Interno'?'':'none';
+            document.getElementById('salidaCliente').style.display=forma==='Cliente'?'':'none';
+            document.getElementById('salidaPaqueteria').style.display=forma==='Paqueteria'?'':'none';
+        }
+        document.querySelectorAll('input[name="TipoOperacion"],input[name="FormaEnvio"]').forEach(x=>x.addEventListener('change',syncSalidaVisibility));
+
+        function buildSalidaFormData(){
+            const fd=new FormData(document.getElementById('formSalida'));
+            fd.append('__RequestVerificationToken',token);
+            const forma=document.querySelector('input[name="FormaEnvio"]:checked')?.value||'';
+            if(forma==='Paqueteria'){
+                fd.set('ChoferExterno',document.getElementById('fsChoferExternoPaq').value||'');
+                fd.set('UnidadExterna',document.getElementById('fsUnidadExternaPaq').value||'');
+                fd.set('PlacasExternas',document.getElementById('fsPlacasExternasPaq').value||'');
+            }
+            return fd;
+        }
+
+        async function guardarSalida(confirmar){
+            const url=confirmar?urlConfirmarSalida:urlGuardarSalida;
+            const btn=confirmar?document.getElementById('btnGuardarContinuar'):document.getElementById('btnGuardarSalir');
+            try{
+                btn.disabled=true;
+                const r=await fetch(url,{method:'POST',body:buildSalidaFormData()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible guardar la forma de salida.');
+                document.getElementById('fsRowVersion').value=j.rowVersion||document.getElementById('fsRowVersion').value;
+                const card=document.querySelector(`.lg-event[data-embarque-id="${flujoActual?.embarqueID}"]`);if(card&&j.rowVersion)card.dataset.rowVersion=j.rowVersion;
+                toast(j.mensaje||'Información guardada.');
+                if(!confirmar){closeModal('modalFlujo');return}
+                await refrescarFlujoActual('preparacion');
+            }catch(err){toast(err.message||'Error al guardar.','error')}
+            finally{btn.disabled=false}
+        }
+        document.getElementById('btnGuardarSalir')?.addEventListener('click',()=>guardarSalida(false));
+        document.getElementById('btnGuardarContinuar')?.addEventListener('click',()=>guardarSalida(true));
+
+        async function refrescarFlujoActual(stage){
+            if(!flujoActual?.embarqueID)return;
+            try{
+                const r=await fetch(`${urlFlujo}?embarqueId=${encodeURIComponent(flujoActual.embarqueID)}`);const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible actualizar el flujo.');
+                flujoActual=j.flujo;renderFlujo(flujoActual);if(stage)activateStage(stage);
+            }catch(err){toast(err.message||'No fue posible actualizar el flujo.','error')}
+        }
+
+
+        document.getElementById('formAsignarHora')?.addEventListener('submit',async e=>{
+            e.preventDefault();
+            const tipo=document.getElementById('ahTipo').value;
+            const id=document.getElementById('ahID').value;
+            const fecha=document.getElementById('ahFecha').value;
+            const hora=document.getElementById('ahHora').value;
+            const obs=document.getElementById('ahObs').value;
+            if(!fecha||!hora){toast('Captura fecha y hora.','error');return}
+            const data=new URLSearchParams();
+            data.append('__RequestVerificationToken',token);
+            try{
+                let url;
+                if(tipo==='programacion'){
+                    url=urlMoverProg;
+                    data.append('ListaCargaProgramacionID',id);
+                    data.append('FechaProgramadaCarga',fecha);
+                    data.append('HoraProgramadaCarga',hora);
+                    if(obs)data.append('Observaciones',obs);
+                }else{
+                    url=urlMoverEmb;
+                    data.append('EmbarqueID',id);
+                    data.append('FechaCargaProgramada',fecha);
+                    data.append('HoraCargaProgramada',hora);
+                    data.append('RowVersion',document.getElementById('ahRowVersion').value||'');
+                    if(obs)data.append('Observaciones',obs);
+                }
+                const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},body:data.toString()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status}.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible guardar la hora.');
+                closeModal('modalAsignarHora');
+                toast(j.mensaje||'Hora guardada correctamente.');
+                setTimeout(()=>location.reload(),650);
+            }catch(err){toast(err.message||'Error al guardar la hora.','error')}
+        });
+
+        document.getElementById('btnEntregaFlow')?.addEventListener('click',()=>{
+            if(!flujoActual)return;
+            closeModal('modalFlujo');
+            document.getElementById('cEmbarqueID').value=flujoActual.embarqueID;
+            document.getElementById('cRowVersion').value=flujoActual.rowVersion||document.querySelector(`.lg-event[data-embarque-id="${flujoActual.embarqueID}"]`)?.dataset.rowVersion||'';
+            const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());document.getElementById('cFecha').value=now.toISOString().slice(0,16);
+            openModal('modalCerrar');
+        });
+
+        document.getElementById('formCerrar')?.addEventListener('submit',async e=>{
+            e.preventDefault();const fd=new FormData(e.currentTarget);fd.append('__RequestVerificationToken',token);
+            try{const r=await fetch(urlCerrar,{method:'POST',body:fd});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible cerrar.');closeModal('modalCerrar');toast(j.mensaje||'Entrega confirmada.');setTimeout(()=>location.reload(),650)}
+            catch(err){toast(err.message||'Error al cerrar.','error')}
+        });
+    })();
+</script>
