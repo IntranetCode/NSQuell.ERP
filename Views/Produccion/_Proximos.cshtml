@@ -119,32 +119,44 @@
         .ThenBy(x => x.ProgramaProduccionID)
         .ToList();
 
-    var atrasados = proximos
+    // NSQ_LHRH_INICIO_UNICO_V1
+    // Si los dos lados de una pareja estan en la bandeja, solo se muestra
+    // la tarjeta raiz. El boton crea las dos ejecuciones en una transaccion.
+    var idsProximos = proximos.Select(x => x.ProgramaProduccionID).ToHashSet();
+    var proximosVisibles = proximos
+        .Where(x =>
+            !x.EsParejaLhRh ||
+            !x.ProgramaParejaID.HasValue ||
+            !idsProximos.Contains(x.ProgramaParejaID.Value) ||
+            x.ProgramaProduccionID < x.ProgramaParejaID.Value)
+        .ToList();
+
+    var atrasados = proximosVisibles
         .Where(x => x.FechaInicioProgramada!.Value < DateTime.Now)
         .ToList();
 
-    var enVentana = proximos
+    var enVentana = proximosVisibles
         .Where(x => x.FechaInicioProgramada!.Value >= DateTime.Now)
         .ToList();
 
-    var maquinasConProximos = proximos
+    var maquinasConProximos = proximosVisibles
         .Where(x => x.MaquinaID.HasValue)
         .Select(x => x.MaquinaID!.Value)
         .Distinct()
         .Count();
 
-    var bloqueadosPorMaquina = proximos
+    var bloqueadosPorMaquina = proximosVisibles
         .Count(x =>
             x.MaquinaID.HasValue &&
             maquinasOcupadas.Contains(x.MaquinaID.Value));
 
-    var pendientesCambioMolde = proximos
+    var pendientesCambioMolde = proximosVisibles
         .Count(x => EstadoCambioMolde(x.ProgramaProduccionID) == "PENDIENTE");
 
-    var enCambioMolde = proximos
+    var enCambioMolde = proximosVisibles
         .Count(x => EstadoCambioMolde(x.ProgramaProduccionID) == "EN_PROCESO");
 
-    var disponiblesParaIniciar = proximos
+    var disponiblesParaIniciar = proximosVisibles
         .Count(x =>
             x.PuedeIniciar &&
             x.MaquinaID.HasValue &&
@@ -743,7 +755,7 @@
 
             <span class="prox-summary-pill">
                 <i class="bi bi-clock-history"></i>
-                <strong>@proximos.Count</strong>
+                <strong>@proximosVisibles.Count</strong>
                 visible(s)
             </span>
         </div>
@@ -793,7 +805,7 @@
         </div>
     </div>
 
-    @if (!proximos.Any())
+    @if (!proximosVisibles.Any())
     {
         <div class="prox-empty">
             <i class="bi bi-clock"></i>
@@ -806,7 +818,7 @@
     else
     {
         <div class="prox-list">
-            @foreach (var item in proximos)
+            @foreach (var item in proximosVisibles)
             {
                 var fechaInicio = item.FechaInicioProgramada!.Value;
 
@@ -883,6 +895,16 @@
                     <div class="prox-description">
                         @Txt(item.DescripcionParte)
                     </div>
+
+                    @if (item.EsParejaLhRh && item.ParejaLhRh != null)
+                    {
+                        <div class="mt-2">
+                            <span class="prox-summary-pill is-ready">
+                                <i class="bi bi-link-45deg"></i>
+                                LH/RH conjunto · Grupo @item.GrupoLhRh · @item.ParejaLhRh.OFParejaTexto · @item.ParejaLhRh.ParteParejaTexto
+                            </span>
+                        </div>
+                    }
 
                     <div class="mt-2 d-flex gap-2 flex-wrap">
                         <span class="prox-summary-pill">
@@ -1058,9 +1080,14 @@
                                         data-fin="@Fecha(item.FechaFinProgramada)"
                                         data-operador-id="@(item.OperadorSugeridoID?.ToString() ?? "")"
                                         data-operador-nombre="@Data(item.OperadorSugeridoNombre)"
-                                        data-turno="@Data(item.TurnoSugeridoNombre)">
+                                        data-turno="@Data(item.TurnoSugeridoNombre)"
+                                        data-lhrh="@(item.EsParejaLhRh ? "1" : "0")"
+                                        data-grupo-lhrh="@(item.GrupoLhRh?.ToString() ?? "")"
+                                        data-programa-pareja-id="@(item.ProgramaParejaID?.ToString() ?? "")"
+                                        data-of-pareja="@Data(item.ParejaLhRh?.OFParejaTexto)"
+                                        data-parte-pareja="@Data(item.ParejaLhRh?.ParteParejaTexto)">
                                     <i class="bi bi-play-fill me-1"></i>
-                                    Iniciar preparación
+                                    @(item.EsParejaLhRh ? "Iniciar preparacion LH/RH" : "Iniciar preparacion")
                                 </button>
                             </div>
                         }

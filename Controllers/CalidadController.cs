@@ -887,6 +887,16 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
                     cmd.Parameters.Add("@ChecklistArranqueID", SqlDbType.Int).Value = model.ChecklistArranqueID;
                     await cmd.ExecuteNonQueryAsync();
                 }
+
+                // NSQ_LHRH_INICIO_UNICO_V1
+                // Se comparte solamente el checklist fisico de liberacion de maquina.
+                // Los campos HCC/HIP/Ayuda Visual/Matriz siguen independientes por OF.
+                await SincronizarChecklistLhRhAuditorV1Async(
+                    model.ChecklistArranqueID,
+                    usuarioId.Value,
+                    cn,
+                    tx);
+
                 await tx.CommitAsync();
                 inspeccion.FechaInicioValidacionPrearranque ??= DateTime.Now;
                 MarcarModificacion(inspeccion, usuarioId);

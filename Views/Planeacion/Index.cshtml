@@ -1,4 +1,4 @@
-﻿@model List<ERP.NSQuell.Models.PlaneacionOFIndexVm>
+@model List<ERP.NSQuell.Models.PlaneacionOFIndexVm>
 @using System.Linq
 
 @functions {
@@ -146,9 +146,9 @@
 
     var success = TempData["Success"] as string;
     var error = TempData["Error"] as string;
-    // NSQ_OF_SOLO_PENDIENTES_GENERAR_V2
+    // NSQ_PLANEACION_EXTENSION_OF_V2
+    // La bandeja muestra programas sin OF + OF generadas que aun no han sido despachadas completamente.
     var lista = (Model ?? new List<ERP.NSQuell.Models.PlaneacionOFIndexVm>())
-        .Where(x => x.SolicitudProduccionID < 0)
         .ToList();
 
     var pendientesGenerarOF = lista.Count(x => x.SolicitudProduccionID < 0);
@@ -178,6 +178,79 @@
         .ThenBy(x => x.Key.Nombre)
         .ToList();
 }
+
+
+    <!-- NSQ_PLANEACION_EXTENSION_OF_V2 -->
+    <div class="modal fade" id="modalExtensionOF" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 rounded-4 shadow-lg">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title fw-bold">Extension de Orden de Fabricacion</h5>
+                        <div class="text-muted small">Actualiza la misma OF y propaga el cambio a Planeacion, Produccion, Calidad y Almacen.</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formExtensionOF">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" id="extSolicitudProduccionID" name="SolicitudProduccionID" />
+
+                        <div id="extError" class="alert alert-danger d-none"></div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3"><label class="form-label fw-semibold">OF</label><div id="extOF" class="form-control bg-light">-</div></div>
+                            <div class="col-md-3"><label class="form-label fw-semibold">Maquina</label><div id="extMaquina" class="form-control bg-light">-</div></div>
+                            <div class="col-md-3"><label class="form-label fw-semibold">Cliente</label><div id="extCliente" class="form-control bg-light">-</div></div>
+                            <div class="col-md-3"><label class="form-label fw-semibold">Parte</label><div id="extParte" class="form-control bg-light">-</div></div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4"><label class="form-label fw-semibold">Cantidad actual</label><div id="extCantidadActual" class="form-control bg-light">-</div></div>
+                            <div class="col-md-4"><label class="form-label fw-semibold">Horas actuales</label><div id="extHorasActuales" class="form-control bg-light">-</div></div>
+                            <div class="col-md-4"><label class="form-label fw-semibold">Fin programado</label><div id="extFinActual" class="form-control bg-light">-</div></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="extMotivo">Motivo de la extension</label>
+                            <select class="form-select" id="extMotivo" name="Motivo" required>
+                                <option value="">Selecciona...</option>
+                                <option value="CONTINUIDAD_MAQUINA">1. No detener maquina, continuar con la produccion</option>
+                                <option value="ADELANTO_RELEASE">2. Adelanto de piezas para el cliente / la OF tiene menos piezas de las requeridas</option>
+                            </select>
+                        </div>
+
+                        <div id="extBloqueComun" class="row g-3 d-none">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold" for="extCantidadAdicional">Piezas adicionales</label>
+                                <input type="number" min="1" step="1" class="form-control" id="extCantidadAdicional" name="CantidadAdicional" />
+                            </div>
+                            <div class="col-md-6" id="extHorasWrap">
+                                <label class="form-label fw-semibold" for="extHorasAdicionales">Horas adicionales</label>
+                                <input type="number" min="0.0001" step="0.0001" class="form-control" id="extHorasAdicionales" name="HorasAdicionales" />
+                                <div class="form-text">Para continuidad de maquina se capturan manualmente.</div>
+                            </div>
+                        </div>
+
+                        <div id="extReleaseWrap" class="mt-3 d-none">
+                            <label class="form-label fw-semibold" for="extReleaseOrigen">Fila/entrega Release de origen</label>
+                            <select class="form-select" id="extReleaseOrigen" name="ReleaseDetalleOrigenID"></select>
+                            <div class="form-text">Solo aparecen entregas compatibles del mismo Release/renglon con cantidad libre.</div>
+                            <div id="extReleaseInfo" class="alert alert-info mt-2 mb-0 d-none"></div>
+                        </div>
+
+                        <div id="extResumen" class="alert alert-secondary mt-3 d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-erp btn-erp-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="btnAplicarExtensionOF" class="btn-erp btn-erp-primary">
+                        <i class="fa-solid fa-check"></i> Aplicar extension
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 @section Scripts {
     <script>
@@ -315,6 +388,209 @@
                 pendingForm.submit();
             });
 
+
+            // NSQ_PLANEACION_EXTENSION_OF_V2
+            const extModalElement = document.getElementById('modalExtensionOF');
+            const extModal = extModalElement ? bootstrap.Modal.getOrCreateInstance(extModalElement) : null;
+            const extForm = document.getElementById('formExtensionOF');
+            const extMotivo = document.getElementById('extMotivo');
+            const extCantidad = document.getElementById('extCantidadAdicional');
+            const extHoras = document.getElementById('extHorasAdicionales');
+            const extHorasWrap = document.getElementById('extHorasWrap');
+            const extReleaseWrap = document.getElementById('extReleaseWrap');
+            const extReleaseOrigen = document.getElementById('extReleaseOrigen');
+            const extReleaseInfo = document.getElementById('extReleaseInfo');
+            const extBloqueComun = document.getElementById('extBloqueComun');
+            const extResumen = document.getElementById('extResumen');
+            const extError = document.getElementById('extError');
+            const extAplicar = document.getElementById('btnAplicarExtensionOF');
+            let extData = null;
+
+            const extFmtNumber = value => Number(value || 0).toLocaleString('es-MX', { maximumFractionDigits: 4 });
+            const extFmtDate = value => value ? new Date(value).toLocaleString('es-MX') : '-';
+            const extShowError = message => {
+                if (!extError) return;
+                extError.textContent = message || 'Ocurrio un error.';
+                extError.classList.remove('d-none');
+            };
+            const extClearError = () => extError?.classList.add('d-none');
+
+            const extOrigenId = o => o.releaseDetalleID ?? o.ReleaseDetalleID ?? '';
+            const extOrigenDisponible = o => o.cantidadTransferible ?? o.CantidadTransferible ?? o.disponibleLibre ?? o.DisponibleLibre ?? 0;
+            const extOrigenFecha = o => o.fechaRequerida ?? o.FechaRequerida ?? null;
+            const extOrigenParte = o => o.numeroParte ?? o.NumeroParte ?? o.referenciaSAP ?? o.ReferenciaSAP ?? '';
+
+            const extActualizarResumen = () => {
+                if (!extData || !extResumen) return;
+                const piezas = Number(extCantidad?.value || 0);
+                const motivo = extMotivo?.value || '';
+                if (piezas <= 0 || !motivo) {
+                    extResumen.classList.add('d-none');
+                    return;
+                }
+
+                let horasExtra = Number(extHoras?.value || 0);
+                if (motivo === 'ADELANTO_RELEASE') {
+                    const objetivo = Number(extData.objetivoHora || 0);
+                    horasExtra = objetivo > 0 ? piezas / objetivo : 0;
+                }
+
+                const nueva = Number(extData.cantidadActual || 0) + piezas;
+                const horasNuevas = Number(extData.horasActuales || 0) + horasExtra;
+                extResumen.innerHTML = `<strong>Resultado:</strong> ${extFmtNumber(extData.cantidadActual)} + ${extFmtNumber(piezas)} = <strong>${extFmtNumber(nueva)} piezas</strong>. Horas adicionales: <strong>${extFmtNumber(horasExtra)}</strong>. Horas totales estimadas: <strong>${extFmtNumber(horasNuevas)}</strong>.`;
+                extResumen.classList.remove('d-none');
+            };
+
+            const extConfigurarMotivo = () => {
+                const motivo = extMotivo?.value || '';
+                extBloqueComun?.classList.toggle('d-none', !motivo);
+                extClearError();
+
+                const esRelease = motivo === 'ADELANTO_RELEASE';
+                extReleaseWrap?.classList.toggle('d-none', !esRelease);
+                extHorasWrap?.classList.toggle('d-none', esRelease);
+
+                if (extHoras) {
+                    extHoras.required = motivo === 'CONTINUIDAD_MAQUINA';
+                    if (esRelease) extHoras.value = '';
+                }
+                if (extReleaseOrigen) extReleaseOrigen.required = esRelease;
+
+                if (esRelease && extData && !extData.tieneRelease) {
+                    extShowError('Esta OF no tiene una fila Release relacionada. No puede usar el motivo 2.');
+                }
+
+                extActualizarResumen();
+            };
+
+            extMotivo?.addEventListener('change', extConfigurarMotivo);
+            extCantidad?.addEventListener('input', extActualizarResumen);
+            extHoras?.addEventListener('input', extActualizarResumen);
+            extReleaseOrigen?.addEventListener('change', () => {
+                const selected = (extData?.origenes || []).find(o => String(extOrigenId(o)) === String(extReleaseOrigen.value));
+                if (selected && extReleaseInfo) {
+                    extReleaseInfo.textContent = `Disponible para transferir: ${extFmtNumber(extOrigenDisponible(selected))} piezas.`;
+                    extReleaseInfo.classList.remove('d-none');
+                    if (extCantidad) extCantidad.max = String(extOrigenDisponible(selected));
+                } else {
+                    extReleaseInfo?.classList.add('d-none');
+                    if (extCantidad) extCantidad.removeAttribute('max');
+                }
+                extActualizarResumen();
+            });
+
+            document.querySelectorAll('[data-extension-of]').forEach(button => {
+                button.addEventListener('click', async () => {
+                    extClearError();
+                    extData = null;
+                    extForm?.reset();
+                    extBloqueComun?.classList.add('d-none');
+                    extReleaseWrap?.classList.add('d-none');
+                    extResumen?.classList.add('d-none');
+                    extReleaseInfo?.classList.add('d-none');
+
+                    if (extAplicar) {
+                        extAplicar.disabled = true;
+                        extAplicar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cargando...';
+                    }
+
+                    extModal?.show();
+
+                    try {
+                        const solicitudId = button.dataset.solicitudId;
+                        const response = await fetch(`/PlaneacionPrograma/ObtenerExtensionOF?solicitudProduccionId=${encodeURIComponent(solicitudId)}`, {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        const data = await response.json();
+                        if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible cargar la OF.');
+                        extData = data;
+
+                        document.getElementById('extSolicitudProduccionID').value = data.solicitudProduccionId;
+                        document.getElementById('extOF').textContent = data.folio || button.dataset.folio || '-';
+                        document.getElementById('extMaquina').textContent = data.maquina || button.dataset.maquina || '-';
+                        document.getElementById('extCliente').textContent = data.cliente || button.dataset.cliente || '-';
+                        document.getElementById('extParte').textContent = data.parte || '-';
+                        document.getElementById('extCantidadActual').textContent = `${extFmtNumber(data.cantidadActual)} pzas`;
+                        document.getElementById('extHorasActuales').textContent = `${extFmtNumber(data.horasActuales)} h`;
+                        document.getElementById('extFinActual').textContent = extFmtDate(data.fechaFinProgramada);
+
+                        if (extReleaseOrigen) {
+                            extReleaseOrigen.innerHTML = '<option value="">Selecciona una entrega...</option>';
+                            (data.origenes || []).forEach(o => {
+                                const option = document.createElement('option');
+                                option.value = extOrigenId(o);
+                                const parte = extOrigenParte(o);
+                                const fecha = extOrigenFecha(o);
+                                const disponible = extOrigenDisponible(o);
+                                option.textContent = `Fila ${extOrigenId(o)}${parte ? ' | ' + parte : ''}${fecha ? ' | ' + extFmtDate(fecha) : ''} | Disponible: ${extFmtNumber(disponible)}`;
+                                extReleaseOrigen.appendChild(option);
+                            });
+                        }
+
+                        if (extAplicar) {
+                            extAplicar.disabled = false;
+                            extAplicar.innerHTML = '<i class="fa-solid fa-check"></i> Aplicar extension';
+                        }
+                    } catch (error) {
+                        extShowError(error.message || String(error));
+                        if (extAplicar) {
+                            extAplicar.disabled = true;
+                            extAplicar.innerHTML = '<i class="fa-solid fa-ban"></i> Extension bloqueada';
+                        }
+                    }
+                });
+            });
+
+            extAplicar?.addEventListener('click', async () => {
+                extClearError();
+                if (!extForm || !extData) return;
+                if (!extForm.reportValidity()) return;
+
+                const motivo = extMotivo?.value || '';
+                if (!motivo) {
+                    extShowError('Selecciona el motivo de la extension.');
+                    return;
+                }
+
+                const piezas = Number(extCantidad?.value || 0);
+                if (!Number.isInteger(piezas) || piezas <= 0) {
+                    extShowError('Captura una cantidad entera de piezas mayor a cero.');
+                    return;
+                }
+
+                if (motivo === 'ADELANTO_RELEASE') {
+                    const selected = (extData.origenes || []).find(o => String(extOrigenId(o)) === String(extReleaseOrigen?.value || ''));
+                    if (!selected) {
+                        extShowError('Selecciona una fila Release de origen.');
+                        return;
+                    }
+                    if (piezas > Number(extOrigenDisponible(selected) || 0)) {
+                        extShowError('La cantidad solicitada supera el pendiente libre de la fila Release seleccionada.');
+                        return;
+                    }
+                }
+
+                extAplicar.disabled = true;
+                extAplicar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Aplicando...';
+
+                try {
+                    const formData = new FormData(extForm);
+                    const response = await fetch('/PlaneacionPrograma/AplicarExtensionOF', {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.ok) throw new Error(result.mensaje || 'No fue posible aplicar la extension.');
+
+                    extModal?.hide();
+                    window.location.reload();
+                } catch (error) {
+                    extShowError(error.message || String(error));
+                    extAplicar.disabled = false;
+                    extAplicar.innerHTML = '<i class="fa-solid fa-check"></i> Aplicar extension';
+                }
+            });
             modalElement?.addEventListener('hidden.bs.modal', () => {
                 pendingForm = null;
 
@@ -340,14 +616,14 @@
         <section class="hero">
             <div class="hero-layout">
                 <div>
-                    <h1><i class="fa-solid fa-file-circle-plus me-2"></i>OF pendientes por generar</h1>
-                    <p>Programas de Planeacion que ya estan calendarizados y aun necesitan generar su Orden de Fabricacion.</p>
+                    <h1><i class="fa-solid fa-industry me-2"></i>Ordenes de fabricacion activas</h1>
+                    <p>Programas pendientes de generar y OF en proceso. Una OF pasa al historial solo al completar su despacho al cliente.</p>
                 </div>
 
                 <div class="hero-stats">
 
                     <div class="stat"><div class="stat-value">@pendientesGenerarOF.ToString("N0")</div><div class="stat-label">Pendientes de generar</div></div>
-
+                    <div class="stat"><div class="stat-value">@ofGeneradas.ToString("N0")</div><div class="stat-label">OF activas</div></div>
                     <div class="stat"><div class="stat-value">@vencidas.ToString("N0")</div><div class="stat-label">Entregas vencidas</div></div>
                 </div>
             </div>
@@ -428,8 +704,8 @@
         {
             <section class="empty-state">
                 <i class="fa-regular fa-folder-open"></i>
-                <h5 class="fw-bold">No hay OF pendientes por generar</h5>
-                <p class="mb-3">Todos los programas visibles ya tienen Orden de Fabricacion o todavia no existen programas listos.</p>
+                <h5 class="fw-bold">No hay OF activas en Planeacion</h5>
+                <p class="mb-3">No existen programas pendientes de generar ni OF pendientes de completar su despacho al cliente.</p>
                 <a asp-controller="PlaneacionPrograma"
                    asp-action="Index"
                    class="btn-erp btn-erp-primary">
@@ -699,12 +975,23 @@
                                                     }
                                                     else
                                                     {
-                                                        <a asp-controller="Planeacion"
-                                                           asp-action="Detalle"
-                                                           asp-route-id="@item.SolicitudProduccionID"
-                                                           class="btn-erp btn-erp-light row-action">
-                                                            <i class="fa-regular fa-eye"></i>Ver
-                                                        </a>
+                                                        <div class="d-flex gap-1 flex-wrap justify-content-end">
+                                                            <a asp-controller="Planeacion"
+                                                               asp-action="Detalle"
+                                                               asp-route-id="@item.SolicitudProduccionID"
+                                                               class="btn-erp btn-erp-light row-action">
+                                                                <i class="fa-regular fa-eye"></i>Ver
+                                                            </a>
+                                                            <button type="button"
+                                                                    class="btn-erp btn-erp-primary row-action"
+                                                                    data-extension-of
+                                                                    data-solicitud-id="@item.SolicitudProduccionID"
+                                                                    data-folio="@Texto(item.NumeroOFRecibida)"
+                                                                    data-cliente="@Texto(item.Cliente)"
+                                                                    data-maquina="@maquina.Key.Codigo">
+                                                                <i class="fa-solid fa-plus"></i>Extension
+                                                            </button>
+                                                        </div>
                                                     }
                                                 </div>
                                             </article>
