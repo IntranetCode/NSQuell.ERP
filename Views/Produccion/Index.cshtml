@@ -2857,8 +2857,11 @@
 
                 <div class="modal-body">
                     <input type="hidden" name="programaProduccionId" id="modalProgramaProduccionId" />
+                    <input type="hidden" name="personalInicioConfirmado" value="true" />
                     <input type="hidden" name="operadorNombre" id="modalOperadorNombre" />
                     <input type="hidden" name="operadorAuxiliarNombre" id="modalOperadorAuxiliarNombre" />
+
+                    <div class="alert alert-primary d-none mb-3" id="ppInicioLhRhResumen" role="alert"></div>
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -3004,8 +3007,7 @@
                         </div>
 
                         <div class="small text-muted mt-2">
-                            Los datos ya programados son de solo lectura en Producción.
-                            Este modal únicamente permite completar información faltante.
+                            La programacion semanal se usa como sugerencia. Confirma o cambia el personal real que estara presente al iniciar la preparacion.
                         </div>
                         <div class="alert py-2 px-3 mt-2 mb-0 d-none"
                              id="ppProdCoberturaTecnicaAviso"
@@ -3076,12 +3078,16 @@
                                     <div class="operator-role-name"><i class="bi bi-tools me-1"></i>Técnico / SMED</div>
                                     <span class="operator-required-badge">Uno requerido</span>
                                 </div>
-                                <label class="form-label">Responsable técnico para el turno</label>
-                                <select name="responsableApoyo" id="modalResponsableApoyo" class="form-select">
-                                    <option value="">-- Seleccionar Técnico o SMED --</option>
+                                <label class="form-label">Tecnico en Produccion</label>
+                                <select name="tecnicoProduccionId" id="modalTecnicoProduccionId" class="form-select mb-3">
+                                    <option value="">-- Seleccionar Tecnico --</option>
+                                </select>
+                                <label class="form-label">SMED</label>
+                                <select name="smedId" id="modalSmedId" class="form-select">
+                                    <option value="">-- Seleccionar SMED --</option>
                                 </select>
                                 <div class="small text-muted mt-2">
-                                    Sólo aparece cuando Programación de Personal no tiene ni Técnico ni SMED.
+                                    Los valores programados se precargan como sugerencia. Puedes cambiarlos segun el personal real disponible.
                                 </div>
                             </div>
                         </div>
@@ -4215,14 +4221,13 @@
                                 if (modalOperadorNombre) modalOperadorNombre.value = nombrePrincipal;
                                 if (modalOperadorAuxiliarNombre) modalOperadorAuxiliarNombre.value = nombreAuxiliar;
 
-                                const apoyoRequerido =
-                                    formIniciarPreparacion?.dataset.apoyoRequerido === '1';
+                                const tecnicoRealId = modalTecnicoProduccionId?.value || '';
+                                const smedRealId = document.getElementById('modalSmedId')?.value || '';
 
-                                if (apoyoRequerido &&
-                                    !(modalResponsableApoyo?.value || '').trim()) {
+                                if (!tecnicoRealId && !smedRealId) {
                                     mostrarValidacionOperadores(
-                                        'Falta el responsable técnico. Selecciona un Técnico en Producción o un SMED.',
-                                        [modalResponsableApoyo]);
+                                        'Falta cobertura tecnica. Confirma un Tecnico en Produccion o un SMED para el inicio real.',
+                                        [modalTecnicoProduccionId, document.getElementById('modalSmedId')]);
                                     return;
                                 }
 
@@ -4327,108 +4332,133 @@
 
 }
 
-@* NSQ_PERSONAL_INICIO_V8_UI *@
+@* NSQ_LHRH_INICIO_UNICO_V1 *@
 <script>
-document.addEventListener('shown.bs.modal', async function(event) {
-    if (event.target?.id !== 'modalIniciarPreparacion') return;
-
-    const programa=document.getElementById('modalProgramaProduccionId')?.value;
-    if(!programa) return;
-
-    const form=document.getElementById('formIniciarPreparacion');
-    const operadorCard=document.getElementById('ppInicioOperadorCard');
-    const auxiliarCard=document.getElementById('ppInicioAuxiliarCard');
-    const soporteCard=document.getElementById('ppInicioSoporteCard');
-    const completo=document.getElementById('ppInicioPersonalCompleto');
-    const aviso=document.getElementById('ppProdCoberturaTecnicaAviso');
-    const responsable=document.getElementById('modalResponsableApoyo');
-
-    const setProgramado=(id,value,empty='Sin asignar')=>{
-        const el=document.getElementById(id);
-        if(el) el.textContent=value||empty;
-    };
-    const mostrar=(el,visible)=>{
-        if(el) el.classList.toggle('d-none',!visible);
+(() => {
+    const waitSelect = (select, value, attempts = 20) => {
+        if (!select || !value) return;
+        let n = 0;
+        const timer = window.setInterval(() => {
+            n++;
+            const option = Array.from(select.options || []).find(x => x.value === String(value));
+            if (option) {
+                select.value = String(value);
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                window.clearInterval(timer);
+            } else if (n >= attempts) {
+                window.clearInterval(timer);
+            }
+        }, 100);
     };
 
-    async function cargarResponsables(){
-        if(!responsable) return;
-        responsable.innerHTML='<option value="">-- Cargando Técnico / SMED --</option>';
-        try{
-            const r=await fetch('/Produccion/ResponsablesApoyoInicioActivos',{
-                headers:{'X-Requested-With':'XMLHttpRequest'}
+    const setText = (id, value, empty = 'Sin asignar') => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || empty;
+    };
+
+    async function cargarSmedYPreseleccionar(data) {
+        const smed = document.getElementById('modalSmedId');
+        if (!smed) return;
+
+        smed.innerHTML = '<option value="">-- Cargando SMED --</option>';
+        try {
+            const r = await fetch('/Produccion/ResponsablesApoyoInicioActivos', {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            if(!r.ok) throw new Error(`HTTP ${r.status}`);
-            const json=await r.json();
-            const opciones=Array.isArray(json?.opciones)?json.opciones:[];
-            responsable.innerHTML='<option value="">-- Seleccionar Técnico o SMED --</option>';
-            opciones.forEach(x=>{
-                const op=document.createElement('option');
-                op.value=`${x.tipo}:${x.personaID}`;
-                op.textContent=`${x.tipo} · ${x.nombre}${x.numeroControl?' · Ctrl '+x.numeroControl:''}`;
-                responsable.appendChild(op);
-            });
-        }catch(e){
-            console.error(e);
-            responsable.innerHTML='<option value="">-- No fue posible cargar responsables --</option>';
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const json = await r.json();
+            const opciones = Array.isArray(json?.opciones) ? json.opciones : [];
+            smed.innerHTML = '<option value="">-- Seleccionar SMED --</option>';
+            opciones
+                .filter(x => String(x.tipo || '').toUpperCase() === 'SMED')
+                .forEach(x => {
+                    const op = document.createElement('option');
+                    op.value = String(x.personaID);
+                    op.textContent = `${x.nombre || ''}${x.numeroControl ? ' · Ctrl ' + x.numeroControl : ''}${x.puesto ? ' · ' + x.puesto : ''}`;
+                    smed.appendChild(op);
+                });
+            if (data?.smedID) waitSelect(smed, data.smedID);
+        } catch (e) {
+            console.error('SMED:', e);
+            smed.innerHTML = '<option value="">-- Error al cargar SMED --</option>';
         }
     }
 
-    try{
-        const response=await fetch(
-            `/Produccion/PersonalProgramadoPrograma?programaProduccionId=${encodeURIComponent(programa)}`,
-            {headers:{'X-Requested-With':'XMLHttpRequest'}});
-        if(!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data=await response.json();
+    document.addEventListener('click', event => {
+        const btn = event.target.closest('.btn-iniciar-preparacion');
+        if (!btn) return;
 
-        const asignado=data?.ok&&data?.asignado;
-        const tieneOperador=asignado&&!!data.operadorID;
-        const tieneAuxiliar=asignado&&!!data.auxiliarID;
-        const tieneTecnico=asignado&&!!data.tecnicoProduccionID;
-        const tieneSmed=asignado&&!!data.smedID;
+        const box = document.getElementById('ppInicioLhRhResumen');
+        if (!box) return;
 
-        setProgramado('ppProdOperadorProgramado',asignado?data.operadorNombre:null);
-        setProgramado('ppProdAuxiliarProgramado',asignado?data.auxiliarNombre:null);
-        setProgramado('ppProdTecnicoProgramado',asignado?data.tecnicoProduccionNombre:null);
-        setProgramado('ppProdSmedProgramado',asignado?data.smedNombre:null);
+        const esLhRh = btn.dataset.lhrh === '1';
+        box.classList.toggle('d-none', !esLhRh);
+        if (esLhRh) {
+            const grupo = btn.dataset.grupoLhrh || '-';
+            const programa = btn.dataset.programaParejaId || '-';
+            const of = btn.dataset.ofPareja || 'OF pareja';
+            const parte = btn.dataset.partePareja || 'parte pareja';
+            box.innerHTML = `<i class="bi bi-link-45deg me-1"></i><strong>Inicio conjunto LH/RH.</strong> Grupo ${grupo}. Tambien se iniciara Programa ${programa} · ${of} · ${parte}. El personal y la preparacion fisica se aplican a ambas OF.`;
+        }
+    });
 
-        const turnoBadge=document.getElementById('ppProdTurnoProgramado');
-        if(turnoBadge) turnoBadge.textContent='Turno: '+(asignado&&data.turno?data.turno:'-');
+    document.addEventListener('shown.bs.modal', async event => {
+        if (event.target?.id !== 'modalIniciarPreparacion') return;
 
-        mostrar(operadorCard,!tieneOperador);
-        mostrar(auxiliarCard,!tieneAuxiliar);
+        const programa = document.getElementById('modalProgramaProduccionId')?.value;
+        if (!programa) return;
 
-        const faltaApoyo=!tieneTecnico&&!tieneSmed;
-        mostrar(soporteCard,faltaApoyo);
-        if(form) form.dataset.apoyoRequerido=faltaApoyo?'1':'0';
-        if(responsable) responsable.value='';
-        if(faltaApoyo) await cargarResponsables();
+        const operadorCard = document.getElementById('ppInicioOperadorCard');
+        const auxiliarCard = document.getElementById('ppInicioAuxiliarCard');
+        const soporteCard = document.getElementById('ppInicioSoporteCard');
+        const completo = document.getElementById('ppInicioPersonalCompleto');
+        const aviso = document.getElementById('ppProdCoberturaTecnicaAviso');
 
-        if(aviso){
-            aviso.classList.remove('d-none','alert-danger','alert-warning','alert-success');
-            if(!tieneTecnico&&!tieneSmed){
-                aviso.classList.add('alert-danger');
-                aviso.innerHTML='<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>Falta Técnico/SMED:</strong> selecciona al menos uno.';
-            }else if(tieneTecnico&&!tieneSmed){
-                aviso.classList.add('alert-warning');
-                aviso.innerHTML='<i class="bi bi-info-circle me-1"></i>SMED sin asignar; el <strong>Técnico programado</strong> cubre el requisito.';
-            }else if(!tieneTecnico&&tieneSmed){
-                aviso.classList.add('alert-warning');
-                aviso.innerHTML='<i class="bi bi-info-circle me-1"></i>Técnico sin asignar; el <strong>SMED programado</strong> cubre el requisito.';
-            }else{
-                aviso.classList.add('alert-success');
-                aviso.innerHTML='<i class="bi bi-shield-check me-1"></i>Cobertura Técnica/SMED completa.';
+        [operadorCard, auxiliarCard, soporteCard].forEach(x => x?.classList.remove('d-none'));
+
+        if (completo) {
+            completo.classList.remove('d-none');
+            completo.innerHTML = '<i class="bi bi-info-circle me-1"></i>La Programacion de Personal es una sugerencia. Confirma o cambia Operador, Auxiliar, Tecnico y SMED segun el personal real disponible.';
+        }
+
+        try {
+            const response = await fetch(
+                `/Produccion/PersonalProgramadoPrograma?programaProduccionId=${encodeURIComponent(programa)}`,
+                { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const asignado = data?.ok && data?.asignado;
+
+            setText('ppProdOperadorProgramado', asignado ? data.operadorNombre : null);
+            setText('ppProdAuxiliarProgramado', asignado ? data.auxiliarNombre : null);
+            setText('ppProdTecnicoProgramado', asignado ? data.tecnicoProduccionNombre : null);
+            setText('ppProdSmedProgramado', asignado ? data.smedNombre : null);
+
+            const turnoBadge = document.getElementById('ppProdTurnoProgramado');
+            if (turnoBadge) turnoBadge.textContent = 'Turno sugerido: ' + (asignado && data.turno ? data.turno : '-');
+
+            if (asignado) {
+                waitSelect(document.getElementById('modalOperadorId'), data.operadorID);
+                waitSelect(document.getElementById('modalOperadorAuxiliarId'), data.auxiliarID);
+                waitSelect(document.getElementById('modalTecnicoProduccionId'), data.tecnicoProduccionID);
+            }
+
+            await cargarSmedYPreseleccionar(asignado ? data : null);
+
+            if (aviso) {
+                aviso.classList.remove('d-none', 'alert-danger', 'alert-warning', 'alert-success');
+                aviso.classList.add('alert-info');
+                aviso.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Los nombres de arriba son sugerencias. Los selectores inferiores definen el personal real que quedara en la ejecucion.';
+            }
+        } catch (error) {
+            console.debug('Programacion de Personal no disponible:', error);
+            await cargarSmedYPreseleccionar(null);
+            if (aviso) {
+                aviso.classList.remove('d-none');
+                aviso.className = 'alert alert-warning py-2 px-3 mt-2 mb-0';
+                aviso.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>No fue posible consultar las sugerencias. Selecciona manualmente el personal real.';
             }
         }
-
-        mostrar(completo,tieneOperador&&(tieneTecnico||tieneSmed));
-    }catch(error){
-        console.debug('Programacion de Personal no disponible:',error);
-        mostrar(operadorCard,true);
-        mostrar(auxiliarCard,true);
-        mostrar(soporteCard,true);
-        if(form) form.dataset.apoyoRequerido='1';
-        await cargarResponsables();
-    }
-});
+    });
+})();
 </script>

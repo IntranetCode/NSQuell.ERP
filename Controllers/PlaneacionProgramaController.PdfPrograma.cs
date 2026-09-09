@@ -42,6 +42,9 @@ public partial class PlaneacionProgramaController
         public int? EjecucionProduccionID { get; set; }
         public DateTime? FechaInicioReal { get; set; }
         public DateTime? FechaFinReal { get; set; }
+        public int CantidadPlaneadaEjecucion { get; set; }
+        public int CantidadOKTotalEjecucion { get; set; }
+        public int MinutosParoEjecucion { get; set; }
         public bool EsContinuidad { get; set; }
 
         public bool EjecucionAbierta =>
@@ -210,14 +213,29 @@ SELECT
     ISNULL(pp.EstatusID,1) AS EstatusID,
     ej.EjecucionProduccionID,
     ej.FechaInicioReal,
-    ej.FechaFinReal
+    ej.FechaFinReal,
+    ISNULL(ej.CantidadPlaneadaEjecucion,0) AS CantidadPlaneadaEjecucion,
+    ISNULL(ej.CantidadOKTotalEjecucion,0) AS CantidadOKTotalEjecucion,
+    ISNULL(ej.MinutosParoEjecucion,0) AS MinutosParoEjecucion
 FROM dbo.Planeacion_ProgramaProduccion pp
 OUTER APPLY
 (
     SELECT TOP(1)
         e.EjecucionProduccionID,
         e.FechaInicioReal,
-        e.FechaFinReal
+        e.FechaFinReal,
+        ISNULL(e.CantidadPlaneada,0) AS CantidadPlaneadaEjecucion,
+        ISNULL(e.CantidadOKTotal,0) AS CantidadOKTotalEjecucion,
+        ISNULL((
+            SELECT SUM(
+                CASE
+                    WHEN p.FechaInicioParo IS NULL THEN 0
+                    ELSE DATEDIFF(MINUTE, p.FechaInicioParo, ISNULL(p.FechaFinParo, GETDATE()))
+                END)
+            FROM dbo.Produccion_Paros p
+            WHERE p.EjecucionProduccionID = e.EjecucionProduccionID
+              AND p.Activo = 1
+        ),0) AS MinutosParoEjecucion
     FROM dbo.Produccion_Ejecucion e
     WHERE e.ProgramaProduccionID = pp.ProgramaProduccionID
       AND e.Activo = 1
@@ -304,7 +322,16 @@ ORDER BY
                     : Convert.ToDateTime(rd["FechaInicioReal"]),
                 FechaFinReal = rd["FechaFinReal"] == DBNull.Value
                     ? null
-                    : Convert.ToDateTime(rd["FechaFinReal"])
+                    : Convert.ToDateTime(rd["FechaFinReal"]),
+                CantidadPlaneadaEjecucion = rd["CantidadPlaneadaEjecucion"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["CantidadPlaneadaEjecucion"]),
+                CantidadOKTotalEjecucion = rd["CantidadOKTotalEjecucion"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["CantidadOKTotalEjecucion"]),
+                MinutosParoEjecucion = rd["MinutosParoEjecucion"] == DBNull.Value
+                    ? 0
+                    : Convert.ToInt32(rd["MinutosParoEjecucion"])
             });
         }
 
@@ -636,9 +663,12 @@ ORDER BY
                     {
                         c.Item().Text($"Maq {Texto(maquina.MaquinaCodigo)}")
                             .Bold().FontSize(8).FontColor(Colors.White);
-                        c.Item().Text(TextoCiclo(maquina.Contexto ?? maquina.Cambios.FirstOrDefault()))
+                        // NSQ_PDF_PROGRAMA_HORAS_RESTANTES_V1_6
+                        // El numero bajo la maquina NO es Ciclo: representa la suma de horas
+                        // visibles que aun tiene por producir dentro del programa mostrado.
+                        c.Item().Text(TextoHorasMaquina(maquina))
                             .FontSize(5.4f).FontColor("#DDEBF7");
-                        c.Item().Text(maquina.ContextoEsProduccionReal ? "EN PRODUCCION" : "CONTEXTO")
+                        c.Item().Text(maquina.ContextoEsProduccionReal ? "EN PRODUCCION" : "PROGRAMA BASE")
                             .FontSize(5.2f).SemiBold().FontColor("#DDEBF7");
                     });
 
@@ -653,7 +683,7 @@ ORDER BY
                 CeldaActual(table, actual == null ? "Sin produccion actual registrada" : Texto(actual.Descripcion), true);
                 CeldaActual(table, actual == null ? "-" : Texto(actual.ReferenciaSAP));
                 CeldaActual(table, actual == null ? "-" : actual.CantidadProgramada.ToString("N0", CultureInfo.GetCultureInfo("es-MX")), false, true);
-                CeldaActual(table, actual == null ? "-" : FormatoHoras(ResolverHoras(actual)), false, true);
+                CeldaActual(table, actual == null ? "-" : FormatoHoras(ResolverHorasRestantesActual(actual)), false, true);
                 CeldaActual(table, actual == null ? "-" : Texto(actual.MoldeCodigo), false, true);
                 CeldaActual(table, actual == null ? "-" : Texto(actual.Observaciones));
             });
@@ -794,18 +824,53 @@ ORDER BY
     private static string Texto(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
 
-    private static string TextoCiclo(ProgramaPdfFila? fila)
+    private static string TextoHorasMaquina(ProgramaPdfMaquina maquina)
     {
-        if (fila == null)
-            return "Sin programa base";
+        var total = 0m;
 
-        if (!string.IsNullOrWhiteSpace(fila.Ciclo))
-            return $"Ciclo: {fila.Ciclo.Trim()}";
+        if (maquina.Contexto != null)
+        {
+            total += maquina.ContextoEsProduccionReal
+                ? ResolverHorasRestantesActual(maquina.Contexto)
+                : ResolverHoras(maquina.Contexto);
+        }
 
-        if (fila.ObjetivoHora.HasValue && fila.ObjetivoHora.Value > 0)
-            return $"Obj/h: {fila.ObjetivoHora.Value:N0}";
+        total += maquina.Cambios.Sum(ResolverHoras);
 
-        return "Ciclo: -";
+        if (total <= 0)
+            return "Horas: -";
+
+        return $"Horas: {Math.Ceiling(total):0} h";
+    }
+
+    private static decimal ResolverHorasRestantesActual(ProgramaPdfFila fila)
+    {
+        var horasPlaneadas = ResolverHoras(fila);
+        if (horasPlaneadas <= 0)
+            return 0;
+
+        // Si no existe una ejecucion abierta, no inventar avance: conservar horas planeadas.
+        if (!fila.EjecucionAbierta || !fila.FechaInicioReal.HasValue)
+            return horasPlaneadas;
+
+        // Si Produccion ya registro la cantidad planeada completa, la corrida no tiene horas pendientes.
+        if (fila.CantidadPlaneadaEjecucion > 0 &&
+            fila.CantidadOKTotalEjecucion >= fila.CantidadPlaneadaEjecucion)
+        {
+            return 0;
+        }
+
+        var minutosDesdeInicio = Math.Max(
+            0d,
+            (DateTime.Now - fila.FechaInicioReal.Value).TotalMinutes);
+
+        // Los paros registrados en Produccion no consumen las horas productivas planeadas.
+        var minutosProductivos = Math.Max(
+            0d,
+            minutosDesdeInicio - Math.Max(0, fila.MinutosParoEjecucion));
+
+        var horasConsumidas = (decimal)(minutosProductivos / 60d);
+        return Math.Max(0m, horasPlaneadas - horasConsumidas);
     }
 
     private static string NormalizarCondicion(string? condicion)

@@ -1080,6 +1080,16 @@ ORDER BY
                         tx);
                 }
 
+                // NSQ_LHRH_INICIO_UNICO_V1
+                // El checklist fisico se captura una vez y se refleja en la OF pareja.
+                // Si se envia a Calidad, tambien se crea/actualiza la inspeccion separada de la pareja.
+                await SincronizarChecklistLhRhProduccionV1Async(
+                    vm.ChecklistArranqueID,
+                    vm.EnviarACalidad,
+                    usuarioId,
+                    cn,
+                    tx);
+
                 await tx.CommitAsync();
 
                 TempData["Success"] =
@@ -1394,7 +1404,7 @@ VALUES
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Iniciar(int programaProduccionId, int? operadorId = null, string? operadorNombre = null, int? operadorAuxiliarId = null, string? operadorAuxiliarNombre = null, string? observaciones = null, List<long>? etiquetasBlancasSeleccionadas = null)
+        public async Task<IActionResult> Iniciar(int programaProduccionId, int? operadorId = null, string? operadorNombre = null, int? operadorAuxiliarId = null, string? operadorAuxiliarNombre = null, int? tecnicoProduccionId = null, int? smedId = null, bool personalInicioConfirmado = false, string? observaciones = null, List<long>? etiquetasBlancasSeleccionadas = null)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
 
@@ -1410,6 +1420,8 @@ VALUES
 
             if (operadorId.HasValue && operadorId.Value <= 0) operadorId = null;
             if (operadorAuxiliarId.HasValue && operadorAuxiliarId.Value <= 0) operadorAuxiliarId = null;
+            if (tecnicoProduccionId.HasValue && tecnicoProduccionId.Value <= 0) tecnicoProduccionId = null;
+            if (smedId.HasValue && smedId.Value <= 0) smedId = null;
             if (operadorId.HasValue) operadorNombre = null;
             if (operadorAuxiliarId.HasValue) operadorAuxiliarNombre = null;
 
@@ -1475,6 +1487,12 @@ VALUES
                 var parejaLhRh = await ObtenerParejaLhRhProduccionAsync(programaProduccionId, cn, tx);
                 ValidarParejaLhRhParaInicio(parejaLhRh);
 
+                // NSQ_LHRH_INICIO_UNICO_V1
+                // Una produccion fisica LH/RH crea las dos ejecuciones en una sola transaccion.
+                var programaParejaLhRh = parejaLhRh == null
+                    ? null
+                    : await ObtenerProgramaParejaParaInicioUnicoLhRhV1Async(parejaLhRh, cn, tx);
+
                 var estadoCambioMoldeInicio = await ObtenerEstadoCambioMoldeProgramaAsync(programaProduccionId, cn, tx);
 
                 if (estadoCambioMoldeInicio.RequiereCambioMolde && !string.Equals(estadoCambioMoldeInicio.Estado, EstadoMoldeConfirmada, StringComparison.OrdinalIgnoreCase))
@@ -1486,16 +1504,23 @@ VALUES
 
                 var personalProgramado = await ObtenerPersonalProgramadoProduccionAsync(programaProduccionId, DateTime.Now, programa.FechaInicioProgramada, cn, tx);
 
-                if (personalProgramado?.OperadorID.HasValue == true)
+                // NSQ_LHRH_INICIO_UNICO_V1
+                // La programacion semanal es sugerencia. Si el modal confirma personal,
+                // los valores elegidos por Produccion son la fuente real de esta ejecucion.
+                if (!personalInicioConfirmado &&
+                    !operadorId.HasValue &&
+                    string.IsNullOrWhiteSpace(operadorNombre) &&
+                    personalProgramado?.OperadorID.HasValue == true)
                 {
                     operadorId = personalProgramado.OperadorID;
-                    operadorNombre = null;
                 }
 
-                if (personalProgramado?.AuxiliarID.HasValue == true)
+                if (!personalInicioConfirmado &&
+                    !operadorAuxiliarId.HasValue &&
+                    string.IsNullOrWhiteSpace(operadorAuxiliarNombre) &&
+                    personalProgramado?.AuxiliarID.HasValue == true)
                 {
                     operadorAuxiliarId = personalProgramado.AuxiliarID;
-                    operadorAuxiliarNombre = null;
                 }
 
                 var bloqueoMaquina = await ObtenerBloqueoMaquinaParaInicioAsync(programaProduccionId, programa.MaquinaID.Value, parejaLhRh?.ProgramaParejaID, cn, tx);
@@ -1510,7 +1535,7 @@ VALUES
                 int? operadorPrincipalFinalId = operadorId;
                 string? operadorPrincipalFinalNombre = operadorNombre;
 
-                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) && programa.OperadorPrincipalPlaneadoID.HasValue)
+                if (!personalInicioConfirmado && !operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre) && programa.OperadorPrincipalPlaneadoID.HasValue)
                     operadorPrincipalFinalId = programa.OperadorPrincipalPlaneadoID;
 
                 if (operadorPrincipalFinalId.HasValue)
@@ -1525,7 +1550,7 @@ VALUES
                     }
                 }
 
-                if (!operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
+                if (!personalInicioConfirmado && !operadorPrincipalFinalId.HasValue && string.IsNullOrWhiteSpace(operadorPrincipalFinalNombre))
                 {
                     var operadorSugerido = await ObtenerOperadorSugeridoProduccionAsync(programa.MaquinaID.Value, DateTime.Now, cn, tx);
 
@@ -1551,7 +1576,7 @@ VALUES
                 int? operadorAuxiliarFinalId = operadorAuxiliarId;
                 string? operadorAuxiliarFinalNombre = operadorAuxiliarNombre;
 
-                if (!operadorAuxiliarFinalId.HasValue && string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) && programa.OperadorAuxiliarID.HasValue)
+                if (!personalInicioConfirmado && !operadorAuxiliarFinalId.HasValue && string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) && programa.OperadorAuxiliarID.HasValue)
                     operadorAuxiliarFinalId = programa.OperadorAuxiliarID;
 
                 if (operadorAuxiliarFinalId.HasValue)
@@ -1618,14 +1643,16 @@ VALUES
                     return RedirectToAction(nameof(Index));
                 }
 
-                int? tecnicoProduccionFinalId = personalProgramado?.TecnicoID;
-                string? tecnicoProduccionFinalNombre = personalProgramado?.TecnicoNombre;
-                int? smedFinalId = personalProgramado?.SmedID;
-                string? smedFinalNombre = personalProgramado?.SmedNombre;
+                int? tecnicoProduccionFinalId = tecnicoProduccionId;
+                string? tecnicoProduccionFinalNombre = null;
+                int? smedFinalId = smedId;
+                string? smedFinalNombre = null;
 
-                var apoyoYaProgramado = tecnicoProduccionFinalId.HasValue || smedFinalId.HasValue;
-
-                if (!apoyoYaProgramado)
+                // Compatibilidad con la UI anterior. Solo se usa cuando el POST no
+                // proviene del nuevo modal de confirmacion de personal.
+                if (!personalInicioConfirmado &&
+                    !tecnicoProduccionFinalId.HasValue &&
+                    !smedFinalId.HasValue)
                 {
                     var responsableApoyo = Request.Form["responsableApoyo"].ToString().Trim();
 
@@ -1636,7 +1663,7 @@ VALUES
                         if (partesApoyo.Length != 2 || !int.TryParse(partesApoyo[1], out var apoyoId) || apoyoId <= 0)
                         {
                             await tx.RollbackAsync();
-                            TempData["Error"] = "El responsable Técnico/SMED seleccionado no es válido.";
+                            TempData["Error"] = "El responsable Tecnico/SMED seleccionado no es valido.";
                             return RedirectToAction(nameof(Index));
                         }
 
@@ -1646,7 +1673,7 @@ VALUES
                         if (!validacionApoyo.Valido || string.IsNullOrWhiteSpace(validacionApoyo.Nombre))
                         {
                             await tx.RollbackAsync();
-                            TempData["Error"] = "El responsable seleccionado ya no pertenece al catálogo activo de Técnico/SMED.";
+                            TempData["Error"] = "El responsable seleccionado ya no pertenece al catalogo activo de Tecnico/SMED.";
                             return RedirectToAction(nameof(Index));
                         }
 
@@ -1661,6 +1688,18 @@ VALUES
                             tecnicoProduccionFinalNombre = validacionApoyo.Nombre;
                         }
                     }
+                }
+
+                // Solo los POST heredados usan Programacion como fallback. El nuevo
+                // modal envia personalInicioConfirmado=true y respeta lo seleccionado.
+                if (!personalInicioConfirmado &&
+                    !tecnicoProduccionFinalId.HasValue &&
+                    !smedFinalId.HasValue)
+                {
+                    tecnicoProduccionFinalId = personalProgramado?.TecnicoID;
+                    tecnicoProduccionFinalNombre = personalProgramado?.TecnicoNombre;
+                    smedFinalId = personalProgramado?.SmedID;
+                    smedFinalNombre = personalProgramado?.SmedNombre;
                 }
 
                 if (tecnicoProduccionFinalId.HasValue)
@@ -1716,8 +1755,7 @@ VALUES
                     TempData["Error"] = "El SMED debe ser distinto del operador principal y del auxiliar.";
                     return RedirectToAction(nameof(Index));
                 }
-
-                await SincronizarCoberturaFaltanteInicioV8Async(programaProduccionId, DateTime.Now, programa.FechaInicioProgramada, tecnicoProduccionFinalId, smedFinalId, operadorAuxiliarFinalId, usuarioId, cn, tx);
+                // NSQ_LHRH_INICIO_UNICO_V1: no se modifica la programacion semanal; solo es sugerencia.
 
                 var etiquetasBlancasValidadas = await ValidarEtiquetasBlancasInicioAsync(etiquetasBlancasSeleccionadas, programa, cn, tx);
                 var cantidadEtiquetaBlanca = etiquetasBlancasValidadas.Sum(x => x.CantidadPiezas);
@@ -1746,6 +1784,47 @@ VALUES
                 await SincronizarOperadorProgramaAsync(programaProduccionId, operadorPrincipalFinalId, "PRINCIPAL", usuarioId, cn, tx);
                 await SincronizarOperadorProgramaAsync(programaProduccionId, operadorAuxiliarFinalId, "AUXILIAR", usuarioId, cn, tx);
                 await MarcarProgramaEnPreparacionAsync(programaProduccionId, usuarioId, cn, tx);
+
+                int? ejecucionParejaCreadaId = null;
+
+                if (programaParejaLhRh != null && parejaLhRh != null)
+                {
+                    var cantidadPareja = programaParejaLhRh.CantidadPlaneada ?? 0;
+                    if (cantidadPareja <= 0)
+                        throw new InvalidOperationException($"La OF pareja {parejaLhRh.OFParejaTexto} no tiene una cantidad valida para iniciar Produccion.");
+
+                    var textoOperadoresPareja = "Operadores al iniciar preparacion. Principal: " + operadorPrincipalFinalNombre!.Trim() + ".";
+                    textoOperadoresPareja += !string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre) ? " Auxiliar: " + operadorAuxiliarFinalNombre.Trim() + "." : " Auxiliar: sin asignar.";
+                    textoOperadoresPareja += !string.IsNullOrWhiteSpace(tecnicoProduccionFinalNombre) ? " Tecnico en Produccion: " + tecnicoProduccionFinalNombre.Trim() + "." : " Tecnico en Produccion: sin asignar.";
+                    textoOperadoresPareja += !string.IsNullOrWhiteSpace(smedFinalNombre) ? " SMED: " + smedFinalNombre.Trim() + "." : " SMED: sin asignar.";
+                    textoOperadoresPareja += $" Produccion conjunta LH/RH grupo {parejaLhRh.GrupoLhRh}; contraparte Programa {programa.ProgramaProduccionID}.";
+
+                    var observacionesPareja = string.IsNullOrWhiteSpace(observaciones)
+                        ? textoOperadoresPareja
+                        : observaciones + Environment.NewLine + textoOperadoresPareja;
+
+                    if (observacionesPareja.Length > 500)
+                        observacionesPareja = observacionesPareja[..500];
+
+                    ejecucionParejaCreadaId = await InsertarEjecucionAsync(
+                        programaParejaLhRh,
+                        cantidadPareja,
+                        operadorPrincipalFinalId,
+                        operadorPrincipalFinalNombre,
+                        operadorAuxiliarFinalId,
+                        operadorAuxiliarFinalNombre,
+                        tecnicoProduccionFinalId,
+                        tecnicoProduccionFinalNombre,
+                        observacionesPareja,
+                        usuarioId,
+                        cn,
+                        tx);
+
+                    await SincronizarOperadorProgramaAsync(programaParejaLhRh.ProgramaProduccionID, operadorPrincipalFinalId, "PRINCIPAL", usuarioId, cn, tx);
+                    await SincronizarOperadorProgramaAsync(programaParejaLhRh.ProgramaProduccionID, operadorAuxiliarFinalId, "AUXILIAR", usuarioId, cn, tx);
+                    await MarcarProgramaEnPreparacionAsync(programaParejaLhRh.ProgramaProduccionID, usuarioId, cn, tx);
+                }
+
                 await tx.CommitAsync();
 
                 var mensajeInicio = string.IsNullOrWhiteSpace(operadorAuxiliarFinalNombre)
@@ -1755,8 +1834,7 @@ VALUES
                 if (cantidadEtiquetaBlanca > 0)
                     mensajeInicio += $" Se aplicaron {cantidadEtiquetaBlanca:N0} pieza(s) de etiqueta blanca. Planeación conserva {cantidadProgramadaPlaneacion:N0} pieza(s) programadas y Producción ejecutará {cantidadPlaneadaEjecucion:N0} pieza(s).";
 
-                if (parejaLhRh != null)
-                    mensajeInicio += $" Producción detectó la pareja LH/RH con {parejaLhRh.OFParejaTexto}. Ambas OF deben completar su preparación y liberación de Calidad antes de iniciar serie conjunta.";
+                if (parejaLhRh != null) mensajeInicio += $" Inicio conjunto LH/RH creado para ambas OF. La preparacion fisica y los checklist se capturan una sola vez; Calidad conserva dos inspecciones y ambas deben liberar antes de iniciar serie.";
 
                 TempData["Success"] = mensajeInicio;
                 return RedirectToAction(nameof(Detalle), new { id = ejecucionId });
@@ -8856,6 +8934,9 @@ ORDER BY e.FechaCreacion DESC,e.EjecucionProduccionID DESC;";
                     .ThenBy(x =>
                         x.ProgramaProduccionID)
                     .ToList();
+
+            // NSQ_LHRH_INICIO_UNICO_V1
+            await EnriquecerProximosLhRhAsync(vm.ProximosAIniciar, cn);
 
             // NSQ_PREPARACION_MOLDE_PANEL_V1
             ViewBag.EstadosCambioMolde =
