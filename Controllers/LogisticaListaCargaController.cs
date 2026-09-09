@@ -73,6 +73,51 @@ public sealed class LogisticaListaCargaController : Controller
         return View(vm);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> ObtenerUbicacionParte(int parteId, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+        if (parteId <= 0) return BadRequest(new { ok = false, mensaje = "La parte no es válida." });
+        await using var cn = await AbrirAsync(cancellationToken);
+        const string sql = @"
+SELECT TOP(1)
+ParteID,
+ISNULL(PiezasAlmacen,0) AS PiezasAlmacen,
+ISNULL(PiezasGP12,0) AS PiezasGP12,
+ISNULL(PiezasProduccion,0) AS PiezasProduccion,
+ISNULL(PiezasLocalizadas,0) AS PiezasLocalizadas,
+ISNULL(Ubicacion,N'SIN MATERIAL') AS Ubicacion
+FROM dbo.vw_Logistica_UbicacionMaterial
+WHERE ParteID=@ParteID;";
+        await using var cmd = new SqlCommand(sql, cn);
+        cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId;
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (!await rd.ReadAsync(cancellationToken))
+        {
+            return Json(new
+            {
+                ok = true,
+                parteId,
+                ubicacion = "SIN MATERIAL",
+                piezasAlmacen = 0,
+                piezasGP12 = 0,
+                piezasProduccion = 0,
+                piezasLocalizadas = 0
+            });
+        }
+        return Json(new
+        {
+            ok = true,
+            parteId = Entero(rd, "ParteID"),
+            ubicacion = Texto(rd, "Ubicacion"),
+            piezasAlmacen = Decimal(rd, "PiezasAlmacen"),
+            piezasGP12 = Decimal(rd, "PiezasGP12"),
+            piezasProduccion = Decimal(rd, "PiezasProduccion"),
+            piezasLocalizadas = Decimal(rd, "PiezasLocalizadas")
+        });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> GuardarProgramacion(LogisticaListaCargaProgramarVm model, CancellationToken cancellationToken = default)
@@ -203,63 +248,240 @@ VALUES
             TempData["LogisticaError"] = "La semana seleccionada no es válida.";
             return RedirectSemana(model.Anio, model.NumeroSemana);
         }
+
         await using var cn = await AbrirAsync(cancellationToken);
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
         try
         {
             DateTime fechaInicioSemana;
             const string sqlSemana = @"SELECT FechaInicio,Estatus FROM dbo.Logistica_ListaCargaSemanas WITH(UPDLOCK,HOLDLOCK) WHERE ListaCargaSemanaID=@Id AND Activo=1;";
+
             await using (var cmd = new SqlCommand(sqlSemana, cn, tx))
             {
                 cmd.Parameters.Add("@Id", SqlDbType.Int).Value = model.ListaCargaSemanaID;
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
-                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("La semana seleccionada ya no existe.");
+
+                if (!await rd.ReadAsync(cancellationToken))
+                    throw new InvalidOperationException("La semana seleccionada ya no existe.");
+
                 fechaInicioSemana = (Fecha(rd, "FechaInicio") ?? DateTime.MinValue).Date;
-                if (string.Equals(Texto(rd, "Estatus"), "Cerrada", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("La semana está cerrada y no permite generar embarques.");
+
+                if (string.Equals(Texto(rd, "Estatus"), "Cerrada", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("La semana está cerrada y no permite generar embarques.");
             }
-            var ids = (model.ProgramacionIDs ?? new List<int>()).Where(x => x > 0).Distinct().ToList();
+
+            var ids = (model.ProgramacionIDs ?? new List<int>())
+                .Where(x => x > 0)
+                .Distinct()
+                .ToList();
+
             var programaciones = new List<(int ProgramacionID, int ReleaseDetalleID, int ClienteID, int ParteID, DateTime FechaOriginal, DateTime FechaCarga, int Cantidad, int PendienteGenerar, string Criticidad, string Cliente, string NumeroParte, string Descripcion, string FolioRelease, int? SolicitudProduccionID, string NumeroOF, DateTime? FechaCargaRelease, DateTime FechaRequerida, int? SecuenciaEntrega)>();
+
             const string sqlProgramaciones = @"
-SELECT p.ListaCargaProgramacionID,p.ReleaseDetalleID,p.ClienteID,p.ParteID,p.FechaRequeridaOriginal,p.FechaProgramadaCarga,p.CantidadProgramada,
-p.CantidadProgramada-ISNULL((SELECT SUM(x.CantidadAsignada) FROM dbo.Logistica_ListaCargaProgramacionEmbarques x WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND x.Activo=1),0) PendienteGenerar,
-CASE WHEN p.FechaRequeridaOriginal<@FechaInicioSemana THEN N'Expeditado' ELSE N'Programado' END Criticidad,
-ISNULL(cli.Nombre,N'') Cliente,ISNULL(d.NumeroParte,N'') NumeroParte,ISNULL(d.Descripcion,N'') Descripcion,ISNULL(d.FolioRelease,N'') FolioRelease,
-d.SolicitudProduccionID,ISNULL(d.NumeroOF,N'') NumeroOF,d.FechaCarga FechaCargaRelease,d.FechaRequerida,d.SecuenciaEntrega
+SELECT
+    p.ListaCargaProgramacionID,
+    p.ReleaseDetalleID,
+    p.ClienteID,
+    p.ParteID,
+    p.FechaRequeridaOriginal,
+    p.FechaProgramadaCarga,
+    p.CantidadProgramada,
+    p.CantidadProgramada-ISNULL(
+        (
+            SELECT SUM(x.CantidadAsignada)
+            FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+            WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID
+              AND x.Activo=1
+        ),0
+    ) PendienteGenerar,
+    CASE
+        WHEN p.FechaRequeridaOriginal<@FechaInicioSemana THEN N'Expeditado'
+        ELSE N'Programado'
+    END Criticidad,
+    ISNULL(cli.Nombre,N'') Cliente,
+    ISNULL(d.NumeroParte,N'') NumeroParte,
+    ISNULL(d.Descripcion,N'') Descripcion,
+    ISNULL(d.FolioRelease,N'') FolioRelease,
+    d.SolicitudProduccionID,
+    ISNULL(d.NumeroOF,N'') NumeroOF,
+    d.FechaCarga FechaCargaRelease,
+    d.FechaRequerida,
+    d.SecuenciaEntrega
 FROM dbo.Logistica_ListaCargaProgramacion p WITH(UPDLOCK,HOLDLOCK)
-INNER JOIN dbo.vw_Logistica_DemandaRelease d ON d.ReleaseDetalleID=p.ReleaseDetalleID
-LEFT JOIN dbo.ERP_Clientes cli ON cli.ClienteID=p.ClienteID
-WHERE p.ListaCargaSemanaOrigenID=@SemanaID AND p.Activo=1 AND p.Estatus<>N'Cancelada'
-AND (@FiltrarIDs=0 OR p.ListaCargaProgramacionID IN (SELECT TRY_CONVERT(int,value) FROM STRING_SPLIT(@IDs,',')))
-AND p.CantidadProgramada>ISNULL((SELECT SUM(x.CantidadAsignada) FROM dbo.Logistica_ListaCargaProgramacionEmbarques x WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND x.Activo=1),0)
-ORDER BY p.FechaProgramadaCarga,p.ClienteID,p.FechaRequeridaOriginal,p.ReleaseDetalleID;";
+INNER JOIN dbo.vw_Logistica_DemandaRelease d
+    ON d.ReleaseDetalleID=p.ReleaseDetalleID
+LEFT JOIN dbo.ERP_Clientes cli
+    ON cli.ClienteID=p.ClienteID
+WHERE p.ListaCargaSemanaOrigenID=@SemanaID
+  AND p.Activo=1
+  AND p.Estatus<>N'Cancelada'
+  AND
+  (
+      @FiltrarIDs=0
+      OR p.ListaCargaProgramacionID IN
+      (
+          SELECT TRY_CONVERT(int,value)
+          FROM STRING_SPLIT(@IDs,',')
+      )
+  )
+  AND p.CantidadProgramada>
+      ISNULL(
+          (
+              SELECT SUM(x.CantidadAsignada)
+              FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+              WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID
+                AND x.Activo=1
+          ),0
+      )
+ORDER BY
+    p.FechaProgramadaCarga,
+    p.ClienteID,
+    p.FechaRequeridaOriginal,
+    p.ReleaseDetalleID;";
+
             await using (var cmd = new SqlCommand(sqlProgramaciones, cn, tx))
             {
                 cmd.Parameters.Add("@SemanaID", SqlDbType.Int).Value = model.ListaCargaSemanaID;
                 cmd.Parameters.Add("@FechaInicioSemana", SqlDbType.Date).Value = fechaInicioSemana;
                 cmd.Parameters.Add("@FiltrarIDs", SqlDbType.Bit).Value = ids.Count > 0;
                 cmd.Parameters.Add("@IDs", SqlDbType.NVarChar, -1).Value = ids.Count > 0 ? string.Join(",", ids) : string.Empty;
+
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
                 while (await rd.ReadAsync(cancellationToken))
                 {
                     var cantidad = Entero(rd, "PendienteGenerar");
                     if (cantidad <= 0) continue;
-                    programaciones.Add((Entero(rd, "ListaCargaProgramacionID"), Entero(rd, "ReleaseDetalleID"), Entero(rd, "ClienteID"), Entero(rd, "ParteID"), (Fecha(rd, "FechaRequeridaOriginal") ?? DateTime.MinValue).Date, (Fecha(rd, "FechaProgramadaCarga") ?? DateTime.MinValue).Date, Entero(rd, "CantidadProgramada"), cantidad, Texto(rd, "Criticidad"), Texto(rd, "Cliente"), Texto(rd, "NumeroParte"), Texto(rd, "Descripcion"), Texto(rd, "FolioRelease"), EnteroNullable(rd, "SolicitudProduccionID"), Texto(rd, "NumeroOF"), Fecha(rd, "FechaCargaRelease"), (Fecha(rd, "FechaRequerida") ?? DateTime.MinValue).Date, EnteroNullable(rd, "SecuenciaEntrega")));
+
+                    programaciones.Add((
+                        Entero(rd, "ListaCargaProgramacionID"),
+                        Entero(rd, "ReleaseDetalleID"),
+                        Entero(rd, "ClienteID"),
+                        Entero(rd, "ParteID"),
+                        (Fecha(rd, "FechaRequeridaOriginal") ?? DateTime.MinValue).Date,
+                        (Fecha(rd, "FechaProgramadaCarga") ?? DateTime.MinValue).Date,
+                        Entero(rd, "CantidadProgramada"),
+                        cantidad,
+                        Texto(rd, "Criticidad"),
+                        Texto(rd, "Cliente"),
+                        Texto(rd, "NumeroParte"),
+                        Texto(rd, "Descripcion"),
+                        Texto(rd, "FolioRelease"),
+                        EnteroNullable(rd, "SolicitudProduccionID"),
+                        Texto(rd, "NumeroOF"),
+                        Fecha(rd, "FechaCargaRelease"),
+                        (Fecha(rd, "FechaRequerida") ?? DateTime.MinValue).Date,
+                        EnteroNullable(rd, "SecuenciaEntrega")
+                    ));
                 }
             }
-            if (programaciones.Count == 0) throw new InvalidOperationException("No existen cantidades pendientes de generar como embarque.");
+
+            if (programaciones.Count == 0)
+                throw new InvalidOperationException("No existen cantidades pendientes de generar como embarque.");
+
+            /*
+             * Cuando la vista manda ProgramacionIDs se espera que correspondan
+             * al grupo visual Cliente + FechaCarga + Criticidad.
+             *
+             * De todas formas el servidor vuelve a agrupar para no depender
+             * únicamente de la vista.
+             */
+            var grupos = programaciones
+                .GroupBy(x => new
+                {
+                    x.ClienteID,
+                    x.FechaCarga,
+                    x.Criticidad
+                })
+                .OrderBy(x => x.Key.FechaCarga)
+                .ThenBy(x => x.Key.ClienteID)
+                .ToList();
+
             var embarquesCreados = 0;
             var piezasGeneradas = 0L;
-            foreach (var grupo in programaciones.GroupBy(x => new { x.ClienteID, x.FechaCarga, x.Criticidad }).OrderBy(x => x.Key.FechaCarga).ThenBy(x => x.Key.ClienteID))
+            var embarquesIds = new List<int>();
+
+            foreach (var grupo in grupos)
             {
                 var primero = grupo.First();
-                if (string.IsNullOrWhiteSpace(primero.Cliente)) throw new InvalidOperationException($"El cliente {primero.ClienteID} no tiene nombre válido.");
+
+                if (string.IsNullOrWhiteSpace(primero.Cliente))
+                    throw new InvalidOperationException($"El cliente {primero.ClienteID} no tiene nombre válido.");
+
+                /*
+                 * La Lista de carga únicamente define:
+                 * - cliente
+                 * - fecha de carga/salida
+                 * - cantidades
+                 * - criticidad
+                 *
+                 * Tipo de operación y forma de envío se definen después
+                 * en el módulo de Embarques.
+                 */
                 const string sqlHeader = @"
 INSERT dbo.Logistica_Embarques
-(Folio,ClienteID,ClienteNombreSnapshot,Destino,DireccionEntrega,TipoOperacion,FormaEnvio,ModalidadEnvio,Transportista,GuiaReferencia,PasaAduana,FechaProgramada,FechaCargaProgramada,HoraCargaProgramada,FechaEntregaProgramada,HoraEntregaProgramada,Estatus,RutaID,UnidadID,OperadorTexto,ResponsableUsuarioID,ResponsableNombreSnapshot,Observaciones,FechaCreacion,CreadoPor,Activo)
+(
+    Folio,
+    ClienteID,
+    ClienteNombreSnapshot,
+    Destino,
+    DireccionEntrega,
+    TipoOperacion,
+    FormaEnvio,
+    ModalidadEnvio,
+    Transportista,
+    GuiaReferencia,
+    PasaAduana,
+    FechaProgramada,
+    FechaCargaProgramada,
+    HoraCargaProgramada,
+    FechaEntregaProgramada,
+    HoraEntregaProgramada,
+    Estatus,
+    RutaID,
+    UnidadID,
+    OperadorTexto,
+    ResponsableUsuarioID,
+    ResponsableNombreSnapshot,
+    Observaciones,
+    FechaCreacion,
+    CreadoPor,
+    Activo
+)
 VALUES
-(NULL,@ClienteID,@Cliente,@Destino,NULL,N'Pendiente',N'Pendiente',NULL,NULL,NULL,NULL,@FechaCarga,@FechaCarga,NULL,@FechaEntrega,NULL,N'Programado',NULL,NULL,NULL,@UsuarioID,@Usuario,N'Embarque generado desde Lista de carga.',SYSDATETIME(),@Usuario,1);
+(
+    NULL,
+    @ClienteID,
+    @Cliente,
+    @Destino,
+    NULL,
+    N'Pendiente',
+    N'Pendiente',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    @FechaCarga,
+    @FechaCarga,
+    NULL,
+    @FechaEntrega,
+    NULL,
+    N'Programado',
+    NULL,
+    NULL,
+    NULL,
+    @UsuarioID,
+    @Usuario,
+    N'Embarque generado desde Lista de carga. Pendiente definir forma de salida.',
+    SYSDATETIME(),
+    @Usuario,
+    1
+);
 SELECT CONVERT(int,SCOPE_IDENTITY());";
+
                 int embarqueId;
+
                 await using (var cmd = new SqlCommand(sqlHeader, cn, tx))
                 {
                     cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = primero.ClienteID;
@@ -269,70 +491,216 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
                     cmd.Parameters.Add("@FechaEntrega", SqlDbType.Date).Value = grupo.Min(x => x.FechaRequerida);
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                     cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+
                     embarqueId = Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken));
                 }
+
                 var folio = $"LOG-{DateTime.Today:yyyy}-{embarqueId:000000}";
-                await using (var cmd = new SqlCommand("UPDATE dbo.Logistica_Embarques SET Folio=@Folio WHERE EmbarqueID=@Id;", cn, tx))
+
+                await using (var cmd = new SqlCommand(
+                    "UPDATE dbo.Logistica_Embarques SET Folio=@Folio WHERE EmbarqueID=@Id;",
+                    cn,
+                    tx))
                 {
                     cmd.Parameters.Add("@Folio", SqlDbType.NVarChar, 50).Value = folio;
                     cmd.Parameters.Add("@Id", SqlDbType.Int).Value = embarqueId;
                     await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
+
+                /*
+                 * Una programación puede contener varios Releases.
+                 * El embarque conserva un detalle por ReleaseDetalleID,
+                 * pero todos pertenecen a la misma carga física.
+                 */
                 foreach (var releaseGrupo in grupo.GroupBy(x => x.ReleaseDetalleID))
                 {
                     var r = releaseGrupo.First();
                     var cantidadDetalle = releaseGrupo.Sum(x => x.PendienteGenerar);
-                    var detalleId = await InsertarDetalleProgramacionAsync(cn, tx, embarqueId, r.ReleaseDetalleID, r.ParteID, r.SolicitudProduccionID, r.SecuenciaEntrega, r.FolioRelease, r.FechaCargaRelease, r.FechaRequerida, r.NumeroParte, r.Descripcion, r.NumeroOF, cantidadDetalle, cancellationToken);
+
+                    var detalleId = await InsertarDetalleProgramacionAsync(
+                        cn,
+                        tx,
+                        embarqueId,
+                        r.ReleaseDetalleID,
+                        r.ParteID,
+                        r.SolicitudProduccionID,
+                        r.SecuenciaEntrega,
+                        r.FolioRelease,
+                        r.FechaCargaRelease,
+                        r.FechaRequerida,
+                        r.NumeroParte,
+                        r.Descripcion,
+                        r.NumeroOF,
+                        cantidadDetalle,
+                        cancellationToken);
+
                     foreach (var p in releaseGrupo)
                     {
                         const string sqlRelacion = @"
 INSERT dbo.Logistica_ListaCargaProgramacionEmbarques
-(ListaCargaProgramacionID,EmbarqueID,EmbarqueDetalleID,CantidadAsignada,CantidadEnviada,Criticidad,Activo,FechaCreacion,CreadoPor)
-VALUES(@ProgramacionID,@EmbarqueID,@DetalleID,@Cantidad,0,@Criticidad,1,SYSDATETIME(),@Usuario);";
+(
+    ListaCargaProgramacionID,
+    EmbarqueID,
+    EmbarqueDetalleID,
+    CantidadAsignada,
+    CantidadEnviada,
+    Criticidad,
+    Activo,
+    FechaCreacion,
+    CreadoPor
+)
+VALUES
+(
+    @ProgramacionID,
+    @EmbarqueID,
+    @DetalleID,
+    @Cantidad,
+    0,
+    @Criticidad,
+    1,
+    SYSDATETIME(),
+    @Usuario
+);";
+
                         await using var cmd = new SqlCommand(sqlRelacion, cn, tx);
+
                         cmd.Parameters.Add("@ProgramacionID", SqlDbType.Int).Value = p.ProgramacionID;
                         cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
                         cmd.Parameters.Add("@DetalleID", SqlDbType.Int).Value = detalleId;
                         cmd.Parameters.Add("@Cantidad", SqlDbType.Int).Value = p.PendienteGenerar;
                         cmd.Parameters.Add("@Criticidad", SqlDbType.NVarChar, 30).Value = p.Criticidad;
                         cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+
                         await cmd.ExecuteNonQueryAsync(cancellationToken);
+
                         piezasGeneradas += p.PendienteGenerar;
                     }
                 }
-                const string sqlActualizar = @"
-UPDATE p SET Estatus=CASE WHEN ISNULL(x.Generado,0)>=p.CantidadProgramada THEN N'Generada' ELSE N'Programada' END,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+
+                const string sqlActualizarProgramaciones = @"
+UPDATE p
+SET
+    Estatus=
+        CASE
+            WHEN ISNULL(x.Generado,0)>=p.CantidadProgramada
+                THEN N'Generada'
+            ELSE N'Programada'
+        END,
+    FechaModificacion=SYSDATETIME(),
+    ActualizadoPor=@Usuario
 FROM dbo.Logistica_ListaCargaProgramacion p
-OUTER APPLY(SELECT SUM(e.CantidadAsignada) Generado FROM dbo.Logistica_ListaCargaProgramacionEmbarques e WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND e.Activo=1)x
-WHERE p.ListaCargaProgramacionID IN(SELECT DISTINCT ListaCargaProgramacionID FROM dbo.Logistica_ListaCargaProgramacionEmbarques WHERE EmbarqueID=@EmbarqueID AND Activo=1);";
-                await using (var cmd = new SqlCommand(sqlActualizar, cn, tx))
+OUTER APPLY
+(
+    SELECT SUM(e.CantidadAsignada) Generado
+    FROM dbo.Logistica_ListaCargaProgramacionEmbarques e
+    WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID
+      AND e.Activo=1
+)x
+WHERE p.ListaCargaProgramacionID IN
+(
+    SELECT DISTINCT ListaCargaProgramacionID
+    FROM dbo.Logistica_ListaCargaProgramacionEmbarques
+    WHERE EmbarqueID=@EmbarqueID
+      AND Activo=1
+);";
+
+                await using (var cmd = new SqlCommand(sqlActualizarProgramaciones, cn, tx))
                 {
                     cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
                     cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
                     await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
+
                 const string sqlHistorial = @"
-INSERT dbo.Logistica_EmbarqueHistorial(EmbarqueID,Evento,EstadoAnterior,EstadoNuevo,Observaciones,UsuarioID,UsuarioNombre,FechaEvento)
-VALUES(@EmbarqueID,N'GENERADO_LISTA_CARGA',NULL,N'Programado',@Observaciones,@UsuarioID,@Usuario,SYSDATETIME());";
+INSERT dbo.Logistica_EmbarqueHistorial
+(
+    EmbarqueID,
+    Evento,
+    EstadoAnterior,
+    EstadoNuevo,
+    Observaciones,
+    UsuarioID,
+    UsuarioNombre,
+    FechaEvento
+)
+VALUES
+(
+    @EmbarqueID,
+    N'GENERADO_LISTA_CARGA',
+    NULL,
+    N'Programado',
+    @Observaciones,
+    @UsuarioID,
+    @Usuario,
+    SYSDATETIME()
+);";
+
                 await using (var cmd = new SqlCommand(sqlHistorial, cn, tx))
                 {
                     cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
-                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = $"Embarque generado desde Lista de carga. Criticidad: {grupo.Key.Criticidad}. Fecha de carga/salida programada: {grupo.Key.FechaCarga:dd/MM/yyyy}. Modalidad de salida pendiente de definir.";
+                    cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value =
+                        $"Embarque generado desde Lista de carga. Criticidad: {grupo.Key.Criticidad}. Fecha de carga/salida programada: {grupo.Key.FechaCarga:dd/MM/yyyy}. Forma de salida pendiente de definir.";
                     cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
                     cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+
                     await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
+
+                embarquesIds.Add(embarqueId);
                 embarquesCreados++;
             }
+
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = $"Se generaron {embarquesCreados:N0} embarque(s) por {piezasGeneradas:N0} PZA. La modalidad de salida queda pendiente hasta la ejecución.";
+
+            /*
+             * Si el usuario pulsó "Generar embarque" sobre un grupo,
+             * normalmente aquí habrá un solo EmbarqueID.
+             *
+             * Lo mandamos directo al detalle para continuar el flujo.
+             */
+            if (embarquesIds.Count == 1)
+            {
+                TempData["LogisticaOk"] =
+                    $"Embarque generado correctamente por {piezasGeneradas:N0} PZA. Ahora define cómo saldrá la mercancía.";
+
+                return RedirectToAction(
+                    "Detalle",
+                    "LogisticaEmbarques",
+                    new
+                    {
+                        id = embarquesIds[0]
+                    });
+            }
+
+            /*
+             * Si utilizó "Generar todos", pueden haberse creado varios.
+             * En ese caso tiene más sentido volver a la Lista de carga.
+             */
+            TempData["LogisticaOk"] =
+                $"Se generaron {embarquesCreados:N0} embarques por {piezasGeneradas:N0} PZA. Puedes continuar su preparación desde Embarques.";
+
+            return RedirectSemana(
+                model.Anio,
+                model.NumeroSemana);
         }
         catch (Exception ex)
         {
-            try { await tx.RollbackAsync(cancellationToken); } catch { }
-            TempData["LogisticaError"] = "No fue posible generar los embarques: " + ex.Message;
+            try
+            {
+                await tx.RollbackAsync(cancellationToken);
+            }
+            catch
+            {
+            }
+
+            TempData["LogisticaError"] =
+                "No fue posible generar los embarques: " +
+                ex.Message;
+
+            return RedirectSemana(
+                model.Anio,
+                model.NumeroSemana);
         }
-        return RedirectSemana(model.Anio, model.NumeroSemana);
     }
 
     [HttpPost]
@@ -524,6 +892,281 @@ WHERE ListaCargaSemanaID=@ListaCargaSemanaID AND Activo=1;";
         return RedirectToAction(nameof(Index), new { anio, semana });
     }
 
+    [HttpGet]
+    public async Task<IActionResult> DiasCargaClientes(string? q = null, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+
+        q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+
+        await using var cn = await AbrirAsync(cancellationToken);
+
+        var vm = new LogisticaDiasCargaClientesVm
+        {
+            Busqueda = q
+        };
+
+        const string sqlClientes = @"
+SELECT
+    c.ClienteID,
+    ISNULL(c.Nombre,N'') AS Cliente
+FROM dbo.ERP_Clientes c
+WHERE
+    @Q IS NULL
+    OR c.Nombre LIKE N'%'+@Q+N'%'
+ORDER BY c.Nombre;";
+
+        await using (var cmd = new SqlCommand(sqlClientes, cn))
+        {
+            cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 250).Value = Db(q);
+
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            while (await rd.ReadAsync(cancellationToken))
+            {
+                vm.Clientes.Add(new LogisticaDiaCargaClienteVm
+                {
+                    ClienteID = Entero(rd, "ClienteID"),
+                    Cliente = Texto(rd, "Cliente")
+                });
+            }
+        }
+
+        if (vm.Clientes.Count == 0)
+            return View(vm);
+
+        const string sqlDias = @"
+SELECT
+    ClienteDiaCargaID,
+    ClienteID,
+    DiaSemana,
+    Prioridad,
+    VigenciaDesde,
+    VigenciaHasta,
+    Observaciones,
+    Activo
+FROM dbo.Logistica_ClienteDiasCarga
+WHERE Activo=1
+  AND DiaSemana BETWEEN 1 AND 6
+  AND (VigenciaDesde IS NULL OR VigenciaDesde<=CAST(GETDATE() AS date))
+  AND (VigenciaHasta IS NULL OR VigenciaHasta>=CAST(GETDATE() AS date))
+ORDER BY ClienteID,Prioridad,DiaSemana;";
+
+        await using (var cmd = new SqlCommand(sqlDias, cn))
+        {
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            while (await rd.ReadAsync(cancellationToken))
+            {
+                var clienteId = Entero(rd, "ClienteID");
+
+                var cliente = vm.Clientes.FirstOrDefault(x => x.ClienteID == clienteId);
+                if (cliente == null) continue;
+
+                var dia = Entero(rd, "DiaSemana");
+
+                if (dia is >= 1 and <= 6 && !cliente.DiasSeleccionados.Contains(dia))
+                    cliente.DiasSeleccionados.Add(dia);
+            }
+        }
+
+        foreach (var cliente in vm.Clientes)
+            cliente.DiasSeleccionados = cliente.DiasSeleccionados.OrderBy(x => x).ToList();
+
+        return View(vm);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GuardarDiasCargaCliente(LogisticaGuardarDiasCargaClienteVm model, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+
+        model.DiasSeleccionados = (model.DiasSeleccionados ?? new List<int>())
+            .Where(x => x >= 1 && x <= 6)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+        model.Busqueda = string.IsNullOrWhiteSpace(model.Busqueda)
+            ? null
+            : model.Busqueda.Trim();
+
+        if (model.ClienteID <= 0)
+        {
+            TempData["LogisticaError"] = "El cliente seleccionado no es válido.";
+            return RedirectToAction(nameof(DiasCargaClientes), new { q = model.Busqueda });
+        }
+
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
+        try
+        {
+            const string sqlCliente = @"
+SELECT COUNT_BIG(*)
+FROM dbo.ERP_Clientes WITH(HOLDLOCK)
+WHERE ClienteID=@ClienteID;";
+
+            await using (var cmd = new SqlCommand(sqlCliente, cn, tx))
+            {
+                cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = model.ClienteID;
+
+                if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) == 0)
+                    throw new InvalidOperationException("El cliente seleccionado ya no existe.");
+            }
+
+            /*
+             * Primero desactivamos los días que ya no fueron seleccionados.
+             * No eliminamos historial físicamente.
+             */
+            const string sqlDesactivar = @"
+UPDATE dbo.Logistica_ClienteDiasCarga
+SET Activo=0
+WHERE ClienteID=@ClienteID
+  AND Activo=1
+  AND DiaSemana BETWEEN 1 AND 6
+  AND DiaSemana NOT IN
+  (
+      SELECT TRY_CONVERT(int,value)
+      FROM STRING_SPLIT(@Dias,',')
+  );";
+
+            await using (var cmd = new SqlCommand(sqlDesactivar, cn, tx))
+            {
+                cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = model.ClienteID;
+                cmd.Parameters.Add("@Dias", SqlDbType.NVarChar, 100).Value = model.DiasSeleccionados.Count > 0
+                    ? string.Join(",", model.DiasSeleccionados)
+                    : string.Empty;
+
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            foreach (var dia in model.DiasSeleccionados)
+            {
+                /*
+                 * Si ya existe un registro histórico de ese cliente/día,
+                 * lo reactivamos en vez de insertar duplicados.
+                 */
+                const string sqlExiste = @"
+SELECT TOP(1) ClienteDiaCargaID
+FROM dbo.Logistica_ClienteDiasCarga WITH(UPDLOCK,HOLDLOCK)
+WHERE ClienteID=@ClienteID
+  AND DiaSemana=@DiaSemana
+ORDER BY Activo DESC,ClienteDiaCargaID DESC;";
+
+                int? clienteDiaCargaId;
+
+                await using (var cmd = new SqlCommand(sqlExiste, cn, tx))
+                {
+                    cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = model.ClienteID;
+                    cmd.Parameters.Add("@DiaSemana", SqlDbType.Int).Value = dia;
+
+                    var valor = await cmd.ExecuteScalarAsync(cancellationToken);
+
+                    clienteDiaCargaId = valor == null || valor == DBNull.Value
+                        ? null
+                        : Convert.ToInt32(valor);
+                }
+
+                if (clienteDiaCargaId.HasValue)
+                {
+                    const string sqlReactivar = @"
+UPDATE dbo.Logistica_ClienteDiasCarga
+SET
+    Activo=1,
+    Prioridad=1,
+    VigenciaDesde=NULL,
+    VigenciaHasta=NULL
+WHERE ClienteDiaCargaID=@ClienteDiaCargaID;";
+
+                    await using var cmd = new SqlCommand(sqlReactivar, cn, tx);
+
+                    cmd.Parameters.Add("@ClienteDiaCargaID", SqlDbType.Int).Value = clienteDiaCargaId.Value;
+
+                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+                else
+                {
+                    const string sqlInsertar = @"
+INSERT dbo.Logistica_ClienteDiasCarga
+(
+    ClienteID,
+    DiaSemana,
+    Prioridad,
+    VigenciaDesde,
+    VigenciaHasta,
+    Observaciones,
+    Activo
+)
+VALUES
+(
+    @ClienteID,
+    @DiaSemana,
+    1,
+    NULL,
+    NULL,
+    NULL,
+    1
+);";
+
+                    await using var cmd = new SqlCommand(sqlInsertar, cn, tx);
+
+                    cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = model.ClienteID;
+                    cmd.Parameters.Add("@DiaSemana", SqlDbType.Int).Value = dia;
+
+                    await cmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
+
+            await tx.CommitAsync(cancellationToken);
+
+            TempData["LogisticaOk"] = model.DiasSeleccionados.Count == 0
+                ? "Se eliminaron los días habituales de carga del cliente."
+                : $"Días habituales actualizados: {TextoDias(model.DiasSeleccionados)}.";
+
+            return RedirectToAction(nameof(DiasCargaClientes), new { q = model.Busqueda });
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                await tx.RollbackAsync(cancellationToken);
+            }
+            catch
+            {
+            }
+
+            TempData["LogisticaError"] = "No fue posible guardar los días habituales: " + ex.Message;
+
+            return RedirectToAction(nameof(DiasCargaClientes), new { q = model.Busqueda });
+        }
+    }
+
+    private static string TextoDias(IEnumerable<int> dias)
+    {
+        var nombres = dias
+            .Distinct()
+            .OrderBy(x => x)
+            .Select(x => x switch
+            {
+                1 => "Lunes",
+                2 => "Martes",
+                3 => "Miércoles",
+                4 => "Jueves",
+                5 => "Viernes",
+                6 => "Sábado",
+                _ => string.Empty
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        return nombres.Count == 0
+            ? "Sin días definidos"
+            : string.Join(", ", nombres);
+    }
     private static async Task<List<LogisticaListaCargaFilaVm>> CargarMatrizSemanalAsync(SqlConnection cn, int listaCargaSemanaId, DateTime fechaInicio, DateTime fechaFin, int? clienteId, string? q, string? criticidad, CancellationToken cancellationToken)
     {
         var filas = new Dictionary<(int ClienteID, int ParteID), LogisticaListaCargaFilaVm>();

@@ -610,8 +610,8 @@
             var cajasIndexadas = Model.CajasPT.Select((caja, index) => new { Caja = caja, Index = index }).ToList();
             var gruposPt = cajasIndexadas.GroupBy(x => new { x.Caja.ParteID, x.Caja.NumeroParte, x.Caja.Descripcion }).OrderBy(g => g.Min(x => x.Caja.FechaEntrada)).ThenBy(g => g.Key.NumeroParte).ToList();
             <div class="section">
-                <h2 class="section-title">2. Picking List / selección de PT</h2>
-                <p class="section-sub">Escanea o selecciona cajas completas. Esta selección será la base del Picking List del embarque.</p>
+                <h2 class="section-title">2. Packing List / selección de PT</h2>
+                <p class="section-sub">Escanea o selecciona cajas completas. Esta selección será la base del Packing List del embarque.</p>
                 <div class="scan">
                     <div>
                         <label class="scan-label" for="logisticaScanInput">Escáner de cajas PT</label>
@@ -720,7 +720,7 @@
         }
 
         <div class="floating">
-            <div class="floating-info"><div class="step-badge">Paso 1 de 2</div><div class="floating-summary"><small>Picking List / selección PT</small><strong id="nextSummary">Selecciona o escanea al menos una caja completa</strong></div></div>
+            <div class="floating-info"><div class="step-badge">Paso 1 de 2</div><div class="floating-summary"><small>Packing List / selección PT</small><strong id="nextSummary">Selecciona o escanea al menos una caja completa</strong></div></div>
             <div class="floating-actions"><a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a><button type="submit" class="btn btn-primary" id="btnGuardar" disabled>Siguiente: datos del embarque</button></div>
         </div>
     </form>

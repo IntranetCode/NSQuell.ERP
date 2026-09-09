@@ -4,12 +4,21 @@
 @{
     Layout = null;
     ViewData["Title"] = "Lista de carga semanal";
+
     var semanaAnteriorFecha = Model.FechaInicio.AddDays(-7);
     var semanaSiguienteFecha = Model.FechaInicio.AddDays(7);
+
     var anioAnterior = ISOWeek.GetYear(semanaAnteriorFecha);
     var numeroSemanaAnterior = ISOWeek.GetWeekOfYear(semanaAnteriorFecha);
+
     var anioSiguiente = ISOWeek.GetYear(semanaSiguienteFecha);
     var numeroSemanaSiguiente = ISOWeek.GetWeekOfYear(semanaSiguienteFecha);
+
+    var gruposClientes = Model.Filas
+        .GroupBy(x => new { x.ClienteID, x.Cliente })
+        .OrderByDescending(x => x.Sum(y => y.Atraso))
+        .ThenBy(x => x.Key.Cliente)
+        .ToList();
 }
 <!DOCTYPE html>
 <html lang="es">
@@ -17,23 +26,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>@ViewData["Title"]</title>
+
     <style>
         :root {
-            --navy: #172033;
+            --navy: #101b31;
+            --navy2: #172b4d;
             --blue: #173a7a;
-            --blue2: #233f80;
-            --line: #dce5ef;
-            --bg: #f3f6f9;
-            --soft: #fbfcfd;
-            --text: #1f2b3d;
-            --muted: #6c7889;
+            --blue2: #2454a4;
+            --blueSoft: #edf4ff;
+            --line: #d4deea;
+            --line2: #c4d0de;
+            --bg: #edf2f7;
+            --text: #172033;
+            --muted: #66758a;
             --danger: #b42318;
-            --danger-bg: #fff1f0;
-            --warn: #9a6700;
-            --warn-bg: #fff8e6;
-            --ok: #137a4b;
-            --ok-bg: #ecfdf3;
-            --shadow: 0 8px 24px rgba(23,32,51,.08)
+            --danger2: #d92d20;
+            --dangerBg: #fff1f0;
+            --warn: #936100;
+            --warn2: #b77900;
+            --warnBg: #fff7df;
+            --ok: #087443;
+            --ok2: #15955c;
+            --okBg: #eaf9f1;
+            --purple: #6941c6;
+            --purpleBg: #f2edff;
+            --shadow: 0 5px 18px rgba(16,27,49,.08)
         }
 
         * {
@@ -52,60 +69,115 @@
             font: inherit
         }
 
+        body {
+            min-height: 100vh
+        }
+
         .page {
-            max-width: 1820px;
+            max-width: 1880px;
             margin: 0 auto;
             padding: 16px
         }
 
-        .topbar {
+        .header {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: space-between;
-            gap: 16px;
+            gap: 18px;
             margin-bottom: 12px
         }
 
-        .title-wrap h1 {
-            margin: 0;
-            color: var(--navy);
-            font-size: 24px;
-            line-height: 1.15
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0
         }
 
-        .title-wrap p {
-            margin: 5px 0 0;
-            color: var(--muted);
+        .header-title {
+            min-width: 0
+        }
+
+            .header-title h1 {
+                margin: 0;
+                color: var(--navy);
+                font-size: 25px;
+                font-weight: 900;
+                letter-spacing: -.02em
+            }
+
+            .header-title p {
+                margin: 4px 0 0;
+                color: var(--muted);
+                font-size: 12px
+            }
+
+        .back-main {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            background: linear-gradient(135deg,#101b31,#173a7a);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 11px;
+            padding: 10px 16px;
+            box-shadow: 0 6px 17px rgba(16,27,49,.25);
+            min-width: 150px;
+            transition: .15s
+        }
+
+            .back-main:hover {
+                filter: brightness(1.1);
+                transform: translateY(-1px)
+            }
+
+        .back-icon {
+            font-size: 26px;
+            line-height: 1
+        }
+
+        .back-main small {
+            display: block;
+            font-size: 7px;
+            letter-spacing: .11em;
+            color: #c8d5e8;
+            font-weight: 900
+        }
+
+        .back-main strong {
+            display: block;
+            margin-top: 1px;
             font-size: 13px
         }
 
-        .week-nav {
+        .header-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: flex-end
+            gap: 7px;
+            flex-wrap: wrap
         }
 
         .btn {
-            border: 1px solid var(--line);
+            border: 1px solid var(--line2);
             background: #fff;
             color: var(--navy);
             padding: 7px 11px;
             border-radius: 7px;
             text-decoration: none;
             cursor: pointer;
-            font-weight: 600;
+            font-weight: 700;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
-            min-height: 34px
+            min-height: 34px;
+            transition: .12s;
+            white-space: nowrap
         }
 
             .btn:hover {
-                border-color: #aabbd0;
-                background: #f8fafc
+                border-color: #8ca4c0;
+                background: #f8fbff
             }
 
         .btn-primary {
@@ -116,6 +188,7 @@
 
             .btn-primary:hover {
                 background: var(--blue2);
+                border-color: var(--blue2);
                 color: #fff
             }
 
@@ -125,37 +198,46 @@
             color: #fff
         }
 
+            .btn-success:hover {
+                background: var(--ok2);
+                border-color: var(--ok2)
+            }
+
         .btn-danger {
             background: #fff;
-            border-color: #e9b3ad;
+            border-color: #efb5af;
             color: var(--danger)
         }
 
-        .btn-warning {
-            background: var(--warn-bg);
-            border-color: #ead59e;
-            color: #725000
+            .btn-danger:hover {
+                background: var(--dangerBg)
+            }
+
+        .btn-soft {
+            background: var(--blueSoft);
+            border-color: #c9daf5;
+            color: var(--blue)
         }
 
         .btn-sm {
-            padding: 5px 8px;
             min-height: 29px;
-            font-size: 12px
+            padding: 5px 8px;
+            font-size: 11px
         }
 
         .btn:disabled, .btn.disabled {
-            opacity: .45;
-            cursor: not-allowed;
+            opacity: .42;
             pointer-events: none
         }
 
         .week-box {
             background: #fff;
             border: 1px solid var(--line);
-            padding: 7px 12px;
-            border-radius: 7px;
+            border-radius: 8px;
+            padding: 7px 13px;
             text-align: center;
-            min-width: 132px
+            min-width: 145px;
+            box-shadow: var(--shadow)
         }
 
             .week-box strong {
@@ -165,89 +247,45 @@
             }
 
             .week-box span {
-                font-size: 11px;
+                font-size: 9px;
                 color: var(--muted)
             }
 
-        .status {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 8px;
-            border-radius: 999px;
-            font-weight: 700;
-            font-size: 10px;
-            white-space: nowrap
-        }
-
-        .status-open {
-            background: var(--ok-bg);
-            color: var(--ok)
-        }
-
-        .status-closed {
-            background: #eef1f4;
-            color: #576271
-        }
-
-        .status-exp {
-            background: var(--danger-bg);
-            color: var(--danger)
-        }
-
-        .status-prog {
-            background: #edf3ff;
-            color: var(--blue)
-        }
-
-        .status-warn {
-            background: var(--warn-bg);
-            color: var(--warn)
-        }
-
-        .status-ok {
-            background: var(--ok-bg);
-            color: var(--ok)
-        }
-
         .notice {
             padding: 10px 12px;
-            border-radius: 7px;
-            margin: 0 0 10px;
-            border: 1px solid
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid;
+            font-size: 12px
         }
 
         .notice-ok {
-            background: var(--ok-bg);
-            border-color: #b7ebd0;
-            color: #12633f
+            background: var(--okBg);
+            border-color: #afe3c8;
+            color: #085f39
         }
 
         .notice-error {
-            background: var(--danger-bg);
-            border-color: #f3c3be;
-            color: #8f1d14
-        }
-
-        .notice-info {
-            background: #edf3ff;
-            border-color: #cddcf4;
-            color: #274c84
+            background: var(--dangerBg);
+            border-color: #efb8b2;
+            color: #8e1d14
         }
 
         .summary {
             display: grid;
-            grid-template-columns: repeat(8,minmax(110px,1fr));
-            border: 1px solid var(--line);
+            grid-template-columns: repeat(8,minmax(105px,1fr));
             background: #fff;
-            border-radius: 9px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 10px
+            margin-bottom: 10px;
+            box-shadow: var(--shadow)
         }
 
         .summary-item {
             padding: 9px 11px;
             border-right: 1px solid var(--line);
-            min-width: 0
+            border-top: 3px solid var(--blue)
         }
 
             .summary-item:last-child {
@@ -256,98 +294,125 @@
 
             .summary-item span {
                 display: block;
-                color: var(--muted);
-                font-size: 9px;
+                font-size: 8px;
                 text-transform: uppercase;
-                letter-spacing: .05em
+                font-weight: 800;
+                color: var(--muted)
             }
 
             .summary-item strong {
                 display: block;
-                margin-top: 2px;
+                margin-top: 3px;
                 color: var(--navy);
-                font-size: 17px;
-                white-space: nowrap
+                font-size: 18px;
+                font-weight: 900
             }
 
-            .summary-item.danger strong {
-                color: var(--danger)
+            .summary-item.danger {
+                border-top-color: var(--danger2)
             }
 
-            .summary-item.warning strong {
-                color: var(--warn)
+                .summary-item.danger strong {
+                    color: var(--danger)
+                }
+
+            .summary-item.warning {
+                border-top-color: #d99a14
             }
 
-            .summary-item.success strong {
-                color: var(--ok)
+                .summary-item.warning strong {
+                    color: var(--warn2)
+                }
+
+            .summary-item.success {
+                border-top-color: var(--ok2)
             }
+
+                .summary-item.success strong {
+                    color: var(--ok)
+                }
 
         .toolbar {
             display: flex;
-            align-items: end;
-            gap: 8px;
+            align-items: center;
+            gap: 7px;
             flex-wrap: wrap;
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 9px;
+            border-radius: 10px;
             padding: 9px 10px;
-            margin-bottom: 10px
+            margin-bottom: 10px;
+            box-shadow: var(--shadow)
         }
 
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 3px
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 280px
         }
 
-            .field label {
-                font-size: 10px;
-                text-transform: uppercase;
-                color: var(--muted);
-                font-weight: 700
+            .search-box input {
+                width: 100%;
+                height: 35px;
+                border: 1px solid var(--line2);
+                border-radius: 7px;
+                padding: 7px 10px 7px 32px;
+                outline: none
             }
 
-            .field input, .field select, .field textarea {
-                border: 1px solid #cfd9e5;
-                border-radius: 6px;
-                background: #fff;
-                padding: 7px 8px;
-                outline: none;
-                color: var(--text)
-            }
-
-                .field input:focus, .field select:focus, .field textarea:focus {
-                    border-color: #7694c4;
-                    box-shadow: 0 0 0 2px rgba(35,63,128,.08)
+                .search-box input:focus {
+                    border-color: #6389be;
+                    box-shadow: 0 0 0 3px rgba(35,63,128,.08)
                 }
 
-        .field-search {
-            flex: 1;
-            min-width: 220px
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            top: 9px;
+            color: #7b899a
         }
 
-        .field-client {
-            min-width: 220px
+        .toolbar select {
+            height: 35px;
+            border: 1px solid var(--line2);
+            border-radius: 7px;
+            padding: 5px 9px;
+            background: #fff;
+            min-width: 185px
         }
 
-        .field-critical {
-            min-width: 145px
+        .toolbar-label {
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--muted)
         }
 
-        .week-actions {
-            margin-left: auto;
-            display: flex;
-            gap: 6px;
+        .status {
+            display: inline-flex;
             align-items: center;
-            flex-wrap: wrap
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-weight: 800;
+            font-size: 9px
+        }
+
+        .status-exp {
+            background: var(--dangerBg);
+            color: var(--danger)
+        }
+
+        .status-generated {
+            background: var(--purpleBg);
+            color: var(--purple)
         }
 
         .section {
             background: #fff;
             border: 1px solid var(--line);
-            border-radius: 9px;
+            border-radius: 10px;
             overflow: hidden;
-            margin-bottom: 12px
+            box-shadow: var(--shadow)
         }
 
         .section-head {
@@ -355,324 +420,486 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            padding: 9px 11px;
+            padding: 10px 12px;
             border-bottom: 1px solid var(--line);
-            background: var(--soft)
+            background: #f8fafc
         }
 
             .section-head h2 {
                 font-size: 14px;
                 color: var(--navy);
-                margin: 0
+                margin: 0;
+                font-weight: 900
             }
 
             .section-head small {
-                color: var(--muted)
+                display: block;
+                color: var(--muted);
+                font-size: 10px;
+                margin-top: 2px
             }
 
-        .section-actions {
+        .clients {
+            padding: 9px
+        }
+
+        .client-accordion {
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            margin-bottom: 7px;
+            overflow: hidden;
+            background: #fff
+        }
+
+            .client-accordion.has-exp {
+                border-color: #edc1bc
+            }
+
+        .client-head {
+            width: 100%;
+            border: 0;
+            background: #f8fafc;
+            padding: 0;
+            cursor: pointer;
+            text-align: left;
+            color: inherit
+        }
+
+        .client-accordion.has-exp .client-head {
+            background: linear-gradient(90deg,#fff4f2,#fafbfd 40%)
+        }
+
+        .client-head-inner {
+            display: grid;
+            grid-template-columns: minmax(220px,1.8fr) repeat(5,minmax(90px,.65fr)) 32px;
+            align-items: center;
+            gap: 4px;
+            min-height: 58px;
+            padding: 7px 9px
+        }
+
+        .client-name {
+            font-weight: 900;
+            color: var(--navy);
+            font-size: 13px
+        }
+
+        .client-sub {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+            font-size: 9px;
+            color: var(--muted)
+        }
+
+        .client-kpi {
+            text-align: center;
+            border-left: 1px solid #e4eaf1
+        }
+
+            .client-kpi span {
+                display: block;
+                font-size: 7px;
+                text-transform: uppercase;
+                color: #8491a2;
+                font-weight: 800
+            }
+
+            .client-kpi strong {
+                font-size: 12px;
+                color: var(--navy)
+            }
+
+            .client-kpi.danger strong {
+                color: var(--danger)
+            }
+
+            .client-kpi.warning strong {
+                color: var(--warn2)
+            }
+
+            .client-kpi.success strong {
+                color: var(--ok)
+            }
+
+        .chevron {
+            font-size: 17px;
+            color: #728096;
+            transition: .15s
+        }
+
+        .client-accordion.open .chevron {
+            transform: rotate(180deg)
+        }
+
+        .client-body {
+            display: none;
+            border-top: 1px solid var(--line)
+        }
+
+        .client-accordion.open .client-body {
+            display: block
+        }
+
+        .client-toolbar {
             display: flex;
             align-items: center;
-            gap: 7px;
-            flex-wrap: wrap
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 9px;
+            background: #fbfcfe;
+            border-bottom: 1px solid var(--line);
+            font-size: 9px;
+            color: var(--muted)
         }
 
         .table-wrap {
-            width: 100%;
             overflow-x: auto
         }
 
-        .matrix {
+        .parts {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            min-width: 1590px
+            min-width: 1400px
         }
 
-            .matrix th {
-                background: #eef3f8;
-                color: #314158;
-                border-right: 1px solid var(--line);
-                border-bottom: 1px solid var(--line);
-                font-size: 9px;
-                text-transform: uppercase;
-                letter-spacing: .02em;
+            .parts th {
+                background: #e9eff6;
+                color: #33445c;
+                border-right: 1px solid #d5dee9;
+                border-bottom: 1px solid #ccd7e4;
                 padding: 6px 4px;
+                font-size: 8px;
+                text-transform: uppercase;
+                text-align: center
+            }
+
+            .parts td {
+                border-right: 1px solid #e6ebf2;
+                border-bottom: 1px solid #e5ebf1;
+                padding: 5px 4px;
+                font-size: 10px;
                 text-align: center;
                 vertical-align: middle
             }
 
-            .matrix td {
-                border-right: 1px solid #edf1f5;
-                border-bottom: 1px solid #e8edf3;
-                padding: 5px 4px;
-                vertical-align: middle;
-                text-align: center;
-                font-size: 11px
+            .parts tbody tr:hover {
+                background: #f7faff
             }
 
-                .matrix th:last-child, .matrix td:last-child {
-                    border-right: 0
-                }
-
-            .matrix tbody tr:hover {
-                background: #f8fbff
+            .parts tr.part-exp {
+                background: #fff9f8
             }
 
-            .matrix tbody tr.row-exp {
-                background: #fff8f7
-            }
-
-                .matrix tbody tr.row-exp:hover {
-                    background: #fff1ef
-                }
-
-            .matrix tbody tr.row-pending td:first-child {
-                box-shadow: inset 3px 0 0 #d99a16
-            }
-
-            .matrix .left {
+            .parts .left {
                 text-align: left
             }
-
-            .matrix .num {
-                font-variant-numeric: tabular-nums
-            }
-
-            .matrix .strong {
-                font-weight: 700;
-                color: var(--navy)
-            }
-
-            .matrix .late {
-                color: var(--danger);
-                font-weight: 800;
-                background: #fff0ee
-            }
-
-            .matrix .sent {
-                color: var(--ok);
-                font-weight: 800
-            }
-
-            .matrix .pending {
-                color: var(--warn);
-                font-weight: 800
-            }
-
-            .matrix .muted {
-                color: #a2acb9
-            }
-
-        .c-cliente {
-            width: 145px
-        }
-
-        .c-ref {
-            width: 110px
-        }
-
-        .c-desc {
-            width: 190px
-        }
-
-        .c-total {
-            width: 72px
-        }
-
-        .c-atraso {
-            width: 66px
-        }
-
-        .c-dia {
-            width: 72px
-        }
-
-        .c-ubi {
-            width: 160px
-        }
-
-        .c-programado {
-            width: 105px
-        }
-
-        .c-enviado {
-            width: 95px
-        }
-
-        .c-action {
-            width: 92px
-        }
-
-        .client {
-            font-weight: 700;
-            color: #24334a
-        }
 
         .reference {
             font-family: Consolas,monospace;
-            font-size: 11px
+            font-weight: 700;
+            color: #223b61
         }
 
         .designation {
+            display: block;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
-            display: block
+            text-overflow: ellipsis
         }
 
-        .habitual {
-            display: block;
-            margin-top: 3px;
-            font-size: 9px;
-            color: #627188;
-            line-height: 1.15
+        .demand-number {
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--navy)
+        }
+
+        .late {
+            color: var(--danger) !important
         }
 
         .day-cell {
-            min-height: 38px;
+            min-height: 37px;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 1px
+            flex-direction: column
         }
 
         .day-value {
-            font-weight: 800;
-            color: var(--blue);
-            font-size: 12px
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--blue)
         }
+
+            .day-value.empty {
+                color: #9cabbc
+            }
 
         .day-required {
-            font-size: 8px;
-            color: #8995a5;
-            white-space: nowrap
+            font-size: 7px;
+            color: #8491a1
         }
 
-        .day-habitual {
-            background: #f3f7ff
+        td.habitual {
+            background: #eef4ff
         }
 
-            .day-habitual .day-value {
-                color: #173a7a
+            td.habitual .day-cell:after {
+                content: "Habitual";
+                font-size: 6px;
+                text-transform: uppercase;
+                font-weight: 800;
+                color: #6681a9
+            }
+
+        .progress {
+            height: 4px;
+            border-radius: 999px;
+            background: #e3eaf2;
+            overflow: hidden;
+            margin-top: 4px
+        }
+
+            .progress span {
+                display: block;
+                height: 100%;
+                background: var(--blue2)
+            }
+
+            .progress.success span {
+                background: var(--ok2)
+            }
+
+        .track-main {
+            font-size: 11px;
+            font-weight: 900
+        }
+
+        .track-sub {
+            display: block;
+            font-size: 7px;
+            color: var(--muted);
+            margin-top: 2px
+        }
+
+            .track-sub.warn {
+                color: var(--warn)
+            }
+
+            .track-sub.ok {
+                color: var(--ok)
             }
 
         .location {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            align-items: flex-start
+            text-align: left
         }
 
             .location strong {
-                font-size: 10px;
-                color: #33445d;
-                white-space: normal;
-                text-align: left
+                display: block;
+                font-size: 9px
             }
 
             .location small {
-                font-size: 9px;
-                color: var(--muted);
-                line-height: 1.2;
-                text-align: left
+                font-size: 7px;
+                color: var(--muted)
             }
 
-        .metric-detail {
-            display: block;
-            font-size: 8px;
-            font-weight: 500;
-            color: var(--muted);
-            margin-top: 2px;
-            line-height: 1.2
-        }
-
-        .progress {
-            height: 3px;
-            background: #e9eef4;
-            border-radius: 999px;
-            overflow: hidden;
-            margin-top: 3px
-        }
-
-            .progress > span {
-                display: block;
-                height: 100%;
-                background: #3d6db4
-            }
-
-        .progress-ok > span {
-            background: #25845c
-        }
-
-        .empty {
-            padding: 28px;
+        .no-results {
+            display: none;
+            padding: 25px;
             text-align: center;
             color: var(--muted)
         }
 
-        .agenda {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 900px
+        .shipment-zone {
+            padding: 9px;
+            border-bottom: 1px solid var(--line);
+            background: #f8fafc
         }
 
-            .agenda th {
-                background: #eef3f8;
-                color: #314158;
-                font-size: 10px;
-                text-transform: uppercase;
-                padding: 7px 8px;
-                border-bottom: 1px solid var(--line);
-                text-align: left
-            }
-
-            .agenda td {
-                padding: 7px 8px;
-                border-bottom: 1px solid #edf1f5;
-                font-size: 12px
-            }
-
-            .agenda tbody tr:hover {
-                background: #f8fbff
-            }
-
-            .agenda a {
-                color: var(--blue);
-                text-decoration: none;
-                font-weight: 700
-            }
-
-                .agenda a:hover {
-                    text-decoration: underline
-                }
-
-        .obs-bar {
+        .shipment-zone-title {
             display: flex;
-            gap: 8px;
-            align-items: end
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 7px
         }
 
-            .obs-bar .field {
-                flex: 1
+            .shipment-zone-title strong {
+                font-size: 10px;
+                color: var(--navy)
             }
 
-            .obs-bar textarea {
-                resize: vertical;
-                min-height: 34px;
-                max-height: 100px
+            .shipment-zone-title span {
+                font-size: 8px;
+                color: var(--muted)
+            }
+
+        .shipment-groups {
+            display: grid;
+            grid-template-columns: repeat(auto-fit,minmax(320px,1fr));
+            gap: 7px
+        }
+
+        .shipment-group {
+            border: 1px solid #cad7e7;
+            border-radius: 8px;
+            background: #fff;
+            overflow: hidden;
+            box-shadow: 0 2px 7px rgba(16,27,49,.04)
+        }
+
+            .shipment-group.exp {
+                border-color: #efc0bb
+            }
+
+        .shipment-group-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 7px 8px;
+            background: #eef4fb;
+            border-bottom: 1px solid #dbe4ee
+        }
+
+        .shipment-group.exp .shipment-group-head {
+            background: #fff3f1
+        }
+
+        .shipment-group-title {
+            min-width: 0
+        }
+
+            .shipment-group-title strong {
+                display: block;
+                font-size: 10px;
+                color: var(--navy)
+            }
+
+            .shipment-group-title span {
+                display: block;
+                margin-top: 1px;
+                font-size: 8px;
+                color: var(--muted)
+            }
+
+        .shipment-group-total {
+            text-align: right;
+            white-space: nowrap
+        }
+
+            .shipment-group-total strong {
+                display: block;
+                font-size: 13px;
+                color: var(--blue)
+            }
+
+        .shipment-group.exp .shipment-group-total strong {
+            color: var(--danger)
+        }
+
+        .shipment-group-total span {
+            display: block;
+            font-size: 7px;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-weight: 800
+        }
+
+        .shipment-lines {
+            padding: 5px 8px
+        }
+
+        .shipment-line {
+            display: grid;
+            grid-template-columns: 105px minmax(0,1fr) 80px;
+            gap: 7px;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px dashed #e1e7ef
+        }
+
+            .shipment-line:last-child {
+                border-bottom: 0
+            }
+
+            .shipment-line .ref {
+                font: 700 9px Consolas,monospace;
+                color: #29446a;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap
+            }
+
+            .shipment-line .desc {
+                font-size: 8px;
+                color: #607086;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap
+            }
+
+            .shipment-line .qty {
+                text-align: right;
+                font-size: 9px;
+                font-weight: 900;
+                color: var(--navy)
+            }
+
+        .shipment-group-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 8px;
+            border-top: 1px solid #e1e7ef;
+            background: #fbfcfe
+        }
+
+            .shipment-group-foot small {
+                font-size: 7px;
+                color: var(--muted);
+                line-height: 1.25
+            }
+
+        .btn-generate-group {
+            background: var(--ok);
+            border-color: var(--ok);
+            color: #fff
+        }
+
+            .btn-generate-group:hover {
+                background: var(--ok2);
+                border-color: var(--ok2);
+                color: #fff
+            }
+
+        .global-generate {
+            background: #fff;
+            border-color: #a8cbb9;
+            color: var(--ok)
+        }
+
+            .global-generate:hover {
+                background: var(--okBg);
+                border-color: #7fba9d;
+                color: var(--ok)
             }
 
         .dialog-backdrop {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(12,19,31,.52);
+            background: rgba(10,20,35,.62);
             z-index: 1000;
             padding: 20px;
             align-items: center;
-            justify-content: center
+            justify-content: center;
+            backdrop-filter: blur(2px)
         }
 
             .dialog-backdrop.open {
@@ -680,39 +907,34 @@
             }
 
         .dialog {
-            width: min(720px,100%);
-            max-height: calc(100vh - 40px);
+            width: min(850px,100%);
+            max-height: calc(100vh - 35px);
             background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 18px 50px rgba(0,0,0,.22);
+            border-radius: 12px;
+            box-shadow: 0 22px 65px rgba(0,0,0,.30);
             overflow: hidden;
             display: flex;
             flex-direction: column
         }
 
-        .dialog-sm {
-            width: min(560px,100%)
-        }
-
         .dialog-head {
-            padding: 12px 14px;
+            padding: 13px 15px;
             border-bottom: 1px solid var(--line);
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            gap: 10px
+            background: #fbfcfe
         }
 
             .dialog-head h3 {
                 margin: 0;
                 color: var(--navy);
-                font-size: 16px
+                font-size: 17px
             }
 
             .dialog-head small {
                 display: block;
-                margin-top: 2px;
-                color: var(--muted)
+                color: var(--muted);
+                margin-top: 2px
             }
 
         .dialog-body {
@@ -721,270 +943,395 @@
         }
 
         .dialog-foot {
-            padding: 10px 14px;
+            padding: 11px 14px;
             border-top: 1px solid var(--line);
             display: flex;
             justify-content: flex-end;
-            gap: 7px
+            gap: 7px;
+            background: #fbfcfe
         }
-
-        .dialog-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px
-        }
-
-            .dialog-grid .full {
-                grid-column: 1/-1
-            }
 
         .x {
             border: 0;
             background: none;
-            font-size: 20px;
+            font-size: 21px;
             cursor: pointer;
-            color: #6c7889
+            color: #69778a
         }
 
-        .legend {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            font-size: 10px;
-            color: var(--muted)
-        }
-
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 3px
-        }
-
-        .dot-exp {
-            background: #d92d20
-        }
-
-        .dot-prog {
-            background: #2f65b0
-        }
-
-        .dot-hab {
-            background: #8ea8d4
-        }
-
-        .state-actions {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-            flex-wrap: wrap
-        }
-
-        .program-summary {
+        .planner-top {
             display: grid;
             grid-template-columns: repeat(4,1fr);
-            gap: 7px;
-            margin-bottom: 12px
+            gap: 8px;
+            margin-bottom: 11px
         }
 
-            .program-summary > div {
-                border: 1px solid var(--line);
-                border-radius: 7px;
-                padding: 7px 8px;
-                background: var(--soft)
-            }
-
-            .program-summary span {
-                display: block;
-                font-size: 9px;
-                text-transform: uppercase;
-                color: var(--muted)
-            }
-
-            .program-summary strong {
-                display: block;
-                margin-top: 2px;
-                color: var(--navy);
-                font-size: 14px
-            }
-
-        .program-table {
-            width: 100%;
-            border-collapse: collapse
+        .planner-kpi {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 9px;
+            background: #f8fafc
         }
 
-            .program-table th {
-                font-size: 9px;
+            .planner-kpi span {
+                display: block;
+                font-size: 8px;
                 text-transform: uppercase;
                 color: var(--muted);
-                text-align: left;
-                padding: 5px;
-                border-bottom: 1px solid var(--line)
+                font-weight: 800
             }
 
-            .program-table td {
-                padding: 5px;
-                border-bottom: 1px solid #edf1f5;
-                vertical-align: top
+            .planner-kpi strong {
+                display: block;
+                margin-top: 2px;
+                font-size: 17px;
+                color: var(--navy)
             }
 
-            .program-table input {
-                width: 100%;
-                border: 1px solid #cfd9e5;
-                border-radius: 6px;
-                padding: 7px
+            .planner-kpi.remaining {
+                background: var(--warnBg);
+                border-color: #e6cc87
             }
 
-            .program-table .col-date {
-                width: 160px
+                .planner-kpi.remaining strong {
+                    color: var(--warn2)
+                }
+
+            .planner-kpi.complete {
+                background: var(--okBg);
+                border-color: #a9dec3
             }
 
-            .program-table .col-qty {
-                width: 120px
-            }
+                .planner-kpi.complete strong {
+                    color: var(--ok)
+                }
 
-            .program-table .col-delete {
-                width: 42px
-            }
-
-        .program-warning {
-            display: none;
-            color: var(--warn);
-            font-size: 9px;
-            margin-top: 3px;
-            line-height: 1.2
+        .live-location {
+            border: 1px solid #cdd9e8;
+            border-radius: 9px;
+            background: #f5f9ff;
+            margin-bottom: 11px;
+            overflow: hidden
         }
 
-            .program-warning.show {
-                display: block
-            }
-
-        .program-footer {
+        .live-location-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid var(--line)
+            padding: 7px 9px;
+            background: #edf4ff;
+            border-bottom: 1px solid #dbe5f0
         }
 
-        .program-total {
-            font-size: 12px;
+            .live-location-head strong {
+                font-size: 10px;
+                color: var(--navy)
+            }
+
+        .live-location-grid {
+            display: grid;
+            grid-template-columns: 1.4fr repeat(3,1fr)
+        }
+
+            .live-location-grid > div {
+                padding: 8px 10px;
+                border-right: 1px solid #dbe5f0
+            }
+
+                .live-location-grid > div:last-child {
+                    border-right: 0
+                }
+
+            .live-location-grid span {
+                display: block;
+                font-size: 7px;
+                text-transform: uppercase;
+                color: #7b899a;
+                font-weight: 800
+            }
+
+            .live-location-grid strong {
+                display: block;
+                margin-top: 2px;
+                font-size: 12px;
+                color: var(--navy)
+            }
+
+        .live-location-foot {
+            padding: 6px 9px;
+            border-top: 1px solid #dbe5f0;
+            font-size: 9px;
             color: var(--muted)
         }
 
-            .program-total strong {
-                color: var(--navy);
-                font-size: 16px
-            }
-
-        .hint {
-            font-size: 10px;
-            color: var(--muted);
-            margin: 4px 0 0;
-            line-height: 1.35
+        #liveActualizado {
+            float: right
         }
 
-        .warning-box {
-            background: var(--warn-bg);
-            border: 1px solid #ead59e;
-            color: #715200;
-            border-radius: 7px;
-            padding: 8px 10px;
+        .planner-message {
+            border-radius: 8px;
+            padding: 9px 10px;
             font-size: 11px;
+            margin-bottom: 10px;
+            border: 1px solid
+        }
+
+            .planner-message.info {
+                background: var(--blueSoft);
+                border-color: #c3d5f1;
+                color: #254c85
+            }
+
+            .planner-message.warning {
+                background: var(--warnBg);
+                border-color: #e7ca7e;
+                color: #715000
+            }
+
+            .planner-message.error {
+                background: var(--dangerBg);
+                border-color: #efb4ae;
+                color: #8b1e17
+            }
+
+        .planner-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
             margin-bottom: 10px
         }
 
-        @@media(max-width:1250px) {
+        .planner-help {
+            padding: 8px 10px;
+            border: 1px solid #cbd9eb;
+            background: #f5f8fc;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 10px;
+            color: #52657e
+        }
+
+            .planner-help strong {
+                color: var(--navy)
+            }
+
+        .planner-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--line)
+        }
+
+            .planner-table th {
+                background: #eaf0f6;
+                color: #52647b;
+                font-size: 8px;
+                text-transform: uppercase;
+                text-align: left;
+                padding: 6px
+            }
+
+            .planner-table td {
+                padding: 6px;
+                border-bottom: 1px solid var(--line);
+                vertical-align: top
+            }
+
+            .planner-table input {
+                width: 100%;
+                border: 1px solid var(--line2);
+                border-radius: 6px;
+                padding: 7px;
+                outline: none
+            }
+
+                .planner-table input:focus {
+                    border-color: #668ac0;
+                    box-shadow: 0 0 0 2px rgba(35,63,128,.07)
+                }
+
+                .planner-table input[readonly] {
+                    background: #edf3fa;
+                    color: var(--navy);
+                    font-weight: 900;
+                    cursor: not-allowed;
+                    border-color: #c9d7e8
+                }
+
+            .planner-table .col-date {
+                width: 160px
+            }
+
+            .planner-table .col-qty {
+                width: 135px
+            }
+
+            .planner-table .col-delete {
+                width: 42px
+            }
+
+        .saldo-tag {
+            display: block;
+            margin-top: 3px;
+            font-size: 7px;
+            color: var(--blue);
+            font-weight: 800
+        }
+
+        .row-warning {
+            display: none;
+            color: var(--warn);
+            font-size: 8px;
+            margin-top: 3px
+        }
+
+            .row-warning.show {
+                display: block
+            }
+
+        .rest-bar {
+            margin-top: 11px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 9px;
+            background: #f8fafc
+        }
+
+        .rest-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--muted);
+            margin-bottom: 5px
+        }
+
+            .rest-head strong {
+                color: var(--navy)
+            }
+
+        .rest-track {
+            height: 9px;
+            background: #e2e9f1;
+            border-radius: 999px;
+            overflow: hidden
+        }
+
+            .rest-track span {
+                display: block;
+                height: 100%;
+                background: var(--blue2);
+                transition: width .15s
+            }
+
+            .rest-track.complete span {
+                background: var(--ok2)
+            }
+
+            .rest-track.error span {
+                background: var(--danger2)
+            }
+
+        @@media(max-width:1200px) {
             .summary {
                 grid-template-columns: repeat(4,1fr)
             }
 
-            .summary-item:nth-child(4n) {
-                border-right: 0
+            .client-head-inner {
+                grid-template-columns: minmax(200px,1.5fr) repeat(3,minmax(85px,.6fr)) 32px
             }
 
-            .week-actions {
-                margin-left: 0
-            }
-
-            .topbar {
-                flex-direction: column
-            }
-
-            .week-nav {
-                justify-content: flex-start
+            .client-kpi.hide-medium {
+                display: none
             }
         }
 
-        @@media(max-width:700px) {
+        @@media(max-width:750px) {
             .page {
-                padding: 10px
+                padding: 9px
+            }
+
+            .header {
+                align-items: flex-start;
+                flex-direction: column
             }
 
             .summary {
                 grid-template-columns: repeat(2,1fr)
             }
 
-            .summary-item:nth-child(even) {
-                border-right: 0
-            }
-
-            .toolbar {
-                align-items: stretch
-            }
-
-            .field, .field-client, .field-critical, .field-search {
+            .search-box {
                 width: 100%;
-                min-width: 0
+                min-width: 100%
             }
 
-            .week-actions {
-                width: 100%
+            .client-head-inner {
+                grid-template-columns: 1fr 90px 30px
             }
 
-            .obs-bar {
-                flex-direction: column;
-                align-items: stretch
+            .client-kpi {
+                display: none
             }
 
-            .dialog-grid {
-                grid-template-columns: 1fr
-            }
-
-                .dialog-grid .full {
-                    grid-column: auto
+                .client-kpi.mobile-show {
+                    display: block
                 }
 
-            .program-summary {
+            .planner-top {
                 grid-template-columns: repeat(2,1fr)
             }
 
-            .program-footer {
-                align-items: stretch;
-                flex-direction: column
-            }
-
-            .title-wrap h1 {
-                font-size: 21px
+            .live-location-grid {
+                grid-template-columns: repeat(2,1fr)
             }
         }
     </style>
 </head>
 <body>
+
     <div class="page">
-        <div class="topbar">
-            <div class="title-wrap">
-                <h1>Lista de carga semanal</h1>
-                <p>Programa cuánto material debe cargar o salir de planta cada día. La modalidad de salida se define posteriormente en Embarques.</p>
+        <div class="header">
+            <div class="header-left">
+                <a class="back-main" asp-controller="LogisticaEmbarques" asp-action="Index">
+                    <span class="back-icon">←</span>
+                    <span>
+                        <small>REGRESAR A</small>
+                        <strong>Logística</strong>
+                    </span>
+                </a>
+
+                <div class="header-title">
+                    <h1>Lista de carga semanal</h1>
+                    <p>Programa cantidades por cliente y parte. El sistema asigna los Releases internamente.</p>
+                </div>
             </div>
-            <div class="week-nav">
-                <a class="btn" asp-controller="LogisticaListaCarga" asp-action="Index" asp-route-anio="@anioAnterior" asp-route-semana="@numeroSemanaAnterior">‹ Semana anterior</a>
-                <div class="week-box"><strong>@Model.SemanaTexto</strong><span>@Model.RangoTexto</span></div>
-                <a class="btn" asp-controller="LogisticaListaCarga" asp-action="Index" asp-route-anio="@anioSiguiente" asp-route-semana="@numeroSemanaSiguiente">Semana siguiente ›</a>
+
+            <div class="header-actions">
+                <a class="btn btn-soft"
+                   asp-controller="LogisticaListaCarga"
+                   asp-action="DiasCargaClientes"
+                   title="Configurar días habituales de carga por cliente">
+                    Días habituales
+                </a>
+
+                <a class="btn"
+                   asp-controller="LogisticaListaCarga"
+                   asp-action="Index"
+                   asp-route-anio="@anioAnterior"
+                   asp-route-semana="@numeroSemanaAnterior">
+                    ‹ Anterior
+                </a>
+
+                <div class="week-box">
+                    <strong>@Model.SemanaTexto</strong>
+                    <span>@Model.RangoTexto</span>
+                </div>
+
+                <a class="btn"
+                   asp-controller="LogisticaListaCarga"
+                   asp-action="Index"
+                   asp-route-anio="@anioSiguiente"
+                   asp-route-semana="@numeroSemanaSiguiente">
+                    Siguiente ›
+                </a>
             </div>
         </div>
 
@@ -992,430 +1339,619 @@
         {
             <div class="notice notice-ok">@ok</div>
         }
+
         @if (TempData["LogisticaError"] is string error && !string.IsNullOrWhiteSpace(error))
         {
             <div class="notice notice-error">@error</div>
         }
-        @if (ViewBag.ErrorConfiguracion is string errorConfiguracion && !string.IsNullOrWhiteSpace(errorConfiguracion))
-        {
-            <div class="notice notice-error">@errorConfiguracion</div>
-        }
 
         <div class="summary">
-            <div class="summary-item"><span>Clientes</span><strong>@Model.TotalClientes</strong></div>
-            <div class="summary-item"><span>Partidas</span><strong>@Model.TotalPartidas</strong></div>
-            <div class="summary-item"><span>Semana actual</span><strong>@Model.TotalSemana.ToString("N0")</strong></div>
-            <div class="summary-item danger"><span>Expeditado / atraso</span><strong>@Model.TotalAtraso.ToString("N0")</strong></div>
-            <div class="summary-item"><span>Por atender</span><strong>@Model.TotalPorAtender.ToString("N0")</strong></div>
-            <div class="summary-item warning"><span>Sin programar</span><strong>@Model.TotalSinProgramar.ToString("N0")</strong></div>
-            <div class="summary-item"><span>Programado</span><strong>@Model.TotalProgramado.ToString("N0")</strong></div>
-            <div class="summary-item success"><span>Enviado</span><strong>@Model.TotalEnviado.ToString("N0")</strong></div>
+            <div class="summary-item">
+                <span>Clientes</span>
+                <strong>@Model.TotalClientes</strong>
+            </div>
+            <div class="summary-item">
+                <span>Partes</span>
+                <strong>@Model.TotalPartidas</strong>
+            </div>
+            <div class="summary-item">
+                <span>Demanda semana</span>
+                <strong>@Model.TotalSemana.ToString("N0")</strong>
+            </div>
+            <div class="summary-item danger">
+                <span>Expeditado</span>
+                <strong>@Model.TotalAtraso.ToString("N0")</strong>
+            </div>
+            <div class="summary-item">
+                <span>Por atender</span>
+                <strong>@Model.TotalPorAtender.ToString("N0")</strong>
+            </div>
+            <div class="summary-item warning">
+                <span>Sin programar</span>
+                <strong>@Model.TotalSinProgramar.ToString("N0")</strong>
+            </div>
+            <div class="summary-item">
+                <span>Programado</span>
+                <strong>@Model.TotalProgramado.ToString("N0")</strong>
+            </div>
+            <div class="summary-item success">
+                <span>Enviado</span>
+                <strong>@Model.TotalEnviado.ToString("N0")</strong>
+            </div>
         </div>
 
-        <form method="get" asp-controller="LogisticaListaCarga" asp-action="Index" class="toolbar">
-            <input type="hidden" name="anio" value="@Model.Anio" />
-            <input type="hidden" name="semana" value="@Model.NumeroSemana" />
-            <div class="field field-search">
-                <label>Buscar</label>
-                <input type="text" name="q" value="@Model.Busqueda" placeholder="Cliente, referencia, designación u OF" />
+        <div class="toolbar">
+            <div class="search-box">
+                <span class="search-icon">⌕</span>
+                <input id="buscarClienteParte" placeholder="Buscar cliente, referencia o designación..." autocomplete="off" />
             </div>
-            <div class="field field-client">
-                <label>Cliente</label>
-                <select name="clienteId">
-                    <option value="">Todos los clientes</option>
-                    @foreach (var cliente in Model.Clientes)
-                    {
-                        if (Model.ClienteID == cliente.ClienteID)
-                        {
-                            <option value="@cliente.ClienteID" selected>@cliente.Cliente</option>
-                        }
-                        else
-                        {
-                            <option value="@cliente.ClienteID">@cliente.Cliente</option>
-                        }
-                    }
-                </select>
-            </div>
-            <div class="field field-critical">
-                <label>Criticidad</label>
-                <select name="criticidad">
-                    <option value="">Todos</option>
-                    @if (Model.Criticidad == "Programado")
-                    {
-                        <option value="Programado" selected>Programado</option>
-                    }
-                    else
-                    {
-                        <option value="Programado">Programado</option>
-                    }
-                    @if (Model.Criticidad == "Expeditado")
-                    {
-                        <option value="Expeditado" selected>Expeditado</option>
-                    }
-                    else
-                    {
-                        <option value="Expeditado">Expeditado</option>
-                    }
-                </select>
-            </div>
-            <button class="btn btn-primary" type="submit">Aplicar</button>
-            <a class="btn" asp-controller="LogisticaListaCarga" asp-action="Index" asp-route-anio="@Model.Anio" asp-route-semana="@Model.NumeroSemana">Limpiar</a>
-            <div class="week-actions">
-                <span class="status @(Model.SemanaAbierta ? "status-open" : "status-closed")">@Model.EstatusSemana</span>
-            </div>
-        </form>
 
-        @if (Model.ListaCargaSemanaID.HasValue)
-        {
-            <div class="section">
-                <div class="section-head">
-                    <div>
-                        <h2>Control de semana</h2>
-                        <small>Observaciones generales y apertura/cierre operativo.</small>
-                    </div>
-                    <div class="state-actions">
-                        <span class="status @(Model.SemanaAbierta ? "status-open" : "status-closed")">@Model.EstatusSemana</span>
-                        <form method="post" asp-controller="LogisticaListaCarga" asp-action="CambiarEstadoSemana" style="margin:0">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="listaCargaSemanaId" value="@Model.ListaCargaSemanaID" />
-                            <input type="hidden" name="estatus" value="@(Model.SemanaAbierta ? "Cerrada" : "Abierta")" />
-                            <button type="submit" class="btn btn-sm @(Model.SemanaAbierta ? "btn-danger" : "btn-primary")">@(Model.SemanaAbierta ? "Cerrar semana" : "Reabrir semana")</button>
-                        </form>
-                    </div>
+            <span class="toolbar-label">Mostrar</span>
+
+            <select id="filtroEstado">
+                <option value="todos">Todos los clientes</option>
+                <option value="expeditado">Con expeditados</option>
+                <option value="pendiente">Con piezas sin programar</option>
+                <option value="programado">Con programación</option>
+                <option value="generar">Por generar embarque</option>
+            </select>
+
+            <button type="button" class="btn btn-sm" id="btnExpandir">Expandir todos</button>
+            <button type="button" class="btn btn-sm" id="btnContraer">Contraer todos</button>
+        </div>
+
+        <div class="section">
+            <div class="section-head">
+                <div>
+                    <h2>Programación por cliente · @Model.SemanaTexto</h2>
+                    <small>Programa las partes y genera cada embarque por cliente, fecha de carga y criticidad.</small>
                 </div>
-                <div style="padding:9px 10px">
-                    <form method="post" asp-controller="LogisticaListaCarga" asp-action="GuardarObservacionesSemana" class="obs-bar">
+
+                @if (Model.ListaCargaSemanaID.HasValue && Model.SemanaAbierta)
+                {
+                    <form method="post" asp-controller="LogisticaListaCarga" asp-action="GenerarEmbarques" class="js-generar-form" style="margin:0">
                         @Html.AntiForgeryToken()
-                        <input type="hidden" name="listaCargaSemanaId" value="@Model.ListaCargaSemanaID" />
-                        <div class="field">
-                            <label>Observaciones de la semana</label>
-                            <textarea name="observaciones" maxlength="1000" placeholder="Comentarios operativos generales...">@Model.ObservacionesSemana</textarea>
-                        </div>
-                        <button type="submit" class="btn">Guardar observación</button>
+
+                        <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
+                        <input type="hidden" name="Anio" value="@Model.Anio" />
+                        <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
+
+                        <button type="submit" class="btn global-generate" @(Model.TieneProgramacionSinGenerar ? null : "disabled")>
+                            Generar todos · @Model.TotalPendienteGenerar.ToString("N0") PZA
+                        </button>
                     </form>
-                </div>
+                }
             </div>
-        }
 
-        <div class="section">
-            <div class="section-head">
-                <div>
-                    <h2>Programación de carga · @Model.SemanaTexto</h2>
-                    <small>Incluye demanda de la semana y cantidades pendientes de semanas anteriores.</small>
-                </div>
-                <div class="section-actions">
-                    <div class="legend">
-                        <span><i class="dot dot-exp"></i>Expeditado</span>
-                        <span><i class="dot dot-prog"></i>Programado</span>
-                        <span><i class="dot dot-hab"></i>Día habitual</span>
-                    </div>
-                    @if (Model.ListaCargaSemanaID.HasValue && Model.SemanaAbierta)
+            <div class="clients">
+                @foreach (var grupo in gruposClientes)
+                {
+                    var totalSemana = grupo.Sum(x => x.TotalSemana);
+                    var totalAtraso = grupo.Sum(x => x.Atraso);
+                    var totalAtender = grupo.Sum(x => x.TotalPorAtender);
+                    var totalProgramado = grupo.Sum(x => x.TotalProgramado);
+                    var totalPendiente = grupo.Sum(x => x.TotalSinProgramar);
+                    var totalEnviado = grupo.Sum(x => x.TotalEnviado);
+                    var totalGenerar = grupo.Sum(x => x.TotalPendienteGenerar);
+
+                    var dias = grupo
+                    .SelectMany(x => x.DiasHabituales)
+                    .GroupBy(x => x.DiaSemana)
+                    .Select(x => x.First())
+                    .OrderBy(x => x.DiaSemana)
+                    .ToList();
+
+                    var diasTexto = dias.Count == 0
+                    ? "Sin día habitual"
+                    : string.Join(" · ", dias.Select(x => x.DiaTexto));
+
+                    var search = (grupo.Key.Cliente + " " + string.Join(" ", grupo.Select(x => x.Referencia + " " + x.Designacion))).ToLowerInvariant();
+
+                    var programacionesPendientesGenerar = grupo
+                    .SelectMany(fila => fila.Programaciones
+                    .Where(p => p.Activo && !string.Equals(p.Estatus, "Cancelada", StringComparison.OrdinalIgnoreCase))
+                    .Select(p => new
                     {
-                        <form method="post" asp-controller="LogisticaListaCarga" asp-action="GenerarEmbarques" style="margin:0" class="js-generar-form">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
-                            <input type="hidden" name="Anio" value="@Model.Anio" />
-                            <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
-                            <button type="submit" class="btn btn-success" @(Model.TieneProgramacionSinGenerar ? null : "disabled")>Generar embarques · @Model.TotalPendienteGenerar.ToString("N0") PZA</button>
-                        </form>
-                    }
+                        Fila = fila,
+                        Programacion = p,
+                        PendienteGenerar = Math.Max(0, p.CantidadProgramada - p.CantidadGeneradaEmbarque),
+                        Criticidad = p.FechaRequeridaOriginal.Date < Model.FechaInicio.Date ? "Expeditado" : "Programado"
+                    }))
+                    .Where(x => x.PendienteGenerar > 0)
+                    .ToList();
+
+                    var gruposParaEmbarque = programacionesPendientesGenerar
+                    .GroupBy(x => new
+                    {
+                        FechaCarga = x.Programacion.FechaProgramadaCarga.Date,
+                        x.Criticidad
+                    })
+                    .OrderBy(x => x.Key.FechaCarga)
+                    .ThenByDescending(x => x.Key.Criticidad == "Expeditado")
+                    .ToList();
+
+                    <div class="client-accordion @(totalAtraso > 0 ? "has-exp" : "")"
+                         data-search="@search"
+                         data-expeditado="@(totalAtraso > 0 ? "1" : "0")"
+                         data-pendiente="@(totalPendiente > 0 ? "1" : "0")"
+                         data-programado="@(totalProgramado > 0 ? "1" : "0")"
+                         data-generar="@(totalGenerar > 0 ? "1" : "0")">
+
+                        <button type="button" class="client-head js-client-toggle">
+                            <div class="client-head-inner">
+                                <div>
+                                    <div class="client-name">@grupo.Key.Cliente</div>
+
+                                    <div class="client-sub">
+                                        <span>@grupo.Count() parte(s)</span>
+                                        <span>·</span>
+                                        <span>Día habitual: <strong>@diasTexto</strong></span>
+
+                                        @if (totalAtraso > 0)
+                                        {
+                                            <span class="status status-exp">Expeditado</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="client-kpi">
+                                    <span>Semana</span>
+                                    <strong>@totalSemana.ToString("N0")</strong>
+                                </div>
+
+                                <div class="client-kpi danger">
+                                    <span>Atraso</span>
+                                    <strong>@totalAtraso.ToString("N0")</strong>
+                                </div>
+
+                                <div class="client-kpi mobile-show">
+                                    <span>Por atender</span>
+                                    <strong>@totalAtender.ToString("N0")</strong>
+                                </div>
+
+                                <div class="client-kpi warning hide-medium">
+                                    <span>Sin programar</span>
+                                    <strong>@totalPendiente.ToString("N0")</strong>
+                                </div>
+
+                                <div class="client-kpi success hide-medium">
+                                    <span>Enviado</span>
+                                    <strong>@totalEnviado.ToString("N0")</strong>
+                                </div>
+
+                                <div class="chevron">⌄</div>
+                            </div>
+                        </button>
+
+                        <div class="client-body">
+                            <div class="client-toolbar">
+                                <span><strong>@grupo.Key.Cliente</strong> · @grupo.Count() parte(s)</span>
+                                <span>Programado: <strong>@totalProgramado.ToString("N0")</strong> · Sin programar: <strong>@totalPendiente.ToString("N0")</strong></span>
+                            </div>
+
+                            @if (gruposParaEmbarque.Count > 0)
+                            {
+                                <div class="shipment-zone">
+                                    <div class="shipment-zone-title">
+                                        <strong>Embarques listos para generar</strong>
+                                        <span>Se agrupan por cliente + fecha de carga + criticidad.</span>
+                                    </div>
+                                    <div class="shipment-groups">
+                                        @foreach (var grupoEmbarque in gruposParaEmbarque)
+                                        {
+                                            var totalGrupoEmbarque = grupoEmbarque.Sum(x => x.PendienteGenerar);
+                                            var partesGrupoEmbarque = grupoEmbarque
+                                            .GroupBy(x => new { x.Fila.ParteID, x.Fila.Referencia, x.Fila.Designacion })
+                                            .Select(x => new
+                                            {
+                                                x.Key.ParteID,
+                                                x.Key.Referencia,
+                                                x.Key.Designacion,
+                                                Cantidad = x.Sum(y => y.PendienteGenerar)
+                                            })
+                                            .OrderBy(x => x.Referencia)
+                                            .ToList();
+                                            var esExpeditadoGrupo = string.Equals(grupoEmbarque.Key.Criticidad, "Expeditado", StringComparison.OrdinalIgnoreCase);
+
+                                            <div class="shipment-group @(esExpeditadoGrupo ? "exp" : "")">
+                                                <div class="shipment-group-head">
+                                                    <div class="shipment-group-title">
+                                                        <strong>@grupoEmbarque.Key.FechaCarga.ToString("dddd dd/MM", new CultureInfo("es-MX")) · @grupoEmbarque.Key.Criticidad</strong>
+                                                        <span>@partesGrupoEmbarque.Count referencia(s) · @grupoEmbarque.Count() programación(es)</span>
+                                                    </div>
+                                                    <div class="shipment-group-total">
+                                                        <strong>@totalGrupoEmbarque.ToString("N0")</strong>
+                                                        <span>PZA</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="shipment-lines">
+                                                    @foreach (var parteEmbarque in partesGrupoEmbarque)
+                                                    {
+                                                        <div class="shipment-line">
+                                                            <span class="ref" title="@parteEmbarque.Referencia">@parteEmbarque.Referencia</span>
+                                                            <span class="desc" title="@parteEmbarque.Designacion">@parteEmbarque.Designacion</span>
+                                                            <span class="qty">@parteEmbarque.Cantidad.ToString("N0")</span>
+                                                        </div>
+                                                    }
+                                                </div>
+
+                                                <div class="shipment-group-foot">
+                                                    <small>La forma de envío se definirá después en el embarque.</small>
+                                                    @if (Model.SemanaAbierta && Model.ListaCargaSemanaID.HasValue)
+                                                    {
+                                                        <form method="post" asp-controller="LogisticaListaCarga" asp-action="GenerarEmbarques" class="js-generar-form js-generar-grupo" style="margin:0">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
+                                                            <input type="hidden" name="Anio" value="@Model.Anio" />
+                                                            <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
+                                                            @foreach (var itemProgramacion in grupoEmbarque)
+                                                            {
+                                                                <input type="hidden" name="ProgramacionIDs" value="@itemProgramacion.Programacion.ListaCargaProgramacionID" />
+                                                            }
+                                                            <button type="submit" class="btn btn-sm btn-generate-group"
+                                                                    data-cliente="@grupo.Key.Cliente"
+                                                                    data-fecha="@grupoEmbarque.Key.FechaCarga.ToString("dd/MM/yyyy")"
+                                                                    data-criticidad="@grupoEmbarque.Key.Criticidad"
+                                                                    data-cantidad="@totalGrupoEmbarque">
+                                                                Generar embarque
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="table-wrap">
+                                <table class="parts">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:115px">Referencia</th>
+                                            <th style="width:205px">Designación</th>
+                                            <th style="width:72px">Semana</th>
+                                            <th style="width:72px">Atraso</th>
+                                            <th style="width:80px">Por atender</th>
+                                            <th style="width:67px">Lun<br /><small>@Model.FechaInicio.ToString("dd/MM")</small></th>
+                                            <th style="width:67px">Mar<br /><small>@Model.FechaInicio.AddDays(1).ToString("dd/MM")</small></th>
+                                            <th style="width:67px">Mié<br /><small>@Model.FechaInicio.AddDays(2).ToString("dd/MM")</small></th>
+                                            <th style="width:67px">Jue<br /><small>@Model.FechaInicio.AddDays(3).ToString("dd/MM")</small></th>
+                                            <th style="width:67px">Vie<br /><small>@Model.FechaInicio.AddDays(4).ToString("dd/MM")</small></th>
+                                            <th style="width:67px">Sáb<br /><small>@Model.FechaInicio.AddDays(5).ToString("dd/MM")</small></th>
+                                            <th style="width:95px">Programado</th>
+                                            <th style="width:85px">Enviado</th>
+                                            <th style="width:145px">Ubicación</th>
+                                            <th style="width:90px">Acción</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @foreach (var fila in grupo.OrderByDescending(x => x.EsExpeditado).ThenBy(x => x.Referencia))
+                                        {
+                                            var porcentajeProgramado = fila.PorcentajeProgramado.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+                                            var porcentajeEnviado = fila.PorcentajeEnviado.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
+                                            var diasJson = JsonSerializer.Serialize(
+                                            fila.DiasHabituales
+                                            .Select(x => x.DiaSemana)
+                                            .Distinct()
+                                            .OrderBy(x => x)
+                                            .ToList());
+
+                                            var fechas = new[]
+                                            {
+                                                                        Model.FechaInicio.Date,
+                                                                        Model.FechaInicio.AddDays(1).Date,
+                                                                        Model.FechaInicio.AddDays(2).Date,
+                                                                        Model.FechaInicio.AddDays(3).Date,
+                                                                        Model.FechaInicio.AddDays(4).Date,
+                                                                        Model.FechaInicio.AddDays(5).Date
+                                                                        };
+
+                                            var valores = new[]
+                                            {
+                                                                        fila.Lunes,
+                                                                        fila.Martes,
+                                                                        fila.Miercoles,
+                                                                        fila.Jueves,
+                                                                        fila.Viernes,
+                                                                        fila.Sabado
+                                                                        };
+
+                                            var requeridos = new[]
+                                            {
+                                                                        fila.RequeridoLunes,
+                                                                        fila.RequeridoMartes,
+                                                                        fila.RequeridoMiercoles,
+                                                                        fila.RequeridoJueves,
+                                                                        fila.RequeridoViernes,
+                                                                        fila.RequeridoSabado
+                                                                        };
+
+                                            <tr class="@(fila.EsExpeditado ? "part-exp" : "")">
+                                                <td class="left">
+                                                    <span class="reference">@fila.Referencia</span>
+                                                </td>
+
+                                                <td class="left">
+                                                    <span class="designation" title="@fila.Designacion">@fila.Designacion</span>
+                                                </td>
+
+                                                <td>
+                                                    <span class="demand-number">@fila.TotalSemana.ToString("N0")</span>
+                                                </td>
+
+                                                <td>
+                                                    <span class="demand-number @(fila.Atraso > 0 ? "late" : "")">
+                                                        @(fila.Atraso > 0 ? fila.Atraso.ToString("N0") : "-")
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <span class="demand-number">@fila.TotalPorAtender.ToString("N0")</span>
+
+                                                    @if (fila.TotalSinProgramar > 0)
+                                                    {
+                                                        <span class="track-sub warn">
+                                                            Sin fecha @fila.TotalSinProgramar.ToString("N0")
+                                                        </span>
+                                                    }
+                                                </td>
+
+                                                @for (var i = 0; i < 6; i++)
+                                                {
+                                                    <td class="@(fila.EsDiaHabitual(fechas[i]) ? "habitual" : "")">
+                                                        <div class="day-cell">
+                                                            <span class="day-value @(valores[i] <= 0 ? "empty" : "")">
+                                                                @(valores[i] > 0 ? valores[i].ToString("N0") : "-")
+                                                            </span>
+
+                                                            @if (requeridos[i] > 0)
+                                                            {
+                                                                <span class="day-required">
+                                                                    Req. @requeridos[i].ToString("N0")
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                    </td>
+                                                }
+
+                                                <td>
+                                                    <span class="track-main">@fila.TotalProgramado.ToString("N0")</span>
+
+                                                    <div class="progress">
+                                                        <span style="width:@porcentajeProgramado"></span>
+                                                    </div>
+
+                                                    @if (fila.TotalPendienteGenerar > 0)
+                                                    {
+                                                        <span class="track-sub">
+                                                            Generar @fila.TotalPendienteGenerar.ToString("N0")
+                                                        </span>
+                                                    }
+                                                    else if (fila.TotalProgramado > 0)
+                                                    {
+                                                        <span class="track-sub ok">Generado</span>
+                                                    }
+                                                </td>
+
+                                                <td>
+                                                    <span class="track-main" style="color:var(--ok)">
+                                                        @fila.TotalEnviado.ToString("N0")
+                                                    </span>
+
+                                                    <div class="progress success">
+                                                        <span style="width:@porcentajeEnviado"></span>
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    <div class="location">
+                                                        <strong>@fila.UbicacionTexto</strong>
+
+                                                        @if (fila.TieneMaterialLocalizado)
+                                                        {
+                                                            <small>
+                                                                @if (fila.PiezasAlmacen > 0)
+                                                                {
+                                                                    <span>ALM @fila.PiezasAlmacen.ToString("N0")</span>
+                                                                }
+
+                                                                @if (fila.PiezasProduccion > 0)
+                                                                {
+                                                                    <span> · PROD @fila.PiezasProduccion.ToString("N0")</span>
+                                                                }
+
+                                                                @if (fila.PiezasGP12 > 0)
+                                                                {
+                                                                    <span> · GP12 @fila.PiezasGP12.ToString("N0")</span>
+                                                                }
+                                                            </small>
+                                                        }
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    @if (Model.SemanaAbierta && fila.TotalSinProgramar > 0)
+                                                    {
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-primary js-programar"
+                                                                data-cliente-id="@fila.ClienteID"
+                                                                data-parte-id="@fila.ParteID"
+                                                                data-cliente="@fila.Cliente"
+                                                                data-referencia="@fila.Referencia"
+                                                                data-designacion="@fila.Designacion"
+                                                                data-sin-programar="@fila.TotalSinProgramar"
+                                                                data-semana-inicio="@Model.FechaInicio.ToString("yyyy-MM-dd")"
+                                                                data-dias='@diasJson'>
+                                                            Programar
+                                                        </button>
+                                                    }
+                                                    else if (fila.TotalPendienteGenerar > 0)
+                                                    {
+                                                        <span class="track-sub warn">Por generar</span>
+                                                    }
+                                                    else if (fila.TotalProgramado > 0)
+                                                    {
+                                                        <span class="status status-generated">Generado</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="track-sub ok">Completo</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div id="sinResultados" class="no-results">
+                    No hay clientes que coincidan con los filtros.
                 </div>
             </div>
-
-            @if (Model.TotalSinProgramar > 0)
-            {
-                <div class="notice notice-info" style="margin:10px">
-                    Hay <strong>@Model.TotalSinProgramar.ToString("N0") PZA</strong> pendientes de asignar a una fecha de carga. Las piezas no desaparecen aunque no se programen esta semana.
-                </div>
-            }
-
-            @if (Model.Filas.Count == 0)
-            {
-                <div class="empty">No hay entregas pendientes para los criterios seleccionados.</div>
-            }
-            else
-            {
-                <div class="table-wrap">
-                    <table class="matrix">
-                        <thead>
-                            <tr>
-                                <th class="c-cliente">Cliente</th>
-                                <th class="c-ref">Referencia</th>
-                                <th class="c-desc">Designación</th>
-                                <th class="c-total">Semana</th>
-                                <th class="c-atraso">Atraso</th>
-                                <th class="c-dia">Lun<br /><small>@Model.FechaInicio.ToString("dd/MM")</small></th>
-                                <th class="c-dia">Mar<br /><small>@Model.FechaInicio.AddDays(1).ToString("dd/MM")</small></th>
-                                <th class="c-dia">Mié<br /><small>@Model.FechaInicio.AddDays(2).ToString("dd/MM")</small></th>
-                                <th class="c-dia">Jue<br /><small>@Model.FechaInicio.AddDays(3).ToString("dd/MM")</small></th>
-                                <th class="c-dia">Vie<br /><small>@Model.FechaInicio.AddDays(4).ToString("dd/MM")</small></th>
-                                <th class="c-dia">Sáb<br /><small>@Model.FechaInicio.AddDays(5).ToString("dd/MM")</small></th>
-                                <th class="c-ubi">Ubicación</th>
-                                <th class="c-total">Por atender</th>
-                                <th class="c-programado">Programado</th>
-                                <th class="c-enviado">Enviado</th>
-                                <th class="c-action">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var fila in Model.Filas)
-                            {
-                                var porcentajeProgramadoCss = fila.PorcentajeProgramado.ToString("0.##", CultureInfo.InvariantCulture) + "%";
-                                var porcentajeEnviadoCss = fila.PorcentajeEnviado.ToString("0.##", CultureInfo.InvariantCulture) + "%";
-                                var fechaLunes = Model.FechaInicio.Date;
-                                var fechaMartes = Model.FechaInicio.AddDays(1).Date;
-                                var fechaMiercoles = Model.FechaInicio.AddDays(2).Date;
-                                var fechaJueves = Model.FechaInicio.AddDays(3).Date;
-                                var fechaViernes = Model.FechaInicio.AddDays(4).Date;
-                                var fechaSabado = Model.FechaInicio.AddDays(5).Date;
-                                var tieneGenerado = fila.TotalGeneradoEmbarques > 0;
-                                var programacionesJson = JsonSerializer.Serialize(fila.Programaciones.Where(x => x.Activo && !string.Equals(x.Estatus, "Cancelada", StringComparison.OrdinalIgnoreCase)).Select(x => new
-                                {
-                                    fecha = x.FechaProgramadaCarga.ToString("yyyy-MM-dd"),
-                                    cantidad = x.CantidadProgramada,
-                                    observaciones = x.Observaciones ?? string.Empty,
-                                    generado = x.CantidadGeneradaEmbarque,
-                                    enviado = x.CantidadEnviada
-                                }));
-                                var diasJson = JsonSerializer.Serialize(fila.DiasHabituales.Select(x => x.DiaSemana).Distinct().OrderBy(x => x).ToList());
-                                <tr class="@($"{(fila.EsExpeditado ? "row-exp" : "")} {(fila.TotalSinProgramar > 0 ? "row-pending" : "")}")">
-                                    <td class="left">
-                                        <div class="client">@fila.Cliente</div>
-                                        <span class="status @(fila.EsExpeditado ? "status-exp" : "status-prog")">@fila.Criticidad</span>
-                                        <span class="habitual">Habitual: @fila.DiasHabitualesTexto</span>
-                                    </td>
-                                    <td class="left"><span class="reference">@fila.Referencia</span></td>
-                                    <td class="left"><span class="designation" title="@fila.Designacion">@fila.Designacion</span></td>
-                                    <td class="num strong">@fila.TotalSemana.ToString("N0")</td>
-                                    <td class="num @(fila.Atraso > 0 ? "late" : "muted")">@(fila.Atraso > 0 ? fila.Atraso.ToString("N0") : "-")</td>
-
-                                    <td class="@(fila.EsDiaHabitual(fechaLunes) ? "day-habitual" : "")">
-                                        <div class="day-cell">
-                                            <span class="day-value">@(fila.Lunes > 0 ? fila.Lunes.ToString("N0") : "-")</span>
-                                            @if (fila.RequeridoLunes > 0)
-                                            {
-                                                <span class="day-required">Req. @fila.RequeridoLunes.ToString("N0")</span>
-                                            }
-                                        </div>
-                                    </td>
-                                    <td class="@(fila.EsDiaHabitual(fechaMartes) ? "day-habitual" : "")">
-                                        <div class="day-cell">
-                                            <span class="day-value">@(fila.Martes > 0 ? fila.Martes.ToString("N0") : "-")</span>
-                                            @if (fila.RequeridoMartes > 0)
-                                            {
-                                                <span class="day-required">Req. @fila.RequeridoMartes.ToString("N0")</span>
-                                            }
-                                        </div>
-                                    </td>
-                                    <td class="@(fila.EsDiaHabitual(fechaMiercoles) ? "day-habitual" : "")">
-                                        <div class="day-cell">
-                                            <span class="day-value">@(fila.Miercoles > 0 ? fila.Miercoles.ToString("N0") : "-")</span>
-                                            @if (fila.RequeridoMiercoles > 0)
-                                            {
-                                                <span class="day-required">Req. @fila.RequeridoMiercoles.ToString("N0")</span>
-                                            }
-                                        </div>
-                                    </td>
-                                    <td class="@(fila.EsDiaHabitual(fechaJueves) ? "day-habitual" : "")">
-                                        <div class="day-cell">
-                                            <span class="day-value">@(fila.Jueves > 0 ? fila.Jueves.ToString("N0") : "-")</span>
-                                            @if (fila.RequeridoJueves > 0)
-                                            {
-                                                <span class="day-required">Req. @fila.RequeridoJueves.ToString("N0")</span>
-                                            }
-                                        </div>
-                                    </td>
-                                    <td class="@(fila.EsDiaHabitual(fechaViernes) ? "day-habitual" : "")">
-                                        <div class="day-cell">
-                                            <span class="day-value">@(fila.Viernes > 0 ? fila.Viernes.ToString("N0") : "-")</span>
-                                            @if (fila.RequeridoViernes > 0)
-                                            {
-                                                <span class="day-required">Req. @fila.RequeridoViernes.ToString("N0")</span>
-                                            }
-                                        </div>
-                                    </td>
-                                    <td class="@(fila.EsDiaHabitual(fechaSabado) ? "day-habitual" : "")">
-                                        <div class="day-cell">
-                                            <span class="day-value">@(fila.Sabado > 0 ? fila.Sabado.ToString("N0") : "-")</span>
-                                            @if (fila.RequeridoSabado > 0)
-                                            {
-                                                <span class="day-required">Req. @fila.RequeridoSabado.ToString("N0")</span>
-                                            }
-                                        </div>
-                                    </td>
-
-                                    <td class="left">
-                                        <div class="location">
-                                            <strong>@fila.UbicacionTexto</strong>
-                                            @if (fila.TieneMaterialLocalizado)
-                                            {
-                                                <small>
-                                                    @if (fila.PiezasAlmacen > 0)
-                                                    {
-                                                        <span>ALM @fila.PiezasAlmacen.ToString("N0")</span>
-                                                    }
-                                                    @if (fila.PiezasProduccion > 0)
-                                                    {
-                                                        <span> · PROD @fila.PiezasProduccion.ToString("N0")</span>
-                                                    }
-                                                    @if (fila.PiezasGP12 > 0)
-                                                    {
-                                                        <span> · GP12 @fila.PiezasGP12.ToString("N0")</span>
-                                                    }
-                                                </small>
-                                            }
-                                        </div>
-                                    </td>
-
-                                    <td class="num strong">
-                                        @fila.TotalPorAtender.ToString("N0")
-                                        @if (fila.TotalSinProgramar > 0)
-                                        {
-                                            <span class="metric-detail" style="color:var(--warn)">Sin programar: @fila.TotalSinProgramar.ToString("N0")</span>
-                                        }
-                                    </td>
-                                    <td class="num">
-                                        <strong>@fila.TotalProgramado.ToString("N0")</strong>
-                                        <div class="progress" title="@fila.PorcentajeProgramado.ToString("N2")% programado"><span style="width:@porcentajeProgramadoCss"></span></div>
-                                        @if (fila.TotalPendienteGenerar > 0)
-                                        {
-                                            <span class="metric-detail">Por generar: @fila.TotalPendienteGenerar.ToString("N0")</span>
-                                        }
-                                        else if (fila.TotalProgramado > 0)
-                                        {
-                                            <span class="metric-detail" style="color:var(--ok)">Embarque generado</span>
-                                        }
-                                    </td>
-                                    <td class="num sent">
-                                        @fila.TotalEnviado.ToString("N0")
-                                        <div class="progress progress-ok" title="@fila.PorcentajeEnviado.ToString("N2")% enviado"><span style="width:@porcentajeEnviadoCss"></span></div>
-                                        @if (fila.TotalPendienteEnviar > 0)
-                                        {
-                                            <span class="metric-detail">Pendiente: @fila.TotalPendienteEnviar.ToString("N0")</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (Model.SemanaAbierta && Model.ListaCargaSemanaID.HasValue && fila.ClienteID.HasValue && fila.ParteID.HasValue)
-                                        {
-                                            if (tieneGenerado)
-                                            {
-                                                <button type="button" class="btn btn-sm disabled" disabled title="Ya existe un embarque generado para esta programación.">Generado</button>
-                                            }
-                                            else
-                                            {
-                                                <button type="button" class="btn btn-sm btn-primary js-programar"
-                                                        data-cliente-id="@fila.ClienteID"
-                                                        data-parte-id="@fila.ParteID"
-                                                        data-cliente="@fila.Cliente"
-                                                        data-referencia="@fila.Referencia"
-                                                        data-designacion="@fila.Designacion"
-                                                        data-total="@fila.TotalPorAtender"
-                                                        data-programado="@fila.TotalProgramado"
-                                                        data-sin-programar="@fila.TotalSinProgramar"
-                                                        data-semana-inicio="@Model.FechaInicio.ToString("yyyy-MM-dd")"
-                                                        data-semana-fin="@Model.FechaFin.ToString("yyyy-MM-dd")"
-                                                        data-programaciones='@programacionesJson'
-                                                        data-dias='@diasJson'>
-                                                    Programar
-                                                </button>
-                                            }
-                                            <button type="button" class="btn btn-sm js-ajuste"
-                                                    data-cliente-id="@fila.ClienteID"
-                                                    data-parte-id="@fila.ParteID"
-                                                    data-cliente="@fila.Cliente"
-                                                    data-referencia="@fila.Referencia"
-                                                    data-ubicacion="@fila.Ubicacion"
-                                                    data-observaciones="@fila.Observaciones">
-                                                Ubicación
-                                            </button>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-
-        <div class="section">
-            <div class="section-head">
-                <div>
-                    <h2>Salidas de la semana</h2>
-                    <small>Viajes programados y realizados durante la semana.</small>
-                </div>
-                <span class="status status-prog">@Model.TotalSalidas salida(s)</span>
-            </div>
-            @if (Model.Salidas.Count == 0)
-            {
-                <div class="empty">No hay viajes registrados para esta semana con los criterios seleccionados.</div>
-            }
-            else
-            {
-                <div class="table-wrap">
-                    <table class="agenda">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Lugar de envío</th>
-                                <th>Chofer</th>
-                                <th>Hora salida</th>
-                                <th>Hora regreso</th>
-                                <th>Tipo de salida</th>
-                                <th>Criticidad</th>
-                                <th>Unidad</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var salida in Model.Salidas)
-                            {
-                                <tr>
-                                    <td>@salida.Fecha.ToString("dd/MM/yyyy")</td>
-                                    <td><a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@salida.ViajeID">@salida.LugarEnvio</a></td>
-                                    <td>@(string.IsNullOrWhiteSpace(salida.Chofer) ? "-" : salida.Chofer)</td>
-                                    <td>@salida.HoraSalidaTexto</td>
-                                    <td>@salida.HoraRegresoTexto</td>
-                                    <td>@(string.IsNullOrWhiteSpace(salida.TipoSalida) ? "-" : salida.TipoSalida)</td>
-                                    <td><span class="status @(salida.EsExpeditada ? "status-exp" : "status-prog")">@salida.Criticidad</span></td>
-                                    <td>@(string.IsNullOrWhiteSpace(salida.Unidad) ? "-" : salida.Unidad)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
         </div>
     </div>
 
     @if (Model.ListaCargaSemanaID.HasValue)
     {
         <div id="programarBackdrop" class="dialog-backdrop" aria-hidden="true">
-            <div class="dialog" role="dialog" aria-modal="true">
-                <form method="post" asp-controller="LogisticaListaCarga" asp-action="GuardarProgramacion" id="formProgramacion">
+            <div class="dialog">
+                <form method="post"
+                      asp-controller="LogisticaListaCarga"
+                      asp-action="GuardarProgramacion"
+                      id="formProgramacion">
+
                     @Html.AntiForgeryToken()
-                    <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
-                    <input type="hidden" name="ClienteID" id="prClienteID" />
-                    <input type="hidden" name="ParteID" id="prParteID" />
-                    <input type="hidden" name="Anio" value="@Model.Anio" />
-                    <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
+
+                    <input type="hidden"
+                           name="ListaCargaSemanaID"
+                           value="@Model.ListaCargaSemanaID" />
+
+                    <input type="hidden"
+                           name="ClienteID"
+                           id="prClienteID" />
+
+                    <input type="hidden"
+                           name="ParteID"
+                           id="prParteID" />
+
+                    <input type="hidden"
+                           name="Anio"
+                           value="@Model.Anio" />
+
+                    <input type="hidden"
+                           name="NumeroSemana"
+                           value="@Model.NumeroSemana" />
+
                     <div class="dialog-head">
                         <div>
                             <h3 id="prTitulo">Programar carga</h3>
                             <small id="prSubtitulo"></small>
                         </div>
-                        <button type="button" class="x js-cerrar-programacion" aria-label="Cerrar">×</button>
+
+                        <button type="button"
+                                class="x js-cerrar">
+                            ×
+                        </button>
                     </div>
+
                     <div class="dialog-body">
-                        <div class="program-summary">
-                            <div><span>Por atender</span><strong id="prTotal">0</strong></div>
-                            <div><span>Programado</span><strong id="prProgramado">0</strong></div>
-                            <div><span>Sin programar</span><strong id="prPendiente">0</strong></div>
-                            <div><span>Día habitual</span><strong id="prHabitual" style="font-size:12px">-</strong></div>
+                        <div class="planner-top">
+                            <div class="planner-kpi">
+                                <span>Pendiente inicial</span>
+                                <strong id="prTotal">0</strong>
+                            </div>
+
+                            <div class="planner-kpi">
+                                <span>Distribuido</span>
+                                <strong id="prCapturado">0</strong>
+                            </div>
+
+                            <div class="planner-kpi remaining"
+                                 id="cardRestante">
+                                <span>Sin distribuir</span>
+                                <strong id="prRestante">0</strong>
+                            </div>
+
+                            <div class="planner-kpi">
+                                <span>Día habitual</span>
+                                <strong id="prHabitual">-</strong>
+                            </div>
                         </div>
-                        <div class="warning-box">
-                            La fecha representa el día en que el material se cargará o saldrá de planta. Puede programarse aunque todavía no exista suficiente material disponible en PT.
+
+                        <div class="live-location">
+                            <div class="live-location-head">
+                                <strong>● Ubicación actual del material</strong>
+
+                                <button type="button"
+                                        class="btn btn-sm"
+                                        id="btnActualizarUbicacion">
+                                    ↻ Actualizar
+                                </button>
+                            </div>
+
+                            <div class="live-location-grid">
+                                <div>
+                                    <span>Ubicación</span>
+                                    <strong id="liveUbicacion">Consultando...</strong>
+                                </div>
+
+                                <div>
+                                    <span>Almacén PT</span>
+                                    <strong id="liveAlmacen">-</strong>
+                                </div>
+
+                                <div>
+                                    <span>Producción</span>
+                                    <strong id="liveProduccion">-</strong>
+                                </div>
+
+                                <div>
+                                    <span>GP12</span>
+                                    <strong id="liveGP12">-</strong>
+                                </div>
+                            </div>
+
+                            <div class="live-location-foot">
+                                Total localizado:
+                                <strong id="liveTotal">-</strong> PZA
+
+                                <span id="liveActualizado"></span>
+                            </div>
                         </div>
-                        <table class="program-table">
+
+                        <div class="planner-help">
+                            <strong>¿Cómo funciona?</strong>
+                            La primera fila contiene automáticamente el saldo pendiente.
+                            Cuando agregues cantidades en otras fechas, esa primera cantidad
+                            se reducirá sola para que nunca se duplique el requerimiento.
+                        </div>
+
+                        <div id="mensajePlan"
+                             class="planner-message info">
+                        </div>
+
+                        <div class="planner-actions">
+                            <button type="button"
+                                    class="btn btn-sm"
+                                    id="btnOtraFecha">
+                                + Dividir en otra fecha
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-soft"
+                                    id="btnRestablecer">
+                                Restablecer
+                            </button>
+                        </div>
+
+                        <table class="planner-table">
                             <thead>
                                 <tr>
                                     <th class="col-date">Fecha de carga</th>
@@ -1424,54 +1960,34 @@
                                     <th class="col-delete"></th>
                                 </tr>
                             </thead>
+
                             <tbody id="programacionFilas"></tbody>
                         </table>
-                        <div class="program-footer">
-                            <button type="button" class="btn btn-sm" id="btnAgregarProgramacion">+ Dividir entrega</button>
-                            <div class="program-total">Total capturado: <strong id="prCapturado">0</strong> PZA</div>
-                        </div>
-                        <p class="hint">El día habitual del cliente es únicamente una referencia. Si seleccionas otra fecha aparecerá una advertencia, pero el sistema permitirá guardarla.</p>
-                    </div>
-                    <div class="dialog-foot">
-                        <button type="button" class="btn js-cerrar-programacion">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Guardar programación</button>
-                    </div>
-                </form>
-            </div>
-        </div>
 
-        <div id="ajusteBackdrop" class="dialog-backdrop" aria-hidden="true">
-            <div class="dialog dialog-sm" role="dialog" aria-modal="true">
-                <form method="post" asp-controller="LogisticaListaCarga" asp-action="GuardarAjuste">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
-                    <input type="hidden" name="ClienteID" id="ajClienteID" />
-                    <input type="hidden" name="ParteID" id="ajParteID" />
-                    <input type="hidden" name="anio" value="@Model.Anio" />
-                    <input type="hidden" name="semana" value="@Model.NumeroSemana" />
-                    <div class="dialog-head">
-                        <div>
-                            <h3>Ubicación y observaciones</h3>
-                            <small id="ajusteSubtitulo"></small>
-                        </div>
-                        <button type="button" class="x js-cerrar-ajuste" aria-label="Cerrar">×</button>
-                    </div>
-                    <div class="dialog-body">
-                        <div class="dialog-grid">
-                            <div class="field full">
-                                <label>Ubicación manual</label>
-                                <input type="text" name="UbicacionManual" id="ajUbicacion" maxlength="100" placeholder="Ej. PRODUCCION Y GP12" />
+                        <div class="rest-bar">
+                            <div class="rest-head">
+                                <span>Total distribuido</span>
+                                <strong id="prAvanceTexto">0 / 0 PZA</strong>
                             </div>
-                            <div class="field full">
-                                <label>Observaciones</label>
-                                <textarea name="Observaciones" id="ajObservaciones" maxlength="1000" rows="4" placeholder="Comentario operativo..."></textarea>
+
+                            <div class="rest-track"
+                                 id="prTrack">
+                                <span id="prTrackBar"></span>
                             </div>
                         </div>
-                        <p class="hint">La ubicación indica dónde se encuentran actualmente las piezas inyectadas. La captura manual tendrá prioridad visual sobre la ubicación detectada automáticamente.</p>
                     </div>
+
                     <div class="dialog-foot">
-                        <button type="button" class="btn js-cerrar-ajuste">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Guardar</button>
+                        <button type="button"
+                                class="btn js-cerrar">
+                            Cancelar
+                        </button>
+
+                        <button type="submit"
+                                class="btn btn-primary"
+                                id="btnGuardar">
+                            Guardar programación
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1480,186 +1996,1217 @@
 
     <script>
         (function(){
-            const nombresDias={1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado',7:'Domingo'};
-            const formatoNumero=n=>Number(n||0).toLocaleString('es-MX');
-            const programarBackdrop=document.getElementById('programarBackdrop');
-            const filas=document.getElementById('programacionFilas');
-            const btnAgregar=document.getElementById('btnAgregarProgramacion');
-            const prClienteID=document.getElementById('prClienteID');
-            const prParteID=document.getElementById('prParteID');
-            const prTitulo=document.getElementById('prTitulo');
-            const prSubtitulo=document.getElementById('prSubtitulo');
-            const prTotal=document.getElementById('prTotal');
-            const prProgramado=document.getElementById('prProgramado');
-            const prPendiente=document.getElementById('prPendiente');
-            const prHabitual=document.getElementById('prHabitual');
-            const prCapturado=document.getElementById('prCapturado');
-            let diasHabituales=[];
-            let inicioSemana='';
-            function diaSemana(fechaTexto){
-                if(!fechaTexto)return 0;
-                const partes=fechaTexto.split('-').map(Number);
-                if(partes.length!==3)return 0;
-                const fecha=new Date(partes[0],partes[1]-1,partes[2]);
-                const js=fecha.getDay();
-                return js===0?7:js;
-            }
-            function fechaSugerida(){
-                if(!inicioSemana)return '';
-                const p=inicioSemana.split('-').map(Number);
-                const inicio=new Date(p[0],p[1]-1,p[2]);
-                if(!diasHabituales.length)return inicioSemana;
-                const dia=Math.min(...diasHabituales);
-                const f=new Date(inicio);
-                f.setDate(inicio.getDate()+Math.max(0,dia-1));
-                const y=f.getFullYear();
-                const m=String(f.getMonth()+1).padStart(2,'0');
-                const d=String(f.getDate()).padStart(2,'0');
-                return `${y}-${m}-${d}`;
-            }
-            function advertenciaFila(tr){
-                const fecha=tr.querySelector('.js-fecha-programacion');
-                const warning=tr.querySelector('.program-warning');
-                if(!fecha||!warning)return;
-                if(!fecha.value||!diasHabituales.length){warning.classList.remove('show');warning.textContent='';return;}
-                const dia=diaSemana(fecha.value);
-                if(diasHabituales.includes(dia)){warning.classList.remove('show');warning.textContent='';return;}
-                const habitual=diasHabituales.map(x=>nombresDias[x]||'').filter(Boolean).join(' / ');
-                warning.textContent='⚠ Día distinto al habitual: '+habitual+'. Se permite guardar.';
-                warning.classList.add('show');
-            }
-            function actualizarIndices(){
-                [...filas.querySelectorAll('tr')].forEach((tr,i)=>{
-                    tr.querySelector('.js-fecha-programacion').name=`Programaciones[${i}].FechaProgramadaCarga`;
-                    tr.querySelector('.js-cantidad-programacion').name=`Programaciones[${i}].Cantidad`;
-                    tr.querySelector('.js-observaciones-programacion').name=`Programaciones[${i}].Observaciones`;
-                });
-                actualizarTotal();
-            }
-            function actualizarTotal(){
-                let total=0;
-                filas.querySelectorAll('.js-cantidad-programacion').forEach(x=>total+=Number(x.value||0));
-                if(prCapturado)prCapturado.textContent=formatoNumero(total);
-            }
-            function agregarFila(fecha='',cantidad='',observaciones=''){
-                const tr=document.createElement('tr');
-                tr.innerHTML=`
-                    <td>
-                        <input type="date" class="js-fecha-programacion" required />
-                        <div class="program-warning"></div>
-                    </td>
-                    <td><input type="number" class="js-cantidad-programacion" min="1" step="1" required /></td>
-                    <td><input type="text" class="js-observaciones-programacion" maxlength="1000" placeholder="Opcional" /></td>
-                    <td><button type="button" class="btn btn-sm btn-danger js-eliminar-programacion" title="Eliminar">×</button></td>`;
-                filas.appendChild(tr);
-                tr.querySelector('.js-fecha-programacion').value=fecha||fechaSugerida();
-                tr.querySelector('.js-cantidad-programacion').value=cantidad||'';
-                tr.querySelector('.js-observaciones-programacion').value=observaciones||'';
-                tr.querySelector('.js-fecha-programacion').addEventListener('change',()=>advertenciaFila(tr));
-                tr.querySelector('.js-cantidad-programacion').addEventListener('input',actualizarTotal);
-                tr.querySelector('.js-eliminar-programacion').addEventListener('click',()=>{
-                    tr.remove();
-                    if(!filas.querySelector('tr'))agregarFila(fechaSugerida(),'','');
-                    actualizarIndices();
-                });
-                advertenciaFila(tr);
-                actualizarIndices();
-            }
-            function abrirProgramacion(btn){
-                prClienteID.value=btn.dataset.clienteId||'';
-                prParteID.value=btn.dataset.parteId||'';
-                prTitulo.textContent='Programar carga · '+(btn.dataset.cliente||'');
-                prSubtitulo.textContent=(btn.dataset.referencia||'')+(btn.dataset.designacion?' · '+btn.dataset.designacion:'');
-                prTotal.textContent=formatoNumero(btn.dataset.total);
-                prProgramado.textContent=formatoNumero(btn.dataset.programado);
-                prPendiente.textContent=formatoNumero(btn.dataset.sinProgramar);
-                inicioSemana=btn.dataset.semanaInicio||'';
-                try{diasHabituales=JSON.parse(btn.dataset.dias||'[]').map(Number);}catch{diasHabituales=[];}
-                prHabitual.textContent=diasHabituales.length?diasHabituales.map(x=>nombresDias[x]||'').filter(Boolean).join(' / '):'Sin definir';
-                filas.innerHTML='';
-                let existentes=[];
-                try{existentes=JSON.parse(btn.dataset.programaciones||'[]');}catch{existentes=[];}
-                existentes=existentes.filter(x=>Number(x.generado||0)<=0);
-                if(existentes.length){
-                    existentes.forEach(x=>agregarFila(x.fecha||'',x.cantidad||'',x.observaciones||''));
-                }else{
-                    const cantidad=Number(btn.dataset.sinProgramar||btn.dataset.total||0);
-                    agregarFila(fechaSugerida(),cantidad>0?cantidad:'','');
-                }
-                programarBackdrop.classList.add('open');
-                programarBackdrop.setAttribute('aria-hidden','false');
-            }
-            function cerrarProgramacion(){
-                if(!programarBackdrop)return;
-                programarBackdrop.classList.remove('open');
-                programarBackdrop.setAttribute('aria-hidden','true');
-            }
-            document.querySelectorAll('.js-programar').forEach(btn=>btn.addEventListener('click',()=>abrirProgramacion(btn)));
-            document.querySelectorAll('.js-cerrar-programacion').forEach(btn=>btn.addEventListener('click',cerrarProgramacion));
-            if(btnAgregar)btnAgregar.addEventListener('click',()=>agregarFila(fechaSugerida(),'',''));
-            if(programarBackdrop)programarBackdrop.addEventListener('click',e=>{if(e.target===programarBackdrop)cerrarProgramacion();});
+            const n=v=>Number(v||0);
+            const nf=v=>n(v).toLocaleString('es-MX');
 
-            const ajusteBackdrop=document.getElementById('ajusteBackdrop');
-            const ajClienteID=document.getElementById('ajClienteID');
-            const ajParteID=document.getElementById('ajParteID');
-            const ajUbicacion=document.getElementById('ajUbicacion');
-            const ajObservaciones=document.getElementById('ajObservaciones');
-            const ajusteSubtitulo=document.getElementById('ajusteSubtitulo');
-            function abrirAjuste(btn){
-                ajClienteID.value=btn.dataset.clienteId||'';
-                ajParteID.value=btn.dataset.parteId||'';
-                ajUbicacion.value=btn.dataset.ubicacion||'';
-                ajObservaciones.value=btn.dataset.observaciones||'';
-                ajusteSubtitulo.textContent=(btn.dataset.cliente||'')+' · '+(btn.dataset.referencia||'');
-                ajusteBackdrop.classList.add('open');
-                ajusteBackdrop.setAttribute('aria-hidden','false');
-                setTimeout(()=>ajUbicacion.focus(),50);
-            }
-            function cerrarAjuste(){
-                if(!ajusteBackdrop)return;
-                ajusteBackdrop.classList.remove('open');
-                ajusteBackdrop.setAttribute('aria-hidden','true');
-            }
-            document.querySelectorAll('.js-ajuste').forEach(btn=>btn.addEventListener('click',()=>abrirAjuste(btn)));
-            document.querySelectorAll('.js-cerrar-ajuste').forEach(btn=>btn.addEventListener('click',cerrarAjuste));
-            if(ajusteBackdrop)ajusteBackdrop.addEventListener('click',e=>{if(e.target===ajusteBackdrop)cerrarAjuste();});
+            const nombresDias={
+                1:'Lunes',
+                2:'Martes',
+                3:'Miércoles',
+                4:'Jueves',
+                5:'Viernes',
+                6:'Sábado',
+                7:'Domingo'
+            };
 
-            document.querySelectorAll('.js-generar-form').forEach(form=>{
-                form.addEventListener('submit',e=>{
-                    if(!confirm('¿Generar los embarques pendientes de esta programación? La modalidad de salida se definirá posteriormente en cada embarque.'))e.preventDefault();
-                    else{
-                        const btn=form.querySelector('button[type="submit"]');
-                        if(btn){btn.disabled=true;btn.textContent='Generando...';}
+            /* =========================================================
+               ACORDEONES Y FILTROS
+               ========================================================= */
+
+            const acordeones=[...document.querySelectorAll('.client-accordion')];
+            const buscar=document.getElementById('buscarClienteParte');
+            const filtro=document.getElementById('filtroEstado');
+            const sinResultados=document.getElementById('sinResultados');
+
+            document.querySelectorAll('.js-client-toggle').forEach(btn=>{
+                btn.addEventListener('click',()=>{
+                    const item=btn.closest('.client-accordion');
+
+                    if(item){
+                        item.classList.toggle('open');
                     }
                 });
             });
 
-            const formProgramacion=document.getElementById('formProgramacion');
-            if(formProgramacion){
-                formProgramacion.addEventListener('submit',e=>{
-                    actualizarIndices();
-                    const registros=[...filas.querySelectorAll('tr')];
-                    if(!registros.length){e.preventDefault();alert('Captura al menos una fecha de programación.');return;}
-                    let total=0;
-                    let invalido=false;
-                    registros.forEach(tr=>{
-                        const fecha=tr.querySelector('.js-fecha-programacion').value;
-                        const cantidad=Number(tr.querySelector('.js-cantidad-programacion').value||0);
-                        if(!fecha||cantidad<=0)invalido=true;
-                        total+=cantidad;
-                    });
-                    if(invalido){e.preventDefault();alert('Todas las filas deben tener fecha y una cantidad mayor a cero.');return;}
-                    if(total<=0){e.preventDefault();alert('La cantidad programada debe ser mayor a cero.');return;}
-                    const btn=formProgramacion.querySelector('button[type="submit"]');
-                    if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+            function filtrar(){
+                const q=(buscar?.value||'').trim().toLowerCase();
+                const tipo=filtro?.value||'todos';
+                let visibles=0;
+
+                acordeones.forEach(item=>{
+                    let visible=
+                        !q||
+                        (item.dataset.search||'').includes(q);
+
+                    if(tipo==='expeditado'){
+                        visible=
+                            visible&&
+                            item.dataset.expeditado==='1';
+                    }
+                    else if(tipo==='pendiente'){
+                        visible=
+                            visible&&
+                            item.dataset.pendiente==='1';
+                    }
+                    else if(tipo==='programado'){
+                        visible=
+                            visible&&
+                            item.dataset.programado==='1';
+                    }
+                    else if(tipo==='generar'){
+                        visible=
+                            visible&&
+                            item.dataset.generar==='1';
+                    }
+
+                    item.style.display=
+                        visible
+                            ?''
+                            :'none';
+
+                    if(visible){
+                        visibles++;
+
+                        if(q){
+                            item.classList.add('open');
+                        }
+                    }
                 });
+
+                if(sinResultados){
+                    sinResultados.style.display=
+                        visibles===0
+                            ?'block'
+                            :'none';
+                }
             }
 
-            document.addEventListener('keydown',e=>{
-                if(e.key!=='Escape')return;
-                cerrarProgramacion();
-                cerrarAjuste();
-            });
+            buscar?.addEventListener(
+                'input',
+                filtrar);
+
+            filtro?.addEventListener(
+                'change',
+                filtrar);
+
+            document.getElementById('btnExpandir')
+                ?.addEventListener('click',()=>{
+                    acordeones
+                        .filter(x=>x.style.display!=='none')
+                        .forEach(x=>x.classList.add('open'));
+                });
+
+            document.getElementById('btnContraer')
+                ?.addEventListener('click',()=>{
+                    acordeones
+                        .forEach(x=>x.classList.remove('open'));
+                });
+
+            /* =========================================================
+               MODAL DE PROGRAMACIÓN
+               ========================================================= */
+
+            const backdrop=
+                document.getElementById('programarBackdrop');
+
+            const filas=
+                document.getElementById('programacionFilas');
+
+            const form=
+                document.getElementById('formProgramacion');
+
+            const prClienteID=
+                document.getElementById('prClienteID');
+
+            const prParteID=
+                document.getElementById('prParteID');
+
+            const prTitulo=
+                document.getElementById('prTitulo');
+
+            const prSubtitulo=
+                document.getElementById('prSubtitulo');
+
+            const prTotal=
+                document.getElementById('prTotal');
+
+            const prCapturado=
+                document.getElementById('prCapturado');
+
+            const prRestante=
+                document.getElementById('prRestante');
+
+            const prHabitual=
+                document.getElementById('prHabitual');
+
+            const prAvanceTexto=
+                document.getElementById('prAvanceTexto');
+
+            const prTrack=
+                document.getElementById('prTrack');
+
+            const prTrackBar=
+                document.getElementById('prTrackBar');
+
+            const cardRestante=
+                document.getElementById('cardRestante');
+
+            const mensaje=
+                document.getElementById('mensajePlan');
+
+            const btnGuardar=
+                document.getElementById('btnGuardar');
+
+            const liveUbicacion=
+                document.getElementById('liveUbicacion');
+
+            const liveAlmacen=
+                document.getElementById('liveAlmacen');
+
+            const liveProduccion=
+                document.getElementById('liveProduccion');
+
+            const liveGP12=
+                document.getElementById('liveGP12');
+
+            const liveTotal=
+                document.getElementById('liveTotal');
+
+            const liveActualizado=
+                document.getElementById('liveActualizado');
+
+            let totalObjetivo=0;
+            let diasHabituales=[];
+            let inicioSemana='';
+            let parteActual=0;
+            let timerUbicacion=null;
+
+            /* =========================================================
+               FECHAS
+               ========================================================= */
+
+            function convertirDiaSemana(fechaTexto){
+                if(!fechaTexto){
+                    return 0;
+                }
+
+                const p=
+                    fechaTexto
+                        .split('-')
+                        .map(Number);
+
+                if(p.length!==3){
+                    return 0;
+                }
+
+                const diaJs=
+                    new Date(
+                        p[0],
+                        p[1]-1,
+                        p[2])
+                        .getDay();
+
+                return diaJs===0
+                    ?7
+                    :diaJs;
+            }
+
+            function formatearFecha(fecha){
+                return [
+                    fecha.getFullYear(),
+                    String(fecha.getMonth()+1).padStart(2,'0'),
+                    String(fecha.getDate()).padStart(2,'0')
+                ].join('-');
+            }
+
+            function fechaSugerida(){
+                if(!inicioSemana){
+                    return '';
+                }
+
+                const p=
+                    inicioSemana
+                        .split('-')
+                        .map(Number);
+
+                if(p.length!==3){
+                    return inicioSemana;
+                }
+
+                const fecha=
+                    new Date(
+                        p[0],
+                        p[1]-1,
+                        p[2]);
+
+                if(diasHabituales.length>0){
+                    const preferido=
+                        Math.min(...diasHabituales);
+
+                    fecha.setDate(
+                        fecha.getDate()+
+                        Math.max(
+                            0,
+                            preferido-1));
+                }
+
+                return formatearFecha(fecha);
+            }
+
+            function actualizarAdvertenciaDia(tr){
+                const fecha=
+                    tr?.querySelector('.js-fecha');
+
+                const warning=
+                    tr?.querySelector('.row-warning');
+
+                if(!fecha||!warning){
+                    return;
+                }
+
+                if(
+                    !fecha.value||
+                    diasHabituales.length===0){
+
+                    warning.textContent='';
+                    warning.classList.remove('show');
+
+                    return;
+                }
+
+                const dia=
+                    convertirDiaSemana(
+                        fecha.value);
+
+                if(
+                    diasHabituales
+                        .includes(dia)){
+
+                    warning.textContent='';
+                    warning.classList.remove('show');
+
+                    return;
+                }
+
+                warning.textContent=
+                    'Día distinto al habitual: '+
+                    diasHabituales
+                        .map(x=>nombresDias[x]||'')
+                        .filter(Boolean)
+                        .join(' / ')+
+                    '.';
+
+                warning.classList.add('show');
+            }
+
+            /* =========================================================
+               CÁLCULO AUTOMÁTICO DE SALDO
+               ========================================================= */
+
+            function obtenerFilaSaldo(){
+                return filas
+                    ?.querySelector(
+                        'tr[data-es-saldo="1"]');
+            }
+
+            function obtenerCantidadOtrasFilas(){
+                if(!filas){
+                    return 0;
+                }
+
+                return [...filas.querySelectorAll(
+                    'tr:not([data-es-saldo="1"]) .js-cantidad')]
+                    .reduce(
+                        (total,input)=>
+                            total+
+                            Math.max(
+                                0,
+                                n(input.value)),
+                        0);
+            }
+
+            function actualizarSaldoAutomatico(){
+                const filaSaldo=
+                    obtenerFilaSaldo();
+
+                const inputSaldo=
+                    filaSaldo
+                        ?.querySelector(
+                            '.js-cantidad');
+
+                if(!inputSaldo){
+                    return;
+                }
+
+                const otras=
+                    obtenerCantidadOtrasFilas();
+
+                const saldo=
+                    Math.max(
+                        0,
+                        totalObjetivo-otras);
+
+                inputSaldo.value=
+                    saldo;
+
+                actualizarResumen();
+            }
+
+            function totalDistribuido(){
+                if(!filas){
+                    return 0;
+                }
+
+                return [...filas.querySelectorAll(
+                    '.js-cantidad')]
+                    .reduce(
+                        (total,input)=>
+                            total+
+                            Math.max(
+                                0,
+                                n(input.value)),
+                        0);
+            }
+
+            function actualizarResumen(){
+                const otras=
+                    obtenerCantidadOtrasFilas();
+
+                const excedente=
+                    Math.max(
+                        0,
+                        otras-totalObjetivo);
+
+                const saldo=
+                    Math.max(
+                        0,
+                        totalObjetivo-otras);
+
+                const distribuido=
+                    totalDistribuido();
+
+                if(prCapturado){
+                    prCapturado.textContent=
+                        nf(distribuido);
+                }
+
+                if(prRestante){
+                    prRestante.textContent=
+                        nf(saldo);
+                }
+
+                if(prAvanceTexto){
+                    prAvanceTexto.textContent=
+                        `${nf(distribuido)} / ${nf(totalObjetivo)} PZA`;
+                }
+
+                const porcentaje=
+                    totalObjetivo>0
+                        ?Math.min(
+                            100,
+                            distribuido*100/
+                            totalObjetivo)
+                        :0;
+
+                if(prTrackBar){
+                    prTrackBar.style.width=
+                        porcentaje+'%';
+                }
+
+                cardRestante
+                    ?.classList
+                    .remove('complete');
+
+                prTrack
+                    ?.classList
+                    .remove(
+                        'complete',
+                        'error');
+
+                if(excedente>0){
+                    if(prRestante){
+                        prRestante.textContent=
+                            '+'+nf(excedente);
+                    }
+
+                    if(mensaje){
+                        mensaje.className=
+                            'planner-message error';
+
+                        mensaje.innerHTML=
+                            `Las fechas adicionales suman <strong>${nf(otras)} PZA</strong>, `+
+                            `superando el pendiente por <strong>${nf(excedente)} PZA</strong>.`;
+                    }
+
+                    prTrack
+                        ?.classList
+                        .add('error');
+
+                    if(btnGuardar){
+                        btnGuardar.disabled=true;
+                    }
+
+                    return;
+                }
+
+                if(saldo===0){
+                    cardRestante
+                        ?.classList
+                        .add('complete');
+
+                    prTrack
+                        ?.classList
+                        .add('complete');
+
+                    if(mensaje){
+                        mensaje.className=
+                            'planner-message info';
+
+                        mensaje.innerHTML=
+                            `✓ Las <strong>${nf(totalObjetivo)} PZA</strong> `+
+                            `quedaron completamente distribuidas entre las fechas seleccionadas.`;
+                    }
+
+                    if(btnGuardar){
+                        btnGuardar.disabled=false;
+                    }
+
+                    return;
+                }
+
+                if(mensaje){
+                    mensaje.className=
+                        'planner-message info';
+
+                    if(otras>0){
+                        mensaje.innerHTML=
+                            `Se asignaron <strong>${nf(otras)} PZA</strong> a otras fechas. `+
+                            `La fila de saldo se ajustó automáticamente a <strong>${nf(saldo)} PZA</strong>.`;
+                    }
+                    else{
+                        mensaje.innerHTML=
+                            `Las <strong>${nf(totalObjetivo)} PZA</strong> están asignadas inicialmente a la fecha principal. `+
+                            `Agrega otra fecha para dividir la entrega.`;
+                    }
+                }
+
+                if(btnGuardar){
+                    btnGuardar.disabled=false;
+                }
+            }
+
+            /* =========================================================
+               FILAS
+               ========================================================= */
+
+            function reindexar(){
+                if(!filas){
+                    return;
+                }
+
+                [...filas.querySelectorAll('tr')]
+                    .forEach((tr,index)=>{
+
+                        const fecha=
+                            tr.querySelector(
+                                '.js-fecha');
+
+                        const cantidad=
+                            tr.querySelector(
+                                '.js-cantidad');
+
+                        const observaciones=
+                            tr.querySelector(
+                                '.js-obs');
+
+                        if(fecha){
+                            fecha.name=
+                                `Programaciones[${index}].FechaProgramadaCarga`;
+                        }
+
+                        if(cantidad){
+                            cantidad.name=
+                                `Programaciones[${index}].Cantidad`;
+                        }
+
+                        if(observaciones){
+                            observaciones.name=
+                                `Programaciones[${index}].Observaciones`;
+                        }
+                    });
+            }
+
+            function crearFilaSaldo(){
+                if(!filas){
+                    return;
+                }
+
+                const tr=
+                    document.createElement('tr');
+
+                tr.dataset.esSaldo='1';
+
+                tr.innerHTML=`
+                    <td>
+                        <input type="date"
+                               class="js-fecha"
+                               required />
+                        <div class="row-warning"></div>
+                    </td>
+                    <td>
+                        <input type="number"
+                               class="js-cantidad"
+                               min="0"
+                               step="1"
+                               readonly />
+                        <span class="saldo-tag">
+                            Saldo automático
+                        </span>
+                    </td>
+                    <td>
+                        <input type="text"
+                               class="js-obs"
+                               maxlength="1000"
+                               placeholder="Opcional" />
+                    </td>
+                    <td></td>`;
+
+                filas.appendChild(tr);
+
+                const fecha=
+                    tr.querySelector(
+                        '.js-fecha');
+
+                const cantidad=
+                    tr.querySelector(
+                        '.js-cantidad');
+
+                if(fecha){
+                    fecha.value=
+                        fechaSugerida();
+
+                    fecha.addEventListener(
+                        'change',
+                        ()=>actualizarAdvertenciaDia(tr));
+                }
+
+                if(cantidad){
+                    cantidad.value=
+                        totalObjetivo;
+                }
+
+                actualizarAdvertenciaDia(tr);
+
+                reindexar();
+            }
+
+            function crearFilaAdicional(
+                fecha='',
+                cantidad='',
+                observaciones=''){
+
+                if(!filas){
+                    return;
+                }
+
+                const tr=
+                    document.createElement('tr');
+
+                tr.dataset.esSaldo='0';
+
+                tr.innerHTML=`
+                    <td>
+                        <input type="date"
+                               class="js-fecha"
+                               required />
+                        <div class="row-warning"></div>
+                    </td>
+                    <td>
+                        <input type="number"
+                               class="js-cantidad"
+                               min="1"
+                               step="1"
+                               placeholder="0"
+                               required />
+                    </td>
+                    <td>
+                        <input type="text"
+                               class="js-obs"
+                               maxlength="1000"
+                               placeholder="Opcional" />
+                    </td>
+                    <td>
+                        <button type="button"
+                                class="btn btn-sm btn-danger js-eliminar"
+                                title="Eliminar">
+                            ×
+                        </button>
+                    </td>`;
+
+                filas.appendChild(tr);
+
+                const inputFecha=
+                    tr.querySelector(
+                        '.js-fecha');
+
+                const inputCantidad=
+                    tr.querySelector(
+                        '.js-cantidad');
+
+                const inputObservaciones=
+                    tr.querySelector(
+                        '.js-obs');
+
+                const btnEliminar=
+                    tr.querySelector(
+                        '.js-eliminar');
+
+                if(inputFecha){
+                    inputFecha.value=
+                        fecha||
+                        fechaSugerida();
+
+                    inputFecha.addEventListener(
+                        'change',
+                        ()=>actualizarAdvertenciaDia(tr));
+                }
+
+                if(inputCantidad){
+                    inputCantidad.value=
+                        cantidad!==null&&
+                        cantidad!==undefined
+                            ?cantidad
+                            :'';
+
+                    inputCantidad.addEventListener(
+                        'input',
+                        actualizarSaldoAutomatico);
+
+                    inputCantidad.addEventListener(
+                        'change',
+                        actualizarSaldoAutomatico);
+                }
+
+                if(inputObservaciones){
+                    inputObservaciones.value=
+                        observaciones||
+                        '';
+                }
+
+                if(btnEliminar){
+                    btnEliminar.addEventListener(
+                        'click',
+                        ()=>{
+                            tr.remove();
+
+                            reindexar();
+
+                            actualizarSaldoAutomatico();
+                        });
+                }
+
+                actualizarAdvertenciaDia(tr);
+
+                reindexar();
+
+                actualizarSaldoAutomatico();
+            }
+
+            function restablecerProgramacion(){
+                if(!filas){
+                    return;
+                }
+
+                filas.innerHTML='';
+
+                crearFilaSaldo();
+
+                actualizarSaldoAutomatico();
+            }
+
+            /* =========================================================
+               UBICACIÓN EN TIEMPO REAL
+               ========================================================= */
+
+            async function cargarUbicacion(){
+                if(!parteActual){
+                    return;
+                }
+
+                if(liveUbicacion){
+                    liveUbicacion.textContent=
+                        'Consultando...';
+                }
+
+                try{
+                    const url=
+                        `@Url.Action("ObtenerUbicacionParte", "LogisticaListaCarga")`+
+                        `?parteId=${encodeURIComponent(parteActual)}`;
+
+                    const response=
+                        await fetch(
+                            url,
+                            {
+                                method:'GET',
+                                cache:'no-store',
+                                headers:{
+                                    'X-Requested-With':
+                                        'XMLHttpRequest'
+                                }
+                            });
+
+                    if(!response.ok){
+                        throw new Error(
+                            'No fue posible consultar la ubicación.');
+                    }
+
+                    const data=
+                        await response.json();
+
+                    if(liveUbicacion){
+                        liveUbicacion.textContent=
+                            data.ubicacion||
+                            'SIN MATERIAL';
+                    }
+
+                    if(liveAlmacen){
+                        liveAlmacen.textContent=
+                            nf(data.piezasAlmacen);
+                    }
+
+                    if(liveProduccion){
+                        liveProduccion.textContent=
+                            nf(data.piezasProduccion);
+                    }
+
+                    if(liveGP12){
+                        liveGP12.textContent=
+                            nf(data.piezasGP12);
+                    }
+
+                    if(liveTotal){
+                        liveTotal.textContent=
+                            nf(data.piezasLocalizadas);
+                    }
+
+                    if(liveActualizado){
+                        liveActualizado.textContent=
+                            'Actualizado '+
+                            new Date()
+                                .toLocaleTimeString(
+                                    'es-MX',
+                                    {
+                                        hour:'2-digit',
+                                        minute:'2-digit'
+                                    });
+                    }
+                }
+                catch(error){
+                    console.error(error);
+
+                    if(liveUbicacion){
+                        liveUbicacion.textContent=
+                            'No disponible';
+                    }
+
+                    if(liveAlmacen){
+                        liveAlmacen.textContent='-';
+                    }
+
+                    if(liveProduccion){
+                        liveProduccion.textContent='-';
+                    }
+
+                    if(liveGP12){
+                        liveGP12.textContent='-';
+                    }
+
+                    if(liveTotal){
+                        liveTotal.textContent='-';
+                    }
+                }
+            }
+
+            /* =========================================================
+               ABRIR / CERRAR
+               ========================================================= */
+
+            function abrirProgramacion(btn){
+                if(!backdrop||!filas){
+                    return;
+                }
+
+                const clienteId=
+                    btn.dataset.clienteId||
+                    '';
+
+                const parteId=
+                    btn.dataset.parteId||
+                    '';
+
+                const cliente=
+                    btn.dataset.cliente||
+                    '';
+
+                const referencia=
+                    btn.dataset.referencia||
+                    '';
+
+                const designacion=
+                    btn.dataset.designacion||
+                    '';
+
+                totalObjetivo=
+                    Math.max(
+                        0,
+                        n(btn.dataset.sinProgramar));
+
+                parteActual=
+                    n(parteId);
+
+                inicioSemana=
+                    btn.dataset.semanaInicio||
+                    '';
+
+                try{
+                    diasHabituales=
+                        JSON.parse(
+                            btn.dataset.dias||
+                            '[]')
+                        .map(Number);
+                }
+                catch{
+                    diasHabituales=[];
+                }
+
+                if(prClienteID){
+                    prClienteID.value=
+                        clienteId;
+                }
+
+                if(prParteID){
+                    prParteID.value=
+                        parteId;
+                }
+
+                if(prTitulo){
+                    prTitulo.textContent=
+                        'Programar carga · '+
+                        cliente;
+                }
+
+                if(prSubtitulo){
+                    prSubtitulo.textContent=
+                        referencia+
+                        (
+                            designacion
+                                ?' · '+designacion
+                                :''
+                        );
+                }
+
+                if(prTotal){
+                    prTotal.textContent=
+                        nf(totalObjetivo);
+                }
+
+                if(prHabitual){
+                    prHabitual.textContent=
+                        diasHabituales.length>0
+                            ?diasHabituales
+                                .map(x=>nombresDias[x]||'')
+                                .filter(Boolean)
+                                .join(' / ')
+                            :'Sin definir';
+                }
+
+                /*
+                 * SIEMPRE iniciamos con UNA fila saldo.
+                 *
+                 * Ejemplo:
+                 * pendiente = 18,000
+                 *
+                 * fila principal = 18,000
+                 */
+                restablecerProgramacion();
+
+                cargarUbicacion();
+
+                if(timerUbicacion){
+                    clearInterval(
+                        timerUbicacion);
+                }
+
+                timerUbicacion=
+                    setInterval(
+                        ()=>{
+                            if(
+                                backdrop
+                                    .classList
+                                    .contains('open')){
+
+                                cargarUbicacion();
+                            }
+                        },
+                        30000);
+
+                backdrop.classList.add('open');
+
+                backdrop.setAttribute(
+                    'aria-hidden',
+                    'false');
+            }
+
+            function cerrarProgramacion(){
+                backdrop
+                    ?.classList
+                    .remove('open');
+
+                backdrop
+                    ?.setAttribute(
+                        'aria-hidden',
+                        'true');
+
+                if(timerUbicacion){
+                    clearInterval(
+                        timerUbicacion);
+
+                    timerUbicacion=null;
+                }
+            }
+
+            document
+                .querySelectorAll(
+                    '.js-programar')
+                .forEach(btn=>{
+                    btn.addEventListener(
+                        'click',
+                        ()=>abrirProgramacion(btn));
+                });
+
+            document
+                .querySelectorAll(
+                    '.js-cerrar')
+                .forEach(btn=>{
+                    btn.addEventListener(
+                        'click',
+                        cerrarProgramacion);
+                });
+
+            backdrop
+                ?.addEventListener(
+                    'click',
+                    e=>{
+                        if(e.target===backdrop){
+                            cerrarProgramacion();
+                        }
+                    });
+
+            /* =========================================================
+               BOTONES DEL MODAL
+               ========================================================= */
+
+            document
+                .getElementById(
+                    'btnActualizarUbicacion')
+                ?.addEventListener(
+                    'click',
+                    cargarUbicacion);
+
+            document
+                .getElementById(
+                    'btnOtraFecha')
+                ?.addEventListener(
+                    'click',
+                    ()=>{
+                        crearFilaAdicional(
+                            fechaSugerida(),
+                            '',
+                            '');
+
+                        setTimeout(
+                            ()=>{
+                                const inputs=
+                                    filas
+                                        ?.querySelectorAll(
+                                            'tr:not([data-es-saldo="1"]) .js-cantidad');
+
+                                if(
+                                    inputs&&
+                                    inputs.length>0){
+
+                                    inputs[
+                                        inputs.length-1
+                                    ].focus();
+                                }
+                            },
+                            30);
+                    });
+
+            document
+                .getElementById(
+                    'btnRestablecer')
+                ?.addEventListener(
+                    'click',
+                    restablecerProgramacion);
+
+            /* =========================================================
+               GUARDAR
+               ========================================================= */
+
+            form
+                ?.addEventListener(
+                    'submit',
+                    e=>{
+
+                        reindexar();
+
+                        const otras=
+                            obtenerCantidadOtrasFilas();
+
+                        if(
+                            otras>
+                            totalObjetivo){
+
+                            e.preventDefault();
+
+                            alert(
+                                'Las cantidades distribuidas superan el pendiente disponible.');
+
+                            return;
+                        }
+
+                        const registros=
+                            [...filas.querySelectorAll('tr')];
+
+                        const invalido=
+                            registros.some(
+                                tr=>{
+
+                                    const fecha=
+                                        tr.querySelector(
+                                            '.js-fecha');
+
+                                    const cantidad=
+                                        tr.querySelector(
+                                            '.js-cantidad');
+
+                                    return (
+                                        !fecha?.value||
+                                        n(cantidad?.value)<=0
+                                    );
+                                });
+
+                        if(invalido){
+                            e.preventDefault();
+
+                            alert(
+                                'Todas las fechas deben tener una cantidad mayor a cero.');
+
+                            return;
+                        }
+
+                        /*
+                         * Al llegar aquí SIEMPRE:
+                         *
+                         * suma de todas las filas
+                         * =
+                         * totalObjetivo
+                         *
+                         * porque la primera es saldo automático.
+                         */
+                        if(
+                            totalDistribuido()!==
+                            totalObjetivo){
+
+                            e.preventDefault();
+
+                            alert(
+                                'La distribución no coincide con el pendiente inicial.');
+
+                            return;
+                        }
+
+                        if(btnGuardar){
+                            btnGuardar.disabled=
+                                true;
+
+                            btnGuardar.textContent=
+                                'Guardando...';
+                        }
+                    });
+
+            document
+                .querySelectorAll(
+                    '.js-generar-form')
+                .forEach(formGenerar=>{
+
+                    formGenerar
+                        .addEventListener(
+                            'submit',
+                            e=>{
+
+                                const boton=
+                                    formGenerar
+                                        .querySelector(
+                                            'button[type="submit"]');
+
+                                let mensajeConfirmacion=
+                                    '¿Generar todos los embarques pendientes de la programación?';
+
+                                if(
+                                    formGenerar
+                                        .classList
+                                        .contains('js-generar-grupo')&&
+                                    boton){
+
+                                    const cliente=
+                                        boton.dataset.cliente||
+                                        '';
+
+                                    const fecha=
+                                        boton.dataset.fecha||
+                                        '';
+
+                                    const criticidad=
+                                        boton.dataset.criticidad||
+                                        '';
+
+                                    const cantidad=
+                                        nf(
+                                            boton.dataset.cantidad);
+
+                                    mensajeConfirmacion=
+                                        `¿Generar este embarque?\n\nCliente: ${cliente}\nFecha de carga: ${fecha}\nCriticidad: ${criticidad}\nCantidad: ${cantidad} PZA`;
+                                }
+
+                                if(
+                                    !confirm(
+                                        mensajeConfirmacion)){
+
+                                    e.preventDefault();
+
+                                    return;
+                                }
+
+                                if(boton){
+                                    boton.disabled=
+                                        true;
+
+                                    boton.textContent=
+                                        'Generando...';
+                                }
+                            });
+                });
+
+            document
+                .addEventListener(
+                    'keydown',
+                    e=>{
+                        if(e.key==='Escape'){
+                            cerrarProgramacion();
+                        }
+                    });
         })();
     </script>
 </body>

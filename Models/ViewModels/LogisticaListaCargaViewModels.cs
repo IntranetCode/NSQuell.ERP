@@ -472,3 +472,43 @@ public sealed class LogisticaListaCargaProgramacionEmbarqueVm
     public int PendienteEnviar =>
         Math.Max(0, CantidadAsignada - CantidadEnviada);
 }
+
+public sealed class LogisticaDiasCargaClientesVm
+{
+    public string? Busqueda { get; set; }
+    public List<LogisticaDiaCargaClienteVm> Clientes { get; set; } = new();
+    public int TotalClientes => Clientes.Count;
+    public int ClientesConfigurados => Clientes.Count(x => x.DiasSeleccionados.Count > 0);
+    public int ClientesSinConfigurar => Clientes.Count(x => x.DiasSeleccionados.Count == 0);
+}
+
+public sealed class LogisticaDiaCargaClienteVm
+{
+    public int ClienteID { get; set; }
+    public string Cliente { get; set; } = string.Empty;
+    public List<int> DiasSeleccionados { get; set; } = new();
+    public string DiasTexto
+    {
+        get
+        {
+            if (DiasSeleccionados.Count == 0) return "Sin días definidos";
+            return string.Join(", ", DiasSeleccionados.OrderBy(x => x).Select(x => x switch
+            {
+                1 => "Lunes",
+                2 => "Martes",
+                3 => "Miércoles",
+                4 => "Jueves",
+                5 => "Viernes",
+                6 => "Sábado",
+                _ => string.Empty
+            }).Where(x => !string.IsNullOrWhiteSpace(x)));
+        }
+    }
+}
+
+public sealed class LogisticaGuardarDiasCargaClienteVm
+{
+    public int ClienteID { get; set; }
+    public List<int> DiasSeleccionados { get; set; } = new();
+    public string? Busqueda { get; set; }
+}

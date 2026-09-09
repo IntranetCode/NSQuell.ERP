@@ -1,0 +1,917 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaDiasCargaClientesVm
+@{
+    Layout = null;
+    ViewData["Title"] = "Días habituales de carga";
+
+    var dias = new[]
+    {
+        new { Numero = 1, Corto = "L", Nombre = "Lunes" },
+        new { Numero = 2, Corto = "M", Nombre = "Martes" },
+        new { Numero = 3, Corto = "X", Nombre = "Miércoles" },
+        new { Numero = 4, Corto = "J", Nombre = "Jueves" },
+        new { Numero = 5, Corto = "V", Nombre = "Viernes" },
+        new { Numero = 6, Corto = "S", Nombre = "Sábado" }
+    };
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+
+    <style>
+        :root {
+            --navy: #101b31;
+            --navy2: #172b4d;
+            --blue: #173a7a;
+            --blue2: #2454a4;
+            --blueSoft: #edf4ff;
+            --line: #d4deea;
+            --line2: #c4d0de;
+            --bg: #edf2f7;
+            --text: #172033;
+            --muted: #66758a;
+            --danger: #b42318;
+            --dangerBg: #fff1f0;
+            --warn: #936100;
+            --warnBg: #fff7df;
+            --ok: #087443;
+            --ok2: #15955c;
+            --okBg: #eaf9f1;
+            --shadow: 0 5px 18px rgba(16,27,49,.08)
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Segoe UI,Arial,sans-serif;
+            font-size: 14px
+        }
+
+        button, input {
+            font: inherit
+        }
+
+        body {
+            min-height: 100vh
+        }
+
+        .page {
+            max-width: 1540px;
+            margin: 0 auto;
+            padding: 16px
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 12px
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0
+        }
+
+        .header-title h1 {
+            margin: 0;
+            color: var(--navy);
+            font-size: 25px;
+            font-weight: 900;
+            letter-spacing: -.02em
+        }
+
+        .header-title p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 11px
+        }
+
+        .back-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg,var(--navy),var(--blue));
+            color: #fff;
+            text-decoration: none;
+            border-radius: 11px;
+            padding: 10px 15px;
+            min-width: 165px;
+            box-shadow: 0 5px 16px rgba(16,27,49,.22);
+            transition: .15s
+        }
+
+            .back-main:hover {
+                filter: brightness(1.08);
+                transform: translateY(-1px)
+            }
+
+        .back-icon {
+            font-size: 25px;
+            line-height: 1
+        }
+
+        .back-main small {
+            display: block;
+            font-size: 7px;
+            letter-spacing: .09em;
+            color: #cad7e9;
+            font-weight: 800
+        }
+
+        .back-main strong {
+            display: block;
+            font-size: 12px
+        }
+
+        .header-note {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            padding: 8px 11px;
+            color: var(--muted);
+            font-size: 9px;
+            max-width: 410px;
+            box-shadow: var(--shadow)
+        }
+
+            .header-note strong {
+                color: var(--navy)
+            }
+
+        .notice {
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid;
+            font-size: 12px
+        }
+
+        .notice-ok {
+            background: var(--okBg);
+            border-color: #afe3c8;
+            color: #085f39
+        }
+
+        .notice-error {
+            background: var(--dangerBg);
+            border-color: #efb8b2;
+            color: #8e1d14
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow)
+        }
+
+        .summary-item {
+            padding: 10px 13px;
+            border-right: 1px solid var(--line);
+            border-top: 3px solid var(--blue)
+        }
+
+            .summary-item:last-child {
+                border-right: 0
+            }
+
+            .summary-item span {
+                display: block;
+                font-size: 8px;
+                text-transform: uppercase;
+                font-weight: 900;
+                color: var(--muted)
+            }
+
+            .summary-item strong {
+                display: block;
+                margin-top: 2px;
+                font-size: 20px;
+                color: var(--navy);
+                font-weight: 900
+            }
+
+            .summary-item.success {
+                border-top-color: var(--ok2)
+            }
+
+                .summary-item.success strong {
+                    color: var(--ok)
+                }
+
+            .summary-item.warning {
+                border-top-color: #d99a14
+            }
+
+                .summary-item.warning strong {
+                    color: var(--warn)
+                }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 9px 10px;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow)
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1
+        }
+
+            .search-box input {
+                width: 100%;
+                height: 37px;
+                border: 1px solid var(--line2);
+                border-radius: 7px;
+                padding: 7px 10px 7px 34px;
+                outline: none
+            }
+
+                .search-box input:focus {
+                    border-color: #6389be;
+                    box-shadow: 0 0 0 3px rgba(35,63,128,.08)
+                }
+
+        .search-icon {
+            position: absolute;
+            left: 11px;
+            top: 9px;
+            color: #748399;
+            font-size: 14px
+        }
+
+        .btn {
+            border: 1px solid var(--line2);
+            background: #fff;
+            color: var(--navy);
+            padding: 7px 11px;
+            border-radius: 7px;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 35px;
+            transition: .12s;
+            white-space: nowrap
+        }
+
+            .btn:hover {
+                background: #f8fbff;
+                border-color: #8ea6c2
+            }
+
+        .btn-primary {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: #fff
+        }
+
+            .btn-primary:hover {
+                background: var(--blue2);
+                border-color: var(--blue2);
+                color: #fff
+            }
+
+        .btn-success {
+            background: var(--ok);
+            border-color: var(--ok);
+            color: #fff
+        }
+
+            .btn-success:hover {
+                background: var(--ok2);
+                border-color: var(--ok2);
+                color: #fff
+            }
+
+        .btn-sm {
+            min-height: 30px;
+            padding: 5px 9px;
+            font-size: 10px
+        }
+
+        .section {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: var(--shadow)
+        }
+
+        .section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--line)
+        }
+
+            .section-head h2 {
+                margin: 0;
+                color: var(--navy);
+                font-size: 14px;
+                font-weight: 900
+            }
+
+            .section-head p {
+                margin: 3px 0 0;
+                color: var(--muted);
+                font-size: 9px
+            }
+
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 8px;
+            color: var(--muted)
+        }
+
+        .legend-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+            border: 1px solid var(--line2);
+            background: #fff
+        }
+
+            .legend-dot.selected {
+                background: var(--blue);
+                border-color: var(--blue)
+            }
+
+        .clients {
+            padding: 9px
+        }
+
+        .client-card {
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            margin-bottom: 7px;
+            background: #fff;
+            overflow: hidden;
+            transition: .15s
+        }
+
+            .client-card:hover {
+                border-color: #b5c5d7;
+                box-shadow: 0 3px 10px rgba(16,27,49,.05)
+            }
+
+            .client-card.configured {
+                border-left: 4px solid var(--ok2)
+            }
+
+            .client-card.unconfigured {
+                border-left: 4px solid #d99a14
+            }
+
+        .client-main {
+            display: grid;
+            grid-template-columns: minmax(210px,1.4fr) minmax(420px,2.2fr) minmax(130px,.7fr);
+            gap: 12px;
+            align-items: center;
+            padding: 10px 11px
+        }
+
+        .client-info {
+            min-width: 0
+        }
+
+        .client-name {
+            font-size: 13px;
+            font-weight: 900;
+            color: var(--navy);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .client-status {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            margin-top: 4px;
+            flex-wrap: wrap
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 7px;
+            border-radius: 999px;
+            font-size: 8px;
+            font-weight: 900
+        }
+
+        .badge-ok {
+            background: var(--okBg);
+            color: var(--ok)
+        }
+
+        .badge-warn {
+            background: var(--warnBg);
+            color: var(--warn)
+        }
+
+        .days {
+            display: grid;
+            grid-template-columns: repeat(6,1fr);
+            gap: 6px
+        }
+
+        .day-choice {
+            position: relative
+        }
+
+            .day-choice input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+            .day-choice label {
+                height: 51px;
+                border: 1px solid var(--line2);
+                border-radius: 8px;
+                background: #f9fbfd;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                cursor: pointer;
+                transition: .12s;
+                user-select: none
+            }
+
+                .day-choice label:hover {
+                    border-color: #8ba6c8;
+                    background: #f2f6fb
+                }
+
+            .day-choice strong {
+                font-size: 14px;
+                color: #5e7189
+            }
+
+            .day-choice span {
+                display: block;
+                margin-top: 1px;
+                font-size: 7px;
+                text-transform: uppercase;
+                color: #8997a8;
+                font-weight: 800
+            }
+
+            .day-choice input:checked + label {
+                background: var(--blue);
+                border-color: var(--blue);
+                box-shadow: 0 3px 8px rgba(23,58,122,.18)
+            }
+
+                .day-choice input:checked + label strong, .day-choice input:checked + label span {
+                    color: #fff
+                }
+
+        .client-actions {
+            text-align: right
+        }
+
+            .client-actions .btn {
+                width: 100%
+            }
+
+        .saved-text {
+            display: block;
+            margin-top: 4px;
+            font-size: 8px;
+            color: var(--muted);
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .empty {
+            padding: 45px 20px;
+            text-align: center;
+            color: var(--muted)
+        }
+
+        .empty-icon {
+            font-size: 35px;
+            margin-bottom: 8px;
+            opacity: .5
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--navy);
+            margin-bottom: 4px
+        }
+
+        .footer-note {
+            padding: 10px 12px;
+            background: #f8fafc;
+            border-top: 1px solid var(--line);
+            font-size: 9px;
+            color: var(--muted);
+            line-height: 1.4
+        }
+
+            .footer-note strong {
+                color: var(--navy)
+            }
+
+        @@media(max-width:950px) {
+            .header {
+                align-items: flex-start;
+                flex-direction: column
+            }
+
+            .header-note {
+                max-width: none;
+                width: 100%
+            }
+
+            .client-main {
+                grid-template-columns: 1fr
+            }
+
+            .client-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px
+            }
+
+                .client-actions .btn {
+                    width: auto
+                }
+
+            .saved-text {
+                text-align: left
+            }
+        }
+
+        @@media(max-width:650px) {
+            .page {
+                padding: 9px
+            }
+
+            .summary {
+                grid-template-columns: 1fr
+            }
+
+            .summary-item {
+                border-right: 0;
+                border-bottom: 1px solid var(--line)
+            }
+
+                .summary-item:last-child {
+                    border-bottom: 0
+                }
+
+            .toolbar {
+                align-items: stretch;
+                flex-direction: column
+            }
+
+                .toolbar .btn {
+                    width: 100%
+                }
+
+            .days {
+                grid-template-columns: repeat(3,1fr)
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+
+        <div class="header">
+            <div class="header-left">
+                <a class="back-main"
+                   asp-controller="LogisticaListaCarga"
+                   asp-action="Index">
+                    <span class="back-icon">←</span>
+                    <span>
+                        <small>REGRESAR A</small>
+                        <strong>Lista de carga</strong>
+                    </span>
+                </a>
+
+                <div class="header-title">
+                    <h1>Días habituales de carga</h1>
+                    <p>Configura los días de referencia de cada cliente para sugerir la programación semanal.</p>
+                </div>
+            </div>
+
+            <div class="header-note">
+                <strong>Importante:</strong>
+                estos días son una referencia operativa. La Lista de carga podrá programarse en cualquier otro día cuando sea necesario.
+            </div>
+        </div>
+
+        @if (TempData["LogisticaOk"] is string ok && !string.IsNullOrWhiteSpace(ok))
+        {
+            <div class="notice notice-ok">@ok</div>
+        }
+
+        @if (TempData["LogisticaError"] is string error && !string.IsNullOrWhiteSpace(error))
+        {
+            <div class="notice notice-error">@error</div>
+        }
+
+        <div class="summary">
+            <div class="summary-item">
+                <span>Clientes</span>
+                <strong>@Model.TotalClientes</strong>
+            </div>
+
+            <div class="summary-item success">
+                <span>Configurados</span>
+                <strong>@Model.ClientesConfigurados</strong>
+            </div>
+
+            <div class="summary-item warning">
+                <span>Sin configurar</span>
+                <strong>@Model.ClientesSinConfigurar</strong>
+            </div>
+        </div>
+
+        <form method="get"
+              asp-controller="LogisticaListaCarga"
+              asp-action="DiasCargaClientes"
+              class="toolbar"
+              id="formBuscar">
+
+            <div class="search-box">
+                <span class="search-icon">⌕</span>
+
+                <input type="text"
+                       name="q"
+                       value="@Model.Busqueda"
+                       id="buscar"
+                       placeholder="Buscar cliente..."
+                       autocomplete="off" />
+            </div>
+
+            <button type="submit"
+                    class="btn btn-primary">
+                Buscar
+            </button>
+
+            @if (!string.IsNullOrWhiteSpace(Model.Busqueda))
+            {
+                <a class="btn"
+                   asp-controller="LogisticaListaCarga"
+                   asp-action="DiasCargaClientes">
+                    Limpiar
+                </a>
+            }
+        </form>
+
+        <div class="section">
+
+            <div class="section-head">
+                <div>
+                    <h2>Configuración por cliente</h2>
+                    <p>Selecciona uno o varios días y guarda únicamente ese cliente.</p>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-dot selected"></span>
+                        Seleccionado
+                    </div>
+
+                    <div class="legend-item">
+                        <span class="legend-dot"></span>
+                        Disponible
+                    </div>
+                </div>
+            </div>
+
+            <div class="clients">
+
+                @if (Model.Clientes.Count == 0)
+                {
+                    <div class="empty">
+                        <div class="empty-icon">⌕</div>
+                        <strong>No se encontraron clientes</strong>
+                        <span>Intenta con otro criterio de búsqueda.</span>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var cliente in Model.Clientes.OrderBy(x => x.Cliente))
+                    {
+                        var configurado = cliente.DiasSeleccionados.Count > 0;
+
+                        <form method="post"
+                              asp-controller="LogisticaListaCarga"
+                              asp-action="GuardarDiasCargaCliente"
+                              class="client-card @(configurado?"configured":"unconfigured") js-client-form"
+                              data-cliente="@cliente.Cliente.ToLowerInvariant()">
+
+                            @Html.AntiForgeryToken()
+
+                            <input type="hidden"
+                                   name="ClienteID"
+                                   value="@cliente.ClienteID" />
+
+                            <input type="hidden"
+                                   name="Busqueda"
+                                   value="@Model.Busqueda" />
+
+                            <div class="client-main">
+
+                                <div class="client-info">
+                                    <div class="client-name">
+                                        @cliente.Cliente
+                                    </div>
+
+                                    <div class="client-status">
+                                        @if (configurado)
+                                        {
+                                            <span class="badge badge-ok">
+                                                Configurado
+                                            </span>
+
+                                            <span style="font-size:8px;color:var(--muted)">
+                                                @cliente.DiasTexto
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-warn">
+                                                Sin configurar
+                                            </span>
+
+                                            <span style="font-size:8px;color:var(--muted)">
+                                                No tiene día habitual
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="days">
+                                    @foreach (var dia in dias)
+                                    {
+                                        var seleccionado = cliente.DiasSeleccionados.Contains(dia.Numero);
+                                        var inputId = $"cliente_{cliente.ClienteID}_dia_{dia.Numero}";
+
+                                        <div class="day-choice">
+                                            <input type="checkbox"
+                                                   id="@inputId"
+                                                   name="DiasSeleccionados"
+                                                   value="@dia.Numero"
+                                                   @(seleccionado ? "checked" : null) />
+
+                                            <label for="@inputId"
+                                                   title="@dia.Nombre">
+                                                <strong>@dia.Corto</strong>
+                                                <span>@dia.Nombre</span>
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="client-actions">
+
+                                    <button type="submit"
+                                            class="btn btn-success js-guardar">
+                                        Guardar
+                                    </button>
+
+                                    <span class="saved-text js-estado">
+                                        @(configurado? cliente.DiasTexto: "Sin días definidos")
+                                    </span>
+
+                                </div>
+
+                            </div>
+                        </form>
+                    }
+                }
+
+            </div>
+
+            <div class="footer-note">
+                <strong>Ejemplo:</strong>
+                si GOLDE tiene marcado Jueves, la Lista de carga sugerirá ese día al programar.
+                Si esa semana necesita salir martes o viernes, el usuario podrá mover la programación sin solicitar motivo.
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        (function(){
+            const forms=[...document.querySelectorAll('.js-client-form')];
+            const buscador=document.getElementById('buscar');
+
+            function nombresSeleccionados(form){
+                const nombres={
+                    '1':'Lunes',
+                    '2':'Martes',
+                    '3':'Miércoles',
+                    '4':'Jueves',
+                    '5':'Viernes',
+                    '6':'Sábado'
+                };
+
+                return [...form.querySelectorAll('input[name="DiasSeleccionados"]:checked')]
+                    .map(x=>nombres[x.value])
+                    .filter(Boolean);
+            }
+
+            forms.forEach(form=>{
+                const checks=[...form.querySelectorAll('input[name="DiasSeleccionados"]')];
+                const estado=form.querySelector('.js-estado');
+                const boton=form.querySelector('.js-guardar');
+
+                checks.forEach(check=>{
+                    check.addEventListener('change',()=>{
+                        const seleccionados=nombresSeleccionados(form);
+
+                        if(estado){
+                            estado.textContent=
+                                seleccionados.length>0
+                                    ?seleccionados.join(', ')
+                                    :'Sin días definidos';
+                        }
+
+                        if(boton){
+                            boton.textContent='Guardar cambios';
+                        }
+                    });
+                });
+
+                form.addEventListener('submit',()=>{
+                    if(boton){
+                        boton.disabled=true;
+                        boton.textContent='Guardando...';
+                    }
+                });
+            });
+
+            /*
+             * Filtro instantáneo adicional.
+             * El buscador superior también puede consultar al servidor,
+             * pero mientras escribe ocultamos clientes sin esperar POST/GET.
+             */
+            buscador?.addEventListener('input',()=>{
+                const valor=(buscador.value||'').trim().toLowerCase();
+
+                forms.forEach(form=>{
+                    const cliente=form.dataset.cliente||'';
+
+                    form.style.display=
+                        !valor||cliente.includes(valor)
+                            ?''
+                            :'none';
+                });
+            });
+        })();
+    </script>
+
+</body>
+</html>

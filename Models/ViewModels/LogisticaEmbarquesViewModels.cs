@@ -726,6 +726,9 @@ public sealed class LogisticaConfigurarEnvioVm
     public int? ChoferUsuarioID { get; set; }
 
     [StringLength(200)]
+    public string? ChoferNombreSnapshot { get; set; }
+
+    [StringLength(200)]
     public string? ChoferExterno { get; set; }
 
     [StringLength(100)]

@@ -5,13 +5,13 @@
 @{
     Layout = "_Layout";
 
-    var preparacionAnticipadaID = ViewBag.PreparacionAnticipadaID != null ? Convert.ToInt32(ViewBag.PreparacionAnticipadaID) : 0;
-    var puedeGestionar = ViewBag.PuedeGestionarCambioMolde != null && Convert.ToBoolean(ViewBag.PuedeGestionarCambioMolde);
-    var estadoCambioMolde = Convert.ToString(ViewBag.EstadoCambioMolde) ?? "";
-    var fechaInicioCambioMolde = ViewBag.FechaInicioCambioMolde as DateTime?;
-    var limiteCambioMoldeMinutos = ViewBag.LimiteCambioMoldeMinutos != null ? Convert.ToInt32(ViewBag.LimiteCambioMoldeMinutos) : 0;
-    var esParejaLhRh = ViewBag.EsParejaLhRh != null && Convert.ToBoolean(ViewBag.EsParejaLhRh);
-    var grupoLhRh = ViewBag.GrupoLhRh != null ? Convert.ToInt32(ViewBag.GrupoLhRh) : (int?)null;
+    var preparacionAnticipadaID = ViewData["PreparacionAnticipadaID"] != null ? Convert.ToInt32(ViewData["PreparacionAnticipadaID"]) : 0;
+    var puedeGestionar = ViewData["PuedeGestionarCambioMolde"] != null && Convert.ToBoolean(ViewData["PuedeGestionarCambioMolde"]);
+    var estadoCambioMolde = Convert.ToString(ViewData["EstadoCambioMolde"]) ?? "";
+    DateTime? fechaInicioCambioMolde = ViewData["FechaInicioCambioMolde"] != null ? Convert.ToDateTime(ViewData["FechaInicioCambioMolde"]) : (DateTime?)null;
+    var limiteCambioMoldeMinutos = ViewData["LimiteCambioMoldeMinutos"] != null ? Convert.ToInt32(ViewData["LimiteCambioMoldeMinutos"]) : 0;
+    var esParejaLhRh = ViewData["EsParejaLhRh"] != null && Convert.ToBoolean(ViewData["EsParejaLhRh"]);
+    int? grupoLhRh = ViewData["GrupoLhRh"] != null ? Convert.ToInt32(ViewData["GrupoLhRh"]) : (int?)null;
     var puedeEditar = puedeGestionar && !Model.EstaCompleto;
     var cambioEnProceso = string.Equals(estadoCambioMolde, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase);
     var cambioConfirmado = string.Equals(estadoCambioMolde, ProduccionPreparacionEstado.Confirmada, StringComparison.OrdinalIgnoreCase);

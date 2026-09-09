@@ -1,0 +1,1305 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaConfigurarEnvioVm
+@using ERP.NSQuell.Models.ViewModels.Logistica
+@{
+    Layout = null;
+    ViewData["Title"] = "Definir forma de salida";
+
+    var rutas = ViewBag.RutasDefinirSalida as List<LogisticaSelectVm> ?? new List<LogisticaSelectVm>();
+    var unidades = ViewBag.UnidadesDefinirSalida as List<LogisticaSelectVm> ?? new List<LogisticaSelectVm>();
+    var choferes = ViewBag.ChoferesDefinirSalida as List<LogisticaSelectVm> ?? new List<LogisticaSelectVm>();
+
+    string folio = ViewBag.Folio as string ?? string.Empty;
+    string cliente = ViewBag.Cliente as string ?? string.Empty;
+    string destino = ViewBag.Destino as string ?? string.Empty;
+    string estatus = ViewBag.Estatus as string ?? string.Empty;
+
+    DateTime? fechaCarga = ViewBag.FechaCarga as DateTime?;
+    TimeSpan? horaCarga = ViewBag.HoraCarga as TimeSpan?;
+
+    int totalPiezas = ViewBag.TotalPiezas is int tp ? tp : 0;
+    long totalPartidas = ViewBag.TotalPartidas is long tpa ? tpa : 0;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+
+    <style>
+        :root {
+            --navy: #101b31;
+            --navy2: #172b4d;
+            --blue: #173a7a;
+            --blue2: #2454a4;
+            --blueSoft: #edf4ff;
+            --line: #d4deea;
+            --line2: #c4d0de;
+            --bg: #edf2f7;
+            --white: #fff;
+            --text: #172033;
+            --muted: #66758a;
+            --danger: #b42318;
+            --dangerBg: #fff1f0;
+            --warn: #936100;
+            --warnBg: #fff7df;
+            --ok: #087443;
+            --okBg: #eaf9f1;
+            --shadow: 0 8px 28px rgba(16,27,49,.09)
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Segoe UI,Arial,sans-serif;
+            font-size: 14px
+        }
+
+        button, input, select, textarea {
+            font: inherit
+        }
+
+        .page {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 18px
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 14px
+        }
+
+        .top-left {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0
+        }
+
+        .back-main {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            background: linear-gradient(135deg,var(--navy),var(--blue));
+            color: #fff;
+            text-decoration: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            min-width: 142px;
+            box-shadow: 0 5px 16px rgba(16,27,49,.22);
+            transition: .15s
+        }
+
+            .back-main:hover {
+                transform: translateY(-1px);
+                filter: brightness(1.08)
+            }
+
+        .back-icon {
+            font-size: 24px;
+            line-height: 1
+        }
+
+        .back-main small {
+            display: block;
+            font-size: 7px;
+            color: #c9d5e6;
+            font-weight: 800;
+            letter-spacing: .09em
+        }
+
+        .back-main strong {
+            display: block;
+            font-size: 12px
+        }
+
+        .title h1 {
+            margin: 0;
+            color: var(--navy);
+            font-size: 25px;
+            font-weight: 900;
+            letter-spacing: -.02em
+        }
+
+        .title p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 12px
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: var(--blueSoft);
+            color: var(--blue);
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase
+        }
+
+        .notice {
+            border: 1px solid;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            font-size: 12px
+        }
+
+        .notice-error {
+            background: var(--dangerBg);
+            border-color: #efb8b2;
+            color: #8e1d14
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: 1.4fr 1.4fr .8fr .8fr .9fr;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            margin-bottom: 13px
+        }
+
+        .summary-item {
+            padding: 11px 13px;
+            border-right: 1px solid var(--line)
+        }
+
+            .summary-item:last-child {
+                border-right: 0
+            }
+
+            .summary-item span {
+                display: block;
+                font-size: 8px;
+                text-transform: uppercase;
+                color: var(--muted);
+                font-weight: 800
+            }
+
+            .summary-item strong {
+                display: block;
+                margin-top: 3px;
+                color: var(--navy);
+                font-size: 15px;
+                font-weight: 900
+            }
+
+            .summary-item.big strong {
+                font-size: 17px
+            }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 11px;
+            box-shadow: var(--shadow);
+            overflow: hidden
+        }
+
+        .card-head {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            background: linear-gradient(#fcfdff,#f7f9fc)
+        }
+
+            .card-head h2 {
+                margin: 0;
+                font-size: 15px;
+                color: var(--navy);
+                font-weight: 900
+            }
+
+            .card-head p {
+                margin: 3px 0 0;
+                color: var(--muted);
+                font-size: 10px
+            }
+
+        .body {
+            padding: 14px
+        }
+
+        .step-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px
+        }
+
+        .step-number {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: var(--navy);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 900
+        }
+
+        .step-title strong {
+            font-size: 12px;
+            color: var(--navy)
+        }
+
+        .tipo-grid {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 8px;
+            margin-bottom: 18px
+        }
+
+        .forma-grid {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 9px;
+            margin-bottom: 18px
+        }
+
+        .choice {
+            position: relative
+        }
+
+            .choice input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+            .choice label {
+                display: block;
+                border: 2px solid var(--line);
+                border-radius: 10px;
+                padding: 12px;
+                cursor: pointer;
+                min-height: 92px;
+                transition: .15s;
+                background: #fff
+            }
+
+                .choice label:hover {
+                    border-color: #9eb4cf;
+                    background: #fafcff
+                }
+
+            .choice input:checked + label {
+                border-color: var(--blue);
+                background: var(--blueSoft);
+                box-shadow: 0 0 0 3px rgba(23,58,122,.07)
+            }
+
+        .choice-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 31px;
+            height: 31px;
+            border-radius: 8px;
+            background: #e9eff7;
+            color: var(--navy);
+            font-weight: 900;
+            font-size: 15px;
+            margin-bottom: 7px
+        }
+
+        .choice input:checked + label .choice-icon {
+            background: var(--blue);
+            color: #fff
+        }
+
+        .choice-title {
+            display: block;
+            color: var(--navy);
+            font-size: 12px;
+            font-weight: 900
+        }
+
+        .choice-desc {
+            display: block;
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 9px;
+            line-height: 1.35
+        }
+
+        .section {
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            margin-top: 10px;
+            overflow: hidden;
+            display: none
+        }
+
+            .section.visible {
+                display: block
+            }
+
+        .section-head {
+            padding: 9px 11px;
+            border-bottom: 1px solid var(--line);
+            background: #f7f9fc
+        }
+
+            .section-head strong {
+                color: var(--navy);
+                font-size: 11px
+            }
+
+            .section-head span {
+                display: block;
+                color: var(--muted);
+                font-size: 8px;
+                margin-top: 2px
+            }
+
+        .section-body {
+            padding: 11px
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 10px
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(3,minmax(0,1fr))
+        }
+
+        .full {
+            grid-column: 1/-1
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px
+        }
+
+            .field label {
+                font-size: 8px;
+                text-transform: uppercase;
+                color: var(--muted);
+                font-weight: 900
+            }
+
+                .field label .req {
+                    color: var(--danger)
+                }
+
+            .field input,
+            .field select,
+            .field textarea {
+                width: 100%;
+                border: 1px solid var(--line2);
+                border-radius: 7px;
+                padding: 8px 9px;
+                background: #fff;
+                color: var(--text);
+                outline: none
+            }
+
+                .field input:focus,
+                .field select:focus,
+                .field textarea:focus {
+                    border-color: #6489bf;
+                    box-shadow: 0 0 0 3px rgba(23,58,122,.07)
+                }
+
+            .field textarea {
+                resize: vertical;
+                min-height: 76px
+            }
+
+        .field-help {
+            color: var(--muted);
+            font-size: 8px;
+            line-height: 1.3
+        }
+
+        .export-box {
+            display: none;
+            margin-top: 9px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ead398;
+            background: var(--warnBg)
+        }
+
+            .export-box.visible {
+                display: block
+            }
+
+        .export-box-title {
+            font-size: 9px;
+            font-weight: 900;
+            color: #6f5000;
+            margin-bottom: 7px
+        }
+
+        .aduana-options {
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap
+        }
+
+        .mini-choice {
+            position: relative
+        }
+
+            .mini-choice input {
+                position: absolute;
+                opacity: 0
+            }
+
+            .mini-choice label {
+                display: block;
+                min-width: 100px;
+                text-align: center;
+                padding: 7px 10px;
+                border: 1px solid #d8c080;
+                border-radius: 7px;
+                cursor: pointer;
+                background: #fff;
+                color: #705000;
+                font-size: 10px;
+                font-weight: 800
+            }
+
+            .mini-choice input:checked + label {
+                background: #805b00;
+                border-color: #805b00;
+                color: #fff
+            }
+
+        .footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+            padding-top: 13px;
+            border-top: 1px solid var(--line)
+        }
+
+        .footer-info {
+            max-width: 700px;
+            color: var(--muted);
+            font-size: 9px;
+            line-height: 1.35
+        }
+
+        .actions {
+            display: flex;
+            gap: 7px;
+            justify-content: flex-end
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 36px;
+            padding: 8px 13px;
+            border: 1px solid var(--line2);
+            border-radius: 7px;
+            background: #fff;
+            color: var(--navy);
+            text-decoration: none;
+            font-weight: 800;
+            cursor: pointer
+        }
+
+            .btn:hover {
+                background: #f8fafc
+            }
+
+        .btn-primary {
+            background: var(--blue);
+            border-color: var(--blue);
+            color: #fff
+        }
+
+            .btn-primary:hover {
+                background: var(--blue2);
+                border-color: var(--blue2)
+            }
+
+            .btn-primary:disabled {
+                opacity: .5;
+                cursor: not-allowed
+            }
+
+        .validation {
+            margin-top: 4px;
+            color: var(--danger);
+            font-size: 8px
+        }
+
+        @@media(max-width:1000px) {
+            .summary {
+                grid-template-columns: repeat(2,1fr)
+            }
+
+            .forma-grid {
+                grid-template-columns: 1fr
+            }
+        }
+
+        @@media(max-width:700px) {
+            .page {
+                padding: 10px
+            }
+
+            .topbar {
+                align-items: flex-start;
+                flex-direction: column
+            }
+
+            .tipo-grid, .grid, .grid-3 {
+                grid-template-columns: 1fr
+            }
+
+            .summary {
+                grid-template-columns: 1fr
+            }
+
+            .footer {
+                align-items: stretch;
+                flex-direction: column
+            }
+
+            .actions {
+                justify-content: stretch
+            }
+
+                .actions .btn {
+                    flex: 1
+                }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+
+        <div class="topbar">
+            <div class="top-left">
+                <a class="back-main"
+                   asp-controller="LogisticaEmbarques"
+                   asp-action="Detalle"
+                   asp-route-id="@Model.EmbarqueID">
+                    <span class="back-icon">←</span>
+                    <span>
+                        <small>REGRESAR A</small>
+                        <strong>Embarque</strong>
+                    </span>
+                </a>
+
+                <div class="title">
+                    <h1>Definir forma de salida</h1>
+                    <p>Indica cómo saldrá la mercancía de planta. Solo se solicitarán los datos correspondientes a la opción seleccionada.</p>
+                </div>
+            </div>
+
+            <span class="status">@estatus</span>
+        </div>
+
+        @if (TempData["LogisticaError"] is string error && !string.IsNullOrWhiteSpace(error))
+        {
+            <div class="notice notice-error">@error</div>
+        }
+
+        <div class="summary">
+            <div class="summary-item big">
+                <span>Embarque</span>
+                <strong>@folio</strong>
+            </div>
+
+            <div class="summary-item big">
+                <span>Cliente</span>
+                <strong>@cliente</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Partidas</span>
+                <strong>@totalPartidas.ToString("N0")</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Piezas</span>
+                <strong>@totalPiezas.ToString("N0")</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Fecha de carga</span>
+                <strong>
+                    @(fechaCarga.HasValue? fechaCarga.Value.ToString("dd/MM/yyyy") : "Sin fecha")
+                    @if (horaCarga.HasValue)
+                    {
+                        <text> · @horaCarga.Value.ToString(@"hh\:mm")</text>
+                    }
+                </strong>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h2>Configuración de salida</h2>
+                <p>La Lista de carga ya definió qué cantidad debe salir y cuándo. Aquí se define cómo se realizará físicamente el movimiento.</p>
+            </div>
+
+            <form method="post"
+                  asp-controller="LogisticaEmbarques"
+                  asp-action="ConfigurarEnvio"
+                  id="formDefinirSalida">
+
+                @Html.AntiForgeryToken()
+
+                <input asp-for="EmbarqueID" type="hidden" />
+
+                <div class="body">
+
+                    <div class="step-title">
+                        <span class="step-number">1</span>
+                        <strong>Tipo de operación</strong>
+                    </div>
+
+                    <div class="tipo-grid">
+
+                        <div class="choice">
+                            <input asp-for="TipoOperacion"
+                                   type="radio"
+                                   id="tipoNacional"
+                                   value="Nacional" />
+
+                            <label for="tipoNacional">
+                                <span class="choice-icon">MX</span>
+                                <span class="choice-title">Nacional</span>
+                                <span class="choice-desc">
+                                    La mercancía permanecerá dentro de territorio nacional.
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="choice">
+                            <input asp-for="TipoOperacion"
+                                   type="radio"
+                                   id="tipoExportacion"
+                                   value="Exportacion" />
+
+                            <label for="tipoExportacion">
+                                <span class="choice-icon">↗</span>
+                                <span class="choice-title">Exportación</span>
+                                <span class="choice-desc">
+                                    La mercancía tendrá un destino fuera de México.
+                                </span>
+                            </label>
+                        </div>
+
+                    </div>
+
+                    <span asp-validation-for="TipoOperacion"
+                          class="validation">
+                    </span>
+
+                    <div id="seccionAduana"
+                         class="export-box">
+
+                        <div class="export-box-title">
+                            ¿Este embarque pasará por aduana?
+                        </div>
+
+                        <div class="aduana-options">
+
+                            <div class="mini-choice">
+                                <input type="radio"
+                                       id="aduanaSi"
+                                       name="PasaAduana"
+                                       value="true"
+                                       @(Model.PasaAduana == true ? "checked" : null) />
+
+                                <label for="aduanaSi">
+                                    Sí pasa por aduana
+                                </label>
+                            </div>
+
+                            <div class="mini-choice">
+                                <input type="radio"
+                                       id="aduanaNo"
+                                       name="PasaAduana"
+                                       value="false"
+                                       @(Model.PasaAduana == false ? "checked" : null) />
+
+                                <label for="aduanaNo">
+                                    No pasa por aduana
+                                </label>
+                            </div>
+
+                        </div>
+
+                        <span asp-validation-for="PasaAduana"
+                              class="validation">
+                        </span>
+                    </div>
+
+                    <div style="height:18px"></div>
+
+                    <div class="step-title">
+                        <span class="step-number">2</span>
+                        <strong>¿Cómo saldrá la mercancía?</strong>
+                    </div>
+
+                    <div class="forma-grid">
+
+                        <div class="choice">
+                            <input asp-for="FormaEnvio"
+                                   type="radio"
+                                   id="formaCliente"
+                                   value="Cliente" />
+
+                            <label for="formaCliente">
+                                <span class="choice-icon">C</span>
+                                <span class="choice-title">Cliente recoge</span>
+                                <span class="choice-desc">
+                                    El cliente o su transportista llegará a planta para recoger la mercancía.
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="choice">
+                            <input asp-for="FormaEnvio"
+                                   type="radio"
+                                   id="formaInterno"
+                                   value="Interno" />
+
+                            <label for="formaInterno">
+                                <span class="choice-icon">NS</span>
+                                <span class="choice-title">Entrega NS</span>
+                                <span class="choice-desc">
+                                    La empresa realizará la entrega utilizando ruta, unidad y chofer interno.
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="choice">
+                            <input asp-for="FormaEnvio"
+                                   type="radio"
+                                   id="formaPaqueteria"
+                                   value="Paqueteria" />
+
+                            <label for="formaPaqueteria">
+                                <span class="choice-icon">P</span>
+                                <span class="choice-title">Paquetería</span>
+                                <span class="choice-desc">
+                                    La mercancía será recolectada o enviada mediante una compañía transportista.
+                                </span>
+                            </label>
+                        </div>
+
+                    </div>
+
+                    <span asp-validation-for="FormaEnvio"
+                          class="validation">
+                    </span>
+
+                    <div id="seccionInterno"
+                         class="section">
+
+                        <div class="section-head">
+                            <strong>Entrega realizada por NS</strong>
+                            <span>Selecciona los recursos internos que realizarán el movimiento.</span>
+                        </div>
+
+                        <div class="section-body">
+                            <div class="grid grid-3">
+
+                                <div class="field">
+                                    <label>
+                                        Ruta
+                                        <span class="req">*</span>
+                                    </label>
+
+                                    <select asp-for="RutaID"
+                                            id="RutaID">
+                                        <option value="">Seleccionar ruta...</option>
+
+                                        @foreach (var ruta in rutas)
+                                        {
+                                            if (Model.RutaID == ruta.Id)
+                                            {
+                                                <option value="@ruta.Id" selected>
+                                                    @ruta.Texto
+                                                </option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@ruta.Id">
+                                                    @ruta.Texto
+                                                </option>
+                                            }
+                                        }
+                                    </select>
+
+                                    <span asp-validation-for="RutaID"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>
+                                        Unidad
+                                        <span class="req">*</span>
+                                    </label>
+
+                                    <select asp-for="UnidadID"
+                                            id="UnidadID">
+                                        <option value="">Seleccionar unidad...</option>
+
+                                        @foreach (var unidad in unidades)
+                                        {
+                                            if (Model.UnidadID == unidad.Id)
+                                            {
+                                                <option value="@unidad.Id" selected>
+                                                    @unidad.Texto
+                                                </option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@unidad.Id">
+                                                    @unidad.Texto
+                                                </option>
+                                            }
+                                        }
+                                    </select>
+
+                                    <span asp-validation-for="UnidadID"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>
+                                        Chofer
+                                        <span class="req">*</span>
+                                    </label>
+
+                                    <select asp-for="ChoferUsuarioID"
+                                            id="ChoferUsuarioID">
+                                        <option value="">Seleccionar chofer...</option>
+
+                                        @foreach (var chofer in choferes)
+                                        {
+                                            if (Model.ChoferUsuarioID == chofer.Id)
+                                            {
+                                                <option value="@chofer.Id" selected>
+                                                    @chofer.Texto
+                                                </option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@chofer.Id">
+                                                    @chofer.Texto
+                                                </option>
+                                            }
+                                        }
+                                    </select>
+
+                                    <span asp-validation-for="ChoferUsuarioID"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                            </div>
+
+                            @if (rutas.Count == 0 || unidades.Count == 0 || choferes.Count == 0)
+                            {
+                                <div class="notice notice-error"
+                                     style="margin:10px 0 0">
+                                    @if (rutas.Count == 0)
+                                    {
+                                        <span>No hay rutas activas. </span>
+                                    }
+
+                                    @if (unidades.Count == 0)
+                                    {
+                                        <span>No hay unidades activas. </span>
+                                    }
+
+                                    @if (choferes.Count == 0)
+                                    {
+                                        <span>No se encontraron usuarios activos de Logística con puesto de Chofer.</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div id="seccionCliente"
+                         class="section">
+
+                        <div class="section-head">
+                            <strong>Cliente recoge</strong>
+                            <span>Registra quién recogerá físicamente la mercancía.</span>
+                        </div>
+
+                        <div class="section-body">
+                            <div class="grid">
+
+                                <div class="field full">
+                                    <label>
+                                        Persona / transportista que recoge
+                                        <span class="req">*</span>
+                                    </label>
+
+                                    <input asp-for="ChoferExterno"
+                                           id="ClienteChoferExterno"
+                                           maxlength="200"
+                                           placeholder="Ej. Juan Pérez / Transportes ABC" />
+
+                                    <span asp-validation-for="ChoferExterno"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>Unidad / vehículo</label>
+
+                                    <input asp-for="UnidadExterna"
+                                           id="ClienteUnidadExterna"
+                                           maxlength="100"
+                                           placeholder="Ej. Tráiler, rabón, camioneta..." />
+
+                                    <span asp-validation-for="UnidadExterna"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>Placas</label>
+
+                                    <input asp-for="PlacasExternas"
+                                           id="ClientePlacasExternas"
+                                           maxlength="100"
+                                           placeholder="Opcional" />
+
+                                    <span asp-validation-for="PlacasExternas"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                            </div>
+
+                            <div class="field-help"
+                                 style="margin-top:8px">
+                                El vehículo y las placas pueden completarse posteriormente si aún no se conocen. La persona o transportista que recoge sí es obligatoria.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="seccionPaqueteria"
+                         class="section">
+
+                        <div class="section-head">
+                            <strong>Salida por paquetería / transportista</strong>
+                            <span>Registra la modalidad y compañía responsable del movimiento.</span>
+                        </div>
+
+                        <div class="section-body">
+                            <div class="grid">
+
+                                <div class="field">
+                                    <label>
+                                        Modalidad
+                                        <span class="req">*</span>
+                                    </label>
+
+                                    <select asp-for="ModalidadEnvio"
+                                            id="ModalidadEnvio">
+                                        <option value="">Seleccionar...</option>
+                                        <option value="Terrestre">Terrestre</option>
+                                        <option value="Aerea">Aérea</option>
+                                        <option value="Maritima">Marítima</option>
+                                    </select>
+
+                                    <span asp-validation-for="ModalidadEnvio"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>
+                                        Compañía / paquetería
+                                        <span class="req">*</span>
+                                    </label>
+
+                                    <input asp-for="Transportista"
+                                           id="Transportista"
+                                           maxlength="200"
+                                           placeholder="Ej. FedEx, DHL, Transportes..." />
+
+                                    <span asp-validation-for="Transportista"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>Guía / referencia</label>
+
+                                    <input asp-for="GuiaReferencia"
+                                           id="GuiaReferencia"
+                                           maxlength="150"
+                                           placeholder="Puede registrarse después" />
+
+                                    <span asp-validation-for="GuiaReferencia"
+                                          class="validation">
+                                    </span>
+                                </div>
+
+                                <div class="field">
+                                    <label>Chofer / persona que recoge</label>
+
+                                    <input asp-for="ChoferExterno"
+                                           id="PaqueteriaChoferExterno"
+                                           maxlength="200"
+                                           placeholder="Opcional" />
+                                </div>
+
+                                <div class="field">
+                                    <label>Unidad externa</label>
+
+                                    <input asp-for="UnidadExterna"
+                                           id="PaqueteriaUnidadExterna"
+                                           maxlength="100"
+                                           placeholder="Opcional" />
+                                </div>
+
+                                <div class="field">
+                                    <label>Placas</label>
+
+                                    <input asp-for="PlacasExternas"
+                                           id="PaqueteriaPlacasExternas"
+                                           maxlength="100"
+                                           placeholder="Opcional" />
+                                </div>
+
+                            </div>
+
+                            <div class="field-help"
+                                 style="margin-top:8px">
+                                La guía puede capturarse posteriormente cuando el transportista la proporcione.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+
+                        <div class="footer-info">
+                            <strong>@cliente</strong>
+                            @if (!string.IsNullOrWhiteSpace(destino))
+                            {
+                                <span> · @destino</span>
+                            }
+                            <br />
+                            Después de guardar regresarás al detalle del embarque para continuar con preparación, documentación y salida.
+                        </div>
+
+                        <div class="actions">
+                            <a class="btn"
+                               asp-controller="LogisticaEmbarques"
+                               asp-action="Detalle"
+                               asp-route-id="@Model.EmbarqueID">
+                                Cancelar
+                            </a>
+
+                            <button type="submit"
+                                    class="btn btn-primary"
+                                    id="btnGuardar">
+                                Guardar forma de salida
+                            </button>
+                        </div>
+
+                    </div>
+
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            const form=document.getElementById('formDefinirSalida');
+            const btnGuardar=document.getElementById('btnGuardar');
+
+            const tipos=[...document.querySelectorAll('input[name="TipoOperacion"]')];
+            const formas=[...document.querySelectorAll('input[name="FormaEnvio"]')];
+
+            const seccionAduana=document.getElementById('seccionAduana');
+            const seccionInterno=document.getElementById('seccionInterno');
+            const seccionCliente=document.getElementById('seccionCliente');
+            const seccionPaqueteria=document.getElementById('seccionPaqueteria');
+
+            const ruta=document.getElementById('RutaID');
+            const unidad=document.getElementById('UnidadID');
+            const choferInterno=document.getElementById('ChoferUsuarioID');
+
+            const modalidad=document.getElementById('ModalidadEnvio');
+            const transportista=document.getElementById('Transportista');
+
+            function tipoSeleccionado(){
+                return document.querySelector('input[name="TipoOperacion"]:checked')?.value||'';
+            }
+
+            function formaSeleccionada(){
+                return document.querySelector('input[name="FormaEnvio"]:checked')?.value||'';
+            }
+
+            function mostrarAduana(){
+                const exportacion=tipoSeleccionado()==='Exportacion';
+
+                seccionAduana?.classList.toggle('visible',exportacion);
+
+                if(!exportacion){
+                    document.querySelectorAll('input[name="PasaAduana"]').forEach(x=>{
+                        x.checked=false;
+                    });
+                }
+            }
+
+            function mostrarForma(){
+                const forma=formaSeleccionada();
+
+                seccionInterno?.classList.toggle(
+                    'visible',
+                    forma==='Interno');
+
+                seccionCliente?.classList.toggle(
+                    'visible',
+                    forma==='Cliente');
+
+                seccionPaqueteria?.classList.toggle(
+                    'visible',
+                    forma==='Paqueteria');
+
+                if(ruta)ruta.required=forma==='Interno';
+                if(unidad)unidad.required=forma==='Interno';
+                if(choferInterno)choferInterno.required=forma==='Interno';
+
+                if(modalidad)modalidad.required=forma==='Paqueteria';
+                if(transportista)transportista.required=forma==='Paqueteria';
+            }
+
+            tipos.forEach(x=>{
+                x.addEventListener(
+                    'change',
+                    mostrarAduana);
+            });
+
+            formas.forEach(x=>{
+                x.addEventListener(
+                    'change',
+                    mostrarForma);
+            });
+
+            mostrarAduana();
+            mostrarForma();
+
+            form?.addEventListener('submit',e=>{
+                const tipo=tipoSeleccionado();
+                const forma=formaSeleccionada();
+
+                if(!tipo){
+                    e.preventDefault();
+                    alert('Selecciona si el embarque es Nacional o Exportación.');
+                    return;
+                }
+
+                if(tipo==='Exportacion'){
+                    const aduana=document.querySelector('input[name="PasaAduana"]:checked');
+
+                    if(!aduana){
+                        e.preventDefault();
+                        alert('Indica si la exportación pasa por aduana.');
+                        return;
+                    }
+                }
+
+                if(!forma){
+                    e.preventDefault();
+                    alert('Selecciona cómo saldrá la mercancía.');
+                    return;
+                }
+
+                if(forma==='Interno'){
+                    if(!ruta?.value){
+                        e.preventDefault();
+                        alert('Selecciona una ruta.');
+                        return;
+                    }
+
+                    if(!unidad?.value){
+                        e.preventDefault();
+                        alert('Selecciona una unidad.');
+                        return;
+                    }
+
+                    if(!choferInterno?.value){
+                        e.preventDefault();
+                        alert('Selecciona un chofer.');
+                        return;
+                    }
+                }
+
+                if(forma==='Cliente'){
+                    const recoge=document.getElementById('ClienteChoferExterno');
+
+                    if(!recoge?.value.trim()){
+                        e.preventDefault();
+                        alert('Captura quién recogerá la mercancía.');
+                        return;
+                    }
+                }
+
+                if(forma==='Paqueteria'){
+                    if(!modalidad?.value){
+                        e.preventDefault();
+                        alert('Selecciona la modalidad del envío.');
+                        return;
+                    }
+
+                    if(!transportista?.value.trim()){
+                        e.preventDefault();
+                        alert('Captura la compañía o paquetería.');
+                        return;
+                    }
+                }
+
+                if(btnGuardar){
+                    btnGuardar.disabled=true;
+                    btnGuardar.textContent='Guardando...';
+                }
+            });
+        })();
+    </script>
+
+</body>
+</html>
