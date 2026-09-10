@@ -1,0 +1,304 @@
+@model ERP.NSQuell.Models.ComprasContpaqiDetalleViewModel
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Detalle compra CONTPAQ";
+
+    var d = Model.Documento;
+    var mx = CultureInfo.GetCultureInfo("es-MX");
+    var en = CultureInfo.GetCultureInfo("en-US");
+
+    var backUrl = Url.Action("Contpaqi", "Compras") ?? "/Compras/Contpaqi";
+    if (!string.IsNullOrWhiteSpace(Model.ReturnQueryString) && Model.ReturnQueryString.StartsWith("?"))
+    {
+        backUrl += Model.ReturnQueryString;
+    }
+
+    string Mxn(decimal? valor) => valor.HasValue ? valor.Value.ToString("C2", mx) : "-";
+    string Original(decimal? valor) => valor.HasValue ? $"{valor.Value:N2} {d.Moneda}" : "-";
+    decimal? AMonedaNacional(decimal? valor) =>
+        valor.HasValue && d.FactorEfectivoMXN.HasValue
+            ? valor.Value * d.FactorEfectivoMXN.Value
+            : null;
+
+    var total = d.TotalCompra ?? 0m;
+    var pagado = d.TotalPagado ?? 0m;
+    var porcentajePagado = total > 0 ? Math.Min(100m, Math.Max(0m, pagado * 100m / total)) : 0m;
+}
+
+@section Styles {
+<style>
+    .ctqd-page{color:#182230}
+    .ctqd-card,.ctqd-hero{background:#fff;border:1px solid #e4e9f0;box-shadow:0 10px 28px rgba(15,23,42,.055)}
+    .ctqd-hero{border-radius:24px;padding:24px;margin-bottom:16px;background:radial-gradient(circle at 90% 15%,rgba(11,79,143,.11),transparent 31%),linear-gradient(135deg,#fff,#f8fbff)}
+    .ctqd-card{border-radius:20px;padding:18px;margin-bottom:16px}
+    .ctqd-title{font-size:34px;font-weight:1000;letter-spacing:-.04em;margin:2px 0}
+    .ctqd-muted{color:#667085;font-weight:600}
+    .ctqd-status{display:inline-flex;padding:5px 9px;border-radius:999px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:10px;font-weight:900}
+    .ctqd-money{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}
+    .ctqd-money-box{background:rgba(255,255,255,.82);border:1px solid #dbe4ee;border-radius:16px;padding:13px}
+    .ctqd-label{font-size:10px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:#667085}
+    .ctqd-big{font-size:21px;font-weight:1000;margin-top:4px}
+    .ctqd-sub{font-size:11px;color:#667085;margin-top:3px}
+    .ctqd-progress{height:7px;background:#e9eef5;border-radius:99px;overflow:hidden;margin-top:9px}
+    .ctqd-progress span{display:block;height:100%;background:#16a34a;border-radius:99px}
+    .ctqd-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    .ctqd-field{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:11px;min-height:70px}
+    .ctqd-value{margin-top:4px;font-weight:850;overflow-wrap:anywhere}
+    .ctqd-table{width:100%;border-collapse:collapse;font-size:12px}
+    .ctqd-table th,.ctqd-table td{padding:9px 7px;border-bottom:1px solid #e5e7eb;vertical-align:top}
+    .ctqd-table th{color:#667085;font-size:9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+    .ctqd-btn{display:inline-flex;text-decoration:none;border-radius:12px;padding:9px 13px;font-weight:900;border:1px solid #cfe2f3;background:#fff;color:#0b4f8f}
+    .ctqd-alert{padding:13px 15px;margin-bottom:16px;border-radius:14px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-weight:700}
+    .ctqd-flag{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900;background:#ecfdf5;color:#15803d;border:1px solid #bbf7d0}
+    .ctqd-flag.no{background:#f3f4f6;color:#475467;border-color:#e5e7eb}
+    .ctqd-section-title{font-size:17px;font-weight:1000;margin-bottom:13px}
+    .ctqd-details{margin-top:10px}
+    .ctqd-details summary{cursor:pointer;font-weight:900;color:#475467}
+    .ctqd-kv{display:grid;grid-template-columns:160px minmax(0,1fr);gap:6px 10px;font-size:11px;margin-top:10px}
+    .ctqd-kv div:nth-child(odd){color:#667085;font-weight:800}
+    @@media(max-width:1050px){.ctqd-money,.ctqd-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:650px){.ctqd-money,.ctqd-grid{grid-template-columns:1fr}.ctqd-title{font-size:29px}}
+</style>
+}
+
+<div class="ctqd-page">
+    <div class="erp-page-breadcrumb">
+        <a href="@backUrl" class="erp-btn-back" onclick="if(window.history.length>1){history.back();return false;}">← Volver</a>
+        <span>Inicio</span><span>›</span><span>Compras</span><span>›</span><span>CONTPAQ</span><span>›</span><strong>Detalle</strong>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="ctqd-alert">@Model.ErrorMessage</div>
+    }
+
+    <section class="ctqd-hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <div class="ctqd-muted">Compra @d.CompraClave</div>
+                <h1 class="ctqd-title">@(d.FolioCompra ?? $"Compra #{d.CompraID}")</h1>
+                <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+                    <strong>@(d.Proveedor ?? "Proveedor no disponible")</strong>
+                    <span class="ctqd-status">@(d.EstatusCompra ?? "SIN ESTATUS")</span>
+                </div>
+                <div class="ctqd-muted mt-1">RFC @(d.RFCProveedor ?? "-") · @d.FechaCompra.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-MX"))</div>
+            </div>
+
+            <a href="@backUrl" class="ctqd-btn" onclick="if(window.history.length>1){history.back();return false;}">Volver</a>
+        </div>
+
+        <div class="ctqd-money">
+            <div class="ctqd-money-box">
+                <div class="ctqd-label">Total original</div>
+                <div class="ctqd-big">@Original(d.TotalCompra)</div>
+                <div class="ctqd-sub">@Mxn(d.TotalCompraMXN)</div>
+            </div>
+
+            <div class="ctqd-money-box">
+                <div class="ctqd-label">Pagado</div>
+                <div class="ctqd-big">@Original(d.TotalPagado)</div>
+                <div class="ctqd-sub">@Mxn(d.TotalPagadoMXN)</div>
+                <div class="ctqd-progress"><span style="width:@porcentajePagado.ToString("0.##", CultureInfo.InvariantCulture)%"></span></div>
+            </div>
+
+            <div class="ctqd-money-box">
+                <div class="ctqd-label">Saldo</div>
+                <div class="ctqd-big">@Original(d.SaldoPendiente)</div>
+                <div class="ctqd-sub">@Mxn(d.SaldoPendienteMXN)</div>
+            </div>
+
+            <div class="ctqd-money-box">
+                <div class="ctqd-label">Tipo de cambio documento</div>
+                <div class="ctqd-big">@(d.FactorEfectivoMXN?.ToString("N4") ?? d.TipoCambio?.ToString("N4") ?? "-")</div>
+                <div class="ctqd-sub">MXN por unidad de moneda original, cuando es calculable.</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ctqd-card">
+        <h2 class="ctqd-section-title">Resumen financiero</h2>
+
+        <div class="table-responsive">
+            <table class="ctqd-table">
+                <thead>
+                    <tr><th>Concepto</th><th>Moneda original</th><th>MXN</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Subtotal</td><td>@Original(d.SubtotalCompra)</td><td>@Mxn(AMonedaNacional(d.SubtotalCompra))</td></tr>
+                    <tr><td>Descuento</td><td>@Original(d.DescuentoCompra)</td><td>@Mxn(AMonedaNacional(d.DescuentoCompra))</td></tr>
+                    <tr><td>Impuestos</td><td>@Original(d.ImpuestosCompra)</td><td>@Mxn(AMonedaNacional(d.ImpuestosCompra))</td></tr>
+                    <tr><td>Retenciones</td><td>@Original(d.RetencionesCompra)</td><td>@Mxn(AMonedaNacional(d.RetencionesCompra))</td></tr>
+                    <tr><td>Costo total</td><td>@Original(d.CostoTotalCompra)</td><td>@Mxn(AMonedaNacional(d.CostoTotalCompra))</td></tr>
+                    <tr><td><strong>Total</strong></td><td><strong>@Original(d.TotalCompra)</strong></td><td><strong>@Mxn(d.TotalCompraMXN)</strong></td></tr>
+                    <tr><td>Pagado</td><td>@Original(d.TotalPagado)</td><td>@Mxn(d.TotalPagadoMXN)</td></tr>
+                    <tr><td><strong>Saldo pendiente</strong></td><td><strong>@Original(d.SaldoPendiente)</strong></td><td><strong>@Mxn(d.SaldoPendienteMXN)</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="ctqd-card">
+        <h2 class="ctqd-section-title">Proveedor, pago y fiscal</h2>
+
+        <div class="ctqd-grid">
+            <div class="ctqd-field"><div class="ctqd-label">Proveedor</div><div class="ctqd-value">@(d.Proveedor ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">RFC</div><div class="ctqd-value">@(d.RFCProveedor ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Teléfono</div><div class="ctqd-value">@(d.TelefonoProveedor ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Correo</div><div class="ctqd-value">@(d.EmailProveedor ?? "-")</div></div>
+
+            <div class="ctqd-field"><div class="ctqd-label">Estado proveedor</div><div class="ctqd-value">@(d.EstadoProveedor ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Sitio web</div><div class="ctqd-value">@(d.WebProveedor ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Condición de pago</div><div class="ctqd-value">@(d.CondicionPago ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Último pago</div><div class="ctqd-value">@(d.FechaUltimoPago?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Entrega documento</div><div class="ctqd-value">@(d.FechaEntregaDocumento?.ToString("dd/MM/yyyy") ?? "-")</div></div>
+
+            <div class="ctqd-field" style="grid-column:span 2"><div class="ctqd-label">UUID</div><div class="ctqd-value">@(d.UUID ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">XML</div><div class="ctqd-value"><span class="ctqd-flag @(d.TieneXML ? "" : "no")">@(d.TieneXML ? "Disponible" : "No")</span></div></div>
+            <div class="ctqd-field"><div class="ctqd-label">PDF</div><div class="ctqd-value"><span class="ctqd-flag @(d.TienePDF ? "" : "no")">@(d.TienePDF ? "Disponible" : "No")</span></div></div>
+        </div>
+    </section>
+
+    <section class="ctqd-card">
+        <h2 class="ctqd-section-title">Operación y control</h2>
+
+        <div class="ctqd-grid">
+            <div class="ctqd-field"><div class="ctqd-label">Almacén</div><div class="ctqd-value">@(d.AlmacenDocumento ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Centro de costo</div><div class="ctqd-value">@(d.CentroCosto ?? "-")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Creado</div><div class="ctqd-value">@(d.DocumentoCreadoEn?.ToString("dd/MM/yyyy HH:mm") ?? "-")<div class="ctqd-sub">@(d.DocumentoCreadoPor ?? "")</div></div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Validado</div><div class="ctqd-value">@(d.DocumentoValidadoEn?.ToString("dd/MM/yyyy HH:mm") ?? "-")<div class="ctqd-sub">@(d.DocumentoValidadoPor ?? "")</div></div></div>
+
+            <div class="ctqd-field"><div class="ctqd-label">Impreso</div><div class="ctqd-value">@(d.Impreso ? "Sí" : "No")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Validado</div><div class="ctqd-value">@(d.Validado ? "Sí" : "No")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Cancelado / eliminado</div><div class="ctqd-value">@(d.Cancelado ? "Cancelado" : d.Eliminado ? "Eliminado" : "No")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">En uso</div><div class="ctqd-value">@(d.EnUso ? "Sí" : "No")</div></div>
+            <div class="ctqd-field"><div class="ctqd-label">Último cambio</div><div class="ctqd-value">@(d.UltimoCambioConocido?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div></div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(d.TituloCompra) || !string.IsNullOrWhiteSpace(d.Comentarios))
+        {
+            <div class="ctqd-grid mt-3">
+                <div class="ctqd-field" style="grid-column:span 2"><div class="ctqd-label">Título</div><div class="ctqd-value">@(d.TituloCompra ?? "-")</div></div>
+                <div class="ctqd-field" style="grid-column:span 2"><div class="ctqd-label">Comentarios</div><div class="ctqd-value">@(d.Comentarios ?? "-")</div></div>
+            </div>
+        }
+    </section>
+
+    <section class="ctqd-card">
+        <details class="ctqd-details">
+            <summary>Información contable y periodos de CONTPAQ</summary>
+
+            <div class="ctqd-grid mt-3">
+                <div class="ctqd-field"><div class="ctqd-label">Mes</div><div class="ctqd-value">@(d.PeriodoMes?.ToString() ?? "-")</div></div>
+                <div class="ctqd-field"><div class="ctqd-label">Semana</div><div class="ctqd-value">@(d.PeriodoSemana?.ToString() ?? "-")</div></div>
+                <div class="ctqd-field"><div class="ctqd-label">Año</div><div class="ctqd-value">@(d.PeriodoAnio?.ToString() ?? "-")</div></div>
+                <div class="ctqd-field"><div class="ctqd-label">Trimestre</div><div class="ctqd-value">@(d.PeriodoTrimestre?.ToString() ?? "-")</div></div>
+
+                <div class="ctqd-field"><div class="ctqd-label">Póliza diario</div><div class="ctqd-value">@(d.PolizaDiario ?? "-")</div></div>
+                <div class="ctqd-field"><div class="ctqd-label">Póliza ingreso</div><div class="ctqd-value">@(d.PolizaIngreso ?? "-")</div></div>
+                <div class="ctqd-field"><div class="ctqd-label">Póliza egreso</div><div class="ctqd-value">@(d.PolizaEgreso ?? "-")</div></div>
+                <div class="ctqd-field"><div class="ctqd-label">Pólizas generadas</div><div class="ctqd-value">@(d.PolizasGeneradas ?? d.PolizaTotal ?? "-")</div></div>
+            </div>
+        </details>
+    </section>
+
+    <section class="ctqd-card">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div>
+                <h2 class="ctqd-section-title mb-1">Partidas compradas</h2>
+                <div class="ctqd-muted">@Model.Partidas.Count partida(s) devueltas directamente por ERP_Compras.</div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="ctqd-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Código / producto</th>
+                        <th>Cantidad</th>
+                        <th>Unidad</th>
+                        <th>Precio</th>
+                        <th>Costo</th>
+                        <th>Importe</th>
+                        <th>IVA</th>
+                        <th>Lote / serie</th>
+                        <th>Orden / pedido</th>
+                        <th>Más</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var p in Model.Partidas)
+                {
+                    <tr>
+                        <td>@(p.NumeroPartida?.ToString() ?? p.PartidaID.ToString())</td>
+                        <td>
+                            <strong>@(p.CodigoProducto ?? "-")</strong>
+                            <div>@(p.Producto ?? "-")</div>
+                            @if (!string.IsNullOrWhiteSpace(p.CodigoProductoProveedor))
+                            {
+                                <div class="ctqd-sub">Proveedor: @p.CodigoProductoProveedor</div>
+                            }
+                        </td>
+                        <td>@(p.Cantidad?.ToString("N4") ?? "-")</td>
+                        <td>@(p.Unidad ?? "-")</td>
+                        <td>@(p.PrecioUnitario?.ToString("N4") ?? "-")</td>
+                        <td>@(p.CostoUnitario?.ToString("N4") ?? "-")</td>
+                        <td>@(p.ImportePartida?.ToString("N2") ?? "-")</td>
+                        <td>@(p.PorcentajeIVA.HasValue ? p.PorcentajeIVA.Value.ToString("N2") + "%" : "-")</td>
+                        <td>
+                            @(string.IsNullOrWhiteSpace(p.Lote) ? "-" : p.Lote)
+                            @if (!string.IsNullOrWhiteSpace(p.NumeroSerie)) { <div class="ctqd-sub">Serie: @p.NumeroSerie</div> }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(p.OrdenCompraExterna)) { <div>OC: @p.OrdenCompraExterna</div> }
+                            @if (!string.IsNullOrWhiteSpace(p.Orden)) { <div>Orden: @p.Orden</div> }
+                            @if (!string.IsNullOrWhiteSpace(p.Pedido)) { <div>Pedido: @p.Pedido</div> }
+                            @if (string.IsNullOrWhiteSpace(p.OrdenCompraExterna) && string.IsNullOrWhiteSpace(p.Orden) && string.IsNullOrWhiteSpace(p.Pedido)) { <span>-</span> }
+                        </td>
+                        <td>
+                            <details>
+                                <summary>Ver</summary>
+                                <div class="ctqd-kv">
+                                    <div>Partida clave</div><div>@(p.PartidaClave ?? "-")</div>
+                                    <div>Producto ID</div><div>@(p.ProductoIDTexto ?? "-")</div>
+                                    <div>EAN13</div><div>@(p.CodigoEAN13 ?? "-")</div>
+                                    <div>Clave unidad SAT</div><div>@(p.ClaveUnidadSAT ?? "-")</div>
+                                    <div>Cant. inventario</div><div>@(p.CantidadInventario?.ToString("N4") ?? "-")</div>
+                                    <div>Descuento</div><div>@(p.PorcentajeDescuento?.ToString("N2") ?? "-")%</div>
+                                    <div>Retención</div><div>@(p.PorcentajeRetencion?.ToString("N2") ?? "-")%</div>
+                                    <div>IEPS</div><div>@(p.PorcentajeIEPS?.ToString("N2") ?? "-")%</div>
+                                    <div>Importe IEPS</div><div>@(p.ImporteIEPS?.ToString("N2") ?? "-")</div>
+                                    <div>Base IVA</div><div>@(p.BaseIVA?.ToString("N2") ?? "-")</div>
+                                    <div>IVA importación</div><div>@(p.IVAImportacion?.ToString("N2") ?? "-")</div>
+                                    <div>Objeto impuesto SAT</div><div>@(p.ObjetoImpuestoSAT ?? "-")</div>
+                                    <div>Impuesto país</div><div>@(p.PorcentajeImpuestoPais?.ToString("N2") ?? "-")%</div>
+                                    <div>Almacén ID</div><div>@(p.AlmacenIDTexto ?? "-")</div>
+                                    <div>Centro costo ID</div><div>@(p.CentroCostoIDTexto ?? "-")</div>
+                                    <div>Serie hasta</div><div>@(p.NumeroSerieHasta ?? "-")</div>
+                                    <div>Caducidad</div><div>@(p.FechaCaducidad?.ToString("dd/MM/yyyy") ?? "-")</div>
+                                    <div>Rack</div><div>@(p.Rack ?? "-")</div>
+                                    <div>Posición</div><div>@(p.Posicion ?? "-")</div>
+                                    <div>Nivel</div><div>@(p.Nivel ?? "-")</div>
+                                    <div>Documento origen</div><div>@(p.DocumentoOrigenID ?? "-")</div>
+                                    <div>Partida origen</div><div>@(p.PartidaOrigenID ?? "-")</div>
+                                    <div>Partida entrega</div><div>@(p.PartidaEntregaID ?? "-")</div>
+                                    <div>Partida destino</div><div>@(p.PartidaDestinoID ?? "-")</div>
+                                    <div>Proveedor partida</div><div>@(p.ProveedorPartidaID ?? "-")</div>
+                                    <div>Fecha partida</div><div>@(p.FechaPartida?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div>Fecha item</div><div>@(p.FechaItem?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div>Validada</div><div>@(p.PartidaValidadaEn?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div>Validada por</div><div>@(p.PartidaValidadaPor ?? "-")</div>
+                                    <div>Sincronizada</div><div>@(p.PartidaSincronizadaEn?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div>Eliminada en</div><div>@(p.PartidaEliminadaEn?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div>Estatus partida</div><div>@(p.PartidaEliminada ? "Eliminada" : p.PartidaCancelada ? "Cancelada" : "Activa")</div>
+                                </div>
+                            </details>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,13 @@
+@model ERP.NSQuell.Models.CtqProductosVm
+@using System.Globalization
+@{
+    ViewData["Title"]="Productos comprados CONTPAQ";var mx=CultureInfo.GetCultureInfo("es-MX");string M(decimal v)=>v.ToString("C2",mx);
+    string PageUrl(int p)=>Url.Action("ContpaqiProductos","Compras",new { desde=Model.Filtro.Desde.ToString("yyyy-MM-dd"),hasta=Model.Filtro.Hasta.ToString("yyyy-MM-dd"),rangoPersonalizado=true,buscar=Model.Filtro.Buscar,proveedor=Model.Filtro.Proveedor,rfc=Model.Filtro.RFC,estatus=Model.Filtro.Estatus,moneda=Model.Filtro.Moneda,centroCosto=Model.Filtro.CentroCosto,almacen=Model.Filtro.Almacen,pagina=p,tamanoPagina=Model.Filtro.TamanoPagina })??"#";
+}
+<div id="ctq-workspace-root" class="ctq15-page">
+<partial name="_ContpaqiSubnav" />
+<partial name="_ContpaqiFilterPanel" model="Model.Filtro" />
+@if(!string.IsNullOrWhiteSpace(Model.ErrorMessage)){<div class="ctq15-alert">@Model.ErrorMessage</div>}
+<section class="ctq15-card"><div class="d-flex justify-content-between align-items-center"><h5 class="fw-bold mb-0">Productos comprados</h5><span class="ctq15-result-note">@Model.TotalProductos producto(s)</span></div></section>
+<section class="ctq15-card"><div class="table-responsive"><table class="ctq15-table"><thead><tr><th>Código</th><th>Producto</th><th>Unidad</th><th>Cantidad</th><th>Compras</th><th>Proveedores</th><th>Importe MXN</th><th>Precio prom. MXN</th><th>Min / Max MXN</th><th>Última compra</th></tr></thead><tbody>@foreach(var x in Model.Filas){<tr><td><strong>@x.Codigo</strong></td><td>@x.Producto</td><td>@x.Unidad</td><td>@x.Cantidad.ToString("N4")</td><td>@x.Compras</td><td>@x.Proveedores</td><td class="ctq15-money">@M(x.ImporteMxn)</td><td>@M(x.PrecioPromedioMxn)</td><td>@M(x.PrecioMinMxn)<br/>@M(x.PrecioMaxMxn)</td><td>@(x.UltimaCompra?.ToString("dd/MM/yyyy")??"-")</td></tr>}</tbody></table></div><div class="ctq15-pager">@if(Model.Filtro.Pagina>1){<a href="@PageUrl(Model.Filtro.Pagina-1)" class="ctq15-btn" data-ctq-ajax>← Anterior</a>}@if(Model.Filtro.Pagina<Model.TotalPaginas){<a href="@PageUrl(Model.Filtro.Pagina+1)" class="ctq15-btn" data-ctq-ajax>Siguiente →</a>}</div></section>
+</div>

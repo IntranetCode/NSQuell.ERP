@@ -2085,17 +2085,33 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                     "La inspección no tiene una ejecución de Producción relacionada.");
             }
 
-            var horas = 9;
-
-            if (inspeccion.FechaInicioProgramada.HasValue &&
-                inspeccion.FechaFinProgramada.HasValue)
+            // V9: Calidad usa exactamente HorasProgramadas de Planeacion.
+            var horas = 1;
+            await using (var cnHorasV9 = new SqlConnection(ConnectionString))
             {
-                var duracion =
-                    (inspeccion.FechaFinProgramada.Value -
-                     inspeccion.FechaInicioProgramada.Value).TotalHours;
+                await cnHorasV9.OpenAsync();
+                const string sqlHorasV9 = @"
+SELECT TOP(1) CAST(CEILING(ISNULL(HorasProgramadas,1)) AS INT)
+FROM dbo.Planeacion_ProgramaProduccion
+WHERE ProgramaProduccionID=@ProgramaProduccionID AND Activo=1;";
+                await using var cmdHorasV9 = new SqlCommand(sqlHorasV9, cnHorasV9);
+                cmdHorasV9.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = inspeccion.ProgramaProduccionID;
+                var valorHorasV9 = await cmdHorasV9.ExecuteScalarAsync();
+                if (valorHorasV9 != null && valorHorasV9 != DBNull.Value)
+                    horas = Math.Max(1, Convert.ToInt32(valorHorasV9));
 
-                if (duracion > 0)
-                    horas = Math.Clamp((int)Math.Ceiling(duracion), 1, 9);
+                // Ocultar solo revisiones excedentes que nunca fueron atendidas/vinculadas.
+                const string sqlExcesoV9 = @"
+UPDATE dbo.Calidad_MonitoreosProceso
+SET Activo=0, UsuarioModificacionID=@UsuarioID, FechaModificacion=GETDATE()
+WHERE InspeccionID=@InspeccionID AND Activo=1 AND NumeroHora>@Horas
+  AND UPPER(LTRIM(RTRIM(ISNULL(Resultado,N'PENDIENTE'))))=N'PENDIENTE'
+  AND RegistroHoraID IS NULL;";
+                await using var cmdExcesoV9 = new SqlCommand(sqlExcesoV9, cnHorasV9);
+                cmdExcesoV9.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = (object?)usuarioId ?? DBNull.Value;
+                cmdExcesoV9.Parameters.Add("@InspeccionID", SqlDbType.Int).Value = inspeccionId;
+                cmdExcesoV9.Parameters.Add("@Horas", SqlDbType.Int).Value = horas;
+                await cmdExcesoV9.ExecuteNonQueryAsync();
             }
 
             var primerMonitoreo = await _context.CalidadMonitoreosProceso
@@ -2147,9 +2163,8 @@ WHERE EjecucionProduccionID = @EjecucionProduccionID;";
             var creados = await _context.Database.ExecuteSqlInterpolatedAsync($@"
 ;WITH Numeros AS
 (
-    SELECT NumeroHora
-    FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9)) n(NumeroHora)
-    WHERE NumeroHora <= {horas}
+    SELECT TOP ({horas}) ROW_NUMBER() OVER(ORDER BY (SELECT NULL)) AS NumeroHora
+    FROM sys.all_objects a CROSS JOIN sys.all_objects b
 )
 INSERT INTO dbo.Calidad_MonitoreosProceso
 (

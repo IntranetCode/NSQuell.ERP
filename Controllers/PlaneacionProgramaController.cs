@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
@@ -1049,9 +1049,14 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                 ? Math.Ceiling(cantidadFinal / piezasPorEmbalaje.Value)
                 : 0;
 
-            vm.HorasProgramadas = objetivoHora > 0
-                ? Math.Ceiling(cantidadFinal / (decimal)objetivoHora)
-                : 0;
+            // V9: HorasProgramadas capturadas por Planeacion son canonicas.
+            // Solo calcular automaticamente cuando el usuario no capturo horas validas.
+            if (!vm.HorasProgramadas.HasValue || vm.HorasProgramadas.Value <= 0)
+            {
+                vm.HorasProgramadas = objetivoHora > 0
+                    ? Math.Ceiling(cantidadFinal / (decimal)objetivoHora)
+                    : 0;
+            }
         }
 
         [HttpPost]
@@ -1216,6 +1221,7 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                 await CompletarVinculoOFExistenteAsync(vm, cn, sqlTx);
                 var programaId = await InsertarProgramaAsync(vm, usuarioId, cn, sqlTx);
                 await ActualizarTrabajarDomingoProgramaAsync(programaId, trabajarDomingo, cn, sqlTx);
+                if (vm.HorasProgramadas.HasValue && vm.HorasProgramadas.Value > 0) await SincronizarHorasCanonicasV9Async(programaId, vm.HorasProgramadas.Value, cn, sqlTx);
                 foreach (var transferenciaAumentoId in transferenciasAumentoIds)
                 {
                     etapaSql = "Vincular transferencia de aumento con programa";
@@ -1349,6 +1355,9 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                     // No vinculamos apartado PT a la OF. Almacén entregará de forma manual.
                     // REACTIVAR_ALMACEN: await VincularApartadoPTAOFAsync(programa.ReleaseDetalleID.Value, programaProduccionId, solicitudProduccionId, cn, (SqlTransaction)tx);
                 }
+
+                if (programa.HorasProgramadas.HasValue && programa.HorasProgramadas.Value > 0)
+                    await SincronizarHorasCanonicasV9Async(programaProduccionId, programa.HorasProgramadas.Value, cn, (SqlTransaction)tx);
 
                 await tx.CommitAsync();
 

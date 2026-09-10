@@ -1,0 +1,394 @@
+@model ERP.NSQuell.Models.ComprasContpaqiIndexViewModel
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Compras CONTPAQ";
+
+    var mx = CultureInfo.GetCultureInfo("es-MX");
+    var en = CultureInfo.GetCultureInfo("en-US");
+    var culturaMes = CultureInfo.GetCultureInfo("es-MX");
+
+    var periodo = new DateTime(Model.Filtros.Anio, Model.Filtros.Mes, 1);
+    var anterior = periodo.AddMonths(-1);
+    var siguiente = periodo.AddMonths(1);
+
+    var tituloPeriodo = Model.Filtros.RangoPersonalizado
+        ? $"{Model.Filtros.Desde:dd/MM/yyyy} - {Model.Filtros.Hasta:dd/MM/yyyy}"
+        : culturaMes.TextInfo.ToTitleCase(periodo.ToString("MMMM yyyy", culturaMes));
+
+    string Mxn(decimal valor) => valor.ToString("C2", mx);
+    string Usd(decimal? valor) => valor.HasValue ? "$" + valor.Value.ToString("N2", en) + " USD" : "Sin referencia USD";
+
+
+    var ctqGlobalFilter = new ERP.NSQuell.Models.CtqPeriodoFiltroVm
+    {
+        Desde = Model.Filtros.Desde,
+        Hasta = Model.Filtros.Hasta,
+        Buscar = Model.Filtros.Buscar,
+        Proveedor = Model.Filtros.Proveedor,
+        RFC = Model.Filtros.RFC,
+        Estatus = Model.Filtros.Estatus,
+        Moneda = Model.Filtros.Moneda,
+        CentroCosto = Model.Filtros.CentroCosto,
+        Almacen = Model.Filtros.Almacen,
+        Pagina = Model.Filtros.Pagina,
+        TamanoPagina = Model.Filtros.TamanoPagina,
+        TotalResultados = Model.TotalDocumentos,
+        Proveedores = Model.Proveedores,
+        EstatusDisponibles = Model.EstatusDisponibles,
+        Monedas = Model.Monedas,
+        CentrosCosto = Model.CentrosCosto,
+        Almacenes = Model.Almacenes
+    };
+}
+
+@section Styles {
+<style>
+    .ctq-page{color:#182230}
+    .ctq-hero,.ctq-panel,.ctq-kpi,.ctq-mini{background:#fff;border:1px solid #e4e9f0;box-shadow:0 10px 28px rgba(15,23,42,.055)}
+    .ctq-hero{border-radius:24px;padding:25px;margin-bottom:16px;background:radial-gradient(circle at 92% 12%,rgba(249,115,22,.14),transparent 31%),linear-gradient(135deg,#fff,#fffaf6)}
+    .ctq-panel{border-radius:20px;padding:18px;margin-bottom:16px}
+    .ctq-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+    .ctq-title{margin:9px 0 4px;font-size:34px;font-weight:1000;letter-spacing:-.04em}
+    .ctq-muted{color:#667085;font-weight:600}
+    .ctq-period-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .ctq-period-main{font-weight:1000;font-size:18px;min-width:180px;text-align:center}
+    .ctq-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:12px;padding:9px 13px;font-weight:900;border:1px solid #fed7aa;background:#fff;color:#ea580c;cursor:pointer}
+    .ctq-btn-primary{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;border-color:#f97316}
+    .ctq-btn-soft{border-color:#e4e7ec;color:#344054}
+    .ctq-filter-grid{display:grid;grid-template-columns:2fr 2fr 1.2fr 1.2fr 1.2fr auto;gap:10px;align-items:end}
+    .ctq-field label{display:block;font-size:11px;font-weight:900;color:#344054;margin-bottom:5px}
+    .ctq-field input,.ctq-field select{width:100%;min-height:39px;border:1px solid #d0d5dd;border-radius:10px;padding:8px 10px;background:#fff}
+    .ctq-advanced{margin-top:12px;padding-top:12px;border-top:1px solid #eef1f5}
+    .ctq-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+    .ctq-kpi{border-radius:18px;padding:15px}
+    .ctq-kpi-label{font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#667085}
+    .ctq-kpi-main{font-size:23px;font-weight:1000;line-height:1.15;margin-top:5px}
+    .ctq-kpi-alt{font-size:12px;font-weight:800;color:#475467;margin-top:4px}
+    .ctq-kpi-note{font-size:10px;color:#667085;margin-top:4px}
+    .ctq-health{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:16px}
+    .ctq-mini{border-radius:16px;padding:13px}
+    .ctq-mini strong{display:block;font-size:20px;margin-top:3px}
+    .ctq-analytics{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr);gap:12px;margin-bottom:16px;align-items:start}
+    .ctq-side-stack{display:grid;grid-template-columns:1fr;gap:12px;align-content:start}
+    .ctq-compact-panel{padding:15px}
+    .ctq-compact-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .ctq-pills{display:flex;flex-wrap:wrap;gap:7px}
+    .ctq-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid #e4e7ec;border-radius:11px;background:#f9fafb}
+    .ctq-pill strong{font-size:12px}
+    .ctq-pill span{font-size:10px;color:#667085}
+    .ctq-range-strip{display:grid;grid-template-columns:180px 170px 170px minmax(180px,1fr);gap:10px;align-items:end;margin-bottom:12px;padding:12px;border:1px solid #eef1f5;border-radius:14px;background:#fbfcfe}
+    .ctq-range-help{font-size:10px;color:#667085;padding-bottom:8px}
+    .ctq-summary-list{display:flex;flex-direction:column;gap:9px}
+    .ctq-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+    .ctq-summary-name{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ctq-summary-meta{font-size:10px;color:#667085}
+    .ctq-bar{height:5px;background:#f2f4f7;border-radius:99px;overflow:hidden;margin-top:4px}
+    .ctq-bar > span{display:block;height:100%;background:#f97316;border-radius:99px}
+    .ctq-table{width:100%;border-collapse:separate;border-spacing:0 7px}
+    .ctq-table th{padding:0 9px 5px;color:#667085;font-size:10px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+    .ctq-table td{padding:11px 9px;background:#f9fafb;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;vertical-align:middle;font-size:12px}
+    .ctq-table td:first-child{border-left:1px solid #e5e7eb;border-radius:13px 0 0 13px}
+    .ctq-table td:last-child{border-right:1px solid #e5e7eb;border-radius:0 13px 13px 0}
+    .ctq-folio{font-weight:1000;color:#073763}
+    .ctq-sub{font-size:10px;color:#667085;margin-top:2px}
+    .ctq-product-cell{min-width:240px;max-width:360px}
+    .ctq-product-name{font-weight:900;line-height:1.25}
+    .ctq-badge{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+    .ctq-badge.cancelado,.ctq-badge.eliminado{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+    .ctq-badge.validado{background:#ecfdf5;color:#15803d;border-color:#bbf7d0}
+    .ctq-alert{padding:13px 15px;margin-bottom:16px;border-radius:14px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-weight:700}
+    .ctq-fx{font-size:10px;color:#667085;margin-top:8px}
+    details summary{cursor:pointer;font-weight:850;color:#475467}
+    @@media(max-width:1250px){.ctq-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.ctq-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.ctq-health{grid-template-columns:repeat(3,minmax(0,1fr))}.ctq-analytics{grid-template-columns:1fr}.ctq-side-stack{grid-template-columns:1fr 1fr}}
+    @@media(max-width:980px){.ctq-period-head{grid-template-columns:1fr}.ctq-period-inline{justify-content:flex-start}.ctq-range-strip{grid-template-columns:1fr 1fr}.ctq-compact-grid,.ctq-side-stack{grid-template-columns:1fr}}
+    @@media(max-width:720px){.ctq-filter-grid,.ctq-kpis,.ctq-health,.ctq-range-strip{grid-template-columns:1fr}.ctq-period-inline{display:grid;grid-template-columns:1fr}.ctq-period-inline .ctq-field{width:auto;min-width:0}.ctq-title{font-size:29px}}
+</style>
+}
+
+<div id="ctq-workspace-root" class="ctq-page">
+    <partial name="_ContpaqiSubnav" />
+    <div class="erp-page-breadcrumb">
+        <a asp-controller="Menu" asp-action="Grupo" asp-route-id="4" class="erp-btn-back">← Regresar</a>
+        <span>Inicio</span><span>›</span><span>Compras</span><span>›</span><strong>Compras CONTPAQ</strong>
+    </div>
+
+    <section class="ctq-hero">
+        <span class="ctq-chip">Solo lectura · CONTPAQ</span>
+        <h1 class="ctq-title">Compras reales CONTPAQ</h1>
+        <div class="ctq-muted">Compras y facturas de proveedor consultadas directamente desde CONTPAQ. Cada compra se consolida una sola vez aunque tenga varias partidas.</div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="ctq-alert">@Model.ErrorMessage</div>
+    }
+
+    <partial name="_ContpaqiFilterPanel" model="ctqGlobalFilter" />
+
+    <section class="ctq-kpis">
+        <div class="ctq-kpi">
+            <div class="ctq-kpi-label">Total comprado</div>
+            <div class="ctq-kpi-main">@Mxn(Model.TotalCompraMXN)</div>
+            <div class="ctq-kpi-alt">@Usd(Model.TotalCompraUSD)</div>
+        </div>
+
+        <div class="ctq-kpi">
+            <div class="ctq-kpi-label">Total pagado</div>
+            <div class="ctq-kpi-main">@Mxn(Model.TotalPagadoMXN)</div>
+            <div class="ctq-kpi-alt">@Usd(Model.TotalPagadoUSD)</div>
+        </div>
+
+        <div class="ctq-kpi">
+            <div class="ctq-kpi-label">Saldo pendiente</div>
+            <div class="ctq-kpi-main">@Mxn(Model.SaldoPendienteMXN)</div>
+            <div class="ctq-kpi-alt">@Usd(Model.SaldoPendienteUSD)</div>
+        </div>
+
+        <div class="ctq-kpi">
+            <div class="ctq-kpi-label">Ticket promedio</div>
+            <div class="ctq-kpi-main">@Mxn(Model.TicketPromedioMXN)</div>
+            <div class="ctq-kpi-alt">@Model.TotalDocumentos documento(s)</div>
+        </div>
+    </section>
+
+    <div class="ctq-fx mb-3">
+        @if (Model.TipoCambioUSDReferencia.HasValue)
+        {
+            <span>Equivalente USD calculado con referencia automática de CONTPAQ: 1 USD = @Model.TipoCambioUSDReferencia.Value.ToString("N4") MXN @if (Model.FechaTipoCambioUSDReferencia.HasValue) { <text>(@Model.FechaTipoCambioUSDReferencia.Value.ToString("dd/MM/yyyy"))</text> }.</span>
+        }
+        else
+        {
+            <span>No se encontró una referencia USD utilizable en CONTPAQ; los equivalentes USD quedan sin calcular.</span>
+        }
+    </div>
+
+    <section class="ctq-health">
+        <div class="ctq-mini"><div class="ctq-kpi-label">Compras</div><strong>@Model.TotalDocumentos</strong></div>
+        <div class="ctq-mini"><div class="ctq-kpi-label">Proveedores</div><strong>@Model.ProveedoresUnicos</strong></div>
+        <div class="ctq-mini"><div class="ctq-kpi-label">Con saldo</div><strong>@Model.DocumentosConSaldo</strong></div>
+        <div class="ctq-mini"><div class="ctq-kpi-label">Cancelados / eliminados</div><strong>@Model.DocumentosCancelados</strong></div>
+        <div class="ctq-mini"><div class="ctq-kpi-label">Sin XML</div><strong>@Model.DocumentosSinXML</strong></div>
+        <div class="ctq-mini"><div class="ctq-kpi-label">Sin PDF</div><strong>@Model.DocumentosSinPDF</strong></div>
+    </section>
+
+    <section class="ctq-analytics">
+        <div class="ctq-panel mb-0">
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                <h2 class="h6 fw-bold mb-0">Top proveedores</h2>
+                <span class="ctq-muted">Concentración del gasto del periodo</span>
+            </div>
+
+            <div class="ctq-summary-list">
+                @foreach (var x in Model.TopProveedores)
+                {
+                    <div>
+                        <div class="ctq-summary-row">
+                            <div>
+                                <div class="ctq-summary-name">@x.Nombre</div>
+                                <div class="ctq-summary-meta">@x.Documentos compra(s) · @x.Porcentaje.ToString("N1")% del gasto</div>
+                            </div>
+                            <strong>@Mxn(x.TotalMXN)</strong>
+                        </div>
+                        <div class="ctq-bar"><span style="width:@Math.Min(100m, Math.Max(0m, x.Porcentaje)).ToString("0.##", CultureInfo.InvariantCulture)%"></span></div>
+                    </div>
+                }
+
+                @if (!Model.TopProveedores.Any())
+                {
+                    <div class="ctq-muted">Sin datos para el periodo.</div>
+                }
+            </div>
+        </div>
+
+        <div class="ctq-side-stack">
+            <div class="ctq-panel ctq-compact-panel mb-0">
+                <h2 class="h6 fw-bold mb-3">Centros de costo</h2>
+                <div class="ctq-summary-list">
+                    @foreach (var x in Model.ResumenCentroCosto)
+                    {
+                        <div class="ctq-summary-row">
+                            <div>
+                                <div class="ctq-summary-name">@x.Nombre</div>
+                                <div class="ctq-summary-meta">@x.Documentos compra(s)</div>
+                            </div>
+                            <strong>@Mxn(x.TotalMXN)</strong>
+                        </div>
+                    }
+                    @if (!Model.ResumenCentroCosto.Any()) { <div class="ctq-muted">Sin datos.</div> }
+                </div>
+            </div>
+
+            <div class="ctq-panel ctq-compact-panel mb-0">
+                <h2 class="h6 fw-bold mb-3">Almacenes</h2>
+                <div class="ctq-summary-list">
+                    @foreach (var x in Model.ResumenAlmacen)
+                    {
+                        <div class="ctq-summary-row">
+                            <div>
+                                <div class="ctq-summary-name">@x.Nombre</div>
+                                <div class="ctq-summary-meta">@x.Documentos compra(s)</div>
+                            </div>
+                            <strong>@Mxn(x.TotalMXN)</strong>
+                        </div>
+                    }
+                    @if (!Model.ResumenAlmacen.Any()) { <div class="ctq-muted">Sin datos.</div> }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ctq-panel ctq-compact-panel">
+        <div class="ctq-compact-grid">
+            <div>
+                <h2 class="h6 fw-bold mb-2">Estatus del periodo</h2>
+                <div class="ctq-pills">
+                    @foreach (var x in Model.ResumenEstatus)
+                    {
+                        <div class="ctq-pill">
+                            <strong>@x.Nombre</strong>
+                            <span>@x.Documentos compra(s) · @Mxn(x.TotalMXN)</span>
+                        </div>
+                    }
+                    @if (!Model.ResumenEstatus.Any()) { <span class="ctq-muted">Sin datos.</span> }
+                </div>
+            </div>
+
+            <div>
+                <h2 class="h6 fw-bold mb-2">Monedas utilizadas</h2>
+                <div class="ctq-pills">
+                    @foreach (var x in Model.ResumenMoneda)
+                    {
+                        <div class="ctq-pill">
+                            <strong>@x.Nombre</strong>
+                            <span>@x.Documentos compra(s) · @Mxn(x.TotalMXN)</span>
+                        </div>
+                    }
+                    @if (!Model.ResumenMoneda.Any()) { <span class="ctq-muted">Sin datos.</span> }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ctq-panel">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div>
+                <h2 class="h5 fw-bold mb-1">Listado de compras</h2>
+                <div class="ctq-muted">Página @Model.Filtros.Pagina de @Model.TotalPaginas</div>
+            </div>
+            <div class="ctq-muted">@Model.TotalDocumentos documento(s)</div>
+        </div>
+
+        @if (Model.Documentos.Any())
+        {
+            <div class="table-responsive">
+                <table class="ctq-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Folio</th>
+                            <th>Proveedor</th>
+                            <th>Producto</th>
+                            <th>Moneda</th>
+                            <th>Total original</th>
+                            <th>Total MXN</th>
+                            <th>Pagado MXN</th>
+                            <th>Saldo MXN</th>
+                            <th>Estatus</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var item in Model.Documentos)
+                    {
+                        var badgeClass = (item.EstatusCompra ?? "").ToLowerInvariant();
+
+                        <tr>
+                            <td>@item.FechaCompra.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <div class="ctq-folio">@(item.FolioCompra ?? item.CompraClave ?? item.CompraID.ToString())</div>
+                                <div class="ctq-sub">@item.CompraClave</div>
+                            </td>
+                            <td>
+                                <strong>@(item.Proveedor ?? "-")</strong>
+                                <div class="ctq-sub">@(item.RFCProveedor ?? "Sin RFC")</div>
+                            </td>
+                            <td class="ctq-product-cell">
+                                <div class="ctq-product-name">@(item.ProductoResumen ?? "Sin producto")</div>
+                                @if (!string.IsNullOrWhiteSpace(item.CodigoProductoResumen))
+                                {
+                                    <div class="ctq-sub">Código: @item.CodigoProductoResumen</div>
+                                }
+                                @if (item.TotalPartidas > 1)
+                                {
+                                    <div class="ctq-sub">@item.TotalPartidas partidas en esta compra · abre el detalle para ver todas</div>
+                                }
+                            </td>
+                            <td>@(item.Moneda ?? "-")</td>
+                            <td>@(item.TotalCompra.HasValue ? $"{item.TotalCompra.Value:N2} {item.Moneda}" : "-")</td>
+                            <td>@(item.TotalCompraMXN.HasValue ? Mxn(item.TotalCompraMXN.Value) : "-")</td>
+                            <td>@(item.TotalPagadoMXN.HasValue ? Mxn(item.TotalPagadoMXN.Value) : "-")</td>
+                            <td>@(item.SaldoPendienteMXN.HasValue ? Mxn(item.SaldoPendienteMXN.Value) : "-")</td>
+                            <td><span class="ctq-badge @badgeClass">@(item.EstatusCompra ?? "-")</span></td>
+                            <td class="text-end">
+                                <a asp-controller="Compras"
+                                   asp-action="ContpaqiDetalle"
+                                   asp-route-empresaOrigenId="@item.EmpresaOrigenID"
+                                   asp-route-compraId="@item.CompraID"
+                                   asp-route-returnQueryString="@Context.Request.QueryString.Value"
+                                   class="ctq-btn">Detalle</a>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                @if (Model.Filtros.Pagina > 1)
+                {
+                    <a class="ctq-btn"
+                       asp-action="Contpaqi"
+                       asp-route-anio="@Model.Filtros.Anio"
+                       asp-route-mes="@Model.Filtros.Mes"
+                       asp-route-rangoPersonalizado="@Model.Filtros.RangoPersonalizado"
+                       asp-route-desde="@Model.Filtros.Desde.ToString("yyyy-MM-dd")"
+                       asp-route-hasta="@Model.Filtros.Hasta.ToString("yyyy-MM-dd")"
+                       asp-route-buscar="@Model.Filtros.Buscar"
+                       asp-route-proveedor="@Model.Filtros.Proveedor"
+                       asp-route-rfc="@Model.Filtros.RFC"
+                       asp-route-estatus="@Model.Filtros.Estatus"
+                       asp-route-moneda="@Model.Filtros.Moneda"
+                       asp-route-centroCosto="@Model.Filtros.CentroCosto"
+                       asp-route-almacen="@Model.Filtros.Almacen"
+                       asp-route-tamanoPagina="@Model.Filtros.TamanoPagina"
+                       asp-route-pagina="@(Model.Filtros.Pagina - 1)">← Anterior</a>
+                }
+
+                @if (Model.Filtros.Pagina < Model.TotalPaginas)
+                {
+                    <a class="ctq-btn"
+                       asp-action="Contpaqi"
+                       asp-route-anio="@Model.Filtros.Anio"
+                       asp-route-mes="@Model.Filtros.Mes"
+                       asp-route-rangoPersonalizado="@Model.Filtros.RangoPersonalizado"
+                       asp-route-desde="@Model.Filtros.Desde.ToString("yyyy-MM-dd")"
+                       asp-route-hasta="@Model.Filtros.Hasta.ToString("yyyy-MM-dd")"
+                       asp-route-buscar="@Model.Filtros.Buscar"
+                       asp-route-proveedor="@Model.Filtros.Proveedor"
+                       asp-route-rfc="@Model.Filtros.RFC"
+                       asp-route-estatus="@Model.Filtros.Estatus"
+                       asp-route-moneda="@Model.Filtros.Moneda"
+                       asp-route-centroCosto="@Model.Filtros.CentroCosto"
+                       asp-route-almacen="@Model.Filtros.Almacen"
+                       asp-route-tamanoPagina="@Model.Filtros.TamanoPagina"
+                       asp-route-pagina="@(Model.Filtros.Pagina + 1)">Siguiente →</a>
+                }
+            </div>
+        }
+        else if (string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <div class="ctq-muted text-center py-5">No se encontraron compras en este periodo con los filtros seleccionados.</div>
+        }
+    </section>
+</div>

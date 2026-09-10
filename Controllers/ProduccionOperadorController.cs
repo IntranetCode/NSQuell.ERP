@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using ERP.NSQuell.Servicios.Almacen;
 using ERP.NSQuell.Servicios.Planeacion;
 using Microsoft.AspNetCore.Http;
@@ -6781,6 +6781,7 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
             DateTime? finReal = null;
             int? objetivoHora = null;
             int cantidadPlaneada = 0;
+            decimal? horasProgramadasCanonicas = null;
 
             const string sqlPrograma = @"
 SELECT TOP(1)
@@ -6809,6 +6810,7 @@ SELECT TOP(1)
         0
     ) AS CantidadPlaneada,
 
+    pp.HorasProgramadas AS HorasProgramadasCanonicas,
     dt.ObjetivoHora
 
 FROM dbo.Produccion_Ejecucion e
@@ -6874,6 +6876,11 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                             ? null
                             : Convert.ToInt32(
                                 rd["ObjetivoHora"]);
+
+                    horasProgramadasCanonicas =
+                        rd["HorasProgramadasCanonicas"] == DBNull.Value
+                            ? null
+                            : Convert.ToDecimal(rd["HorasProgramadasCanonicas"]);
                 }
             }
 
@@ -7092,23 +7099,18 @@ ORDER BY
 
             var horasRequeridas = 0;
 
-            if (cantidadPlaneada > 0 &&
-                objetivoHora.HasValue &&
-                objetivoHora.Value > 0)
+            // V9: la cantidad de bloques normales nace de Planeacion.HorasProgramadas.
+            if (horasProgramadasCanonicas.HasValue && horasProgramadasCanonicas.Value > 0)
             {
-                horasRequeridas =
-                    (int)Math.Ceiling(
-                        (decimal)cantidadPlaneada /
-                        objetivoHora.Value);
+                horasRequeridas = (int)Math.Ceiling(horasProgramadasCanonicas.Value);
+            }
+            else if (cantidadPlaneada > 0 && objetivoHora.HasValue && objetivoHora.Value > 0)
+            {
+                // Fallback solo para programas legacy sin HorasProgramadas.
+                horasRequeridas = (int)Math.Ceiling((decimal)cantidadPlaneada / objetivoHora.Value);
             }
 
-            if (horasRequeridas <= 0)
-            {
-                horasRequeridas =
-                    Math.Max(
-                        1,
-                        registros.Count + 1);
-            }
+            if (horasRequeridas <= 0) horasRequeridas = 1;
 
             // ============================================================
             // NOMBRES DE OPERADORES DE REGISTROS EXISTENTES
@@ -7502,57 +7504,16 @@ ORDER BY
             var limiteSeguridad =
                 inicio.AddHours(500);
 
-            DateTime limite;
+            var minutosInterrupcionesCerradas =
+                interrupcionesFusionadas.Where(x => x.Fin.HasValue)
+                    .Sum(x => Math.Max(0,(x.Fin!.Value-x.Inicio).TotalMinutes));
 
-            if (finReal.HasValue)
-            {
-                limite =
-                    AlMinuto(
-                        finReal.Value);
-            }
-            else
-            {
-                var minutosInterrupcionesCerradas =
-                    interrupcionesFusionadas
-                        .Where(x =>
-                            x.Fin.HasValue)
-                        .Sum(x =>
-                            Math.Max(
-                                0,
-                                (
-                                    x.Fin!.Value -
-                                    x.Inicio
-                                ).TotalMinutes));
-
-                /*
-                 * Las interrupciones cerradas desplazan el tiempo
-                 * necesario para completar las horas productivas.
-                 */
-                var limiteTeorico =
-                    inicio
-                        .AddHours(
-                            horasRequeridas)
-                        .AddMinutes(
-                            minutosInterrupcionesCerradas);
-
-                /*
-                 * Si la ejecución está tardando más que lo teórico,
-                 * debemos seguir permitiendo nuevas capturas.
-                 *
-                 * Dejamos preparada como máximo una hora hacia adelante
-                 * respecto del momento actual.
-                 */
-                var limitePorOperacion =
-                    AlMinuto(ahora)
-                        .AddHours(1);
-
-                limite =
-                    limiteTeorico >
-                    limitePorOperacion
-                        ? limiteTeorico
-                        : limitePorOperacion;
-            }
-
+            // V9: nunca extender bloques normales por la fecha actual.
+            // HorasProgramadas define el total de tiempo normal; lo posterior es Tiempo Extra.
+            var limiteTeorico = inicio.AddHours(horasRequeridas).AddMinutes(minutosInterrupcionesCerradas);
+            DateTime limite = limiteTeorico;
+            if (finReal.HasValue && AlMinuto(finReal.Value) < limite)
+                limite = AlMinuto(finReal.Value);
             if (limite >
                 limiteSeguridad)
             {

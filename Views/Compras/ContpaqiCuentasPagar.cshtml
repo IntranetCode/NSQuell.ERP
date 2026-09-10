@@ -1,0 +1,16 @@
+@model ERP.NSQuell.Models.CtqCuentaPagarVm
+@using System.Globalization
+@{
+    ViewData["Title"]="Cuentas por pagar CONTPAQ";
+    var mx=CultureInfo.GetCultureInfo("es-MX"); string M(decimal v)=>v.ToString("C2",mx);
+    string PageUrl(int p)=>Url.Action("ContpaqiCuentasPagar","Compras",new { desde=Model.Filtro.Desde.ToString("yyyy-MM-dd"),hasta=Model.Filtro.Hasta.ToString("yyyy-MM-dd"),rangoPersonalizado=true,buscar=Model.Filtro.Buscar,proveedor=Model.Filtro.Proveedor,rfc=Model.Filtro.RFC,estatus=Model.Filtro.Estatus,moneda=Model.Filtro.Moneda,centroCosto=Model.Filtro.CentroCosto,almacen=Model.Filtro.Almacen,pagina=p,tamanoPagina=Model.Filtro.TamanoPagina })??"#";
+}
+<div id="ctq-workspace-root" class="ctq15-page">
+<partial name="_ContpaqiSubnav" />
+<partial name="_ContpaqiFilterPanel" model="Model.Filtro" />
+<div class="ctq15-info"><strong>Vencimiento:</strong> ERP_Compras no expone una fecha de vencimiento exacta. Se muestra saldo real, condición de pago, último pago y antigüedad desde la compra; no se fabrica un vencimiento.</div>
+@if(!string.IsNullOrWhiteSpace(Model.ErrorMessage)){<div class="ctq15-alert">@Model.ErrorMessage</div>}
+<section class="ctq15-kpis"><div class="ctq15-kpi"><div class="ctq15-kpi-label">Saldo pendiente</div><div class="ctq15-kpi-value">@M(Model.TotalSaldoMxn)</div>@if(Model.TotalSaldoUsd.HasValue){<div class="ctq15-kpi-sub">$@Model.TotalSaldoUsd.Value.ToString("N2") USD</div>}</div><div class="ctq15-kpi"><div class="ctq15-kpi-label">Pagado</div><div class="ctq15-kpi-value">@M(Model.TotalPagadoMxn)</div></div><div class="ctq15-kpi"><div class="ctq15-kpi-label">Documentos con saldo</div><div class="ctq15-kpi-value">@Model.TotalDocumentos</div></div><div class="ctq15-kpi"><div class="ctq15-kpi-label">Página</div><div class="ctq15-kpi-value">@Model.Filtro.Pagina / @Model.TotalPaginas</div></div></section>
+<section class="ctq15-card"><div class="table-responsive"><table class="ctq15-table"><thead><tr><th>Fecha</th><th>Folio</th><th>Proveedor</th><th>Condición</th><th>Último pago</th><th>Antigüedad</th><th>Saldo original</th><th>Saldo MXN</th><th></th></tr></thead><tbody>@foreach(var x in Model.Filas){<tr><td>@x.FechaCompra.ToString("dd/MM/yyyy")</td><td><strong>@(x.Folio??x.CompraID.ToString())</strong></td><td>@x.Proveedor<br/><small>@x.RFC</small></td><td>@(x.CondicionPago??"-")</td><td>@(x.FechaUltimoPago?.ToString("dd/MM/yyyy")??"-")</td><td>@x.AntiguedadDias días</td><td>@x.SaldoOriginal.ToString("N2") @x.Moneda</td><td class="ctq15-money">@M(x.SaldoMxn)</td><td><a asp-action="ContpaqiDetalle" asp-route-empresaOrigenId="@x.EmpresaOrigenID" asp-route-compraId="@x.CompraID" class="ctq15-btn">Ver detalle</a></td></tr>}</tbody></table></div>
+<div class="ctq15-pager">@if(Model.Filtro.Pagina>1){<a href="@PageUrl(Model.Filtro.Pagina-1)" class="ctq15-btn" data-ctq-ajax>← Anterior</a>}@if(Model.Filtro.Pagina<Model.TotalPaginas){<a href="@PageUrl(Model.Filtro.Pagina+1)" class="ctq15-btn" data-ctq-ajax>Siguiente →</a>}</div></section>
+</div>

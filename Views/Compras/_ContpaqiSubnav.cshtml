@@ -1,0 +1,70 @@
+@using System.Globalization
+@{
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "Contpaqi";
+    var q = Context.Request.Query;
+
+    DateTime ParseDate(string key, DateTime fallback)
+    {
+        var raw = q[key].ToString();
+        return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var value)
+            ? value.Date
+            : fallback.Date;
+    }
+
+    var hoy = DateTime.Today;
+    var defaultDesde = new DateTime(hoy.Year, hoy.Month, 1);
+    var defaultHasta = defaultDesde.AddMonths(1).AddDays(-1);
+
+    DateTime navDesde;
+    DateTime navHasta;
+
+    if (!string.IsNullOrWhiteSpace(q["desde"]))
+    {
+        navDesde = ParseDate("desde", defaultDesde);
+        navHasta = ParseDate("hasta", defaultHasta);
+    }
+    else if (int.TryParse(q["anio"].ToString(), out var y)
+          && int.TryParse(q["mes"].ToString(), out var m)
+          && y >= 2000 && y <= 2100 && m >= 1 && m <= 12)
+    {
+        navDesde = new DateTime(y, m, 1);
+        navHasta = navDesde.AddMonths(1).AddDays(-1);
+    }
+    else
+    {
+        navDesde = defaultDesde;
+        navHasta = defaultHasta;
+    }
+
+    string NavUrl(string targetAction)
+    {
+        return Url.Action(targetAction, "Compras", new
+        {
+            desde = navDesde.ToString("yyyy-MM-dd"),
+            hasta = navHasta.ToString("yyyy-MM-dd"),
+            rangoPersonalizado = true,
+            buscar = q["buscar"].ToString(),
+            proveedor = q["proveedor"].ToString(),
+            rfc = q["rfc"].ToString(),
+            estatus = q["estatus"].ToString(),
+            moneda = q["moneda"].ToString(),
+            centroCosto = q["centroCosto"].ToString(),
+            almacen = q["almacen"].ToString(),
+            tamanoPagina = q["tamanoPagina"].ToString()
+        }) ?? "#";
+    }
+
+    string Active(string targetAction) =>
+        action.Equals(targetAction, StringComparison.OrdinalIgnoreCase) ? "active" : string.Empty;
+}
+<link rel="stylesheet" href="~/css/compras/contpaqi-v15.css" asp-append-version="true" />
+<script src="~/js/compras/contpaqi-v15.js" asp-append-version="true" defer></script>
+<nav class="ctq15-subnav" aria-label="Compras CONTPAQ">
+    <a class="@Active("ContpaqiResumen")" href="@NavUrl("ContpaqiResumen")" data-ctq-ajax>Resumen</a>
+    <a class="@Active("Contpaqi")" href="@NavUrl("Contpaqi")" data-ctq-ajax>Compras / Facturas</a>
+    <a class="@Active("ContpaqiCuentasPagar")" href="@NavUrl("ContpaqiCuentasPagar")" data-ctq-ajax>Cuentas por pagar</a>
+    <a class="@Active("ContpaqiProveedores")" href="@NavUrl("ContpaqiProveedores")" data-ctq-ajax>Proveedores</a>
+    <a class="@Active("ContpaqiProductos")" href="@NavUrl("ContpaqiProductos")" data-ctq-ajax>Productos comprados</a>
+    <a class="@Active("ContpaqiFiscal")" href="@NavUrl("ContpaqiFiscal")" data-ctq-ajax>Fiscal</a>
+    <a class="@Active("ContpaqiAnalitica")" href="@NavUrl("ContpaqiAnalitica")" data-ctq-ajax>Analítica</a>
+</nav>
