@@ -1,0 +1,160 @@
+@model ERP.NSQuell.Models.CtqPeriodoFiltroVm
+@using System.Globalization
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Contpaqi";
+    var culture = CultureInfo.GetCultureInfo("es-MX");
+    var mesBase = new DateTime(Model.Desde.Year, Model.Desde.Month, 1);
+    var esMesCompleto = Model.Desde.Date == mesBase.Date
+        && Model.Hasta.Date == mesBase.AddMonths(1).AddDays(-1).Date;
+    var tituloPeriodo = esMesCompleto
+        ? culture.TextInfo.ToTitleCase(mesBase.ToString("MMMM yyyy", culture))
+        : $"{Model.Desde:dd/MM/yyyy} - {Model.Hasta:dd/MM/yyyy}";
+
+    string EstadoFiscal() => Context.Request.Query["estadoDocumento"].ToString();
+
+    string PeriodUrl(DateTime d, DateTime h)
+    {
+        return Url.Action(currentAction, "Compras", new
+        {
+            desde = d.ToString("yyyy-MM-dd"),
+            hasta = h.ToString("yyyy-MM-dd"),
+            rangoPersonalizado = true,
+            buscar = Model.Buscar,
+            proveedor = Model.Proveedor,
+            rfc = Model.RFC,
+            estatus = Model.Estatus,
+            moneda = Model.Moneda,
+            centroCosto = Model.CentroCosto,
+            almacen = Model.Almacen,
+            tamanoPagina = Model.TamanoPagina,
+            estadoDocumento = EstadoFiscal()
+        }) ?? "#";
+    }
+
+    var anterior = mesBase.AddMonths(-1);
+    var siguiente = mesBase.AddMonths(1);
+    var actual = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    var inicioAnio = new DateTime(DateTime.Today.Year, 1, 1);
+}
+<section class="ctq15-filter-panel">
+    <form method="get"
+          action="@Url.Action(currentAction, "Compras")"
+          class="ctq15-filter-form"
+          data-ctq-filter-form>
+        <input type="hidden" name="rangoPersonalizado" value="true" />
+        @if (!string.IsNullOrWhiteSpace(EstadoFiscal()))
+        {
+            <input type="hidden" name="estadoDocumento" value="@EstadoFiscal()" />
+        }
+
+        <div class="ctq15-period-row">
+            <div class="ctq15-period-left">
+                <div>
+                    <div class="ctq15-eyebrow">Periodo de consulta</div>
+                    <div class="ctq15-period-nav">
+                        <a href="@PeriodUrl(anterior, anterior.AddMonths(1).AddDays(-1))" class="ctq15-btn ctq15-btn-soft" data-ctq-ajax aria-label="Mes anterior">←</a>
+                        <strong class="ctq15-period-title">@tituloPeriodo</strong>
+                        <a href="@PeriodUrl(siguiente, siguiente.AddMonths(1).AddDays(-1))" class="ctq15-btn ctq15-btn-soft" data-ctq-ajax aria-label="Mes siguiente">→</a>
+                        <a href="@PeriodUrl(actual, actual.AddMonths(1).AddDays(-1))" class="ctq15-btn ctq15-btn-soft" data-ctq-ajax>Mes actual</a>
+                        <a href="@PeriodUrl(DateTime.Today.AddMonths(-3).Date, DateTime.Today.Date)" class="ctq15-btn ctq15-btn-soft" data-ctq-ajax>Últimos 3 meses</a>
+                        <a href="@PeriodUrl(inicioAnio, DateTime.Today.Date)" class="ctq15-btn ctq15-btn-soft" data-ctq-ajax>Año actual</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ctq15-date-range">
+                <div class="ctq15-field ctq15-date-field">
+                    <label>Desde</label>
+                    <input type="date" name="desde" value="@Model.Desde.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="ctq15-field ctq15-date-field">
+                    <label>Hasta</label>
+                    <input type="date" name="hasta" value="@Model.Hasta.ToString("yyyy-MM-dd")" />
+                </div>
+                <button type="submit" class="ctq15-btn ctq15-btn-primary">Aplicar</button>
+            </div>
+        </div>
+
+        <div class="ctq15-filter-grid">
+            <div class="ctq15-field ctq15-search">
+                <label>Buscar folio / proveedor / RFC / UUID</label>
+                <input type="text" name="buscar" value="@Model.Buscar" placeholder="Buscar..." />
+            </div>
+
+            <div class="ctq15-field">
+                <label>Proveedor</label>
+                <select name="proveedor">
+                    <option value="">Todos</option>
+                    @foreach (var item in Model.Proveedores)
+                    {
+                        <option value="@item" selected="@(Model.Proveedor == item ? "selected" : null)">@item</option>
+                    }
+                </select>
+            </div>
+
+            <div class="ctq15-field">
+                <label>Estatus</label>
+                <select name="estatus">
+                    <option value="">Todos</option>
+                    @foreach (var item in Model.EstatusDisponibles)
+                    {
+                        <option value="@item" selected="@(Model.Estatus == item ? "selected" : null)">@item</option>
+                    }
+                </select>
+            </div>
+
+            <div class="ctq15-field">
+                <label>Moneda</label>
+                <select name="moneda">
+                    <option value="">Todas</option>
+                    @foreach (var item in Model.Monedas)
+                    {
+                        <option value="@item" selected="@(Model.Moneda == item ? "selected" : null)">@item</option>
+                    }
+                </select>
+            </div>
+
+            <div class="ctq15-field ctq15-rows">
+                <label>Filas</label>
+                <select name="tamanoPagina">
+                    @foreach (var size in new[] { 10, 25, 50, 100 })
+                    {
+                        <option value="@size" selected="@(Model.TamanoPagina == size ? "selected" : null)">@size</option>
+                    }
+                </select>
+            </div>
+
+            <button type="submit" class="ctq15-btn ctq15-btn-primary ctq15-main-apply">Aplicar</button>
+        </div>
+
+        <details class="ctq15-more" open="@(!string.IsNullOrWhiteSpace(Model.RFC) || !string.IsNullOrWhiteSpace(Model.CentroCosto) || !string.IsNullOrWhiteSpace(Model.Almacen) ? "open" : null)">
+            <summary>Más filtros</summary>
+            <div class="ctq15-more-grid">
+                <div class="ctq15-field">
+                    <label>RFC</label>
+                    <input type="text" name="rfc" value="@Model.RFC" />
+                </div>
+                <div class="ctq15-field">
+                    <label>Centro de costo</label>
+                    <select name="centroCosto">
+                        <option value="">Todos</option>
+                        @foreach (var item in Model.CentrosCosto)
+                        {
+                            <option value="@item" selected="@(Model.CentroCosto == item ? "selected" : null)">@item</option>
+                        }
+                    </select>
+                </div>
+                <div class="ctq15-field">
+                    <label>Almacén</label>
+                    <select name="almacen">
+                        <option value="">Todos</option>
+                        @foreach (var item in Model.Almacenes)
+                        {
+                            <option value="@item" selected="@(Model.Almacen == item ? "selected" : null)">@item</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </details>
+    </form>
+</section>

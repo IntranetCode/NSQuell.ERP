@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
 
@@ -118,6 +118,8 @@ WHERE p.PersonaID=@PersonaID
             AND r.TipoRol=@TipoRol
             AND r.Activo=1
       )
+      OR (@TipoRol=N'TECNICO' AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Modern_Spanish_CI_AI LIKE N'%TECN%')
+      OR (@TipoRol=N'SMED' AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) COLLATE Modern_Spanish_CI_AI LIKE N'%SMED%')
   );";
 
         await using var cmd=new SqlCommand(sql,cn,tx);

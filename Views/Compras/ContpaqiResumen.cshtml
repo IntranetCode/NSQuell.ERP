@@ -1,0 +1,46 @@
+@model ERP.NSQuell.Models.CtqResumenVm
+@using System.Globalization
+@{
+    ViewData["Title"] = "Resumen Compras CONTPAQ";
+    var mx = CultureInfo.GetCultureInfo("es-MX");
+    string M(decimal v) => v.ToString("C2", mx);
+    string U(decimal? v) => v.HasValue ? "$" + v.Value.ToString("N2", CultureInfo.InvariantCulture) + " USD" : "Sin referencia USD";
+    var max = Model.Tendencia.Count > 0 ? Model.Tendencia.Max(x => x.TotalMxn) : 0m;
+}
+<div id="ctq-workspace-root" class="ctq15-page">
+    <partial name="_ContpaqiSubnav" />
+    <partial name="_ContpaqiFilterPanel" model="Model.Filtro" />
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage)) { <div class="ctq15-alert">@Model.ErrorMessage</div> }
+
+    <section class="ctq15-kpis">
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Total comprado</div><div class="ctq15-kpi-value">@M(Model.TotalMxn)</div><div class="ctq15-kpi-sub">@U(Model.TotalUsd)</div></div>
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Total pagado</div><div class="ctq15-kpi-value">@M(Model.PagadoMxn)</div><div class="ctq15-kpi-sub">@U(Model.PagadoUsd)</div></div>
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Saldo pendiente</div><div class="ctq15-kpi-value">@M(Model.SaldoMxn)</div><div class="ctq15-kpi-sub">@U(Model.SaldoUsd)</div></div>
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Ticket promedio</div><div class="ctq15-kpi-value">@M(Model.TicketPromedioMxn)</div><div class="ctq15-kpi-sub">@Model.Documentos compras · @Model.Proveedores proveedores</div></div>
+    </section>
+
+    <section class="ctq15-kpis">
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Compras con saldo</div><div class="ctq15-kpi-value">@Model.ConSaldo</div></div>
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Sin XML</div><div class="ctq15-kpi-value">@Model.SinXml</div></div>
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Sin PDF</div><div class="ctq15-kpi-value">@Model.SinPdf</div></div>
+        <div class="ctq15-kpi"><div class="ctq15-kpi-label">Documentos</div><div class="ctq15-kpi-value">@Model.Documentos</div></div>
+    </section>
+
+    <section class="ctq15-card">
+        <h5 class="fw-bold">Tendencia del periodo</h5>
+        @foreach (var x in Model.Tendencia)
+        {
+            var pct = max > 0 ? Math.Min(100m, x.TotalMxn * 100m / max) : 0m;
+            <div class="mb-2">
+                <div class="d-flex justify-content-between gap-3"><span><strong>@x.Mes/@x.Anio</strong> <small class="text-muted">@x.Documentos compras</small></span><strong>@M(x.TotalMxn)</strong></div>
+                <div class="ctq15-bar"><span style="width:@pct.ToString("0.##",CultureInfo.InvariantCulture)%"></span></div>
+            </div>
+        }
+    </section>
+
+    <section class="ctq15-grid3">
+        <div class="ctq15-card"><h5 class="fw-bold">Top proveedores</h5>@foreach (var x in Model.TopProveedores) { <div class="ctq15-summary-row"><div><div class="ctq15-summary-name">@x.Nombre</div><div class="ctq15-summary-meta">@x.Documentos compras · saldo @M(x.SaldoMxn)</div></div><strong>@M(x.TotalMxn)</strong></div> }</div>
+        <div class="ctq15-card"><h5 class="fw-bold">Centros de costo</h5>@foreach (var x in Model.CentrosCosto) { <div class="ctq15-summary-row"><span class="ctq15-summary-name">@x.Nombre</span><strong>@M(x.TotalMxn)</strong></div> }</div>
+        <div class="ctq15-card"><h5 class="fw-bold">Almacenes</h5>@foreach (var x in Model.Almacenes) { <div class="ctq15-summary-row"><span class="ctq15-summary-name">@x.Nombre</span><strong>@M(x.TotalMxn)</strong></div> }</div>
+    </section>
+</div>

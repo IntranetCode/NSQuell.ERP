@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -11,7 +11,7 @@ using System.Text;
 
 namespace ERP.NSQuell.Controllers
 {
-    public class ComprasController : Controller
+    public partial class ComprasController : Controller
     {
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;

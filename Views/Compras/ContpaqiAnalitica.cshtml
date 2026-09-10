@@ -1,0 +1,12 @@
+@model ERP.NSQuell.Models.CtqAnaliticaVm
+@using System.Globalization
+@{
+    ViewData["Title"]="Analítica Compras CONTPAQ";var mx=CultureInfo.GetCultureInfo("es-MX");string M(decimal v)=>v.ToString("C2",mx);var max=Model.Tendencia.Count>0?Model.Tendencia.Max(x=>x.TotalMxn):0m;
+}
+<div id="ctq-workspace-root" class="ctq15-page">
+<partial name="_ContpaqiSubnav" />
+<partial name="_ContpaqiFilterPanel" model="Model.Filtro" />
+@if(!string.IsNullOrWhiteSpace(Model.ErrorMessage)){<div class="ctq15-alert">@Model.ErrorMessage</div>}
+<section class="ctq15-card"><h5 class="fw-bold">Tendencia mensual de gasto</h5>@foreach(var x in Model.Tendencia){var pct=max>0?Math.Min(100m,x.TotalMxn*100m/max):0m;<div class="mb-3"><div class="d-flex justify-content-between gap-3"><span><strong>@x.Mes/@x.Anio</strong> <small class="text-muted">@x.Documentos compras</small></span><span><strong>@M(x.TotalMxn)</strong> <small class="text-muted">Pagado @M(x.PagadoMxn) · Saldo @M(x.SaldoMxn)</small></span></div><div class="ctq15-bar"><span style="width:@pct.ToString("0.##",CultureInfo.InvariantCulture)%"></span></div></div>}</section>
+<section class="ctq15-grid2"><div class="ctq15-card"><h5 class="fw-bold">Proveedores</h5>@foreach(var x in Model.Proveedores){<div class="ctq15-summary-row"><span>@x.Nombre <small>(@x.Documentos)</small></span><strong>@M(x.TotalMxn)</strong></div>}</div><div class="ctq15-card"><h5 class="fw-bold">Centros de costo</h5>@foreach(var x in Model.CentrosCosto){<div class="ctq15-summary-row"><span>@x.Nombre <small>(@x.Documentos)</small></span><strong>@M(x.TotalMxn)</strong></div>}</div><div class="ctq15-card"><h5 class="fw-bold">Almacenes</h5>@foreach(var x in Model.Almacenes){<div class="ctq15-summary-row"><span>@x.Nombre <small>(@x.Documentos)</small></span><strong>@M(x.TotalMxn)</strong></div>}</div><div class="ctq15-card"><h5 class="fw-bold">Monedas</h5>@foreach(var x in Model.Monedas){<div class="ctq15-summary-row"><span>@x.Nombre <small>(@x.Documentos)</small></span><strong>@M(x.TotalMxn)</strong></div>}</div></section>
+</div>

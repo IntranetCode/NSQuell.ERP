@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.ProduccionBandejaVm
+@model ERP.NSQuell.Models.ProduccionBandejaVm
 @using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
@@ -2422,7 +2422,12 @@
 
 }
 
-<div class="page">
+<style id="NSQ_PERSONAL_INICIO_V9_MODAL_UNIFICADO">
+#ppProduccionPersonalProgramadoResumen > .row.g-2{display:none!important}
+#ppInicioPersonalCompleto{display:none!important}
+#ppProduccionPersonalProgramadoResumen #ppInicioCamposFaltantes{margin-top:14px;margin-bottom:0!important}
+#ppProduccionPersonalProgramadoResumen .operator-role-card{height:100%}
+</style><div class="page">
 
     <nav class="production-page-nav" aria-label="Navegación de Producción">
         <a class="production-back-btn"
@@ -3022,8 +3027,8 @@
                     <div class="alert alert-success py-2 px-3 mb-3 d-none"
                          id="ppInicioPersonalCompleto">
                         <i class="bi bi-shield-check me-1"></i>
-                        El personal obligatorio ya viene definido desde Programación de Personal.
-                        No se modifica desde Producción.
+                        La Programación de Personal es una sugerencia editable.
+                        Confirma o cambia el personal real antes de iniciar.
                     </div>
 
                     <div class="row g-3 mb-3" id="ppInicioCamposFaltantes">
@@ -3161,6 +3166,10 @@
                             const mensajeValidacionOperadores = document.getElementById('mensajeValidacionOperadores');
                             const textoValidacionOperadores = document.getElementById('textoValidacionOperadores');
 
+                            // NSQ_PERSONAL_INICIO_V9_MODAL_UNIFICADO
+                            const resumenPersonalV9=document.getElementById('ppProduccionPersonalProgramadoResumen');
+                            const camposPersonalV9=document.getElementById('ppInicioCamposFaltantes');
+                            if(resumenPersonalV9&&camposPersonalV9&&camposPersonalV9.parentElement!==resumenPersonalV9){resumenPersonalV9.appendChild(camposPersonalV9);}
                             const formIniciarPreparacion = document.getElementById('formIniciarPreparacion');
                             const btnConfirmarInicio = document.getElementById('btnConfirmarInicio');
 
@@ -3242,6 +3251,15 @@
                                         : 'Escribe el nombre si no seleccionas operador';
                                 }
                             }
+                let catalogoPersonalInicioV9Cache=null;
+                async function obtenerCatalogoPersonalInicioV9(){
+                    if(catalogoPersonalInicioV9Cache)return catalogoPersonalInicioV9Cache;
+                    const rr=await fetch('/Produccion/CatalogoPersonalInicioV9',{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    if(!rr.ok)throw new Error(`HTTP ${rr.status}`);
+                    catalogoPersonalInicioV9Cache=await rr.json();return catalogoPersonalInicioV9Cache;
+                }
+                function anexarV9(select,items){if(!select||!Array.isArray(items))return;const ids=new Set(Array.from(select.options).map(o=>o.value));for(const x of items){const id=String(x.personaID||'');if(!id||ids.has(id))continue;const o=document.createElement('option');o.value=id;o.textContent=[x.nombre,x.numeroControl?`Ctrl ${x.numeroControl}`:'',x.puesto].filter(Boolean).join(' · ');select.appendChild(o);ids.add(id);}}
+                async function completarPersonalInicioV9(opPref,auxPref){try{const d=await obtenerCatalogoPersonalInicioV9();anexarV9(modalOperadorId,d.operadores);anexarV9(modalOperadorAuxiliarId,d.auxiliares);anexarV9(modalTecnicoProduccionId,d.tecnicos);anexarV9(document.getElementById('modalSmedId'),d.smed);if(opPref)seleccionarPersonaSiExiste(modalOperadorId,opPref);if(auxPref)seleccionarPersonaSiExiste(modalOperadorAuxiliarId,auxPref);sincronizarModoManual(modalOperadorId,modalOperadorManual);sincronizarModoManual(modalOperadorAuxiliarId,modalOperadorAuxiliarManual,'auxiliar');sincronizarTecnicoProduccion();}catch(e){console.error('CatalogoPersonalInicioV9',e);}}
                 async function cargarOperadoresPolivalencia(programaId, parteId, maquinaId, operadorPreferido, auxiliarPreferido) {
                                 limpiarSelectEscala(modalOperadorId, '-- Cargando operadores --');
                                 limpiarSelectEscala(modalOperadorAuxiliarId, '-- Cargando auxiliares --');
@@ -3267,17 +3285,19 @@
                                     const data = await response.json();
 
                                     if (!data?.configurado) {
-                                        limpiarSelectEscala(modalOperadorId, '-- Polivalencia no configurada --');
-                                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Auxiliares no disponibles --');
+                                        limpiarSelectEscala(modalOperadorId, '-- Seleccionar operador --');
+                                        limpiarSelectEscala(modalOperadorAuxiliarId, '-- Seleccionar auxiliar --');
+                                        await completarPersonalInicioV9(operadorPreferido, auxiliarPreferido);
                                         if (modalPolivalenciaInfo) {
-                                            modalPolivalenciaInfo.textContent = 'No esta disponible la configuracion de Polivalencia.';
-                                            modalPolivalenciaInfo.className = 'small text-danger fw-semibold mt-1';
+                                            modalPolivalenciaInfo.textContent = 'Polivalencia no esta disponible en esta base. Se muestra el catalogo activo de Produccion como respaldo.';
+                                            modalPolivalenciaInfo.className = 'small text-warning fw-semibold mt-1';
                                         }
                                         return;
                                     }
 
                                     const operadores = Array.isArray(data.operadores) ? data.operadores : [];
                                     const auxiliares = Array.isArray(data.auxiliares) ? data.auxiliares : [];
+                                    if (operadores.length === 0 || auxiliares.length === 0) { const fb=await obtenerCatalogoPersonalInicioV9(); if(operadores.length===0) operadores.push(...(fb.operadores||[])); if(auxiliares.length===0) auxiliares.push(...(fb.auxiliares||[])); }
                                     const tieneMatriz = data.tieneMatriz === true;
                                     const numeroParte = data.numeroParte || '';
                                     const etiquetaEscala = data.escalaEncontrada
@@ -4095,6 +4115,7 @@
                                     operadorAuxiliarId);
 
                                 cargarTecnicosProduccion();
+                                setTimeout(()=>completarPersonalInicioV9(null,null),350); setTimeout(()=>completarPersonalInicioV9(null,null),1200);
                                 cargarEtiquetasBlancasInicio(programaId);
                             });
 

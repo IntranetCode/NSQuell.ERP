@@ -1,4 +1,4 @@
-﻿@model ERP.NSQuell.Models.Compras.DashboardViewModel
+@model ERP.NSQuell.Models.Compras.DashboardViewModel
 
 @{
     ViewData["Title"] = "Compras";
@@ -638,8 +638,7 @@
                 Bandeja Compras
             </a>
         }
-
-        @if (puedeVerBandejaDireccion)
+@if (puedeVerBandejaDireccion)
         {
             <a asp-controller="Compras" asp-action="BandejaDireccion" class="btn-compras-secondary">
                 Bandeja Dirección
