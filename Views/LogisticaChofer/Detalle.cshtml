@@ -1,0 +1,1377 @@
+﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = $"{Model.Folio} | Mis viajes";
+
+    var programado = Model.Estatus == "Programado";
+    var enCurso = Model.Estatus == "En curso";
+    var completado = Model.Estatus == "Completado";
+    var cancelado = Model.Estatus == "Cancelado";
+    var puedeIncidencia = !Model.EstaCerrado;
+    var ahoraTexto = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
+}
+@functions {
+    public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+
+    public static string EstadoClase(string? estatus)
+    {
+        return estatus switch
+        {
+            "En curso" => "estado-curso",
+            "Programado" => "estado-programado",
+            "Completado" => "estado-completado",
+            "Cancelado" => "estado-cancelado",
+            _ => "estado-neutral"
+        };
+    }
+
+    public static string IconoEvidencia(string? tipo)
+    {
+        return tipo?.Trim().ToUpperInvariant() switch
+        {
+            "SALIDA" => "fa-arrow-right-from-bracket",
+            "REGRESO" => "fa-flag-checkered",
+            "ENTREGA" => "fa-box",
+            "TRAYECTO" => "fa-road",
+            "INCIDENCIA" => "fa-triangle-exclamation",
+            _ => "fa-camera"
+        };
+    }
+}
+
+@section Styles {
+    <style>
+        :root {
+            --chofer-azul: #004aad;
+            --chofer-azul-oscuro: #00347a;
+            --chofer-verde: #107c41;
+            --chofer-amarillo: #b54708;
+            --chofer-rojo: #b42318;
+            --chofer-gris: #667085;
+            --chofer-borde: #dbe4f0;
+            --chofer-fondo: #f4f7fb;
+            --chofer-texto: #172033;
+            --chofer-superficie: #fff
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            background: var(--chofer-fondo)
+        }
+
+        .chofer-page {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 18px
+        }
+
+        .chofer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 17px 18px;
+            background: linear-gradient(135deg,var(--chofer-azul-oscuro),var(--chofer-azul));
+            color: #fff;
+            border-radius: 18px;
+            margin-bottom: 12px
+        }
+
+        .chofer-head-left {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            min-width: 0
+        }
+
+        .chofer-back {
+            width: 42px;
+            height: 42px;
+            flex: 0 0 42px;
+            border-radius: 11px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(255,255,255,.12);
+            color: #fff;
+            text-decoration: none
+        }
+
+            .chofer-back:hover {
+                background: #fff;
+                color: var(--chofer-azul)
+            }
+
+        .chofer-title {
+            min-width: 0
+        }
+
+            .chofer-title h1 {
+                margin: 0;
+                font-size: 1.55rem;
+                font-weight: 950;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis
+            }
+
+            .chofer-title p {
+                margin: 4px 0 0;
+                color: rgba(255,255,255,.85);
+                font-size: .82rem;
+                font-weight: 700
+            }
+
+        .estado {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 7px 10px;
+            font-size: .72rem;
+            line-height: 1;
+            font-weight: 950;
+            text-transform: uppercase;
+            white-space: nowrap
+        }
+
+        .chofer-head .estado-programado {
+            background: #fff;
+            color: var(--chofer-azul)
+        }
+
+        .chofer-head .estado-curso {
+            background: #dff7e8;
+            color: var(--chofer-verde)
+        }
+
+        .chofer-head .estado-completado {
+            background: #eef2f6;
+            color: #475467
+        }
+
+        .chofer-head .estado-cancelado {
+            background: #fde7e7;
+            color: var(--chofer-rojo)
+        }
+
+        .chofer-head .estado-neutral {
+            background: #eef2f6;
+            color: #475467
+        }
+
+        .alert {
+            border-radius: 12px;
+            font-weight: 800
+        }
+
+        .summary-line {
+            display: grid;
+            grid-template-columns: repeat(5,minmax(0,1fr));
+            background: var(--chofer-superficie);
+            border: 1px solid var(--chofer-borde);
+            border-radius: 13px;
+            overflow: hidden;
+            margin-bottom: 12px
+        }
+
+        .summary-item {
+            padding: 10px 12px;
+            border-right: 1px solid var(--chofer-borde);
+            min-width: 0
+        }
+
+            .summary-item:last-child {
+                border-right: 0
+            }
+
+            .summary-item span {
+                display: block;
+                color: var(--chofer-gris);
+                text-transform: uppercase;
+                font-size: .66rem;
+                font-weight: 900;
+                letter-spacing: .035em
+            }
+
+            .summary-item strong {
+                display: block;
+                margin-top: 3px;
+                color: var(--chofer-texto);
+                font-size: .86rem;
+                font-weight: 900;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis
+            }
+
+        .section {
+            background: var(--chofer-superficie);
+            border: 1px solid var(--chofer-borde);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 12px
+        }
+
+        .section-title {
+            min-height: 48px;
+            padding: 11px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: #f8fbff;
+            border-bottom: 1px solid var(--chofer-borde);
+            color: var(--chofer-azul-oscuro);
+            font-size: .8rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .035em
+        }
+
+            .section-title small {
+                color: var(--chofer-gris);
+                font-size: .7rem;
+                font-weight: 800;
+                text-transform: none;
+                letter-spacing: 0
+            }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 155px minmax(0,1fr);
+            gap: 10px;
+            padding: 10px 14px;
+            border-bottom: 1px solid #edf1f5;
+            min-width: 0
+        }
+
+            .info-row:nth-last-child(-n+2) {
+                border-bottom: 0
+            }
+
+            .info-row.full {
+                grid-column: 1 / -1;
+                border-bottom: 0
+            }
+
+            .info-row span {
+                color: var(--chofer-gris);
+                font-size: .76rem;
+                font-weight: 750
+            }
+
+            .info-row strong {
+                color: var(--chofer-texto);
+                font-size: .8rem;
+                font-weight: 850;
+                overflow-wrap: anywhere
+            }
+
+        .action-body {
+            padding: 14px
+        }
+
+        .action-intro {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 12px;
+            color: var(--chofer-gris);
+            font-size: .78rem;
+            font-weight: 700
+        }
+
+            .action-intro i {
+                color: var(--chofer-azul);
+                font-size: 1rem
+            }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 11px
+        }
+
+        .field {
+            min-width: 0
+        }
+
+            .field.full {
+                grid-column: 1 / -1
+            }
+
+            .field label {
+                display: block;
+                margin-bottom: 5px;
+                color: #465a70;
+                font-size: .72rem;
+                font-weight: 900
+            }
+
+            .field input,
+            .field select,
+            .field textarea {
+                width: 100%;
+                min-height: 44px;
+                border: 1px solid #ccd9e7;
+                border-radius: 10px;
+                background: #fff;
+                color: var(--chofer-texto);
+                padding: 10px 11px;
+                outline: none
+            }
+
+            .field textarea {
+                min-height: 76px;
+                resize: vertical
+            }
+
+                .field input:focus,
+                .field select:focus,
+                .field textarea:focus {
+                    border-color: #6b9ed0;
+                    box-shadow: 0 0 0 3px rgba(0,74,173,.08)
+                }
+
+        .photo-field input[type=file] {
+            min-height: 58px;
+            padding: 15px 11px;
+            border-style: dashed;
+            border-color: #75a5d8;
+            background: #f5f9ff
+        }
+
+        .field-help {
+            margin-top: 4px;
+            color: var(--chofer-gris);
+            font-size: .68rem;
+            font-weight: 650
+        }
+
+        .action-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 12px
+        }
+
+        .btn-action {
+            min-height: 44px;
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            color: #fff;
+            font-weight: 950;
+            cursor: pointer
+        }
+
+        .btn-start {
+            background: var(--chofer-azul)
+        }
+
+        .btn-return {
+            background: var(--chofer-verde)
+        }
+
+        .btn-incident {
+            background: var(--chofer-rojo)
+        }
+
+        .btn-action:hover {
+            filter: brightness(.93)
+        }
+
+        .tabs {
+            display: flex;
+            overflow-x: auto;
+            border-bottom: 1px solid var(--chofer-borde);
+            background: #fff
+        }
+
+        .tab-btn {
+            border: 0;
+            border-bottom: 3px solid transparent;
+            background: transparent;
+            padding: 11px 14px 9px;
+            color: var(--chofer-gris);
+            font-size: .74rem;
+            font-weight: 900;
+            white-space: nowrap;
+            cursor: pointer
+        }
+
+            .tab-btn.active {
+                color: var(--chofer-azul);
+                border-bottom-color: var(--chofer-azul)
+            }
+
+        .tab-panel {
+            display: none
+        }
+
+            .tab-panel.active {
+                display: block
+            }
+
+        .list-row {
+            display: grid;
+            grid-template-columns: 42px minmax(0,1fr) auto;
+            gap: 10px;
+            align-items: center;
+            padding: 11px 14px;
+            border-bottom: 1px solid #edf1f5
+        }
+
+            .list-row:last-child {
+                border-bottom: 0
+            }
+
+        .list-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
+            display: grid;
+            place-items: center;
+            background: #eef5fd;
+            color: var(--chofer-azul)
+        }
+
+        .list-main {
+            min-width: 0
+        }
+
+            .list-main strong {
+                display: block;
+                color: var(--chofer-texto);
+                font-size: .8rem;
+                font-weight: 900;
+                overflow-wrap: anywhere
+            }
+
+            .list-main small {
+                display: block;
+                margin-top: 3px;
+                color: var(--chofer-gris);
+                font-size: .69rem;
+                font-weight: 650
+            }
+
+        .mini-link {
+            border: 1px solid var(--chofer-borde);
+            border-radius: 9px;
+            padding: 7px 9px;
+            color: var(--chofer-azul);
+            background: #fff;
+            text-decoration: none;
+            font-size: .72rem;
+            font-weight: 900
+        }
+
+        .incident-status {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 5px 7px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: .67rem;
+            font-weight: 900
+        }
+
+            .incident-status.open {
+                background: #fef3f2;
+                color: var(--chofer-rojo)
+            }
+
+        .empty {
+            padding: 28px 16px;
+            color: var(--chofer-gris);
+            font-size: .78rem;
+            font-weight: 750;
+            text-align: center
+        }
+
+        .closed-note {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            color: var(--chofer-gris);
+            font-size: .77rem;
+            font-weight: 750
+        }
+
+        html[data-nsq-theme="dark"] {
+            --chofer-fondo: #08111e;
+            --chofer-superficie: #111c2d;
+            --chofer-borde: #2b3d53;
+            --chofer-texto: #edf3fb;
+            --chofer-gris: #9badc2;
+            color-scheme: dark
+        }
+
+            html[data-nsq-theme="dark"] .section-title {
+                background: #0d1828
+            }
+
+            html[data-nsq-theme="dark"] .field input,
+            html[data-nsq-theme="dark"] .field select,
+            html[data-nsq-theme="dark"] .field textarea,
+            html[data-nsq-theme="dark"] .tabs,
+            html[data-nsq-theme="dark"] .mini-link {
+                background: #111c2d;
+                color: #edf3fb
+            }
+
+            html[data-nsq-theme="dark"] .photo-field input[type=file] {
+                background: #0d1828
+            }
+
+            html[data-nsq-theme="dark"] .closed-note {
+                background: #0d1828
+            }
+
+        @@media(max-width:760px) {
+            .chofer-page {
+                padding: 9px
+            }
+
+            .chofer-head {
+                border-radius: 15px;
+                padding: 13px
+            }
+
+            .chofer-title h1 {
+                font-size: 1.24rem
+            }
+
+            .chofer-title p {
+                font-size: .72rem
+            }
+
+            .summary-line {
+                grid-template-columns: repeat(2,1fr)
+            }
+
+            .summary-item {
+                border-bottom: 1px solid var(--chofer-borde)
+            }
+
+                .summary-item:nth-child(even) {
+                    border-right: 0
+                }
+
+                .summary-item:last-child {
+                    grid-column: 1 / -1;
+                    border-bottom: 0
+                }
+
+            .info-grid {
+                grid-template-columns: 1fr
+            }
+
+            .info-row,
+            .info-row.full {
+                grid-column: auto;
+                grid-template-columns: 112px minmax(0,1fr);
+                border-bottom: 1px solid #edf1f5
+            }
+
+                .info-row:last-child {
+                    border-bottom: 0
+                }
+
+            .form-grid {
+                grid-template-columns: 1fr
+            }
+
+            .field.full {
+                grid-column: auto
+            }
+
+            .action-footer {
+                display: block
+            }
+
+            .btn-action {
+                width: 100%;
+                min-height: 50px
+            }
+
+            .list-row {
+                grid-template-columns: 34px minmax(0,1fr) auto;
+                padding: 10px
+            }
+
+            .list-icon {
+                width: 31px;
+                height: 31px
+            }
+
+            .chofer-head .estado {
+                font-size: .62rem;
+                padding: 6px 8px
+            }
+        }
+
+        .btn-agregar-evidencia {
+            width: 100%;
+            min-height: 52px;
+            border: 1px dashed #75a5d8;
+            border-radius: 10px;
+            background: #f5f9ff;
+            color: var(--chofer-azul);
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer
+        }
+
+            .btn-agregar-evidencia:hover {
+                background: #eaf3ff;
+                border-color: var(--chofer-azul)
+            }
+
+        .lista-evidencias-captura {
+            display: grid;
+            gap: 6px;
+            margin-top: 8px
+        }
+
+        .evidencia-captura-item {
+            display: grid;
+            grid-template-columns: 32px minmax(0,1fr) 34px;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 9px;
+            border: 1px solid var(--chofer-borde);
+            border-radius: 9px;
+            background: #f8fafc
+        }
+
+        .evidencia-captura-icono {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: #eaf3ff;
+            color: var(--chofer-azul)
+        }
+
+        .evidencia-captura-info {
+            min-width: 0
+        }
+
+            .evidencia-captura-info strong {
+                display: block;
+                color: var(--chofer-texto);
+                font-size: .72rem;
+                font-weight: 850;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis
+            }
+
+            .evidencia-captura-info small {
+                display: block;
+                margin-top: 2px;
+                color: var(--chofer-gris);
+                font-size: .65rem;
+                font-weight: 650
+            }
+
+        .evidencia-captura-eliminar {
+            width: 32px;
+            height: 32px;
+            border: 0;
+            border-radius: 8px;
+            background: #fef3f2;
+            color: var(--chofer-rojo);
+            cursor: pointer
+        }
+
+        .contador-evidencias {
+            margin-top: 7px;
+            color: var(--chofer-gris);
+            font-size: .68rem;
+            font-weight: 750
+        }
+
+        html[data-nsq-theme="dark"] .btn-agregar-evidencia,
+        html[data-nsq-theme="dark"] .evidencia-captura-item {
+            background: #0d1828
+        }
+    </style>
+}
+
+<div class="chofer-page">
+    <section class="chofer-head">
+        <div class="chofer-head-left">
+            <a class="chofer-back" href="@Url.Action("Index", "LogisticaChofer")" title="Regresar a mis viajes">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <div class="chofer-title">
+                <h1>@Model.Folio</h1>
+                <p>@Txt(Model.Origen) → @Txt(Model.Destino)</p>
+            </div>
+        </div>
+        <span class="estado @EstadoClase(Model.Estatus)">
+            @if (enCurso)
+            {
+                <i class="fa-solid fa-location-arrow"></i>
+            }
+            else if (programado)
+            {
+                <i class="fa-regular fa-clock"></i>
+            }
+            else if (completado)
+            {
+                <i class="fa-solid fa-check"></i>
+            }
+            else
+            {
+                <i class="fa-solid fa-circle"></i>
+            }
+            @Model.Estatus
+        </span>
+    </section>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success">@TempData["LogisticaOk"]</div>
+    }
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["LogisticaError"]</div>
+    }
+
+    <div class="summary-line">
+        <div class="summary-item">
+            <span>Fecha programada</span>
+            <strong>@Model.FechaProgramada.ToString("dd/MM/yyyy")</strong>
+        </div>
+        <div class="summary-item">
+            <span>Hora de salida</span>
+            <strong>@(Model.HoraSalidaProgramada?.ToString(@"hh\:mm") ?? "Sin hora")</strong>
+        </div>
+        <div class="summary-item">
+            <span>Unidad</span>
+            <strong>@Model.UnidadMostrar</strong>
+        </div>
+        <div class="summary-item">
+            <span>Ruta</span>
+            <strong>@Txt(Model.Ruta)</strong>
+        </div>
+        <div class="summary-item">
+            <span>Chofer</span>
+            <strong>@Model.ChoferMostrar</strong>
+        </div>
+    </div>
+
+    <section class="section">
+        <div class="section-title">
+            <span><i class="fa-solid fa-route me-2"></i>Información del viaje</span>
+            <small>Datos asignados por Logística</small>
+        </div>
+        <div class="info-grid">
+            <div class="info-row">
+                <span>Origen</span>
+                <strong>@Txt(Model.Origen)</strong>
+            </div>
+            <div class="info-row">
+                <span>Destino</span>
+                <strong>@Txt(Model.Destino)</strong>
+            </div>
+            <div class="info-row">
+                <span>Motivo</span>
+                <strong>@Txt(Model.Motivo)</strong>
+            </div>
+            <div class="info-row">
+                <span>Unidad</span>
+                <strong>@Model.UnidadMostrar</strong>
+            </div>
+            <div class="info-row">
+                <span>Ruta</span>
+                <strong>@Txt(Model.Ruta)</strong>
+            </div>
+            <div class="info-row">
+                <span>Salida programada</span>
+                <strong>@Model.FechaProgramada.ToString("dd/MM/yyyy") @(Model.HoraSalidaProgramada?.ToString(@"hh\:mm") ?? "")</strong>
+            </div>
+
+            @if (Model.FechaSalidaReal.HasValue)
+            {
+                <div class="info-row">
+                    <span>Salida real</span>
+                    <strong>@Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm")</strong>
+                </div>
+            }
+
+            @if (Model.KilometrajeSalida.HasValue)
+            {
+                <div class="info-row">
+                    <span>Km inicial</span>
+                    <strong>@Model.KilometrajeSalida.Value.ToString("N0") km</strong>
+                </div>
+            }
+
+            @if (Model.FechaRegresoReal.HasValue)
+            {
+                <div class="info-row">
+                    <span>Regreso real</span>
+                    <strong>@Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm")</strong>
+                </div>
+            }
+
+            @if (Model.KilometrajeRegreso.HasValue)
+            {
+                <div class="info-row">
+                    <span>Km final</span>
+                    <strong>@Model.KilometrajeRegreso.Value.ToString("N0") km</strong>
+                </div>
+            }
+
+            @if (Model.KilometrosUtilizados.HasValue)
+            {
+                <div class="info-row">
+                    <span>Recorrido</span>
+                    <strong>@Model.KilometrosUtilizados.Value.ToString("N0") km</strong>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+            {
+                <div class="info-row full">
+                    <span>Observaciones</span>
+                    <strong>@Model.Observaciones</strong>
+                </div>
+            }
+        </div>
+    </section>
+
+    @if (Model.PuedeRegistrarSalida)
+    {
+        <section class="section">
+            <div class="section-title">
+                <span><i class="fa-solid fa-play me-2"></i>Registrar salida</span>
+                <small>@ahoraTexto</small>
+            </div>
+            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarSalida" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+
+                <div class="action-intro">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Antes de salir registra el kilometraje de la unidad y toma una o más fotografías de evidencia.</span>
+                </div>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="kmSalida">Kilometraje inicial</label>
+                        <input id="kmSalida" type="number" name="kilometrajeSalida" min="0" inputmode="numeric" required placeholder="Ej. 154820" />
+                    </div>
+
+                    <div class="field full">
+                        <label>Evidencias de salida</label>
+
+                        <input id="evidenciasSalida"
+                               type="file"
+                               name="evidencias"
+                               accept="image/*,.pdf"
+                               multiple
+                               hidden />
+
+                        <button type="button"
+                                class="btn-agregar-evidencia"
+                                data-input="evidenciasSalida">
+                            <i class="fa-solid fa-plus"></i>
+                            Agregar evidencia
+                        </button>
+
+                        <div id="listaEvidenciasSalida"
+                             class="lista-evidencias-captura"></div>
+
+                        <div class="field-help">
+                            Debes agregar al menos una fotografía. Después puedes agregar más fotos o archivos PDF.
+                        </div>
+                    </div>
+
+                    <div class="field full">
+                        <label for="obsSalida">Observaciones</label>
+                        <textarea id="obsSalida" name="observaciones" maxlength="1000" placeholder="Opcional"></textarea>
+                    </div>
+                </div>
+
+                <div class="action-footer">
+                    <button type="submit" class="btn-action btn-start">
+                        <i class="fa-solid fa-truck-fast"></i>
+                        Confirmar salida
+                    </button>
+                </div>
+            </form>
+        </section>
+    }
+
+    @if (Model.PuedeRegistrarRegreso)
+    {
+        <section class="section">
+            <div class="section-title">
+                <span><i class="fa-solid fa-flag-checkered me-2"></i>Registrar regreso</span>
+                <small>Viaje en curso</small>
+            </div>
+            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarRetorno" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+
+                <div class="action-intro">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Al regresar registra el kilometraje final y toma una fotografía de evidencia.</span>
+                </div>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="kmRegreso">Kilometraje final</label>
+                        <input id="kmRegreso" type="number" name="kilometrajeRegreso" min="@(Model.KilometrajeSalida ?? 0)" inputmode="numeric" required placeholder="Kilometraje al regresar" />
+                        @if (Model.KilometrajeSalida.HasValue)
+                        {
+                            <div class="field-help">Kilometraje inicial: @Model.KilometrajeSalida.Value.ToString("N0") km.</div>
+                        }
+                    </div>
+
+                    <div class="field full">
+                        <label>Evidencias de regreso</label>
+
+                        <input id="evidenciasRegreso"
+                               type="file"
+                               name="evidencias"
+                               accept="image/*,.pdf"
+                               multiple
+                               hidden />
+
+                        <button type="button"
+                                class="btn-agregar-evidencia"
+                                data-input="evidenciasRegreso">
+                            <i class="fa-solid fa-plus"></i>
+                            Agregar evidencia
+                        </button>
+
+                        <div id="listaEvidenciasRegreso"
+                             class="lista-evidencias-captura"></div>
+
+                        <div class="field-help">
+                            Debes agregar al menos una fotografía. Después puedes agregar más fotos o archivos PDF.
+                        </div>
+                    </div>
+
+                    <div class="field full">
+                        <label for="obsRegreso">Observaciones</label>
+                        <textarea id="obsRegreso" name="observaciones" maxlength="1000" placeholder="Opcional"></textarea>
+                    </div>
+                </div>
+
+                <div class="action-footer">
+                    <button type="submit" class="btn-action btn-return">
+                        <i class="fa-solid fa-check"></i>
+                        Confirmar regreso
+                    </button>
+                </div>
+            </form>
+        </section>
+    }
+
+    @if (puedeIncidencia)
+    {
+        <section class="section">
+            <div class="section-title">
+                <span><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar incidencia</span>
+                <small>La evidencia es opcional</small>
+            </div>
+            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarIncidencia" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="tipoIncidencia">Tipo</label>
+                        <select id="tipoIncidencia" name="tipo" required>
+                            <option value="">Selecciona...</option>
+                            <option value="Unidad">Unidad</option>
+                            <option value="Operador">Operador</option>
+                            <option value="Tráfico">Tráfico</option>
+                            <option value="Retraso">Retraso</option>
+                            <option value="Ruta">Ruta</option>
+                            <option value="Material">Material</option>
+                            <option value="Recolección">Recolección</option>
+                            <option value="Cliente / destino">Cliente / destino</option>
+                            <option value="Seguridad">Seguridad</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="severidadIncidencia">Severidad</label>
+                        <select id="severidadIncidencia" name="severidad" required>
+                            <option value="Baja">Baja</option>
+                            <option value="Media" selected>Media</option>
+                            <option value="Alta">Alta</option>
+                            <option value="Crítica">Crítica</option>
+                        </select>
+                    </div>
+
+                    <div class="field full">
+                        <label for="descripcionIncidencia">Descripción</label>
+                        <textarea id="descripcionIncidencia" name="descripcion" maxlength="1200" required placeholder="Describe qué ocurrió"></textarea>
+                    </div>
+
+                    <div class="field full photo-field">
+                        <label for="evidenciaIncidencia">Foto o archivo de evidencia</label>
+                        <input id="evidenciaIncidencia" type="file" name="evidencia" accept="image/*,.pdf" capture="environment" />
+                        <div class="field-help">Opcional. Puedes tomar una fotografía o adjuntar un PDF.</div>
+                    </div>
+                </div>
+
+                <div class="action-footer">
+                    <button type="submit" class="btn-action btn-incident">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        Registrar incidencia
+                    </button>
+                </div>
+            </form>
+        </section>
+    }
+
+    @if (Model.EstaCerrado)
+    {
+        <section class="section">
+            <div class="closed-note">
+                <i class="fa-solid fa-lock"></i>
+                <span>Este viaje está @Model.Estatus.ToLowerInvariant() y ya no permite captura operativa.</span>
+            </div>
+        </section>
+    }
+
+    <section class="section">
+        <div class="tabs" role="tablist">
+            <button type="button" class="tab-btn active" data-tab="evidencias">
+                <i class="fa-solid fa-camera me-1"></i>
+                Evidencias (@Model.Evidencias.Count)
+            </button>
+            <button type="button" class="tab-btn" data-tab="incidencias">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                Incidencias (@Model.Incidencias.Count)
+            </button>
+            <button type="button" class="tab-btn" data-tab="historial">
+                <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                Historial (@Model.Historial.Count)
+            </button>
+        </div>
+
+        <div class="tab-panel active" id="panel-evidencias">
+            @if (Model.Evidencias.Any())
+            {
+                @foreach (var evidencia in Model.Evidencias.OrderByDescending(x => x.FechaCarga))
+                {
+                    <div class="list-row">
+                        <div class="list-icon">
+                            <i class="fa-solid @IconoEvidencia(evidencia.TipoEvidencia)"></i>
+                        </div>
+                        <div class="list-main">
+                            <strong>@evidencia.TipoEvidencia · @Txt(evidencia.NombreOriginal)</strong>
+                            <small>@evidencia.FechaCarga.ToString("dd/MM/yyyy HH:mm") · @evidencia.TamanoTexto @(!string.IsNullOrWhiteSpace(evidencia.UsuarioCargaNombre) ? $"· {evidencia.UsuarioCargaNombre}" : "")</small>
+                            @if (!string.IsNullOrWhiteSpace(evidencia.Observaciones))
+                            {
+                                <small>@evidencia.Observaciones</small>
+                            }
+                        </div>
+                        <a class="mini-link" asp-controller="LogisticaChofer" asp-action="VerEvidencia" asp-route-id="@evidencia.ViajeEvidenciaID" target="_blank">
+                            <i class="fa-regular fa-eye"></i>
+                            Ver
+                        </a>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="empty">Todavía no hay evidencias registradas para este viaje.</div>
+            }
+        </div>
+
+        <div class="tab-panel" id="panel-incidencias">
+            @if (Model.Incidencias.Any())
+            {
+                @foreach (var incidencia in Model.Incidencias.OrderByDescending(x => x.FechaRegistro))
+                {
+                    <div class="list-row">
+                        <div class="list-icon">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div class="list-main">
+                            <strong>@incidencia.Tipo · @incidencia.Severidad</strong>
+                            <small>@incidencia.FechaRegistro.ToString("dd/MM/yyyy HH:mm") · @incidencia.Descripcion</small>
+                            @if (!string.IsNullOrWhiteSpace(incidencia.Responsable))
+                            {
+                                <small>Responsable: @incidencia.Responsable</small>
+                            }
+                        </div>
+                        <span class="incident-status @(incidencia.EstaAbierta ? "open" : "")">@incidencia.Estatus</span>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="empty">No hay incidencias registradas.</div>
+            }
+        </div>
+
+        <div class="tab-panel" id="panel-historial">
+            @if (Model.Historial.Any())
+            {
+                @foreach (var movimiento in Model.Historial.OrderByDescending(x => x.FechaEvento))
+                {
+                    <div class="list-row">
+                        <div class="list-icon">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </div>
+                        <div class="list-main">
+                            <strong>@Txt(movimiento.Evento)</strong>
+                            <small>@movimiento.FechaEvento.ToString("dd/MM/yyyy HH:mm") @(!string.IsNullOrWhiteSpace(movimiento.Usuario) ? $"· {movimiento.Usuario}" : "")</small>
+                            @if (!string.IsNullOrWhiteSpace(movimiento.Observaciones))
+                            {
+                                <small>@movimiento.Observaciones</small>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
+                        {
+                            <span class="incident-status">@movimiento.EstadoNuevo</span>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="empty">No hay historial registrado.</div>
+            }
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const tabs = document.querySelectorAll('.tab-btn');
+            const panels = document.querySelectorAll('.tab-panel');
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const target = tab.dataset.tab;
+
+                    tabs.forEach(x => x.classList.remove('active'));
+                    panels.forEach(x => x.classList.remove('active'));
+
+                    tab.classList.add('active');
+                    document.getElementById('panel-' + target)?.classList.add('active');
+                });
+            });
+
+                    const almacenesEvidencia = new Map();
+
+        function obtenerAlmacen(input) {
+            if (!almacenesEvidencia.has(input.id)) {
+                almacenesEvidencia.set(input.id, new DataTransfer());
+            }
+
+            return almacenesEvidencia.get(input.id);
+        }
+
+        function claveArchivo(file) {
+            return `${file.name}_${file.size}_${file.lastModified}`;
+        }
+
+        function formatoTamano(bytes) {
+            if (!bytes) return '0 KB';
+
+            if (bytes < 1024 * 1024)
+                return `${(bytes / 1024).toFixed(1)} KB`;
+
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function obtenerListaId(inputId) {
+            return inputId === 'evidenciasSalida'
+                ? 'listaEvidenciasSalida'
+                : 'listaEvidenciasRegreso';
+        }
+
+        function renderizarEvidencias(input) {
+            const almacen = obtenerAlmacen(input);
+            const contenedor = document.getElementById(obtenerListaId(input.id));
+
+            if (!contenedor) return;
+
+            contenedor.innerHTML = '';
+
+            Array.from(almacen.files).forEach((file, indice) => {
+                const esImagen = file.type?.startsWith('image/');
+                const fila = document.createElement('div');
+
+                fila.className = 'evidencia-captura-item';
+
+                const icono = document.createElement('div');
+                icono.className = 'evidencia-captura-icono';
+                icono.innerHTML = esImagen
+                    ? '<i class="fa-solid fa-camera"></i>'
+                    : '<i class="fa-solid fa-file-pdf"></i>';
+
+                const info = document.createElement('div');
+                info.className = 'evidencia-captura-info';
+
+                const nombre = document.createElement('strong');
+                nombre.textContent = file.name;
+
+                const tamano = document.createElement('small');
+                tamano.textContent = `${esImagen ? 'Fotografía' : 'Archivo PDF'} · ${formatoTamano(file.size)}`;
+
+                info.appendChild(nombre);
+                info.appendChild(tamano);
+
+                const eliminar = document.createElement('button');
+                eliminar.type = 'button';
+                eliminar.className = 'evidencia-captura-eliminar';
+                eliminar.title = 'Quitar evidencia';
+                eliminar.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+
+                eliminar.addEventListener('click', () => {
+                    eliminarEvidencia(input, indice);
+                });
+
+                fila.appendChild(icono);
+                fila.appendChild(info);
+                fila.appendChild(eliminar);
+
+                contenedor.appendChild(fila);
+            });
+
+            if (almacen.files.length > 0) {
+                const contador = document.createElement('div');
+                contador.className = 'contador-evidencias';
+                contador.textContent = `${almacen.files.length} evidencia${almacen.files.length === 1 ? '' : 's'} agregada${almacen.files.length === 1 ? '' : 's'}. Puedes agregar más.`;
+                contenedor.appendChild(contador);
+            }
+        }
+
+        function eliminarEvidencia(input, indiceEliminar) {
+            const actual = obtenerAlmacen(input);
+            const nuevo = new DataTransfer();
+
+            Array.from(actual.files).forEach((file, indice) => {
+                if (indice !== indiceEliminar)
+                    nuevo.items.add(file);
+            });
+
+            almacenesEvidencia.set(input.id, nuevo);
+            input.files = nuevo.files;
+
+            renderizarEvidencias(input);
+        }
+
+        function agregarArchivos(input, archivosNuevos) {
+            const almacen = obtenerAlmacen(input);
+            const existentes = new Set(
+                Array.from(almacen.files).map(claveArchivo)
+            );
+
+            Array.from(archivosNuevos).forEach(file => {
+                if (almacen.files.length >= 15)
+                    return;
+
+                const clave = claveArchivo(file);
+
+                if (!existentes.has(clave)) {
+                    almacen.items.add(file);
+                    existentes.add(clave);
+                }
+            });
+
+            input.files = almacen.files;
+
+            renderizarEvidencias(input);
+        }
+
+        document.querySelectorAll('.btn-agregar-evidencia').forEach(boton => {
+            boton.addEventListener('click', () => {
+                const input = document.getElementById(boton.dataset.input);
+
+                if (!input) return;
+
+                input.value = '';
+                input.click();
+            });
+        });
+
+        ['evidenciasSalida', 'evidenciasRegreso'].forEach(id => {
+            const input = document.getElementById(id);
+
+            if (!input) return;
+
+            input.addEventListener('change', () => {
+                const nuevos = Array.from(input.files || []);
+
+                agregarArchivos(input, nuevos);
+            });
+        });
+
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', (event) => {
+                            const inputEvidencias = form.querySelector('input[name="evidencias"]');
+
+        if (inputEvidencias) {
+            const almacen = obtenerAlmacen(inputEvidencias);
+            const archivos = Array.from(almacen.files);
+
+            const tieneFoto = archivos.some(file =>
+                file.type?.startsWith('image/')
+            );
+
+            if (!tieneFoto) {
+                event.preventDefault();
+
+                alert('Debes agregar al menos una fotografía antes de continuar.');
+
+                return;
+            }
+
+            inputEvidencias.files = almacen.files;
+        }
+                    const button = form.querySelector('button[type="submit"]');
+
+                    if (!button) return;
+
+                    button.disabled = true;
+                    button.style.opacity = '.7';
+
+                    const text = button.textContent.trim();
+
+                    if (text.includes('salida')) button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando salida...';
+                    else if (text.includes('regreso')) button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando regreso...';
+                    else if (text.includes('incidencia')) button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+                });
+            });
+        })();
+    </script>
+}

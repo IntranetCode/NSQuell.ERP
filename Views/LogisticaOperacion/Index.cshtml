@@ -1359,16 +1359,19 @@
 
 
     .lg-client-row {
-        min-height: 118px
+        min-height: var(--client-row-height,86px);
+        height: var(--client-row-height,86px)
     }
 
         .lg-client-row .lg-client {
-            min-height: 118px
+            min-height: var(--client-row-height,86px);
+            height: var(--client-row-height,86px)
         }
 
     .lg-client-day {
         min-width: 190px;
-        min-height: 118px;
+        min-height: var(--client-row-height,86px);
+        height: var(--client-row-height,86px);
         position: relative;
         border-right: 1px solid var(--lg-line);
         padding: 7px;
@@ -1397,10 +1400,11 @@
         position: absolute;
         left: 0;
         right: 0;
-        top: 42px;
+        top: var(--timed-top,8px);
         bottom: 5px;
-        z-index: 3;
-        pointer-events: none
+        z-index: 8;
+        pointer-events: none;
+        isolation: isolate
     }
 
     .lg-timed-event {
@@ -1474,13 +1478,39 @@
             box-shadow: 0 4px 10px rgba(13,55,109,.18)
         }
 
-    .lg-timed-event[draggable="true"] {
-        cursor: grab
+    .lg-timed-event.emb {
+        cursor: pointer !important;
+        pointer-events: auto !important;
+        position: absolute;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        z-index: 10
     }
 
-    .lg-timed-event.dragging {
+    .lg-timed-event.emb * {
+        pointer-events: none
+    }
+
+    .lg-timed-event.emb:hover {
+        filter: brightness(.985);
+        box-shadow: 0 7px 17px rgba(18,48,85,.18);
+        transform: translateY(-1px)
+    }
+
+    .lg-timed-event.emb:focus-visible {
+        outline: 2px solid var(--lg-blue);
+        outline-offset: 2px
+    }
+
+    .lg-timed-event.emb[data-puede-mover="true"]:active {
+        cursor: grabbing !important
+    }
+
+    .lg-timed-event.emb.dragging {
         opacity: .42 !important;
-        cursor: grabbing
+        cursor: grabbing !important;
+        transform: none
     }
 
     .lg-client-day.drag-over {
@@ -1517,11 +1547,13 @@
     }
 
     .lg-client-row, .lg-client-row .lg-client {
-        min-height: 154px
+        min-height: var(--client-row-height,86px);
+        height: var(--client-row-height,86px)
     }
 
     .lg-client-day {
-        min-height: 154px
+        min-height: var(--client-row-height,86px);
+        height: var(--client-row-height,86px)
     }
 
     .lg-day-summary .lg-summary-btn {
@@ -1548,7 +1580,7 @@
         display: flex;
         flex-direction: column;
         gap: 5px;
-        height: 100%;
+        height: auto;
         justify-content: flex-start
     }
 
@@ -1588,6 +1620,14 @@
             background: #fff8e9;
             border-color: #e5c37f
         }
+
+            .lg-summary-btn.prog[draggable="true"] {
+                cursor: grab
+            }
+
+            .lg-summary-btn.prog.dragging {
+                opacity: .45
+            }
 
         .lg-summary-btn.emb {
             background: #edf5ff;
@@ -1704,7 +1744,7 @@
 
     .lg-day-program-bar {
         display: grid;
-        grid-template-columns: 1fr 120px 120px auto;
+        grid-template-columns: 1fr 160px auto;
         gap: 6px;
         align-items: end;
         padding: 8px;
@@ -2100,6 +2140,36 @@
             grid-template-columns: repeat(2,1fr)
         }
     }
+
+    /* Altura adaptable por cliente: la fila crece solo cuando necesita espacio. */
+    .lg-client-row {
+        transition: height .16s ease,min-height .16s ease
+    }
+
+    .lg-client-day {
+        overflow: hidden
+    }
+
+    .lg-client-day .lg-summary-empty {
+        min-height: 54px
+    }
+
+    .lg-timed-layer {
+        transition: top .16s ease
+    }
+
+    .lg-timed-event {
+        z-index: 2
+    }
+
+    .lg-day-summary {
+        position: relative;
+        z-index: 6
+    }
+
+    .lg-no-time-strip {
+        z-index: 9
+    }
 </style>
 
 <div class="lg-page">
@@ -2108,7 +2178,7 @@
             <div class="lg-title-icon"><i class="fa-solid fa-truck-fast"></i></div>
             <div>
                 <h1>Centro Operativo de Logística</h1>
-                <p>Requerimientos de Release, programación, embarques y seguimiento en una sola línea de tiempo.</p>
+                <p>Planeación programa los Releases por día y Logística continúa con embarques, preparación, salida y entrega desde este mismo Centro Operativo.</p>
             </div>
         </div>
         <div class="lg-actions">
@@ -2241,7 +2311,23 @@
         {
             @foreach (var cliente in Model.Clientes)
             {
-                <div class="lg-row lg-client-row" data-cliente-id="@cliente.ClienteID">
+                var altoFilaCliente = 78;
+                foreach (var diaAltura in dias)
+                {
+                    var eventosAltura = cliente.EventosDia(diaAltura).ToList();
+                    var resumenesAltura = 0;
+                    if (eventosAltura.Any(x => x.EsRequerimiento)) resumenesAltura++;
+                    if (eventosAltura.Any(x => x.EsProgramacion)) resumenesAltura++;
+                    var embarquesConHoraAltura = eventosAltura.Count(x => x.EsEmbarque && x.HoraProgramada.HasValue);
+                    var embarquesSinHoraAltura = eventosAltura.Count(x => x.EsEmbarque && !x.HoraProgramada.HasValue);
+                    var altoResumen = resumenesAltura > 0 ? 8 + (resumenesAltura * 35) : 8;
+                    var altoEmbarques = embarquesConHoraAltura > 0 ? 8 + (embarquesConHoraAltura * 39) : 0;
+                    var altoSinHora = embarquesSinHoraAltura > 0 ? 28 : 0;
+                    var altoDia = Math.Max(78, altoResumen + altoEmbarques + altoSinHora + 8);
+                    if (altoDia > altoFilaCliente) altoFilaCliente = altoDia;
+                }
+                altoFilaCliente = Math.Min(altoFilaCliente, 310);
+                <div class="lg-row lg-client-row" data-cliente-id="@cliente.ClienteID" style="--client-row-height:@(altoFilaCliente)px">
                     <aside class="lg-client">
                         <div class="lg-client-name">@cliente.Cliente</div>
                         <div class="lg-client-sub">@cliente.TotalPiezas.ToString("N0") PZA visibles</div>
@@ -2279,94 +2365,106 @@
                         var progPiezas = programaciones.Sum(x => (long)Math.Max(0, x.CantidadProgramada - x.CantidadGenerada));
                         var embPiezas = embarques.Sum(x => (long)x.TotalPiezas);
                         var reqExp = requerimientos.Count(x => x.EsExpeditado);
+                        var resumenesDia = (requerimientos.Any() ? 1 : 0) + (programaciones.Any() ? 1 : 0);
+                        var timedTopDia = resumenesDia > 0 ? 8 + (resumenesDia * 35) : 8;
 
-                        <div class="lg-client-day @(dia.Date == hoy ? "today" : "")" data-cliente-id="@cliente.ClienteID" data-fecha="@dia.ToString("yyyy-MM-dd")">
+                        <div class="lg-client-day @(dia.Date == hoy ? "today" : "")" data-cliente-id="@cliente.ClienteID" data-fecha="@dia.ToString("yyyy-MM-dd")" style="--timed-top:@(timedTopDia)px">
                             <div class="lg-day-summary">
                                 @if (!eventos.Any())
                                 {
                                     <div class="lg-summary-empty">Sin operación</div>
                                 }
-                                else if (requerimientos.Any())
+                                else
                                 {
-                                    <button type="button" class="lg-summary-btn req @(reqExp > 0 ? "exp" : "")" data-open-day="requerimientos">
-                                        <span class="left">
-                                            <span class="lg-summary-icon"><i class="fa-solid fa-clipboard-list"></i></span>
-                                            <span class="lg-summary-text">
-                                                <strong>@requerimientos.Count release@(requerimientos.Count == 1 ? "" : "s") por programar</strong>
-                                                <span>
-                                                    @reqPiezas.ToString("N0") PZA @if(reqExp>0){
+                                    @if (requerimientos.Any())
+                                    {
+                                        <button type="button" class="lg-summary-btn req @(reqExp > 0 ? "exp" : "")" data-open-day="requerimientos">
+                                            <span class="left">
+                                                <span class="lg-summary-icon"><i class="fa-solid fa-clipboard-list"></i></span>
+                                                <span class="lg-summary-text">
+                                                    <strong>@requerimientos.Count release@(requerimientos.Count == 1 ? "" : "s") por programar</strong>
+                                                    <span>@reqPiezas.ToString("N0") PZA @if(reqExp > 0){
                                                     <text>· @reqExp exp.</text>
                                                 }
+                </span>
                                             </span>
                                         </span>
-                                    </span>
-                                    <span class="lg-summary-count">@requerimientos.Count</span>
-                                </button>
+                                        <span class="lg-summary-count">@requerimientos.Count</span>
+                                    </button>
+                                }
+                                @if (programaciones.Any())
+                                {
+                                    var programacionIds = string.Join(",", programaciones.Select(x => x.ListaCargaProgramacionID.ToString()));
+                                    <button type="button"
+                                            draggable="true"
+                                            class="lg-summary-btn prog"
+                                            data-start-shipment="true"
+                                            data-drag-type="programacion-grupo"
+                                            data-programacion-ids="@programacionIds"
+                                            data-cliente-id="@cliente.ClienteID"
+                                            data-fecha="@dia.ToString("yyyy-MM-dd")"
+                                            title="Clic: iniciar embarque · Arrastrar: reprogramar estos Releases a otro día">
+                                        <span class="left">
+                                            <span class="lg-summary-icon"><i class="fa-solid fa-cart-flatbed"></i></span>
+                                            <span class="lg-summary-text">
+                                                <strong>@programaciones.Count release@(programaciones.Count == 1 ? "" : "s") programado@(programaciones.Count == 1 ? "" : "s")</strong>
+                                                <span>@progPiezas.ToString("N0") PZA · Clic para iniciar embarque · arrastra para cambiar día</span>
+                                            </span>
+                                        </span>
+                                        <span class="lg-summary-count">@programaciones.Count</span>
+                                    </button>
+                                }
+                                @if (Model.Vista == "Mes" && embarques.Any())
+                                {
+                                    <button type="button" class="lg-summary-btn emb" data-open-day="embarques">
+                                        <span class="left">
+                                            <span class="lg-summary-icon"><i class="fa-solid fa-truck"></i></span>
+                                            <span class="lg-summary-text"><strong>@embarques.Count embarque@(embarques.Count == 1 ? "" : "s")</strong><span>@embPiezas.ToString("N0") PZA</span></span>
+                                        </span>
+                                        <span class="lg-summary-count">@embarques.Count</span>
+                                    </button>
+                                }
                             }
                         </div>
 
                         @if (Model.Vista != "Mes")
                         {
-                            var programadasConHora = programaciones.Where(x => x.HoraProgramada.HasValue).OrderBy(x => x.HoraProgramada).ToList();
                             var embarquesConHora = embarques.Where(x => x.HoraProgramada.HasValue).OrderBy(x => x.HoraProgramada).ToList();
-                            var sinHoraProg = programaciones.Count(x => !x.HoraProgramada.HasValue);
                             var sinHoraEmb = embarques.Count(x => !x.HoraProgramada.HasValue);
                             <div class="lg-timed-layer">
-                                @{
-                                    var laneProg = 0;
-                                }
-                                @foreach (var e in programadasConHora)
-                                {
-                                    var left = LeftEvento(e);
-                                    var top = 2 + (laneProg % 2) * 38;
-                                    laneProg++;
-                                    <button type="button" draggable="true" class="lg-timed-event prog @(e.EsExpeditado ? "exp" : "")" style="left:@left.ToString("0.##", CultureInfo.InvariantCulture)%;top:@(top)px" data-open-day="programaciones" data-drag-type="programacion" data-programacion-id="@e.ListaCargaProgramacionID" data-cliente-id="@e.ClienteID" data-fecha="@e.FechaProgramada.ToString("yyyy-MM-dd")" data-hora="@(e.HoraProgramada?.ToString(@"hh\:mm") ?? "")" title="@e.HoraTexto · @(string.IsNullOrWhiteSpace(e.FolioRelease) ? e.Folio : e.FolioRelease) · Arrastra para reprogramar">
-                                        <span class="time">@e.HoraTexto</span>
-                                        <strong>@(string.IsNullOrWhiteSpace(e.FolioRelease) ? e.Folio : e.FolioRelease)</strong>
-                                        <span>@Math.Max(0, e.CantidadProgramada - e.CantidadGenerada).ToString("N0") PZA · Programación</span>
-                                    </button>
-                                }
                                 @{
                                     var laneEmb = 0;
                                 }
                                 @foreach (var e in embarquesConHora)
                                 {
                                     var left = LeftEvento(e);
-                                    var top = 80 + (laneEmb % 2) * 38;
+                                    var top = 6 + laneEmb * 39;
                                     laneEmb++;
-                                    <button type="button" draggable="@((e.Estatus == "Programado" || e.Estatus == "Preparando").ToString().ToLowerInvariant())" class="lg-timed-event emb @(e.EsExpeditado ? "exp" : "")" style="left:@left.ToString("0.##", CultureInfo.InvariantCulture)%;top:@(top)px" data-open-flow="@e.EmbarqueID" data-drag-type="embarque" data-embarque-id="@e.EmbarqueID" data-cliente-id="@e.ClienteID" data-fecha="@e.FechaProgramada.ToString("yyyy-MM-dd")" data-hora="@(e.HoraProgramada?.ToString(@"hh\:mm") ?? "")" data-row-version="@e.RowVersion" title="@e.HoraTexto · @e.Folio · @e.Estatus · Clic para abrir flujo">
+                                    <button type="button"
+                                            draggable="@((e.Estatus == "Programado" || e.Estatus == "Preparando").ToString().ToLowerInvariant())"
+                                            class="lg-timed-event emb @(e.EsExpeditado ? "exp" : "")"
+                                            style="left:@left.ToString("0.##", CultureInfo.InvariantCulture)%;top:@(top)px"
+                                            data-open-flow="@e.EmbarqueID"
+                                            data-drag-type="embarque"
+                                            data-embarque-id="@e.EmbarqueID"
+                                            data-cliente-id="@e.ClienteID"
+                                            data-fecha="@e.FechaProgramada.ToString("yyyy-MM-dd")"
+                                            data-hora="@(e.HoraProgramada?.ToString(@"hh\:mm") ?? "")"
+                                            data-row-version="@e.RowVersion"
+                                            data-puede-mover="@((e.Estatus == "Programado" || e.Estatus == "Preparando").ToString().ToLowerInvariant())"
+                                            title="@e.HoraTexto · @e.Folio · @e.Estatus · Clic para abrir · Arrastra para reprogramar">
                                         <span class="time">@e.HoraTexto</span>
                                         <strong>@e.Folio</strong>
                                         <span>@e.TotalPiezas.ToString("N0") PZA · @e.Estatus</span>
                                     </button>
                                 }
                             </div>
-                            @if (sinHoraProg > 0 || sinHoraEmb > 0)
+                            @if (sinHoraEmb > 0)
                             {
                                 <div class="lg-no-time-strip">
-                                    @if (sinHoraProg > 0)
-                                    {
-                                        <button type="button" class="lg-no-time-btn" data-open-day="programaciones"><i class="fa-solid fa-cart-flatbed"></i> @sinHoraProg programación@(sinHoraProg == 1 ? "" : "es") sin hora</button>
-                                    }
-                                    @if (sinHoraEmb > 0)
-                                    {
-                                        <button type="button" class="lg-no-time-btn" data-open-day="embarques"><i class="fa-solid fa-truck"></i> @sinHoraEmb embarque@(sinHoraEmb == 1 ? "" : "s") sin hora</button>
-                                    }
+                                    <button type="button" class="lg-no-time-btn" data-open-day="embarques"><i class="fa-solid fa-truck"></i> @sinHoraEmb embarque@(sinHoraEmb == 1 ? "" : "s") sin hora</button>
                                 </div>
                             }
-                        }
-                        else
-                        {
-                            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
-                                @if (programaciones.Any())
-                                {
-                                    <button type="button" class="lg-summary-btn prog" data-open-day="programaciones"><span class="left"><span class="lg-summary-icon"><i class="fa-solid fa-cart-flatbed"></i></span><span class="lg-summary-text"><strong>@programaciones.Count programación@(programaciones.Count == 1 ? "" : "es")</strong><span>@progPiezas.ToString("N0") PZA</span></span></span><span class="lg-summary-count">@programaciones.Count</span></button>
-                                }
-                                @if (embarques.Any())
-                                {
-                                    <button type="button" class="lg-summary-btn emb" data-open-day="embarques"><span class="left"><span class="lg-summary-icon"><i class="fa-solid fa-truck"></i></span><span class="lg-summary-text"><strong>@embarques.Count embarque@(embarques.Count == 1 ? "" : "s")</strong><span>@embPiezas.ToString("N0") PZA</span></span></span><span class="lg-summary-count">@embarques.Count</span></button>
-                                }
-                            </div>
                         }
 
                         <div class="lg-client-day-data">
@@ -2540,14 +2638,14 @@
 <div class="lg-modal-backdrop" id="modalClienteDia">
     <div class="lg-modal lg-day-modal">
         <div class="lg-modal-head">
-            <div><h2 id="dayTitulo">Operación del cliente</h2><p id="daySub">Releases, programaciones y embarques del día.</p></div>
+            <div><h2 id="dayTitulo">Operación del cliente</h2><p id="daySub">Planea Releases y continúa con el embarque desde el mismo calendario.</p></div>
             <button class="lg-close" type="button" data-close="modalClienteDia">✕</button>
         </div>
         <div class="lg-modal-body">
             <div class="lg-day-modal-toolbar">
                 <div class="lg-day-modal-tabs">
                     <button type="button" class="lg-day-tab active" data-day-tab="requerimientos">Releases <span id="cntReq">0</span></button>
-                    <button type="button" class="lg-day-tab" data-day-tab="programaciones">Programaciones <span id="cntProg">0</span></button>
+                    <button type="button" class="lg-day-tab" data-day-tab="programaciones">Listos para embarque <span id="cntProg">0</span></button>
                     <button type="button" class="lg-day-tab" data-day-tab="embarques">Embarques <span id="cntEmb">0</span></button>
                 </div>
                 <div class="lg-selected-count"><strong id="selectedReq">0</strong> release(s) seleccionados</div>
@@ -2558,8 +2656,7 @@
                     <label>Programar releases seleccionados</label>
                     <div style="font-size:8px;color:var(--lg-muted)">Usará la cantidad pendiente completa de cada Release.</div>
                 </div>
-                <div class="lg-field"><label>Fecha carga</label><input class="lg-input" type="date" id="bulkFecha" /></div>
-                <div class="lg-field"><label>Hora *</label><input class="lg-input" type="time" id="bulkHora" step="60" required /></div>
+                <div class="lg-field"><label>Día programado *</label><input class="lg-input" type="date" id="bulkFecha" min="@DateTime.Today.ToString("yyyy-MM-dd")" /></div>
                 <button class="lg-btn lg-btn-primary" type="button" id="btnProgramarSeleccionados"><i class="fa-solid fa-calendar-plus"></i> Programar seleccionados</button>
             </div>
 
@@ -2572,7 +2669,7 @@
 
             <section class="lg-day-list" data-day-list="programaciones">
                 <table class="lg-day-table">
-                    <thead><tr><th>Programación</th><th>Release / Parte</th><th>Fecha / Hora</th><th>Pendiente generar</th><th>Estatus</th><th style="width:120px">Acción</th></tr></thead>
+                    <thead><tr><th>Programación</th><th>Release / Parte</th><th>Día definido</th><th>Pendiente</th><th>Estatus</th><th style="width:135px">Acción logística</th></tr></thead>
                     <tbody id="dayProgBody"></tbody>
                 </table>
             </section>
@@ -2591,10 +2688,44 @@
 </div>
 
 
+
+<div class="lg-modal-backdrop" id="modalIniciarEmbarque">
+    <div class="lg-modal lg-modal-sm">
+        <div class="lg-modal-head">
+            <div><h2>Iniciar embarque</h2><p id="ieSub">Selecciona los Releases planeados que Logística tomará para este embarque.</p></div>
+            <button class="lg-close" type="button" data-close="modalIniciarEmbarque">✕</button>
+        </div>
+        <form id="formIniciarEmbarque">
+            <div class="lg-modal-body">
+                <input type="hidden" id="ieClienteID" name="ClienteID" />
+                <input type="hidden" id="ieFecha" name="FechaProgramada" />
+                <div class="lg-helpbox"><strong>Separación de responsabilidades:</strong> Planeación ya definió el día. Al iniciar el embarque, Logística únicamente toma esas programaciones y comienza su flujo operativo. No se abrirá el timeline automáticamente.</div>
+                <div class="lg-form-grid" style="margin-bottom:8px">
+                    <div class="lg-field"><label>Cliente</label><input class="lg-input" id="ieCliente" readonly /></div>
+                    <div class="lg-field"><label>Día planeado</label><input class="lg-input" id="ieFechaTexto" readonly /></div>
+                    <div class="lg-field"><label>Hora de carga *</label><input class="lg-input" type="time" id="ieHora" name="HoraProgramada" step="60" required /></div>
+                    <div class="lg-field"><label>Releases seleccionados</label><input class="lg-input" id="ieSeleccionados" readonly value="0" /></div>
+                    <div class="lg-field full"><label>Observaciones</label><textarea class="lg-input" style="height:62px;padding-top:7px" id="ieObservaciones" name="Observaciones" maxlength="500" placeholder="Opcional"></textarea></div>
+                </div>
+                <div style="border:1px solid var(--lg-line);border-radius:8px;overflow:hidden">
+                    <table class="lg-day-table">
+                        <thead><tr><th style="width:34px"><input type="checkbox" id="ieCheckAll" checked /></th><th>Release / Parte</th><th>Fecha requerida</th><th>Pendiente</th><th>Prioridad</th></tr></thead>
+                        <tbody id="ieBody"><tr><td colspan="5" style="text-align:center;color:var(--lg-muted);padding:18px"><i class="fa-solid fa-spinner fa-spin"></i> Cargando programaciones...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="lg-modal-foot">
+                <button class="lg-btn" type="button" data-close="modalIniciarEmbarque">Cancelar</button>
+                <button class="lg-btn lg-btn-primary" type="submit" id="btnCrearEmbarque"><i class="fa-solid fa-truck-fast"></i> Crear embarque</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="lg-modal-backdrop" id="modalAsignarHora">
     <div class="lg-modal lg-modal-sm">
         <div class="lg-modal-head">
-            <div><h2 id="horaTitulo">Asignar hora</h2><p id="horaSub">Define la hora operativa en la línea de tiempo.</p></div>
+            <div><h2 id="horaTitulo">Asignar hora al embarque</h2><p id="horaSub">La hora pertenece al embarque y determina su posición en la línea de tiempo.</p></div>
             <button class="lg-close" type="button" data-close="modalAsignarHora">✕</button>
         </div>
         <form id="formAsignarHora">
@@ -2629,8 +2760,7 @@
                 <input type="hidden" name="ParteID" id="pParteID" />
                 <div class="lg-form-grid">
                     <div class="lg-field"><label>Cantidad *</label><input class="lg-input" type="number" min="1" name="Cantidad" id="pCantidad" required /></div>
-                    <div class="lg-field"><label>Fecha carga *</label><input class="lg-input" type="date" name="FechaProgramadaCarga" id="pFecha" required /></div>
-                    <div class="lg-field"><label>Hora</label><input class="lg-input" type="time" name="HoraProgramadaCarga" id="pHora" step="60" /></div>
+                    <div class="lg-field"><label>Día programado *</label><input class="lg-input" type="date" name="FechaProgramadaCarga" id="pFecha" min="@DateTime.Today.ToString("yyyy-MM-dd")" required /></div>
                     <div class="lg-field full"><label>Observaciones</label><textarea class="lg-input" style="height:65px;padding-top:7px" name="Observaciones" maxlength="500"></textarea></div>
                 </div>
             </div>
@@ -2906,6 +3036,8 @@
         const urlGuardarSalida='@Url.Action("GuardarBorradorSalida", "LogisticaOperacion")';
         const urlConfirmarSalida='@Url.Action("ConfirmarSalidaConfigurada", "LogisticaOperacion")';
         const urlCerrar='@Url.Action("CerrarConEvidencia", "LogisticaOperacion")';
+        const urlProgramacionesEmbarque='@Url.Action("ObtenerProgramacionesParaEmbarque", "LogisticaOperacion")';
+        const urlCrearEmbarque='@Url.Action("CrearEmbarqueDesdeProgramaciones", "LogisticaOperacion")';
         const urlDetalleEmb='@Url.Action("Detalle", "LogisticaEmbarques")';
         const horaInicio=0;
         const horaFin=1440;
@@ -2952,14 +3084,13 @@
             const cliente=req[0]?.cliente||prog[0]?.cliente||emb[0]?.cliente||`Cliente ${cell.dataset.clienteId}`;
             const fecha=cell.dataset.fecha||'';
             document.getElementById('dayTitulo').textContent=cliente;
-            document.getElementById('daySub').textContent=`Operación del ${fecha} · selecciona los releases que quieras programar.`;
+            document.getElementById('daySub').textContent=`Operación del ${fecha} · programa Releases o inicia los embarques que ya estén listos.`;
             document.getElementById('bulkFecha').value=fecha;
-            document.getElementById('bulkHora').value='';
             document.getElementById('cntReq').textContent=req.length;
             document.getElementById('cntProg').textContent=prog.length;
             document.getElementById('cntEmb').textContent=emb.length;
             document.getElementById('selectedReq').textContent='0';
-            document.getElementById('checkAllReq').checked=false;
+            const checkAllReq=document.getElementById('checkAllReq');if(checkAllReq)checkAllReq.checked=false;
 
             const rb=document.getElementById('dayReqBody');rb.innerHTML='';
             if(!req.length)rb.innerHTML='<tr><td colspan="6" style="color:var(--lg-muted)">No hay Releases pendientes para este día.</td></tr>';
@@ -2975,15 +3106,15 @@
             });
 
             const pb=document.getElementById('dayProgBody');pb.innerHTML='';
-            if(!prog.length)pb.innerHTML='<tr><td colspan="5" style="color:var(--lg-muted)">No hay programaciones pendientes de generar.</td></tr>';
+            if(!prog.length)pb.innerHTML='<tr><td colspan="6" style="color:var(--lg-muted)">No hay Releases programados pendientes de iniciar embarque.</td></tr>';
             prog.forEach(x=>{
                 const tr=document.createElement('tr');
                 tr.innerHTML=`<td><div class="lg-row-title">${esc(x.folio||`PROG-${x.programacionId}`)}</div></td>
                 <td><div class="lg-row-title">${esc(x.folioRelease||'—')}</div><div class="lg-row-sub">${esc(x.numeroParte||'Sin parte')}</div></td>
-                <td>${esc(x.fechaProgramada||'—')} ${x.hora?esc(x.hora):'<span class="lg-mini-status red">Sin hora</span>'}</td>
+                <td>${esc(x.fechaProgramada||'—')}</td>
                 <td><strong>${number(x.cantidad)} PZA</strong></td>
-                <td><span class="lg-mini-status amber">${esc(x.estatus||'Por generar')}</span></td>
-                <td><button type="button" class="lg-btn btn-set-hour" data-tipo="programacion" data-id="${esc(x.programacionId)}" data-fecha="${esc(x.fechaProgramada||'')}" data-hora="${esc(x.hora||'')}">${x.hora?'Cambiar fecha/hora':'Asignar hora'}</button></td>`;
+                <td><span class="lg-mini-status amber">Listo para embarque</span></td>
+                <td><button type="button" class="lg-btn lg-btn-primary btn-start-shipment" data-cliente-id="${esc(x.clienteId)}" data-fecha="${esc(x.fechaProgramada||fecha)}"><i class="fa-solid fa-truck-fast"></i> Iniciar embarque</button></td>`;
                 pb.appendChild(tr);
             });
 
@@ -3008,19 +3139,18 @@
                 document.getElementById('pParteID').value=b.dataset.parteId||'';
                 document.getElementById('pCantidad').value=b.dataset.cantidad||'';
                 document.getElementById('pFecha').value=fecha;
-                document.getElementById('pHora').value='';
                 document.getElementById('progSub').textContent=`${b.dataset.folio||'Release'} · ${number(b.dataset.cantidad)} PZA`;
                 openModal('modalProgramar');
             }));
             eb.querySelectorAll('.btn-open-flow').forEach(b=>b.addEventListener('click',()=>{closeModal('modalClienteDia');openFlujo(b.dataset.embarqueId)}));
-            [...pb.querySelectorAll('.btn-set-hour'),...eb.querySelectorAll('.btn-set-hour')].forEach(b=>b.addEventListener('click',()=>{
-                document.getElementById('ahTipo').value=b.dataset.tipo||'';
+            eb.querySelectorAll('.btn-set-hour').forEach(b=>b.addEventListener('click',()=>{
+                document.getElementById('ahTipo').value='embarque';
                 document.getElementById('ahID').value=b.dataset.id||'';
                 document.getElementById('ahFecha').value=b.dataset.fecha||fecha;
                 document.getElementById('ahHora').value=b.dataset.hora||'';
                 document.getElementById('ahRowVersion').value=b.dataset.rowVersion||'';
                 document.getElementById('ahObs').value='';
-                document.getElementById('horaTitulo').textContent=b.dataset.tipo==='embarque'?(b.dataset.hora?'Cambiar fecha/hora del embarque':'Asignar hora al embarque'):(b.dataset.hora?'Cambiar fecha/hora de la programación':'Asignar hora a la programación');
+                document.getElementById('horaTitulo').textContent=b.dataset.hora?'Cambiar fecha/hora del embarque':'Asignar hora al embarque';
                 closeModal('modalClienteDia');
                 openModal('modalAsignarHora');
             }));
@@ -3034,14 +3164,12 @@
             const all=document.querySelectorAll('#dayReqBody .req-check').length;
             document.getElementById('checkAllReq').checked=all>0&&n===all;
         }
-
         document.addEventListener('click',e=>{
-            const flow=e.target.closest('[data-open-flow]');
-            if(flow){
+            const startShipment=e.target.closest('[data-start-shipment]');
+            if(startShipment){
                 e.preventDefault();
                 e.stopPropagation();
-                const embarqueId=flow.dataset.openFlow;
-                if(embarqueId)openFlujo(embarqueId);
+                abrirIniciarEmbarque(Number(startShipment.dataset.clienteId||0),startShipment.dataset.fecha||'');
                 return;
             }
             const btn=e.target.closest('[data-open-day]');
@@ -3049,7 +3177,7 @@
             const cell=btn.closest('.lg-client-day');
             if(cell)renderClienteDia(cell,btn.dataset.openDay||'requerimientos');
         });
-        document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('click',()=>setDayTab(btn.dataset.dayTab)));
+document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('click',()=>setDayTab(btn.dataset.dayTab)));
         document.getElementById('checkAllReq')?.addEventListener('change',e=>{
             document.querySelectorAll('#dayReqBody .req-check').forEach(x=>x.checked=e.target.checked);
             actualizarSeleccionReq();
@@ -3059,9 +3187,7 @@
             const seleccion=[...document.querySelectorAll('#dayReqBody .req-check:checked')];
             if(!seleccion.length){toast('Selecciona al menos un Release.','error');return}
             const fecha=document.getElementById('bulkFecha').value;
-            const hora=document.getElementById('bulkHora').value;
             if(!fecha){toast('Selecciona la fecha de carga.','error');return}
-            if(!hora){toast('Selecciona la hora de carga para colocar la programación en la línea de tiempo.','error');return}
             const ids=[...new Set(seleccion.map(x=>Number(x.dataset.releaseId||0)).filter(x=>x>0))];
             if(!ids.length){toast('No fue posible identificar los Releases seleccionados.','error');return}
             const btn=document.getElementById('btnProgramarSeleccionados');
@@ -3073,7 +3199,6 @@
                 fd.append('__RequestVerificationToken',token);
                 ids.forEach(id=>fd.append('releaseDetalleIds',String(id)));
                 fd.append('fechaProgramadaCarga',fecha);
-                fd.append('horaProgramadaCarga',hora);
                 const r=await fetch(urlProgramarSeleccionados,{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}});
                 let j;
                 try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
@@ -3091,18 +3216,169 @@
 
 
 
-        document.querySelectorAll('.lg-timed-event[draggable="true"]').forEach(card=>{
+        async function abrirIniciarEmbarque(clienteId,fecha){
+            if(!clienteId||!fecha){toast('No fue posible identificar el cliente o el día planeado.','error');return}
+            const body=document.getElementById('ieBody');
+            body.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--lg-muted);padding:18px"><i class="fa-solid fa-spinner fa-spin"></i> Cargando programaciones...</td></tr>';
+            document.getElementById('ieClienteID').value=clienteId;
+            document.getElementById('ieFecha').value=fecha;
+            document.getElementById('ieCliente').value='';
+            document.getElementById('ieFechaTexto').value=fecha;
+            document.getElementById('ieHora').value='';
+            document.getElementById('ieObservaciones').value='';
+            document.getElementById('ieSeleccionados').value='0';
+            openModal('modalIniciarEmbarque');
+            try{
+                const r=await fetch(`${urlProgramacionesEmbarque}?clienteId=${encodeURIComponent(clienteId)}&fecha=${encodeURIComponent(fecha)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible cargar las programaciones listas para embarque.');
+                document.getElementById('ieCliente').value=j.cliente||`Cliente ${clienteId}`;
+                document.getElementById('ieFechaTexto').value=j.fechaTexto||fecha;
+                body.innerHTML='';
+                (j.programaciones||[]).forEach(x=>{
+                    const tr=document.createElement('tr');
+                    tr.innerHTML=`<td><input type="checkbox" class="ie-check" name="ProgramacionIDs" value="${esc(x.listaCargaProgramacionID)}" checked></td>
+                    <td><div class="lg-row-title">${esc(x.folioRelease||`PROG-${x.listaCargaProgramacionID}`)}</div><div class="lg-row-sub">${esc(x.numeroParte||'Sin parte')}${x.descripcion?` · ${esc(x.descripcion)}`:''}${x.numeroOF?` · OF ${esc(x.numeroOF)}`:''}</div></td>
+                    <td>${esc(x.fechaRequeridaTexto||x.fechaRequerida||'—')}</td>
+                    <td><strong>${number(x.cantidadPendiente)} PZA</strong></td>
+                    <td>${x.esExpeditado?'<span class="lg-mini-status red">Expeditado</span>':'<span class="lg-mini-status blue">Planeado</span>'}</td>`;
+                    body.appendChild(tr);
+                });
+                if(!(j.programaciones||[]).length)body.innerHTML='<tr><td colspan="5" style="color:var(--lg-muted);padding:14px">No hay programaciones pendientes para iniciar embarque.</td></tr>';
+                document.getElementById('ieCheckAll').checked=(j.programaciones||[]).length>0;
+                actualizarSeleccionEmbarque();
+            }catch(err){body.innerHTML=`<tr><td colspan="5" style="color:var(--lg-red);padding:14px">${esc(err.message||'Error')}</td></tr>`;toast(err.message||'Error al cargar las programaciones.','error')}
+        }
+
+        function actualizarSeleccionEmbarque(){
+            const checks=[...document.querySelectorAll('#ieBody .ie-check')];
+            const seleccionados=checks.filter(x=>x.checked);
+            document.getElementById('ieSeleccionados').value=String(seleccionados.length);
+            const all=document.getElementById('ieCheckAll');
+            if(all){all.checked=checks.length>0&&seleccionados.length===checks.length;all.indeterminate=seleccionados.length>0&&seleccionados.length<checks.length}
+        }
+
+        document.getElementById('ieBody')?.addEventListener('change',e=>{if(e.target.classList.contains('ie-check'))actualizarSeleccionEmbarque()});
+        document.getElementById('ieCheckAll')?.addEventListener('change',e=>{document.querySelectorAll('#ieBody .ie-check').forEach(x=>x.checked=e.target.checked);actualizarSeleccionEmbarque()});
+        document.addEventListener('click',e=>{
+            const btn=e.target.closest('[data-start-shipment],.btn-start-shipment');
+            if(!btn)return;
+            e.preventDefault();e.stopPropagation();
+            const clienteId=btn.dataset.clienteId||btn.closest('.lg-client-day')?.dataset.clienteId;
+            const fecha=btn.dataset.fecha||btn.closest('.lg-client-day')?.dataset.fecha;
+            if(document.getElementById('modalClienteDia')?.classList.contains('show'))closeModal('modalClienteDia');
+            abrirIniciarEmbarque(clienteId,fecha);
+        });
+
+        document.getElementById('formIniciarEmbarque')?.addEventListener('submit',async e=>{
+            e.preventDefault();
+            const ids=[...document.querySelectorAll('#ieBody .ie-check:checked')].map(x=>x.value).filter(Boolean);
+            const hora=document.getElementById('ieHora').value;
+            if(!ids.length){toast('Selecciona al menos un Release planeado.','error');return}
+            if(!hora){toast('Captura la hora de carga para iniciar el embarque.','error');return}
+            const fd=new FormData();
+            fd.append('__RequestVerificationToken',token);
+            fd.append('ClienteID',document.getElementById('ieClienteID').value);
+            fd.append('FechaProgramada',document.getElementById('ieFecha').value);
+            fd.append('HoraProgramada',hora);
+            fd.append('Observaciones',document.getElementById('ieObservaciones').value||'');
+            ids.forEach(id=>fd.append('ProgramacionIDs',id));
+            const btn=document.getElementById('btnCrearEmbarque');const original=btn.innerHTML;
+            try{
+                btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Creando...';
+                const r=await fetch(urlCrearEmbarque,{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible crear el embarque.');
+                closeModal('modalIniciarEmbarque');
+                toast(j.mensaje||'Embarque creado correctamente. Ya aparece en el calendario; ábrelo cuando Logística quiera continuar.');
+                setTimeout(()=>location.reload(),650);
+            }catch(err){toast(err.message||'Error al crear el embarque.','error')}
+            finally{btn.disabled=false;btn.innerHTML=original}
+        });
+
+        let shipmentPress=null;
+        let shipmentWasDragged=false;
+
+        document.querySelectorAll('.lg-summary-btn.prog[draggable="true"]').forEach(card=>{
             card.addEventListener('dragstart',e=>{
                 dragCard=card;
                 card.classList.add('dragging');
                 e.dataTransfer.effectAllowed='move';
-                e.dataTransfer.setData('text/plain',card.dataset.dragType||'operacion');
+                e.dataTransfer.setData('text/plain','programacion-grupo');
             });
             card.addEventListener('dragend',()=>{
                 card.classList.remove('dragging');
                 document.querySelectorAll('.lg-client-day.drag-over').forEach(x=>x.classList.remove('drag-over'));
                 limpiarIndicadorDrop();
                 setTimeout(()=>{dragCard=null},0);
+            });
+        });
+
+        document.querySelectorAll('.lg-timed-event.emb[data-open-flow]').forEach(card=>{
+            card.addEventListener('pointerdown',e=>{
+                if(e.button!==0)return;
+                shipmentWasDragged=false;
+                shipmentPress={card,x:e.clientX,y:e.clientY,pointerId:e.pointerId};
+            });
+
+            card.addEventListener('pointermove',e=>{
+                if(!shipmentPress||shipmentPress.card!==card)return;
+                const dx=Math.abs(e.clientX-shipmentPress.x);
+                const dy=Math.abs(e.clientY-shipmentPress.y);
+                if(dx>6||dy>6)shipmentWasDragged=true;
+            });
+
+            card.addEventListener('pointerup',e=>{
+                if(e.button!==0||!shipmentPress||shipmentPress.card!==card)return;
+                const dx=Math.abs(e.clientX-shipmentPress.x);
+                const dy=Math.abs(e.clientY-shipmentPress.y);
+                const fueMovimiento=shipmentWasDragged||dx>6||dy>6||card.classList.contains('dragging');
+                shipmentPress=null;
+                if(fueMovimiento)return;
+                e.preventDefault();
+                e.stopPropagation();
+                const embarqueId=Number(card.dataset.openFlow||0);
+                if(embarqueId>0)openFlujo(embarqueId);
+            });
+
+            card.addEventListener('pointercancel',()=>{
+                shipmentPress=null;
+            });
+
+            card.addEventListener('click',e=>{
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            card.addEventListener('keydown',e=>{
+                if(e.key!=='Enter'&&e.key!==' ')return;
+                e.preventDefault();
+                const embarqueId=Number(card.dataset.openFlow||0);
+                if(embarqueId>0)openFlujo(embarqueId);
+            });
+
+            card.addEventListener('dragstart',e=>{
+                if(card.dataset.puedeMover!=='true'){
+                    e.preventDefault();
+                    return;
+                }
+                shipmentWasDragged=true;
+                dragCard=card;
+                card.classList.add('dragging');
+                e.dataTransfer.effectAllowed='move';
+                e.dataTransfer.setData('text/plain','embarque');
+            });
+
+            card.addEventListener('dragend',()=>{
+                shipmentWasDragged=true;
+                shipmentPress=null;
+                card.classList.remove('dragging');
+                document.querySelectorAll('.lg-client-day.drag-over').forEach(x=>x.classList.remove('drag-over'));
+                limpiarIndicadorDrop();
+                setTimeout(()=>{
+                    dragCard=null;
+                    shipmentWasDragged=false;
+                },120);
             });
         });
 
@@ -3113,7 +3389,8 @@
                 e.preventDefault();
                 e.dataTransfer.dropEffect='move';
                 cell.classList.add('drag-over');
-                mostrarIndicadorDrop(cell,e);
+                if(dragCard.dataset.dragType==='embarque')mostrarIndicadorDrop(cell,e);
+                else limpiarIndicadorDrop();
             });
             cell.addEventListener('dragleave',e=>{
                 if(!cell.contains(e.relatedTarget)){cell.classList.remove('drag-over');limpiarIndicadorDrop()}
@@ -3124,25 +3401,54 @@
                 cell.classList.remove('drag-over');
                 if(String(cell.dataset.clienteId)!==String(dragCard.dataset.clienteId)){toast('No puedes mover una operación a otro cliente.','error');return}
                 const fecha=cell.dataset.fecha;
+                limpiarIndicadorDrop();
+                if(dragCard.dataset.dragType==='programacion-grupo'){
+                    if(fecha===dragCard.dataset.fecha){toast('Las programaciones ya se encuentran en ese día.','error');return}
+                    const ids=(dragCard.dataset.programacionIds||'').split(',').map(x=>Number(x)).filter(x=>x>0);
+                    if(!ids.length){toast('No fue posible identificar las programaciones.','error');return}
+                    await moverGrupoProgramaciones(ids,fecha,dragCard);
+                    return;
+                }
                 const minutos=minutesFromDrop(cell,e.clientX);
                 const hora=horaDesdeMinutos(minutos);
-                limpiarIndicadorDrop();
                 const data=new URLSearchParams();
                 data.append('__RequestVerificationToken',token);
-                if(dragCard.dataset.dragType==='programacion'){
-                    data.append('ListaCargaProgramacionID',dragCard.dataset.programacionId||'');
-                    data.append('FechaProgramadaCarga',fecha);
-                    data.append('HoraProgramadaCarga',hora);
-                    await postMove(urlMoverProg,data,dragCard,cell,fecha,hora);
-                }else{
-                    data.append('EmbarqueID',dragCard.dataset.embarqueId||'');
-                    data.append('FechaCargaProgramada',fecha);
-                    data.append('HoraCargaProgramada',hora);
-                    data.append('RowVersion',dragCard.dataset.rowVersion||'');
-                    await postMove(urlMoverEmb,data,dragCard,cell,fecha,hora);
-                }
+                data.append('EmbarqueID',dragCard.dataset.embarqueId||'');
+                data.append('FechaCargaProgramada',fecha);
+                data.append('HoraCargaProgramada',hora);
+                data.append('RowVersion',dragCard.dataset.rowVersion||'');
+                await postMove(urlMoverEmb,data,dragCard,cell,fecha,hora);
             });
         });
+
+        async function moverGrupoProgramaciones(ids,fecha,card){
+            const hoy=new Date();hoy.setHours(0,0,0,0);
+            const destino=new Date(`${fecha}T00:00:00`);
+            if(destino<hoy){toast('No puedes mover la programación a un día que ya terminó.','error');return}
+            let movidas=0;
+            try{
+                card.classList.add('dragging');
+                card.style.pointerEvents='none';
+                for(const id of ids){
+                    const data=new URLSearchParams();
+                    data.append('__RequestVerificationToken',token);
+                    data.append('ListaCargaProgramacionID',String(id));
+                    data.append('FechaProgramadaCarga',fecha);
+                    const r=await fetch(urlMoverProg,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},body:data.toString()});
+                    let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                    if(!r.ok||!j.ok)throw new Error(j.mensaje||`No fue posible mover la programación ${id}.`);
+                    movidas++;
+                }
+                toast(`${movidas} programación(es) movida(s) al ${fecha}.`);
+                setTimeout(()=>location.reload(),450);
+            }catch(err){
+                toast(`${movidas} movida(s). ${err.message||'Error al mover las programaciones.'}`,'error');
+                if(movidas>0)setTimeout(()=>location.reload(),900);
+            }finally{
+                card.classList.remove('dragging');
+                card.style.pointerEvents='';
+            }
+        }
 
         async function postMove(url,data,card,cell,fecha,hora){
             try{
@@ -3156,6 +3462,7 @@
             }catch(err){toast(err.message||'Error al reprogramar.','error')}
             finally{card.style.opacity='';card.style.pointerEvents=''}
         }
+
 
         document.getElementById('formProgramar')?.addEventListener('submit',async e=>{
             e.preventDefault();const fd=new FormData(e.currentTarget);fd.append('__RequestVerificationToken',token);
@@ -3209,15 +3516,6 @@
                 document.getElementById('flowBody').style.display='';
             }catch(err){document.getElementById('flowLoading').innerHTML=`<div style="color:var(--lg-red)">${esc(err.message||'Error')}</div>`}
         }
-
-        document.querySelectorAll('.lg-timed-event.emb[data-open-flow]').forEach(card=>{
-            card.addEventListener('click',e=>{
-                if(card.classList.contains('dragging'))return;
-                e.preventDefault();
-                e.stopPropagation();
-                openFlujo(card.dataset.openFlow);
-            });
-        });
 
         function renderFlujo(f){
             document.getElementById('flowTitulo').textContent=f.folio||`Embarque ${f.embarqueID}`;
@@ -3344,7 +3642,6 @@
 
         document.getElementById('formAsignarHora')?.addEventListener('submit',async e=>{
             e.preventDefault();
-            const tipo=document.getElementById('ahTipo').value;
             const id=document.getElementById('ahID').value;
             const fecha=document.getElementById('ahFecha').value;
             const hora=document.getElementById('ahHora').value;
@@ -3353,21 +3650,12 @@
             const data=new URLSearchParams();
             data.append('__RequestVerificationToken',token);
             try{
-                let url;
-                if(tipo==='programacion'){
-                    url=urlMoverProg;
-                    data.append('ListaCargaProgramacionID',id);
-                    data.append('FechaProgramadaCarga',fecha);
-                    data.append('HoraProgramadaCarga',hora);
-                    if(obs)data.append('Observaciones',obs);
-                }else{
-                    url=urlMoverEmb;
-                    data.append('EmbarqueID',id);
-                    data.append('FechaCargaProgramada',fecha);
-                    data.append('HoraCargaProgramada',hora);
-                    data.append('RowVersion',document.getElementById('ahRowVersion').value||'');
-                    if(obs)data.append('Observaciones',obs);
-                }
+                const url=urlMoverEmb;
+                data.append('EmbarqueID',id);
+                data.append('FechaCargaProgramada',fecha);
+                data.append('HoraCargaProgramada',hora);
+                data.append('RowVersion',document.getElementById('ahRowVersion').value||'');
+                if(obs)data.append('Observaciones',obs);
                 const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},body:data.toString()});
                 let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status}.`)}
                 if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible guardar la hora.');

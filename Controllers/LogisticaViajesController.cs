@@ -187,6 +187,7 @@ OFFSET @Offset ROWS FETCH NEXT @TamanoPagina ROWS ONLY;";
         try
         {
             var operadorNombre = await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorUsuarioID, cancellationToken);
+            await ValidarDisponibilidadViajeAsync(cn, tx, model.FechaProgramada, model.HoraSalidaProgramada, model.UnidadID, model.OperadorUsuarioID, null, cancellationToken);
             if (model.RutaID.HasValue && model.RutaID.Value > 0)
             {
                 const string sqlRuta = "SELECT COUNT_BIG(*) FROM dbo.Logistica_Rutas WITH(UPDLOCK,HOLDLOCK) WHERE RutaID=@RutaID AND Activo=1;";
@@ -323,6 +324,7 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
             var actual = await ObtenerViajeParaActualizarAsync(cn, tx, model.ViajeID, cancellationToken) ?? throw new InvalidOperationException("El viaje no existe.");
             if (actual.Estatus != "Programado") throw new InvalidOperationException("Solo los viajes Programados pueden completar su preparación.");
             var operadorNombre = await ValidarRecursosInternosAsync(cn, tx, model.UnidadID, model.OperadorUsuarioID, cancellationToken);
+            await ValidarDisponibilidadViajeAsync(cn, tx, model.FechaProgramada, model.HoraSalidaProgramada, model.UnidadID, model.OperadorUsuarioID, model.ViajeID, cancellationToken);
             if (model.RutaID.HasValue && model.RutaID.Value > 0)
             {
                 const string sqlRuta = "SELECT COUNT_BIG(*) FROM dbo.Logistica_Rutas WITH(UPDLOCK,HOLDLOCK) WHERE RutaID=@RutaID AND Activo=1;";
@@ -1497,21 +1499,27 @@ AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
 
     }
 
+
     private static async Task ValidarViajeListoParaIniciarAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)
     {
         const string sql = @"
 SELECT TipoViaje,Origen,Destino,Motivo,FechaProgramada,HoraSalidaProgramada,RutaID,UnidadID,OperadorUsuarioID,Estatus
 FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
-WHERE ViajeID=@ViajeID AND Activo=1;";
+WHERE ViajeID=@ViajeID
+AND Activo=1;";
+
         string estatus, tipoViaje, origen, destino, motivo;
         DateTime? fechaProgramada;
         TimeSpan? horaSalida;
         int? rutaId, unidadId, operadorUsuarioId;
+
         await using (var cmd = new SqlCommand(sql, cn, tx))
         {
             cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
             if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
+
             estatus = Texto(rd, "Estatus");
             tipoViaje = Texto(rd, "TipoViaje");
             origen = Texto(rd, "Origen");
@@ -1523,8 +1531,11 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
             unidadId = EnteroNullable(rd, "UnidadID");
             operadorUsuarioId = EnteroNullable(rd, "OperadorUsuarioID");
         }
+
         if (estatus != "Programado") throw new InvalidOperationException("Solo un viaje Programado puede iniciar.");
+
         var faltantes = new List<string>();
+
         if (string.IsNullOrWhiteSpace(tipoViaje)) faltantes.Add("tipo de salida");
         if (string.IsNullOrWhiteSpace(origen)) faltantes.Add("origen");
         if (string.IsNullOrWhiteSpace(destino)) faltantes.Add("destino");
@@ -1534,31 +1545,83 @@ WHERE ViajeID=@ViajeID AND Activo=1;";
         if (!rutaId.HasValue || rutaId.Value <= 0) faltantes.Add("ruta");
         if (!unidadId.HasValue || unidadId.Value <= 0) faltantes.Add("unidad");
         if (!operadorUsuarioId.HasValue || operadorUsuarioId.Value <= 0) faltantes.Add("chofer");
-        if (faltantes.Count > 0) throw new InvalidOperationException($"El viaje todavía no está listo para iniciar. Completa: {string.Join(", ", faltantes.Distinct())}.");
+
+        if (faltantes.Count > 0)
+            throw new InvalidOperationException($"El viaje todavía no está listo para iniciar. Completa: {string.Join(", ", faltantes.Distinct())}.");
+
         const string sqlRuta = "SELECT COUNT_BIG(*) FROM dbo.Logistica_Rutas WHERE RutaID=@RutaID AND Activo=1;";
+
         await using (var cmd = new SqlCommand(sqlRuta, cn, tx))
         {
-            cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = rutaId.Value;
-            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) throw new InvalidOperationException("La ruta asignada ya no está activa.");
+            cmd.Parameters.Add("@RutaID", SqlDbType.Int).Value = rutaId!.Value;
+
+            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0)
+                throw new InvalidOperationException("La ruta asignada ya no está activa.");
         }
+
         const string sqlUnidad = "SELECT COUNT_BIG(*) FROM dbo.Logistica_Unidades WHERE UnidadID=@UnidadID AND Activo=1;";
+
         await using (var cmd = new SqlCommand(sqlUnidad, cn, tx))
         {
-            cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId.Value;
-            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) throw new InvalidOperationException("La unidad asignada ya no está activa.");
+            cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId!.Value;
+
+            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0)
+                throw new InvalidOperationException("La unidad asignada ya no está activa.");
         }
+
         const string sqlOperador = @"
 SELECT COUNT_BIG(*)
 FROM dbo.Usuarios U
 INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
 INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
-WHERE U.UsuarioID=@UsuarioID AND U.Activo=1 AND D.Activo=1
+WHERE U.UsuarioID=@UsuarioID
+AND U.Activo=1
+AND D.Activo=1
 AND UPPER(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'))=N'LOGISTICA'
 AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
+
         await using (var cmd = new SqlCommand(sqlOperador, cn, tx))
         {
-            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = operadorUsuarioId.Value;
-            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0) throw new InvalidOperationException("El chofer asignado ya no es un usuario activo de Logística con puesto de Chofer.");
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = operadorUsuarioId!.Value;
+
+            if (Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken)) <= 0)
+                throw new InvalidOperationException("El chofer asignado ya no es un usuario activo de Logística con puesto de Chofer.");
+        }
+
+        const string sqlOcupado = @"
+SELECT TOP(1)
+    ISNULL(Folio,N'') Folio,
+    CASE WHEN OperadorUsuarioID=@ChoferID THEN N'CHOFER' ELSE N'UNIDAD' END Recurso
+FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+AND ViajeID<>@ViajeID
+AND Estatus=N'En curso'
+AND FechaRegresoReal IS NULL
+AND
+(
+    OperadorUsuarioID=@ChoferID
+    OR UnidadID=@UnidadID
+)
+ORDER BY FechaSalidaReal;";
+
+        await using (var cmd = new SqlCommand(sqlOcupado, cn, tx))
+        {
+            cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+            cmd.Parameters.Add("@ChoferID", SqlDbType.Int).Value = operadorUsuarioId.Value;
+            cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId.Value;
+
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            if (await rd.ReadAsync(cancellationToken))
+            {
+                var folio = Texto(rd, "Folio");
+                var recurso = Texto(rd, "Recurso");
+
+                if (recurso == "CHOFER")
+                    throw new InvalidOperationException($"El chofer no puede iniciar este viaje porque todavía está en el viaje {folio}.");
+
+                throw new InvalidOperationException($"La unidad no puede salir porque todavía está ocupada por el viaje {folio}.");
+            }
         }
     }
     private static string NormalizarTipoViaje(string? valor, bool permitirVacio)
@@ -1578,8 +1641,81 @@ AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N'')))) LIKE N'%CHOFER%';";
         return permitidos.FirstOrDefault(x => string.Equals(x, valor, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
     }
 
- 
 
+    private static async Task ValidarDisponibilidadViajeAsync(SqlConnection cn, SqlTransaction tx, DateTime fecha, TimeSpan? horaSalida, int? unidadId, int? operadorUsuarioId, int? viajeExcluir, CancellationToken cancellationToken)
+    {
+        if (!horaSalida.HasValue || !unidadId.HasValue || unidadId.Value <= 0 || !operadorUsuarioId.HasValue || operadorUsuarioId.Value <= 0) return;
+
+        const string sqlEnCurso = @"
+SELECT TOP(1)
+    ISNULL(Folio,N'') Folio,
+    CASE WHEN OperadorUsuarioID=@ChoferID THEN N'CHOFER' ELSE N'UNIDAD' END Recurso
+FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+AND Estatus=N'En curso'
+AND FechaRegresoReal IS NULL
+AND (@ViajeExcluir IS NULL OR ViajeID<>@ViajeExcluir)
+AND
+(
+    OperadorUsuarioID=@ChoferID
+    OR UnidadID=@UnidadID
+)
+ORDER BY FechaSalidaReal;";
+
+        await using (var cmd = new SqlCommand(sqlEnCurso, cn, tx))
+        {
+            cmd.Parameters.Add("@ChoferID", SqlDbType.Int).Value = operadorUsuarioId.Value;
+            cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId.Value;
+            cmd.Parameters.Add("@ViajeExcluir", SqlDbType.Int).Value = Db(viajeExcluir);
+
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            if (await rd.ReadAsync(cancellationToken))
+            {
+                var folio = Texto(rd, "Folio");
+                var recurso = Texto(rd, "Recurso");
+
+                if (recurso == "CHOFER") throw new InvalidOperationException($"El chofer seleccionado todavía está realizando el viaje {folio}.");
+                throw new InvalidOperationException($"La unidad seleccionada todavía está realizando el viaje {folio}.");
+            }
+        }
+
+        const string sqlProgramado = @"
+SELECT TOP(1)
+    ISNULL(Folio,N'') Folio,
+    CASE WHEN OperadorUsuarioID=@ChoferID THEN N'CHOFER' ELSE N'UNIDAD' END Recurso
+FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
+WHERE Activo=1
+AND Estatus=N'Programado'
+AND (@ViajeExcluir IS NULL OR ViajeID<>@ViajeExcluir)
+AND FechaProgramada=@Fecha
+AND HoraSalidaProgramada=@Hora
+AND
+(
+    OperadorUsuarioID=@ChoferID
+    OR UnidadID=@UnidadID
+);";
+
+        await using (var cmd = new SqlCommand(sqlProgramado, cn, tx))
+        {
+            cmd.Parameters.Add("@ChoferID", SqlDbType.Int).Value = operadorUsuarioId.Value;
+            cmd.Parameters.Add("@UnidadID", SqlDbType.Int).Value = unidadId.Value;
+            cmd.Parameters.Add("@ViajeExcluir", SqlDbType.Int).Value = Db(viajeExcluir);
+            cmd.Parameters.Add("@Fecha", SqlDbType.Date).Value = fecha.Date;
+            cmd.Parameters.Add("@Hora", SqlDbType.Time).Value = horaSalida.Value;
+
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+            if (await rd.ReadAsync(cancellationToken))
+            {
+                var folio = Texto(rd, "Folio");
+                var recurso = Texto(rd, "Recurso");
+
+                if (recurso == "CHOFER") throw new InvalidOperationException($"El chofer ya tiene el viaje {folio} programado para {fecha:dd/MM/yyyy} a las {horaSalida.Value:hh\\:mm}.");
+                throw new InvalidOperationException($"La unidad ya tiene el viaje {folio} programado para {fecha:dd/MM/yyyy} a las {horaSalida.Value:hh\\:mm}.");
+            }
+        }
+    }
     private static string? NormalizarEstatusFiltro(string? valor)
     {
         valor = valor?.Trim();

@@ -1,0 +1,736 @@
+﻿@model List<ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm>
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Mis viajes | Logística";
+
+    var nombreChofer = ViewBag.NombreChofer as string ?? "Chofer";
+    var totalViajes = ViewBag.TotalViajes is int total ? total : Model.Count;
+    var programados = ViewBag.Programados is int prog ? prog : Model.Count(x => x.Estatus == "Programado");
+    var enCurso = ViewBag.EnCurso is int curso ? curso : Model.Count(x => x.Estatus == "En curso");
+    var completadosHoy = ViewBag.CompletadosHoy is int completos ? completos : Model.Count(x => x.Estatus == "Completado" && x.FechaRegresoReal.HasValue && x.FechaRegresoReal.Value.Date == DateTime.Today);
+
+    var viajesEnCurso = Model.Where(x => x.Estatus == "En curso").OrderBy(x => x.FechaSalidaReal ?? x.FechaProgramada).ToList();
+    var viajesProgramados = Model.Where(x => x.Estatus == "Programado").OrderBy(x => x.FechaProgramada).ThenBy(x => x.HoraSalidaProgramada).ToList();
+    var viajesCompletados = Model.Where(x => x.Estatus == "Completado").OrderByDescending(x => x.FechaRegresoReal ?? x.FechaProgramada).ToList();
+}
+@functions {
+    public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+
+    public static string EstadoClase(string? estatus)
+    {
+        return estatus switch
+        {
+            "En curso" => "estado-curso",
+            "Programado" => "estado-programado",
+            "Completado" => "estado-completado",
+            "Cancelado" => "estado-cancelado",
+            _ => "estado-neutral"
+        };
+    }
+
+    public static string FechaHoraProgramada(ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm viaje)
+    {
+        return viaje.HoraSalidaProgramada.HasValue
+            ? $"{viaje.FechaProgramada:dd/MM/yyyy} {viaje.HoraSalidaProgramada.Value:hh\\:mm}"
+            : viaje.FechaProgramada.ToString("dd/MM/yyyy");
+    }
+}
+
+@section Styles {
+    <style>
+        :root {
+            --azul: #004aad;
+            --azul-oscuro: #00347a;
+            --verde: #107c41;
+            --amarillo: #b54708;
+            --rojo: #b42318;
+            --gris: #667085;
+            --borde: #dbe4f0;
+            --fondo: #f3f6fa;
+            --texto: #172033
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            background: var(--fondo);
+            color: var(--texto);
+            font-family: "Segoe UI",Arial,sans-serif
+        }
+
+        .page {
+            max-width: 1700px;
+            margin: auto;
+            padding: 20px
+        }
+
+        .hero {
+            background: linear-gradient(135deg,var(--azul-oscuro),var(--azul));
+            color: #fff;
+            border-radius: 22px;
+            padding: 20px 22px;
+            margin-bottom: 14px;
+            box-shadow: 0 18px 42px rgba(0,74,173,.2)
+        }
+
+            .hero h1 {
+                margin: 0;
+                font-size: 1.65rem;
+                font-weight: 950
+            }
+
+            .hero p {
+                margin: 5px 0 0;
+                color: rgba(255,255,255,.86);
+                font-weight: 650
+            }
+
+        .hero-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+        .btn-hero {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 12px;
+            padding: 9px 13px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 900;
+            background: rgba(255,255,255,.12)
+        }
+
+            .btn-hero:hover {
+                background: #fff;
+                color: var(--azul)
+            }
+
+        .resumen-linea {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px 18px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            background: #fff;
+            border: 1px solid var(--borde);
+            border-radius: 14px;
+            color: var(--gris);
+            font-size: .78rem;
+            font-weight: 800
+        }
+
+            .resumen-linea strong {
+                color: var(--azul-oscuro);
+                font-size: .95rem;
+                font-weight: 950
+            }
+
+            .resumen-linea .en-curso strong {
+                color: var(--verde)
+            }
+
+        .panel {
+            background: #fff;
+            border: 1px solid var(--borde);
+            border-radius: 20px;
+            box-shadow: 0 10px 28px rgba(15,23,42,.06);
+            overflow: hidden;
+            margin-bottom: 16px
+        }
+
+        .panel-head {
+            min-height: 52px;
+            padding: 13px 17px;
+            background: #f8fbff;
+            border-bottom: 1px solid var(--borde);
+            color: var(--azul-oscuro);
+            font-weight: 950;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px
+        }
+
+            .panel-head small {
+                color: var(--gris);
+                font-weight: 800
+            }
+
+        .panel-body {
+            padding: 10px 14px 14px
+        }
+
+        .table-wrap {
+            overflow-x: auto
+        }
+
+        .viajes-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+            min-width: 980px
+        }
+
+            .viajes-table th {
+                padding: 7px 10px;
+                color: var(--gris);
+                font-size: .7rem;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+                text-align: left;
+                white-space: nowrap
+            }
+
+            .viajes-table td {
+                padding: 11px 10px;
+                border-top: 1px solid var(--borde);
+                border-bottom: 1px solid var(--borde);
+                background: #fff;
+                vertical-align: middle
+            }
+
+                .viajes-table td:first-child {
+                    border-left: 1px solid var(--borde);
+                    border-radius: 13px 0 0 13px
+                }
+
+                .viajes-table td:last-child {
+                    border-right: 1px solid var(--borde);
+                    border-radius: 0 13px 13px 0
+                }
+
+            .viajes-table tbody tr:hover td {
+                background: #f8fbff
+            }
+
+            .viajes-table tr.viaje-curso td:first-child {
+                border-left: 4px solid var(--verde)
+            }
+
+            .viajes-table tr.viaje-programado td:first-child {
+                border-left: 4px solid var(--azul)
+            }
+
+            .viajes-table tr.viaje-completado td:first-child {
+                border-left: 4px solid #98a2b3
+            }
+
+        .main {
+            color: var(--azul-oscuro);
+            font-weight: 950
+        }
+
+        .sub {
+            margin-top: 2px;
+            color: var(--gris);
+            font-size: .78rem;
+            font-weight: 650
+        }
+
+        .estado {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 6px 9px;
+            font-size: .72rem;
+            font-weight: 950;
+            white-space: nowrap
+        }
+
+        .estado-curso {
+            background: #ecfdf3;
+            color: var(--verde)
+        }
+
+        .estado-programado {
+            background: #eff6ff;
+            color: var(--azul)
+        }
+
+        .estado-completado {
+            background: #f2f4f7;
+            color: #475467
+        }
+
+        .estado-cancelado {
+            background: #fef3f2;
+            color: var(--rojo)
+        }
+
+        .estado-neutral {
+            background: #f2f4f7;
+            color: var(--gris)
+        }
+
+        .btn-abrir {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-width: 126px;
+            min-height: 42px;
+            border-radius: 11px;
+            padding: 9px 12px;
+            background: var(--azul);
+            color: #fff;
+            text-decoration: none;
+            font-weight: 950;
+            white-space: nowrap
+        }
+
+            .btn-abrir:hover {
+                background: var(--azul-oscuro);
+                color: #fff
+            }
+
+            .btn-abrir.en-curso {
+                background: var(--verde)
+            }
+
+                .btn-abrir.en-curso:hover {
+                    background: #0c6534
+                }
+
+        .empty {
+            padding: 34px 18px;
+            text-align: center;
+            color: var(--gris);
+            font-weight: 800
+        }
+
+            .empty i {
+                display: block;
+                margin-bottom: 8px;
+                font-size: 1.8rem;
+                color: #98a2b3
+            }
+
+        .alert {
+            border-radius: 14px;
+            font-weight: 800
+        }
+
+        .mobile-list {
+            display: none
+        }
+
+        .mobile-row {
+            border-bottom: 1px solid var(--borde);
+            padding: 13px 2px
+        }
+
+            .mobile-row:last-child {
+                border-bottom: 0
+            }
+
+        .mobile-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start
+        }
+
+        .mobile-route {
+            margin-top: 8px;
+            color: var(--texto);
+            font-size: .87rem;
+            font-weight: 800
+        }
+
+        .mobile-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px 10px;
+            margin-top: 8px;
+            color: var(--gris);
+            font-size: .76rem;
+            font-weight: 700
+        }
+
+        .mobile-action {
+            margin-top: 10px
+        }
+
+            .mobile-action .btn-abrir {
+                width: 100%
+            }
+
+        html[data-nsq-theme="dark"] {
+            --fondo: #08111e;
+            --texto: #edf3fb;
+            --gris: #9aabc1;
+            --borde: #2c3e55;
+            color-scheme: dark
+        }
+
+            html[data-nsq-theme="dark"] .panel,
+            html[data-nsq-theme="dark"] .resumen-linea,
+            html[data-nsq-theme="dark"] .viajes-table td {
+                background: #111c2d
+            }
+
+            html[data-nsq-theme="dark"] .panel-head {
+                background: #0d1828
+            }
+
+            html[data-nsq-theme="dark"] .viajes-table tbody tr:hover td {
+                background: #132338
+            }
+
+        @@media(max-width:800px) {
+            .page {
+                padding: 10px
+            }
+
+            .hero {
+                border-radius: 18px;
+                padding: 17px
+            }
+
+                .hero h1 {
+                    font-size: 1.4rem
+                }
+
+            .hero-actions {
+                width: 100%
+            }
+
+            .btn-hero {
+                flex: 1;
+                justify-content: center
+            }
+
+            .resumen-linea {
+                gap: 7px 13px;
+                padding: 9px 11px
+            }
+
+            .table-wrap {
+                display: none
+            }
+
+            .mobile-list {
+                display: block
+            }
+
+            .panel-body {
+                padding: 4px 13px 8px
+            }
+        }
+    </style>
+}
+
+<div class="page">
+    <section class="hero">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h1><i class="fa-solid fa-truck-fast me-2"></i>Mis viajes</h1>
+                <p>@nombreChofer · consulta tus viajes asignados y entra al que te corresponde atender.</p>
+            </div>
+            <div class="hero-actions">
+                <a href="@Url.Action("Index", "LogisticaChofer")" class="btn-hero">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Actualizar
+                </a>
+            </div>
+        </div>
+    </section>
+
+    @if (TempData["LogisticaOk"] != null)
+    {
+        <div class="alert alert-success">@TempData["LogisticaOk"]</div>
+    }
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["LogisticaError"]</div>
+    }
+
+    <div class="resumen-linea">
+        <span>Total <strong>@totalViajes</strong></span>
+        <span>Programados <strong>@programados</strong></span>
+        <span class="en-curso">En curso <strong>@enCurso</strong></span>
+        <span>Completados hoy <strong>@completadosHoy</strong></span>
+        <span><i class="fa-regular fa-calendar me-1"></i>@DateTime.Today.ToString("dd/MM/yyyy")</span>
+    </div>
+
+    @if (viajesEnCurso.Any())
+    {
+        <section class="panel">
+            <div class="panel-head">
+                <span><i class="fa-solid fa-location-arrow me-2"></i>Viaje en curso</span>
+                <small>@viajesEnCurso.Count activo@(viajesEnCurso.Count == 1 ? "" : "s")</small>
+            </div>
+            <div class="panel-body">
+                <div class="table-wrap">
+                    <table class="viajes-table">
+                        <thead>
+                            <tr>
+                                <th>Viaje</th>
+                                <th>Salida</th>
+                                <th>Origen / destino</th>
+                                <th>Unidad</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var viaje in viajesEnCurso)
+                            {
+                                <tr class="viaje-curso">
+                                    <td>
+                                        <div class="main">@viaje.Folio</div>
+                                        <div class="sub">@Txt(viaje.Motivo)</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@(viaje.FechaSalidaReal?.ToString("HH:mm") ?? "-")</div>
+                                        <div class="sub">@(viaje.FechaSalidaReal?.ToString("dd/MM/yyyy") ?? viaje.FechaProgramada.ToString("dd/MM/yyyy"))</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@Txt(viaje.Destino)</div>
+                                        <div class="sub">@Txt(viaje.Origen)</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@viaje.UnidadMostrar</div>
+                                        <div class="sub">@Txt(viaje.Ruta)</div>
+                                    </td>
+                                    <td>
+                                        <span class="estado @EstadoClase(viaje.Estatus)">
+                                            <i class="fa-solid fa-circle"></i>
+                                            @viaje.Estatus
+                                        </span>
+                                        @if (viaje.TieneIncidencia)
+                                        {
+                                            <div class="sub text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Con incidencia</div>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <a class="btn-abrir en-curso" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
+                                            <i class="fa-solid fa-arrow-right"></i>
+                                            Continuar
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mobile-list">
+                    @foreach (var viaje in viajesEnCurso)
+                    {
+                        <div class="mobile-row">
+                            <div class="mobile-top">
+                                <div>
+                                    <div class="main">@viaje.Folio</div>
+                                    <div class="sub">Salida @(viaje.FechaSalidaReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                </div>
+                                <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
+                            </div>
+                            <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                            <div class="mobile-meta">
+                                <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
+                                <span><i class="fa-solid fa-route me-1"></i>@Txt(viaje.Ruta)</span>
+                                @if (viaje.TieneIncidencia)
+                                {
+                                    <span class="text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                                }
+                            </div>
+                            <div class="mobile-action">
+                                <a class="btn-abrir en-curso" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                    Continuar viaje
+                                </a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+
+    <section class="panel">
+        <div class="panel-head">
+            <span><i class="fa-regular fa-clock me-2"></i>Próximos viajes</span>
+            <small>@viajesProgramados.Count pendiente@(viajesProgramados.Count == 1 ? "" : "s")</small>
+        </div>
+        <div class="panel-body">
+            @if (viajesProgramados.Any())
+            {
+                <div class="table-wrap">
+                    <table class="viajes-table">
+                        <thead>
+                            <tr>
+                                <th>Viaje</th>
+                                <th>Programado</th>
+                                <th>Origen / destino</th>
+                                <th>Unidad</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var viaje in viajesProgramados)
+                            {
+                                <tr class="viaje-programado">
+                                    <td>
+                                        <div class="main">@viaje.Folio</div>
+                                        <div class="sub">@Txt(viaje.Motivo)</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@FechaHoraProgramada(viaje)</div>
+                                        <div class="sub">Salida programada</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@Txt(viaje.Destino)</div>
+                                        <div class="sub">@Txt(viaje.Origen)</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@viaje.UnidadMostrar</div>
+                                        <div class="sub">@Txt(viaje.Ruta)</div>
+                                    </td>
+                                    <td>
+                                        <span class="estado @EstadoClase(viaje.Estatus)">
+                                            <i class="fa-solid fa-clock"></i>
+                                            @viaje.Estatus
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
+                                            <i class="fa-solid fa-arrow-right"></i>
+                                            Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mobile-list">
+                    @foreach (var viaje in viajesProgramados)
+                    {
+                        <div class="mobile-row">
+                            <div class="mobile-top">
+                                <div>
+                                    <div class="main">@viaje.Folio</div>
+                                    <div class="sub">@FechaHoraProgramada(viaje)</div>
+                                </div>
+                                <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
+                            </div>
+                            <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                            <div class="mobile-meta">
+                                <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
+                                <span><i class="fa-solid fa-route me-1"></i>@Txt(viaje.Ruta)</span>
+                            </div>
+                            <div class="mobile-action">
+                                <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                    Abrir viaje
+                                </a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty">
+                    <i class="fa-regular fa-calendar-check"></i>
+                    No tienes viajes programados pendientes.
+                </div>
+            }
+        </div>
+    </section>
+
+    @if (viajesCompletados.Any())
+    {
+        <section class="panel">
+            <div class="panel-head">
+                <span><i class="fa-solid fa-check-double me-2"></i>Completados recientes</span>
+                <small>Últimos 7 días</small>
+            </div>
+            <div class="panel-body">
+                <div class="table-wrap">
+                    <table class="viajes-table">
+                        <thead>
+                            <tr>
+                                <th>Viaje</th>
+                                <th>Regreso</th>
+                                <th>Destino</th>
+                                <th>Unidad</th>
+                                <th>Recorrido</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var viaje in viajesCompletados)
+                            {
+                                <tr class="viaje-completado">
+                                    <td>
+                                        <div class="main">@viaje.Folio</div>
+                                        <div class="sub">@Txt(viaje.Motivo)</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@(viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@Txt(viaje.Destino)</div>
+                                        <div class="sub">@Txt(viaje.Origen)</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@viaje.UnidadMostrar</div>
+                                    </td>
+                                    <td>
+                                        <div class="main">@(viaje.KilometrosUtilizados.HasValue ? $"{viaje.KilometrosUtilizados.Value:N0} km" : "-")</div>
+                                    </td>
+                                    <td class="text-end">
+                                        <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
+                                            <i class="fa-regular fa-eye"></i>
+                                            Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mobile-list">
+                    @foreach (var viaje in viajesCompletados)
+                    {
+                        <div class="mobile-row">
+                            <div class="mobile-top">
+                                <div>
+                                    <div class="main">@viaje.Folio</div>
+                                    <div class="sub">Regreso @(viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                </div>
+                                <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
+                            </div>
+                            <div class="mobile-route">@Txt(viaje.Destino)</div>
+                            <div class="mobile-meta">
+                                <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
+                                <span><i class="fa-solid fa-road me-1"></i>@(viaje.KilometrosUtilizados.HasValue ? $"{viaje.KilometrosUtilizados.Value:N0} km" : "-")</span>
+                            </div>
+                            <div class="mobile-action">
+                                <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
+                                    <i class="fa-regular fa-eye"></i>
+                                    Ver viaje
+                                </a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+</div>

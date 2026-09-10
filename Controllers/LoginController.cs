@@ -34,21 +34,22 @@ public class LoginController : Controller
 
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult Login()
+    public async Task<IActionResult> Login()
     {
         if (HttpContext.Session.GetInt32("UsuarioCambioPasswordID") != null)
-        {
             return RedirectToAction("CambiarPasswordInicial", "CuentaPassword");
-        }
 
-        if (HttpContext.Session.GetInt32("UsuarioID") != null)
+        var usuarioId = HttpContext.Session.GetInt32("UsuarioID");
+
+        if (usuarioId.HasValue && usuarioId.Value > 0)
         {
+            if (await UsuarioEsChoferAsync(usuarioId.Value))
+                return RedirectToAction("Index", "LogisticaChofer");
+
             var rolId = HttpContext.Session.GetInt32("RolID");
 
             if (rolId == 4)
-            {
                 return RedirectToAction("Index", "ProduccionOperador");
-            }
 
             return RedirectToAction("Index", "Menu");
         }
@@ -170,31 +171,24 @@ public class LoginController : Controller
         if (await DebeRedirigirCambioPasswordAsync(usuario.UsuarioID))
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
             HttpContext.Session.Remove("UsuarioID");
             HttpContext.Session.Remove("Username");
             HttpContext.Session.Remove("MenuUsuario");
-
             HttpContext.Session.SetInt32("UsuarioCambioPasswordID", usuario.UsuarioID);
             HttpContext.Session.SetString("UsernameCambioPassword", usuario.Username ?? "");
-
             TempData["InfoMessage"] = "Por seguridad, debes actualizar tu contraseña antes de ingresar al ERP.";
-
             return RedirectToAction("CambiarPasswordInicial", "CuentaPassword");
         }
 
         int rolId = await ObtenerRolIdPorUsuarioAsync(usuario.UsuarioID);
-
+        var esChofer = await UsuarioEsChoferAsync(usuario.UsuarioID);
         var perfilSesion = await ObtenerPerfilSesionUsuarioAsync(usuario.UsuarioID);
-
         var nombreMostrar = !string.IsNullOrWhiteSpace(perfilSesion?.NombreCompleto)
             ? perfilSesion.NombreCompleto
             : await ObtenerNombreMostrarPorUsuarioAsync(usuario.UsuarioID);
 
         if (string.IsNullOrWhiteSpace(nombreMostrar))
-        {
             nombreMostrar = usuario.Username;
-        }
 
         var rolSesion = !string.IsNullOrWhiteSpace(perfilSesion?.Rol)
             ? perfilSesion.Rol
@@ -202,75 +196,59 @@ public class LoginController : Controller
 
         var menuUsuario = await ObtenerMenuEfectivoPorUsuarioAsync(usuario.UsuarioID);
 
-        // Sesión
         HttpContext.Session.SetInt32("UsuarioID", usuario.UsuarioID);
         HttpContext.Session.SetString("Username", usuario.Username ?? "");
-
         HttpContext.Session.SetString("Rol", rolSesion ?? "");
         HttpContext.Session.SetString("NombreRol", rolSesion ?? "");
         HttpContext.Session.SetInt32("RolID", rolId);
-
         HttpContext.Session.SetString("NombreMostrar", nombreMostrar ?? usuario.Username ?? "");
         HttpContext.Session.SetString("NombreCompleto", nombreMostrar ?? usuario.Username ?? "");
-
         HttpContext.Session.SetString("Correo", perfilSesion?.Correo ?? "");
         HttpContext.Session.SetString("Email", perfilSesion?.Correo ?? "");
         HttpContext.Session.SetString("CorreoUsuario", perfilSesion?.Correo ?? "");
-
         HttpContext.Session.SetString("Telefono", perfilSesion?.Telefono ?? "");
         HttpContext.Session.SetString("TelefonoUsuario", perfilSesion?.Telefono ?? "");
-
         HttpContext.Session.SetString("DescripcionRol", perfilSesion?.DescripcionRol ?? "");
         HttpContext.Session.SetString("DescripcionDelRol", perfilSesion?.DescripcionRol ?? "");
         HttpContext.Session.SetString("RolDescripcion", perfilSesion?.DescripcionRol ?? "");
-
         HttpContext.Session.SetString("MenuUsuario", JsonConvert.SerializeObject(menuUsuario));
+        HttpContext.Session.SetString("EsChofer", esChofer ? "1" : "0");
 
-        // Autenticación por cookies
         var claims = new List<Claim>
-        {
-            // Identidad humana
-            new Claim(ClaimTypes.Name, nombreMostrar ?? usuario.Username ?? $"user:{usuario.UsuarioID}"),
-
-            // Identificador de usuario
-            new Claim("UsuarioID", usuario.UsuarioID.ToString()),
-            new Claim(ClaimTypes.NameIdentifier, usuario.UsuarioID.ToString()),
-
-            // Datos visibles
-            new Claim("Username", usuario.Username ?? ""),
-            new Claim("NombreMostrar", nombreMostrar ?? usuario.Username ?? ""),
-            new Claim("Correo", perfilSesion?.Correo ?? ""),
-            new Claim("Telefono", perfilSesion?.Telefono ?? ""),
-
-            // Rol
-            new Claim(ClaimTypes.Role, rolSesion ?? "Usuario"),
-            new Claim("Rol", rolSesion ?? "Usuario"),
-            new Claim("RolID", rolId.ToString()),
-            new Claim("DescripcionRol", perfilSesion?.DescripcionRol ?? "")
-        };
+    {
+        new Claim(ClaimTypes.Name,nombreMostrar??usuario.Username??$"user:{usuario.UsuarioID}"),
+        new Claim("UsuarioID",usuario.UsuarioID.ToString()),
+        new Claim(ClaimTypes.NameIdentifier,usuario.UsuarioID.ToString()),
+        new Claim("Username",usuario.Username??""),
+        new Claim("NombreMostrar",nombreMostrar??usuario.Username??""),
+        new Claim("Correo",perfilSesion?.Correo??""),
+        new Claim("Telefono",perfilSesion?.Telefono??""),
+        new Claim(ClaimTypes.Role,rolSesion??"Usuario"),
+        new Claim("Rol",rolSesion??"Usuario"),
+        new Claim("RolID",rolId.ToString()),
+        new Claim("DescripcionRol",perfilSesion?.DescripcionRol??""),
+        new Claim("EsChofer",esChofer?"1":"0")
+    };
 
         TempData["MostrarBienvenida"] = "true";
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
-
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
+        TempData["Bienvenida"] = $"Bienvenido, {nombreMostrar ?? usuario.Username}";
+
+        if (esChofer)
+            return RedirectToAction("Index", "LogisticaChofer");
+
         if (rolId == 4)
-        {
-            TempData["Bienvenida"] = $"Bienvenido, {nombreMostrar ?? usuario.Username}";
             return RedirectToAction("Index", "ProduccionOperador");
-        }
 
         if (rolId == 7)
-        {
             return RedirectToAction("Index", "Universidad");
-        }
 
-        TempData["Bienvenida"] = $"Bienvenido, {nombreMostrar ?? usuario.Username}";
         return RedirectToAction("Index", "Menu");
     }
-
     // ---------- OBTENER USUARIO POR USERNAME ----------
     private async Task<UsuarioModel?> ObtenerUsuarioActivoAsync(string username, string connectionString)
     {
@@ -1076,6 +1054,24 @@ public class LoginController : Controller
         }
     }
 
+    private async Task<bool> UsuarioEsChoferAsync(int usuarioId)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        const string sql = @"
+SELECT COUNT_BIG(*)
+FROM dbo.Usuarios U
+INNER JOIN dbo.Persona P ON P.PersonaID=U.PersonaID
+INNER JOIN dbo.Departamentos D ON D.DepartamentoID=U.DepartamentoID
+WHERE U.UsuarioID=@UsuarioID
+AND U.Activo=1
+AND ISNULL(D.Activo,0)=1
+AND UPPER(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(D.NombreDepartamento,N''))),N'Í',N'I'),N'Ó',N'O'))=N'LOGISTICA'
+AND UPPER(LTRIM(RTRIM(ISNULL(P.Puesto,N''))))=N'CHOFER';";
+        using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+        return Convert.ToInt64(await command.ExecuteScalarAsync()) > 0;
+    }
     // ---------- OBTENER ROL ID POR USUARIO ----------
     private async Task<int> ObtenerRolIdPorUsuarioAsync(int usuarioId)
     {
@@ -1156,16 +1152,22 @@ public class LoginController : Controller
     }
 
     [AllowAnonymous]
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
-        if (HttpContext.Session.GetInt32("UsuarioID") != null)
+        var usuarioId = HttpContext.Session.GetInt32("UsuarioID");
+
+        if (usuarioId.HasValue && usuarioId.Value > 0)
         {
+            if (await UsuarioEsChoferAsync(usuarioId.Value))
+                return RedirectToAction("Index", "LogisticaChofer");
+
             var rolId = HttpContext.Session.GetInt32("RolID");
 
             if (rolId == 4)
-            {
                 return RedirectToAction("Index", "ProduccionOperador");
-            }
+
+            if (rolId == 7)
+                return RedirectToAction("Index", "Universidad");
 
             return RedirectToAction("Index", "Menu");
         }
