@@ -417,20 +417,25 @@
             recalcularAumentosRelease();
         }
         function recalcularHorasPorCantidad() {
-            if (!cantidadInput || !horasInput || objetivoHora <= 0) return;
+            if (!cantidadInput || objetivoHora <= 0) {
+                if (formulaHoras) formulaHoras.textContent = '0';
+                return;
+            }
 
             const cantidad = cantidadTotalPrograma();
-            const horas = cantidad > 0 ? Math.ceil(cantidad / objetivoHora) : 0;
+            const horasSugeridas = cantidad > 0
+                ? Math.ceil(cantidad / objetivoHora)
+                : 0;
 
-            if (horas > 0) {
-                horasInput.value = horas.toFixed(0);
-
-                if (formulaHoras) {
-                    formulaHoras.textContent = horas.toFixed(0);
-                }
+            // V10.6: Cantidad / ObjetivoHora es SOLO una referencia visual.
+            // HorasProgramadas es una decision manual de Planeacion y nunca
+            // debe ser sobrescrita automaticamente por esta formula.
+            if (formulaHoras) {
+                formulaHoras.textContent = horasSugeridas > 0
+                    ? horasSugeridas.toFixed(0)
+                    : '0';
             }
         }
-
         function obtenerIntervaloOperativoJs(fecha) {
             const dia = new Date(fecha);
             dia.setHours(0, 0, 0, 0);
@@ -534,7 +539,7 @@
         function recalcularFin() {
             if (!horasInput || !finInput) return;
 
-            const horas = Math.ceil(toDecimal(horasInput.value));
+            const horas = toDecimal(horasInput.value);
             const base = construirFechaArranque();
 
             if (!base || horas <= 0) {
@@ -641,19 +646,10 @@
         trabajarDomingoInput?.addEventListener('change', recalcularFin);
 
         horasInput?.addEventListener('input', function () {
-            const horas = Math.ceil(toDecimal(horasInput.value));
-
-            if (horas > 0) {
-                horasInput.value = horas.toFixed(0);
-            }
-
-            if (formulaHoras) {
-                formulaHoras.textContent = horas > 0 ? horas.toFixed(0) : '0';
-            }
-
+            // V10.6: lo capturado por Planeacion es el valor canonico.
+            // No redondear ni sustituir por Cantidad / ObjetivoHora.
             recalcularFin();
         });
-
         inicioInput?.addEventListener('change', function () {
             normalizarInicioCambioArranque();
             actualizarAvisoHorarioPasado();
