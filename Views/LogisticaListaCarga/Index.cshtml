@@ -402,7 +402,7 @@
             color: var(--danger)
         }
 
-        .status-generated {
+        .status-programmed {
             background: var(--purpleBg);
             color: var(--purple)
         }
@@ -866,30 +866,6 @@
                 line-height: 1.25
             }
 
-        .btn-generate-group {
-            background: var(--ok);
-            border-color: var(--ok);
-            color: #fff
-        }
-
-            .btn-generate-group:hover {
-                background: var(--ok2);
-                border-color: var(--ok2);
-                color: #fff
-            }
-
-        .global-generate {
-            background: #fff;
-            border-color: #a8cbb9;
-            color: var(--ok)
-        }
-
-            .global-generate:hover {
-                background: var(--okBg);
-                border-color: #7fba9d;
-                color: var(--ok)
-            }
-
         .dialog-backdrop {
             display: none;
             position: fixed;
@@ -1290,17 +1266,17 @@
     <div class="page">
         <div class="header">
             <div class="header-left">
-                <a class="back-main" asp-controller="LogisticaEmbarques" asp-action="Index">
+                <a class="back-main" asp-controller="LogisticaOperacion" asp-action="Index">
                     <span class="back-icon">←</span>
                     <span>
                         <small>REGRESAR A</small>
-                        <strong>Logística</strong>
+                        <strong>Centro Operativo</strong>
                     </span>
                 </a>
 
                 <div class="header-title">
                     <h1>Lista de carga semanal</h1>
-                    <p>Programa cantidades por cliente y parte. El sistema asigna los Releases internamente.</p>
+                    <p>Consulta la demanda y programa el día de carga por cliente y parte. Los embarques continúan desde el Centro Operativo.</p>
                 </div>
             </div>
 
@@ -1393,7 +1369,6 @@
                 <option value="expeditado">Con expeditados</option>
                 <option value="pendiente">Con piezas sin programar</option>
                 <option value="programado">Con programación</option>
-                <option value="generar">Por generar embarque</option>
             </select>
 
             <button type="button" class="btn btn-sm" id="btnExpandir">Expandir todos</button>
@@ -1404,23 +1379,9 @@
             <div class="section-head">
                 <div>
                     <h2>Programación por cliente · @Model.SemanaTexto</h2>
-                    <small>Programa las partes y genera cada embarque por cliente, fecha de carga y criticidad.</small>
+                    <small>Define el día de carga por cliente y parte. La creación del embarque continúa desde el Centro Operativo.</small>
                 </div>
 
-                @if (Model.ListaCargaSemanaID.HasValue && Model.SemanaAbierta)
-                {
-                    <form method="post" asp-controller="LogisticaListaCarga" asp-action="GenerarEmbarques" class="js-generar-form" style="margin:0">
-                        @Html.AntiForgeryToken()
-
-                        <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
-                        <input type="hidden" name="Anio" value="@Model.Anio" />
-                        <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
-
-                        <button type="submit" class="btn global-generate" @(Model.TieneProgramacionSinGenerar ? null : "disabled")>
-                            Generar todos · @Model.TotalPendienteGenerar.ToString("N0") PZA
-                        </button>
-                    </form>
-                }
             </div>
 
             <div class="clients">
@@ -1432,7 +1393,6 @@
                     var totalProgramado = grupo.Sum(x => x.TotalProgramado);
                     var totalPendiente = grupo.Sum(x => x.TotalSinProgramar);
                     var totalEnviado = grupo.Sum(x => x.TotalEnviado);
-                    var totalGenerar = grupo.Sum(x => x.TotalPendienteGenerar);
 
                     var dias = grupo
                     .SelectMany(x => x.DiasHabituales)
@@ -1447,36 +1407,12 @@
 
                     var search = (grupo.Key.Cliente + " " + string.Join(" ", grupo.Select(x => x.Referencia + " " + x.Designacion))).ToLowerInvariant();
 
-                    var programacionesPendientesGenerar = grupo
-                    .SelectMany(fila => fila.Programaciones
-                    .Where(p => p.Activo && !string.Equals(p.Estatus, "Cancelada", StringComparison.OrdinalIgnoreCase))
-                    .Select(p => new
-                    {
-                        Fila = fila,
-                        Programacion = p,
-                        PendienteGenerar = Math.Max(0, p.CantidadProgramada - p.CantidadGeneradaEmbarque),
-                        Criticidad = p.FechaRequeridaOriginal.Date < Model.FechaInicio.Date ? "Expeditado" : "Programado"
-                    }))
-                    .Where(x => x.PendienteGenerar > 0)
-                    .ToList();
-
-                    var gruposParaEmbarque = programacionesPendientesGenerar
-                    .GroupBy(x => new
-                    {
-                        FechaCarga = x.Programacion.FechaProgramadaCarga.Date,
-                        x.Criticidad
-                    })
-                    .OrderBy(x => x.Key.FechaCarga)
-                    .ThenByDescending(x => x.Key.Criticidad == "Expeditado")
-                    .ToList();
 
                     <div class="client-accordion @(totalAtraso > 0 ? "has-exp" : "")"
                          data-search="@search"
                          data-expeditado="@(totalAtraso > 0 ? "1" : "0")"
                          data-pendiente="@(totalPendiente > 0 ? "1" : "0")"
-                         data-programado="@(totalProgramado > 0 ? "1" : "0")"
-                         data-generar="@(totalGenerar > 0 ? "1" : "0")">
-
+                         data-programado="@(totalProgramado > 0 ? "1" : "0")">
                         <button type="button" class="client-head js-client-toggle">
                             <div class="client-head-inner">
                                 <div>
@@ -1529,81 +1465,6 @@
                                 <span>Programado: <strong>@totalProgramado.ToString("N0")</strong> · Sin programar: <strong>@totalPendiente.ToString("N0")</strong></span>
                             </div>
 
-                            @if (gruposParaEmbarque.Count > 0)
-                            {
-                                <div class="shipment-zone">
-                                    <div class="shipment-zone-title">
-                                        <strong>Embarques listos para generar</strong>
-                                        <span>Se agrupan por cliente + fecha de carga + criticidad.</span>
-                                    </div>
-                                    <div class="shipment-groups">
-                                        @foreach (var grupoEmbarque in gruposParaEmbarque)
-                                        {
-                                            var totalGrupoEmbarque = grupoEmbarque.Sum(x => x.PendienteGenerar);
-                                            var partesGrupoEmbarque = grupoEmbarque
-                                            .GroupBy(x => new { x.Fila.ParteID, x.Fila.Referencia, x.Fila.Designacion })
-                                            .Select(x => new
-                                            {
-                                                x.Key.ParteID,
-                                                x.Key.Referencia,
-                                                x.Key.Designacion,
-                                                Cantidad = x.Sum(y => y.PendienteGenerar)
-                                            })
-                                            .OrderBy(x => x.Referencia)
-                                            .ToList();
-                                            var esExpeditadoGrupo = string.Equals(grupoEmbarque.Key.Criticidad, "Expeditado", StringComparison.OrdinalIgnoreCase);
-
-                                            <div class="shipment-group @(esExpeditadoGrupo ? "exp" : "")">
-                                                <div class="shipment-group-head">
-                                                    <div class="shipment-group-title">
-                                                        <strong>@grupoEmbarque.Key.FechaCarga.ToString("dddd dd/MM", new CultureInfo("es-MX")) · @grupoEmbarque.Key.Criticidad</strong>
-                                                        <span>@partesGrupoEmbarque.Count referencia(s) · @grupoEmbarque.Count() programación(es)</span>
-                                                    </div>
-                                                    <div class="shipment-group-total">
-                                                        <strong>@totalGrupoEmbarque.ToString("N0")</strong>
-                                                        <span>PZA</span>
-                                                    </div>
-                                                </div>
-
-                                                <div class="shipment-lines">
-                                                    @foreach (var parteEmbarque in partesGrupoEmbarque)
-                                                    {
-                                                        <div class="shipment-line">
-                                                            <span class="ref" title="@parteEmbarque.Referencia">@parteEmbarque.Referencia</span>
-                                                            <span class="desc" title="@parteEmbarque.Designacion">@parteEmbarque.Designacion</span>
-                                                            <span class="qty">@parteEmbarque.Cantidad.ToString("N0")</span>
-                                                        </div>
-                                                    }
-                                                </div>
-
-                                                <div class="shipment-group-foot">
-                                                    <small>La forma de envío se definirá después en el embarque.</small>
-                                                    @if (Model.SemanaAbierta && Model.ListaCargaSemanaID.HasValue)
-                                                    {
-                                                        <form method="post" asp-controller="LogisticaListaCarga" asp-action="GenerarEmbarques" class="js-generar-form js-generar-grupo" style="margin:0">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
-                                                            <input type="hidden" name="Anio" value="@Model.Anio" />
-                                                            <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
-                                                            @foreach (var itemProgramacion in grupoEmbarque)
-                                                            {
-                                                                <input type="hidden" name="ProgramacionIDs" value="@itemProgramacion.Programacion.ListaCargaProgramacionID" />
-                                                            }
-                                                            <button type="submit" class="btn btn-sm btn-generate-group"
-                                                                    data-cliente="@grupo.Key.Cliente"
-                                                                    data-fecha="@grupoEmbarque.Key.FechaCarga.ToString("dd/MM/yyyy")"
-                                                                    data-criticidad="@grupoEmbarque.Key.Criticidad"
-                                                                    data-cantidad="@totalGrupoEmbarque">
-                                                                Generar embarque
-                                                            </button>
-                                                        </form>
-                                                    }
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-                            }
 
                             <div class="table-wrap">
                                 <table class="parts">
@@ -1725,15 +1586,9 @@
                                                         <span style="width:@porcentajeProgramado"></span>
                                                     </div>
 
-                                                    @if (fila.TotalPendienteGenerar > 0)
+                                                    @if (fila.TotalProgramado > 0)
                                                     {
-                                                        <span class="track-sub">
-                                                            Generar @fila.TotalPendienteGenerar.ToString("N0")
-                                                        </span>
-                                                    }
-                                                    else if (fila.TotalProgramado > 0)
-                                                    {
-                                                        <span class="track-sub ok">Generado</span>
+                                                        <span class="track-sub ok">Programado</span>
                                                     }
                                                 </td>
 
@@ -1786,16 +1641,12 @@
                                                                 data-sin-programar="@fila.TotalSinProgramar"
                                                                 data-semana-inicio="@Model.FechaInicio.ToString("yyyy-MM-dd")"
                                                                 data-dias='@diasJson'>
-                                                            Programar
+                                                            Programar día
                                                         </button>
-                                                    }
-                                                    else if (fila.TotalPendienteGenerar > 0)
-                                                    {
-                                                        <span class="track-sub warn">Por generar</span>
                                                     }
                                                     else if (fila.TotalProgramado > 0)
                                                     {
-                                                        <span class="status status-generated">Generado</span>
+                                                        <span class="status status-programmed">Programado</span>
                                                     }
                                                     else
                                                     {
@@ -1851,7 +1702,7 @@
 
                     <div class="dialog-head">
                         <div>
-                            <h3 id="prTitulo">Programar carga</h3>
+                            <h3 id="prTitulo">Programar día de carga</h3>
                             <small id="prSubtitulo"></small>
                         </div>
 
@@ -2052,11 +1903,6 @@
                         visible=
                             visible&&
                             item.dataset.programado==='1';
-                    }
-                    else if(tipo==='generar'){
-                        visible=
-                            visible&&
-                            item.dataset.generar==='1';
                     }
 
                     item.style.display=
@@ -2891,7 +2737,7 @@
 
                 if(prTitulo){
                     prTitulo.textContent=
-                        'Programar carga · '+
+                        'Programar día de carga · '+
                         cliente;
                 }
 
@@ -3136,68 +2982,6 @@
                         }
                     });
 
-            document
-                .querySelectorAll(
-                    '.js-generar-form')
-                .forEach(formGenerar=>{
-
-                    formGenerar
-                        .addEventListener(
-                            'submit',
-                            e=>{
-
-                                const boton=
-                                    formGenerar
-                                        .querySelector(
-                                            'button[type="submit"]');
-
-                                let mensajeConfirmacion=
-                                    '¿Generar todos los embarques pendientes de la programación?';
-
-                                if(
-                                    formGenerar
-                                        .classList
-                                        .contains('js-generar-grupo')&&
-                                    boton){
-
-                                    const cliente=
-                                        boton.dataset.cliente||
-                                        '';
-
-                                    const fecha=
-                                        boton.dataset.fecha||
-                                        '';
-
-                                    const criticidad=
-                                        boton.dataset.criticidad||
-                                        '';
-
-                                    const cantidad=
-                                        nf(
-                                            boton.dataset.cantidad);
-
-                                    mensajeConfirmacion=
-                                        `¿Generar este embarque?\n\nCliente: ${cliente}\nFecha de carga: ${fecha}\nCriticidad: ${criticidad}\nCantidad: ${cantidad} PZA`;
-                                }
-
-                                if(
-                                    !confirm(
-                                        mensajeConfirmacion)){
-
-                                    e.preventDefault();
-
-                                    return;
-                                }
-
-                                if(boton){
-                                    boton.disabled=
-                                        true;
-
-                                    boton.textContent=
-                                        'Generando...';
-                                }
-                            });
-                });
 
             document
                 .addEventListener(

@@ -2,11 +2,30 @@
 @model LogisticaIndexVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Embarques";
+    ViewData["Title"] = "Embarques · Vista lista";
     var periodo = ViewBag.Periodo as string ?? "hoy";
     var mes = ViewBag.MesSeleccionado is int m ? m : DateTime.Today.Month;
     var anio = ViewBag.AnioSeleccionado is int a ? a : DateTime.Today.Year;
-    var grupos = (Model.Demandas ?? new List<LogisticaDemandaVm>()).Where(x => x.PendienteProgramar > 0).GroupBy(x => new { ClienteID = x.ClienteID ?? 0, Cliente = x.Cliente }).OrderBy(x => x.Key.Cliente).ToList();
+    var programaciones = (Model.Programaciones ?? new List<LogisticaOperacionEventoVm>())
+        .OrderBy(x => x.FechaProgramada)
+        .ThenBy(x => x.HoraProgramada ?? TimeSpan.Zero)
+        .ThenBy(x => x.Cliente)
+        .ThenBy(x => x.EventoID)
+        .ToList();
+    var gruposProgramacion = programaciones
+        .GroupBy(x => new { x.ClienteID, x.Cliente, Fecha = x.FechaProgramada.Date })
+        .OrderBy(x => x.Key.Fecha)
+        .ThenBy(x => x.Key.Cliente)
+        .ToList();
+    var demandas = (Model.Demandas ?? new List<LogisticaDemandaVm>())
+        .Where(x => x.PendienteProgramar > 0)
+        .ToList();
+    var gruposDemanda = demandas
+        .GroupBy(x => new { ClienteID = x.ClienteID ?? 0, x.Cliente })
+        .OrderBy(x => x.Key.Cliente)
+        .ToList();
+    int PendienteProgramacion(LogisticaOperacionEventoVm p) => Math.Max(0, p.CantidadProgramada - p.CantidadGenerada);
+    bool EsExpeditadaProgramacion(LogisticaOperacionEventoVm p) => string.Equals(p.Criticidad, "Expeditado", StringComparison.OrdinalIgnoreCase);
     string Badge(string e) => e switch
     {
         "Programado" => "bg-primary",
@@ -22,6 +41,9 @@
     DateTime FechaCargaDemanda(LogisticaDemandaVm d) => (d.FechaCarga ?? d.FechaEntrega.AddDays(-1)).Date;
     bool EsExpeditadaDemanda(LogisticaDemandaVm d) => FechaCargaDemanda(d) < DateTime.Today;
     bool EsExpeditadoEmbarque(LogisticaEmbarqueResumenVm e) => e.Estatus is not "Entregado" and not "Cancelado" && e.FechaCargaProgramada.HasValue && e.FechaCargaProgramada.Value.Date < DateTime.Today;
+    var piezasProgramadasPendientes = programaciones.Sum(x => (long)PendienteProgramacion(x));
+    var expeditadosProgramacion = programaciones.Count(EsExpeditadaProgramacion);
+    var expeditadosEmbarque = Model.Embarques.Count(EsExpeditadoEmbarque);
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
@@ -29,10 +51,14 @@
 <style>
     :root {
         --lg-blue: #173a7a;
+        --lg-blue-2: #2456a4;
         --lg-text: #172033;
         --lg-muted: #6d7888;
         --lg-border: #dce4ee;
         --lg-soft: #f6f8fb;
+        --lg-green: #198754;
+        --lg-red: #dc3545;
+        --lg-amber: #b7791f;
         --lg-shadow: 0 8px 24px rgba(22,42,75,.06)
     }
 
@@ -89,6 +115,24 @@
             align-items: center;
             border-radius: 8px;
             font-weight: 600
+        }
+
+    .view-switch {
+        display: inline-flex;
+        border: 1px solid var(--lg-border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff
+    }
+
+        .view-switch .btn {
+            border: 0;
+            border-radius: 0
+        }
+
+        .view-switch .active {
+            background: var(--lg-blue);
+            color: #fff
         }
 
     .summary {
@@ -188,7 +232,17 @@
         font-size: .73rem
     }
 
-    .client {
+    .note {
+        margin-bottom: 11px;
+        padding: 9px 11px;
+        border: 1px dashed #cbd8e6;
+        border-radius: 9px;
+        background: #f8fbff;
+        color: #56667b;
+        font-size: .73rem
+    }
+
+    .group-card {
         overflow: hidden;
         margin-bottom: 10px;
         border: 1px solid #d9e2ec;
@@ -196,9 +250,13 @@
         box-shadow: 0 3px 12px rgba(22,42,75,.025)
     }
 
-    .client-head {
+        .group-card.exp {
+            border-left: 3px solid var(--lg-red)
+        }
+
+    .group-head {
         display: grid;
-        grid-template-columns: minmax(180px,1.5fr) 100px 120px 125px 125px auto;
+        grid-template-columns: minmax(190px,1.6fr) 110px 110px 135px 120px auto;
         gap: 10px;
         align-items: center;
         padding: 10px 12px;
@@ -206,7 +264,7 @@
         border-bottom: 1px solid #e6ebf1
     }
 
-    .client-name {
+    .group-name {
         color: #1d2a3b;
         font-size: .88rem;
         font-weight: 800
@@ -264,8 +322,8 @@
             background: #f4f8fc
         }
 
-    .exp {
-        color: #dc3545;
+    .exp-text {
+        color: var(--lg-red);
         font-weight: 800
     }
 
@@ -302,31 +360,178 @@
         text-transform: uppercase
     }
 
-    .note {
-        margin-bottom: 11px;
-        padding: 9px 11px;
-        border: 1px dashed #cbd8e6;
-        border-radius: 9px;
-        background: #f8fbff;
-        color: #56667b;
-        font-size: .73rem
+    .action-stack {
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+        flex-wrap: wrap
     }
+
+    .priority {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 7px;
+        border-radius: 999px;
+        font-size: .64rem;
+        font-weight: 800
+    }
+
+        .priority.normal {
+            background: #eaf1fb;
+            color: #234d88
+        }
+
+        .priority.exp {
+            background: #fdecec;
+            color: #a92525
+        }
+
+    .modal-backdrop-lg {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(16,25,40,.58);
+        z-index: 2050
+    }
+
+        .modal-backdrop-lg.show {
+            display: flex
+        }
+
+    .modal-card-lg {
+        width: min(880px,96vw);
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 24px 70px rgba(0,0,0,.25)
+    }
+
+    .modal-card-sm {
+        width: min(520px,96vw)
+    }
+
+    .modal-head-lg, .modal-foot-lg {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 13px 15px
+    }
+
+    .modal-head-lg {
+        border-bottom: 1px solid var(--lg-border)
+    }
+
+    .modal-foot-lg {
+        border-top: 1px solid var(--lg-border)
+    }
+
+    .modal-head-lg h2 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--lg-text)
+    }
+
+    .modal-head-lg p {
+        margin: 2px 0 0;
+        font-size: .72rem;
+        color: var(--lg-muted)
+    }
+
+    .modal-body-lg {
+        padding: 14px 15px;
+        overflow: auto
+    }
+
+    .modal-close {
+        border: 0;
+        background: transparent;
+        font-size: 1.1rem;
+        color: var(--lg-muted)
+    }
+
+    .form-grid-lg {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 9px;
+        margin-bottom: 10px
+    }
+
+    .field-lg label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: .69rem;
+        font-weight: 800;
+        color: #445166
+    }
+
+    .field-lg.full {
+        grid-column: 1/-1
+    }
+
+    .field-lg .form-control {
+        min-height: 36px;
+        font-size: .78rem
+    }
+
+    .helpbox {
+        padding: 9px 10px;
+        margin-bottom: 10px;
+        border: 1px solid #d7e3f1;
+        border-radius: 8px;
+        background: #f7fbff;
+        color: #52657c;
+        font-size: .72rem
+    }
+
+    .toast-wrap-lg {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        display: grid;
+        gap: 7px;
+        z-index: 2200
+    }
+
+    .toast-lg {
+        min-width: 260px;
+        max-width: 420px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        background: #173a7a;
+        color: #fff;
+        box-shadow: 0 10px 30px rgba(0,0,0,.18);
+        font-size: .76rem;
+        font-weight: 700
+    }
+
+        .toast-lg.error {
+            background: #b02a37
+        }
 
     html[data-nsq-theme="dark"] .page {
         color: #e7edf6
     }
 
-    html[data-nsq-theme="dark"] .head, html[data-nsq-theme="dark"] .summary > div, html[data-nsq-theme="dark"] .periods, html[data-nsq-theme="dark"] .section, html[data-nsq-theme="dark"] .client, html[data-nsq-theme="dark"] .table-wrap {
+    html[data-nsq-theme="dark"] .head, html[data-nsq-theme="dark"] .summary > div, html[data-nsq-theme="dark"] .periods, html[data-nsq-theme="dark"] .section, html[data-nsq-theme="dark"] .group-card, html[data-nsq-theme="dark"] .table-wrap, html[data-nsq-theme="dark"] .modal-card-lg {
         background: #111b2d;
         border-color: #2a3a50;
         box-shadow: none
     }
 
-    html[data-nsq-theme="dark"] .title, html[data-nsq-theme="dark"] .section-title, html[data-nsq-theme="dark"] .client-name {
+    html[data-nsq-theme="dark"] .title, html[data-nsq-theme="dark"] .section-title, html[data-nsq-theme="dark"] .group-name, html[data-nsq-theme="dark"] .modal-head-lg h2 {
         color: #eef4fb
     }
 
-    html[data-nsq-theme="dark"] .client-head, html[data-nsq-theme="dark"] .table thead th {
+    html[data-nsq-theme="dark"] .group-head, html[data-nsq-theme="dark"] .table thead th {
         background: #162237;
         border-color: #2a3a50;
         color: #cbd7e6
@@ -340,8 +545,14 @@
         background: #101a2a
     }
 
-    html[data-nsq-theme="dark"] .sub, html[data-nsq-theme="dark"] .section-sub, html[data-nsq-theme="dark"] .mini, html[data-nsq-theme="dark"] .summary span {
+    html[data-nsq-theme="dark"] .sub, html[data-nsq-theme="dark"] .section-sub, html[data-nsq-theme="dark"] .mini, html[data-nsq-theme="dark"] .summary span, html[data-nsq-theme="dark"] .modal-head-lg p {
         color: #9eacbf
+    }
+
+    html[data-nsq-theme="dark"] .note, html[data-nsq-theme="dark"] .helpbox {
+        background: #142238;
+        border-color: #334963;
+        color: #b9c8da
     }
 
     @@media(max-width:1200px) {
@@ -349,24 +560,16 @@
             grid-template-columns: repeat(3,minmax(130px,1fr))
         }
 
-        .client-head {
+        .group-head {
             grid-template-columns: minmax(180px,1fr) repeat(3,110px) auto
         }
 
-            .client-head > .metric:nth-of-type(4) {
+            .group-head > .metric:nth-of-type(4) {
                 display: none
             }
     }
 
     @@media(max-width:800px) {
-        .client-head {
-            grid-template-columns: 1fr 1fr
-        }
-
-            .client-head > *:last-child {
-                grid-column: span 2
-            }
-
         .summary {
             grid-template-columns: repeat(2,minmax(0,1fr))
         }
@@ -382,18 +585,43 @@
         .section {
             padding: 11px
         }
+
+        .group-head {
+            grid-template-columns: 1fr 1fr
+        }
+
+            .group-head > *:first-child {
+                grid-column: 1/-1
+            }
+
+            .group-head > *:last-child {
+                grid-column: 1/-1
+            }
+
+        .form-grid-lg {
+            grid-template-columns: 1fr
+        }
+
+        .field-lg.full {
+            grid-column: auto
+        }
     }
 </style>
+
+<form id="antiForgeryForm" class="d-none">@Html.AntiForgeryToken()</form>
 
 <div class="page">
     <div class="head">
         <div>
-            <h1 class="title"><i class="fa-solid fa-truck-ramp-box me-1"></i>Embarques</h1>
-            <p class="sub">Programación por cliente, preparación, carga, salida y entrega de producto terminado.</p>
+            <h1 class="title"><i class="fa-solid fa-truck-ramp-box me-1"></i>Embarques · Vista lista</h1>
+            <p class="sub">La misma operación del Centro Operativo presentada en formato de lista.</p>
         </div>
         <div class="actions">
-            <a asp-action="Crear" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus me-1"></i>Nuevo embarque</a>
-            <a asp-action="Calendario" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-calendar-days me-1"></i>Calendario</a>
+            <div class="view-switch">
+                <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-sm btn-light"><i class="fa-solid fa-calendar-days me-1"></i>Calendario</a>
+                <span class="btn btn-sm active"><i class="fa-solid fa-list me-1"></i>Lista</span>
+            </div>
+            <a asp-controller="LogisticaListaCarga" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-clipboard-list me-1"></i>Lista de carga</a>
             <a asp-controller="LogisticaCatalogos" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-gears me-1"></i>Catálogos</a>
         </div>
     </div>
@@ -408,11 +636,11 @@
     }
 
     <div class="summary">
-        <div><strong>@grupos.Count</strong><span>clientes por programar</span></div>
-        <div><strong>@Model.PiezasPendientes.ToString("N0")</strong><span>pzas pendientes</span></div>
-        <div><strong>@Model.PiezasPTListas.ToString("N0")</strong><span>PT disponible</span></div>
+        <div><strong>@gruposProgramacion.Count</strong><span>grupos programados</span></div>
+        <div><strong>@piezasProgramadasPendientes.ToString("N0")</strong><span>pzas listas para iniciar embarque</span></div>
         <div><strong>@Model.EmbarquesActivos</strong><span>embarques activos</span></div>
-        <div><strong class="text-danger">@Model.EntregasAtrasadas</strong><span>cargas expeditadas</span></div>
+        <div><strong class="text-danger">@(expeditadosProgramacion + expeditadosEmbarque)</strong><span>operaciones expeditadas</span></div>
+        <div><strong>@Model.EmbarquesCargados</strong><span>cargados</span></div>
         <div><strong>@Model.EmbarquesEnRuta</strong><span>en ruta</span></div>
     </div>
 
@@ -436,98 +664,413 @@
 
     <div class="section">
         <div class="section-head">
-            <div><h2 class="section-title">Pendientes por cliente</h2><p class="section-sub">Cada cliente puede consolidar varias partes y OF en un solo embarque.</p></div>
-            <span class="badge bg-light text-dark">@grupos.Count cliente(s)</span>
+            <div>
+                <h2 class="section-title">Programaciones listas para iniciar embarque</h2>
+                <p class="section-sub">Provienen de Lista de carga. Aquí Logística puede iniciar el embarque usando el mismo proceso del Centro Operativo.</p>
+            </div>
+            <span class="badge bg-light text-dark">@programaciones.Count programación(es)</span>
         </div>
-        <div class="note"><strong>Expeditado</strong> se determina por la fecha de carga. La fecha de entrega del cliente se conserva únicamente como referencia visual proveniente del Release.</div>
-        @if (grupos.Count == 0)
+        <div class="note"><strong>Una sola fuente de información:</strong> cuando un embarque se crea aquí, deja de aparecer como programación pendiente y pasa a la sección de embarques. El Calendario reflejará el mismo cambio al actualizarse.</div>
+        @if (gruposProgramacion.Count == 0)
         {
-            <div class="empty">No hay entregas pendientes para el periodo seleccionado.</div>
+            <div class="empty">No hay programaciones pendientes de iniciar embarque para el periodo seleccionado.</div>
         }
         else
         {
-            @foreach (var g in grupos)
+            @foreach (var g in gruposProgramacion)
+            {
+                var totalPiezas = g.Sum(PendienteProgramacion);
+                var exp = g.Any(EsExpeditadaProgramacion);
+                var horaSugerida = g.Select(x => x.HoraProgramada).FirstOrDefault(x => x.HasValue);
+                var ids = string.Join(",", g.Select(x => x.ListaCargaProgramacionID.GetValueOrDefault()).Where(x => x > 0));
+                <div class="group-card @(exp ? "exp" : "")">
+                    <div class="group-head">
+                        <div>
+                            <div class="group-name">@g.Key.Cliente</div>
+                            <div class="mini">@g.Count() Release(s) programado(s)</div>
+                        </div>
+                        <div class="metric"><span class="mini">Carga</span><strong class="@(g.Key.Fecha < DateTime.Today ? "exp-text" : "")">@g.Key.Fecha.ToString("dd/MM/yyyy")</strong></div>
+                        <div class="metric"><span class="mini">Hora</span><strong>@(horaSugerida?.ToString(@"hh\:mm") ?? "Por definir")</strong></div>
+                        <div class="metric"><span class="mini">Piezas</span><strong>@totalPiezas.ToString("N0")</strong></div>
+                        <div class="metric"><span class="mini">Prioridad</span><strong><span class="priority @(exp ? "exp" : "normal")">@(exp ? "Expeditado" : "Programado")</span></strong></div>
+                        <div class="action-stack">
+                            @if (g.Key.Fecha < DateTime.Today)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm js-reprogramar" data-ids="@ids" data-cliente="@g.Key.Cliente" data-fecha="@g.Key.Fecha.ToString("yyyy-MM-dd")"><i class="fa-solid fa-calendar-day me-1"></i>Reprogramar</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-primary btn-sm js-iniciar" data-cliente-id="@g.Key.ClienteID" data-fecha="@g.Key.Fecha.ToString("yyyy-MM-dd")" data-hora="@(horaSugerida?.ToString(@"hh\:mm") ?? "")"><i class="fa-solid fa-truck-fast me-1"></i>Iniciar embarque</button>
+                            }
+                        </div>
+                    </div>
+                    <div class="table-wrap border-0 rounded-0">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Release</th><th>Parte</th><th>Descripción</th><th>OF</th><th>Fecha requerida</th><th>Fecha programada</th><th class="text-end">Pendiente</th><th>Estado</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in g.OrderBy(x => x.FechaRequeridaOriginal).ThenBy(x => x.NumeroParte))
+                                {
+                                    var pexp = EsExpeditadaProgramacion(p);
+                                    <tr>
+                                        <td class="folio">@(string.IsNullOrWhiteSpace(p.FolioRelease) ? $"PROG-{p.EventoID:000000}" : p.FolioRelease)</td>
+                                        <td class="fw-semibold">@(string.IsNullOrWhiteSpace(p.NumeroParte) ? "-" : p.NumeroParte)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(p.DescripcionParte) ? "-" : p.DescripcionParte)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(p.NumeroOF) ? "-" : p.NumeroOF)</td>
+                                        <td class="@(pexp ? "exp-text" : "")">@(p.FechaRequeridaOriginal?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                        <td>@p.FechaProgramada.ToString("dd/MM/yyyy") @(p.HoraProgramada?.ToString(@"hh\:mm") ?? "")</td>
+                                        <td class="text-end fw-semibold">@PendienteProgramacion(p).ToString("N0")</td>
+                                        <td><span class="priority @(pexp ? "exp" : "normal")">@(pexp ? "Expeditado" : "Programado")</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <div>
+                <h2 class="section-title">Embarques en operación</h2>
+                <p class="section-sub">Mismos embarques que aparecen en el Calendario. Entra a Operar para continuar el flujo completo.</p>
+            </div>
+            <span class="badge bg-light text-dark">@Model.Embarques.Count</span>
+        </div>
+        <div class="table-wrap">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr><th>Folio</th><th>Cliente</th><th>Destino</th><th>Carga</th><th>Entrega <span class="visual-only">Visual</span></th><th>Partidas</th><th class="text-end">Piezas</th><th>Estatus</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in Model.Embarques.OrderBy(x => x.FechaCargaProgramada).ThenBy(x => x.HoraCargaProgramada))
+                    {
+                        var exp = EsExpeditadoEmbarque(e);
+                        <tr>
+                            <td class="folio">@e.Folio</td>
+                            <td>@e.Cliente</td>
+                            <td>@(string.IsNullOrWhiteSpace(e.Destino) ? "-" : e.Destino)</td>
+                            <td class="@(exp ? "exp-text" : "")">@FH(e.FechaCargaProgramada, e.HoraCargaProgramada) @(exp ? "· EXPEDITADO" : "")</td>
+                            <td>@(e.FechaEntregaProgramada?.ToString("dd/MM/yyyy") ?? "-")</td>
+                            <td class="text-center">@e.TotalPartidas</td>
+                            <td class="text-end">@e.TotalPiezasSolicitadas.ToString("N0")</td>
+                            <td>
+                                @if (exp)
+                                {
+                                    <span class="badge bg-danger">Expeditado</span>
+                                    <span class="mini ms-1">@e.Estatus</span>
+                                }
+                                else
+                                {
+                                    <span class="badge @Badge(e.Estatus)">@e.Estatus</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <a asp-action="Detalle" asp-route-id="@e.EmbarqueID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-sliders me-1"></i>Operar</a>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Embarques.Count == 0)
+                    {
+                        <tr><td colspan="9" class="empty">No hay embarques registrados para el periodo seleccionado.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <div>
+                <h2 class="section-title">Releases todavía sin día programado</h2>
+                <p class="section-sub">Se muestran para visibilidad. La programación del día se realiza exclusivamente desde Lista de carga.</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark">@demandas.Count pendiente(s)</span>
+                <a asp-controller="LogisticaListaCarga" asp-action="Index" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-calendar-plus me-1"></i>Ir a Lista de carga</a>
+            </div>
+        </div>
+        @if (gruposDemanda.Count == 0)
+        {
+            <div class="empty">No hay Releases pendientes de programar en este periodo.</div>
+        }
+        else
+        {
+            @foreach (var g in gruposDemanda)
             {
                 var piezas = g.Sum(x => x.PendienteProgramar);
                 var cajas = g.Sum(x => x.CajasPTDisponibles);
                 var exp = g.Any(EsExpeditadaDemanda);
                 var proximaCarga = g.Min(FechaCargaDemanda);
                 var proximaEntrega = g.Min(x => x.FechaEntrega);
-                <div class="client">
-                    <div class="client-head">
+                <div class="group-card @(exp ? "exp" : "")">
+                    <div class="group-head">
                         <div>
-                            <div class="client-name">@g.Key.Cliente @if(exp){
-                            <span class="badge bg-danger ms-1">Expeditado</span>
-                        }
-    </div>
-                        <div class="mini">@g.Count() entrega(s) / parte(s) pendientes</div>
+                            <div class="group-name">@g.Key.Cliente</div>
+                            <div class="mini">@g.Count() Release(s) / parte(s) pendientes</div>
+                        </div>
+                        <div class="metric"><span class="mini">Pendiente</span><strong>@piezas.ToString("N0")</strong></div>
+                        <div class="metric"><span class="mini">Cajas PT</span><strong>@cajas.ToString("N0")</strong></div>
+                        <div class="metric"><span class="mini">Carga requerida</span><strong class="@(proximaCarga < DateTime.Today ? "exp-text" : "")">@proximaCarga.ToString("dd/MM/yyyy")</strong></div>
+                        <div class="metric"><span class="mini">Entrega cliente</span><strong>@proximaEntrega.ToString("dd/MM/yyyy")</strong></div>
+                        <div class="action-stack"><span class="priority @(exp ? "exp" : "normal")">@(exp ? "Expeditado" : "Sin programar")</span></div>
                     </div>
-                    <div class="metric"><span class="mini">Pendiente</span><strong>@piezas.ToString("N0")</strong></div>
-                    <div class="metric"><span class="mini">Cajas PT</span><strong>@cajas.ToString("N0")</strong></div>
-                    <div class="metric"><span class="mini">Próxima carga</span><strong class="@(proximaCarga < DateTime.Today ? "exp" : "")">@proximaCarga.ToString("dd/MM/yyyy")</strong></div>
-                    <div class="metric"><span class="mini">Entrega cliente</span><strong>@proximaEntrega.ToString("dd/MM/yyyy")</strong></div>
-                    <div class="text-end">@if(g.Key.ClienteID>0){
-                    <a asp-action="Crear" asp-route-clienteId="@g.Key.ClienteID" class="btn btn-primary btn-sm"><i class="fa-solid fa-calendar-plus me-1"></i>Programar cliente</a>
-                }
-</div>
-            </div>
-            <div class="table-wrap">
-                <table class="table table-sm">
-                    <thead><tr><th>Parte</th><th>Descripción</th><th>OF</th><th>Fecha carga</th><th>Entrega <span class="visual-only">Visual</span></th><th class="text-end">Pendiente</th><th class="text-end">PT disponible</th><th class="text-end">Cajas</th></tr></thead>
-                    <tbody>
-                        @foreach (var d in g.OrderBy(FechaCargaDemanda).ThenBy(x => x.FechaEntrega))
-                        {
-                            var fechaCarga = FechaCargaDemanda(d);
-                            var dexp = EsExpeditadaDemanda(d);
-                            <tr>
-                                <td class="fw-semibold">@d.NumeroParte</td>
-                                <td>@(string.IsNullOrWhiteSpace(d.Descripcion) ? "-" : d.Descripcion)</td>
-                                <td>@(string.IsNullOrWhiteSpace(d.NumeroOF) ? "-" : d.NumeroOF)</td>
-                                <td class="@(dexp ? "exp" : "")">@fechaCarga.ToString("dd/MM/yyyy") @(dexp ? "· EXPEDITADO" : "")</td>
-                                <td>@d.FechaEntrega.ToString("dd/MM/yyyy")</td>
-                                <td class="text-end fw-semibold">@d.PendienteProgramar.ToString("N0")</td>
-                                <td class="text-end">@d.PiezasPTDisponibles.ToString("N0")</td>
-                                <td class="text-end">@d.CajasPTDisponibles.ToString("N0")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-                }
-                }
+                    <div class="table-wrap border-0 rounded-0">
+                        <table class="table table-sm">
+                            <thead><tr><th>Release</th><th>Parte</th><th>Descripción</th><th>OF</th><th>Fecha carga</th><th>Entrega <span class="visual-only">Visual</span></th><th class="text-end">Pendiente</th><th class="text-end">PT disponible</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in g.OrderBy(FechaCargaDemanda).ThenBy(x => x.FechaEntrega))
+                                {
+                                    var fechaCarga = FechaCargaDemanda(d);
+                                    var dexp = EsExpeditadaDemanda(d);
+                                    <tr>
+                                        <td class="folio">@d.FolioRelease</td>
+                                        <td class="fw-semibold">@d.NumeroParte</td>
+                                        <td>@(string.IsNullOrWhiteSpace(d.Descripcion) ? "-" : d.Descripcion)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(d.NumeroOF) ? "-" : d.NumeroOF)</td>
+                                        <td class="@(dexp ? "exp-text" : "")">@fechaCarga.ToString("dd/MM/yyyy") @(dexp ? "· EXPEDITADO" : "")</td>
+                                        <td>@d.FechaEntrega.ToString("dd/MM/yyyy")</td>
+                                        <td class="text-end fw-semibold">@d.PendienteProgramar.ToString("N0")</td>
+                                        <td class="text-end">@d.PiezasPTDisponibles.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
     </div>
+</div>
 
-    <div class="section">
-        <div class="section-head">
-            <div><h2 class="section-title">Embarques programados</h2><p class="section-sub">Seguimiento operativo por fecha de carga. La entrega se muestra únicamente como referencia.</p></div>
-            <span class="badge bg-light text-dark">@Model.Embarques.Count</span>
+<div class="modal-backdrop-lg" id="modalIniciarEmbarque">
+    <div class="modal-card-lg">
+        <div class="modal-head-lg">
+            <div>
+                <h2>Iniciar embarque</h2>
+                <p>Selecciona los Releases programados que formarán el embarque.</p>
+            </div>
+            <button type="button" class="modal-close" data-close="modalIniciarEmbarque">✕</button>
         </div>
-        <div class="table-wrap">
-            <table class="table table-sm table-hover">
-                <thead><tr><th>Folio</th><th>Cliente</th><th>Destino</th><th>Carga</th><th>Entrega <span class="visual-only">Visual</span></th><th>Partidas</th><th>Piezas</th><th>Estatus</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var e in Model.Embarques)
-                    {
-                        var exp = EsExpeditadoEmbarque(e);
-                        <tr>
-                            <td class="folio">@e.Folio</td>
-                            <td>@e.Cliente</td>
-                            <td>@e.Destino</td>
-                            <td class="@(exp ? "exp" : "")">@FH(e.FechaCargaProgramada, e.HoraCargaProgramada) @(exp ? "· EXPEDITADO" : "")</td>
-                            <td>@(e.FechaEntregaProgramada?.ToString("dd/MM/yyyy") ?? "-")</td>
-                            <td class="text-center">@e.TotalPartidas</td>
-                            <td class="text-end">@e.TotalPiezasSolicitadas.ToString("N0")</td>
-                            <td><span class="badge @(exp ? "bg-danger" : Badge(e.Estatus))">@(exp ? "Expeditado" : e.Estatus)</span></td>
-                            <td class="text-end"><a asp-action="Detalle" asp-route-id="@e.EmbarqueID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye"></i></a></td>
-                        </tr>
-                    }
-                    @if (Model.Embarques.Count == 0)
-                    {
-                        <tr><td colspan="9" class="empty">No hay embarques registrados.</td></tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+        <form id="formIniciarEmbarque">
+            <div class="modal-body-lg">
+                <input type="hidden" id="ieClienteID" />
+                <input type="hidden" id="ieFecha" />
+                <div class="helpbox"><strong>El día ya viene de Lista de carga.</strong> Aquí Logística define la hora y toma las programaciones para comenzar el flujo operativo.</div>
+                <div class="form-grid-lg">
+                    <div class="field-lg"><label>Cliente</label><input class="form-control" id="ieCliente" readonly /></div>
+                    <div class="field-lg"><label>Día programado</label><input class="form-control" id="ieFechaTexto" readonly /></div>
+                    <div class="field-lg"><label>Hora de carga *</label><input class="form-control" type="time" id="ieHora" step="60" required /></div>
+                    <div class="field-lg"><label>Releases seleccionados</label><input class="form-control" id="ieSeleccionados" readonly value="0" /></div>
+                    <div class="field-lg full"><label>Observaciones</label><textarea class="form-control" id="ieObservaciones" rows="2" maxlength="500" placeholder="Opcional"></textarea></div>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-sm">
+                        <thead><tr><th style="width:34px"><input type="checkbox" id="ieCheckAll" checked /></th><th>Release / Parte</th><th>Fecha requerida</th><th class="text-end">Pendiente</th><th>Prioridad</th></tr></thead>
+                        <tbody id="ieBody"><tr><td colspan="5" class="text-center text-muted py-3">Selecciona un grupo para cargar sus programaciones.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-foot-lg">
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-close="modalIniciarEmbarque">Cancelar</button>
+                <button class="btn btn-primary btn-sm" type="submit" id="btnCrearEmbarque"><i class="fa-solid fa-truck-fast me-1"></i>Crear embarque</button>
+            </div>
+        </form>
     </div>
 </div>
+
+<div class="modal-backdrop-lg" id="modalReprogramar">
+    <div class="modal-card-lg modal-card-sm">
+        <div class="modal-head-lg">
+            <div>
+                <h2>Reprogramar programaciones</h2>
+                <p id="rpSub">Selecciona el nuevo día de carga.</p>
+            </div>
+            <button type="button" class="modal-close" data-close="modalReprogramar">✕</button>
+        </div>
+        <form id="formReprogramar">
+            <div class="modal-body-lg">
+                <input type="hidden" id="rpIds" />
+                <div class="field-lg"><label>Nueva fecha *</label><input class="form-control" type="date" id="rpFecha" min="@DateTime.Today.ToString("yyyy-MM-dd")" required /></div>
+                <div class="field-lg mt-2"><label>Observaciones</label><textarea class="form-control" id="rpObservaciones" rows="2" maxlength="500" placeholder="Opcional"></textarea></div>
+            </div>
+            <div class="modal-foot-lg">
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-close="modalReprogramar">Cancelar</button>
+                <button class="btn btn-primary btn-sm" type="submit" id="btnReprogramar"><i class="fa-solid fa-calendar-check me-1"></i>Guardar nueva fecha</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="toast-wrap-lg" id="toastWrap"></div>
+
+<script>
+    (() => {
+        const token=document.querySelector('#antiForgeryForm input[name="__RequestVerificationToken"]')?.value||'';
+        const urlProgramaciones='@Url.Action("ObtenerProgramacionesParaEmbarque", "LogisticaOperacion")';
+        const urlCrear='@Url.Action("CrearEmbarqueDesdeProgramaciones", "LogisticaOperacion")';
+        const urlMoverProgramacion='@Url.Action("MoverProgramacion", "LogisticaOperacion")';
+
+        function esc(v){
+            return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+        function number(v){
+            const n=Number(v||0);
+            return Number.isFinite(n)?n.toLocaleString('es-MX'):'0';
+        }
+        function toast(msg,tipo='ok'){
+            const wrap=document.getElementById('toastWrap');
+            const item=document.createElement('div');
+            item.className=`toast-lg ${tipo}`;
+            item.textContent=msg;
+            wrap.appendChild(item);
+            setTimeout(()=>item.remove(),4200);
+        }
+        function openModal(id){
+            document.getElementById(id)?.classList.add('show');
+            document.body.style.overflow='hidden';
+        }
+        function closeModal(id){
+            document.getElementById(id)?.classList.remove('show');
+            if(!document.querySelector('.modal-backdrop-lg.show'))document.body.style.overflow='';
+        }
+        document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.close)));
+        document.querySelectorAll('.modal-backdrop-lg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id)}));
+        document.addEventListener('keydown',e=>{
+            if(e.key!=='Escape')return;
+            document.querySelectorAll('.modal-backdrop-lg.show').forEach(m=>closeModal(m.id));
+        });
+
+        function actualizarSeleccion(){
+            const checks=[...document.querySelectorAll('#ieBody .ie-check')];
+            const seleccionados=checks.filter(x=>x.checked);
+            document.getElementById('ieSeleccionados').value=String(seleccionados.length);
+            document.getElementById('ieCheckAll').checked=checks.length>0&&seleccionados.length===checks.length;
+        }
+
+        async function abrirIniciar(clienteId,fecha,hora){
+            if(!clienteId||!fecha){toast('No fue posible identificar el cliente o el día programado.','error');return}
+            const body=document.getElementById('ieBody');
+            document.getElementById('ieClienteID').value=clienteId;
+            document.getElementById('ieFecha').value=fecha;
+            document.getElementById('ieCliente').value='';
+            document.getElementById('ieFechaTexto').value=fecha;
+            document.getElementById('ieHora').value=hora||'';
+            document.getElementById('ieObservaciones').value='';
+            document.getElementById('ieSeleccionados').value='0';
+            body.innerHTML='<tr><td colspan="5" class="text-center text-muted py-3"><i class="fa-solid fa-spinner fa-spin me-1"></i>Cargando programaciones...</td></tr>';
+            openModal('modalIniciarEmbarque');
+            try{
+                const r=await fetch(`${urlProgramaciones}?clienteId=${encodeURIComponent(clienteId)}&fecha=${encodeURIComponent(fecha)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;
+                try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible cargar las programaciones.');
+                document.getElementById('ieCliente').value=j.cliente||`Cliente ${clienteId}`;
+                document.getElementById('ieFechaTexto').value=j.fechaTexto||fecha;
+                body.innerHTML='';
+                (j.programaciones||[]).forEach(x=>{
+                    const tr=document.createElement('tr');
+                    tr.innerHTML=`<td><input type="checkbox" class="ie-check" value="${esc(x.listaCargaProgramacionID)}" checked /></td>
+                    <td><div class="folio">${esc(x.folioRelease||`PROG-${x.listaCargaProgramacionID}`)}</div><div class="mini">${esc(x.numeroParte||'Sin parte')}${x.descripcion?` · ${esc(x.descripcion)}`:''}${x.numeroOF?` · OF ${esc(x.numeroOF)}`:''}</div></td>
+                    <td>${esc(x.fechaRequeridaTexto||x.fechaRequerida||'-')}</td>
+                    <td class="text-end fw-semibold">${number(x.cantidadPendiente)} PZA</td>
+                    <td>${x.esExpeditado?'<span class="priority exp">Expeditado</span>':'<span class="priority normal">Programado</span>'}</td>`;
+                    body.appendChild(tr);
+                });
+                if(!(j.programaciones||[]).length)body.innerHTML='<tr><td colspan="5" class="text-center text-muted py-3">No hay programaciones pendientes para iniciar embarque.</td></tr>';
+                body.querySelectorAll('.ie-check').forEach(x=>x.addEventListener('change',actualizarSeleccion));
+                actualizarSeleccion();
+            }catch(err){
+                body.innerHTML=`<tr><td colspan="5" class="text-center text-danger py-3">${esc(err.message||'Error al cargar programaciones.')}</td></tr>`;
+                toast(err.message||'Error al cargar programaciones.','error');
+            }
+        }
+
+        document.querySelectorAll('.js-iniciar').forEach(b=>b.addEventListener('click',()=>abrirIniciar(b.dataset.clienteId,b.dataset.fecha,b.dataset.hora)));
+        document.getElementById('ieCheckAll')?.addEventListener('change',e=>{
+            document.querySelectorAll('#ieBody .ie-check').forEach(x=>x.checked=e.currentTarget.checked);
+            actualizarSeleccion();
+        });
+
+        document.getElementById('formIniciarEmbarque')?.addEventListener('submit',async e=>{
+            e.preventDefault();
+            const ids=[...document.querySelectorAll('#ieBody .ie-check:checked')].map(x=>x.value).filter(Boolean);
+            const hora=document.getElementById('ieHora').value;
+            if(!ids.length){toast('Selecciona al menos un Release programado.','error');return}
+            if(!hora){toast('Captura la hora de carga.','error');return}
+            const fd=new FormData();
+            fd.append('__RequestVerificationToken',token);
+            fd.append('ClienteID',document.getElementById('ieClienteID').value);
+            fd.append('FechaProgramada',document.getElementById('ieFecha').value);
+            fd.append('HoraProgramada',hora);
+            fd.append('Observaciones',document.getElementById('ieObservaciones').value||'');
+            ids.forEach(id=>fd.append('ProgramacionIDs',id));
+            const btn=document.getElementById('btnCrearEmbarque');
+            const original=btn.innerHTML;
+            try{
+                btn.disabled=true;
+                btn.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Creando...';
+                const r=await fetch(urlCrear,{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;
+                try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible crear el embarque.');
+                closeModal('modalIniciarEmbarque');
+                toast(j.mensaje||'Embarque creado correctamente.');
+                setTimeout(()=>location.reload(),650);
+            }catch(err){
+                toast(err.message||'Error al crear el embarque.','error');
+            }finally{
+                btn.disabled=false;
+                btn.innerHTML=original;
+            }
+        });
+
+        document.querySelectorAll('.js-reprogramar').forEach(b=>b.addEventListener('click',()=>{
+            document.getElementById('rpIds').value=b.dataset.ids||'';
+            document.getElementById('rpFecha').value='';
+            document.getElementById('rpObservaciones').value='';
+            document.getElementById('rpSub').textContent=`${b.dataset.cliente||'Cliente'} · fecha anterior ${b.dataset.fecha||''}`;
+            openModal('modalReprogramar');
+        }));
+
+        document.getElementById('formReprogramar')?.addEventListener('submit',async e=>{
+            e.preventDefault();
+            const ids=(document.getElementById('rpIds').value||'').split(',').map(x=>x.trim()).filter(Boolean);
+            const fecha=document.getElementById('rpFecha').value;
+            const observaciones=document.getElementById('rpObservaciones').value||'';
+            if(!ids.length){toast('No hay programaciones para mover.','error');return}
+            if(!fecha){toast('Selecciona la nueva fecha.','error');return}
+            const btn=document.getElementById('btnReprogramar');
+            const original=btn.innerHTML;
+            let movidas=0;
+            try{
+                btn.disabled=true;
+                btn.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
+                for(const id of ids){
+                    const data=new URLSearchParams();
+                    data.append('__RequestVerificationToken',token);
+                    data.append('ListaCargaProgramacionID',id);
+                    data.append('FechaProgramadaCarga',fecha);
+                    if(observaciones)data.append('Observaciones',observaciones);
+                    const r=await fetch(urlMoverProgramacion,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:data.toString()});
+                    let j;
+                    try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                    if(!r.ok||!j.ok)throw new Error(j.mensaje||`No fue posible mover la programación ${id}.`);
+                    movidas++;
+                }
+                closeModal('modalReprogramar');
+                toast(`${movidas} programación(es) reprogramada(s) correctamente.`);
+                setTimeout(()=>location.reload(),650);
+            }catch(err){
+                toast(`${movidas} reprogramada(s). ${err.message||'Error al reprogramar.'}`,'error');
+                if(movidas>0)setTimeout(()=>location.reload(),900);
+            }finally{
+                btn.disabled=false;
+                btn.innerHTML=original;
+            }
+        });
+    })();
+</script>

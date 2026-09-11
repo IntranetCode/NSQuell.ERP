@@ -167,6 +167,8 @@ public sealed class LogisticaChoferController : Controller
 
             await ValidarChoferYUnidadDisponiblesAsync(cn, tx, viajeId, UsuarioID.Value, viaje.UnidadID.Value, cancellationToken);
 
+            await ValidarEmbarquesViajeListosParaSalidaAsync(cn, tx, viajeId, cancellationToken);
+
             var ahora = DateTime.Now;
 
             const string sqlUpdate = @"
@@ -228,6 +230,8 @@ SELECT @@ROWCOUNT;";
 
             if (!string.IsNullOrWhiteSpace(observaciones))
                 descripcion += $" Observaciones: {observaciones}";
+
+            await DespacharEmbarquesViajeAsync(cn, tx, viajeId, ahora, cancellationToken);
 
             await InsertarHistorialAsync(cn, tx, viajeId, "SALIDA_REGISTRADA_CHOFER", "Programado", "En curso", descripcion, cancellationToken);
 
@@ -622,6 +626,25 @@ AND v.OperadorUsuarioID=@UsuarioID;";
         return File(bytes, string.IsNullOrWhiteSpace(tipoContenido) ? "application/octet-stream" : tipoContenido, nombreOriginal);
     }
 
+    private static async Task ValidarEmbarquesViajeEntregadosAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TOP(1) ISNULL(e.Folio,N'') Folio,ISNULL(e.Estatus,N'') Estatus
+FROM dbo.Logistica_ViajeEmbarques ve
+INNER JOIN dbo.Logistica_Embarques e WITH(UPDLOCK,HOLDLOCK) ON e.EmbarqueID=ve.EmbarqueID
+WHERE ve.ViajeID=@ViajeID
+AND ve.Activo=1
+AND e.Activo=1
+AND e.Estatus NOT IN(N'Entregado',N'Cancelado')
+ORDER BY ISNULL(ve.OrdenEntrega,2147483647),ve.ViajeEmbarqueID;";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (!await rd.ReadAsync(cancellationToken)) return;
+        var folio = Texto(rd, "Folio");
+        var estatus = Texto(rd, "Estatus");
+        throw new InvalidOperationException($"Todavía no puedes registrar el regreso. El embarque {folio} continúa en estatus {estatus}.");
+    }
     private async Task<List<LogisticaViajeDetalleVm>> ObtenerViajesChoferAsync(SqlConnection cn, int usuarioId, CancellationToken cancellationToken)
     {
         var lista = new List<LogisticaViajeDetalleVm>();
@@ -1093,6 +1116,211 @@ VALUES
         return (nombreOriginal, nombreFisico, rutaRelativa, rutaFisica, archivo.ContentType ?? "application/octet-stream", archivo.Length);
     }
 
+    private static async Task<List<(int EmbarqueID, string Folio, string Estatus)>> ObtenerEmbarquesViajeAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)
+    {
+        var resultado = new List<(int EmbarqueID, string Folio, string Estatus)>();
+        const string sql = @"
+SELECT e.EmbarqueID,ISNULL(e.Folio,N'') Folio,ISNULL(e.Estatus,N'') Estatus
+FROM dbo.Logistica_ViajeEmbarques ve WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Logistica_Embarques e WITH(UPDLOCK,HOLDLOCK) ON e.EmbarqueID=ve.EmbarqueID
+WHERE ve.ViajeID=@ViajeID AND ve.Activo=1 AND e.Activo=1
+ORDER BY ISNULL(ve.OrdenEntrega,2147483647),ve.ViajeEmbarqueID;";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await rd.ReadAsync(cancellationToken))
+            resultado.Add((Entero(rd, "EmbarqueID"), Texto(rd, "Folio"), Texto(rd, "Estatus")));
+        return resultado;
+    }
+
+    private static async Task ValidarEmbarquesViajeListosParaSalidaAsync(SqlConnection cn, SqlTransaction tx, int viajeId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TOP(1)
+    e.EmbarqueID,
+    ISNULL(e.Folio,N'') Folio,
+    ISNULL(e.Estatus,N'') Estatus,
+    ISNULL(d.TotalSolicitado,0) TotalSolicitado,
+    ISNULL(c.PiezasCargadas,0) PiezasCargadas,
+    ISNULL(c.TotalCajas,0) TotalCajas,
+    ISNULL(c.CajasNoCargadas,0) CajasNoCargadas,
+    ISNULL(i.IncidenciasCriticas,0) IncidenciasCriticas
+FROM dbo.Logistica_ViajeEmbarques ve
+INNER JOIN dbo.Logistica_Embarques e WITH(UPDLOCK,HOLDLOCK)
+    ON e.EmbarqueID=ve.EmbarqueID
+    AND e.Activo=1
+OUTER APPLY
+(
+    SELECT ISNULL(SUM(CONVERT(bigint,x.CantidadSolicitada)),0) TotalSolicitado
+    FROM dbo.Logistica_EmbarqueDetalle x
+    WHERE x.EmbarqueID=e.EmbarqueID
+    AND x.Activo=1
+) d
+OUTER APPLY
+(
+    SELECT
+        COUNT(DISTINCT x.CajaID) TotalCajas,
+        COUNT(DISTINCT CASE
+            WHEN x.EstatusSeleccion NOT IN(N'Cargada',N'Despachada')
+            THEN x.CajaID
+            ELSE NULL
+        END) CajasNoCargadas,
+        ISNULL(SUM(
+            CASE
+                WHEN x.EstatusSeleccion IN(N'Cargada',N'Despachada')
+                THEN CONVERT(bigint,x.CantidadAsignada)
+                ELSE 0
+            END
+        ),0) PiezasCargadas
+    FROM dbo.Logistica_EmbarqueCajas x
+    WHERE x.EmbarqueID=e.EmbarqueID
+    AND x.Activo=1
+) c
+OUTER APPLY
+(
+    SELECT COUNT_BIG(*) IncidenciasCriticas
+    FROM dbo.Logistica_Incidencias x
+    WHERE x.EmbarqueID=e.EmbarqueID
+    AND x.Activo=1
+    AND x.Estatus IN(N'Abierta',N'En seguimiento')
+    AND x.Severidad=N'Crítica'
+) i
+WHERE ve.ViajeID=@ViajeID
+AND ve.Activo=1
+AND
+(
+    e.Estatus<>N'Cargado'
+    OR ISNULL(d.TotalSolicitado,0)<=0
+    OR ISNULL(c.PiezasCargadas,0)<>ISNULL(d.TotalSolicitado,0)
+    OR ISNULL(c.TotalCajas,0)<=0
+    OR ISNULL(c.CajasNoCargadas,0)>0
+    OR ISNULL(i.IncidenciasCriticas,0)>0
+);";
+
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+
+        await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+
+        if (!await rd.ReadAsync(cancellationToken))
+            return;
+
+        var folio = Texto(rd, "Folio");
+        var estatus = Texto(rd, "Estatus");
+        var totalSolicitado = EnteroLargo(rd, "TotalSolicitado");
+        var piezasCargadas = EnteroLargo(rd, "PiezasCargadas");
+        var totalCajas = Entero(rd, "TotalCajas");
+        var cajasNoCargadas = Entero(rd, "CajasNoCargadas");
+        var incidencias = Entero(rd, "IncidenciasCriticas");
+
+        if (estatus != "Cargado")
+            throw new InvalidOperationException($"El embarque {folio} aún está en estatus {estatus}. Debe completar Documentación y Carga física antes de salir.");
+
+        if (totalSolicitado <= 0)
+            throw new InvalidOperationException($"El embarque {folio} no contiene piezas programadas.");
+
+        if (piezasCargadas != totalSolicitado)
+            throw new InvalidOperationException($"El embarque {folio} todavía no tiene completa su carga física. Programadas: {totalSolicitado:N0} PZA. Cargadas: {piezasCargadas:N0} PZA.");
+
+        if (totalCajas <= 0)
+            throw new InvalidOperationException($"El embarque {folio} no tiene cajas asignadas.");
+
+        if (cajasNoCargadas > 0)
+            throw new InvalidOperationException($"El embarque {folio} tiene {cajasNoCargadas:N0} caja(s) pendientes de escanear/cargar.");
+
+        if (incidencias > 0)
+            throw new InvalidOperationException($"El embarque {folio} tiene incidencias críticas abiertas.");
+    }
+
+    private async Task ActualizarListaCargaSalidaChoferAsync(SqlConnection cn, SqlTransaction tx, int embarqueId, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+UPDATE x
+SET CantidadEnviada=x.CantidadAsignada,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+WHERE x.EmbarqueID=@EmbarqueID AND x.Activo=1;
+
+UPDATE p
+SET Estatus=
+CASE
+    WHEN ISNULL(t.Enviado,0)>=p.CantidadProgramada THEN N'Cumplida'
+    WHEN ISNULL(t.Enviado,0)>0 THEN N'Parcial'
+    WHEN ISNULL(t.Generado,0)>=p.CantidadProgramada THEN N'Generada'
+    ELSE N'Programada'
+END,
+FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+FROM dbo.Logistica_ListaCargaProgramacion p
+OUTER APPLY
+(
+    SELECT SUM(x.CantidadAsignada) Generado,SUM(x.CantidadEnviada) Enviado
+    FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+    WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND x.Activo=1
+) t
+WHERE EXISTS
+(
+    SELECT 1
+    FROM dbo.Logistica_ListaCargaProgramacionEmbarques x
+    WHERE x.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND x.EmbarqueID=@EmbarqueID AND x.Activo=1
+);";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+        cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task InsertarHistorialEmbarqueAsync(SqlConnection cn, SqlTransaction tx, int embarqueId, string evento, string? anterior, string? nuevo, string? observaciones, CancellationToken cancellationToken)
+    {
+        const string sql = @"
+INSERT dbo.Logistica_EmbarqueHistorial
+(EmbarqueID,Evento,EstadoAnterior,EstadoNuevo,Observaciones,UsuarioID,UsuarioNombre,FechaEvento)
+VALUES
+(@EmbarqueID,@Evento,@Anterior,@Nuevo,@Observaciones,@UsuarioID,@UsuarioNombre,SYSDATETIME());";
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+        cmd.Parameters.Add("@Evento", SqlDbType.NVarChar, 80).Value = evento;
+        cmd.Parameters.Add("@Anterior", SqlDbType.NVarChar, 30).Value = Db(anterior);
+        cmd.Parameters.Add("@Nuevo", SqlDbType.NVarChar, 30).Value = Db(nuevo);
+        cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = Db(observaciones);
+        cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+        cmd.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task DespacharEmbarquesViajeAsync(SqlConnection cn, SqlTransaction tx, int viajeId, DateTime fechaSalida, CancellationToken cancellationToken)
+    {
+        var embarques = await ObtenerEmbarquesViajeAsync(cn, tx, viajeId, cancellationToken);
+        if (embarques.Count == 0) return;
+
+        foreach (var embarque in embarques)
+        {
+            if (embarque.Estatus == "En ruta") continue;
+            if (embarque.Estatus != "Cargado") throw new InvalidOperationException($"El embarque {embarque.Folio} debe estar Cargado antes de iniciar el viaje.");
+
+            await using (var sp = new SqlCommand("dbo.usp_Logistica_DespacharEmbarque", cn, tx) { CommandType = CommandType.StoredProcedure })
+            {
+                sp.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarque.EmbarqueID;
+                sp.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+                sp.Parameters.Add("@UsuarioNombre", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                await using var rd = await sp.ExecuteReaderAsync(cancellationToken);
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException($"No fue posible confirmar la salida del embarque {embarque.Folio}.");
+            }
+
+            const string sqlFecha = @"
+UPDATE dbo.Logistica_Embarques
+SET FechaSalida=@FechaSalida,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE EmbarqueID=@EmbarqueID AND Activo=1 AND Estatus=N'En ruta';";
+            await using (var cmd = new SqlCommand(sqlFecha, cn, tx))
+            {
+                cmd.Parameters.Add("@FechaSalida", SqlDbType.DateTime2).Value = fechaSalida;
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarque.EmbarqueID;
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await ActualizarListaCargaSalidaChoferAsync(cn, tx, embarque.EmbarqueID, cancellationToken);
+            await InsertarHistorialEmbarqueAsync(cn, tx, embarque.EmbarqueID, "SALIDA_CONFIRMADA_POR_CHOFER", "Cargado", "En ruta", $"Salida física confirmada desde el viaje VIA-{viajeId:000000} por {UsuarioNombre} a las {fechaSalida:dd/MM/yyyy HH:mm}.", cancellationToken);
+        }
+    }
     private static (bool Ok, string Mensaje) ValidarFotoEvidencia(IFormFile archivo)
     {
         const long maximo = 10 * 1024 * 1024;

@@ -40,6 +40,9 @@
     if (!Model.UnidadID.HasValue || Model.UnidadID.Value <= 0) faltantesPreparacion.Add("unidad");
     if (!Model.OperadorUsuarioID.HasValue || Model.OperadorUsuarioID.Value <= 0) faltantesPreparacion.Add("chofer");
 
+    string TxtVisible(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim().Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
+    var esEntregaPt = string.Equals(Model.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
+    var tipoViajeVisible = esEntregaPt ? "Entrega" : TxtVisible(Model.TipoViaje);
     var preparacionCompleta = faltantesPreparacion.Count == 0;
     var ahora = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
     var incidenciasAbiertas = Model.Incidencias?.Count(x => x.EstaAbierta) ?? 0;
@@ -146,6 +149,10 @@
         gap: 6px;
         margin-bottom: 10px
     }
+
+        .workflow.entrega {
+            grid-template-columns: repeat(5,1fr)
+        }
 
     .workflow-step {
         padding: 8px 10px;
@@ -292,6 +299,22 @@
         color: #17633a;
         font-size: .75rem
     }
+
+    .sync-box {
+        margin-bottom: 10px;
+        padding: 11px 13px;
+        border: 1px solid #b7d0ee;
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 9px;
+        background: #f4f8ff;
+        color: #31506f;
+        font-size: .76rem
+    }
+
+        .sync-box strong {
+            color: var(--lv-blue);
+            font-weight: 800
+        }
 
     .tabs-shell {
         border: 1px solid var(--lv-border);
@@ -554,12 +577,18 @@
         border-color: #2a3a50
     }
 
+    html[data-nsq-theme="dark"] .sync-box {
+        background: #0f1d31;
+        border-color: #35577f;
+        color: #c5d4e7
+    }
+
     @@media(max-width:1100px) {
         .summary {
             grid-template-columns: repeat(3,1fr)
         }
 
-        .workflow {
+        .workflow, .workflow.entrega {
             grid-template-columns: repeat(2,1fr)
         }
     }
@@ -587,7 +616,7 @@
             padding: 12px 9px 22px
         }
 
-        .summary, .workflow {
+        .summary, .workflow, .workflow.entrega {
             grid-template-columns: repeat(2,1fr)
         }
 
@@ -627,11 +656,15 @@
     <div class="viaje-head">
         <div>
             <h1 class="viaje-title"><i class="fa-solid fa-route me-1"></i>@Model.Folio</h1>
-            <div class="viaje-sub">@Model.TipoViaje · @Model.Origen → @Model.Destino</div>
+            <div class="viaje-sub">@tipoViajeVisible · @Model.Origen → @Model.Destino</div>
         </div>
         <div class="head-actions">
             <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Viajes</a>
-            @if (Model.PuedeEditar)
+            @if (esEntregaPt)
+            {
+                <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-table-columns me-1"></i>Centro Operativo</a>
+            }
+            else if (Model.PuedeEditar)
             {
                 <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
             }
@@ -656,56 +689,102 @@
         <div class="summary-item"><span>KM usados</span><strong>@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") + " km":"-")</strong></div>
     </div>
 
-    <div class="workflow">
-        <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : "current")"><span>Paso 1</span><strong>Programado</strong></div>
-        <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : Model.Estatus == "Programado" && preparacionCompleta ? "current" : "")"><span>Paso 2</span><strong>Preparación</strong></div>
-        <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : Model.Estatus == "En curso" ? "current" : "")"><span>Paso 3</span><strong>En curso</strong></div>
-        <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : "")"><span>Paso 4</span><strong>Regreso / cierre</strong></div>
-    </div>
+    @if (esEntregaPt)
+    {
+        <div class="workflow entrega">
+            <div class="workflow-step done"><span>Paso 1</span><strong>Programación</strong></div>
+            <div class="workflow-step @(Model.Estatus == "Programado" ? "current" : Model.Estatus is "En curso" or "Completado" ? "done" : "")"><span>Paso 2</span><strong>Carga física</strong></div>
+            <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : "")"><span>Paso 3</span><strong>Salida del chofer</strong></div>
+            <div class="workflow-step @(Model.Estatus == "En curso" ? "current" : Model.Estatus == "Completado" ? "done" : "")"><span>Paso 4</span><strong>En ruta</strong></div>
+            <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : "")"><span>Paso 5</span><strong>Regreso / cierre</strong></div>
+        </div>
+        <div class="sync-box"><i class="fa-solid fa-arrows-rotate me-1"></i><strong>Viaje vinculado a una Entrega.</strong> La carga física puede realizarla Centro Operativo o el chofer, sin restricción de horario. La salida física y el regreso los confirma el chofer desde su portal. Esta vista no debe duplicar esas acciones.</div>
+    }
+    else
+    {
+        <div class="workflow">
+            <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : "current")"><span>Paso 1</span><strong>Programado</strong></div>
+            <div class="workflow-step @(Model.Estatus is "En curso" or "Completado" ? "done" : Model.Estatus == "Programado" && preparacionCompleta ? "current" : "")"><span>Paso 2</span><strong>Preparación</strong></div>
+            <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : Model.Estatus == "En curso" ? "current" : "")"><span>Paso 3</span><strong>En curso</strong></div>
+            <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : "")"><span>Paso 4</span><strong>Regreso / cierre</strong></div>
+        </div>
+    }
 
     <div class="stage">
         @if (Model.Estatus == "Programado")
         {
-            <div class="stage-head">
-                <div>
-                    <h2 class="stage-title">Etapa actual: preparar e iniciar viaje</h2>
-                    <div class="stage-sub">Primero completa la preparación. Después registra la salida y el kilometraje inicial.</div>
-                </div>
-                <span class="badge bg-primary stage-badge">Programado</span>
-            </div>
-            if (!preparacionCompleta)
+            @if (esEntregaPt)
             {
-                <div class="missing mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>Falta completar:</strong> @string.Join(", ", faltantesPreparacion).</div>
-                <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
+                <div class="stage-head">
+                    <div>
+                        <h2 class="stage-title">Etapa actual: carga física y espera de salida</h2>
+                        <div class="stage-sub">Centro Operativo y el chofer pueden registrar la carga física. Cuando el embarque quede Cargado, el chofer confirmará la salida real desde su portal.</div>
+                    </div>
+                    <span class="badge bg-primary stage-badge">Programado</span>
+                </div>
+                @if (!preparacionCompleta)
+                {
+                    <div class="missing mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>La programación vinculada está incompleta:</strong> @string.Join(", ", faltantesPreparacion). Corrige esos datos desde Centro Operativo para mantener sincronizados Embarque y Viaje.</div>
+                }
+                else
+                {
+                    <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Programación del viaje completa. La carga puede continuar desde Centro Operativo o desde el portal del chofer. La salida física no se registra desde esta pantalla.</div>
+                }
+                <div class="stage-grid">
+                    <div class="s3"><div class="info-box"><div class="info-label">Fecha / hora</div><div class="info-value">@Model.FechaProgramada.ToString("dd/MM/yyyy") @(Model.HoraSalidaProgramada?.ToString(@"hh\:mm") ?? "Pendiente")</div></div></div>
+                    <div class="s3"><div class="info-box"><div class="info-label">Ruta</div><div class="info-value">@(Model.TieneRuta? Model.Ruta: "Pendiente")</div></div></div>
+                    <div class="s3"><div class="info-box"><div class="info-label">Unidad</div><div class="info-value">@Model.UnidadMostrar</div></div></div>
+                    <div class="s3"><div class="info-box"><div class="info-label">Chofer</div><div class="info-value">@Model.ChoferMostrar</div></div></div>
+                    <div class="s12 text-end"><a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-primary btn-sm"><i class="fa-solid fa-table-columns me-1"></i>Abrir Centro Operativo</a></div>
+                </div>
             }
             else
             {
-                <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Preparación completa. Ya puedes iniciar el viaje.</div>
-                <form asp-controller="LogisticaViajes" asp-action="RegistrarSalida" method="post" class="stage-grid">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
-                    <div class="s4"><label class="required">Fecha y hora de salida</label><input type="datetime-local" name="FechaSalida" value="@ahora" class="form-control" required /></div>
-                    <div class="s3"><label class="required">Kilometraje inicial</label><input type="number" name="KilometrajeSalida" min="0" step="1" class="form-control" required placeholder="Ej. 125430" /></div>
-                    <div class="s4"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1000" class="form-control" placeholder="Opcional" /></div>
-                    <div class="s1"><button type="submit" class="btn btn-success btn-sm w-100" onclick="return confirm('¿Confirmar la salida de este viaje?');"><i class="fa-solid fa-play me-1"></i>Iniciar</button></div>
-                </form>
+                <div class="stage-head">
+                    <div>
+                        <h2 class="stage-title">Etapa actual: preparar e iniciar viaje</h2>
+                        <div class="stage-sub">Primero completa la preparación. Después registra la salida y el kilometraje inicial.</div>
+                    </div>
+                    <span class="badge bg-primary stage-badge">Programado</span>
+                </div>
+                @if (!preparacionCompleta)
+                {
+                    <div class="missing mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>Falta completar:</strong> @string.Join(", ", faltantesPreparacion).</div>
+                    <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
+                }
+                else
+                {
+                    <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Preparación completa. Ya puedes iniciar el viaje.</div>
+                    <form asp-controller="LogisticaViajes" asp-action="RegistrarSalida" method="post" class="stage-grid">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                        <div class="s4"><label class="required">Fecha y hora de salida</label><input type="datetime-local" name="FechaSalida" value="@ahora" class="form-control" required /></div>
+                        <div class="s3"><label class="required">Kilometraje inicial</label><input type="number" name="KilometrajeSalida" min="0" step="1" class="form-control" required placeholder="Ej. 125430" /></div>
+                        <div class="s4"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1000" class="form-control" placeholder="Opcional" /></div>
+                        <div class="s1"><button type="submit" class="btn btn-success btn-sm w-100" onclick="return confirm('¿Confirmar la salida de este viaje?');"><i class="fa-solid fa-play me-1"></i>Iniciar</button></div>
+                    </form>
+                }
             }
         }
         else if (Model.Estatus == "En curso")
         {
             <div class="stage-head">
                 <div>
-                    <h2 class="stage-title">Etapa actual: registrar regreso</h2>
-                    <div class="stage-sub">La salida ya fue registrada. Captura el kilometraje final para cerrar el viaje.</div>
+                    <h2 class="stage-title">@(esEntregaPt ? "Entrega en ruta" : "Etapa actual: registrar regreso")</h2>
+                    <div class="stage-sub">@(esEntregaPt ? "La salida física ya fue confirmada por el chofer. El regreso también debe registrarlo el chofer desde su portal." : "La salida ya fue registrada. Captura el kilometraje final para cerrar el viaje.")</div>
                 </div>
                 <span class="badge bg-warning text-dark stage-badge">En curso</span>
             </div>
             <div class="stage-grid mb-2">
-                <div class="s4"><div class="info-box"><div class="info-label">Salida real</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm"):"-")</div></div></div>
-                <div class="s4"><div class="info-box"><div class="info-label">Kilometraje inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0") + " km":"-")</div></div></div>
+                <div class="s4"><div class="info-box"><div class="info-label">Salida real</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm") : "-")</div></div></div>
+                <div class="s4"><div class="info-box"><div class="info-label">Kilometraje inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0") + " km" : "-")</div></div></div>
                 <div class="s4"><div class="info-box"><div class="info-label">Destino</div><div class="info-value">@Model.Destino</div></div></div>
             </div>
-            @if (Model.PuedeRegistrarRegreso)
+            @if (esEntregaPt)
+            {
+                <div class="sync-box mb-0"><i class="fa-solid fa-user-shield me-1"></i><strong>Acción reservada al chofer.</strong> El regreso de esta Entrega se registra en LogisticaChofer para no crear un segundo cierre del mismo recorrido.</div>
+            }
+            else if (Model.PuedeRegistrarRegreso)
             {
                 <form asp-controller="LogisticaViajes" asp-action="RegistrarRetorno" method="post" class="stage-grid">
                     @Html.AntiForgeryToken()
@@ -728,11 +807,11 @@
                 <span class="badge bg-success stage-badge">Completado</span>
             </div>
             <div class="stage-grid">
-                <div class="s3"><div class="info-box"><div class="info-label">Salida</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm"):"-")</div></div></div>
-                <div class="s3"><div class="info-box"><div class="info-label">Regreso</div><div class="info-value">@(Model.FechaRegresoReal.HasValue? Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm"):"-")</div></div></div>
-                <div class="s2"><div class="info-box"><div class="info-label">KM inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0"):"-")</div></div></div>
-                <div class="s2"><div class="info-box"><div class="info-label">KM final</div><div class="info-value">@(Model.KilometrajeRegreso.HasValue? Model.KilometrajeRegreso.Value.ToString("N0"):"-")</div></div></div>
-                <div class="s2"><div class="info-box"><div class="info-label">KM usados</div><div class="info-value">@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0"):"-")</div></div></div>
+                <div class="s3"><div class="info-box"><div class="info-label">Salida</div><div class="info-value">@(Model.FechaSalidaReal.HasValue? Model.FechaSalidaReal.Value.ToString("dd/MM/yyyy HH:mm") : "-")</div></div></div>
+                <div class="s3"><div class="info-box"><div class="info-label">Regreso</div><div class="info-value">@(Model.FechaRegresoReal.HasValue? Model.FechaRegresoReal.Value.ToString("dd/MM/yyyy HH:mm") : "-")</div></div></div>
+                <div class="s2"><div class="info-box"><div class="info-label">KM inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0") : "-")</div></div></div>
+                <div class="s2"><div class="info-box"><div class="info-label">KM final</div><div class="info-value">@(Model.KilometrajeRegreso.HasValue? Model.KilometrajeRegreso.Value.ToString("N0") : "-")</div></div></div>
+                <div class="s2"><div class="info-box"><div class="info-label">KM usados</div><div class="info-value">@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") : "-")</div></div></div>
             </div>
         }
         else
@@ -747,10 +826,13 @@
     <div class="tabs-shell">
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDatos" type="button"><i class="fa-solid fa-circle-info me-1"></i>Datos</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencias @if(incidenciasAbiertas>0){
-            <span class="badge bg-danger ms-1">@incidenciasAbiertas</span>
-                        }
-</button></li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencias @if(incidenciasAbiertas>0){
+                    <span class="badge bg-danger ms-1">@incidenciasAbiertas</span>
+                                        }
+                </button>
+            </li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabEvidencias" type="button"><i class="fa-solid fa-paperclip me-1"></i>Evidencias <span class="badge bg-secondary ms-1">@totalEvidencias</span></button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabHistorial" type="button"><i class="fa-solid fa-clock-rotate-left me-1"></i>Historial</button></li>
         </ul>
@@ -759,7 +841,7 @@
             <div class="tab-pane fade show active" id="tabDatos">
                 <div class="section-head"><h3>Información del viaje</h3></div>
                 <div class="info-grid">
-                    <div class="i3 info-box"><div class="info-label">Tipo de salida</div><div class="info-value">@Model.TipoViaje</div></div>
+                    <div class="i3 info-box"><div class="info-label">Tipo de salida</div><div class="info-value">@tipoViajeVisible</div></div>
                     <div class="i3 info-box"><div class="info-label">Fecha programada</div><div class="info-value">@Model.FechaProgramada.ToString("dd/MM/yyyy")</div></div>
                     <div class="i3 info-box"><div class="info-label">Hora programada</div><div class="info-value">@(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm"):"Pendiente")</div></div>
                     <div class="i3 info-box"><div class="info-label">Ruta</div><div class="info-value">@(Model.TieneRuta? Model.Ruta: "Pendiente")</div></div>
@@ -767,7 +849,7 @@
                     <div class="i6 info-box"><div class="info-label">Destino</div><div class="info-value">@Model.Destino</div></div>
                     <div class="i6 info-box"><div class="info-label">Unidad</div><div class="info-value">@Model.UnidadMostrar</div></div>
                     <div class="i6 info-box"><div class="info-label">Chofer</div><div class="info-value">@Model.ChoferMostrar</div></div>
-                    <div class="i12 info-box"><div class="info-label">Motivo / objetivo</div><div class="info-value">@Model.Motivo</div></div>
+                    <div class="i12 info-box"><div class="info-label">Motivo / objetivo</div><div class="info-value">@TxtVisible(Model.Motivo)</div></div>
                 </div>
 
                 <div class="section-head mt-3"><h3>Seguimiento capturado</h3></div>
@@ -778,7 +860,7 @@
                     <div class="i3 info-box"><div class="info-label">KM final</div><div class="info-value">@(Model.KilometrajeRegreso.HasValue? Model.KilometrajeRegreso.Value.ToString("N0") + " km":"Pendiente")</div></div>
                     <div class="i3 info-box"><div class="info-label">KM utilizados</div><div class="info-value">@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") + " km":"-")</div></div>
                     <div class="i3 info-box"><div class="info-label">Pago gasolina</div><div class="info-value">@(Model.PagoGasolina.HasValue ? $"${Model.PagoGasolina.Value:N2}" : "-")</div></div>
-                    <div class="i6 info-box"><div class="info-label">Observaciones</div><div class="info-value" style="white-space:pre-line">@(string.IsNullOrWhiteSpace(Model.Observaciones) ? "-" : Model.Observaciones)</div></div>
+                    <div class="i6 info-box"><div class="info-label">Observaciones</div><div class="info-value" style="white-space:pre-line">@TxtVisible(Model.Observaciones)</div></div>
                 </div>
 
                 <div class="section-head mt-3"><h3>Registro</h3></div>
@@ -788,7 +870,7 @@
                     <div class="i4 info-box"><div class="info-label">Fecha creación</div><div class="info-value">@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div></div>
                 </div>
 
-                @if (Model.PuedeCancelar)
+                @if (Model.PuedeCancelar && !esEntregaPt)
                 {
                     <div class="danger-box">
                         <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#cancelarViaje"><i class="fa-solid fa-ban me-1"></i>Cancelar viaje</button>
@@ -801,6 +883,10 @@
                             </form>
                         </div>
                     </div>
+                }
+                @if (esEntregaPt && Model.Estatus == "Programado")
+                {
+                    <div class="sync-box mt-3 mb-0"><i class="fa-solid fa-link me-1"></i><strong>Entrega sincronizada con Embarque.</strong> Para cancelar o reprogramar esta operación utiliza Centro Operativo; hacerlo directamente sobre el viaje podría separar el estado del Embarque y del Viaje.</div>
                 }
             </div>
 
@@ -911,7 +997,7 @@
                                         <div class="evidence-meta">@evidencia.TipoEvidencia · @evidencia.FechaCarga.ToString("dd/MM/yyyy HH:mm")</div>
                                         @if (!string.IsNullOrWhiteSpace(evidencia.Observaciones))
                                         {
-                                            <div class="evidence-meta">@evidencia.Observaciones</div>
+                                            <div class="evidence-meta">@TxtVisible(evidencia.Observaciones)</div>
                                         }
                                     </div>
                                     <div class="d-flex gap-1">
@@ -945,7 +1031,7 @@
                     {
                         <div class="history-row">
                             <div class="history-date">@movimiento.FechaEvento.ToString("dd/MM/yyyy HH:mm")</div>
-                            <div class="history-event">@movimiento.Evento.Replace("_", " ")</div>
+                            <div class="history-event">@TxtVisible(movimiento.Evento.Replace("_", " "))</div>
                             <div>
                                 @if (!string.IsNullOrWhiteSpace(movimiento.EstadoAnterior) || !string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
                                 {
@@ -962,7 +1048,7 @@
                                 }
                                 @if (!string.IsNullOrWhiteSpace(movimiento.Observaciones))
                                 {
-                                    <div class="text-muted">@movimiento.Observaciones</div>
+                                    <div class="text-muted">@TxtVisible(movimiento.Observaciones)</div>
                                 }
                             </div>
                             <div class="history-user">@movimiento.Usuario</div>

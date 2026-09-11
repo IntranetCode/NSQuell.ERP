@@ -1,6 +1,6 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeCrearVm
 @{
-    ViewData["Title"] = "Programar viaje";
+    ViewData["Title"] = "Programar viaje independiente";
     Layout = "_Layout";
 }
 <style>
@@ -186,6 +186,55 @@
             color: var(--lv-blue)
         }
 
+    .linked-note {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 14px;
+        padding: 12px 14px;
+        border: 1px solid #b8d2f1;
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 11px;
+        background: #f4f8ff;
+        color: #31506f
+    }
+
+        .linked-note > div:first-child {
+            display: flex;
+            align-items: flex-start;
+            gap: 9px;
+            min-width: 0
+        }
+
+        .linked-note i {
+            margin-top: 2px;
+            color: var(--lv-blue);
+            font-size: 1rem
+        }
+
+        .linked-note strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--lv-blue);
+            font-size: .81rem;
+            font-weight: 800
+        }
+
+        .linked-note span {
+            display: block;
+            font-size: .75rem;
+            line-height: 1.45;
+            font-weight: 600
+        }
+
+        .linked-note .btn {
+            flex: 0 0 auto;
+            border-radius: 8px;
+            font-weight: 700;
+            white-space: nowrap
+        }
+
     .resource-strip {
         display: grid;
         grid-template-columns: repeat(4,minmax(120px,1fr));
@@ -273,6 +322,16 @@
         border-color: #2a3a50
     }
 
+    html[data-nsq-theme="dark"] .linked-note {
+        background: #0d1828;
+        border-color: #31527a;
+        color: #b9c8da
+    }
+
+        html[data-nsq-theme="dark"] .linked-note strong {
+            color: #dceafe
+        }
+
     @@media(max-width:900px) {
         .col-8g, .col-6g, .col-4g, .col-3g {
             grid-column: span 6
@@ -310,16 +369,36 @@
         .resource-strip {
             grid-template-columns: 1fr
         }
+
+        .linked-note {
+            flex-direction: column
+        }
+
+            .linked-note .btn {
+                width: 100%;
+                justify-content: center
+            }
     }
 </style>
 
 <div class="viaje-form-page">
     <div class="viaje-form-header">
         <div>
-            <h1 class="viaje-form-title"><i class="fa-solid fa-route me-1"></i>Programar viaje</h1>
-            <p class="viaje-form-subtitle">Registra una salida operativa. La hora, ruta, unidad y chofer pueden completarse después, pero serán obligatorios antes de iniciar el viaje.</p>
+            <h1 class="viaje-form-title"><i class="fa-solid fa-route me-1"></i>Programar viaje independiente</h1>
+            <p class="viaje-form-subtitle">Registra rutas de personal, recolecciones, traslados u otras salidas que no provienen de un embarque de producto terminado.</p>
         </div>
         <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Regresar</a>
+    </div>
+
+    <div class="linked-note">
+        <div>
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+                <strong>Las Entregas de producto terminado no se crean aquí.</strong>
+                <span>Cuando un embarque usa la forma de salida Entrega, el viaje se crea y sincroniza desde Centro Operativo. Ahí se conservan fecha, hora, ruta, unidad y chofer ligados al embarque. La carga física puede realizarla Centro Operativo o el chofer, sin importar la hora; la salida física la confirma el chofer desde su portal.</span>
+            </div>
+        </div>
+        <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-table-columns me-1"></i>Centro Operativo</a>
     </div>
 
     @if (TempData["LogisticaError"] != null)
@@ -338,10 +417,9 @@
             <div class="form-section-title">Datos generales</div>
             <div class="form-grid">
                 <div class="col-4g">
-                    <label asp-for="TipoViaje" class="form-label required">Tipo de salida</label>
+                    <label asp-for="TipoViaje" class="form-label required">Tipo de viaje</label>
                     <select asp-for="TipoViaje" class="form-select" required>
                         <option value="">Selecciona...</option>
-                        <option value="Entrega PT">Entrega PT</option>
                         <option value="Ruta de personal">Ruta de personal</option>
                         <option value="Recolección de MP">Recolección de MP</option>
                         <option value="Traslado entre plantas">Traslado entre plantas</option>
@@ -349,6 +427,7 @@
                         <option value="Entrega / recolección especial">Entrega / recolección especial</option>
                         <option value="Otro">Otro</option>
                     </select>
+                    <div class="form-text">Para una Entrega de producto terminado utiliza Centro Operativo; no se debe crear manualmente desde Viajes.</div>
                     <span asp-validation-for="TipoViaje"></span>
                 </div>
                 <div class="col-4g">
@@ -400,7 +479,7 @@
 
         <div class="form-section">
             <div class="form-section-title">Unidad y chofer</div>
-            <div class="optional-note"><strong>Asignación opcional al programar.</strong> Puedes crear el viaje sin estos recursos. Antes de iniciar se exigirá hora de salida, ruta, unidad y chofer activos.</div>
+            <div class="optional-note"><strong>Asignación opcional al programar.</strong> En un viaje independiente puedes guardar mientras falten recursos. Antes de iniciar el viaje se exigirán hora de salida, ruta, unidad y chofer activos.</div>
             <div class="form-grid">
                 <div class="col-6g">
                     <label asp-for="UnidadID" class="form-label">Unidad</label>
@@ -423,7 +502,7 @@
                         }
                     </select>
                     <span asp-validation-for="OperadorUsuarioID"></span>
-                    <div class="form-text">Solo aparecen usuarios activos del departamento de Logística cuyo puesto contiene “Chofer”.</div>
+                    <div class="form-text">Selecciona uno de los choferes activos disponibles en el catálogo.</div>
                 </div>
             </div>
             <div class="resource-strip">
@@ -448,7 +527,7 @@
 
         <div class="form-actions">
             <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
-            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Programar viaje</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Programar viaje independiente</button>
         </div>
     </form>
 </div>

@@ -12,9 +12,12 @@
     var viajesEnCurso = Model.Where(x => x.Estatus == "En curso").OrderBy(x => x.FechaSalidaReal ?? x.FechaProgramada).ToList();
     var viajesProgramados = Model.Where(x => x.Estatus == "Programado").OrderBy(x => x.FechaProgramada).ThenBy(x => x.HoraSalidaProgramada).ToList();
     var viajesCompletados = Model.Where(x => x.Estatus == "Completado").OrderByDescending(x => x.FechaRegresoReal ?? x.FechaProgramada).ToList();
+    var hayEntregas = Model.Any(x => string.Equals(x.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase));
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
+    public static bool EsEntrega(ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm viaje) => string.Equals(viaje.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
 
     public static string EstadoClase(string? estatus)
     {
@@ -434,7 +437,7 @@
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
                 <h1><i class="fa-solid fa-truck-fast me-2"></i>Mis viajes</h1>
-                <p>@nombreChofer · consulta tus viajes asignados y entra al que te corresponde atender.</p>
+                <p>@nombreChofer · consulta tus viajes asignados. En las Entregas puedes entrar al detalle para revisar o continuar la carga física y posteriormente registrar la salida.</p>
             </div>
             <div class="hero-actions">
                 <a href="@Url.Action("Index", "LogisticaChofer")" class="btn-hero">
@@ -463,6 +466,14 @@
         <span><i class="fa-regular fa-calendar me-1"></i>@DateTime.Today.ToString("dd/MM/yyyy")</span>
     </div>
 
+    @if (hayEntregas)
+    {
+        <div class="alert alert-primary d-flex align-items-start gap-2">
+            <i class="fa-solid fa-boxes-stacked mt-1"></i>
+            <div><strong>Carga física compartida.</strong> En los viajes de Entrega, Centro Operativo y el chofer pueden escanear las mismas cajas sin importar la hora. El avance se guarda sobre el mismo embarque; la salida física continúa siendo confirmada por el chofer desde el detalle del viaje.</div>
+        </div>
+    }
+
     @if (viajesEnCurso.Any())
     {
         <section class="panel">
@@ -489,7 +500,8 @@
                                 <tr class="viaje-curso">
                                     <td>
                                         <div class="main">@viaje.Folio</div>
-                                        <div class="sub">@Txt(viaje.Motivo)</div>
+                                        <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje))</div>
+                                        <div class="sub">@TxtVisible(viaje.Motivo)</div>
                                     </td>
                                     <td>
                                         <div class="main">@(viaje.FechaSalidaReal?.ToString("HH:mm") ?? "-")</div>
@@ -536,6 +548,10 @@
                                 </div>
                                 <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
                             </div>
+                            @if (EsEntrega(viaje))
+                            {
+                                <div class="sub mt-1"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física compartida</div>
+                            }
                             <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
                             <div class="mobile-meta">
                                 <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
@@ -584,7 +600,8 @@
                                 <tr class="viaje-programado">
                                     <td>
                                         <div class="main">@viaje.Folio</div>
-                                        <div class="sub">@Txt(viaje.Motivo)</div>
+                                        <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje))</div>
+                                        <div class="sub">@TxtVisible(viaje.Motivo)</div>
                                     </td>
                                     <td>
                                         <div class="main">@FechaHoraProgramada(viaje)</div>
@@ -603,11 +620,15 @@
                                             <i class="fa-solid fa-clock"></i>
                                             @viaje.Estatus
                                         </span>
+                                        @if (EsEntrega(viaje))
+                                        {
+                                            <div class="sub"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física se gestiona desde el detalle</div>
+                                        }
                                     </td>
                                     <td class="text-end">
                                         <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
                                             <i class="fa-solid fa-arrow-right"></i>
-                                            Abrir
+                                            @(EsEntrega(viaje) ? "Abrir operación" : "Abrir")
                                         </a>
                                     </td>
                                 </tr>
@@ -623,10 +644,14 @@
                             <div class="mobile-top">
                                 <div>
                                     <div class="main">@viaje.Folio</div>
-                                    <div class="sub">@FechaHoraProgramada(viaje)</div>
+                                    <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje)) · @FechaHoraProgramada(viaje)</div>
                                 </div>
                                 <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
                             </div>
+                            @if (EsEntrega(viaje))
+                            {
+                                <div class="sub mt-1"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física compartida desde el detalle</div>
+                            }
                             <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
                             <div class="mobile-meta">
                                 <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
@@ -635,7 +660,7 @@
                             <div class="mobile-action">
                                 <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
                                     <i class="fa-solid fa-arrow-right"></i>
-                                    Abrir viaje
+                                    @(EsEntrega(viaje) ? "Abrir operación" : "Abrir viaje")
                                 </a>
                             </div>
                         </div>
@@ -678,7 +703,8 @@
                                 <tr class="viaje-completado">
                                     <td>
                                         <div class="main">@viaje.Folio</div>
-                                        <div class="sub">@Txt(viaje.Motivo)</div>
+                                        <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje))</div>
+                                        <div class="sub">@TxtVisible(viaje.Motivo)</div>
                                     </td>
                                     <td>
                                         <div class="main">@(viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>

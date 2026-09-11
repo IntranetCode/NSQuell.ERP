@@ -1020,6 +1020,173 @@
             color: var(--lg-muted)
         }
 
+    .lg-file-picker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 74px;
+        cursor: pointer
+    }
+
+    .lg-file-picker input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none
+    }
+
+    .lg-file-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 7px
+    }
+
+    .lg-file-item {
+        display: grid;
+        grid-template-columns: 28px minmax(0,1fr) auto;
+        gap: 7px;
+        align-items: center;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        padding: 6px 7px;
+        background: #fff
+    }
+
+    .lg-file-item-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eef4fb;
+        color: var(--lg-blue)
+    }
+
+    .lg-file-item strong {
+        display: block;
+        font-size: 8px;
+        color: var(--lg-navy);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .lg-file-item small {
+        display: block;
+        font-size: 7px;
+        color: var(--lg-muted);
+        margin-top: 1px
+    }
+
+    .lg-file-remove {
+        width: 27px;
+        height: 27px;
+        border-radius: 7px;
+        border: 1px solid #f0bcbc;
+        background: #fff6f6;
+        color: var(--lg-red);
+        cursor: pointer
+    }
+
+    .lg-file-summary {
+        margin-top: 6px;
+        font-size: 7px;
+        color: var(--lg-muted);
+        text-align: right
+    }
+
+    .lg-evidence-list {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 6px;
+        margin-top: 7px
+    }
+
+    .lg-evidence-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        padding: 7px;
+        background: #fff;
+        min-width: 0
+    }
+
+    .lg-evidence-item > i {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eef4fb;
+        color: var(--lg-blue);
+        flex: 0 0 28px
+    }
+
+    .lg-evidence-item .data {
+        min-width: 0;
+        flex: 1
+    }
+
+    .lg-evidence-item strong {
+        display: block;
+        font-size: 8px;
+        color: var(--lg-navy);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .lg-evidence-item small {
+        display: block;
+        font-size: 6px;
+        color: var(--lg-muted);
+        margin-top: 1px
+    }
+
+    .lg-origin-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 2px 5px;
+        font-size: 6px;
+        font-weight: 900;
+        background: #eef2f7;
+        color: #617285;
+        white-space: nowrap
+    }
+
+    .lg-origin-chip.viaje {
+        background: var(--lg-purple-soft);
+        color: var(--lg-purple)
+    }
+
+    .lg-radio-card.is-disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        background: #f4f6f8
+    }
+
+    .lg-flow-warning {
+        border: 1px solid #e4c786;
+        background: var(--lg-amber-soft);
+        border-radius: 8px;
+        padding: 8px 9px;
+        font-size: 8px;
+        color: #825817;
+        margin-bottom: 8px
+    }
+
+    @@media (max-width:760px) {
+        .lg-evidence-list { grid-template-columns: 1fr }
+    }
+
     .lg-toast-wrap {
         position: fixed;
         right: 15px;
@@ -2170,6 +2337,239 @@
     .lg-no-time-strip {
         z-index: 9
     }
+
+    .lg-inline-panel {
+        border: 1px solid var(--lg-line);
+        border-radius: 9px;
+        background: #fbfcfe;
+        padding: 9px;
+        margin-top: 8px
+    }
+
+    .lg-inline-panel h4 {
+        margin: 0 0 7px;
+        color: var(--lg-navy);
+        font-size: 8px;
+        font-weight: 900
+    }
+
+    .lg-doc-requirements {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 5px;
+        margin-top: 7px
+    }
+
+    .lg-doc-required {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 7px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 7px 8px;
+        min-width: 0
+    }
+
+    .lg-doc-required strong {
+        display: block;
+        color: var(--lg-navy);
+        font-size: 8px
+    }
+
+    .lg-doc-required small {
+        display: block;
+        color: var(--lg-muted);
+        font-size: 6px;
+        margin-top: 2px
+    }
+
+    .lg-doc-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        font-size: 6px;
+        font-weight: 900;
+        white-space: nowrap;
+        background: var(--lg-amber-soft);
+        color: #8d5a08
+    }
+
+    .lg-doc-state.ok {
+        background: var(--lg-green-soft);
+        color: var(--lg-green)
+    }
+
+    .lg-doc-upload-grid {
+        display: grid;
+        grid-template-columns: 210px minmax(0,1fr);
+        gap: 7px;
+        align-items: end
+    }
+
+    .lg-doc-upload-grid .full {
+        grid-column: 1/-1
+    }
+
+    .lg-doc-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px
+    }
+
+    .lg-doc-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0,1fr) auto;
+        gap: 8px;
+        align-items: center;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 7px 8px
+    }
+
+    .lg-doc-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eef4fb;
+        color: var(--lg-blue);
+        font-size: 13px
+    }
+
+    .lg-doc-row strong {
+        display: block;
+        color: var(--lg-navy);
+        font-size: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .lg-doc-row small {
+        display: block;
+        color: var(--lg-muted);
+        font-size: 6px;
+        margin-top: 2px
+    }
+
+    .lg-doc-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+    .lg-scan-box {
+        border: 1px solid #9cbbe0;
+        background: #f3f8fe;
+        border-radius: 10px;
+        padding: 10px;
+        margin-top: 9px
+    }
+
+    .lg-scan-row {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 7px;
+        align-items: end
+    }
+
+    .lg-scan-input {
+        height: 42px;
+        width: 100%;
+        border: 2px solid #8dafd5;
+        border-radius: 8px;
+        background: #fff;
+        color: var(--lg-navy);
+        padding: 0 11px;
+        font-size: 13px;
+        font-weight: 800;
+        outline: none
+    }
+
+    .lg-scan-input:focus {
+        border-color: var(--lg-blue);
+        box-shadow: 0 0 0 4px rgba(31,102,194,.08)
+    }
+
+    .lg-scan-help {
+        margin-top: 5px;
+        color: var(--lg-muted);
+        font-size: 7px
+    }
+
+    .lg-load-stats {
+        display: grid;
+        grid-template-columns: repeat(4,1fr);
+        gap: 6px;
+        margin-top: 8px
+    }
+
+    .lg-load-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 8px;
+        max-height: 245px;
+        overflow: auto
+    }
+
+    .lg-load-row {
+        display: grid;
+        grid-template-columns: 32px minmax(0,1fr) auto;
+        gap: 8px;
+        align-items: center;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 7px 8px
+    }
+
+    .lg-load-check {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--lg-green-soft);
+        color: var(--lg-green)
+    }
+
+    .lg-load-check.pending {
+        background: var(--lg-amber-soft);
+        color: var(--lg-amber)
+    }
+
+    .lg-load-row strong {
+        display: block;
+        color: var(--lg-navy);
+        font-size: 8px
+    }
+
+    .lg-load-row small {
+        display: block;
+        color: var(--lg-muted);
+        font-size: 6px;
+        margin-top: 2px
+    }
+
+    @@media(max-width:760px) {
+        .lg-doc-requirements,.lg-doc-upload-grid,.lg-load-stats { grid-template-columns:1fr }
+        .lg-doc-upload-grid .full { grid-column:auto }
+        .lg-scan-row { grid-template-columns:1fr }
+        .lg-doc-row,.lg-load-row { grid-template-columns:32px minmax(0,1fr) }
+        .lg-doc-actions { grid-column:1/-1;justify-content:flex-start }
+    }
 </style>
 
 <div class="lg-page">
@@ -2224,7 +2624,7 @@
             <select class="lg-select" name="formaEnvio">
                 <option value="">Todas</option>
                 <option value="Pendiente" selected="@(Model.FormaEnvio == "Pendiente")">Por definir</option>
-                <option value="Interno" selected="@(Model.FormaEnvio == "Interno")">Entrega NS</option>
+                <option value="Interno" selected="@(Model.FormaEnvio == "Interno")">Entrega</option>
                 <option value="Cliente" selected="@(Model.FormaEnvio == "Cliente")">Cliente recoge</option>
                 <option value="Paqueteria" selected="@(Model.FormaEnvio == "Paqueteria")">Paquetería</option>
             </select>
@@ -2833,21 +3233,19 @@
                                 </div>
                                 <div class="lg-subsection" id="bloqueAduana" style="display:none">
                                     <h4>ADUANA</h4>
-                                    <div class="lg-radio-row">
-                                        <label class="lg-radio-card"><input type="radio" name="PasaAduana" value="true" /><strong>Sí pasa por aduana</strong></label>
-                                        <label class="lg-radio-card"><input type="radio" name="PasaAduana" value="false" /><strong>No pasa por aduana</strong></label>
-                                    </div>
+                                    <input type="hidden" name="PasaAduana" id="fsPasaAduana" value="" />
+                                    <div class="lg-helpbox" style="margin:0"><strong>Exportación:</strong> la operación se registra con paso por aduana y no puede utilizar la opción Entrega.</div>
                                 </div>
                                 <div class="lg-subsection">
                                     <h4>FORMA DE SALIDA</h4>
                                     <div class="lg-radio-row">
-                                        <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Interno" /><strong><i class="fa-solid fa-truck"></i> Entrega NS</strong><small>Ruta, unidad y chofer interno.</small></label>
+                                        <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Interno" /><strong><i class="fa-solid fa-truck"></i> Entrega</strong><small>Ruta, unidad y chofer interno.</small></label>
                                         <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Cliente" /><strong><i class="fa-solid fa-user-check"></i> Cliente recoge</strong><small>Persona o transportista que recoge.</small></label>
                                         <label class="lg-radio-card"><input type="radio" name="FormaEnvio" value="Paqueteria" /><strong><i class="fa-solid fa-box"></i> Paquetería</strong><small>Compañía y modalidad de envío.</small></label>
                                     </div>
                                 </div>
                                 <div class="lg-subsection" id="salidaInterna" style="display:none">
-                                    <h4>ENTREGA NS</h4>
+                                    <h4>ENTREGA</h4>
                                     <div class="lg-form-grid">
                                         <div class="lg-field"><label>Ruta</label><select class="lg-select" name="RutaID" id="fsRuta"><option value="">Selecciona...</option></select></div>
                                         <div class="lg-field"><label>Unidad</label><select class="lg-select" name="UnidadID" id="fsUnidad"><option value="">Selecciona...</option></select></div>
@@ -2878,7 +3276,7 @@
                                         <div class="lg-field full"><label>Guía / referencia</label><input class="lg-input" name="GuiaReferencia" id="fsGuia" maxlength="150" /></div>
                                         <div class="lg-field full"><label>Chofer / persona que recoge <small>(opcional)</small></label><input class="lg-input" id="fsChoferExternoPaq" maxlength="200" /></div>
                                         <div class="lg-field"><label>Unidad externa <small>(opcional)</small></label><input class="lg-input" id="fsUnidadExternaPaq" maxlength="100" /></div>
-                                        <div class="lg-field"><label>Placas <small>(opcional)</small></label><input class="lg-input" id="fsPlacasExternasPaq" maxlength="100" /></div>
+                                        <div class="lg-field"><label>Placas *</label><input class="lg-input" id="fsPlacasExternasPaq" maxlength="100" placeholder="Obligatorias para paquetería" /></div>
                                     </div>
                                 </div>
                                 <div class="lg-flow-actions">
@@ -2890,56 +3288,131 @@
 
                         <div class="lg-stage" data-stage="preparacion">
                             <div class="lg-stage-head">
-                                <div><h3>3. Preparación PT</h3><p>Asignación y preparación de cajas del embarque.</p></div>
+                                <div><h3>3. Preparación PT</h3><p>Asignación y preparación de las cajas reservadas para este embarque.</p></div>
                                 <span class="lg-stage-badge" id="badgePreparacion">Pendiente</span>
                             </div>
                             <div class="lg-detail-grid">
                                 <div class="lg-detail"><span>Total piezas</span><strong id="frTotal">—</strong></div>
                                 <div class="lg-detail"><span>Preparadas</span><strong id="frPreparadas">—</strong></div>
-                                <div class="lg-detail"><span>Cajas</span><strong id="frCajas">—</strong></div>
+                                <div class="lg-detail"><span>Cajas reservadas</span><strong id="frCajas">—</strong></div>
                                 <div class="lg-detail"><span>Avance</span><strong id="frAvance">—</strong></div>
                             </div>
                             <div class="lg-progress"><span id="frBar" style="width:0%"></span></div>
-                            <div class="lg-disabled-note" style="margin-top:10px"><i class="fa-solid fa-boxes-stacked"></i><br />La captura de cajas desde este modal se conectará en la siguiente etapa. Mientras tanto, la información se mantiene sincronizada con la vista actual de Embarques.</div>
-                            <div class="lg-flow-actions"><a class="lg-btn" id="btnPreparacionVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir vista actual</a><button class="lg-btn lg-btn-primary" type="button" data-next-stage="carga">Ver siguiente etapa</button></div>
-                        </div>
-
-                        <div class="lg-stage" data-stage="carga">
-                            <div class="lg-stage-head"><div><h3>4. Carga física</h3><p>Confirmación de las cajas cargadas y evidencia de carga.</p></div><span class="lg-stage-badge" id="badgeCarga">Pendiente</span></div>
-                            <div class="lg-detail-grid">
-                                <div class="lg-detail"><span>Cajas asignadas</span><strong id="fcCajas">—</strong></div>
-                                <div class="lg-detail"><span>Cajas cargadas</span><strong id="fcCargadas">—</strong></div>
-                                <div class="lg-detail"><span>Evidencias</span><strong id="fcEvidencias">—</strong></div>
-                                <div class="lg-detail"><span>Estatus</span><strong id="fcEstatus">—</strong></div>
+                            <div class="lg-helpbox" style="margin-top:10px"><strong>Preparación PT:</strong> aquí se refleja el avance real de piezas y cajas reservadas. La asignación detallada sigue disponible en la vista completa del embarque.</div>
+                            <div class="lg-flow-actions">
+                                <a class="lg-btn" id="btnPreparacionVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir preparación</a>
+                                <button class="lg-btn lg-btn-primary" type="button" data-next-stage="documentos">Continuar a documentación</button>
                             </div>
-                            <div class="lg-disabled-note"><i class="fa-solid fa-dolly"></i><br />Aquí conectaremos la confirmación de carga y la evidencia sin salir del calendario.</div>
                         </div>
 
                         <div class="lg-stage" data-stage="documentos">
-                            <div class="lg-stage-head"><div><h3>5. Documentación</h3><p>Documentos obligatorios definidos por la forma de salida.</p></div><span class="lg-stage-badge" id="badgeDocumentos">Pendiente</span></div>
-                            <div class="lg-detail-grid">
-                                <div class="lg-detail"><span>Faltantes</span><strong id="fdFaltantes">—</strong></div>
-                                <div class="lg-detail"><span>Forma salida</span><strong id="fdForma">—</strong></div>
-                                <div class="lg-detail"><span>Tipo operación</span><strong id="fdTipo">—</strong></div>
-                                <div class="lg-detail"><span>Evidencias</span><strong id="fdEvidencias">—</strong></div>
+                            <div class="lg-stage-head">
+                                <div><h3>4. Documentación</h3><p>Carga, consulta y valida la documentación del embarque sin salir del Centro Operativo.</p></div>
+                                <span class="lg-stage-badge" id="badgeDocumentos">Pendiente</span>
                             </div>
-                            <div class="lg-disabled-note"><i class="fa-solid fa-file-circle-check"></i><br />La carga y validación de documentos se conectará al mismo modal respetando las reglas actuales de Factura/Remisión, Guía, Packing List, Carta Porte y exportación.</div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Documentos faltantes</span><strong id="fdFaltantes">—</strong></div>
+                                <div class="lg-detail"><span>Forma de salida</span><strong id="fdForma">—</strong></div>
+                                <div class="lg-detail"><span>Tipo operación</span><strong id="fdTipo">—</strong></div>
+                                <div class="lg-detail"><span>Estado</span><strong id="fdEstado">—</strong></div>
+                            </div>
+                            <div class="lg-helpbox"><strong>Orden obligatorio:</strong> los documentos requeridos deben quedar validados antes de iniciar la carga física.</div>
+                            <div class="lg-inline-panel">
+                                <h4>DOCUMENTOS REQUERIDOS</h4>
+                                <div id="docRequisitos" class="lg-doc-requirements"><div class="lg-disabled-note" style="grid-column:1/-1;padding:12px">Abre esta etapa para consultar los requisitos.</div></div>
+                            </div>
+                            <div class="lg-inline-panel">
+                                <h4>AGREGAR DOCUMENTO</h4>
+                                <form id="formDocumentoFlow">
+                                    <div class="lg-doc-upload-grid">
+                                        <div class="lg-field"><label>Tipo de documento *</label><select class="lg-select" id="docTipo" name="tipoDocumento" required><option value="">Selecciona...</option></select></div>
+                                        <div class="lg-field"><label>Archivo *</label><input class="lg-input" style="padding-top:5px" type="file" id="docArchivo" name="archivo" accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png" required /></div>
+                                        <div class="lg-field full"><label>Observaciones</label><textarea class="lg-input" style="height:58px;padding-top:7px" id="docObservaciones" name="observaciones" maxlength="1000" placeholder="Obligatorio cuando se utilice Remisión como sustituto de Factura."></textarea></div>
+                                    </div>
+                                    <div class="lg-flow-actions" style="margin-top:7px">
+                                        <button class="lg-btn lg-btn-primary" type="submit" id="btnSubirDocumento"><i class="fa-solid fa-cloud-arrow-up"></i> Subir documento</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="lg-inline-panel">
+                                <h4>DOCUMENTOS DEL EMBARQUE</h4>
+                                <div id="docLista" class="lg-doc-list"><div class="lg-disabled-note" style="padding:12px">Todavía no se han consultado los documentos.</div></div>
+                            </div>
+                            <div class="lg-flow-actions">
+                                <a class="lg-btn" id="btnDocumentosVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Vista completa</a>
+                                <button class="lg-btn lg-btn-primary" type="button" data-next-stage="carga">Continuar a carga física</button>
+                            </div>
+                        </div>
+
+                        <div class="lg-stage" data-stage="carga">
+                            <div class="lg-stage-head">
+                                <div><h3>5. Carga física</h3><p>Escanea cada caja cuando sea cargada físicamente al embarque.</p></div>
+                                <span class="lg-stage-badge" id="badgeCarga">Pendiente</span>
+                            </div>
+                            <div class="lg-detail-grid">
+                                <div class="lg-detail"><span>Cajas asignadas</span><strong id="fcCajas">—</strong></div>
+                                <div class="lg-detail"><span>Cajas cargadas</span><strong id="fcCargadas">—</strong></div>
+                                <div class="lg-detail"><span>Piezas pendientes</span><strong id="fcPendientes">—</strong></div>
+                                <div class="lg-detail"><span>Estatus</span><strong id="fcEstatus">—</strong></div>
+                            </div>
+                            <div class="lg-progress"><span id="fcBar" style="width:0%"></span></div>
+                            <div class="lg-load-stats">
+                                <div class="lg-detail"><span>Total piezas</span><strong id="fcTotalPiezas">—</strong></div>
+                                <div class="lg-detail"><span>Piezas cargadas</span><strong id="fcPiezasCargadas">—</strong></div>
+                                <div class="lg-detail"><span>Piezas reservadas</span><strong id="fcPiezasReservadas">—</strong></div>
+                                <div class="lg-detail"><span>Avance carga</span><strong id="fcAvance">—</strong></div>
+                            </div>
+                            <div class="lg-scan-box">
+                                <form id="formEscanearCajaFlow">
+                                    <div class="lg-scan-row">
+                                        <div class="lg-field">
+                                            <label>Escanear etiqueta de caja</label>
+                                            <input class="lg-scan-input" id="fcCodigo" name="codigo" autocomplete="off" maxlength="500" placeholder="Escanea o captura la etiqueta y presiona Enter" />
+                                        </div>
+                                        <button class="lg-btn lg-btn-primary" style="height:42px" type="submit" id="btnEscanearCaja"><i class="fa-solid fa-barcode"></i> Registrar caja</button>
+                                    </div>
+                                    <div class="lg-scan-help"><i class="fa-solid fa-circle-info"></i> El lector puede enviar Enter automáticamente. La caja se valida contra PT, cliente, pieza, calidad y disponibilidad.</div>
+                                </form>
+                            </div>
+                            <div class="lg-inline-panel">
+                                <h4>CAJAS DEL EMBARQUE</h4>
+                                <div id="fcListaCajas" class="lg-load-list"><div class="lg-disabled-note" style="padding:12px">Abre esta etapa para consultar las cajas.</div></div>
+                            </div>
+                            <div class="lg-flow-actions">
+                                <a class="lg-btn" id="btnCargaVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Vista completa</a>
+                                <button class="lg-btn lg-btn-success" type="button" id="btnConfirmarCargaFisica" disabled><i class="fa-solid fa-circle-check"></i> Confirmar carga física</button>
+                                <button class="lg-btn" type="button" data-next-stage="salidaPlanta">Ver salida de planta</button>
+                            </div>
                         </div>
 
                         <div class="lg-stage" data-stage="salidaPlanta">
-                            <div class="lg-stage-head"><div><h3>6. Salida de planta</h3><p>Confirmación de salida una vez preparada la carga y documentación.</p></div><span class="lg-stage-badge" id="badgeSalidaPlanta">Pendiente</span></div>
+                            <div class="lg-stage-head">
+                                <div><h3>6. Salida de planta</h3><p>Confirmación de la salida física después de documentación y carga completas.</p></div>
+                                <span class="lg-stage-badge" id="badgeSalidaPlanta">Pendiente</span>
+                            </div>
                             <div class="lg-detail-grid">
                                 <div class="lg-detail"><span>Incidencias abiertas</span><strong id="fspInc">—</strong></div>
                                 <div class="lg-detail"><span>Críticas</span><strong id="fspCrit">—</strong></div>
-                                <div class="lg-detail"><span>Despachadas</span><strong id="fspDesp">—</strong></div>
-                                <div class="lg-detail"><span>Estatus</span><strong id="fspEst">—</strong></div>
+                                <div class="lg-detail"><span>Piezas despachadas</span><strong id="fspDesp">—</strong></div>
+                                <div class="lg-detail"><span>Viaje</span><strong id="fspViaje">—</strong></div>
                             </div>
-                            <div class="lg-disabled-note"><i class="fa-solid fa-truck-fast"></i><br />La salida se conectará aquí con las mismas validaciones que hoy usa Embarques.</div>
+                            <div class="lg-helpbox" id="salidaPlantaAyuda"><strong>Salida:</strong> esperando información del embarque.</div>
+                            <div class="lg-flow-actions">
+                                <a class="lg-btn" id="btnSalidaVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir operación</a>
+                                <button class="lg-btn lg-btn-success" type="button" id="btnConfirmarSalidaPlanta" style="display:none"><i class="fa-solid fa-truck-fast"></i> Confirmar salida de planta</button>
+                            </div>
                         </div>
 
                         <div class="lg-stage" data-stage="entrega">
-                            <div class="lg-stage-head"><div><h3>7. Entrega</h3><p>Cierre del embarque con receptor y evidencia obligatoria.</p></div><span class="lg-stage-badge" id="badgeEntrega">Pendiente</span></div>
-                            <div class="lg-helpbox"><strong>Esta etapa ya está conectada.</strong> Cuando el embarque esté En ruta podrás confirmar la entrega y adjuntar la evidencia desde aquí.</div>
+                            <div class="lg-stage-head">
+                                <div><h3>7. Entrega</h3><p>Cierre del embarque con receptor y una o más evidencias.</p></div>
+                                <span class="lg-stage-badge" id="badgeEntrega">Pendiente</span>
+                            </div>
+                            <div class="lg-helpbox" id="entregaAyuda"><strong>Entrega:</strong> cuando el embarque esté En ruta podrás registrar al receptor y adjuntar evidencias.</div>
+                            <div class="lg-subsection">
+                                <h4>EVIDENCIAS COMPARTIDAS</h4>
+                                <div id="flowEvidencias" class="lg-evidence-list"></div>
+                            </div>
                             <div class="lg-flow-actions"><button class="lg-btn lg-btn-success" type="button" id="btnEntregaFlow" style="display:none"><i class="fa-solid fa-circle-check"></i> Confirmar entrega</button></div>
                         </div>
                     </section>
@@ -3002,7 +3475,7 @@
 <div class="lg-modal-backdrop" id="modalCerrar">
     <div class="lg-modal lg-modal-sm">
         <div class="lg-modal-head">
-            <div><h2>Confirmar entrega</h2><p>La evidencia es obligatoria para cerrar.</p></div>
+            <div><h2>Confirmar entrega</h2><p>Registra al receptor y adjunta una o más evidencias de entrega.</p></div>
             <button class="lg-close" type="button" data-close="modalCerrar">✕</button>
         </div>
         <form id="formCerrar" enctype="multipart/form-data">
@@ -3013,12 +3486,20 @@
                     <div class="lg-field"><label>Receptor *</label><input class="lg-input" name="ReceptorNombre" required maxlength="200" /></div>
                     <div class="lg-field"><label>Fecha entrega *</label><input class="lg-input" type="datetime-local" name="FechaEntrega" id="cFecha" required /></div>
                     <div class="lg-field"><label>Remisión</label><input class="lg-input" name="FolioRemision" maxlength="100" /></div>
-                    <div class="lg-field"><label>Observación evidencia</label><input class="lg-input" name="ObservacionesEvidencia" maxlength="500" /></div>
+                    <div class="lg-field"><label>Observación evidencias</label><input class="lg-input" name="ObservacionesEvidencia" maxlength="500" /></div>
                     <div class="lg-field full"><label>Observaciones</label><textarea class="lg-input" style="height:65px;padding-top:7px" name="Observaciones" maxlength="1200"></textarea></div>
-                    <div class="lg-field full"><label>Evidencia *</label><label class="lg-file"><strong><i class="fa-solid fa-cloud-arrow-up"></i> Adjuntar evidencia</strong><small>JPG, JPEG, PNG o PDF · Máx. 10 MB</small><input style="margin-top:8px;font-size:8px" type="file" name="Evidencia" accept=".jpg,.jpeg,.png,.pdf" required /></label></div>
+                    <div class="lg-field full">
+                        <label>Evidencias *</label>
+                        <label class="lg-file lg-file-picker" for="cEvidencias">
+                            <span><strong><i class="fa-solid fa-camera"></i> Agregar evidencia</strong><small>Fotos o PDF · hasta 15 archivos · máximo 10 MB por archivo</small></span>
+                            <input type="file" id="cEvidencias" name="Evidencias" accept="image/*,.pdf" multiple />
+                        </label>
+                        <div class="lg-file-list" id="cEvidenciasLista"></div>
+                        <div class="lg-file-summary" id="cEvidenciasResumen">0 evidencias seleccionadas</div>
+                    </div>
                 </div>
             </div>
-            <div class="lg-modal-foot"><button class="lg-btn" type="button" data-close="modalCerrar">Cancelar</button><button class="lg-btn lg-btn-success" type="submit">Confirmar entrega</button></div>
+            <div class="lg-modal-foot"><button class="lg-btn" type="button" data-close="modalCerrar">Cancelar</button><button class="lg-btn lg-btn-success" type="submit" id="btnConfirmarEntrega"><i class="fa-solid fa-circle-check"></i> Confirmar entrega</button></div>
         </form>
     </div>
 </div>
@@ -3035,13 +3516,23 @@
         const urlFlujo='@Url.Action("ObtenerFlujo", "LogisticaOperacion")';
         const urlGuardarSalida='@Url.Action("GuardarBorradorSalida", "LogisticaOperacion")';
         const urlConfirmarSalida='@Url.Action("ConfirmarSalidaConfigurada", "LogisticaOperacion")';
+        const urlObtenerDocumentos='@Url.Action("ObtenerDocumentosModal", "LogisticaEmbarques")';
+        const urlSubirDocumento='@Url.Action("SubirDocumento", "LogisticaEmbarques")';
+        const urlValidarDocumento='@Url.Action("ValidarDocumento", "LogisticaEmbarques")';
+        const urlRetirarDocumento='@Url.Action("RetirarDocumento", "LogisticaEmbarques")';
+        const urlObtenerCargaFisica='@Url.Action("ObtenerCargaFisica", "LogisticaOperacion")';
+        const urlEscanearCajaCarga='@Url.Action("EscanearCajaCarga", "LogisticaOperacion")';
+        const urlConfirmarCargaFisica='@Url.Action("ConfirmarCargaFisica", "LogisticaOperacion")';
+        const urlConfirmarSalidaPlanta='@Url.Action("ConfirmarSalidaPlanta", "LogisticaOperacion")';
         const urlCerrar='@Url.Action("CerrarConEvidencia", "LogisticaOperacion")';
         const urlProgramacionesEmbarque='@Url.Action("ObtenerProgramacionesParaEmbarque", "LogisticaOperacion")';
         const urlCrearEmbarque='@Url.Action("CrearEmbarqueDesdeProgramaciones", "LogisticaOperacion")';
         const urlDetalleEmb='@Url.Action("Detalle", "LogisticaEmbarques")';
+        const urlVerEvidenciaEmbarque='@Url.Action("VerEvidencia", "LogisticaEmbarques")';
+        const urlVerEvidenciaViaje='@Url.Action("VerEvidencia", "LogisticaViajes")';
         const horaInicio=0;
         const horaFin=1440;
-        let dragCard=null,flujoActual=null;
+        let dragCard=null,flujoActual=null,documentosActual=null,cargaFisicaActual=null;
 
         document.querySelectorAll('.lg-modal-backdrop').forEach(modal=>{
             if(modal.parentElement!==document.body)document.body.appendChild(modal);
@@ -3059,7 +3550,7 @@
         function hhmm(min){return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`}
         function esc(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;")}
         function number(v){return Number(v||0).toLocaleString('es-MX')}
-        function formaTexto(v){if(v==='Interno')return'Entrega NS';if(v==='Cliente')return'Cliente recoge';if(v==='Paqueteria')return'Paquetería';return'Por definir'}
+        function formaTexto(v){if(v==='Interno')return'Entrega';if(v==='Cliente')return'Cliente recoge';if(v==='Paqueteria')return'Paquetería';return'Por definir'}
         function tipoTexto(v){return v==='Exportacion'?'Exportación':v==='Nacional'?'Nacional':'Por definir'}
 
 
@@ -3511,6 +4002,8 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
                 let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
                 if(!r.ok||!j.ok)throw new Error(j.mensaje||`Error HTTP ${r.status}.`);
                 flujoActual=j.flujo;
+                documentosActual=null;
+                cargaFisicaActual=null;
                 renderFlujo(flujoActual);
                 document.getElementById('flowLoading').style.display='none';
                 document.getElementById('flowBody').style.display='';
@@ -3525,8 +4018,7 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
             document.getElementById('fCarga').textContent=`${f.fechaCargaProgramada||'Sin fecha'} ${f.horaCargaProgramada||''}`.trim();
             document.getElementById('fPiezas').textContent=`${number(f.totalPiezas)} PZA`;
             document.getElementById('fPreparadas').textContent=`${number(f.totalPiezasPreparadas)} PZA`;
-            document.getElementById('btnVistaCompletaFlow').href=`${urlDetalleEmb}/${f.embarqueID}`;
-            document.getElementById('btnPreparacionVista').href=`${urlDetalleEmb}/${f.embarqueID}`;
+            ['btnVistaCompletaFlow','btnPreparacionVista','btnDocumentosVista','btnCargaVista','btnSalidaVista'].forEach(id=>{const a=document.getElementById(id);if(a)a.href=`${urlDetalleEmb}/${f.embarqueID}`});
 
             renderTimeline(f.pasos||[]);
             cargarSalidaForm(f);
@@ -3534,21 +4026,221 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
             document.getElementById('fpHora').textContent=f.horaCargaProgramada||'—';
             document.getElementById('fpPiezas').textContent=`${number(f.totalPiezas)} PZA`;
             document.getElementById('fpEntrega').textContent=f.fechaEntregaProgramada||'—';
+
             document.getElementById('frTotal').textContent=`${number(f.totalPiezas)} PZA`;
             document.getElementById('frPreparadas').textContent=`${number(f.totalPiezasPreparadas)} PZA`;
             document.getElementById('frCajas').textContent=number(f.totalCajas);
-            const pct=f.totalPiezas>0?Math.min(100,Math.round((Number(f.totalPiezasPreparadas||0)*100)/Number(f.totalPiezas||1))):0;
-            document.getElementById('frAvance').textContent=`${pct}%`;document.getElementById('frBar').style.width=`${pct}%`;
-            document.getElementById('fcCajas').textContent=number(f.totalCajas);document.getElementById('fcCargadas').textContent=number(f.totalCajasCargadas);
-            document.getElementById('fcEvidencias').textContent=number(f.totalEvidencias);document.getElementById('fcEstatus').textContent=f.estatus||'—';
-            document.getElementById('fdFaltantes').textContent=number(f.documentosFaltantes);document.getElementById('fdForma').textContent=formaTexto(f.salida?.formaEnvio);
-            document.getElementById('fdTipo').textContent=tipoTexto(f.salida?.tipoOperacion);document.getElementById('fdEvidencias').textContent=number(f.totalEvidencias);
-            document.getElementById('fspInc').textContent=number(f.incidenciasAbiertas);document.getElementById('fspCrit').textContent=number(f.incidenciasCriticas);
-            document.getElementById('fspDesp').textContent=`${number(f.totalPiezasDespachadas)} PZA`;document.getElementById('fspEst').textContent=f.estatus||'—';
-            const btnEntrega=document.getElementById('btnEntregaFlow');btnEntrega.style.display=f.estatus==='En ruta'?'':'none';
+            const pctPreparacion=f.totalPiezas>0?Math.min(100,Math.round((Number(f.totalPiezasPreparadas||0)*100)/Number(f.totalPiezas||1))):0;
+            document.getElementById('frAvance').textContent=`${pctPreparacion}%`;
+            document.getElementById('frBar').style.width=`${pctPreparacion}%`;
+
+            const totalCajas=Number(f.totalCajas||0);
+            const cargadas=Number(f.totalCajasCargadas||0);
+            const pendientes=Math.max(0,totalCajas-cargadas);
+            const pctCarga=totalCajas>0?Math.min(100,Math.round((cargadas*100)/totalCajas)):0;
+            document.getElementById('fcCajas').textContent=number(totalCajas);
+            document.getElementById('fcCargadas').textContent=number(cargadas);
+            document.getElementById('fcPendientes').textContent=number(pendientes);
+            document.getElementById('fcEstatus').textContent=f.estatus||'—';
+            document.getElementById('fcBar').style.width=`${pctCarga}%`;
+
+            const pasoDocumentos=(f.pasos||[]).find(x=>x.clave==='documentos');
+            document.getElementById('fdFaltantes').textContent=pasoDocumentos?.disponible||pasoDocumentos?.completo?number(f.documentosFaltantes):'—';
+            document.getElementById('fdForma').textContent=formaTexto(f.salida?.formaEnvio);
+            document.getElementById('fdTipo').textContent=tipoTexto(f.salida?.tipoOperacion);
+            document.getElementById('fdEstado').textContent=pasoDocumentos?.completo?'Completa':pasoDocumentos?.disponible?'Pendiente':'Bloqueada';
+
+            document.getElementById('fspInc').textContent=number(f.incidenciasAbiertas);
+            document.getElementById('fspCrit').textContent=number(f.incidenciasCriticas);
+            document.getElementById('fspDesp').textContent=`${number(f.totalPiezasDespachadas)} PZA`;
+            document.getElementById('fspViaje').textContent=f.viajeID?`VIA-${String(f.viajeID).padStart(6,'0')}`:'—';
+
+            const forma=f.salida?.formaEnvio||'';
+            const ayudaSalida=document.getElementById('salidaPlantaAyuda');
+            const btnSalidaPlanta=document.getElementById('btnConfirmarSalidaPlanta');
+            if(btnSalidaPlanta){
+                btnSalidaPlanta.style.display='none';
+                btnSalidaPlanta.disabled=false;
+                btnSalidaPlanta.title='';
+            }
+            if(forma==='Interno'){
+                ayudaSalida.innerHTML=f.estatus==='En ruta'||f.estatus==='Entregado'
+                    ?'<strong>Entrega:</strong> la salida de planta ya fue confirmada por el chofer y el embarque se encuentra '+esc(f.estatus)+'.'
+                    :f.viajeID
+                        ?`<strong>Entrega:</strong> el viaje VIA-${String(f.viajeID).padStart(6,'0')} ya está vinculado. La salida física la confirma exclusivamente el chofer desde su portal; al registrarla, PT se descuenta y el embarque pasa a En ruta.`
+                        :'<strong>Entrega:</strong> falta crear o vincular el viaje del chofer antes de la salida.';
+            }else if(forma==='Cliente'||forma==='Paqueteria'){
+                if(f.estatus==='Cargado'){
+                    if(Number(f.incidenciasCriticas||0)>0){
+                        ayudaSalida.innerHTML=`<strong>Salida bloqueada:</strong> existen ${number(f.incidenciasCriticas)} incidencia(s) crítica(s) abierta(s). Deben resolverse antes de confirmar la salida de planta.`;
+                        if(btnSalidaPlanta){btnSalidaPlanta.style.display='';btnSalidaPlanta.disabled=true;btnSalidaPlanta.title='Resuelve las incidencias críticas antes de continuar.'}
+                    }else{
+                        ayudaSalida.innerHTML=forma==='Cliente'
+                            ?'<strong>Cliente recoge:</strong> la carga física está completa. Confirma la salida cuando la mercancía abandone realmente la planta; en ese momento se descontará PT y el embarque pasará a En ruta.'
+                            :'<strong>Paquetería:</strong> la carga física está completa. Confirma la salida cuando la mercancía sea entregada al transportista; en ese momento se descontará PT y el embarque pasará a En ruta.';
+                        if(btnSalidaPlanta)btnSalidaPlanta.style.display='';
+                    }
+                }else if(f.estatus==='En ruta'||f.estatus==='Entregado'){
+                    ayudaSalida.innerHTML='<strong>Salida confirmada:</strong> la mercancía ya salió de planta y el descuento de PT fue registrado.';
+                }else{
+                    ayudaSalida.innerHTML='<strong>Salida externa:</strong> primero completa Documentación y Carga física. El botón de salida se habilitará cuando el embarque quede Cargado.';
+                }
+            }else{
+                ayudaSalida.innerHTML='<strong>Salida:</strong> primero define y confirma la forma de salida del embarque.';
+            }
+
+            document.getElementById('entregaAyuda').innerHTML=f.estatus==='En ruta'?'<strong>Entrega disponible:</strong> captura al receptor y adjunta una o más evidencias para cerrar el embarque.':'<strong>Entrega:</strong> esta etapa se habilita cuando la salida física deja el embarque En ruta.';
+            renderEvidenciasCompartidas(f.evidencias||[]);
+
+            const btnEntrega=document.getElementById('btnEntregaFlow');
+            btnEntrega.style.display=f.estatus==='En ruta'?'':'none';
             const actual=(f.pasos||[]).find(x=>x.actual)||(f.pasos||[]).find(x=>x.disponible&&!x.completo)||(f.pasos||[])[0];
-            activateStage(actual?.clave||'programacion');
+            activateStage(actual?.clave||'programacion',false);
             actualizarBadges(f.pasos||[]);
+        }
+
+        function renderEvidenciasCompartidas(evidencias){
+            const cont=document.getElementById('flowEvidencias');
+            if(!cont)return;
+            cont.innerHTML='';
+            if(!evidencias.length){cont.innerHTML='<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px">Todavía no hay evidencias registradas para el embarque o su viaje relacionado.</div>';return}
+            evidencias.forEach(x=>{
+                const esViaje=String(x.origen||'').toLowerCase()==='viaje';
+                const href=`${esViaje?urlVerEvidenciaViaje:urlVerEvidenciaEmbarque}?id=${encodeURIComponent(x.evidenciaID)}`;
+                const item=document.createElement('div');
+                item.className='lg-evidence-item';
+                item.innerHTML=`<i class="fa-solid ${x.esPdf?'fa-file-pdf':x.esImagen?'fa-image':'fa-paperclip'}"></i><div class="data"><strong title="${esc(x.nombreOriginal||'Evidencia')}">${esc(x.nombreOriginal||'Evidencia')}</strong><small>${esc(x.tipoEvidencia||'Evidencia')} · ${esc(x.fechaCarga||'')} · ${esc(x.usuario||'')}</small></div><span class="lg-origin-chip ${esViaje?'viaje':''}">${esViaje?'Viaje':'Embarque'}</span><a class="lg-btn" style="height:27px;padding:0 7px" href="${href}" target="_blank" rel="noopener" title="Ver evidencia"><i class="fa-solid fa-eye"></i></a>`;
+                cont.appendChild(item);
+            });
+        }
+
+        async function cargarDocumentosModal(){
+            if(!flujoActual?.embarqueID)return;
+            const req=document.getElementById('docRequisitos');
+            const lista=document.getElementById('docLista');
+            if(req)req.innerHTML='<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Consultando requisitos...</div>';
+            if(lista)lista.innerHTML='<div class="lg-disabled-note" style="padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Consultando documentos...</div>';
+            try{
+                const r=await fetch(`${urlObtenerDocumentos}?embarqueId=${encodeURIComponent(flujoActual.embarqueID)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible consultar los documentos.');
+                documentosActual=j;
+                renderDocumentosModal(j);
+            }catch(err){
+                if(req)req.innerHTML=`<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px;color:var(--lg-red)">${esc(err.message||'Error al consultar requisitos.')}</div>`;
+                if(lista)lista.innerHTML='';
+            }
+        }
+
+        function iconoDocumento(nombre,tipoContenido){
+            const ext=String(nombre||'').split('.').pop()?.toLowerCase()||'';
+            if(String(tipoContenido||'').startsWith('image/')||['jpg','jpeg','png'].includes(ext))return'fa-image';
+            if(ext==='pdf')return'fa-file-pdf';
+            if(['xls','xlsx'].includes(ext))return'fa-file-excel';
+            if(['doc','docx'].includes(ext))return'fa-file-word';
+            if(ext==='xml')return'fa-code';
+            return'fa-file';
+        }
+
+        function renderDocumentosModal(j){
+            const req=document.getElementById('docRequisitos');
+            const lista=document.getElementById('docLista');
+            const select=document.getElementById('docTipo');
+            const form=document.getElementById('formDocumentoFlow');
+            const btnSubir=document.getElementById('btnSubirDocumento');
+            document.getElementById('fdFaltantes').textContent=number(j.documentosFaltantes);
+            document.getElementById('fdEstado').textContent=j.documentacionCompleta?'Completa':'Pendiente';
+            if(req){
+                req.innerHTML='';
+                const requeridos=j.requeridos||[];
+                if(!requeridos.length)req.innerHTML='<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px">No hay requisitos documentales definidos para la forma de salida actual.</div>';
+                requeridos.forEach(x=>{
+                    const d=document.createElement('div');
+                    d.className='lg-doc-required';
+                    d.innerHTML=`<div style="min-width:0"><strong>${esc(x.tipoDocumento||'Documento')}</strong><small>${esc(x.areaResponsable||'Sin área')} · ${x.obligatorio?'Obligatorio':'Opcional'}</small></div><span class="lg-doc-state ${x.cumplido?'ok':''}"><i class="fa-solid ${x.cumplido?'fa-circle-check':'fa-clock'}"></i> ${x.cumplido?'Cumplido':'Pendiente'}</span>`;
+                    req.appendChild(d);
+                });
+            }
+            if(select){
+                const actual=select.value;
+                select.innerHTML='<option value="">Selecciona...</option>';
+                (j.tiposPermitidos||[]).forEach(tipo=>{const o=document.createElement('option');o.value=tipo;o.textContent=tipo;if(tipo===actual)o.selected=true;select.appendChild(o)});
+            }
+            const puedeModificar=Boolean(j.puedeModificar);
+            if(form)form.querySelectorAll('input,select,textarea').forEach(x=>x.disabled=!puedeModificar);
+            if(btnSubir)btnSubir.disabled=!puedeModificar;
+            if(lista){
+                lista.innerHTML='';
+                const documentos=j.documentos||[];
+                if(!documentos.length){lista.innerHTML='<div class="lg-disabled-note" style="padding:12px">Todavía no hay documentos cargados.</div>';return}
+                documentos.forEach(x=>{
+                    const row=document.createElement('div');
+                    row.className='lg-doc-row';
+                    const estado=x.validado?'<span class="lg-doc-state ok"><i class="fa-solid fa-circle-check"></i> Validado</span>':'<span class="lg-doc-state"><i class="fa-solid fa-clock"></i> Pendiente</span>';
+                    row.innerHTML=`<div class="lg-doc-icon"><i class="fa-solid ${iconoDocumento(x.nombreOriginal,x.tipoContenido)}"></i></div><div style="min-width:0"><strong title="${esc(x.nombreOriginal||'Documento')}">${esc(x.tipoDocumento||'Documento')} · ${esc(x.nombreOriginal||'')}</strong><small>${esc(x.areaResponsable||'Sin área')} · ${tamanoArchivo(x.tamanoBytes)} · ${esc(x.fechaCarga||'')} ${x.usuarioCarga?`· ${esc(x.usuarioCarga)}`:''}</small>${x.observaciones?`<small title="${esc(x.observaciones)}">Obs.: ${esc(x.observaciones)}</small>`:''}</div><div class="lg-doc-actions">${estado}<a class="lg-btn" style="height:27px;padding:0 7px" href="${esc(x.verUrl||'#')}" target="_blank" rel="noopener" title="Ver documento"><i class="fa-solid fa-eye"></i></a>${!x.validado&&puedeModificar?`<button class="lg-btn lg-btn-success" style="height:27px;padding:0 7px" type="button" data-validar-documento="${x.documentoId}"><i class="fa-solid fa-check"></i> Validar</button>`:''}${puedeModificar?`<button class="lg-btn lg-btn-danger" style="height:27px;padding:0 7px" type="button" data-retirar-documento="${x.documentoId}"><i class="fa-solid fa-trash-can"></i></button>`:''}</div>`;
+                    lista.appendChild(row);
+                });
+            }
+        }
+
+        async function ejecutarAccionDocumento(url,data,mensajeError){
+            const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:data.toString()});
+            let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+            if(!r.ok||!j.ok)throw new Error(j.mensaje||mensajeError);
+            toast(j.mensaje||'Documento actualizado.');
+            await refrescarFlujoActual('documentos');
+        }
+
+        async function cargarCargaFisica(){
+            if(!flujoActual?.embarqueID)return;
+            const lista=document.getElementById('fcListaCajas');
+            if(lista)lista.innerHTML='<div class="lg-disabled-note" style="padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Consultando cajas...</div>';
+            try{
+                const r=await fetch(`${urlObtenerCargaFisica}?embarqueId=${encodeURIComponent(flujoActual.embarqueID)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible consultar la carga física.');
+                cargaFisicaActual=j;
+                renderCargaFisica(j);
+                setTimeout(()=>{const input=document.getElementById('fcCodigo');if(input&&!input.disabled)input.focus()},80);
+            }catch(err){
+                if(lista)lista.innerHTML=`<div class="lg-disabled-note" style="padding:12px;color:var(--lg-red)">${esc(err.message||'Error al consultar las cajas.')}</div>`;
+            }
+        }
+
+        function renderCargaFisica(j){
+            const total=Number(j.totalPiezas||0);
+            const cargadas=Number(j.piezasCargadas||0);
+            const reservadas=Number(j.piezasReservadas||0);
+            const pendientes=Math.max(0,Number(j.piezasPendientes??(total-cargadas)));
+            const pct=total>0?Math.min(100,Math.round((cargadas*100)/total)):0;
+            document.getElementById('fcCajas').textContent=number(j.cajasAsignadas);
+            document.getElementById('fcCargadas').textContent=number(j.cajasCargadas);
+            document.getElementById('fcPendientes').textContent=`${number(pendientes)} PZA`;
+            document.getElementById('fcEstatus').textContent=j.estatus||'—';
+            document.getElementById('fcTotalPiezas').textContent=`${number(total)} PZA`;
+            document.getElementById('fcPiezasCargadas').textContent=`${number(cargadas)} PZA`;
+            document.getElementById('fcPiezasReservadas').textContent=`${number(reservadas)} PZA`;
+            document.getElementById('fcAvance').textContent=`${pct}%`;
+            document.getElementById('fcBar').style.width=`${pct}%`;
+            const cerrado=['Cargado','En ruta','Entregado','Cancelado'].includes(j.estatus||'');
+            const input=document.getElementById('fcCodigo');
+            const btnScan=document.getElementById('btnEscanearCaja');
+            if(input){input.disabled=cerrado;if(cerrado)input.value=''}
+            if(btnScan)btnScan.disabled=cerrado;
+            const btnConfirmar=document.getElementById('btnConfirmarCargaFisica');
+            if(btnConfirmar){btnConfirmar.disabled=!j.puedeConfirmar;btnConfirmar.title=j.puedeConfirmar?'Confirmar que todas las cajas ya fueron cargadas físicamente.':'Completa el escaneo de todas las piezas antes de confirmar.'}
+            const lista=document.getElementById('fcListaCajas');
+            if(!lista)return;
+            lista.innerHTML='';
+            const cajas=j.cajas||[];
+            if(!cajas.length){lista.innerHTML='<div class="lg-disabled-note" style="padding:12px">Todavía no hay cajas asignadas o escaneadas para este embarque.</div>';return}
+            cajas.forEach(x=>{
+                const cargada=['Cargada','Despachada'].includes(x.estatus);
+                const row=document.createElement('div');
+                row.className='lg-load-row';
+                row.innerHTML=`<div class="lg-load-check ${cargada?'':'pending'}"><i class="fa-solid ${cargada?'fa-check':'fa-clock'}"></i></div><div><strong>${esc(x.etiqueta||`Caja ${x.cajaId}`)} · ${number(x.cantidadAsignada)} PZA</strong><small>Parte ${esc(x.numeroParte||'—')} · OF ${esc(x.numeroOF||'—')} ${x.lote?`· Lote ${esc(x.lote)}`:''}</small><small>${cargada?`Cargada ${esc(x.fechaCarga||'')} ${x.usuarioCarga?`· ${esc(x.usuarioCarga)}`:''}`:`Reservada ${esc(x.fechaReserva||'')}`}</small></div><span class="lg-doc-state ${cargada?'ok':''}">${esc(x.estatus||'Pendiente')}</span>`;
+                lista.appendChild(row);
+            });
         }
 
         function renderTimeline(pasos){
@@ -3561,15 +4253,20 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
         }
 
         function actualizarBadges(pasos){
-            const map={programacion:'badgeProgramacion',salida:'badgeSalida',preparacion:'badgePreparacion',carga:'badgeCarga',documentos:'badgeDocumentos',salidaPlanta:'badgeSalidaPlanta',entrega:'badgeEntrega'};
+            const map={programacion:'badgeProgramacion',salida:'badgeSalida',preparacion:'badgePreparacion',documentos:'badgeDocumentos',carga:'badgeCarga',salidaPlanta:'badgeSalidaPlanta',entrega:'badgeEntrega'};
             pasos.forEach(p=>{const b=document.getElementById(map[p.clave]);if(!b)return;b.textContent=p.estadoTexto;b.className=`lg-stage-badge ${p.completo?'ok':p.actual?'current':''}`});
         }
 
-        function activateStage(clave){
+        function activateStage(clave,avisar=true){
+            const paso=(flujoActual?.pasos||[]).find(x=>x.clave===clave);
+            if(paso&&!paso.disponible&&!paso.completo){if(avisar)toast(`Primero completa la etapa anterior: ${paso.titulo}.`,'error');return false}
             document.querySelectorAll('.lg-stage').forEach(x=>x.classList.toggle('active',x.dataset.stage===clave));
             document.querySelectorAll('.lg-flow-side-item').forEach(x=>x.classList.toggle('active',x.dataset.stage===clave));
+            if(clave==='documentos')cargarDocumentosModal();
+            if(clave==='carga')cargarCargaFisica();
+            return true;
         }
-        document.querySelectorAll('[data-next-stage]').forEach(b=>b.addEventListener('click',()=>activateStage(b.dataset.nextStage)));
+        document.querySelectorAll('[data-next-stage]').forEach(b=>b.addEventListener('click',()=>activateStage(b.dataset.nextStage,true)));
 
         function setRadio(name,value){
             document.querySelectorAll(`#formSalida input[name="${name}"]`).forEach(x=>x.checked=String(x.value)===String(value??''));
@@ -3581,29 +4278,51 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
             const s=f.salida||{};
             document.getElementById('fsEmbarqueID').value=f.embarqueID;
             document.getElementById('fsRowVersion').value=s.rowVersion||f.rowVersion||'';
-            setRadio('TipoOperacion',s.tipoOperacion);setRadio('FormaEnvio',s.formaEnvio);
-            if(s.pasaAduana===true)setRadio('PasaAduana','true');else if(s.pasaAduana===false)setRadio('PasaAduana','false');else document.querySelectorAll('input[name="PasaAduana"]').forEach(x=>x.checked=false);
+            setRadio('TipoOperacion',s.tipoOperacion);
+            setRadio('FormaEnvio',s.formaEnvio);
+            document.getElementById('fsPasaAduana').value=s.tipoOperacion==='Exportacion'?'true':'';
             fillSelect('fsRuta',f.rutas,s.rutaID);fillSelect('fsUnidad',f.unidades,s.unidadID);fillSelect('fsChofer',f.choferes,s.choferUsuarioID);
             document.getElementById('fsModalidad').value=s.modalidadEnvio||'';document.getElementById('fsTransportista').value=s.transportista||'';document.getElementById('fsGuia').value=s.guiaReferencia||'';
             document.getElementById('fsChoferExterno').value=s.choferExterno||'';document.getElementById('fsUnidadExterna').value=s.unidadExterna||'';document.getElementById('fsPlacasExternas').value=s.placasExternas||'';
             document.getElementById('fsChoferExternoPaq').value=s.choferExterno||'';document.getElementById('fsUnidadExternaPaq').value=s.unidadExterna||'';document.getElementById('fsPlacasExternasPaq').value=s.placasExternas||'';
+            const bloqueado=['Cargado','En ruta','Entregado','Cancelado'].includes(f.estatus);
+            document.querySelectorAll('#formSalida input,#formSalida select').forEach(x=>{if(x.type!=='hidden')x.disabled=bloqueado});
+            document.getElementById('btnGuardarSalir').disabled=bloqueado;
+            document.getElementById('btnGuardarContinuar').disabled=bloqueado;
             syncSalidaVisibility();
         }
 
         function syncSalidaVisibility(){
             const tipo=document.querySelector('input[name="TipoOperacion"]:checked')?.value||'';
+            const interno=document.querySelector('input[name="FormaEnvio"][value="Interno"]');
+            const exportacion=tipo==='Exportacion';
+            if(interno){
+                interno.disabled=exportacion||['Cargado','En ruta','Entregado','Cancelado'].includes(flujoActual?.estatus||'');
+                interno.closest('.lg-radio-card')?.classList.toggle('is-disabled',exportacion);
+                if(exportacion&&interno.checked)interno.checked=false;
+            }
             const forma=document.querySelector('input[name="FormaEnvio"]:checked')?.value||'';
-            document.getElementById('bloqueAduana').style.display=tipo==='Exportacion'?'':'none';
+            document.getElementById('fsPasaAduana').value=exportacion?'true':'';
+            document.getElementById('bloqueAduana').style.display=exportacion?'':'none';
             document.getElementById('salidaInterna').style.display=forma==='Interno'?'':'none';
             document.getElementById('salidaCliente').style.display=forma==='Cliente'?'':'none';
             document.getElementById('salidaPaqueteria').style.display=forma==='Paqueteria'?'':'none';
+            document.getElementById('fsModalidad').required=forma==='Paqueteria';
+            document.getElementById('fsTransportista').required=forma==='Paqueteria';
+            document.getElementById('fsPlacasExternasPaq').required=forma==='Paqueteria';
+            document.getElementById('fsChoferExterno').required=forma==='Cliente';
+            document.getElementById('fsRuta').required=forma==='Interno';
+            document.getElementById('fsUnidad').required=forma==='Interno';
+            document.getElementById('fsChofer').required=forma==='Interno';
         }
         document.querySelectorAll('input[name="TipoOperacion"],input[name="FormaEnvio"]').forEach(x=>x.addEventListener('change',syncSalidaVisibility));
 
         function buildSalidaFormData(){
             const fd=new FormData(document.getElementById('formSalida'));
             fd.append('__RequestVerificationToken',token);
+            const tipo=document.querySelector('input[name="TipoOperacion"]:checked')?.value||'';
             const forma=document.querySelector('input[name="FormaEnvio"]:checked')?.value||'';
+            if(tipo==='Exportacion')fd.set('PasaAduana','true');else fd.delete('PasaAduana');
             if(forma==='Paqueteria'){
                 fd.set('ChoferExterno',document.getElementById('fsChoferExternoPaq').value||'');
                 fd.set('UnidadExterna',document.getElementById('fsUnidadExternaPaq').value||'');
@@ -3665,9 +4384,217 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
             }catch(err){toast(err.message||'Error al guardar la hora.','error')}
         });
 
+        document.getElementById('formDocumentoFlow')?.addEventListener('submit',async e=>{
+            e.preventDefault();
+            if(!flujoActual?.embarqueID)return;
+            const btn=document.getElementById('btnSubirDocumento');
+            const archivo=document.getElementById('docArchivo')?.files?.[0];
+            const tipo=document.getElementById('docTipo')?.value||'';
+            if(!tipo){toast('Selecciona el tipo de documento.','error');return}
+            if(!archivo){toast('Selecciona un archivo.','error');return}
+            const fd=new FormData(e.currentTarget);
+            fd.append('__RequestVerificationToken',token);
+            fd.append('embarqueId',String(flujoActual.embarqueID));
+            const original=btn.innerHTML;
+            try{
+                btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Subiendo...';
+                const r=await fetch(urlSubirDocumento,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:fd});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible subir el documento.');
+                e.currentTarget.reset();
+                toast(j.mensaje||'Documento cargado.');
+                await refrescarFlujoActual('documentos');
+            }catch(err){toast(err.message||'Error al subir el documento.','error')}
+            finally{btn.disabled=false;btn.innerHTML=original}
+        });
+
+        document.getElementById('docLista')?.addEventListener('click',async e=>{
+            const validar=e.target.closest('[data-validar-documento]');
+            const retirar=e.target.closest('[data-retirar-documento]');
+            if(!flujoActual?.embarqueID||(!validar&&!retirar))return;
+            try{
+                if(validar){
+                    if(!window.confirm('¿Validar este documento como correcto para el embarque?'))return;
+                    const data=new URLSearchParams();
+                    data.append('__RequestVerificationToken',token);
+                    data.append('documentoId',validar.dataset.validarDocumento);
+                    data.append('embarqueId',String(flujoActual.embarqueID));
+                    validar.disabled=true;
+                    await ejecutarAccionDocumento(urlValidarDocumento,data,'No fue posible validar el documento.');
+                }else{
+                    const motivo=window.prompt('Motivo por el que se retira el documento:','');
+                    if(motivo===null)return;
+                    if(!motivo.trim()){toast('Captura el motivo de retiro.','error');return}
+                    const data=new URLSearchParams();
+                    data.append('__RequestVerificationToken',token);
+                    data.append('documentoId',retirar.dataset.retirarDocumento);
+                    data.append('embarqueId',String(flujoActual.embarqueID));
+                    data.append('motivo',motivo.trim());
+                    retirar.disabled=true;
+                    await ejecutarAccionDocumento(urlRetirarDocumento,data,'No fue posible retirar el documento.');
+                }
+            }catch(err){toast(err.message||'Error al actualizar el documento.','error')}
+        });
+
+        document.getElementById('formEscanearCajaFlow')?.addEventListener('submit',async e=>{
+            e.preventDefault();
+            if(!flujoActual?.embarqueID)return;
+            const input=document.getElementById('fcCodigo');
+            const codigo=(input?.value||'').trim();
+            if(!codigo){toast('Escanea o captura una etiqueta de caja.','error');input?.focus();return}
+            const btn=document.getElementById('btnEscanearCaja');
+            const original=btn.innerHTML;
+            const data=new URLSearchParams();
+            data.append('__RequestVerificationToken',token);
+            data.append('embarqueId',String(flujoActual.embarqueID));
+            data.append('codigo',codigo);
+            try{
+                btn.disabled=true;input.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Validando...';
+                const r=await fetch(urlEscanearCajaCarga,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:data.toString()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible registrar la caja.');
+                if(j.rowVersion){
+                    flujoActual.rowVersion=j.rowVersion;
+                    document.getElementById('fsRowVersion').value=j.rowVersion;
+                    document.querySelectorAll(`[data-embarque-id="${flujoActual.embarqueID}"]`).forEach(x=>{if(x.dataset)x.dataset.rowVersion=j.rowVersion});
+                }
+                input.value='';
+                toast(j.mensaje||'Caja registrada.');
+                await refrescarFlujoActual('carga');
+            }catch(err){toast(err.message||'Error al escanear la caja.','error')}
+            finally{
+                btn.innerHTML=original;
+                const cerrado=['Cargado','En ruta','Entregado','Cancelado'].includes(flujoActual?.estatus||'');
+                btn.disabled=cerrado;input.disabled=cerrado;
+                if(!cerrado)setTimeout(()=>input.focus(),80);
+            }
+        });
+
+        document.getElementById('btnConfirmarCargaFisica')?.addEventListener('click',async()=>{
+            if(!flujoActual?.embarqueID)return;
+            if(!cargaFisicaActual?.puedeConfirmar){toast('Todavía faltan piezas o cajas por cargar físicamente.','error');return}
+            if(!window.confirm(`¿Confirmar la carga física completa de ${number(cargaFisicaActual.piezasCargadas)} PZA? Después continuará la Salida de planta.`))return;
+            const btn=document.getElementById('btnConfirmarCargaFisica');
+            const original=btn.innerHTML;
+            const data=new URLSearchParams();
+            data.append('__RequestVerificationToken',token);
+            data.append('embarqueId',String(flujoActual.embarqueID));
+            data.append('rowVersion',cargaFisicaActual.rowVersion||flujoActual.rowVersion||'');
+            try{
+                btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...';
+                const r=await fetch(urlConfirmarCargaFisica,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:data.toString()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible confirmar la carga física.');
+                if(j.rowVersion){
+                    flujoActual.rowVersion=j.rowVersion;
+                    document.getElementById('fsRowVersion').value=j.rowVersion;
+                    document.querySelectorAll(`[data-embarque-id="${flujoActual.embarqueID}"]`).forEach(x=>{if(x.dataset)x.dataset.rowVersion=j.rowVersion});
+                }
+                toast(j.mensaje||'Carga física confirmada.');
+                await refrescarFlujoActual('salidaPlanta');
+            }catch(err){toast(err.message||'Error al confirmar la carga física.','error')}
+            finally{btn.innerHTML=original}
+        });
+
+        let evidenciasEntregaDT=new DataTransfer();
+        const inputEvidenciasEntrega=document.getElementById('cEvidencias');
+
+        function tamanoArchivo(bytes){
+            const n=Number(bytes||0);
+            if(n<1024)return `${n} B`;
+            if(n<1024*1024)return `${(n/1024).toFixed(1)} KB`;
+            return `${(n/1024/1024).toFixed(1)} MB`;
+        }
+
+        function renderEvidenciasEntrega(){
+            if(!inputEvidenciasEntrega)return;
+            inputEvidenciasEntrega.files=evidenciasEntregaDT.files;
+            const lista=document.getElementById('cEvidenciasLista');
+            const resumen=document.getElementById('cEvidenciasResumen');
+            lista.innerHTML='';
+            const archivos=[...evidenciasEntregaDT.files];
+            archivos.forEach((file,index)=>{
+                const ext=(file.name.split('.').pop()||'').toLowerCase();
+                const imagen=file.type.startsWith('image/')||['jpg','jpeg','png','webp','heic','heif'].includes(ext);
+                const item=document.createElement('div');
+                item.className='lg-file-item';
+                item.innerHTML=`<div class="lg-file-item-icon"><i class="fa-solid ${imagen?'fa-image':'fa-file-pdf'}"></i></div><div><strong title="${esc(file.name)}">${esc(file.name)}</strong><small>${tamanoArchivo(file.size)}</small></div><button type="button" class="lg-file-remove" data-remove-evidencia="${index}" title="Quitar"><i class="fa-solid fa-xmark"></i></button>`;
+                lista.appendChild(item);
+            });
+            const total=archivos.reduce((a,x)=>a+x.size,0);
+            resumen.textContent=`${archivos.length} evidencia(s) · ${tamanoArchivo(total)}`;
+        }
+
+        function limpiarEvidenciasEntrega(){
+            evidenciasEntregaDT=new DataTransfer();
+            renderEvidenciasEntrega();
+        }
+
+        inputEvidenciasEntrega?.addEventListener('change',e=>{
+            const nuevas=[...e.target.files];
+            const existentes=[...evidenciasEntregaDT.files];
+            for(const file of nuevas){
+                const ext=(file.name.split('.').pop()||'').toLowerCase();
+                if(!['jpg','jpeg','png','webp','heic','heif','pdf'].includes(ext)){toast(`${file.name}: formato no permitido.`,'error');continue}
+                if(file.size>10*1024*1024){toast(`${file.name}: excede 10 MB.`,'error');continue}
+                if(existentes.some(x=>x.name===file.name&&x.size===file.size&&x.lastModified===file.lastModified)){toast(`${file.name}: ya fue agregado.`,'error');continue}
+                if(evidenciasEntregaDT.items.length>=15){toast('Puedes adjuntar como máximo 15 evidencias.','error');break}
+                const totalActual=[...evidenciasEntregaDT.files].reduce((a,x)=>a+x.size,0);
+                if(totalActual+file.size>100*1024*1024){toast('El total de evidencias no puede exceder 100 MB.','error');break}
+                evidenciasEntregaDT.items.add(file);
+                existentes.push(file);
+            }
+            renderEvidenciasEntrega();
+        });
+
+        document.getElementById('cEvidenciasLista')?.addEventListener('click',e=>{
+            const btn=e.target.closest('[data-remove-evidencia]');
+            if(!btn)return;
+            const quitar=Number(btn.dataset.removeEvidencia);
+            const nuevo=new DataTransfer();
+            [...evidenciasEntregaDT.files].forEach((file,index)=>{if(index!==quitar)nuevo.items.add(file)});
+            evidenciasEntregaDT=nuevo;
+            renderEvidenciasEntrega();
+        });
+
+        document.getElementById('btnConfirmarSalidaPlanta')?.addEventListener('click',async()=>{
+            if(!flujoActual?.embarqueID)return;
+            const forma=flujoActual.salida?.formaEnvio||'';
+            if(forma==='Interno'){toast('La salida de esta Entrega debe confirmarla el chofer desde su portal.','error');return}
+            if(forma!=='Cliente'&&forma!=='Paqueteria'){toast('Primero confirma una forma de salida válida.','error');return}
+            if(flujoActual.estatus!=='Cargado'){toast(`El embarque debe estar Cargado antes de confirmar la salida. Estado actual: ${flujoActual.estatus||'sin estado'}.`,'error');return}
+            if(Number(flujoActual.incidenciasCriticas||0)>0){toast('Existen incidencias críticas abiertas. Resuélvelas antes de confirmar la salida.','error');return}
+            const textoForma=forma==='Cliente'?'Cliente recoge':'Paquetería';
+            if(!window.confirm(`¿Confirmar la salida real de planta para ${textoForma}? Esta acción registrará la salida de PT y cambiará el embarque a En ruta.`))return;
+            const btn=document.getElementById('btnConfirmarSalidaPlanta');
+            const original=btn.innerHTML;
+            const data=new URLSearchParams();
+            data.append('__RequestVerificationToken',token);
+            data.append('embarqueId',String(flujoActual.embarqueID));
+            data.append('rowVersion',flujoActual.rowVersion||document.getElementById('fsRowVersion')?.value||'');
+            try{
+                btn.disabled=true;
+                btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Confirmando salida...';
+                const r=await fetch(urlConfirmarSalidaPlanta,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:data.toString()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible confirmar la salida de planta.');
+                if(j.rowVersion){
+                    flujoActual.rowVersion=j.rowVersion;
+                    document.getElementById('fsRowVersion').value=j.rowVersion;
+                    document.querySelectorAll(`[data-embarque-id="${flujoActual.embarqueID}"]`).forEach(x=>{if(x.dataset)x.dataset.rowVersion=j.rowVersion});
+                }
+                toast(j.mensaje||'Salida de planta confirmada.');
+                await refrescarFlujoActual('entrega');
+            }catch(err){toast(err.message||'Error al confirmar la salida de planta.','error')}
+            finally{btn.disabled=false;btn.innerHTML=original}
+        });
+
         document.getElementById('btnEntregaFlow')?.addEventListener('click',()=>{
             if(!flujoActual)return;
             closeModal('modalFlujo');
+            const form=document.getElementById('formCerrar');
+            form.reset();
+            limpiarEvidenciasEntrega();
             document.getElementById('cEmbarqueID').value=flujoActual.embarqueID;
             document.getElementById('cRowVersion').value=flujoActual.rowVersion||document.querySelector(`.lg-event[data-embarque-id="${flujoActual.embarqueID}"]`)?.dataset.rowVersion||'';
             const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset());document.getElementById('cFecha').value=now.toISOString().slice(0,16);
@@ -3675,9 +4602,22 @@ document.querySelectorAll('.lg-day-tab').forEach(btn=>btn.addEventListener('clic
         });
 
         document.getElementById('formCerrar')?.addEventListener('submit',async e=>{
-            e.preventDefault();const fd=new FormData(e.currentTarget);fd.append('__RequestVerificationToken',token);
-            try{const r=await fetch(urlCerrar,{method:'POST',body:fd});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible cerrar.');closeModal('modalCerrar');toast(j.mensaje||'Entrega confirmada.');setTimeout(()=>location.reload(),650)}
-            catch(err){toast(err.message||'Error al cerrar.','error')}
+            e.preventDefault();
+            if(evidenciasEntregaDT.files.length===0){toast('Adjunta al menos una evidencia de entrega.','error');return}
+            const btn=document.getElementById('btnConfirmarEntrega');
+            const original=btn.innerHTML;
+            const fd=new FormData(e.currentTarget);
+            fd.append('__RequestVerificationToken',token);
+            try{
+                btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+                const r=await fetch(urlCerrar,{method:'POST',body:fd});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible cerrar la entrega.');
+                closeModal('modalCerrar');
+                toast(j.mensaje||'Entrega confirmada.');
+                setTimeout(()=>location.reload(),650);
+            }catch(err){toast(err.message||'Error al cerrar la entrega.','error')}
+            finally{btn.disabled=false;btn.innerHTML=original}
         });
     })();
 </script>

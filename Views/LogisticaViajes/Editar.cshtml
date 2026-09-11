@@ -2,14 +2,25 @@
 @{
     ViewData["Title"] = "Completar preparación";
     Layout = "_Layout";
+    var esEntregaPt = string.Equals(Model.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
+    var rutaTexto = Model.RutaID.HasValue ? Model.Rutas?.FirstOrDefault(x => Convert.ToString(x.Id) == Convert.ToString(Model.RutaID.Value))?.Texto : null;
+    var unidadTexto = Model.UnidadID.HasValue ? Model.Unidades?.FirstOrDefault(x => Convert.ToString(x.Id) == Convert.ToString(Model.UnidadID.Value))?.Texto : null;
+    var choferTexto = Model.OperadorUsuarioID.HasValue ? Model.Operadores?.FirstOrDefault(x => Convert.ToString(x.Id) == Convert.ToString(Model.OperadorUsuarioID.Value))?.Texto : null;
+}
+@functions {
+    public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase).Replace("Entrega PT", "Entrega", StringComparison.OrdinalIgnoreCase);
 }
 <style>
     :root {
         --lv-blue: #173a7a;
+        --lv-blue-soft: #eef5ff;
         --lv-text: #172033;
         --lv-muted: #6d7888;
         --lv-border: #dce4ee;
         --lv-soft: #f6f8fb;
+        --lv-green: #107c41;
+        --lv-amber: #b54708;
         --lv-shadow: 0 8px 24px rgba(22,42,75,.06)
     }
 
@@ -54,13 +65,19 @@
         font-weight: 500
     }
 
-    .viaje-form-header > .btn {
-        min-height: 35px;
-        border-radius: 8px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center
+    .header-actions {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap
     }
+
+        .header-actions .btn {
+            min-height: 35px;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center
+        }
 
     .form-section {
         margin-bottom: 12px;
@@ -248,6 +265,144 @@
             border-color: #233f80
         }
 
+    .linked-box {
+        padding: 17px;
+        border: 1px solid #b8d2f1;
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 12px;
+        background: #f4f8ff;
+        box-shadow: var(--lv-shadow);
+        margin-bottom: 12px
+    }
+
+    .linked-head {
+        display: flex;
+        gap: 11px;
+        align-items: flex-start;
+        margin-bottom: 12px
+    }
+
+    .linked-icon {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: #e3efff;
+        color: var(--lv-blue);
+        font-size: 1rem
+    }
+
+    .linked-head h2 {
+        margin: 0;
+        color: var(--lv-blue);
+        font-size: 1rem;
+        font-weight: 900
+    }
+
+    .linked-head p {
+        margin: 4px 0 0;
+        color: #536b87;
+        font-size: .79rem;
+        line-height: 1.45;
+        font-weight: 600
+    }
+
+    .linked-flow {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 8px;
+        margin-top: 12px
+    }
+
+    .linked-step {
+        padding: 9px 10px;
+        border: 1px solid #cfdef0;
+        border-radius: 9px;
+        background: #fff;
+        text-align: center;
+        color: #506781;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .linked-step i {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--lv-blue)
+        }
+
+    .read-grid {
+        display: grid;
+        grid-template-columns: repeat(12,1fr);
+        gap: 8px;
+        margin-top: 12px
+    }
+
+    .read-box {
+        grid-column: span 4;
+        padding: 10px 11px;
+        border: 1px solid #dce4ed;
+        border-radius: 9px;
+        background: #fff;
+        min-width: 0
+    }
+
+        .read-box.wide {
+            grid-column: span 6
+        }
+
+        .read-box.full {
+            grid-column: span 12
+        }
+
+        .read-box span {
+            display: block;
+            color: #748195;
+            font-size: .66rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .read-box strong {
+            display: block;
+            margin-top: 3px;
+            color: var(--lv-text);
+            font-size: .82rem;
+            font-weight: 800;
+            word-break: break-word
+        }
+
+    .linked-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 13px;
+        padding-top: 12px;
+        border-top: 1px solid #d7e4f2
+    }
+
+        .linked-actions .btn {
+            border-radius: 8px;
+            font-weight: 750
+        }
+
+    .warning-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 11px;
+        margin-bottom: 12px;
+        border: 1px solid #f0cf8a;
+        border-radius: 9px;
+        background: #fff8e7;
+        color: #6f5800;
+        font-size: .76rem;
+        line-height: 1.45
+    }
+
     html[data-nsq-theme="dark"] .viaje-form-page {
         color: #e7edf6
     }
@@ -281,6 +436,24 @@
         border-color: #2a3a50
     }
 
+    html[data-nsq-theme="dark"] .linked-box {
+        background: #0d1828;
+        border-color: #31527a
+    }
+
+    html[data-nsq-theme="dark"] .linked-step, html[data-nsq-theme="dark"] .read-box {
+        background: #111c2d;
+        border-color: #2b3d53
+    }
+
+        html[data-nsq-theme="dark"] .read-box strong {
+            color: #edf3fb
+        }
+
+    html[data-nsq-theme="dark"] .linked-head p {
+        color: #b6c5d8
+    }
+
     @@media(max-width:900px) {
         .col-8g, .col-6g, .col-4g, .col-3g {
             grid-column: span 6
@@ -288,6 +461,14 @@
 
         .resource-state {
             grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .linked-flow {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+
+        .read-box, .read-box.wide {
+            grid-column: span 6
         }
     }
 
@@ -300,10 +481,14 @@
             grid-column: span 12
         }
 
-        .viaje-form-header > .btn {
-            width: 100%;
-            justify-content: center
+        .header-actions {
+            width: 100%
         }
+
+            .header-actions .btn {
+                flex: 1;
+                justify-content: center
+            }
 
         .form-actions {
             position: static;
@@ -315,152 +500,200 @@
                 width: 100%
             }
 
-        .resource-state {
+        .resource-state, .linked-flow {
             grid-template-columns: 1fr
         }
+
+        .read-box, .read-box.wide, .read-box.full {
+            grid-column: span 12
+        }
+
+        .linked-actions {
+            display: grid;
+            grid-template-columns: 1fr
+        }
+
+            .linked-actions .btn {
+                width: 100%
+            }
     }
 </style>
-
 <div class="viaje-form-page">
     <div class="viaje-form-header">
         <div>
-            <h1 class="viaje-form-title"><i class="fa-solid fa-list-check me-1"></i>Completar preparación</h1>
-            <p class="viaje-form-subtitle">Completa o ajusta la programación antes de iniciar el viaje. Hora, ruta, unidad y chofer serán obligatorios al momento de registrar la salida.</p>
+            <h1 class="viaje-form-title"><i class="fa-solid @(esEntregaPt ? "fa-truck-fast" : "fa-list-check") me-1"></i>@(esEntregaPt ? "Entrega vinculada" : "Completar preparación")</h1>
+            <p class="viaje-form-subtitle">@(esEntregaPt ? "Este viaje proviene de un embarque y su programación operativa se administra desde Centro Operativo." : "Completa o ajusta la programación de este viaje antes de iniciarlo.")</p>
         </div>
-        <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Regresar</a>
+        <div class="header-actions">
+            <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Regresar</a>
+            @if (esEntregaPt)
+            {
+                <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-table-columns me-1"></i>Centro Operativo</a>
+            }
+        </div>
     </div>
-
     @if (TempData["LogisticaError"] != null)
     {
-        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3" role="alert">
-            <i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert alert-danger alert-dismissible fade show py-2 px-3 mb-3" role="alert"><i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    }
+    @if (esEntregaPt)
+    {
+        <div class="linked-box">
+            <div class="linked-head">
+                <div class="linked-icon"><i class="fa-solid fa-link"></i></div>
+                <div>
+                    <h2>La Entrega se administra desde el embarque</h2>
+                    <p>Para evitar que el Viaje y el Embarque queden con fecha, ruta, unidad o chofer diferentes, esta pantalla queda en modo consulta. Los cambios de programación de una Entrega deben realizarse desde Centro Operativo. La carga física puede continuarla Centro Operativo o el chofer, sin restricción de horario; la salida física y el regreso corresponden al portal del chofer.</p>
+                </div>
+            </div>
+            <div class="linked-flow">
+                <div class="linked-step"><i class="fa-solid fa-calendar-check"></i>Programación<br />Centro Operativo</div>
+                <div class="linked-step"><i class="fa-solid fa-boxes-stacked"></i>Carga física<br />Operación / Chofer</div>
+                <div class="linked-step"><i class="fa-solid fa-truck-fast"></i>Salida física<br />Chofer</div>
+                <div class="linked-step"><i class="fa-solid fa-flag-checkered"></i>Regreso<br />Chofer</div>
+            </div>
+            <div class="read-grid">
+                <div class="read-box"><span>Tipo</span><strong>Entrega</strong></div>
+                <div class="read-box"><span>Fecha programada</span><strong>@(Model.FechaProgramada == default ? "Pendiente" : Model.FechaProgramada.ToString("dd/MM/yyyy"))</strong></div>
+                <div class="read-box"><span>Hora</span><strong>@(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm") : "Pendiente")</strong></div>
+                <div class="read-box wide"><span>Origen</span><strong>@TxtVisible(Model.Origen)</strong></div>
+                <div class="read-box wide"><span>Destino</span><strong>@TxtVisible(Model.Destino)</strong></div>
+                <div class="read-box"><span>Ruta</span><strong>@Txt(rutaTexto)</strong></div>
+                <div class="read-box"><span>Unidad</span><strong>@Txt(unidadTexto)</strong></div>
+                <div class="read-box"><span>Chofer</span><strong>@Txt(choferTexto)</strong></div>
+                <div class="read-box full"><span>Motivo / objetivo</span><strong>@TxtVisible(Model.Motivo)</strong></div>
+                @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+                {
+                    <div class="read-box full"><span>Observaciones</span><strong style="white-space:pre-line">@TxtVisible(Model.Observaciones)</strong></div>
+                }
+            </div>
+            <div class="linked-actions">
+                <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary"><i class="fa-regular fa-eye me-1"></i>Ver detalle del viaje</a>
+                <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-primary"><i class="fa-solid fa-table-columns me-1"></i>Ir a Centro Operativo</a>
+            </div>
         </div>
     }
-
-    <form asp-controller="LogisticaViajes" asp-action="Editar" method="post" autocomplete="off">
-        @Html.AntiForgeryToken()
-        <input asp-for="ViajeID" type="hidden" />
-        <div asp-validation-summary="ModelOnly" class="validation-summary-errors mb-3"></div>
-
-        <div class="form-section">
-            <div class="form-section-title">Datos generales</div>
-            <div class="form-grid">
-                <div class="col-4g">
-                    <label asp-for="TipoViaje" class="form-label required">Tipo de salida</label>
-                    <select asp-for="TipoViaje" class="form-select" required>
-                        <option value="">Selecciona...</option>
-                        <option value="Entrega PT">Entrega PT</option>
-                        <option value="Ruta de personal">Ruta de personal</option>
-                        <option value="Recolección de MP">Recolección de MP</option>
-                        <option value="Traslado entre plantas">Traslado entre plantas</option>
-                        <option value="Recolección de material">Recolección de material</option>
-                        <option value="Entrega / recolección especial">Entrega / recolección especial</option>
-                        <option value="Otro">Otro</option>
-                    </select>
-                    <span asp-validation-for="TipoViaje"></span>
-                </div>
-                <div class="col-4g">
-                    <label asp-for="FechaProgramada" class="form-label required">Fecha programada</label>
-                    <input asp-for="FechaProgramada" type="date" class="form-control" required />
-                    <span asp-validation-for="FechaProgramada"></span>
-                </div>
-                <div class="col-4g">
-                    <label asp-for="HoraSalidaProgramada" class="form-label">Hora de salida</label>
-                    <input asp-for="HoraSalidaProgramada" type="time" class="form-control" />
-                    <div class="form-text">Puede quedar pendiente mientras el viaje siga Programado.</div>
-                    <span asp-validation-for="HoraSalidaProgramada"></span>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div class="form-section-title">Ruta y objetivo</div>
-            <div class="form-grid">
-                <div class="col-6g">
-                    <label asp-for="Origen" class="form-label required">Origen</label>
-                    <input asp-for="Origen" class="form-control" maxlength="300" placeholder="Origen del viaje" required />
-                    <span asp-validation-for="Origen"></span>
-                </div>
-                <div class="col-6g">
-                    <label asp-for="Destino" class="form-label required">Destino</label>
-                    <input asp-for="Destino" class="form-control" maxlength="300" placeholder="Destino del viaje" required />
-                    <span asp-validation-for="Destino"></span>
-                </div>
-                <div class="col-8g">
-                    <label asp-for="Motivo" class="form-label required">Motivo / objetivo</label>
-                    <input asp-for="Motivo" class="form-control" maxlength="500" placeholder="Describe brevemente el propósito del viaje" required />
-                    <span asp-validation-for="Motivo"></span>
-                </div>
-                <div class="col-4g">
-                    <label asp-for="RutaID" class="form-label">Ruta registrada</label>
-                    <select asp-for="RutaID" class="form-select">
-                        <option value="">Pendiente por asignar...</option>
-                        @foreach (var ruta in Model.Rutas)
-                        {
-                            <option value="@ruta.Id">@ruta.Texto</option>
-                        }
-                    </select>
-                    <span asp-validation-for="RutaID"></span>
+    else
+    {
+        <div class="warning-note"><i class="fa-solid fa-circle-info mt-1"></i><div><strong>Viaje independiente.</strong> Esta pantalla es únicamente para viajes que no provienen de un embarque. Las Entregas de producto terminado se crean y administran desde Centro Operativo para conservar la sincronización Embarque ↔ Viaje.</div></div>
+        <form asp-controller="LogisticaViajes" asp-action="Editar" method="post" autocomplete="off">
+            @Html.AntiForgeryToken()
+            <input asp-for="ViajeID" type="hidden" />
+            <div asp-validation-summary="ModelOnly" class="validation-summary-errors mb-3"></div>
+            <div class="form-section">
+                <div class="form-section-title">Datos generales</div>
+                <div class="form-grid">
+                    <div class="col-4g">
+                        <label asp-for="TipoViaje" class="form-label required">Tipo de salida</label>
+                        <select asp-for="TipoViaje" class="form-select" required>
+                            <option value="">Selecciona...</option>
+                            <option value="Ruta de personal">Ruta de personal</option>
+                            <option value="Recolección de MP">Recolección de MP</option>
+                            <option value="Traslado entre plantas">Traslado entre plantas</option>
+                            <option value="Recolección de material">Recolección de material</option>
+                            <option value="Entrega / recolección especial">Entrega / recolección especial</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                        <div class="form-text">Las Entregas de PT se generan desde Centro Operativo y no desde Viajes.</div>
+                        <span asp-validation-for="TipoViaje"></span>
+                    </div>
+                    <div class="col-4g">
+                        <label asp-for="FechaProgramada" class="form-label required">Fecha programada</label>
+                        <input asp-for="FechaProgramada" type="date" class="form-control" required />
+                        <span asp-validation-for="FechaProgramada"></span>
+                    </div>
+                    <div class="col-4g">
+                        <label asp-for="HoraSalidaProgramada" class="form-label">Hora de salida</label>
+                        <input asp-for="HoraSalidaProgramada" type="time" class="form-control" />
+                        <div class="form-text">Puede quedar pendiente mientras el viaje continúe Programado.</div>
+                        <span asp-validation-for="HoraSalidaProgramada"></span>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="form-section">
-            <div class="form-section-title">Unidad y chofer</div>
-            <div class="stage-note"><strong>Preparación por etapas.</strong> Puedes guardar el viaje mientras falten recursos. Al pulsar <strong>Iniciar viaje</strong> desde el detalle, el sistema exigirá hora de salida, ruta, unidad y chofer activos.</div>
-            <div class="form-grid">
-                <div class="col-6g">
-                    <label asp-for="UnidadID" class="form-label">Unidad</label>
-                    <select asp-for="UnidadID" class="form-select">
-                        <option value="">Pendiente por asignar...</option>
-                        @foreach (var unidad in Model.Unidades)
-                        {
-                            <option value="@unidad.Id">@unidad.Texto</option>
-                        }
-                    </select>
-                    <span asp-validation-for="UnidadID"></span>
-                </div>
-                <div class="col-6g">
-                    <label asp-for="OperadorUsuarioID" class="form-label">Chofer</label>
-                    <select asp-for="OperadorUsuarioID" class="form-select">
-                        <option value="">Pendiente por asignar...</option>
-                        @foreach (var operador in Model.Operadores)
-                        {
-                            <option value="@operador.Id">@operador.Texto</option>
-                        }
-                    </select>
-                    <span asp-validation-for="OperadorUsuarioID"></span>
-                    <div class="form-text">Solo aparecen usuarios activos del departamento de Logística cuyo puesto contiene “Chofer”.</div>
-                </div>
-            </div>
-            <div class="resource-state">
-                <div><span>Hora de salida</span><strong class="@(Model.HoraSalidaProgramada.HasValue ? "ok" : "pending")">@(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm"):"Pendiente")</strong></div>
-                <div><span>Ruta</span><strong class="@(Model.RutaID.HasValue ? "ok" : "pending")">@(Model.RutaID.HasValue ? "Asignada" : "Pendiente")</strong></div>
-                <div><span>Unidad</span><strong class="@(Model.UnidadID.HasValue ? "ok" : "pending")">@(Model.UnidadID.HasValue ? "Asignada" : "Pendiente")</strong></div>
-                <div><span>Chofer</span><strong class="@(Model.OperadorUsuarioID.HasValue ? "ok" : "pending")">@(Model.OperadorUsuarioID.HasValue ? "Asignado" : "Pendiente")</strong></div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <div class="form-section-title">Observaciones</div>
-            <div class="form-grid">
-                <div class="col-12g">
-                    <label asp-for="Observaciones" class="form-label">Observaciones</label>
-                    <textarea asp-for="Observaciones" class="form-control" maxlength="1200" placeholder="Información adicional del viaje"></textarea>
-                    <div class="form-text">Máximo 1,200 caracteres.</div>
-                    <span asp-validation-for="Observaciones"></span>
+            <div class="form-section">
+                <div class="form-section-title">Ruta y objetivo</div>
+                <div class="form-grid">
+                    <div class="col-6g">
+                        <label asp-for="Origen" class="form-label required">Origen</label>
+                        <input asp-for="Origen" class="form-control" maxlength="300" placeholder="Origen del viaje" required />
+                        <span asp-validation-for="Origen"></span>
+                    </div>
+                    <div class="col-6g">
+                        <label asp-for="Destino" class="form-label required">Destino</label>
+                        <input asp-for="Destino" class="form-control" maxlength="300" placeholder="Destino del viaje" required />
+                        <span asp-validation-for="Destino"></span>
+                    </div>
+                    <div class="col-8g">
+                        <label asp-for="Motivo" class="form-label required">Motivo / objetivo</label>
+                        <input asp-for="Motivo" class="form-control" maxlength="500" placeholder="Describe brevemente el propósito del viaje" required />
+                        <span asp-validation-for="Motivo"></span>
+                    </div>
+                    <div class="col-4g">
+                        <label asp-for="RutaID" class="form-label">Ruta registrada</label>
+                        <select asp-for="RutaID" class="form-select">
+                            <option value="">Pendiente por asignar...</option>
+                            @foreach (var ruta in Model.Rutas)
+                            {
+                                <option value="@ruta.Id">@ruta.Texto</option>
+                            }
+                        </select>
+                        <span asp-validation-for="RutaID"></span>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="form-actions">
-            <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary">Cancelar</a>
-            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar preparación</button>
-        </div>
-    </form>
+            <div class="form-section">
+                <div class="form-section-title">Unidad y chofer</div>
+                <div class="stage-note"><strong>Preparación por etapas.</strong> Puedes guardar mientras falten recursos. Antes de iniciar el viaje, el backend deberá validar hora de salida, ruta, unidad y chofer vigentes.</div>
+                <div class="form-grid">
+                    <div class="col-6g">
+                        <label asp-for="UnidadID" class="form-label">Unidad</label>
+                        <select asp-for="UnidadID" class="form-select">
+                            <option value="">Pendiente por asignar...</option>
+                            @foreach (var unidad in Model.Unidades)
+                            {
+                                <option value="@unidad.Id">@unidad.Texto</option>
+                            }
+                        </select>
+                        <span asp-validation-for="UnidadID"></span>
+                    </div>
+                    <div class="col-6g">
+                        <label asp-for="OperadorUsuarioID" class="form-label">Chofer</label>
+                        <select asp-for="OperadorUsuarioID" class="form-select">
+                            <option value="">Pendiente por asignar...</option>
+                            @foreach (var operador in Model.Operadores)
+                            {
+                                <option value="@operador.Id">@operador.Texto</option>
+                            }
+                        </select>
+                        <span asp-validation-for="OperadorUsuarioID"></span>
+                        <div class="form-text">Selecciona uno de los choferes disponibles en el catálogo.</div>
+                    </div>
+                </div>
+                <div class="resource-state">
+                    <div><span>Hora de salida</span><strong class="@(Model.HoraSalidaProgramada.HasValue ? "ok" : "pending")">@(Model.HoraSalidaProgramada.HasValue? Model.HoraSalidaProgramada.Value.ToString(@"hh\:mm") : "Pendiente")</strong></div>
+                    <div><span>Ruta</span><strong class="@(Model.RutaID.HasValue ? "ok" : "pending")">@(Model.RutaID.HasValue ? "Asignada" : "Pendiente")</strong></div>
+                    <div><span>Unidad</span><strong class="@(Model.UnidadID.HasValue ? "ok" : "pending")">@(Model.UnidadID.HasValue ? "Asignada" : "Pendiente")</strong></div>
+                    <div><span>Chofer</span><strong class="@(Model.OperadorUsuarioID.HasValue ? "ok" : "pending")">@(Model.OperadorUsuarioID.HasValue ? "Asignado" : "Pendiente")</strong></div>
+                </div>
+            </div>
+            <div class="form-section">
+                <div class="form-section-title">Observaciones</div>
+                <div class="form-grid">
+                    <div class="col-12g">
+                        <label asp-for="Observaciones" class="form-label">Observaciones</label>
+                        <textarea asp-for="Observaciones" class="form-control" maxlength="1200" placeholder="Información adicional del viaje"></textarea>
+                        <div class="form-text">Máximo 1,200 caracteres.</div>
+                        <span asp-validation-for="Observaciones"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-actions">
+                <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@Model.ViajeID" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar preparación</button>
+            </div>
+        </form>
+    }
 </div>
-
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 }

@@ -33,7 +33,7 @@
 
     string FormaEnvioTexto() => Model.FormaEnvio switch
     {
-        "Interno" => "Entrega NS",
+        "Interno" => "Entrega",
         "Cliente" => "Cliente recoge",
         "Paqueteria" => "Paquetería",
         "Pendiente" => "Por definir",
@@ -51,6 +51,57 @@
     var incidenciasAbiertas = Model.Incidencias?.Count(x => x.EstaAbierta) ?? 0;
     var totalDocumentos = Model.Documentos?.Count ?? 0;
     var totalEvidencias = Model.Evidencias?.Count ?? 0;
+
+    var programacionCompleta = Model.FechaCargaProgramada.HasValue && Model.HoraCargaProgramada.HasValue && Model.TotalPiezasSolicitadas > 0;
+    var salidaConfigurada = !requiereDefinirSalida;
+    var preparacionConfirmada = Model.Estatus is "Preparado" or "Cargando" or "Cargado" or "En ruta" or "Entregado";
+    var documentacionCompleta = salidaConfigurada && Model.DocumentacionCompleta;
+    var cargaFisicaCompleta = Model.Estatus is "Cargado" or "En ruta" or "Entregado";
+    var salidaPlantaCompleta = Model.Estatus is "En ruta" or "Entregado";
+    var entregaCompleta = Model.Estatus == "Entregado";
+    var esEntrega = Model.FormaEnvio == "Interno";
+    var salidaDesdeCentro = Model.FormaEnvio is "Cliente" or "Paqueteria";
+    var porcentajeAvanceVista = Model.Estatus == "Cargando" ? 65 : Model.PorcentajeAvance;
+
+    string ClasePaso(bool completo, bool actual)
+    {
+        if (completo) return "done";
+        if (actual) return "current";
+        return string.Empty;
+    }
+
+    var actualProgramacion = Model.Estatus != "Cancelado" && !programacionCompleta;
+    var actualSalida = Model.Estatus != "Cancelado" && programacionCompleta && !salidaConfigurada;
+    var actualPreparacion = Model.Estatus != "Cancelado" && salidaConfigurada && !preparacionConfirmada;
+    var actualDocumentos = Model.Estatus != "Cancelado" && preparacionConfirmada && !documentacionCompleta;
+    var actualCarga = Model.Estatus != "Cancelado" && preparacionConfirmada && documentacionCompleta && !cargaFisicaCompleta;
+    var actualSalidaPlanta = Model.Estatus != "Cancelado" && cargaFisicaCompleta && !salidaPlantaCompleta;
+    var actualEntrega = Model.Estatus != "Cancelado" && salidaPlantaCompleta && !entregaCompleta;
+
+    var proximaAccionVista = Model.Estatus switch
+    {
+        "Cancelado" => "Embarque cancelado",
+        "Entregado" => "Proceso completado",
+        "En ruta" => "Confirmar entrega",
+        "Cargado" => esEntrega ? "Esperar salida del chofer" : "Confirmar salida de planta",
+        "Preparado" or "Cargando" when !documentacionCompleta => "Completar documentación",
+        "Preparado" or "Cargando" => "Completar carga física",
+        _ when requiereDefinirSalida => "Definir forma de salida",
+        _ => "Completar preparación PT"
+    };
+
+    var proximaAccionDetalleVista = Model.Estatus switch
+    {
+        "Cancelado" => "No hay acciones operativas pendientes.",
+        "Entregado" => "La entrega está cerrada y conserva su trazabilidad.",
+        "En ruta" => "Registra quién recibió la mercancía y adjunta una o más evidencias de entrega.",
+        "Cargado" when esEntrega => "La carga física ya terminó. La salida real la confirma el chofer asignado desde su portal.",
+        "Cargado" => "La carga física ya terminó. Confirma la salida cuando la mercancía abandone realmente la planta.",
+        "Preparado" or "Cargando" when !documentacionCompleta => "La documentación obligatoria debe estar validada antes de continuar con la carga física.",
+        "Preparado" or "Cargando" => "Escanea las cajas físicas y confirma la carga cuando el total coincida.",
+        _ when requiereDefinirSalida => "Selecciona Entrega, Cliente recoge o Paquetería y completa sus datos operativos.",
+        _ => "Reserva las cajas necesarias y confirma la preparación cuando las cantidades estén completas."
+    };
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
@@ -164,7 +215,7 @@
 
     .workflow {
         display: grid;
-        grid-template-columns: repeat(5,1fr);
+        grid-template-columns: repeat(7,minmax(0,1fr));
         gap: 6px;
         margin-bottom: 10px
     }
@@ -384,6 +435,57 @@
         .scan-msg.error {
             color: #b42318
         }
+
+    .load-kpis {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 6px;
+        margin-top: 8px
+    }
+
+    .load-kpi {
+        padding: 7px 8px;
+        border: 1px solid #dce4ee;
+        border-radius: 8px;
+        background: #fff
+    }
+
+        .load-kpi span {
+            display: block;
+            color: #7a8796;
+            font-size: .6rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .load-kpi strong {
+            display: block;
+            margin-top: 2px;
+            color: var(--lg-blue);
+            font-size: .84rem
+        }
+
+    .scan-state {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #edf2f7;
+        color: #66758a
+    }
+
+    .scan-item.checked .scan-state {
+        background: #e5f5ed;
+        color: #087443
+    }
+
+    .delivery-files {
+        margin-top: 4px;
+        color: var(--lg-muted);
+        font-size: .69rem
+    }
 
     .scan-list {
         display: grid;
@@ -733,7 +835,7 @@
         border-color: #2a3a50
     }
 
-    html[data-nsq-theme="dark"] .info-box, html[data-nsq-theme="dark"] .scan-item, html[data-nsq-theme="dark"] .check-item, html[data-nsq-theme="dark"] .doc-required-item {
+    html[data-nsq-theme="dark"] .info-box, html[data-nsq-theme="dark"] .scan-item, html[data-nsq-theme="dark"] .load-kpi, html[data-nsq-theme="dark"] .check-item, html[data-nsq-theme="dark"] .doc-required-item {
         background: #162237;
         border-color: #2a3a50
     }
@@ -744,10 +846,14 @@
         }
 
         .workflow {
-            grid-template-columns: repeat(3,1fr)
+            grid-template-columns: repeat(4,1fr)
         }
 
         .doc-required {
+            grid-template-columns: repeat(2,1fr)
+        }
+
+        .load-kpis {
             grid-template-columns: repeat(2,1fr)
         }
     }
@@ -818,7 +924,7 @@
             grid-column: span 12
         }
 
-        .checklist, .doc-required {
+        .checklist, .doc-required, .load-kpis {
             grid-template-columns: 1fr
         }
 
@@ -870,7 +976,7 @@
                 <div class="sp-icon"><i class="fa-solid fa-truck-arrow-right"></i></div>
                 <div>
                     <strong>Falta definir cómo saldrá este embarque</strong>
-                    <small>Este embarque puede haber sido generado desde Lista de carga. Antes de continuar con la preparación y salida, define si el cliente recoge, si NS realiza la entrega o si se enviará por paquetería.</small>
+                    <small>Este embarque continúa el flujo iniciado desde el Centro Operativo. Antes de continuar con la preparación y salida, define si será Entrega, Cliente recoge o Paquetería.</small>
                 </div>
             </div>
             @if (puedeDefinirSalida)
@@ -888,27 +994,29 @@
 
     <div class="status-strip">
         <div class="status-item"><span>Estatus</span><strong><span class="badge @BadgeEstatus(Model.Estatus)">@Model.Estatus</span></strong></div>
-        <div class="status-item"><span>Avance</span><strong>@Model.PorcentajeAvance%</strong></div>
+        <div class="status-item"><span>Avance</span><strong>@porcentajeAvanceVista%</strong></div>
         <div class="status-item"><span>Preparado</span><strong>@Model.TotalPiezasPreparadas.ToString("N0") / @Model.TotalPiezasSolicitadas.ToString("N0")</strong></div>
         <div class="status-item"><span>Cajas</span><strong>@Model.TotalCajasAsignadas</strong></div>
         <div class="status-item"><span>Cargadas</span><strong>@Model.TotalCajasCargadas</strong></div>
         <div class="status-item"><span>Documentos</span><strong>@(Model.DocumentacionCompleta ? "Completa" : $"{Model.DocumentosFaltantes} pendiente(s)")</strong></div>
     </div>
-    <div class="progress-line"><div style="width:@Math.Clamp(Model.PorcentajeAvance, 0, 100)%"></div></div>
+    <div class="progress-line"><div style="width:@Math.Clamp(porcentajeAvanceVista, 0, 100)%"></div></div>
 
     <div class="workflow">
-        <div class="workflow-step @(Model.Estatus is "Preparando" or "Preparado" or "Cargado" or "En ruta" or "Entregado" ? "done" : "current")"><span>Paso 1</span><strong>Programado</strong></div>
-        <div class="workflow-step @(Model.Estatus is "Preparado" or "Cargado" or "En ruta" or "Entregado" ? "done" : Model.Estatus == "Preparando" ? "current" : "")"><span>Paso 2</span><strong>Preparación</strong></div>
-        <div class="workflow-step @(Model.Estatus is "Cargado" or "En ruta" or "Entregado" ? "done" : Model.Estatus == "Preparado" ? "current" : "")"><span>Paso 3</span><strong>Verificar cajas</strong></div>
-        <div class="workflow-step @(Model.Estatus is "En ruta" or "Entregado" ? "done" : Model.Estatus == "Cargado" ? "current" : "")"><span>Paso 4</span><strong>Salida</strong></div>
-        <div class="workflow-step @(Model.Estatus == "Entregado" ? "done" : Model.Estatus == "En ruta" ? "current" : "")"><span>Paso 5</span><strong>Entrega</strong></div>
+        <div class="workflow-step @(ClasePaso(programacionCompleta, actualProgramacion))"><span>Paso 1</span><strong>Programación</strong></div>
+        <div class="workflow-step @(ClasePaso(salidaConfigurada, actualSalida))"><span>Paso 2</span><strong>Forma de salida</strong></div>
+        <div class="workflow-step @(ClasePaso(preparacionConfirmada, actualPreparacion))"><span>Paso 3</span><strong>Preparación PT</strong></div>
+        <div class="workflow-step @(ClasePaso(documentacionCompleta, actualDocumentos))"><span>Paso 4</span><strong>Documentación</strong></div>
+        <div class="workflow-step @(ClasePaso(cargaFisicaCompleta, actualCarga))"><span>Paso 5</span><strong>Carga física</strong></div>
+        <div class="workflow-step @(ClasePaso(salidaPlantaCompleta, actualSalidaPlanta))"><span>Paso 6</span><strong>Salida de planta</strong></div>
+        <div class="workflow-step @(ClasePaso(entregaCompleta, actualEntrega))"><span>Paso 7</span><strong>Entrega</strong></div>
     </div>
 
     <section class="stage">
         <div class="stage-head">
             <div>
-                <h2 class="stage-title">Etapa actual: @Model.ProximaAccion</h2>
-                <div class="stage-sub">@Model.ProximaAccionDetalle</div>
+                <h2 class="stage-title">Etapa actual: @proximaAccionVista</h2>
+                <div class="stage-sub">@proximaAccionDetalleVista</div>
             </div>
             <span class="badge @BadgeEstatus(Model.Estatus)">@Model.Estatus</span>
         </div>
@@ -918,7 +1026,7 @@
             <div class="stage-action" style="border-color:#ead28e;background:#fffaf0">
                 <div>
                     <strong>Define la forma de salida antes de continuar</strong>
-                    <small>La cantidad y fecha ya están programadas. Falta indicar cómo saldrá físicamente la mercancía.</small>
+                    <small>La cantidad y fecha ya están programadas. Falta indicar si será Entrega, Cliente recoge o Paquetería.</small>
                 </div>
                 <a asp-controller="LogisticaEmbarques" asp-action="DefinirSalida" asp-route-id="@Model.EmbarqueID" class="stage-btn" style="background:#8b6100">
                     <i class="fa-solid fa-truck-arrow-right"></i>Definir salida
@@ -928,66 +1036,111 @@
         else if (Model.Estatus is "Programado" or "Preparando")
         {
             <div class="stage-action">
-                <div><strong>Confirmar preparación completa</strong><small>@Model.TotalPiezasPreparadas.ToString("N0") de @Model.TotalPiezasSolicitadas.ToString("N0") PZA asignadas.</small></div>
-                <form asp-controller="LogisticaEmbarques" asp-action="MarcarPreparado" method="post">
+                <div>
+                    <strong>Confirmar preparación PT</strong>
+                    <small>@Model.TotalPiezasPreparadas.ToString("N0") de @Model.TotalPiezasSolicitadas.ToString("N0") PZA preparadas. La documentación puede completarse en paralelo desde su pestaña.</small>
+                </div>
+                <form asp-controller="LogisticaEmbarques" asp-action="MarcarPreparado" method="post" class="js-single-submit">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                    <button class="stage-btn" type="submit" onclick="return confirm('¿Confirmar preparación completa?');"><i class="fa-solid fa-check"></i>Confirmar preparación</button>
+                    <button class="stage-btn" type="submit" disabled="@(!Model.PreparacionCompleta ? "disabled" : null)" onclick="return confirm('¿Confirmar preparación completa?');">
+                        <i class="fa-solid fa-check"></i>Confirmar preparación
+                    </button>
                 </form>
             </div>
+            @if (!Model.PreparacionCompleta)
+            {
+                <div class="scan-msg error mt-2">Aún faltan @Model.PiezasPendientesPreparar.ToString("N0") PZA por preparar. Reserva las cajas necesarias en la pestaña Preparación.</div>
+            }
         }
-        else if (Model.Estatus == "Preparado")
+        else if (Model.Estatus is "Preparado" or "Cargando")
         {
-            <form asp-controller="LogisticaEmbarques" asp-action="ConfirmarSalidaViajeDesdePT" method="post" id="lgSalidaForm">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+            @if (!Model.DocumentacionCompleta)
+            {
+                <div class="stage-action" style="border-color:#e8c56f;background:#fffaf0">
+                    <div>
+                        <strong>Completa la documentación antes de la carga física</strong>
+                        <small>Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s) por cargar o validar.</small>
+                    </div>
+                    <a href="#tabDocumentos" class="stage-btn" data-bs-toggle="tab" data-bs-target="#tabDocumentos" style="background:#8b6100">
+                        <i class="fa-solid fa-file-circle-check"></i>Ir a documentos
+                    </a>
+                </div>
+            }
+            else
+            {
                 <div class="stage-action">
-                    <div><strong>Escanea las cajas que realmente van a salir</strong><small>Deben coincidir exactamente con las cajas programadas.</small></div>
-                    <button class="stage-btn" id="lgConfirmarSalida" type="submit" disabled><i class="fa-solid fa-truck-fast"></i>Confirmar salida de planta</button>
+                    <div>
+                        <strong>Carga física</strong>
+                        <small>Escanea cada caja que se carga realmente. El escaneo se registra inmediatamente en el embarque.</small>
+                    </div>
+                    <button class="stage-btn" id="lgConfirmarCargaFisica" type="button" disabled>
+                        <i class="fa-solid fa-circle-check"></i>Confirmar carga física
+                    </button>
                 </div>
                 <div class="scan-box">
                     <div class="scan-row">
-                        <input id="lgSalidaScan" class="scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea etiqueta de caja y presiona Enter/Tab..." autofocus />
-                        <button type="button" class="stage-btn" id="lgLimpiarSalida" style="background:#fff;color:#173a7a;border:1px solid #9fb5d0">Limpiar</button>
+                        <input id="lgCargaScan" class="scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea etiqueta de caja y presiona Enter/Tab..." autofocus />
+                        <button type="button" class="stage-btn" id="lgEscanearCarga">
+                            <i class="fa-solid fa-barcode"></i>Registrar
+                        </button>
                     </div>
-                    <div class="scan-msg" id="lgSalidaMsg">0 de @Model.CajasAsignadas.Count caja(s) confirmadas.</div>
-                    <div class="scan-list">
-                        @foreach (var c in Model.CajasAsignadas)
-                        {
-                            <label class="scan-item" data-caja-id="@c.CajaID" data-numero-caja="@c.NumeroCaja" data-etiqueta="@c.Etiqueta" data-lote="@c.Lote">
-                                <input class="scan-check" type="checkbox" name="cajaIdsConfirmadas" value="@c.CajaID" />
-                                <div><strong>Caja #@c.NumeroCaja · @c.NumeroParte</strong><small>@c.Etiqueta</small></div>
-                                <div><strong>@(string.IsNullOrWhiteSpace(c.Lote) ? "Sin lote" : c.Lote)</strong><small>OF @c.NumeroOF</small></div>
-                                <div class="qty">@c.CantidadAsignada.ToString("N0") PZA</div>
-                            </label>
-                        }
+                    <div class="scan-msg" id="lgCargaMsg">Consultando carga física...</div>
+                    <div class="load-kpis">
+                        <div class="load-kpi"><span>PZA totales</span><strong id="lgCargaTotal">—</strong></div>
+                        <div class="load-kpi"><span>PZA cargadas</span><strong id="lgCargaCargadas">—</strong></div>
+                        <div class="load-kpi"><span>PZA reservadas</span><strong id="lgCargaReservadas">—</strong></div>
+                        <div class="load-kpi"><span>PZA pendientes</span><strong id="lgCargaPendientes">—</strong></div>
                     </div>
+                    <div class="scan-list" id="lgCargaLista"></div>
                 </div>
-            </form>
+            }
         }
         else if (Model.Estatus == "Cargado")
         {
-            <div class="stage-action">
-                <div><strong>Producto cargado</strong><small>La salida se habilita cuando checklist, documentación y demás validaciones estén completas.</small></div>
-                @if (Model.PuedeSalir)
+            @if (esEntrega)
+            {
+                <div class="stage-action" style="border-color:#b9d7ca;background:#f4fbf7">
+                    <div>
+                        <strong>Carga física completa</strong>
+                        <small>La salida real la confirma el chofer asignado desde su portal. Cuando registre la salida, el viaje pasará a En curso y este embarque a En ruta.</small>
+                    </div>
+                    <span class="badge bg-info text-dark">Esperando salida del chofer</span>
+                </div>
+            }
+            else if (salidaDesdeCentro)
+            {
+                <div class="stage-action">
+                    <div>
+                        <strong>Confirmar salida de planta</strong>
+                        <small>@(Model.FormaEnvio == "Cliente" ? "Confirma cuando el cliente o transportista retire físicamente la mercancía." : "Confirma cuando la mercancía sea entregada físicamente a la paquetería o transportista.")</small>
+                    </div>
+                    <button class="stage-btn" id="lgConfirmarSalidaPlanta" type="button" disabled="@(Model.IncidenciasCriticas > 0 ? "disabled" : null)">
+                        <i class="fa-solid fa-truck-fast"></i>Confirmar salida de planta
+                    </button>
+                </div>
+                @if (Model.IncidenciasCriticas > 0)
                 {
-                    <form asp-controller="LogisticaEmbarques" asp-action="Despachar" method="post" class="js-single-submit">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                        <button class="stage-btn" type="submit" onclick="return confirm('¿Confirmar salida del embarque?');"><i class="fa-solid fa-truck"></i>Confirmar salida</button>
-                    </form>
+                    <div class="scan-msg error mt-2">Existen @Model.IncidenciasCriticas incidencia(s) crítica(s) abierta(s). Deben resolverse antes de la salida.</div>
                 }
-                else
-                {
-                    <span class="text-warning fw-semibold small">Salida bloqueada por checklist/documentación.</span>
-                }
-            </div>
+            }
+            else
+            {
+                <div class="stage-action">
+                    <div><strong>Forma de salida incompleta</strong><small>Revisa la configuración antes de confirmar la salida de planta.</small></div>
+                </div>
+            }
         }
         else if (Model.Estatus == "En ruta")
         {
             <div class="stage-action">
-                <div><strong>Embarque en tránsito</strong><small>El siguiente paso es confirmar la entrega al destinatario.</small></div>
-                <a href="#tabEntrega" class="stage-btn" data-bs-toggle="tab" data-bs-target="#tabEntrega"><i class="fa-solid fa-box-open"></i>Ir a entrega</a>
+                <div>
+                    <strong>Embarque en tránsito</strong>
+                    <small>El siguiente paso es confirmar quién recibió la mercancía y adjuntar al menos una evidencia.</small>
+                </div>
+                <a href="#tabEntrega" class="stage-btn" data-bs-toggle="tab" data-bs-target="#tabEntrega">
+                    <i class="fa-solid fa-box-open"></i>Ir a entrega
+                </a>
             </div>
         }
         else if (Model.Estatus == "Entregado")
@@ -1256,11 +1409,11 @@
                 <div class="doc-note">
                     @if (requiereDefinirSalida)
                     {
-                        <text><strong>Forma de salida pendiente:</strong> define primero si el cliente recoge, si NS realiza la entrega o si se enviará por paquetería. Los documentos requeridos se determinarán con base en esa selección.</text>
+                        <text><strong>Forma de salida pendiente:</strong> define primero si será Entrega, Cliente recoge o Paquetería. Los documentos requeridos se determinarán con base en esa selección.</text>
                     }
                     else if (Model.FormaEnvio == "Interno")
                     {
-                        <text><strong>Interno:</strong> Factura firmada y sellada; si no hay factura por excepción, se permite Remisión indicando motivo.</text>
+                        <text><strong>Entrega:</strong> Factura firmada y sellada; si no hay factura por excepción, se permite Remisión indicando motivo.</text>
                     }
                     else if (Model.FormaEnvio == "Cliente")
                     {
@@ -1453,14 +1606,28 @@
             @if (puedeEntregar)
             {
                 <div class="tab-pane fade" id="tabEntrega">
-                    <div class="section-head"><div><h3>Registrar entrega</h3><p>Confirma quién recibe y cierra el embarque.</p></div></div>
-                    <form asp-controller="LogisticaEmbarques" asp-action="Entregar" method="post" class="compact-form js-single-submit">
+                    <div class="section-head">
+                        <div><h3>Registrar entrega</h3><p>Confirma quién recibe y adjunta una o más evidencias. La evidencia es obligatoria para cerrar el embarque.</p></div>
+                    </div>
+                    <form id="formEntregaOperacion" enctype="multipart/form-data" class="compact-form">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="EmbarqueID" value="@Model.EmbarqueID" />
-                        <div class="f4"><label class="required">Recibe</label><input type="text" name="ReceptorNombre" maxlength="200" class="form-control" required /></div>
+                        <input type="hidden" name="RowVersion" id="lgEntregaRowVersion" />
+                        <div class="f3"><label class="required">Recibe</label><input type="text" name="ReceptorNombre" maxlength="200" class="form-control" required /></div>
+                        <div class="f3"><label class="required">Fecha y hora de entrega</label><input type="datetime-local" name="FechaEntrega" id="lgFechaEntrega" class="form-control" required /></div>
                         <div class="f3"><label>Folio remisión</label><input type="text" name="FolioRemision" maxlength="100" class="form-control" /></div>
-                        <div class="f3"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" class="form-control" /></div>
-                        <div class="f2"><button class="btn btn-success btn-sm w-100" type="submit" onclick="return confirm('¿Confirmar entrega?');">Entregar</button></div>
+                        <div class="f3"><label>Observación evidencias</label><input type="text" name="ObservacionesEvidencia" maxlength="500" class="form-control" /></div>
+                        <div class="f8"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" class="form-control" /></div>
+                        <div class="f4">
+                            <label class="required">Evidencias</label>
+                            <input type="file" id="lgEntregaEvidencias" name="Evidencias" accept="image/*,.pdf" multiple class="form-control" required />
+                            <div class="delivery-files" id="lgEntregaEvidenciasInfo">Selecciona al menos una foto o PDF. Máximo 15 archivos.</div>
+                        </div>
+                        <div class="f12 text-end">
+                            <button class="btn btn-success btn-sm" id="lgConfirmarEntrega" type="submit">
+                                <i class="fa-solid fa-circle-check me-1"></i>Confirmar entrega
+                            </button>
+                        </div>
                     </form>
                 </div>
             }
@@ -1500,42 +1667,399 @@
 
 @section Scripts {
     <script>
-        (()=>{
-            const release=document.getElementById('releaseAgregar'),cantidad=document.getElementById('cantidadAgregar');
-            release?.addEventListener('change',()=>{const option=release.options[release.selectedIndex],max=Number(option?.dataset?.pendiente||0);if(cantidad&&max>0){cantidad.max=max;cantidad.value=max;}});
+        (() => {
+            const embarqueId = @Model.EmbarqueID;
+            const estatusInicial = '@Model.Estatus';
+            const formaEnvio = '@Model.FormaEnvio';
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
-            window.mostrarRetiroDocumento=id=>{const motivo=prompt('Motivo para retirar el documento:');if(!motivo||!motivo.trim())return;const input=document.getElementById(`motivo-doc-${id}`),form=document.getElementById(`retirar-doc-${id}`);if(input&&form){input.value=motivo.trim();form.submit();}};
-            window.retirarEvidencia=id=>{const motivo=prompt('Motivo para retirar la evidencia:');if(!motivo||!motivo.trim())return;const input=document.getElementById(`motivo-evidencia-${id}`),form=document.getElementById(`retirar-evidencia-${id}`);if(input&&form){input.value=motivo.trim();form.submit();}};
+            const urlObtenerCarga = '@Url.Action("ObtenerCargaFisica", "LogisticaOperacion")';
+            const urlEscanearCarga = '@Url.Action("EscanearCajaCarga", "LogisticaOperacion")';
+            const urlConfirmarCarga = '@Url.Action("ConfirmarCargaFisica", "LogisticaOperacion")';
+            const urlConfirmarSalidaPlanta = '@Url.Action("ConfirmarSalidaPlanta", "LogisticaOperacion")';
+            const urlCerrarEntrega = '@Url.Action("CerrarConEvidencia", "LogisticaOperacion")';
 
-            const tipoDoc=document.getElementById('tipoDocumento'),obsDoc=document.getElementById('obsDocumento'),lblObs=document.getElementById('lblObsDocumento');
-            const syncDocumento=()=>{const remision=tipoDoc?.value==='Remisión';if(obsDoc)obsDoc.required=remision;if(lblObs)lblObs.classList.toggle('required',remision);if(remision&&obsDoc)obsDoc.placeholder='Motivo obligatorio: cierre de mes, Finanzas fuera de servicio, etc.';else if(obsDoc)obsDoc.placeholder='';};
-            tipoDoc?.addEventListener('change',syncDocumento);syncDocumento();
+            let rowVersionActual = '';
+            let cargaActual = null;
 
-            const scan=document.getElementById('lgSalidaScan'),scanMsg=document.getElementById('lgSalidaMsg'),salidaBtn=document.getElementById('lgConfirmarSalida'),limpiar=document.getElementById('lgLimpiarSalida');
-            const checks=Array.from(document.querySelectorAll('.scan-check')),rows=Array.from(document.querySelectorAll('.scan-item')),norm=v=>(v||'').trim().toUpperCase();
-            const updateSalida=(message,type='')=>{const marked=checks.filter(x=>x.checked).length;rows.forEach(r=>r.classList.toggle('checked',r.querySelector('.scan-check')?.checked===true));if(salidaBtn)salidaBtn.disabled=checks.length===0||marked!==checks.length;if(scanMsg){scanMsg.textContent=message||`${marked} de ${checks.length} caja(s) confirmadas.`;scanMsg.classList.remove('ok','error');if(type)scanMsg.classList.add(type);}};
-            const scanCaja=()=>{if(!scan)return;const code=norm(scan.value);if(!code){updateSalida('El lector no envió contenido.','error');return;}let candidates=rows.filter(r=>norm(r.dataset.etiqueta)===code);if(candidates.length===0)candidates=rows.filter(r=>norm(r.dataset.lote)===code||norm(r.dataset.cajaId)===code||norm(r.dataset.numeroCaja)===code);if(candidates.length!==1){updateSalida(candidates.length===0?'La caja escaneada no pertenece a este embarque.':'La lectura es ambigua; escanea la etiqueta completa.','error');scan.select();return;}const chk=candidates[0].querySelector('.scan-check');if(chk.checked){updateSalida(`La caja #${candidates[0].dataset.numeroCaja} ya estaba confirmada.`,'error');scan.value='';return;}chk.checked=true;scan.value='';updateSalida(`Caja #${candidates[0].dataset.numeroCaja} confirmada.`,'ok');scan.focus();};
-            scan?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();scanCaja();}});checks.forEach(x=>x.addEventListener('change',()=>updateSalida()));limpiar?.addEventListener('click',()=>{checks.forEach(x=>x.checked=false);updateSalida('Confirmación limpiada.');scan?.focus();});
+            const release = document.getElementById('releaseAgregar');
+            const cantidad = document.getElementById('cantidadAgregar');
 
-            const salidaForm=document.getElementById('lgSalidaForm');
-            salidaForm?.addEventListener('submit',e=>{
-                if(checks.length===0||checks.some(x=>!x.checked)){e.preventDefault();updateSalida('Debes confirmar todas las cajas antes de salir.','error');return;}
-                if(!confirm('¿Confirmar salida física de PT?')){e.preventDefault();return;}
-                if(salidaForm.dataset.enviando==='1'){e.preventDefault();return;}
-                salidaForm.dataset.enviando='1';
-                if(salidaBtn){salidaBtn.disabled=true;salidaBtn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';}
+            release?.addEventListener('change', () => {
+                const option = release.options[release.selectedIndex];
+                const max = Number(option?.dataset?.pendiente || 0);
+                if (cantidad && max > 0) {
+                    cantidad.max = max;
+                    cantidad.value = max;
+                }
             });
-            updateSalida();
 
-            document.querySelectorAll('form.js-single-submit').forEach(form=>{
-                form.addEventListener('submit',e=>{
-                    if(e.defaultPrevented)return;
-                    if(form.dataset.enviando==='1'){e.preventDefault();return;}
-                    form.dataset.enviando='1';
-                    const btn=form.querySelector('button[type="submit"]');
-                    if(btn){btn.disabled=true;setTimeout(()=>{if(!form.isConnected)return;},0);}
+            window.mostrarRetiroDocumento = id => {
+                const motivo = prompt('Motivo para retirar el documento:');
+                if (!motivo || !motivo.trim()) return;
+                const input = document.getElementById(`motivo-doc-${id}`);
+                const form = document.getElementById(`retirar-doc-${id}`);
+                if (input && form) {
+                    input.value = motivo.trim();
+                    form.submit();
+                }
+            };
+
+            window.retirarEvidencia = id => {
+                const motivo = prompt('Motivo para retirar la evidencia:');
+                if (!motivo || !motivo.trim()) return;
+                const input = document.getElementById(`motivo-evidencia-${id}`);
+                const form = document.getElementById(`retirar-evidencia-${id}`);
+                if (input && form) {
+                    input.value = motivo.trim();
+                    form.submit();
+                }
+            };
+
+            const tipoDoc = document.getElementById('tipoDocumento');
+            const obsDoc = document.getElementById('obsDocumento');
+            const lblObs = document.getElementById('lblObsDocumento');
+
+            const syncDocumento = () => {
+                const remision = tipoDoc?.value === 'Remisión';
+                if (obsDoc) obsDoc.required = remision;
+                if (lblObs) lblObs.classList.toggle('required', remision);
+                if (remision && obsDoc) obsDoc.placeholder = 'Motivo obligatorio: cierre de mes, Finanzas fuera de servicio, etc.';
+                else if (obsDoc) obsDoc.placeholder = '';
+            };
+
+            tipoDoc?.addEventListener('change', syncDocumento);
+            syncDocumento();
+
+            const esc = value => String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+
+            const nf = value => Number(value || 0).toLocaleString('es-MX');
+
+            async function leerJson(response) {
+                try {
+                    return await response.json();
+                } catch {
+                    throw new Error(`El servidor respondió ${response.status} y no devolvió JSON.`);
+                }
+            }
+
+            function mostrarMensajeCarga(texto, tipo = '') {
+                const msg = document.getElementById('lgCargaMsg');
+                if (!msg) return;
+                msg.textContent = texto || '';
+                msg.classList.remove('ok', 'error');
+                if (tipo) msg.classList.add(tipo);
+            }
+
+            function renderCarga(data) {
+                cargaActual = data;
+                if (data?.rowVersion) {
+                    rowVersionActual = data.rowVersion;
+                    const rowEntrega = document.getElementById('lgEntregaRowVersion');
+                    if (rowEntrega) rowEntrega.value = rowVersionActual;
+                }
+
+                const total = document.getElementById('lgCargaTotal');
+                const cargadas = document.getElementById('lgCargaCargadas');
+                const reservadas = document.getElementById('lgCargaReservadas');
+                const pendientes = document.getElementById('lgCargaPendientes');
+                const confirmar = document.getElementById('lgConfirmarCargaFisica');
+
+                if (total) total.textContent = `${nf(data?.totalPiezas)} PZA`;
+                if (cargadas) cargadas.textContent = `${nf(data?.piezasCargadas)} PZA`;
+                if (reservadas) reservadas.textContent = `${nf(data?.piezasReservadas)} PZA`;
+                if (pendientes) pendientes.textContent = `${nf(data?.piezasPendientes)} PZA`;
+                if (confirmar) confirmar.disabled = !data?.puedeConfirmar;
+
+                const lista = document.getElementById('lgCargaLista');
+                if (lista) {
+                    const cajas = Array.isArray(data?.cajas) ? data.cajas : [];
+                    if (cajas.length === 0) {
+                        lista.innerHTML = '<div class="empty">Todavía no hay cajas registradas para la carga física.</div>';
+                    } else {
+                        lista.innerHTML = cajas.map(c => {
+                            const cargada = c.estatus === 'Cargada' || c.estatus === 'Despachada';
+                            return `<div class="scan-item ${cargada ? 'checked' : ''}">
+                                <span class="scan-state"><i class="fa-solid ${cargada ? 'fa-check' : 'fa-box'}"></i></span>
+                                <div><strong>Caja #${esc(c.numeroCaja)} · ${esc(c.numeroParte)}</strong><small>${esc(c.etiqueta || 'Sin etiqueta')}</small></div>
+                                <div><strong>${esc(c.lote || 'Sin lote')}</strong><small>OF ${esc(c.numeroOF || '-')} · ${esc(c.estatus || '-')}</small></div>
+                                <div class="qty">${nf(c.cantidadAsignada)} PZA</div>
+                            </div>`;
+                        }).join('');
+                    }
+                }
+
+                const mensaje = data?.piezasPendientes > 0
+                    ? `${nf(data.piezasCargadas)} de ${nf(data.totalPiezas)} PZA cargadas. Pendientes: ${nf(data.piezasPendientes)} PZA.`
+                    : data?.puedeConfirmar
+                        ? 'Todas las piezas están cargadas. Ya puedes confirmar la carga física.'
+                        : `Carga registrada: ${nf(data?.piezasCargadas)} de ${nf(data?.totalPiezas)} PZA.`;
+
+                mostrarMensajeCarga(mensaje, data?.puedeConfirmar ? 'ok' : '');
+            }
+
+            async function cargarCargaFisica() {
+                const response = await fetch(`${urlObtenerCarga}?embarqueId=${encodeURIComponent(embarqueId)}`, {
+                    method: 'GET',
+                    cache: 'no-store',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const data = await leerJson(response);
+                if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible consultar la carga física.');
+                renderCarga(data);
+                return data;
+            }
+
+            const scan = document.getElementById('lgCargaScan');
+            const btnEscanear = document.getElementById('lgEscanearCarga');
+
+            async function escanearCaja() {
+                if (!scan) return;
+                const codigo = (scan.value || '').trim();
+                if (!codigo) {
+                    mostrarMensajeCarga('Escanea o captura una etiqueta de caja.', 'error');
+                    scan.focus();
+                    return;
+                }
+
+                const original = btnEscanear?.innerHTML;
+                try {
+                    if (btnEscanear) {
+                        btnEscanear.disabled = true;
+                        btnEscanear.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+                    }
+
+                    const datos = new URLSearchParams();
+                    datos.append('__RequestVerificationToken', token);
+                    datos.append('embarqueId', String(embarqueId));
+                    datos.append('codigo', codigo);
+
+                    const response = await fetch(urlEscanearCarga, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: datos.toString()
+                    });
+
+                    const data = await leerJson(response);
+                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible registrar la caja.');
+
+                    if (data.rowVersion) rowVersionActual = data.rowVersion;
+                    scan.value = '';
+                    mostrarMensajeCarga(data.mensaje || 'Caja registrada correctamente.', 'ok');
+                    await cargarCargaFisica();
+                    scan.focus();
+                } catch (error) {
+                    mostrarMensajeCarga(error.message || 'No fue posible registrar la caja.', 'error');
+                    scan.select();
+                } finally {
+                    if (btnEscanear) {
+                        btnEscanear.disabled = false;
+                        btnEscanear.innerHTML = original || '<i class="fa-solid fa-barcode"></i>Registrar';
+                    }
+                }
+            }
+
+            scan?.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault();
+                    escanearCaja();
+                }
+            });
+
+            btnEscanear?.addEventListener('click', escanearCaja);
+
+            document.getElementById('lgConfirmarCargaFisica')?.addEventListener('click', async () => {
+                if (!cargaActual?.puedeConfirmar) {
+                    mostrarMensajeCarga('La carga física todavía no está completa.', 'error');
+                    return;
+                }
+
+                if (!rowVersionActual) {
+                    try { await cargarCargaFisica(); }
+                    catch (error) { mostrarMensajeCarga(error.message, 'error'); return; }
+                }
+
+                if (!confirm('¿Confirmar que la carga física está completa? Después de confirmar, el embarque quedará Cargado.')) return;
+
+                const btn = document.getElementById('lgConfirmarCargaFisica');
+                const original = btn.innerHTML;
+
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...';
+
+                    const datos = new URLSearchParams();
+                    datos.append('__RequestVerificationToken', token);
+                    datos.append('embarqueId', String(embarqueId));
+                    datos.append('rowVersion', rowVersionActual);
+
+                    const response = await fetch(urlConfirmarCarga, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: datos.toString()
+                    });
+
+                    const data = await leerJson(response);
+                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible confirmar la carga física.');
+
+                    alert(data.mensaje || 'Carga física confirmada.');
+                    window.location.reload();
+                } catch (error) {
+                    mostrarMensajeCarga(error.message || 'No fue posible confirmar la carga física.', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                }
+            });
+
+            document.getElementById('lgConfirmarSalidaPlanta')?.addEventListener('click', async () => {
+                if (formaEnvio === 'Interno') {
+                    alert('La salida de una Entrega debe confirmarla el chofer asignado desde su portal.');
+                    return;
+                }
+
+                try {
+                    if (!rowVersionActual) await cargarCargaFisica();
+                } catch (error) {
+                    alert(error.message || 'No fue posible obtener la versión actual del embarque.');
+                    return;
+                }
+
+                const textoForma = formaEnvio === 'Cliente' ? 'Cliente recoge' : 'Paquetería';
+                if (!confirm(`¿Confirmar la salida real de planta para ${textoForma}? El embarque pasará a En ruta.`)) return;
+
+                const btn = document.getElementById('lgConfirmarSalidaPlanta');
+                const original = btn.innerHTML;
+
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...';
+
+                    const datos = new URLSearchParams();
+                    datos.append('__RequestVerificationToken', token);
+                    datos.append('embarqueId', String(embarqueId));
+                    datos.append('rowVersion', rowVersionActual);
+
+                    const response = await fetch(urlConfirmarSalidaPlanta, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: datos.toString()
+                    });
+
+                    const data = await leerJson(response);
+                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible confirmar la salida de planta.');
+
+                    alert(data.mensaje || 'Salida de planta confirmada.');
+                    window.location.reload();
+                } catch (error) {
+                    alert(error.message || 'No fue posible confirmar la salida de planta.');
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                }
+            });
+
+            const fechaEntrega = document.getElementById('lgFechaEntrega');
+            if (fechaEntrega && !fechaEntrega.value) {
+                const ahora = new Date();
+                ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
+                fechaEntrega.value = ahora.toISOString().slice(0, 16);
+            }
+
+            const evidenciasEntrega = document.getElementById('lgEntregaEvidencias');
+            const infoEvidencias = document.getElementById('lgEntregaEvidenciasInfo');
+
+            evidenciasEntrega?.addEventListener('change', () => {
+                const archivos = [...evidenciasEntrega.files];
+                if (infoEvidencias) {
+                    infoEvidencias.textContent = archivos.length === 0
+                        ? 'Selecciona al menos una foto o PDF. Máximo 15 archivos.'
+                        : `${archivos.length} archivo(s) seleccionado(s) · ${archivos.map(x => x.name).join(' · ')}`;
+                }
+            });
+
+            document.getElementById('formEntregaOperacion')?.addEventListener('submit', async event => {
+                event.preventDefault();
+
+                const form = event.currentTarget;
+                const archivos = [...(evidenciasEntrega?.files || [])];
+                if (archivos.length === 0) {
+                    alert('Adjunta al menos una evidencia de entrega.');
+                    return;
+                }
+
+                try {
+                    if (!rowVersionActual) await cargarCargaFisica();
+                } catch (error) {
+                    alert(error.message || 'No fue posible obtener la versión actual del embarque.');
+                    return;
+                }
+
+                const rowInput = document.getElementById('lgEntregaRowVersion');
+                if (rowInput) rowInput.value = rowVersionActual;
+
+                if (!confirm('¿Confirmar la entrega y cerrar este embarque?')) return;
+
+                const btn = document.getElementById('lgConfirmarEntrega');
+                const original = btn.innerHTML;
+                const datos = new FormData(form);
+
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
+
+                    const response = await fetch(urlCerrarEntrega, {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: datos
+                    });
+
+                    const data = await leerJson(response);
+                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible confirmar la entrega.');
+
+                    alert(data.mensaje || 'Entrega confirmada.');
+                    window.location.reload();
+                } catch (error) {
+                    alert(error.message || 'No fue posible confirmar la entrega.');
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                }
+            });
+
+            document.querySelectorAll('form.js-single-submit').forEach(form => {
+                form.addEventListener('submit', event => {
+                    if (event.defaultPrevented) return;
+                    if (form.dataset.enviando === '1') {
+                        event.preventDefault();
+                        return;
+                    }
+                    form.dataset.enviando = '1';
+                    const btn = form.querySelector('button[type="submit"]');
+                    if (btn) btn.disabled = true;
                 });
             });
+
+            if (['Preparado', 'Cargando', 'Cargado', 'En ruta'].includes(estatusInicial)) {
+                cargarCargaFisica()
+                    .then(() => {
+                        if (scan) scan.focus();
+                    })
+                    .catch(error => {
+                        if (scan) mostrarMensajeCarga(error.message || 'No fue posible consultar la carga física.', 'error');
+                    });
+            }
         })();
     </script>
 }

@@ -7,11 +7,13 @@
     var enCurso = Model.Estatus == "En curso";
     var completado = Model.Estatus == "Completado";
     var cancelado = Model.Estatus == "Cancelado";
+    var esEntregaPt = string.Equals(Model.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
     var puedeIncidencia = !Model.EstaCerrado;
     var ahoraTexto = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
 
     public static string EstadoClase(string? estatus)
     {
@@ -513,6 +515,407 @@
             font-weight: 750
         }
 
+        .sync-note {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 12px 14px;
+            border: 1px solid #b8d2f1;
+            border-left: 4px solid var(--chofer-azul);
+            border-radius: 12px;
+            background: #f4f8ff;
+            color: #31506f
+        }
+
+        .sync-note > i {
+            margin-top: 2px;
+            color: var(--chofer-azul);
+            font-size: 1rem
+        }
+
+        .sync-note strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--chofer-azul-oscuro);
+            font-size: .79rem;
+            font-weight: 950
+        }
+
+        .sync-note span {
+            display: block;
+            font-size: .72rem;
+            line-height: 1.45;
+            font-weight: 700
+        }
+
+        .flow-state {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 7px;
+            margin-top: 9px
+        }
+
+        .flow-state-item {
+            padding: 7px 8px;
+            border: 1px solid #d6e2ef;
+            border-radius: 8px;
+            background: #fff;
+            color: var(--chofer-gris);
+            font-size: .66rem;
+            font-weight: 850;
+            text-align: center
+        }
+
+        .flow-state-item.done {
+            border-color: #a9d6be;
+            background: #f0faf5;
+            color: var(--chofer-verde)
+        }
+
+        .flow-state-item.current {
+            border-color: #8db3df;
+            background: #eaf3ff;
+            color: var(--chofer-azul)
+        }
+
+        .carga-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px
+        }
+
+        .carga-toolbar-texto {
+            min-width: 0
+        }
+
+        .carga-toolbar-texto strong {
+            display: block;
+            color: var(--chofer-texto);
+            font-size: .82rem;
+            font-weight: 950
+        }
+
+        .carga-toolbar-texto small {
+            display: block;
+            margin-top: 2px;
+            color: var(--chofer-gris);
+            font-size: .69rem;
+            font-weight: 700
+        }
+
+        .btn-carga-secundario {
+            min-height: 38px;
+            border: 1px solid #b9cce1;
+            border-radius: 9px;
+            padding: 8px 11px;
+            background: #fff;
+            color: var(--chofer-azul);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: .71rem;
+            font-weight: 900;
+            cursor: pointer;
+            white-space: nowrap
+        }
+
+        .btn-carga-secundario:hover {
+            background: #f2f7fd
+        }
+
+        .carga-mensaje {
+            display: none;
+            margin-bottom: 10px;
+            padding: 9px 11px;
+            border-radius: 9px;
+            border: 1px solid #c7d8eb;
+            background: #f7fbff;
+            color: #31506f;
+            font-size: .71rem;
+            font-weight: 800
+        }
+
+        .carga-mensaje.show {
+            display: block
+        }
+
+        .carga-mensaje.ok {
+            border-color: #add8bf;
+            background: #f0faf5;
+            color: var(--chofer-verde)
+        }
+
+        .carga-mensaje.error {
+            border-color: #efb8b4;
+            background: #fef3f2;
+            color: var(--chofer-rojo)
+        }
+
+        .carga-mensaje.warning {
+            border-color: #ecd19a;
+            background: #fffaeb;
+            color: var(--chofer-amarillo)
+        }
+
+        .carga-embarques {
+            display: grid;
+            grid-template-columns: repeat(auto-fit,minmax(230px,1fr));
+            gap: 8px;
+            margin-bottom: 12px
+        }
+
+        .carga-embarque {
+            border: 1px solid var(--chofer-borde);
+            border-radius: 11px;
+            padding: 10px;
+            background: #fff;
+            text-align: left;
+            cursor: pointer;
+            min-width: 0
+        }
+
+        .carga-embarque:hover,
+        .carga-embarque.active {
+            border-color: #7fa9d8;
+            box-shadow: 0 0 0 3px rgba(0,74,173,.06)
+        }
+
+        .carga-embarque-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px
+        }
+
+        .carga-embarque-top strong {
+            color: var(--chofer-texto);
+            font-size: .78rem;
+            font-weight: 950
+        }
+
+        .carga-embarque small {
+            display: block;
+            margin-top: 4px;
+            color: var(--chofer-gris);
+            font-size: .66rem;
+            font-weight: 700;
+            overflow-wrap: anywhere
+        }
+
+        .carga-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 5px 7px;
+            font-size: .62rem;
+            line-height: 1;
+            font-weight: 950;
+            white-space: nowrap;
+            background: #eef2f6;
+            color: #475467
+        }
+
+        .carga-badge.preparado {
+            background: #fff4e5;
+            color: #9a5b00
+        }
+
+        .carga-badge.cargando {
+            background: #eaf3ff;
+            color: var(--chofer-azul)
+        }
+
+        .carga-badge.cargado {
+            background: #eaf8ef;
+            color: var(--chofer-verde)
+        }
+
+        .carga-detalle {
+            border-top: 1px solid var(--chofer-borde);
+            padding-top: 12px
+        }
+
+        .carga-resumen {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 7px;
+            margin-bottom: 10px
+        }
+
+        .carga-kpi {
+            padding: 9px;
+            border: 1px solid var(--chofer-borde);
+            border-radius: 9px;
+            background: #fafcff
+        }
+
+        .carga-kpi span {
+            display: block;
+            color: var(--chofer-gris);
+            font-size: .62rem;
+            font-weight: 850;
+            text-transform: uppercase
+        }
+
+        .carga-kpi strong {
+            display: block;
+            margin-top: 2px;
+            color: var(--chofer-texto);
+            font-size: .92rem;
+            font-weight: 950
+        }
+
+        .carga-progress {
+            height: 9px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: #e6edf5;
+            margin: 8px 0 12px
+        }
+
+        .carga-progress > span {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: var(--chofer-verde);
+            transition: width .2s ease
+        }
+
+        .carga-scan-form {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) auto;
+            gap: 8px;
+            margin-bottom: 10px
+        }
+
+        .carga-scan-form input {
+            min-height: 48px;
+            width: 100%;
+            border: 2px solid #83aeda;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+            color: var(--chofer-texto);
+            font-size: .88rem;
+            font-weight: 800;
+            outline: none
+        }
+
+        .carga-scan-form input:focus {
+            border-color: var(--chofer-azul);
+            box-shadow: 0 0 0 3px rgba(0,74,173,.08)
+        }
+
+        .btn-escanear-caja {
+            min-height: 48px;
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 16px;
+            background: var(--chofer-azul);
+            color: #fff;
+            font-weight: 950;
+            cursor: pointer
+        }
+
+        .btn-escanear-caja:disabled,
+        .btn-confirmar-carga:disabled,
+        .btn-action:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+            filter: none
+        }
+
+        .carga-cajas {
+            max-height: 280px;
+            overflow: auto;
+            border: 1px solid var(--chofer-borde);
+            border-radius: 10px;
+            margin-top: 10px
+        }
+
+        .carga-caja {
+            display: grid;
+            grid-template-columns: minmax(0,1.35fr) minmax(0,.8fr) minmax(0,.7fr) auto;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 10px;
+            border-bottom: 1px solid #edf1f5;
+            font-size: .68rem
+        }
+
+        .carga-caja:last-child {
+            border-bottom: 0
+        }
+
+        .carga-caja strong {
+            color: var(--chofer-texto);
+            font-size: .7rem;
+            font-weight: 900;
+            overflow-wrap: anywhere
+        }
+
+        .carga-caja span,
+        .carga-caja small {
+            color: var(--chofer-gris);
+            font-weight: 700
+        }
+
+        .carga-caja .cargada {
+            color: var(--chofer-verde);
+            font-weight: 950
+        }
+
+        .carga-caja .reservada {
+            color: var(--chofer-amarillo);
+            font-weight: 950
+        }
+
+        .carga-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 11px
+        }
+
+        .btn-confirmar-carga {
+            min-height: 42px;
+            border: 0;
+            border-radius: 10px;
+            padding: 9px 15px;
+            background: var(--chofer-verde);
+            color: #fff;
+            font-size: .73rem;
+            font-weight: 950;
+            cursor: pointer
+        }
+
+        .salida-bloqueo {
+            display: none;
+            margin: 0 14px 12px;
+            padding: 9px 11px;
+            border: 1px solid #ecd19a;
+            border-radius: 9px;
+            background: #fffaeb;
+            color: var(--chofer-amarillo);
+            font-size: .7rem;
+            font-weight: 800
+        }
+
+        .salida-bloqueo.show {
+            display: block
+        }
+
+        html[data-nsq-theme="dark"] .carga-embarque,
+        html[data-nsq-theme="dark"] .carga-kpi,
+        html[data-nsq-theme="dark"] .carga-scan-form input,
+        html[data-nsq-theme="dark"] .btn-carga-secundario {
+            background: #111c2d;
+            color: #edf3fb
+        }
+
         html[data-nsq-theme="dark"] {
             --chofer-fondo: #08111e;
             --chofer-superficie: #111c2d;
@@ -541,6 +944,21 @@
 
             html[data-nsq-theme="dark"] .closed-note {
                 background: #0d1828
+            }
+
+            html[data-nsq-theme="dark"] .sync-note {
+                background: #0d1828;
+                border-color: #31527a;
+                color: #b9c8da
+            }
+
+            html[data-nsq-theme="dark"] .sync-note strong {
+                color: #dceafe
+            }
+
+            html[data-nsq-theme="dark"] .flow-state-item {
+                background: #111c2d;
+                border-color: #2b3d53
             }
 
         @@media(max-width:760px) {
@@ -597,6 +1015,10 @@
                 grid-template-columns: 1fr
             }
 
+            .flow-state {
+                grid-template-columns: 1fr
+            }
+
             .field.full {
                 grid-column: auto
             }
@@ -618,6 +1040,31 @@
             .list-icon {
                 width: 31px;
                 height: 31px
+            }
+
+            .carga-resumen {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .carga-scan-form {
+                grid-template-columns: 1fr
+            }
+
+            .btn-escanear-caja {
+                width: 100%
+            }
+
+            .carga-caja {
+                grid-template-columns: minmax(0,1fr) auto
+            }
+
+            .carga-caja .carga-caja-of,
+            .carga-caja .carga-caja-cantidad {
+                display: none
+            }
+
+            .carga-toolbar {
+                align-items: flex-start
             }
 
             .chofer-head .estado {
@@ -784,6 +1231,23 @@
         </div>
     </div>
 
+    @if (esEntregaPt)
+    {
+        <div class="sync-note">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <div>
+                <strong>Entrega vinculada al Centro Operativo</strong>
+                <span>La carga física es compartida: puede escanearse desde Centro Operativo o desde este portal del chofer, sin restricción de horario. Ambos trabajan sobre las mismas cajas del embarque. La salida física real continúa siendo confirmada por el chofer.</span>
+                <div class="flow-state">
+                    <div class="flow-state-item done"><i class="fa-solid fa-check me-1"></i>Viaje asignado</div>
+                    <div id="pasoCargaFisicaChofer" class="flow-state-item @(programado ? "current" : (enCurso || completado ? "done" : ""))"><i class="fa-solid fa-barcode me-1"></i>Carga física</div>
+                    <div id="pasoSalidaFisicaChofer" class="flow-state-item @((enCurso || completado) ? "done" : "")"><i class="fa-solid fa-truck-fast me-1"></i>Salida física</div>
+                    <div class="flow-state-item @(enCurso ? "current" : (completado ? "done" : ""))"><i class="fa-solid fa-flag-checkered me-1"></i>Regreso</div>
+                </div>
+            </div>
+        </div>
+    }
+
     <section class="section">
         <div class="section-title">
             <span><i class="fa-solid fa-route me-2"></i>Información del viaje</span>
@@ -799,8 +1263,12 @@
                 <strong>@Txt(Model.Destino)</strong>
             </div>
             <div class="info-row">
+                <span>Tipo</span>
+                <strong>@(esEntregaPt ? "Entrega" : TxtVisible(Model.TipoViaje))</strong>
+            </div>
+            <div class="info-row">
                 <span>Motivo</span>
-                <strong>@Txt(Model.Motivo)</strong>
+                <strong>@TxtVisible(Model.Motivo)</strong>
             </div>
             <div class="info-row">
                 <span>Unidad</span>
@@ -859,26 +1327,100 @@
             {
                 <div class="info-row full">
                     <span>Observaciones</span>
-                    <strong>@Model.Observaciones</strong>
+                    <strong>@TxtVisible(Model.Observaciones)</strong>
                 </div>
             }
         </div>
     </section>
 
+    @if (esEntregaPt && programado)
+    {
+        <section class="section" id="seccionCargaFisicaChofer" data-viaje-id="@Model.ViajeID">
+            <div class="section-title">
+                <span><i class="fa-solid fa-barcode me-2"></i>Carga física</span>
+                <small>Compartida con Centro Operativo · sin restricción de horario</small>
+            </div>
+            <div class="action-body">
+                <div class="action-intro">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Puedes iniciar o continuar aquí la misma carga que aparece en Centro Operativo. Si otra persona ya escaneó cajas, se mostrarán como cargadas y solo tendrás que continuar con las pendientes.</span>
+                </div>
+                <div id="tokenCargaChofer" hidden>@Html.AntiForgeryToken()</div>
+                <div class="carga-toolbar">
+                    <div class="carga-toolbar-texto">
+                        <strong>Embarques vinculados al viaje</strong>
+                        <small>Todos deben quedar en Cargado antes de confirmar la salida física.</small>
+                    </div>
+                    <button type="button" class="btn-carga-secundario" id="btnActualizarCargaChofer">
+                        <i class="fa-solid fa-rotate"></i> Actualizar
+                    </button>
+                </div>
+                <div id="mensajeCargaChofer" class="carga-mensaje"></div>
+                <div id="embarquesCargaChofer" class="carga-embarques">
+                    <div class="empty">Consultando embarques vinculados...</div>
+                </div>
+                <div id="detalleCargaChofer" class="carga-detalle" hidden>
+                    <div class="carga-toolbar">
+                        <div class="carga-toolbar-texto">
+                            <strong id="tituloCargaChofer">Carga física</strong>
+                            <small id="subtituloCargaChofer">Selecciona un embarque.</small>
+                        </div>
+                        <span id="estadoCargaChofer" class="carga-badge">-</span>
+                    </div>
+                    <div class="carga-resumen">
+                        <div class="carga-kpi"><span>Programadas</span><strong id="cargaTotalPiezas">0</strong></div>
+                        <div class="carga-kpi"><span>Escaneadas</span><strong id="cargaPiezasCargadas">0</strong></div>
+                        <div class="carga-kpi"><span>Pendientes</span><strong id="cargaPiezasPendientes">0</strong></div>
+                        <div class="carga-kpi"><span>Cajas cargadas</span><strong id="cargaCajasCargadas">0</strong></div>
+                    </div>
+                    <div class="carga-progress" aria-label="Avance de carga"><span id="barraCargaChofer"></span></div>
+                    <form id="formEscanearCajaChofer" class="carga-scan-form" autocomplete="off">
+                        <input id="codigoCajaChofer" type="text" maxlength="500" placeholder="Escanea la etiqueta, folio o código de la caja" aria-label="Código de caja" />
+                        <button id="btnEscanearCajaChofer" type="submit" class="btn-escanear-caja">
+                            <i class="fa-solid fa-barcode"></i> Escanear caja
+                        </button>
+                    </form>
+                    <div id="mensajeEscaneoChofer" class="carga-mensaje"></div>
+                    <div id="listaCajasCargaChofer" class="carga-cajas">
+                        <div class="empty">Selecciona un embarque para consultar sus cajas.</div>
+                    </div>
+                    <div class="carga-footer">
+                        <button id="btnConfirmarCargaChofer" type="button" class="btn-confirmar-carga" disabled>
+                            <i class="fa-solid fa-check-double me-1"></i>Confirmar carga física
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    }
+
     @if (Model.PuedeRegistrarSalida)
     {
         <section class="section">
             <div class="section-title">
-                <span><i class="fa-solid fa-play me-2"></i>Registrar salida</span>
+                <span><i class="fa-solid fa-play me-2"></i>@(esEntregaPt ? "Confirmar salida de planta" : "Registrar salida")</span>
                 <small>@ahoraTexto</small>
             </div>
-            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarSalida" method="post" enctype="multipart/form-data">
+            @if (esEntregaPt)
+            {
+                <div id="salidaBloqueoCarga" class="salida-bloqueo show">
+                    <i class="fa-solid fa-circle-notch fa-spin me-1"></i>Validando que todos los embarques vinculados tengan la carga física confirmada...
+                </div>
+            }
+            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarSalida" method="post" enctype="multipart/form-data" data-operacion="salida">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="viajeId" value="@Model.ViajeID" />
 
                 <div class="action-intro">
                     <i class="fa-solid fa-circle-info"></i>
-                    <span>Antes de salir registra el kilometraje de la unidad y toma una o más fotografías de evidencia.</span>
+                    @if (esEntregaPt)
+                    {
+                        <span>Esta es la salida física real. Antes de registrarla, el sistema validará nuevamente que la carga del embarque esté completa y sin bloqueos críticos. Captura el kilometraje inicial y agrega al menos una fotografía.</span>
+                    }
+                    else
+                    {
+                        <span>Antes de salir registra el kilometraje de la unidad y toma una o más fotografías de evidencia.</span>
+                    }
                 </div>
 
                 <div class="form-grid">
@@ -919,9 +1461,9 @@
                 </div>
 
                 <div class="action-footer">
-                    <button type="submit" class="btn-action btn-start">
+                    <button id="btnRegistrarSalidaChofer" type="submit" class="btn-action btn-start">
                         <i class="fa-solid fa-truck-fast"></i>
-                        Confirmar salida
+                        @(esEntregaPt ? "Confirmar salida de planta" : "Confirmar salida")
                     </button>
                 </div>
             </form>
@@ -935,13 +1477,20 @@
                 <span><i class="fa-solid fa-flag-checkered me-2"></i>Registrar regreso</span>
                 <small>Viaje en curso</small>
             </div>
-            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarRetorno" method="post" enctype="multipart/form-data">
+            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarRetorno" method="post" enctype="multipart/form-data" data-operacion="regreso">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="viajeId" value="@Model.ViajeID" />
 
                 <div class="action-intro">
                     <i class="fa-solid fa-circle-info"></i>
-                    <span>Al regresar registra el kilometraje final y toma una fotografía de evidencia.</span>
+                    @if (esEntregaPt)
+                    {
+                        <span>Cuando termines la entrega y regreses a planta, registra el kilometraje final y agrega al menos una fotografía. Si todavía existe un embarque vinculado sin entregar, el sistema no permitirá cerrar el viaje.</span>
+                    }
+                    else
+                    {
+                        <span>Al regresar registra el kilometraje final y toma una fotografía de evidencia.</span>
+                    }
                 </div>
 
                 <div class="form-grid">
@@ -1002,7 +1551,7 @@
                 <span><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar incidencia</span>
                 <small>La evidencia es opcional</small>
             </div>
-            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarIncidencia" method="post" enctype="multipart/form-data">
+            <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarIncidencia" method="post" enctype="multipart/form-data" data-operacion="incidencia">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="viajeId" value="@Model.ViajeID" />
 
@@ -1149,11 +1698,11 @@
                             <i class="fa-solid fa-clock-rotate-left"></i>
                         </div>
                         <div class="list-main">
-                            <strong>@Txt(movimiento.Evento)</strong>
+                            <strong>@TxtVisible(movimiento.Evento)</strong>
                             <small>@movimiento.FechaEvento.ToString("dd/MM/yyyy HH:mm") @(!string.IsNullOrWhiteSpace(movimiento.Usuario) ? $"· {movimiento.Usuario}" : "")</small>
                             @if (!string.IsNullOrWhiteSpace(movimiento.Observaciones))
                             {
-                                <small>@movimiento.Observaciones</small>
+                                <small>@TxtVisible(movimiento.Observaciones)</small>
                             }
                         </div>
                         @if (!string.IsNullOrWhiteSpace(movimiento.EstadoNuevo))
@@ -1176,200 +1725,430 @@
         (() => {
             const tabs = document.querySelectorAll('.tab-btn');
             const panels = document.querySelectorAll('.tab-panel');
+            const almacenesEvidencia = new Map();
+            const cargaChoferActiva = @((esEntregaPt && programado) ? "true" : "false");
+            const viajeIdCarga = @Model.ViajeID;
+            const urlEmbarquesCarga = '@Url.Action("ObtenerEmbarquesCarga", "LogisticaChofer")';
+            const urlObtenerCarga = '@Url.Action("ObtenerCargaFisica", "LogisticaOperacion")';
+            const urlEscanearCaja = '@Url.Action("EscanearCajaCarga", "LogisticaOperacion")';
+            const urlConfirmarCarga = '@Url.Action("ConfirmarCargaFisica", "LogisticaOperacion")';
+            let embarqueCargaActivo = null;
+            let rowVersionCargaActiva = null;
+            let procesandoCarga = false;
+            let embarquesCargaActuales = [];
+
+            function tokenCarga() {
+                return document.querySelector('#tokenCargaChofer input[name="__RequestVerificationToken"]')?.value || document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            }
+
+            function textoNumero(valor) {
+                const numero = Number(valor || 0);
+                return Number.isFinite(numero) ? numero.toLocaleString('es-MX') : '0';
+            }
+
+            function normalizarEstadoCarga(estado) {
+                return String(estado || '').trim().toLowerCase().replace(/\s+/g, '-');
+            }
+
+            function mostrarMensajeCarga(id, mensaje, tipo = '') {
+                const elemento = document.getElementById(id);
+                if (!elemento) return;
+                elemento.className = `carga-mensaje${mensaje ? ' show' : ''}${tipo ? ' ' + tipo : ''}`;
+                elemento.textContent = mensaje || '';
+            }
+
+            async function leerJson(url, opciones) {
+                const respuesta = await fetch(url, opciones);
+                let data = null;
+                try { data = await respuesta.json(); } catch { }
+                if (!respuesta.ok || data?.ok === false) {
+                    const error = new Error(data?.mensaje || `No fue posible completar la operación (${respuesta.status}).`);
+                    error.status = respuesta.status;
+                    error.recargar = data?.recargar === true;
+                    throw error;
+                }
+                return data || {};
+            }
+
+            function actualizarDisponibilidadSalida() {
+                if (!cargaChoferActiva) return;
+                const boton = document.getElementById('btnRegistrarSalidaChofer');
+                const aviso = document.getElementById('salidaBloqueoCarga');
+                const pasoCarga = document.getElementById('pasoCargaFisicaChofer');
+                const pasoSalida = document.getElementById('pasoSalidaFisicaChofer');
+                const todosCargados = embarquesCargaActuales.length > 0 && embarquesCargaActuales.every(x => String(x.estatus || '').trim() === 'Cargado');
+                if (boton) boton.disabled = !todosCargados;
+                if (aviso) {
+                    aviso.classList.toggle('show', !todosCargados);
+                    if (!todosCargados) {
+                        const pendientes = embarquesCargaActuales.filter(x => String(x.estatus || '').trim() !== 'Cargado').length;
+                        aviso.innerHTML = embarquesCargaActuales.length === 0
+                            ? '<i class="fa-solid fa-triangle-exclamation me-1"></i>No se encontró un embarque vinculado listo para validar.'
+                            : `<i class="fa-solid fa-lock me-1"></i>Falta confirmar la carga física de ${pendientes} embarque${pendientes === 1 ? '' : 's'} antes de salir.`;
+                    }
+                }
+                if (pasoCarga && pasoSalida) {
+                    pasoCarga.classList.toggle('done', todosCargados);
+                    pasoCarga.classList.toggle('current', !todosCargados);
+                    pasoSalida.classList.toggle('current', todosCargados);
+                }
+            }
+
+            function renderizarEmbarquesCarga(embarques) {
+                const contenedor = document.getElementById('embarquesCargaChofer');
+                if (!contenedor) return;
+                contenedor.innerHTML = '';
+                if (!Array.isArray(embarques) || embarques.length === 0) {
+                    contenedor.innerHTML = '<div class="empty">No hay embarques vinculados a este viaje.</div>';
+                    document.getElementById('detalleCargaChofer')?.setAttribute('hidden', 'hidden');
+                    return;
+                }
+                embarques.forEach(item => {
+                    const boton = document.createElement('button');
+                    boton.type = 'button';
+                    boton.className = `carga-embarque${Number(item.embarqueId) === Number(embarqueCargaActivo) ? ' active' : ''}`;
+                    boton.dataset.embarqueId = item.embarqueId;
+                    const estadoClase = normalizarEstadoCarga(item.estatus);
+                    const pendientes = Math.max(0, Number(item.totalPiezas || 0) - Number(item.piezasCargadas || 0));
+                    boton.innerHTML = `
+                        <div class="carga-embarque-top">
+                            <strong>${item.folio || 'Embarque'}</strong>
+                            <span class="carga-badge ${estadoClase}">${item.estatus || '-'}</span>
+                        </div>
+                        <small>${item.cliente || '-'} · ${item.destino || '-'}</small>
+                        <small>${textoNumero(item.piezasCargadas)} / ${textoNumero(item.totalPiezas)} PZA · ${textoNumero(pendientes)} pendiente${pendientes === 1 ? '' : 's'}</small>`;
+                    boton.addEventListener('click', () => seleccionarEmbarqueCarga(Number(item.embarqueId)));
+                    contenedor.appendChild(boton);
+                });
+            }
+
+            async function cargarEmbarquesCarga(preferido = null, silencioso = false) {
+                if (!cargaChoferActiva || procesandoCarga) return;
+                if (!silencioso) mostrarMensajeCarga('mensajeCargaChofer', 'Actualizando carga compartida...', '');
+                try {
+                    const data = await leerJson(`${urlEmbarquesCarga}?viajeId=${encodeURIComponent(viajeIdCarga)}`);
+                    embarquesCargaActuales = Array.isArray(data.embarques) ? data.embarques : [];
+                    const candidato = Number(preferido || embarqueCargaActivo || 0);
+                    const existeCandidato = embarquesCargaActuales.some(x => Number(x.embarqueId) === candidato);
+                    embarqueCargaActivo = existeCandidato ? candidato : Number(embarquesCargaActuales.find(x => String(x.estatus || '').trim() !== 'Cargado')?.embarqueId || embarquesCargaActuales[0]?.embarqueId || 0);
+                    renderizarEmbarquesCarga(embarquesCargaActuales);
+                    actualizarDisponibilidadSalida();
+                    if (!silencioso) mostrarMensajeCarga('mensajeCargaChofer', '', '');
+                    if (embarqueCargaActivo > 0) await cargarDetalleCarga(embarqueCargaActivo, silencioso);
+                } catch (error) {
+                    embarquesCargaActuales = [];
+                    actualizarDisponibilidadSalida();
+                    mostrarMensajeCarga('mensajeCargaChofer', error.message || 'No fue posible consultar la carga del viaje.', 'error');
+                }
+            }
+
+            async function seleccionarEmbarqueCarga(embarqueId) {
+                embarqueCargaActivo = Number(embarqueId);
+                renderizarEmbarquesCarga(embarquesCargaActuales);
+                await cargarDetalleCarga(embarqueCargaActivo);
+            }
+
+            function renderizarCajasCarga(cajas) {
+                const contenedor = document.getElementById('listaCajasCargaChofer');
+                if (!contenedor) return;
+                contenedor.innerHTML = '';
+                if (!Array.isArray(cajas) || cajas.length === 0) {
+                    contenedor.innerHTML = '<div class="empty">Todavía no hay cajas relacionadas con este embarque. Puedes escanear una caja compatible para asignarla durante la carga.</div>';
+                    return;
+                }
+                cajas.forEach(caja => {
+                    const estado = String(caja.estatus || '');
+                    const fila = document.createElement('div');
+                    fila.className = 'carga-caja';
+                    fila.innerHTML = `
+                        <strong>${caja.etiqueta || ('Caja ' + caja.cajaId)}</strong>
+                        <span class="carga-caja-of">OF ${caja.numeroOF || '-'}</span>
+                        <span class="carga-caja-cantidad">${textoNumero(caja.cantidadAsignada)} PZA</span>
+                        <span class="${estado === 'Cargada' || estado === 'Despachada' ? 'cargada' : 'reservada'}">${estado || '-'}</span>`;
+                    contenedor.appendChild(fila);
+                });
+            }
+
+            function aplicarDetalleCarga(data) {
+                const detalle = document.getElementById('detalleCargaChofer');
+                if (!detalle) return;
+                detalle.removeAttribute('hidden');
+                rowVersionCargaActiva = data.rowVersion || null;
+                const estatus = String(data.estatus || '');
+                const total = Number(data.totalPiezas || 0);
+                const cargadas = Number(data.piezasCargadas || 0);
+                const pendientes = Math.max(0, Number(data.piezasPendientes ?? (total - cargadas)));
+                const porcentaje = total > 0 ? Math.min(100, Math.max(0, (cargadas * 100) / total)) : 0;
+                document.getElementById('tituloCargaChofer').textContent = data.folio || `Embarque ${embarqueCargaActivo}`;
+                document.getElementById('subtituloCargaChofer').textContent = estatus === 'Cargado' ? 'Carga física confirmada.' : estatus === 'Cargando' ? 'Carga en proceso. Continúa con las cajas pendientes.' : estatus === 'Preparado' ? 'Listo para iniciar el escaneo físico.' : `Estado actual: ${estatus || '-'}.`;
+                const badge = document.getElementById('estadoCargaChofer');
+                if (badge) {
+                    badge.className = `carga-badge ${normalizarEstadoCarga(estatus)}`;
+                    badge.textContent = estatus || '-';
+                }
+                document.getElementById('cargaTotalPiezas').textContent = textoNumero(total);
+                document.getElementById('cargaPiezasCargadas').textContent = textoNumero(cargadas);
+                document.getElementById('cargaPiezasPendientes').textContent = textoNumero(pendientes);
+                document.getElementById('cargaCajasCargadas').textContent = textoNumero(data.cajasCargadas);
+                const barra = document.getElementById('barraCargaChofer');
+                if (barra) barra.style.width = `${porcentaje}%`;
+                renderizarCajasCarga(data.cajas);
+                const puedeEscanear = estatus === 'Preparado' || estatus === 'Cargando';
+                const input = document.getElementById('codigoCajaChofer');
+                const btnEscanear = document.getElementById('btnEscanearCajaChofer');
+                const btnConfirmar = document.getElementById('btnConfirmarCargaChofer');
+                if (input) input.disabled = !puedeEscanear;
+                if (btnEscanear) btnEscanear.disabled = !puedeEscanear;
+                if (btnConfirmar) btnConfirmar.disabled = !(data.puedeConfirmar === true);
+                if (estatus === 'Cargado') {
+                    mostrarMensajeCarga('mensajeEscaneoChofer', 'La carga física de este embarque ya fue confirmada. Ya no admite más escaneos.', 'ok');
+                } else if (!puedeEscanear) {
+                    mostrarMensajeCarga('mensajeEscaneoChofer', 'Este embarque todavía no está en Preparado/Cargando. Completa los pasos previos desde Centro Operativo antes de escanear.', 'warning');
+                } else {
+                    mostrarMensajeCarga('mensajeEscaneoChofer', '', '');
+                    setTimeout(() => input?.focus(), 50);
+                }
+            }
+
+            async function cargarDetalleCarga(embarqueId, silencioso = false) {
+                if (!embarqueId || procesandoCarga) return;
+                if (!silencioso) mostrarMensajeCarga('mensajeEscaneoChofer', 'Consultando estado actual de la carga...', '');
+                try {
+                    const data = await leerJson(`${urlObtenerCarga}?embarqueId=${encodeURIComponent(embarqueId)}`);
+                    aplicarDetalleCarga(data);
+                } catch (error) {
+                    rowVersionCargaActiva = null;
+                    mostrarMensajeCarga('mensajeEscaneoChofer', error.message || 'No fue posible consultar la carga física.', 'error');
+                }
+            }
+
+            async function escanearCajaChofer(event) {
+                event.preventDefault();
+                if (procesandoCarga || !embarqueCargaActivo) return;
+                const input = document.getElementById('codigoCajaChofer');
+                const boton = document.getElementById('btnEscanearCajaChofer');
+                const codigo = String(input?.value || '').trim();
+                if (!codigo) {
+                    mostrarMensajeCarga('mensajeEscaneoChofer', 'Escanea o captura el código de una caja.', 'warning');
+                    input?.focus();
+                    return;
+                }
+                procesandoCarga = true;
+                if (boton) { boton.disabled = true; boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...'; }
+                try {
+                    const form = new FormData();
+                    form.append('embarqueId', String(embarqueCargaActivo));
+                    form.append('codigo', codigo);
+                    const token = tokenCarga();
+                    if (token) form.append('__RequestVerificationToken', token);
+                    const data = await leerJson(urlEscanearCaja, { method: 'POST', body: form });
+                    if (input) input.value = '';
+                    mostrarMensajeCarga('mensajeEscaneoChofer', data.mensaje || 'Caja registrada correctamente.', data.yaEscaneada ? 'warning' : 'ok');
+                    procesandoCarga = false;
+                    await cargarEmbarquesCarga(embarqueCargaActivo, true);
+                    input?.focus();
+                    return;
+                } catch (error) {
+                    mostrarMensajeCarga('mensajeEscaneoChofer', error.message || 'No fue posible registrar la caja.', 'error');
+                    if (error.recargar) await cargarDetalleCarga(embarqueCargaActivo, true);
+                } finally {
+                    procesandoCarga = false;
+                    if (boton) { boton.innerHTML = '<i class="fa-solid fa-barcode"></i> Escanear caja'; }
+                    const estadoActual = embarquesCargaActuales.find(x => Number(x.embarqueId) === Number(embarqueCargaActivo));
+                    if (boton) boton.disabled = !(estadoActual && (estadoActual.estatus === 'Preparado' || estadoActual.estatus === 'Cargando'));
+                }
+            }
+
+            async function confirmarCargaChofer() {
+                if (procesandoCarga || !embarqueCargaActivo || !rowVersionCargaActiva) return;
+                if (!window.confirm('¿Confirmar que la carga física de este embarque está completa? Después ya no se podrán escanear más cajas.')) return;
+                const boton = document.getElementById('btnConfirmarCargaChofer');
+                procesandoCarga = true;
+                if (boton) { boton.disabled = true; boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Confirmando...'; }
+                try {
+                    const form = new FormData();
+                    form.append('embarqueId', String(embarqueCargaActivo));
+                    form.append('rowVersion', rowVersionCargaActiva);
+                    const token = tokenCarga();
+                    if (token) form.append('__RequestVerificationToken', token);
+                    const data = await leerJson(urlConfirmarCarga, { method: 'POST', body: form });
+                    mostrarMensajeCarga('mensajeEscaneoChofer', data.mensaje || 'Carga física confirmada.', 'ok');
+                    procesandoCarga = false;
+                    await cargarEmbarquesCarga(embarqueCargaActivo, true);
+                    return;
+                } catch (error) {
+                    mostrarMensajeCarga('mensajeEscaneoChofer', error.message || 'No fue posible confirmar la carga física.', 'error');
+                    if (error.recargar) await cargarDetalleCarga(embarqueCargaActivo, true);
+                } finally {
+                    procesandoCarga = false;
+                    if (boton) boton.innerHTML = '<i class="fa-solid fa-check-double me-1"></i>Confirmar carga física';
+                }
+            }
+
+            if (cargaChoferActiva) {
+                const botonSalidaInicial = document.getElementById('btnRegistrarSalidaChofer');
+                if (botonSalidaInicial) botonSalidaInicial.disabled = true;
+                document.getElementById('btnActualizarCargaChofer')?.addEventListener('click', () => cargarEmbarquesCarga(embarqueCargaActivo));
+                document.getElementById('formEscanearCajaChofer')?.addEventListener('submit', escanearCajaChofer);
+                document.getElementById('btnConfirmarCargaChofer')?.addEventListener('click', confirmarCargaChofer);
+                cargarEmbarquesCarga();
+                window.setInterval(() => {
+                    if (!procesandoCarga && document.visibilityState === 'visible') cargarEmbarquesCarga(embarqueCargaActivo, true);
+                }, 15000);
+            }
 
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
                     const target = tab.dataset.tab;
-
                     tabs.forEach(x => x.classList.remove('active'));
                     panels.forEach(x => x.classList.remove('active'));
-
                     tab.classList.add('active');
                     document.getElementById('panel-' + target)?.classList.add('active');
                 });
             });
 
-                    const almacenesEvidencia = new Map();
-
-        function obtenerAlmacen(input) {
-            if (!almacenesEvidencia.has(input.id)) {
-                almacenesEvidencia.set(input.id, new DataTransfer());
+            function obtenerAlmacen(input) {
+                if (!almacenesEvidencia.has(input.id)) almacenesEvidencia.set(input.id, new DataTransfer());
+                return almacenesEvidencia.get(input.id);
             }
 
-            return almacenesEvidencia.get(input.id);
-        }
+            function claveArchivo(file) {
+                return `${file.name}_${file.size}_${file.lastModified}`;
+            }
 
-        function claveArchivo(file) {
-            return `${file.name}_${file.size}_${file.lastModified}`;
-        }
+            function formatoTamano(bytes) {
+                if (!bytes) return '0 KB';
+                if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+            }
 
-        function formatoTamano(bytes) {
-            if (!bytes) return '0 KB';
+            function obtenerListaId(inputId) {
+                return inputId === 'evidenciasSalida' ? 'listaEvidenciasSalida' : 'listaEvidenciasRegreso';
+            }
 
-            if (bytes < 1024 * 1024)
-                return `${(bytes / 1024).toFixed(1)} KB`;
-
-            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-        }
-
-        function obtenerListaId(inputId) {
-            return inputId === 'evidenciasSalida'
-                ? 'listaEvidenciasSalida'
-                : 'listaEvidenciasRegreso';
-        }
-
-        function renderizarEvidencias(input) {
-            const almacen = obtenerAlmacen(input);
-            const contenedor = document.getElementById(obtenerListaId(input.id));
-
-            if (!contenedor) return;
-
-            contenedor.innerHTML = '';
-
-            Array.from(almacen.files).forEach((file, indice) => {
-                const esImagen = file.type?.startsWith('image/');
-                const fila = document.createElement('div');
-
-                fila.className = 'evidencia-captura-item';
-
-                const icono = document.createElement('div');
-                icono.className = 'evidencia-captura-icono';
-                icono.innerHTML = esImagen
-                    ? '<i class="fa-solid fa-camera"></i>'
-                    : '<i class="fa-solid fa-file-pdf"></i>';
-
-                const info = document.createElement('div');
-                info.className = 'evidencia-captura-info';
-
-                const nombre = document.createElement('strong');
-                nombre.textContent = file.name;
-
-                const tamano = document.createElement('small');
-                tamano.textContent = `${esImagen ? 'Fotografía' : 'Archivo PDF'} · ${formatoTamano(file.size)}`;
-
-                info.appendChild(nombre);
-                info.appendChild(tamano);
-
-                const eliminar = document.createElement('button');
-                eliminar.type = 'button';
-                eliminar.className = 'evidencia-captura-eliminar';
-                eliminar.title = 'Quitar evidencia';
-                eliminar.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-
-                eliminar.addEventListener('click', () => {
-                    eliminarEvidencia(input, indice);
+            function renderizarEvidencias(input) {
+                const almacen = obtenerAlmacen(input);
+                const contenedor = document.getElementById(obtenerListaId(input.id));
+                if (!contenedor) return;
+                contenedor.innerHTML = '';
+                Array.from(almacen.files).forEach((file, indice) => {
+                    const esImagen = file.type?.startsWith('image/');
+                    const fila = document.createElement('div');
+                    fila.className = 'evidencia-captura-item';
+                    const icono = document.createElement('div');
+                    icono.className = 'evidencia-captura-icono';
+                    icono.innerHTML = esImagen ? '<i class="fa-solid fa-camera"></i>' : '<i class="fa-solid fa-file-pdf"></i>';
+                    const info = document.createElement('div');
+                    info.className = 'evidencia-captura-info';
+                    const nombre = document.createElement('strong');
+                    nombre.textContent = file.name;
+                    const tamano = document.createElement('small');
+                    tamano.textContent = `${esImagen ? 'Fotografía' : 'Archivo PDF'} · ${formatoTamano(file.size)}`;
+                    info.appendChild(nombre);
+                    info.appendChild(tamano);
+                    const eliminar = document.createElement('button');
+                    eliminar.type = 'button';
+                    eliminar.className = 'evidencia-captura-eliminar';
+                    eliminar.title = 'Quitar evidencia';
+                    eliminar.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                    eliminar.addEventListener('click', () => eliminarEvidencia(input, indice));
+                    fila.appendChild(icono);
+                    fila.appendChild(info);
+                    fila.appendChild(eliminar);
+                    contenedor.appendChild(fila);
                 });
-
-                fila.appendChild(icono);
-                fila.appendChild(info);
-                fila.appendChild(eliminar);
-
-                contenedor.appendChild(fila);
-            });
-
-            if (almacen.files.length > 0) {
-                const contador = document.createElement('div');
-                contador.className = 'contador-evidencias';
-                contador.textContent = `${almacen.files.length} evidencia${almacen.files.length === 1 ? '' : 's'} agregada${almacen.files.length === 1 ? '' : 's'}. Puedes agregar más.`;
-                contenedor.appendChild(contador);
-            }
-        }
-
-        function eliminarEvidencia(input, indiceEliminar) {
-            const actual = obtenerAlmacen(input);
-            const nuevo = new DataTransfer();
-
-            Array.from(actual.files).forEach((file, indice) => {
-                if (indice !== indiceEliminar)
-                    nuevo.items.add(file);
-            });
-
-            almacenesEvidencia.set(input.id, nuevo);
-            input.files = nuevo.files;
-
-            renderizarEvidencias(input);
-        }
-
-        function agregarArchivos(input, archivosNuevos) {
-            const almacen = obtenerAlmacen(input);
-            const existentes = new Set(
-                Array.from(almacen.files).map(claveArchivo)
-            );
-
-            Array.from(archivosNuevos).forEach(file => {
-                if (almacen.files.length >= 15)
-                    return;
-
-                const clave = claveArchivo(file);
-
-                if (!existentes.has(clave)) {
-                    almacen.items.add(file);
-                    existentes.add(clave);
+                if (almacen.files.length > 0) {
+                    const contador = document.createElement('div');
+                    contador.className = 'contador-evidencias';
+                    contador.textContent = `${almacen.files.length} evidencia${almacen.files.length === 1 ? '' : 's'} agregada${almacen.files.length === 1 ? '' : 's'}. Puedes agregar más.`;
+                    contenedor.appendChild(contador);
                 }
-            });
-
-            input.files = almacen.files;
-
-            renderizarEvidencias(input);
-        }
-
-        document.querySelectorAll('.btn-agregar-evidencia').forEach(boton => {
-            boton.addEventListener('click', () => {
-                const input = document.getElementById(boton.dataset.input);
-
-                if (!input) return;
-
-                input.value = '';
-                input.click();
-            });
-        });
-
-        ['evidenciasSalida', 'evidenciasRegreso'].forEach(id => {
-            const input = document.getElementById(id);
-
-            if (!input) return;
-
-            input.addEventListener('change', () => {
-                const nuevos = Array.from(input.files || []);
-
-                agregarArchivos(input, nuevos);
-            });
-        });
-
-            document.querySelectorAll('form').forEach(form => {
-                form.addEventListener('submit', (event) => {
-                            const inputEvidencias = form.querySelector('input[name="evidencias"]');
-
-        if (inputEvidencias) {
-            const almacen = obtenerAlmacen(inputEvidencias);
-            const archivos = Array.from(almacen.files);
-
-            const tieneFoto = archivos.some(file =>
-                file.type?.startsWith('image/')
-            );
-
-            if (!tieneFoto) {
-                event.preventDefault();
-
-                alert('Debes agregar al menos una fotografía antes de continuar.');
-
-                return;
             }
 
-            inputEvidencias.files = almacen.files;
-        }
+            function eliminarEvidencia(input, indiceEliminar) {
+                const actual = obtenerAlmacen(input);
+                const nuevo = new DataTransfer();
+                Array.from(actual.files).forEach((file, indice) => {
+                    if (indice !== indiceEliminar) nuevo.items.add(file);
+                });
+                almacenesEvidencia.set(input.id, nuevo);
+                input.files = nuevo.files;
+                renderizarEvidencias(input);
+            }
+
+            function agregarArchivos(input, archivosNuevos) {
+                const almacen = obtenerAlmacen(input);
+                const existentes = new Set(Array.from(almacen.files).map(claveArchivo));
+                let limiteAlcanzado = false;
+                Array.from(archivosNuevos).forEach(file => {
+                    if (almacen.files.length >= 15) {
+                        limiteAlcanzado = true;
+                        return;
+                    }
+                    const clave = claveArchivo(file);
+                    if (!existentes.has(clave)) {
+                        almacen.items.add(file);
+                        existentes.add(clave);
+                    }
+                });
+                input.files = almacen.files;
+                renderizarEvidencias(input);
+                if (limiteAlcanzado) alert('Puedes agregar como máximo 15 evidencias por operación.');
+            }
+
+            document.querySelectorAll('.btn-agregar-evidencia').forEach(boton => {
+                boton.addEventListener('click', () => {
+                    const input = document.getElementById(boton.dataset.input);
+                    if (!input) return;
+                    input.value = '';
+                    input.click();
+                });
+            });
+
+            ['evidenciasSalida', 'evidenciasRegreso'].forEach(id => {
+                const input = document.getElementById(id);
+                if (!input) return;
+                input.addEventListener('change', () => agregarArchivos(input, Array.from(input.files || [])));
+            });
+
+            document.querySelectorAll('form[data-operacion]').forEach(form => {
+                form.addEventListener('submit', event => {
+                    const operacion = form.dataset.operacion || '';
+                    if (operacion === 'salida' && cargaChoferActiva) {
+                        const todosCargados = embarquesCargaActuales.length > 0 && embarquesCargaActuales.every(x => String(x.estatus || '').trim() === 'Cargado');
+                        if (!todosCargados) {
+                            event.preventDefault();
+                            alert('Antes de salir debes confirmar la carga física de todos los embarques vinculados al viaje.');
+                            return;
+                        }
+                    }
+                    const inputEvidencias = form.querySelector('input[name="evidencias"]');
+                    if (inputEvidencias) {
+                        const almacen = obtenerAlmacen(inputEvidencias);
+                        const archivos = Array.from(almacen.files);
+                        const tieneFoto = archivos.some(file => file.type?.startsWith('image/'));
+                        if (!tieneFoto) {
+                            event.preventDefault();
+                            alert('Debes agregar al menos una fotografía antes de continuar.');
+                            return;
+                        }
+                        inputEvidencias.files = almacen.files;
+                    }
+                    if (operacion === 'salida' && !window.confirm('¿Confirmar la salida física de este viaje? Esta acción marcará el inicio real del recorrido.')) {
+                        event.preventDefault();
+                        return;
+                    }
+                    if (operacion === 'regreso' && !window.confirm('¿Confirmar el regreso de este viaje?')) {
+                        event.preventDefault();
+                        return;
+                    }
                     const button = form.querySelector('button[type="submit"]');
-
                     if (!button) return;
-
                     button.disabled = true;
                     button.style.opacity = '.7';
-
-                    const text = button.textContent.trim();
-
-                    if (text.includes('salida')) button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando salida...';
-                    else if (text.includes('regreso')) button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando regreso...';
-                    else if (text.includes('incidencia')) button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+                    if (operacion === 'salida') button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando salida...';
+                    else if (operacion === 'regreso') button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando regreso...';
+                    else if (operacion === 'incidencia') button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
                 });
             });
         })();
