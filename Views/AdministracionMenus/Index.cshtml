@@ -1,0 +1,1088 @@
+﻿@model ERP.NSQuell.Models.AdministracionMenusVm
+
+@{
+    Layout = null;
+    ViewData["Title"] = "Administración de Menús | NSQuell";
+    var nombreUsuario =
+        Context.Session.GetString("NombreMostrar")
+        ?? Context.Session.GetString("Username")
+        ?? "Administrador";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('nsq-theme') || 'dark';
+            const theme = savedTheme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-nsq-theme', theme);
+        })();
+    </script>
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet"
+          href="~/css/globals/variables.css"
+          asp-append-version="true" />
+    <link rel="stylesheet"
+          href="~/css/nsquell-erp-theme.css"
+          asp-append-version="true" />
+    <link rel="stylesheet"
+          href="~/css/components/navbar.css"
+          asp-append-version="true" />
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <style>
+        :root {
+            --adm-bg: #07111f;
+            --adm-panel: rgba(15, 23, 42, .88);
+            --adm-panel-soft: rgba(30, 41, 59, .72);
+            --adm-border: rgba(148, 163, 184, .20);
+            --adm-text: #e5e7eb;
+            --adm-muted: #94a3b8;
+            --adm-accent: #f47b20;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--adm-text);
+            background:
+                radial-gradient(circle at 10% 0%, rgba(244,123,32,.12), transparent 28rem),
+                radial-gradient(circle at 90% 10%, rgba(59,130,246,.10), transparent 30rem),
+                var(--adm-bg);
+        }
+
+        .adm-shell {
+            width: min(1600px, calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 1rem 0 4rem;
+        }
+
+        .adm-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 1.25rem 0;
+            padding: 1.25rem;
+            border: 1px solid var(--adm-border);
+            border-radius: 22px;
+            background: var(--adm-panel);
+            box-shadow: 0 18px 50px rgba(0,0,0,.24);
+        }
+
+        .adm-eyebrow {
+            color: #fdba74;
+            font-size: .72rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .13em;
+        }
+
+        .adm-title {
+            margin: .25rem 0;
+            font-size: clamp(1.55rem, 3vw, 2.35rem);
+            font-weight: 950;
+        }
+
+        .adm-subtitle {
+            margin: 0;
+            max-width: 900px;
+            color: var(--adm-muted);
+        }
+
+        .adm-grid {
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .adm-card {
+            grid-column: span 12;
+            border: 1px solid var(--adm-border);
+            border-radius: 20px;
+            overflow: hidden;
+            background: var(--adm-panel);
+            box-shadow: 0 16px 44px rgba(0,0,0,.20);
+        }
+
+        .adm-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.15rem;
+            border-bottom: 1px solid var(--adm-border);
+            background: rgba(255,255,255,.025);
+        }
+
+        .adm-card-header h2 {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 900;
+        }
+
+        .adm-card-body {
+            padding: 1rem 1.15rem 1.2rem;
+        }
+
+        .adm-form {
+            padding: 1rem;
+            border: 1px solid var(--adm-border);
+            border-radius: 16px;
+            background: rgba(15, 23, 42, .52);
+        }
+
+        .form-label {
+            color: #cbd5e1;
+            font-size: .78rem;
+            font-weight: 850;
+        }
+
+        .form-control,
+        .form-select {
+            color: #f8fafc;
+            border-color: rgba(148,163,184,.26);
+            background: rgba(2,6,23,.62);
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            color: #fff;
+            border-color: rgba(244,123,32,.78);
+            background: rgba(2,6,23,.82);
+            box-shadow: 0 0 0 .2rem rgba(244,123,32,.12);
+        }
+
+        .form-select option {
+            color: #111827;
+            background: #fff;
+        }
+
+        .table {
+            --bs-table-color: #e5e7eb;
+            --bs-table-bg: transparent;
+            --bs-table-border-color: rgba(148,163,184,.16);
+            margin-bottom: 0;
+            vertical-align: middle;
+        }
+
+        .table thead th {
+            color: #94a3b8;
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .07em;
+            white-space: nowrap;
+        }
+
+        .adm-icon {
+            width: 36px;
+            height: 36px;
+            display: inline-grid;
+            place-items: center;
+            border: 1px solid rgba(244,123,32,.28);
+            border-radius: 11px;
+            color: #fdba74;
+            background: rgba(244,123,32,.10);
+        }
+
+        .adm-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .32rem .58rem;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 850;
+        }
+
+        .adm-badge.on {
+            color: #86efac;
+            background: rgba(34,197,94,.13);
+            border: 1px solid rgba(34,197,94,.25);
+        }
+
+        .adm-badge.off {
+            color: #fca5a5;
+            background: rgba(239,68,68,.12);
+            border: 1px solid rgba(239,68,68,.24);
+        }
+
+        .adm-url {
+            color: #93c5fd;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: .78rem;
+            word-break: break-all;
+        }
+
+        .adm-muted {
+            color: var(--adm-muted);
+            font-size: .78rem;
+        }
+
+        .adm-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .4rem;
+        }
+
+        .adm-edit-row {
+            background: rgba(2,6,23,.55);
+        }
+
+        .adm-edit-box {
+            padding: 1rem;
+        }
+
+        .btn-nsq {
+            color: #111827;
+            border: 0;
+            font-weight: 900;
+            background: linear-gradient(135deg, #fb923c, #f97316);
+        }
+
+        .btn-nsq:hover {
+            color: #111827;
+            filter: brightness(1.06);
+        }
+
+        .adm-info {
+            border: 1px solid rgba(59,130,246,.22);
+            border-radius: 16px;
+            padding: .85rem 1rem;
+            color: #bfdbfe;
+            background: rgba(59,130,246,.09);
+        }
+
+        .adm-alert {
+            border-radius: 15px;
+            border: 1px solid transparent;
+        }
+
+        @@media (min-width: 1100px) {
+            .adm-card.groups {
+                grid-column: span 5;
+            }
+
+            .adm-card.menus {
+                grid-column: span 7;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="adm-shell">
+        @await Html.PartialAsync("_TopNavbar")
+
+        <header class="adm-header">
+            <div>
+                <div class="adm-eyebrow">
+                    Configuración funcional · Administrador ERP
+                </div>
+
+                <h1 class="adm-title">
+                    <i class="fa-solid fa-sitemap me-2"></i>
+                    Administración de menús
+                </h1>
+
+                <p class="adm-subtitle">
+                    Alta, edición y activación de grupos, menús y submenús
+                    directamente desde el ERP. Las bajas son lógicas:
+                    no se eliminan registros ni permisos históricos.
+                </p>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                <a href="/Menu/Index"
+                   class="btn btn-outline-light">
+                    <i class="fa-solid fa-house me-1"></i>
+                    Inicio
+                </a>
+
+                <a href="/Menu/Grupo/8"
+                   class="btn btn-outline-warning">
+                    <i class="fa-solid fa-cloud-arrow-up me-1"></i>
+                    Altas
+                </a>
+            </div>
+        </header>
+
+        @if (TempData["Success"] is string ok &&
+             !string.IsNullOrWhiteSpace(ok))
+        {
+            <div class="alert alert-success adm-alert">
+                <i class="fa-solid fa-circle-check me-1"></i>
+                @ok
+            </div>
+        }
+
+        @if (TempData["Error"] is string error &&
+             !string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert alert-danger adm-alert">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                @error
+            </div>
+        }
+
+        <div class="adm-info mb-3">
+            <strong>Comportamiento del módulo:</strong>
+            cada submenú nuevo se vincula automáticamente a las acciones
+            existentes de <code>Acciones</code> y se otorga al rol
+            <strong>Administrador de ERP</strong>. Los permisos de otros
+            roles/usuarios se siguen administrando con la lógica de permisos
+            existente.
+        </div>
+
+        <div class="adm-grid">
+            <section class="adm-card groups">
+                <div class="adm-card-header">
+                    <h2>
+                        <i class="fa-solid fa-layer-group me-2"></i>
+                        1. Grupos
+                    </h2>
+                    <span class="adm-muted">
+                        @Model.Grupos.Count registro(s)
+                    </span>
+                </div>
+
+                <div class="adm-card-body">
+                    <form asp-action="CrearGrupo"
+                          asp-controller="AdministracionMenus"
+                          method="post"
+                          class="adm-form mb-3">
+                        @Html.AntiForgeryToken()
+
+                        <h3 class="h6 fw-bold mb-3">
+                            + Nuevo grupo
+                        </h3>
+
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <label class="form-label">
+                                    Nombre *
+                                </label>
+                                <input name="nombre"
+                                       maxlength="100"
+                                       required
+                                       class="form-control"
+                                       placeholder="Ej. Recursos Humanos" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">
+                                    Descripción
+                                </label>
+                                <input name="descripcion"
+                                       maxlength="250"
+                                       class="form-control" />
+                            </div>
+
+                            <div class="col-8">
+                                <label class="form-label">
+                                    Icono FontAwesome
+                                </label>
+                                <input name="iconoCss"
+                                       maxlength="100"
+                                       class="form-control"
+                                       placeholder="fa-solid fa-users" />
+                            </div>
+
+                            <div class="col-4">
+                                <label class="form-label">
+                                    Orden
+                                </label>
+                                <input name="orden"
+                                       type="number"
+                                       min="0"
+                                       value="0"
+                                       class="form-control" />
+                                <div class="adm-muted mt-1">
+                                    0 = automático
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <button class="btn btn-nsq w-100">
+                                    Crear grupo
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Grupo</th>
+                                    <th>Orden</th>
+                                    <th>Estado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var g in Model.Grupos)
+                                {
+                                    var collapseId =
+                                        $"editar-grupo-{g.MenuGrupoID}";
+
+                                    <tr>
+                                        <td>@g.MenuGrupoID</td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="adm-icon">
+                                                    <i class="@(string.IsNullOrWhiteSpace(g.IconoCss) ? "fa-solid fa-folder" : g.IconoCss)"></i>
+                                                </span>
+                                                <div>
+                                                    <strong>@g.Nombre</strong>
+                                                    <div class="adm-muted">
+                                                        @g.TotalMenus menú(s)
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>@g.Orden</td>
+                                        <td>
+                                            <span class="adm-badge @(g.Activo ? "on" : "off")">
+                                                @(g.Activo ? "Activo" : "Inactivo")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="adm-actions">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#@collapseId">
+                                                    Editar
+                                                </button>
+
+                                                <form asp-action="AlternarGrupo"
+                                                      method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden"
+                                                           name="menuGrupoID"
+                                                           value="@g.MenuGrupoID" />
+                                                    <button class="btn btn-sm @(g.Activo ? "btn-outline-danger" : "btn-outline-success")"
+                                                            onclick="return confirm('¿Cambiar el estado de este grupo?');">
+                                                        @(g.Activo ? "Desactivar" : "Activar")
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr class="collapse adm-edit-row"
+                                        id="@collapseId">
+                                        <td colspan="5">
+                                            <div class="adm-edit-box">
+                                                <form asp-action="EditarGrupo"
+                                                      method="post">
+                                                    @Html.AntiForgeryToken()
+
+                                                    <input type="hidden"
+                                                           name="menuGrupoID"
+                                                           value="@g.MenuGrupoID" />
+
+                                                    <div class="row g-2">
+                                                        <div class="col-md-5">
+                                                            <label class="form-label">
+                                                                Nombre
+                                                            </label>
+                                                            <input name="nombre"
+                                                                   value="@g.Nombre"
+                                                                   maxlength="100"
+                                                                   required
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-md-5">
+                                                            <label class="form-label">
+                                                                Icono
+                                                            </label>
+                                                            <input name="iconoCss"
+                                                                   value="@g.IconoCss"
+                                                                   maxlength="100"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-md-2">
+                                                            <label class="form-label">
+                                                                Orden
+                                                            </label>
+                                                            <input name="orden"
+                                                                   type="number"
+                                                                   min="1"
+                                                                   value="@g.Orden"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-12">
+                                                            <label class="form-label">
+                                                                Descripción
+                                                            </label>
+                                                            <input name="descripcion"
+                                                                   value="@g.Descripcion"
+                                                                   maxlength="250"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-12">
+                                                            <button class="btn btn-primary">
+                                                                Guardar grupo
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="adm-card menus">
+                <div class="adm-card-header">
+                    <h2>
+                        <i class="fa-solid fa-folder-tree me-2"></i>
+                        2. Menús
+                    </h2>
+                    <span class="adm-muted">
+                        @Model.Menus.Count registro(s)
+                    </span>
+                </div>
+
+                <div class="adm-card-body">
+                    <form asp-action="CrearMenu"
+                          method="post"
+                          class="adm-form mb-3">
+                        @Html.AntiForgeryToken()
+
+                        <h3 class="h6 fw-bold mb-3">
+                            + Nuevo menú
+                        </h3>
+
+                        <div class="row g-2">
+                            <div class="col-md-5">
+                                <label class="form-label">
+                                    Grupo *
+                                </label>
+                                <select name="menuGrupoID"
+                                        required
+                                        class="form-select">
+                                    <option value="">
+                                        -- Selecciona --
+                                    </option>
+                                    @foreach (var g in Model.Grupos
+                                        .OrderBy(x => x.Orden)
+                                        .ThenBy(x => x.Nombre))
+                                    {
+                                        <option value="@g.MenuGrupoID">
+                                            @g.Nombre @(g.Activo ? "" : "(inactivo)")
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label">
+                                    Nombre *
+                                </label>
+                                <input name="nombre"
+                                       maxlength="100"
+                                       required
+                                       class="form-control"
+                                       placeholder="Ej. Administración ERP" />
+                            </div>
+
+                            <div class="col-md-2">
+                                <label class="form-label">
+                                    Orden
+                                </label>
+                                <input name="orden"
+                                       type="number"
+                                       min="0"
+                                       value="0"
+                                       class="form-control" />
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label">
+                                    Icono FontAwesome
+                                </label>
+                                <input name="iconoCss"
+                                       maxlength="100"
+                                       class="form-control"
+                                       placeholder="fa-solid fa-gears" />
+                            </div>
+
+                            <div class="col-md-7">
+                                <label class="form-label">
+                                    Descripción
+                                </label>
+                                <input name="descripcion"
+                                       maxlength="300"
+                                       class="form-control" />
+                            </div>
+
+                            <div class="col-12">
+                                <button class="btn btn-nsq">
+                                    Crear menú
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Grupo / menú</th>
+                                    <th>Orden</th>
+                                    <th>Submenús</th>
+                                    <th>Estado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in Model.Menus)
+                                {
+                                    var collapseId =
+                                        $"editar-menu-{m.MenuID}";
+
+                                    <tr>
+                                        <td>@m.MenuID</td>
+                                        <td>
+                                            <div class="adm-muted">
+                                                @m.GrupoNombre
+                                            </div>
+                                            <strong>
+                                                <i class="@(string.IsNullOrWhiteSpace(m.IconoCss) ? "fa-solid fa-folder" : m.IconoCss) me-1"></i>
+                                                @m.Nombre
+                                            </strong>
+                                        </td>
+                                        <td>@m.Orden</td>
+                                        <td>@m.TotalSubMenus</td>
+                                        <td>
+                                            <span class="adm-badge @(m.Activo ? "on" : "off")">
+                                                @(m.Activo ? "Activo" : "Inactivo")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="adm-actions">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#@collapseId">
+                                                    Editar
+                                                </button>
+
+                                                <form asp-action="AlternarMenu"
+                                                      method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden"
+                                                           name="menuID"
+                                                           value="@m.MenuID" />
+                                                    <button class="btn btn-sm @(m.Activo ? "btn-outline-danger" : "btn-outline-success")"
+                                                            onclick="return confirm('¿Cambiar el estado de este menú?');">
+                                                        @(m.Activo ? "Desactivar" : "Activar")
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr class="collapse adm-edit-row"
+                                        id="@collapseId">
+                                        <td colspan="6">
+                                            <div class="adm-edit-box">
+                                                <form asp-action="EditarMenu"
+                                                      method="post">
+                                                    @Html.AntiForgeryToken()
+
+                                                    <input type="hidden"
+                                                           name="menuID"
+                                                           value="@m.MenuID" />
+
+                                                    <div class="row g-2">
+                                                        <div class="col-md-4">
+                                                            <label class="form-label">
+                                                                Grupo
+                                                            </label>
+                                                            <select name="menuGrupoID"
+                                                                    class="form-select"
+                                                                    required>
+                                                                @foreach (var g in Model.Grupos
+                                                                    .OrderBy(x => x.Orden)
+                                                                    .ThenBy(x => x.Nombre))
+                                                                {
+                                                                    if (g.MenuGrupoID == m.MenuGrupoID)
+                                                                    {
+                                                                        <option value="@g.MenuGrupoID"
+                                                                                selected>
+                                                                            @g.Nombre
+                                                                        </option>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <option value="@g.MenuGrupoID">
+                                                                            @g.Nombre
+                                                                        </option>
+                                                                    }
+                                                                }
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="col-md-4">
+                                                            <label class="form-label">
+                                                                Nombre
+                                                            </label>
+                                                            <input name="nombre"
+                                                                   value="@m.Nombre"
+                                                                   maxlength="100"
+                                                                   required
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-md-2">
+                                                            <label class="form-label">
+                                                                Orden
+                                                            </label>
+                                                            <input name="orden"
+                                                                   value="@m.Orden"
+                                                                   type="number"
+                                                                   min="1"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-md-2">
+                                                            <label class="form-label">
+                                                                Icono
+                                                            </label>
+                                                            <input name="iconoCss"
+                                                                   value="@m.IconoCss"
+                                                                   maxlength="100"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-12">
+                                                            <label class="form-label">
+                                                                Descripción
+                                                            </label>
+                                                            <input name="descripcion"
+                                                                   value="@m.Descripcion"
+                                                                   maxlength="300"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-12">
+                                                            <button class="btn btn-primary">
+                                                                Guardar menú
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="adm-card">
+                <div class="adm-card-header">
+                    <h2>
+                        <i class="fa-solid fa-diagram-project me-2"></i>
+                        3. Submenús
+                    </h2>
+                    <span class="adm-muted">
+                        @Model.SubMenus.Count registro(s)
+                    </span>
+                </div>
+
+                <div class="adm-card-body">
+                    <form asp-action="CrearSubMenu"
+                          method="post"
+                          class="adm-form mb-3">
+                        @Html.AntiForgeryToken()
+
+                        <h3 class="h6 fw-bold mb-3">
+                            + Nuevo submenú
+                        </h3>
+
+                        <div class="row g-2">
+                            <div class="col-lg-3">
+                                <label class="form-label">
+                                    Menú padre *
+                                </label>
+                                <select name="menuID"
+                                        class="form-select"
+                                        required>
+                                    <option value="">
+                                        -- Selecciona --
+                                    </option>
+                                    @foreach (var m in Model.Menus
+                                        .OrderBy(x => x.GrupoNombre)
+                                        .ThenBy(x => x.Orden)
+                                        .ThenBy(x => x.Nombre))
+                                    {
+                                        <option value="@m.MenuID">
+                                            @m.GrupoNombre → @m.Nombre
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-lg-3">
+                                <label class="form-label">
+                                    Nombre *
+                                </label>
+                                <input name="nombre"
+                                       maxlength="100"
+                                       required
+                                       class="form-control"
+                                       placeholder="Ej. Vista operativa" />
+                            </div>
+
+                            <div class="col-lg-3">
+                                <label class="form-label">
+                                    URL interna *
+                                </label>
+                                <input name="urlEnlace"
+                                       maxlength="500"
+                                       required
+                                       class="form-control"
+                                       placeholder="/Controlador/Index" />
+                            </div>
+
+                            <div class="col-lg-3">
+                                <label class="form-label">
+                                    Icono
+                                </label>
+                                <input name="iconoCss"
+                                       maxlength="100"
+                                       class="form-control"
+                                       placeholder="fa-solid fa-list" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">
+                                    Descripción
+                                </label>
+                                <input name="descripcion"
+                                       maxlength="255"
+                                       class="form-control" />
+                            </div>
+
+                            <div class="col-12">
+                                <button class="btn btn-nsq">
+                                    Crear submenú
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Ubicación</th>
+                                    <th>Submenú</th>
+                                    <th>URL</th>
+                                    <th>Acciones</th>
+                                    <th>Estado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var sm in Model.SubMenus)
+                                {
+                                    var collapseId =
+                                        $"editar-submenu-{sm.SubMenuID}";
+
+                                    <tr>
+                                        <td>@sm.SubMenuID</td>
+                                        <td>
+                                            <div class="adm-muted">
+                                                @sm.GrupoNombre
+                                            </div>
+                                            <strong>
+                                                @sm.MenuNombre
+                                            </strong>
+                                        </td>
+                                        <td>
+                                            <strong>
+                                                <i class="@(string.IsNullOrWhiteSpace(sm.IconoCss) ? "fa-solid fa-link" : sm.IconoCss) me-1"></i>
+                                                @sm.Nombre
+                                            </strong>
+                                            @if (!string.IsNullOrWhiteSpace(sm.Descripcion))
+                                            {
+                                                <div class="adm-muted">
+                                                    @sm.Descripcion
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="adm-url">
+                                                @sm.UrlEnlace
+                                            </span>
+                                        </td>
+                                        <td>@sm.AccionesActivas</td>
+                                        <td>
+                                            <span class="adm-badge @(sm.Activo ? "on" : "off")">
+                                                @(sm.Activo ? "Activo" : "Inactivo")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="adm-actions">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#@collapseId">
+                                                    Editar
+                                                </button>
+
+                                                <form asp-action="AlternarSubMenu"
+                                                      method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden"
+                                                           name="subMenuID"
+                                                           value="@sm.SubMenuID" />
+                                                    <button class="btn btn-sm @(sm.Activo ? "btn-outline-danger" : "btn-outline-success")"
+                                                            onclick="return confirm('¿Cambiar el estado de este submenú?');">
+                                                        @(sm.Activo ? "Desactivar" : "Activar")
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr class="collapse adm-edit-row"
+                                        id="@collapseId">
+                                        <td colspan="7">
+                                            <div class="adm-edit-box">
+                                                <form asp-action="EditarSubMenu"
+                                                      method="post">
+                                                    @Html.AntiForgeryToken()
+
+                                                    <input type="hidden"
+                                                           name="subMenuID"
+                                                           value="@sm.SubMenuID" />
+
+                                                    <div class="row g-2">
+                                                        <div class="col-lg-3">
+                                                            <label class="form-label">
+                                                                Menú padre
+                                                            </label>
+                                                            <select name="menuID"
+                                                                    class="form-select"
+                                                                    required>
+                                                                @foreach (var m in Model.Menus
+                                                                    .OrderBy(x => x.GrupoNombre)
+                                                                    .ThenBy(x => x.Orden)
+                                                                    .ThenBy(x => x.Nombre))
+                                                                {
+                                                                    if (m.MenuID == sm.MenuID)
+                                                                    {
+                                                                        <option value="@m.MenuID"
+                                                                                selected>
+                                                                            @m.GrupoNombre → @m.Nombre
+                                                                        </option>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <option value="@m.MenuID">
+                                                                            @m.GrupoNombre → @m.Nombre
+                                                                        </option>
+                                                                    }
+                                                                }
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="col-lg-3">
+                                                            <label class="form-label">
+                                                                Nombre
+                                                            </label>
+                                                            <input name="nombre"
+                                                                   value="@sm.Nombre"
+                                                                   maxlength="100"
+                                                                   required
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-lg-3">
+                                                            <label class="form-label">
+                                                                URL
+                                                            </label>
+                                                            <input name="urlEnlace"
+                                                                   value="@sm.UrlEnlace"
+                                                                   maxlength="500"
+                                                                   required
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-lg-3">
+                                                            <label class="form-label">
+                                                                Icono
+                                                            </label>
+                                                            <input name="iconoCss"
+                                                                   value="@sm.IconoCss"
+                                                                   maxlength="100"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-12">
+                                                            <label class="form-label">
+                                                                Descripción
+                                                            </label>
+                                                            <input name="descripcion"
+                                                                   value="@sm.Descripcion"
+                                                                   maxlength="255"
+                                                                   class="form-control" />
+                                                        </div>
+
+                                                        <div class="col-12">
+                                                            <button class="btn btn-primary">
+                                                                Guardar submenú
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="adm-info mt-3">
+            <i class="fa-solid fa-shield-halved me-1"></i>
+            Esta pantalla verifica contra base de datos que el usuario
+            conectado tenga <strong>RolID = 1 (Administrador de ERP)</strong>.
+            Desactivar un registro no lo elimina físicamente.
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
