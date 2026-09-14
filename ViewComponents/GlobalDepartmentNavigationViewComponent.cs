@@ -58,6 +58,83 @@ public sealed class GlobalDepartmentNavigationViewComponent : ViewComponent
             await using var cn = new SqlConnection(cnn);
             await cn.OpenAsync();
 
+            // NSQ_KIOSCO_SUPERVISION_NAV_V1_PROFILE
+            // Regla por cargo, no por usuario concreto.
+            var puedeUsarKioscoSupervision = false;
+
+            const string sqlPerfilKiosco = @"
+SELECT TOP (1)
+    u.RolID,
+    ISNULL(p.EsColaboradorActivo,0) AS EsColaboradorActivo,
+    LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto
+FROM dbo.Usuarios u
+LEFT JOIN dbo.Persona p
+    ON p.PersonaID=u.PersonaID
+WHERE u.UsuarioID=@UsuarioID
+  AND u.Activo=1;";
+
+            await using (var cmdPerfilKiosco =
+                new SqlCommand(sqlPerfilKiosco, cn))
+            {
+                cmdPerfilKiosco.Parameters.Add(
+                    "@UsuarioID",
+                    SqlDbType.Int).Value =
+                    usuarioId.Value;
+
+                await using var rdPerfilKiosco =
+                    await cmdPerfilKiosco.ExecuteReaderAsync();
+
+                if (await rdPerfilKiosco.ReadAsync())
+                {
+                    var rolIdKiosco =
+                        rdPerfilKiosco["RolID"] == DBNull.Value
+                            ? 0
+                            : Convert.ToInt32(
+                                rdPerfilKiosco["RolID"]);
+
+                    var colaboradorActivoKiosco =
+                        rdPerfilKiosco["EsColaboradorActivo"] != DBNull.Value &&
+                        Convert.ToBoolean(
+                            rdPerfilKiosco["EsColaboradorActivo"]);
+
+                    var puestoKiosco =
+                        rdPerfilKiosco["Puesto"]?.ToString()?.Trim()
+                        ?? string.Empty;
+
+                    var esAuxiliarProduccionKiosco =
+                        colaboradorActivoKiosco &&
+                        puestoKiosco.Contains(
+                            "AUXILIAR",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        puestoKiosco.Contains(
+                            "PRODUC",
+                            StringComparison.OrdinalIgnoreCase);
+
+                    var esEncargadoProduccionKiosco =
+                        colaboradorActivoKiosco &&
+                        puestoKiosco.Contains(
+                            "ENCARGAD",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        puestoKiosco.Contains(
+                            "PRODUC",
+                            StringComparison.OrdinalIgnoreCase);
+
+                    puedeUsarKioscoSupervision =
+                        rolIdKiosco == 1 ||
+                        esAuxiliarProduccionKiosco ||
+                        esEncargadoProduccionKiosco;
+                }
+            }
+
+            if (vm.CurrentController.Equals(
+                    "ProduccionOperador",
+                    StringComparison.OrdinalIgnoreCase) &&
+                !puedeUsarKioscoSupervision)
+            {
+                // Operador puro: no mostrar navegación ERP.
+                return View(vm);
+            }
+
             const string sql = @"
 WITH Perms AS
 (
@@ -156,6 +233,51 @@ ORDER BY
                 .OrderBy(x => x.Orden)
                 .ThenBy(x => x.Nombre)
                 .ToList();
+
+            // NSQ_KIOSCO_SUPERVISION_NAV_V1_SUBMENU
+            // Visible solo para Admin / Auxiliar / Encargado de Produccion.
+            if (puedeUsarKioscoSupervision)
+            {
+                var grupoProduccionKiosco =
+                    vm.Groups.FirstOrDefault(x =>
+                        x.MenuGrupoID == 2 ||
+                        NormalizeNavigationToken(x.Nombre).Equals(
+                            "PRODUCCION",
+                            StringComparison.OrdinalIgnoreCase));
+
+                if (grupoProduccionKiosco != null)
+                {
+                    var menuVistaOperativaKiosco =
+                        grupoProduccionKiosco.Menus
+                            .Where(menu =>
+                                NormalizeNavigationToken(menu.Nombre).Equals(
+                                    "VISTAOPERATIVA",
+                                    StringComparison.OrdinalIgnoreCase)
+                                ||
+                                menu.SubMenus.Any(sub =>
+                                    PathOnly(sub.Url).Equals(
+                                        "/Produccion/CalendarioOperativo",
+                                        StringComparison.OrdinalIgnoreCase)))
+                            .OrderBy(menu => menu.Orden)
+                            .ThenBy(menu => menu.Nombre)
+                            .FirstOrDefault();
+
+                    if (menuVistaOperativaKiosco != null &&
+                        !menuVistaOperativaKiosco.SubMenus.Any(sub =>
+                            PathOnly(sub.Url).Equals(
+                                "/ProduccionOperador/Index",
+                                StringComparison.OrdinalIgnoreCase)))
+                    {
+                        menuVistaOperativaKiosco.SubMenus.Add(
+                            new GlobalDepartmentNavigationSubMenuVm
+                            {
+                                SubMenuID = -220001,
+                                Nombre = "Kiosco de operador",
+                                Url = "/ProduccionOperador/Index"
+                            });
+                    }
+                }
+            }
 
             EnsureCompatibilityLinks(vm);
             EnrichPermittedMenuSectionsFromViews(vm);

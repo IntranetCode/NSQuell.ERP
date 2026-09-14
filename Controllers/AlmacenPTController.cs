@@ -1635,6 +1635,32 @@ VALUES
                                 StringComparison.OrdinalIgnoreCase))
                         .ToList();
 
+                // NSQ_PT_PRIORIDAD_NORMALIZADA_V1_0
+                // La puntuacion de la etiqueta no define otro numero de parte.
+                // Primero se intenta una coincidencia REAL normalizada de NumeroParte.
+                // Los aliases historicos (+00 / sin primer caracter) quedan solo como fallback.
+                var exactosNormalizadosNumeroParte =
+                    candidatos
+                        .Where(x =>
+                            string.Equals(
+                                NormalizarNumeroParte(x.NumeroParte),
+                                claveEscaneada,
+                                StringComparison.OrdinalIgnoreCase))
+                        .GroupBy(x => x.ParteID)
+                        .Select(x => x.First())
+                        .ToList();
+
+                var exactosNormalizadosReferencia =
+                    candidatos
+                        .Where(x =>
+                            string.Equals(
+                                NormalizarNumeroParte(x.ReferenciaSAP),
+                                claveEscaneada,
+                                StringComparison.OrdinalIgnoreCase))
+                        .GroupBy(x => x.ParteID)
+                        .Select(x => x.First())
+                        .ToList();
+
                 ParteCatalogoEscaneo? candidato = null;
 
                 if (exactosNumeroParte.Count == 1)
@@ -1642,12 +1668,27 @@ VALUES
                     candidato = exactosNumeroParte[0];
                 }
                 else if (exactosNumeroParte.Count == 0
+                    && exactosNormalizadosNumeroParte.Count == 1)
+                {
+                    candidato = exactosNormalizadosNumeroParte[0];
+                }
+                else if (exactosNumeroParte.Count == 0
+                    && exactosNormalizadosNumeroParte.Count == 0
                     && exactosReferencia.Count == 1)
                 {
                     candidato = exactosReferencia[0];
                 }
                 else if (exactosNumeroParte.Count == 0
+                    && exactosNormalizadosNumeroParte.Count == 0
                     && exactosReferencia.Count == 0
+                    && exactosNormalizadosReferencia.Count == 1)
+                {
+                    candidato = exactosNormalizadosReferencia[0];
+                }
+                else if (exactosNumeroParte.Count == 0
+                    && exactosNormalizadosNumeroParte.Count == 0
+                    && exactosReferencia.Count == 0
+                    && exactosNormalizadosReferencia.Count == 0
                     && candidatos.Count == 1)
                 {
                     candidato = candidatos[0];

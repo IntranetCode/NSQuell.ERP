@@ -1,0 +1,71 @@
+@model ERP.NSQuell.Models.ViewModels.CalidadDetalleViewModel
+@using ERP.NSQuell.Models
+
+@{
+    var estado =
+        (Model.Estado ?? string.Empty)
+            .Trim()
+            .ToUpperInvariant();
+
+    var mostrarFinAnticipado =
+        Model.EjecucionProduccionID.HasValue &&
+        Model.EjecucionProduccionID.Value > 0 &&
+        (
+            Model.RequiereReliberacion ||
+            Model.ConfiguracionInvalidada ||
+            estado == CalidadEstados.PendienteReliberacion
+        );
+}
+
+@* NSQ_FIN_ANTICIPADO_V1 *@
+@if (mostrarFinAnticipado)
+{
+    <article class="quality-card"
+             style="border-color:#fecaca;background:#fffafa;">
+        <div class="quality-card-header">
+            <h2 style="color:#991b1b;">
+                <i class="fa-solid fa-stop-circle me-1"></i>
+                La producción no continuará
+            </h2>
+        </div>
+
+        <div class="quality-card-body">
+            <div style="padding:12px;border:1px solid #fecaca;border-radius:9px;background:#fff1f2;color:#991b1b;margin-bottom:12px;">
+                <strong>Alternativa a la reliberación.</strong>
+                <div style="margin-top:5px;font-size:.86rem;">
+                    Si se decidió que la corrida ya no se reiniciará, esta opción
+                    finaliza físicamente la OF. Conserva cantidades reales, cancela
+                    la reliberación y cancela únicamente monitoreos futuros pendientes.
+                </div>
+            </div>
+
+            <form method="post"
+                  action="@Url.Action("FinalizarProduccionDesdeCalidad","Calidad")">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden"
+                       name="id"
+                       value="@Model.InspeccionID" />
+
+                <label class="form-label fw-bold">
+                    Justificación obligatoria
+                </label>
+
+                <textarea name="motivo"
+                          rows="3"
+                          minlength="10"
+                          maxlength="500"
+                          required
+                          class="form-control"
+                          placeholder="Indica por qué se decidió no continuar la producción."></textarea>
+
+                <button type="submit"
+                        class="btn btn-danger mt-3"
+                        onclick="return confirm('Esta corrida ya NO será reliberada ni reiniciada. ¿Confirmas que la producción finalizó anticipadamente?');">
+                    <i class="fa-solid fa-stop-circle me-1"></i>
+                    Finalizar producción / cancelar reliberación
+                </button>
+            </form>
+        </div>
+    </article>
+}

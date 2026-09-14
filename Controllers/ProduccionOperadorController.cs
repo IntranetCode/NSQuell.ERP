@@ -37,43 +37,31 @@ namespace ERP.NSQuell.Controllers
             if (!UsuarioEnSesion())
                 return RedirectToAction("Login", "Login");
 
-            await using var cn =
-                new SqlConnection(ConnectionString);
-
+            await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
-            var usuarioId =
-                ObtenerUsuarioID();
+            var usuarioId = ObtenerUsuarioID();
+            var esUsuarioKiosco = await UsuarioEsOperadorAsync(usuarioId, cn);
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
 
-            var esOperador =
-                await UsuarioEsOperadorAsync(
-                    usuarioId,
-                    cn);
-
-            if (!esOperador)
+            if (!esUsuarioKiosco && !puedeSupervisar)
                 return AccesoDenegadoOperador();
 
-            var personaId =
-                await ObtenerPersonaIDUsuarioAsync(
-                    usuarioId,
-                    cn);
+            var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
 
-            if (!personaId.HasValue ||
-                personaId.Value <= 0)
-            {
+            if (!puedeSupervisar && (!personaId.HasValue || personaId.Value <= 0))
                 return AccesoDenegadoOperador();
-            }
 
-            var programas =
-                await ObtenerProgramasEnProduccionAsync(
-                    personaId.Value,
-                    cn);
+            var programas = await ObtenerProgramasEnProduccionAsync(
+                personaId,
+                cn,
+                filtrarPorPersona: !puedeSupervisar);
 
+            ViewBag.ModoSupervisorKiosco = puedeSupervisar;
             ViewBag.AlertasProximosProgramas =
-                await ObtenerAlertasProximosProgramasAsync(
-                    personaId.Value,
-                    cn,
-                    15);
+                !puedeSupervisar && personaId.HasValue && personaId.Value > 0
+                    ? await ObtenerAlertasProximosProgramasAsync(personaId.Value, cn, 15)
+                    : new List<ProduccionAlertaProximoProgramaVm>();
 
             return View(programas);
         }
@@ -3522,8 +3510,9 @@ WHERE NOT EXISTS
 
         private async Task<List<ProduccionOperadorTabletVm>>
     ObtenerProgramasEnProduccionAsync(
-        int personaId,
-        SqlConnection cn)
+        int? personaId,
+        SqlConnection cn,
+        bool filtrarPorPersona = true)
         {
             var lista = new List<ProduccionOperadorTabletVm>();
 
@@ -3603,15 +3592,19 @@ OUTER APPLY
 
 WHERE e.Activo = 1
   AND e.EstatusID IN (@EnProduccion, @Pausado)
-  AND EXISTS
+  AND
   (
-      SELECT 1
-      FROM dbo.Planeacion_ProgramaOperadores po
-      WHERE po.ProgramaProduccionID = e.ProgramaProduccionID
-        AND po.PersonaID = @PersonaID
-        AND po.Activo = 1
-        AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))
-            IN (N'PRINCIPAL',N'AUXILIAR')
+      @FiltrarPorPersona = 0
+      OR EXISTS
+      (
+          SELECT 1
+          FROM dbo.Planeacion_ProgramaOperadores po
+          WHERE po.ProgramaProduccionID = e.ProgramaProduccionID
+            AND po.PersonaID = @PersonaID
+            AND po.Activo = 1
+            AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))
+                IN (N'PRINCIPAL',N'AUXILIAR')
+      )
   )
 
 ORDER BY
@@ -3623,7 +3616,13 @@ ORDER BY
 
             cmd.Parameters.Add(
                 "@PersonaID",
-                SqlDbType.Int).Value = personaId;
+                SqlDbType.Int).Value =
+                (object?)personaId ?? DBNull.Value;
+
+            cmd.Parameters.Add(
+                "@FiltrarPorPersona",
+                SqlDbType.Bit).Value =
+                filtrarPorPersona;
 
             cmd.Parameters.Add(
                 "@EnProduccion",
@@ -4526,6 +4525,45 @@ WHERE MotivoParoID = @MotivoParoID
             public string? Puesto { get; set; }
         }
 
+        // NSQ_KIOSCO_SUPERVISOR_CARGOS_V1_HELPER
+        private static async Task<bool> UsuarioPuedeSupervisarKioscoAsync(
+            int usuarioId,
+            SqlConnection cn,
+            SqlTransaction? tx = null)
+        {
+            if (usuarioId <= 0) return false;
+
+            const string sql = @"
+SELECT TOP (1)
+    u.RolID,
+    ISNULL(p.EsColaboradorActivo,0) AS EsColaboradorActivo,
+    LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto
+FROM dbo.Usuarios u
+LEFT JOIN dbo.Persona p ON p.PersonaID=u.PersonaID
+WHERE u.UsuarioID=@UsuarioID
+  AND u.Activo=1;";
+
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return false;
+
+            var rolId = rd["RolID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RolID"]);
+            if (rolId == 1) return true;
+
+            var colaboradorActivo = rd["EsColaboradorActivo"] != DBNull.Value && Convert.ToBoolean(rd["EsColaboradorActivo"]);
+            if (!colaboradorActivo) return false;
+
+            var puesto = rd["Puesto"]?.ToString()?.Trim() ?? string.Empty;
+            var esAuxiliarProduccion =
+                puesto.Contains("AUXILIAR", StringComparison.OrdinalIgnoreCase) &&
+                puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+            var esEncargadoProduccion =
+                puesto.Contains("ENCARGAD", StringComparison.OrdinalIgnoreCase) &&
+                puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
+            return esAuxiliarProduccion || esEncargadoProduccion;
+        }
         private async Task<bool> UsuarioEsOperadorAsync(
             int usuarioId,
             SqlConnection cn)
@@ -11256,6 +11294,7 @@ WHERE TiempoExtraID=@TiempoExtraID
                     : RedirectToAction(nameof(Index));
             }
         }
+        // NSQ_KIOSCO_SUPERVISOR_ASIGNACION_V1
         private static async Task<bool> PersonaAsignadaAEjecucionAsync(
     int ejecucionProduccionId,
     int personaId,
@@ -11268,6 +11307,36 @@ SELECT
         WHEN EXISTS
         (
             SELECT 1
+            FROM dbo.Usuarios us
+            LEFT JOIN dbo.Persona ps ON ps.PersonaID=us.PersonaID
+            WHERE us.PersonaID=@PersonaID
+              AND us.Activo=1
+              AND
+              (
+                  us.RolID=1
+                  OR
+                  (
+                      ISNULL(ps.EsColaboradorActivo,0)=1
+                      AND
+                      (
+                          (
+                              UPPER(LTRIM(RTRIM(ISNULL(ps.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%AUXILIAR%'
+                              AND UPPER(LTRIM(RTRIM(ISNULL(ps.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+                          )
+                          OR
+                          (
+                              UPPER(LTRIM(RTRIM(ISNULL(ps.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%ENCARGAD%'
+                              AND UPPER(LTRIM(RTRIM(ISNULL(ps.Puesto,N'')))) COLLATE Latin1_General_CI_AI LIKE N'%PRODUC%'
+                          )
+                      )
+                  )
+              )
+        )
+        THEN CAST(1 AS BIT)
+
+        WHEN EXISTS
+        (
+            SELECT 1
             FROM dbo.Produccion_Ejecucion e
             INNER JOIN dbo.Planeacion_ProgramaOperadores po
                 ON po.ProgramaProduccionID=e.ProgramaProduccionID
@@ -11275,12 +11344,13 @@ SELECT
             WHERE e.EjecucionProduccionID=@EjecucionProduccionID
               AND e.Activo=1
               AND po.PersonaID=@PersonaID
-              AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))
-                  IN(N'PRINCIPAL',N'AUXILIAR')
+              AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N'')))) IN(N'PRINCIPAL',N'AUXILIAR')
         )
         THEN CAST(1 AS BIT)
+
         ELSE CAST(0 AS BIT)
-    END;";
+    END;
+";
 
             await using var cmd =
                 tx == null

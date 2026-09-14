@@ -990,7 +990,8 @@
                                           rows="2"
                                           maxlength="1000"
                                           class="form-control"
-                                          placeholder="Opcional: observaciones de la liberación."></textarea>
+                                          data-box-release-observation
+                                          placeholder="Si la caja está incompleta, indica obligatoriamente el motivo."></textarea>
                                         </div>
                                     </div>
                                 </div>
@@ -1299,7 +1300,10 @@
                 }
 
                 function allValidationsOk() {
+                    // NSQ_CAJAS_INCOMPLETAS_V1
+                    // Pack incompleto es válido; etiqueta y técnico siguen siendo obligatorios.
                     return Array.from(form.querySelectorAll('[data-box-validation-value]'))
+                        .filter(input => input.name !== 'EstandarPackCumple')
                         .every(input => input.value === 'true');
                 }
 
@@ -1341,8 +1345,8 @@
 
                     if (decision === 'LIBERAR') {
                         note.textContent = allValidationsOk()
-                            ? 'Las tres validaciones están conformes. Captura el número de operador para liberar.'
-                            : 'Para liberar, las tres validaciones deben quedar conformes y debes capturar el número de operador.';
+                            ? 'Etiqueta y validación del técnico conformes. Si el empaque está incompleto, documenta el motivo antes de liberar.'
+                            : 'Para liberar deben estar conformes la etiqueta y la validación del técnico; el empaque puede quedar incompleto con justificación.';
                         if (allValidationsOk()) note.classList.add('is-ready');
                     } else if (decision === 'GP12') {
                         note.textContent = 'La caja quedará retenida y será enviada al módulo GP12.';
@@ -1377,9 +1381,23 @@
                         return;
                     }
 
-                    if (decision === 'LIBERAR' && (!allValid || !operator)) {
+                    const packCompleto =
+                        form.querySelector('input[name="EstandarPackCumple"]')?.value === 'true';
+
+                    const observacionLiberacion =
+                        form.querySelector('[data-box-release-observation]')?.value?.trim() || '';
+
+                    if (decision === 'LIBERAR' &&
+                        (!allValid ||
+                         !operator ||
+                         (!packCompleto && !observacionLiberacion))) {
                         event.preventDefault();
-                        window.alert('Para liberar la caja confirma las tres validaciones y captura el número de operador indicado en la etiqueta.');
+
+                        window.alert(
+                            !packCompleto && !observacionLiberacion
+                                ? 'La caja está marcada como incompleta. Captura la justificación en Observaciones para poder liberarla.'
+                                : 'Para liberar la caja confirma etiqueta correcta, validación del técnico y captura el número de operador indicado en la etiqueta.');
+
                         return;
                     }
 
