@@ -3021,9 +3021,12 @@ SELECT OBJECT_ID(
                     $"La entrega origen solo tiene {disponibleOrigen:N0} pieza(s) libres.");
             }
 
-            var cajasCompletas = vm.CantidadAumentoPiezas % piezasPorCaja == 0
-                ? vm.CantidadAumentoPiezas / piezasPorCaja
-                : 0;
+            // NSQ_PLANEACION_TRANSFERENCIAS_PARCIALES_V1
+            // CajasTransferidas representa solamente las cajas completas contenidas
+            // en la transferencia. La diferencia queda como piezas parciales.
+            // Ej.: 687/1000 => 0 cajas + 687 parciales; 1687/1000 => 1 caja + 687 parciales.
+            var cajasCompletas = vm.CantidadAumentoPiezas / piezasPorCaja;
+            var piezasParciales = vm.CantidadAumentoPiezas % piezasPorCaja;
 
             var origenAntes =
                 origen.CantidadRequerida;
@@ -3269,9 +3272,11 @@ VALUES
             vm.CantidadRequerida =
                 destinoDespues;
 
-            var nota = cajasCompletas > 0
+            var nota = piezasParciales == 0
                 ? $"Ajuste Release: +{vm.CantidadAumentoPiezas:N0} pzas ({cajasCompletas:N0} caja(s) completas) desde entrega #{origen.ReleaseDetalleID}."
-                : $"Ajuste Release: +{vm.CantidadAumentoPiezas:N0} pzas desde entrega #{origen.ReleaseDetalleID} para completar el cierre de caja del programa.";
+                : cajasCompletas > 0
+                    ? $"Ajuste Release: +{vm.CantidadAumentoPiezas:N0} pzas ({cajasCompletas:N0} caja(s) completas + {piezasParciales:N0} pzas parciales) desde entrega #{origen.ReleaseDetalleID}."
+                    : $"Ajuste Release: +{vm.CantidadAumentoPiezas:N0} pzas parciales desde entrega #{origen.ReleaseDetalleID} para completar el cierre de caja del programa.";
 
             vm.Observaciones =
                 string.IsNullOrWhiteSpace(

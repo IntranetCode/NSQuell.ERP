@@ -37,7 +37,7 @@ namespace ERP.NSQuell.Controllers
             public bool EsSMED { get; set; }
             public bool EsAuxiliarProduccion { get; set; }
             public bool EsOperadorProduccion { get; set; }
-            public bool PuedeVerTodo => EsAdministradorERP || EsEncargadoProduccion;
+            public bool PuedeVerTodo => EsAdministradorERP || EsEncargadoProduccion || EsAuxiliarProduccion;
             public bool PuedeGestionarChecklistArranque => PuedeVerTodo || EsTecnicoProduccion || EsSMED;
             public bool PuedeGestionarSMED => PuedeVerTodo || EsTecnicoProduccion || EsSMED;
             public bool PuedeGestionarMonitoreoPerifericos => PuedeVerTodo || EsTecnicoProduccion || EsSMED;
