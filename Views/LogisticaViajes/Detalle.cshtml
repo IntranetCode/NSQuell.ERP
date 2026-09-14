@@ -47,6 +47,30 @@
     var ahora = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
     var incidenciasAbiertas = Model.Incidencias?.Count(x => x.EstaAbierta) ?? 0;
     var totalEvidencias = Model.Evidencias?.Count ?? 0;
+    var totalParadas = Model.Paradas?.Count ?? 0;
+    var paradasCompletadas = Model.Paradas?.Count(x => x.Estatus is "Completada" or "Omitida") ?? 0;
+    var paradasPendientes = Model.Paradas?.Count(x => x.Estatus is "Pendiente" or "En camino" or "En sitio") ?? 0;
+    var proximaParada = Model.ProximaParada;
+    var puedeAdministrarParadas = Model.Estatus is "Programado" or "En curso";
+    string BadgeParada(string estatus) => estatus switch
+    {
+        "Completada" => "bg-success",
+        "En sitio" => "bg-info text-dark",
+        "En camino" => "bg-primary",
+        "Omitida" => "bg-secondary",
+        "Pendiente" => "bg-light text-dark border",
+        _ => "bg-light text-dark border"
+    };
+    string IconoParada(string tipo) => tipo switch
+    {
+        "Origen" => "fa-warehouse",
+        "Entrega" => "fa-box",
+        "Recoleccion" => "fa-dolly",
+        "Traslado" => "fa-truck-ramp-box",
+        "Servicio" => "fa-screwdriver-wrench",
+        "Retorno" => "fa-house",
+        _ => "fa-location-dot"
+    };
 }
 <style>
     :root {
@@ -113,7 +137,7 @@
 
     .summary {
         display: grid;
-        grid-template-columns: repeat(6,minmax(120px,1fr));
+        grid-template-columns: repeat(auto-fit,minmax(135px,1fr));
         gap: 7px;
         margin-bottom: 10px
     }
@@ -557,6 +581,234 @@
         background: #fff8f8
     }
 
+    .route-summary {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(130px,1fr));
+        gap: 8px;
+        margin-bottom: 12px
+    }
+
+    .route-summary-item {
+        padding: 9px 10px;
+        border: 1px solid #e1e7ee;
+        border-radius: 9px;
+        background: #fbfcfd
+    }
+
+        .route-summary-item span {
+            display: block;
+            color: #7a8492;
+            font-size: .64rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .route-summary-item strong {
+            display: block;
+            margin-top: 2px;
+            font-size: .83rem
+        }
+
+    .route-progress {
+        height: 7px;
+        margin-top: 6px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #e9eef5
+    }
+
+        .route-progress > span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: #198754
+        }
+
+    .route-timeline {
+        position: relative;
+        margin: 4px 0 2px;
+        padding-left: 18px
+    }
+
+        .route-timeline:before {
+            content: "";
+            position: absolute;
+            left: 31px;
+            top: 22px;
+            bottom: 22px;
+            width: 2px;
+            background: #dbe3ec
+        }
+
+    .route-stop {
+        position: relative;
+        display: grid;
+        grid-template-columns: 46px minmax(0,1fr);
+        gap: 10px;
+        margin-bottom: 10px
+    }
+
+        .route-stop:last-child {
+            margin-bottom: 0
+        }
+
+    .route-stop-marker {
+        position: relative;
+        z-index: 2;
+        width: 30px;
+        height: 30px;
+        margin: 9px 0 0 0;
+        border: 2px solid #cfd9e5;
+        border-radius: 50%;
+        background: #fff;
+        color: var(--lv-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        box-shadow: 0 0 0 4px #fff
+    }
+
+    .route-stop.complete .route-stop-marker {
+        border-color: #79b99b;
+        background: #edf9f2;
+        color: #17633a
+    }
+
+    .route-stop.current .route-stop-marker {
+        border-color: #5d83ba;
+        background: #edf4ff;
+        box-shadow: 0 0 0 4px #fff,0 0 0 6px rgba(23,58,122,.08)
+    }
+
+    .route-stop-card {
+        padding: 10px 11px;
+        border: 1px solid #dfe6ee;
+        border-radius: 10px;
+        background: #fff
+    }
+
+    .route-stop.current .route-stop-card {
+        border-color: #9bb4d6;
+        box-shadow: inset 3px 0 0 var(--lv-blue)
+    }
+
+    .route-stop.complete .route-stop-card {
+        border-color: #c6e1d2;
+        background: #f8fcfa
+    }
+
+    .route-stop-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        flex-wrap: wrap
+    }
+
+    .route-stop-title {
+        margin: 0;
+        font-size: .87rem;
+        font-weight: 800
+    }
+
+    .route-stop-sub {
+        margin-top: 2px;
+        color: #6e7988;
+        font-size: .71rem
+    }
+
+    .route-stop-actions {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap
+    }
+
+    .route-stop-meta {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 6px;
+        margin-top: 8px
+    }
+
+    .route-meta {
+        padding: 6px 7px;
+        border-radius: 7px;
+        background: #f7f9fc
+    }
+
+        .route-meta span {
+            display: block;
+            color: #7c8795;
+            font-size: .59rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .route-meta strong {
+            display: block;
+            margin-top: 1px;
+            font-size: .72rem;
+            word-break: break-word
+        }
+
+    .route-shipments {
+        margin-top: 8px;
+        padding-top: 7px;
+        border-top: 1px dashed #dce4ed
+    }
+
+    .route-shipment {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        margin-top: 5px;
+        border: 1px solid #e5eaf0;
+        border-radius: 7px;
+        background: #fbfcfd;
+        font-size: .72rem
+    }
+
+    .route-edit {
+        margin-top: 9px;
+        padding: 10px;
+        border-top: 1px solid #edf1f5;
+        background: #fbfcfd;
+        border-radius: 8px
+    }
+
+    .route-history {
+        margin-top: 7px;
+        padding: 7px 8px;
+        border: 1px dashed #d9e1ea;
+        border-radius: 7px;
+        background: #fbfcfd;
+        font-size: .7rem
+    }
+
+    .route-history-row {
+        display: grid;
+        grid-template-columns: 120px 150px 1fr;
+        gap: 8px;
+        padding: 4px 0;
+        border-bottom: 1px solid #edf1f5
+    }
+
+        .route-history-row:last-child {
+            border-bottom: 0
+        }
+
+    .route-empty-note {
+        padding: 10px;
+        border: 1px solid #d8e2ee;
+        border-radius: 8px;
+        background: #f6f9fd;
+        color: #516071;
+        font-size: .75rem
+    }
+
     html[data-nsq-theme="dark"] .viaje-page {
         color: #e7edf6
     }
@@ -583,12 +835,34 @@
         color: #c5d4e7
     }
 
+    html[data-nsq-theme="dark"] .route-summary-item, html[data-nsq-theme="dark"] .route-stop-card, html[data-nsq-theme="dark"] .route-shipment, html[data-nsq-theme="dark"] .route-edit, html[data-nsq-theme="dark"] .route-history, html[data-nsq-theme="dark"] .route-empty-note {
+        background: #162237;
+        border-color: #2a3a50
+    }
+
+    html[data-nsq-theme="dark"] .route-stop-marker {
+        background: #111b2d;
+        box-shadow: 0 0 0 4px #111b2d
+    }
+
+    html[data-nsq-theme="dark"] .route-meta {
+        background: #111b2d
+    }
+
     @@media(max-width:1100px) {
         .summary {
             grid-template-columns: repeat(3,1fr)
         }
 
         .workflow, .workflow.entrega {
+            grid-template-columns: repeat(2,1fr)
+        }
+
+        .route-summary {
+            grid-template-columns: repeat(2,1fr)
+        }
+
+        .route-stop-meta {
             grid-template-columns: repeat(2,1fr)
         }
     }
@@ -618,6 +892,32 @@
 
         .summary, .workflow, .workflow.entrega {
             grid-template-columns: repeat(2,1fr)
+        }
+
+        .route-summary, .route-stop-meta {
+            grid-template-columns: 1fr
+        }
+
+        .route-stop {
+            grid-template-columns: 38px minmax(0,1fr);
+            gap: 7px
+        }
+
+        .route-timeline {
+            padding-left: 8px
+        }
+
+            .route-timeline:before {
+                left: 21px
+            }
+
+        .route-stop-marker {
+            width: 28px;
+            height: 28px
+        }
+
+        .route-history-row {
+            display: block
         }
 
         .head-actions {
@@ -686,6 +986,8 @@
         <div class="summary-item"><span>Ruta</span><strong title="@Model.Ruta">@(Model.TieneRuta? Model.Ruta: "Pendiente")</strong></div>
         <div class="summary-item"><span>Unidad</span><strong>@Model.UnidadMostrar</strong></div>
         <div class="summary-item"><span>Chofer</span><strong>@Model.ChoferMostrar</strong></div>
+        <div class="summary-item"><span>Paradas</span><strong>@totalParadas total · @paradasPendientes pendientes</strong></div>
+        <div class="summary-item"><span>Próxima parada</span><strong title="@(proximaParada?.Direccion ?? string.Empty)">@(proximaParada == null ? "Sin pendiente" : $"{proximaParada.Secuencia}. {proximaParada.Lugar}")</strong></div>
         <div class="summary-item"><span>KM usados</span><strong>@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") + " km":"-")</strong></div>
     </div>
 
@@ -784,6 +1086,10 @@
             {
                 <div class="sync-box mb-0"><i class="fa-solid fa-user-shield me-1"></i><strong>Acción reservada al chofer.</strong> El regreso de esta Entrega se registra en LogisticaChofer para no crear un segundo cierre del mismo recorrido.</div>
             }
+            else if (Model.EsMultiParada)
+            {
+                <div class="sync-box mb-0"><i class="fa-solid fa-location-dot me-1"></i><strong>Ruta con múltiples paradas.</strong> El viaje continúa hasta completar u omitir las paradas pendientes y llegar al Retorno final. El cierre operativo debe realizarse desde el portal del chofer.</div>
+            }
             else if (Model.PuedeRegistrarRegreso)
             {
                 <form asp-controller="LogisticaViajes" asp-action="RegistrarRetorno" method="post" class="stage-grid">
@@ -826,6 +1132,7 @@
     <div class="tabs-shell">
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDatos" type="button"><i class="fa-solid fa-circle-info me-1"></i>Datos</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRuta" type="button"><i class="fa-solid fa-route me-1"></i>Ruta / paradas <span class="badge bg-secondary ms-1">@totalParadas</span></button></li>
             <li class="nav-item">
                 <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabIncidencias" type="button">
                     <i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencias @if(incidenciasAbiertas>0){
@@ -888,6 +1195,212 @@
                 {
                     <div class="sync-box mt-3 mb-0"><i class="fa-solid fa-link me-1"></i><strong>Entrega sincronizada con Embarque.</strong> Para cancelar o reprogramar esta operación utiliza Centro Operativo; hacerlo directamente sobre el viaje podría separar el estado del Embarque y del Viaje.</div>
                 }
+            </div>
+
+
+            <div class="tab-pane fade" id="tabRuta">
+                <div class="section-head">
+                    <div>
+                        <h3>Ruta y múltiples paradas</h3>
+                        <div class="text-muted small">El viaje conserva una sola unidad y un solo chofer. Cada parada define qué se entrega, recolecta o atiende antes de continuar.</div>
+                    </div>
+                    @if (puedeAdministrarParadas)
+                    {
+                        <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#agregarParada"><i class="fa-solid fa-plus me-1"></i>Agregar parada</button>
+                    }
+                </div>
+                <div class="route-summary">
+                    <div class="route-summary-item"><span>Tipo de recorrido</span><strong>@(Model.EsMultiParada ? "Múltiples paradas" : "Ruta simple")</strong></div>
+                    <div class="route-summary-item"><span>Paradas</span><strong>@totalParadas total</strong></div>
+                    <div class="route-summary-item"><span>Atendidas</span><strong>@paradasCompletadas de @totalParadas</strong><div class="route-progress"><span style="width:@(totalParadas <= 0 ? 0 : Math.Round((decimal)paradasCompletadas * 100m / totalParadas, 1).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></span></div></div>
+                    <div class="route-summary-item"><span>Próxima parada</span><strong>@(proximaParada == null ? "Sin pendiente" : $"{proximaParada.Secuencia}. {proximaParada.Lugar}")</strong></div>
+                </div>
+                @if (puedeAdministrarParadas)
+                {
+                    <div class="collapse mb-3" id="agregarParada">
+                        <div class="route-edit">
+                            <div class="fw-bold mb-2"><i class="fa-solid fa-location-dot me-1"></i>Nueva parada</div>
+                            <form asp-controller="LogisticaViajes" asp-action="AgregarParada" method="post" class="compact-form">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                                <input type="hidden" name="Secuencia" value="0" />
+                                <div class="f3"><label class="required">Tipo de parada</label><select name="TipoParada" class="form-select" required><option value="Entrega">Entrega</option><option value="Recoleccion">Recolección</option><option value="Traslado">Traslado</option><option value="Servicio">Servicio</option><option value="Otro">Otro</option><option value="Retorno">Retorno final</option></select></div>
+                                <div class="f3"><label>Operación</label><input type="text" name="TipoOperacion" maxlength="80" class="form-control" placeholder="Ej. Recolección MP" /></div>
+                                <div class="f3"><label class="required">Lugar</label><input type="text" name="Lugar" maxlength="300" class="form-control" required placeholder="Cliente, proveedor, planta..." /></div>
+                                <div class="f3"><label>Dirección</label><input type="text" name="Direccion" maxlength="600" class="form-control" placeholder="Dirección de la parada" /></div>
+                                <div class="f3"><label>Llegada programada</label><input type="datetime-local" name="FechaHoraLlegadaProgramada" class="form-control" /></div>
+                                <div class="f3"><label>Salida programada</label><input type="datetime-local" name="FechaHoraSalidaProgramada" class="form-control" /></div>
+                                <div class="f3"><label>Contacto</label><input type="text" name="ContactoNombre" maxlength="200" class="form-control" placeholder="Nombre" /></div>
+                                <div class="f3"><label>Teléfono</label><input type="text" name="ContactoTelefono" maxlength="50" class="form-control" placeholder="Teléfono" /></div>
+                                <div class="f8"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" class="form-control" placeholder="Indicaciones de acceso, material a recoger, documentos, etc." /></div>
+                                <div class="f2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="RequiereEvidencia" value="true" id="RequiereEvidenciaNueva" /><label class="form-check-label" for="RequiereEvidenciaNueva">Requiere evidencia</label></div></div>
+                                <div class="f2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="fa-solid fa-plus me-1"></i>Agregar</button></div>
+                            </form>
+                            <div class="text-muted small mt-2"><i class="fa-solid fa-circle-info me-1"></i>Las entregas generadas desde un Embarque se crean y vinculan automáticamente. Este formulario sirve principalmente para recolecciones, traslados, servicios u otras paradas adicionales.</div>
+                        </div>
+                    </div>
+                }
+                @if (Model.Paradas == null || Model.Paradas.Count == 0)
+                {
+                    <div class="empty"><i class="fa-solid fa-route me-1"></i>Este viaje todavía no tiene paradas registradas.</div>
+                }
+                else
+                {
+                    <div class="route-timeline">
+                        @foreach (var parada in Model.Paradas.OrderBy(x => x.Secuencia).ThenBy(x => x.ViajeParadaID))
+                        {
+                            var esProxima = proximaParada?.ViajeParadaID == parada.ViajeParadaID;
+                            var resuelta = parada.Estatus is "Completada" or "Omitida";
+                            var ligadaEmbarque = parada.Embarques != null && parada.Embarques.Count > 0;
+                            var puedeModificar = puedeAdministrarParadas && !resuelta;
+                            var puedeMover = puedeModificar && parada.TipoParada != "Origen" && !parada.CierraViaje;
+                            var puedeEliminar = Model.Estatus == "Programado" && parada.TipoParada != "Origen" && !parada.CierraViaje && !ligadaEmbarque;
+                            var puedeOmitir = Model.Estatus == "En curso" && !resuelta && parada.TipoParada != "Origen" && !parada.CierraViaje && !ligadaEmbarque;
+                            <div class="route-stop @(resuelta ? "complete" : esProxima ? "current" : "")">
+                                <div class="route-stop-marker"><i class="fa-solid @IconoParada(parada.TipoParada)"></i></div>
+                                <div class="route-stop-card">
+                                    <div class="route-stop-top">
+                                        <div>
+                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                <h4 class="route-stop-title">@parada.Secuencia. @parada.Lugar</h4>
+                                                <span class="badge badge-mini @BadgeParada(parada.Estatus)">@parada.Estatus</span>
+                                                <span class="badge bg-light text-dark border badge-mini">@parada.TipoParadaTexto</span>
+                                                @if (parada.CierraViaje)
+                                                {
+                                                    <span class="badge bg-dark badge-mini">Cierra viaje</span>
+                                                }
+                                                @if (ligadaEmbarque)
+                                                {
+                                                    <span class="badge bg-primary badge-mini">Embarque</span>
+                                                }
+                                            </div>
+                                            <div class="route-stop-sub">@(!string.IsNullOrWhiteSpace(parada.TipoOperacion) ? parada.TipoOperacion : parada.TipoParadaTexto)@(!string.IsNullOrWhiteSpace(parada.Direccion) ? $" · {parada.Direccion}" : "")</div>
+                                        </div>
+                                        @if (puedeModificar || puedeEliminar || puedeOmitir)
+                                        {
+                                            <div class="route-stop-actions">
+                                                @if (puedeMover)
+                                                {
+                                                    <form asp-controller="LogisticaViajes" asp-action="MoverParada" method="post">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                        <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                        <input type="hidden" name="direccion" value="subir" />
+                                                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Subir parada"><i class="fa-solid fa-arrow-up"></i></button>
+                                                    </form>
+                                                    <form asp-controller="LogisticaViajes" asp-action="MoverParada" method="post">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                        <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                        <input type="hidden" name="direccion" value="bajar" />
+                                                        <button type="submit" class="btn btn-outline-secondary btn-sm" title="Bajar parada"><i class="fa-solid fa-arrow-down"></i></button>
+                                                    </form>
+                                                }
+                                                @if (puedeModificar)
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#editarParada-@parada.ViajeParadaID" title="Editar parada"><i class="fa-solid fa-pen"></i></button>
+                                                }
+                                                @if (puedeEliminar)
+                                                {
+                                                    <form asp-controller="LogisticaViajes" asp-action="EliminarParada" method="post" onsubmit="return confirm('¿Retirar esta parada de la ruta?');">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                        <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar parada"><i class="fa-solid fa-trash"></i></button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="route-stop-meta">
+                                        <div class="route-meta"><span>Llegada programada</span><strong>@(parada.FechaHoraLlegadaProgramada.HasValue? parada.FechaHoraLlegadaProgramada.Value.ToString("dd/MM/yyyy HH:mm") : "-")</strong></div>
+                                        <div class="route-meta"><span>Salida programada</span><strong>@(parada.FechaHoraSalidaProgramada.HasValue? parada.FechaHoraSalidaProgramada.Value.ToString("dd/MM/yyyy HH:mm") : "-")</strong></div>
+                                        <div class="route-meta"><span>Tiempo real</span><strong>@(parada.FechaLlegadaReal.HasValue ? $"Llegó {parada.FechaLlegadaReal.Value:dd/MM HH:mm}" : "Sin llegada")@(parada.FechaSalidaReal.HasValue ? $" · Salió {parada.FechaSalidaReal.Value:dd/MM HH:mm}" : "")</strong></div>
+                                        <div class="route-meta"><span>Evidencias</span><strong>@parada.TotalEvidencias @(parada.RequiereEvidencia ? "· requerida" : "")</strong></div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(parada.ContactoNombre) || !string.IsNullOrWhiteSpace(parada.ContactoTelefono) || !string.IsNullOrWhiteSpace(parada.Observaciones))
+                                    {
+                                        <div class="route-empty-note mt-2">
+                                            @if (!string.IsNullOrWhiteSpace(parada.ContactoNombre) || !string.IsNullOrWhiteSpace(parada.ContactoTelefono))
+                                            {
+                                                <div><strong>Contacto:</strong> @TxtVisible(parada.ContactoNombre) @if (!string.IsNullOrWhiteSpace(parada.ContactoTelefono)){
+                                                <span>· @parada.ContactoTelefono</span>
+                                            }
+            </div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(parada.Observaciones))
+                                        {
+                                            <div class="mt-1"><strong>Indicaciones:</strong> @TxtVisible(parada.Observaciones)</div>
+                                        }
+                                    </div>
+                                }
+                                @if (ligadaEmbarque)
+                                {
+                                    <div class="route-shipments">
+                                        <div class="fw-bold small"><i class="fa-solid fa-boxes-stacked me-1"></i>Embarques en esta parada</div>
+                                        @foreach (var embarque in parada.Embarques.OrderBy(x => x.OrdenEntrega ?? int.MaxValue).ThenBy(x => x.EmbarqueID))
+                                        {
+                                            <div class="route-shipment">
+                                                <div><strong>@embarque.Folio</strong> · @embarque.Cliente · @embarque.TotalPiezas.ToString("N0") PZA <span class="badge bg-light text-dark border ms-1">@embarque.Estatus</span></div>
+                                                <a asp-controller="LogisticaEmbarques" asp-action="Detalle" asp-route-id="@embarque.EmbarqueID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-up-right-from-square me-1"></i>Ver</a>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                @if (puedeOmitir)
+                                {
+                                    <div class="collapse mt-2" id="omitirParada-@parada.ViajeParadaID">
+                                        <form asp-controller="LogisticaViajes" asp-action="OmitirParada" method="post" class="d-flex gap-2">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                            <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                            <input type="text" name="motivo" maxlength="1000" class="form-control form-control-sm" required placeholder="Motivo de omisión" />
+                                            <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('¿Omitir esta parada y continuar con la siguiente?');">Omitir</button>
+                                        </form>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-warning btn-sm mt-2" data-bs-toggle="collapse" data-bs-target="#omitirParada-@parada.ViajeParadaID"><i class="fa-solid fa-forward me-1"></i>Omitir parada</button>
+                                }
+                                @if (puedeModificar)
+                                {
+                                    <div class="collapse route-edit" id="editarParada-@parada.ViajeParadaID">
+                                        <form asp-controller="LogisticaViajes" asp-action="EditarParada" method="post" class="compact-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                                            <input type="hidden" name="ViajeParadaID" value="@parada.ViajeParadaID" />
+                                            <input type="hidden" name="Secuencia" value="@parada.Secuencia" />
+                                            <input type="hidden" name="RowVersion" value="@parada.RowVersion" />
+                                            <div class="f3"><label>Tipo</label><select name="TipoParada" class="form-select" disabled="@(parada.TipoParada == "Origen" || parada.CierraViaje || ligadaEmbarque ? "disabled" : null)"><option value="Entrega" selected="@(parada.TipoParada == "Entrega")">Entrega</option><option value="Recoleccion" selected="@(parada.TipoParada == "Recoleccion")">Recolección</option><option value="Traslado" selected="@(parada.TipoParada == "Traslado")">Traslado</option><option value="Servicio" selected="@(parada.TipoParada == "Servicio")">Servicio</option><option value="Otro" selected="@(parada.TipoParada == "Otro")">Otro</option><option value="Retorno" selected="@(parada.TipoParada == "Retorno")">Retorno</option><option value="Origen" selected="@(parada.TipoParada == "Origen")">Origen</option></select>@if (parada.TipoParada == "Origen" || parada.CierraViaje || ligadaEmbarque){
+                                            <input type="hidden" name="TipoParada" value="@parada.TipoParada" />
+                                        }
+    </div>
+                                        <div class="f3"><label>Operación</label><input type="text" name="TipoOperacion" maxlength="80" value="@parada.TipoOperacion" class="form-control" /></div>
+                                        <div class="f3"><label class="required">Lugar</label><input type="text" name="Lugar" maxlength="300" value="@parada.Lugar" class="form-control" required /></div>
+                                        <div class="f3"><label>Dirección</label><input type="text" name="Direccion" maxlength="600" value="@parada.Direccion" class="form-control" /></div>
+                                        <div class="f3"><label>Llegada programada</label><input type="datetime-local" name="FechaHoraLlegadaProgramada" value="@(parada.FechaHoraLlegadaProgramada?.ToString("yyyy-MM-ddTHH:mm"))" class="form-control" /></div>
+                                        <div class="f3"><label>Salida programada</label><input type="datetime-local" name="FechaHoraSalidaProgramada" value="@(parada.FechaHoraSalidaProgramada?.ToString("yyyy-MM-ddTHH:mm"))" class="form-control" /></div>
+                                        <div class="f3"><label>Contacto</label><input type="text" name="ContactoNombre" maxlength="200" value="@parada.ContactoNombre" class="form-control" /></div>
+                                        <div class="f3"><label>Teléfono</label><input type="text" name="ContactoTelefono" maxlength="50" value="@parada.ContactoTelefono" class="form-control" /></div>
+                                        <div class="f8"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" value="@parada.Observaciones" class="form-control" /></div>
+                                        <div class="f2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="RequiereEvidencia" value="true" id="Evidencia-@parada.ViajeParadaID" checked="@parada.RequiereEvidencia" /><label class="form-check-label" for="Evidencia-@parada.ViajeParadaID">Requiere evidencia</label></div></div>
+                                        <div class="f2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></div>
+                                    </form>
+                                </div>
+                            }
+                            @if (parada.Historial != null && parada.Historial.Count > 0)
+                            {
+                                <button type="button" class="btn btn-link btn-sm px-0 mt-1" data-bs-toggle="collapse" data-bs-target="#historialParada-@parada.ViajeParadaID"><i class="fa-solid fa-clock-rotate-left me-1"></i>Ver historial de parada</button>
+                                <div class="collapse route-history" id="historialParada-@parada.ViajeParadaID">
+                                    @foreach (var h in parada.Historial.Take(8))
+                                    {
+                                        <div class="route-history-row"><span>@h.FechaEvento.ToString("dd/MM HH:mm")</span><strong>@TxtVisible(h.Evento.Replace("_", " "))</strong><span>@TxtVisible(h.Observaciones)</span></div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                                        }
+                </div>
+                                }
             </div>
 
             <div class="tab-pane fade" id="tabIncidencias">

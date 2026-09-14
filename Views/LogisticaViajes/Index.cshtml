@@ -13,6 +13,8 @@
         "Cancelado" => "bg-secondary",
         _ => "bg-light text-dark"
     };
+    string TipoVisible(string? tipo) => string.IsNullOrWhiteSpace(tipo) ? "-" : tipo.Trim().Replace("Entrega PT", "Entrega", StringComparison.OrdinalIgnoreCase).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
+    string OperacionVisible(string? operacion) => string.IsNullOrWhiteSpace(operacion) ? "Parada operativa" : operacion.Trim().Replace("Entrega PT", "Entrega", StringComparison.OrdinalIgnoreCase).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
 }
 <style>
     :root {
@@ -210,6 +212,136 @@
         font-weight: 600
     }
 
+
+    .route-cell {
+        min-width: 220px;
+        max-width: 300px
+    }
+
+    .route-main {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0
+    }
+
+        .route-main i {
+            color: #7e8ca0;
+            font-size: .65rem;
+            flex: 0 0 auto
+        }
+
+    .route-point {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 700
+    }
+
+    .multi-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        padding: .22rem .42rem;
+        border: 1px solid #bad1f1;
+        border-radius: 999px;
+        background: #f2f7ff;
+        color: #315b96;
+        font-size: .64rem;
+        font-weight: 800;
+        white-space: nowrap
+    }
+
+    .stops-cell {
+        min-width: 145px
+    }
+
+    .stops-number {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        font-weight: 800
+    }
+
+        .stops-number small {
+            color: var(--lv-muted);
+            font-size: .65rem;
+            font-weight: 700
+        }
+
+    .stops-progress {
+        height: 5px;
+        margin-top: 5px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e8edf3
+    }
+
+        .stops-progress > span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--lv-blue)
+        }
+
+    .next-stop {
+        min-width: 220px;
+        max-width: 310px
+    }
+
+    .next-stop-main {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px
+    }
+
+    .next-stop-seq {
+        display: inline-flex;
+        width: 24px;
+        height: 24px;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 24px;
+        border-radius: 50%;
+        background: #edf4ff;
+        color: var(--lv-blue);
+        font-size: .68rem;
+        font-weight: 900
+    }
+
+    .next-stop-name {
+        display: block;
+        max-width: 235px;
+        overflow: hidden;
+        color: #23334d;
+        font-weight: 800;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .next-stop-meta {
+        display: block;
+        margin-top: 1px;
+        color: var(--lv-muted);
+        font-size: .66rem
+    }
+
+    .route-complete {
+        color: #198754;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+    .route-pending {
+        color: #7a8492;
+        font-size: .7rem;
+        font-weight: 700
+    }
+
     .acciones {
         white-space: nowrap;
         text-align: right
@@ -325,6 +457,26 @@
             background: #17253a
         }
 
+
+    html[data-nsq-theme="dark"] .multi-badge {
+        background: #152742;
+        border-color: #34557e;
+        color: #b8d2f4
+    }
+
+    html[data-nsq-theme="dark"] .stops-progress {
+        background: #26364b
+    }
+
+    html[data-nsq-theme="dark"] .next-stop-seq {
+        background: #1d3354;
+        color: #c5dbfb
+    }
+
+    html[data-nsq-theme="dark"] .next-stop-name {
+        color: #e7edf6
+    }
+
     @@media(max-width:1200px) {
         .resumen-strip {
             grid-template-columns: repeat(3,minmax(0,1fr))
@@ -430,7 +582,8 @@
             <label>Tipo de salida</label>
             <select name="tipoViaje" class="form-select">
                 <option value="">Todos</option>
-                <option value="Entrega PT" selected="@(Model.TipoViaje == "Entrega PT")">Entrega PT</option>
+                <option value="Entrega PT" selected="@(Model.TipoViaje == "Entrega PT")">Entrega</option>
+                <option value="Ruta multipropósito" selected="@(Model.TipoViaje == "Ruta multipropósito")">Ruta multiparada</option>
                 <option value="Ruta de personal" selected="@(Model.TipoViaje == "Ruta de personal")">Ruta de personal</option>
                 <option value="Recolección de MP" selected="@(Model.TipoViaje == "Recolección de MP")">Recolección de MP</option>
                 <option value="Traslado entre plantas" selected="@(Model.TipoViaje == "Traslado entre plantas")">Traslado entre plantas</option>
@@ -458,8 +611,9 @@
                     <th>Folio</th>
                     <th>Fecha / hora</th>
                     <th>Tipo</th>
-                    <th>Origen</th>
-                    <th>Destino</th>
+                    <th>Recorrido</th>
+                    <th>Paradas</th>
+                    <th>Próxima parada</th>
                     <th>Unidad</th>
                     <th>Chofer</th>
                     <th>Estatus</th>
@@ -470,56 +624,126 @@
             <tbody>
                 @if (Model.Viajes == null || Model.Viajes.Count == 0)
                 {
-                    <tr><td colspan="10"><div class="empty-state"><i class="fa-solid fa-route fa-2x mb-2"></i><div>No hay viajes que coincidan con los filtros.</div></div></td></tr>
+                    <tr><td colspan="11"><div class="empty-state"><i class="fa-solid fa-route fa-2x mb-2"></i><div>No hay viajes que coincidan con los filtros.</div></div></td></tr>
                 }
                 else
                 {
                     foreach (var viaje in Model.Viajes)
                     {
+                        var esEntrega = string.Equals(viaje.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
+                        var tieneParadas = viaje.TotalParadas > 0;
+                        var porcentajeParadas = Math.Max(0m, Math.Min(100m, viaje.PorcentajeParadas));
                         <tr>
-                            <td><span class="folio">@viaje.Folio</span></td>
-                            <td class="text-nowrap"><div>@viaje.FechaProgramada.ToString("dd/MM/yyyy")</div>@if(viaje.HoraSalidaProgramada.HasValue){
-                            <small class="text-muted">@viaje.HoraSalidaProgramada.Value.ToString(@"hh\:mm")</small>
-                        }else
-                        {
-
-                            <small class="state-note warning">Hora pendiente</small>
-                        }
-    </td>
-                        <td><span class="texto-corto" title="@viaje.TipoViaje">@viaje.TipoViaje</span></td>
-                        <td class="ruta"><span class="texto-corto" title="@viaje.Origen">@viaje.Origen</span></td>
-                        <td class="ruta"><span class="texto-corto" title="@viaje.Destino">@viaje.Destino</span></td>
-                        <td><span class="texto-corto" title="@viaje.Unidad">@(string.IsNullOrWhiteSpace(viaje.Unidad) ? "Pendiente" : viaje.Unidad)</span></td>
-                        <td><span class="texto-corto" title="@viaje.Operador">@(string.IsNullOrWhiteSpace(viaje.Operador) ? "Pendiente" : viaje.Operador)</span></td>
-                        <td>
-                            <span class="badge badge-mini @BadgeEstatus(viaje.Estatus)">@viaje.Estatus</span>
-                            @if (viaje.Estatus == "Programado")
-                            {
-                                <div class="state-note info">Pendiente de iniciar</div>
-                            }
-                            @if (viaje.RetornoPendiente)
-                            {
-                                <div class="state-note warning">Regreso pendiente</div>
-                            }
-                        </td>
-                        <td class="text-center">@if(viaje.TieneIncidencia){
-                        <span class="text-danger" title="Tiene incidencias"><i class="fa-solid fa-triangle-exclamation"></i></span>
-                    }else
-                    {
-
-                        <span class="text-muted">-</span>
+                            <td>
+                                <span class="folio">@viaje.Folio</span>
+                                @if (viaje.EsMultiParada)
+                                {
+                                    <div><span class="multi-badge"><i class="fa-solid fa-code-branch"></i>Multi-parada</span></div>
+                                }
+                            </td>
+                            <td class="text-nowrap">
+                                <div>@viaje.FechaProgramada.ToString("dd/MM/yyyy")</div>
+                                @if (viaje.HoraSalidaProgramada.HasValue)
+                                {
+                                    <small class="text-muted">@viaje.HoraSalidaProgramada.Value.ToString(@"hh\:mm")</small>
+                                }
+                                else
+                                {
+                                    <small class="state-note warning">Hora pendiente</small>
+                                }
+                            </td>
+                            <td><span class="texto-corto" title="@TipoVisible(viaje.TipoViaje)">@TipoVisible(viaje.TipoViaje)</span></td>
+                            <td class="route-cell">
+                                <div class="route-main" title="@viaje.Origen → @viaje.Destino">
+                                    <span class="route-point">@(!string.IsNullOrWhiteSpace(viaje.Origen) ? viaje.Origen : "Origen pendiente")</span>
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                    <span class="route-point">@(!string.IsNullOrWhiteSpace(viaje.Destino) ? viaje.Destino : "Destino pendiente")</span>
+                                </div>
+                                @if (viaje.EsMultiParada && tieneParadas)
+                                {
+                                    <div class="state-note info">@viaje.TotalParadas parada(s) en la ruta</div>
+                                }
+                            </td>
+                            <td class="stops-cell">
+                                @if (tieneParadas)
+                                {
+                                    <div class="stops-number"><span>@viaje.ParadasCompletadas / @viaje.TotalParadas</span><small>@porcentajeParadas.ToString("N0")%</small></div>
+                                    <div class="stops-progress" title="@porcentajeParadas.ToString("N1")% atendido"><span style="width:@porcentajeParadas.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+                                    @if (viaje.ParadasPendientes > 0)
+                                    {
+                                        <div class="state-note warning">@viaje.ParadasPendientes pendiente(s)</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="state-note info">Ruta atendida</div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="route-pending">Sin paradas cargadas</span>
+                                }
+                            </td>
+                            <td class="next-stop">
+                                @if (viaje.ProximaParadaID.HasValue)
+                                {
+                                    <div class="next-stop-main">
+                                        <span class="next-stop-seq">@(viaje.ProximaSecuencia?.ToString() ?? "•")</span>
+                                        <div>
+                                            <span class="next-stop-name" title="@viaje.ProximaParada">@(!string.IsNullOrWhiteSpace(viaje.ProximaParada) ? viaje.ProximaParada : "Parada pendiente")</span>
+                                            <span class="next-stop-meta">@OperacionVisible(viaje.ProximaOperacion)</span>
+                                            @if (viaje.ProximaLlegadaProgramada.HasValue)
+                                            {
+                                                <span class="next-stop-meta"><i class="fa-regular fa-clock me-1"></i>@viaje.ProximaLlegadaProgramada.Value.ToString("dd/MM HH:mm")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                else if (tieneParadas && viaje.ParadasPendientes == 0)
+                                {
+                                    <span class="route-complete"><i class="fa-solid fa-circle-check me-1"></i>Sin paradas pendientes</span>
+                                }
+                                else
+                                {
+                                    <span class="route-pending">Pendiente de ruta</span>
+                                }
+                            </td>
+                            <td><span class="texto-corto" title="@viaje.Unidad">@(string.IsNullOrWhiteSpace(viaje.Unidad) ? "Pendiente" : viaje.Unidad)</span></td>
+                            <td><span class="texto-corto" title="@viaje.Operador">@(string.IsNullOrWhiteSpace(viaje.Operador) ? "Pendiente" : viaje.Operador)</span></td>
+                            <td>
+                                <span class="badge badge-mini @BadgeEstatus(viaje.Estatus)">@viaje.Estatus</span>
+                                @if (viaje.Estatus == "Programado")
+                                {
+                                    <div class="state-note info">Pendiente de iniciar</div>
+                                }
+                                @if (viaje.RetornoPendiente)
+                                {
+                                    <div class="state-note warning">Viaje en curso</div>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (viaje.TieneIncidencia)
+                                {
+                                    <span class="text-danger" title="Tiene incidencias"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="acciones">
+                                <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@viaje.ViajeID" class="btn btn-outline-primary btn-sm" title="Ver ruta y paradas"><i class="fa-solid fa-eye"></i></a>
+                                @if (viaje.Estatus == "Programado" && !esEntrega)
+                                {
+                                    <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@viaje.ViajeID" class="btn btn-outline-warning btn-sm" title="Editar preparación del viaje"><i class="fa-solid fa-screwdriver-wrench"></i></a>
+                                }
+                                else if (viaje.Estatus == "Programado" && esEntrega)
+                                {
+                                    <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-outline-secondary btn-sm" title="Modificar desde Centro Operativo"><i class="fa-solid fa-table-columns"></i></a>
+                                }
+                            </td>
+                        </tr>
                     }
-</td>
-                    <td class="acciones">
-                        <a asp-controller="LogisticaViajes" asp-action="Detalle" asp-route-id="@viaje.ViajeID" class="btn btn-outline-primary btn-sm" title="Ver detalle"><i class="fa-solid fa-eye"></i></a>
-                        @if (viaje.Estatus == "Programado")
-                        {
-                            <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@viaje.ViajeID" class="btn btn-outline-warning btn-sm" title="Completar preparación"><i class="fa-solid fa-screwdriver-wrench"></i></a>
-                        }
-                    </td>
-                </tr>
-                                }
-                                }
+                }
             </tbody>
         </table>
     </div>

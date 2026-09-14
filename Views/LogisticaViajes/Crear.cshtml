@@ -289,6 +289,60 @@
             border-color: #233f80
         }
 
+    .multiparada-note {
+        display: none;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 0 0 12px;
+        padding: 11px 13px;
+        border: 1px solid #b8d2f1;
+        border-left: 4px solid var(--lv-blue);
+        border-radius: 10px;
+        background: #f4f8ff;
+        color: #31506f;
+        font-size: .77rem;
+        line-height: 1.45
+    }
+
+        .multiparada-note.show {
+            display: flex
+        }
+
+        .multiparada-note > i {
+            margin-top: 2px;
+            color: var(--lv-blue);
+            font-size: 1rem
+        }
+
+        .multiparada-note strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--lv-blue);
+            font-weight: 800
+        }
+
+    .multiparada-flow {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+        color: #52677f;
+        font-size: .72rem;
+        font-weight: 700
+    }
+
+        .multiparada-flow span {
+            padding: 4px 7px;
+            border: 1px solid #cedced;
+            border-radius: 7px;
+            background: #fff
+        }
+
+        .multiparada-flow i {
+            color: #8a9bb0
+        }
+
     html[data-nsq-theme="dark"] .viaje-form-page {
         color: #e7edf6
     }
@@ -322,15 +376,21 @@
         border-color: #2a3a50
     }
 
-    html[data-nsq-theme="dark"] .linked-note {
+    html[data-nsq-theme="dark"] .linked-note, html[data-nsq-theme="dark"] .multiparada-note {
         background: #0d1828;
         border-color: #31527a;
         color: #b9c8da
     }
 
-        html[data-nsq-theme="dark"] .linked-note strong {
-            color: #dceafe
-        }
+    html[data-nsq-theme="dark"] .multiparada-flow span {
+        background: #111b2d;
+        border-color: #314158;
+        color: #c7d3e2
+    }
+
+    html[data-nsq-theme="dark"] .linked-note strong {
+        color: #dceafe
+    }
 
     @@media(max-width:900px) {
         .col-8g, .col-6g, .col-4g, .col-3g {
@@ -385,7 +445,7 @@
     <div class="viaje-form-header">
         <div>
             <h1 class="viaje-form-title"><i class="fa-solid fa-route me-1"></i>Programar viaje independiente</h1>
-            <p class="viaje-form-subtitle">Registra rutas de personal, recolecciones, traslados u otras salidas que no provienen de un embarque de producto terminado.</p>
+            <p class="viaje-form-subtitle">Registra rutas de personal, recolecciones, traslados o recorridos con múltiples paradas que no provienen de un embarque de producto terminado.</p>
         </div>
         <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Regresar</a>
     </div>
@@ -411,6 +471,7 @@
 
     <form asp-controller="LogisticaViajes" asp-action="Crear" method="post" autocomplete="off">
         @Html.AntiForgeryToken()
+        <input asp-for="EsMultiParada" type="hidden" id="EsMultiParada" />
         <div asp-validation-summary="ModelOnly" class="validation-summary-errors mb-3"></div>
 
         <div class="form-section">
@@ -418,8 +479,9 @@
             <div class="form-grid">
                 <div class="col-4g">
                     <label asp-for="TipoViaje" class="form-label required">Tipo de viaje</label>
-                    <select asp-for="TipoViaje" class="form-select" required>
+                    <select asp-for="TipoViaje" id="TipoViaje" class="form-select" required>
                         <option value="">Selecciona...</option>
+                        <option value="Ruta multipropósito">Ruta multiparada</option>
                         <option value="Ruta de personal">Ruta de personal</option>
                         <option value="Recolección de MP">Recolección de MP</option>
                         <option value="Traslado entre plantas">Traslado entre plantas</option>
@@ -427,7 +489,7 @@
                         <option value="Entrega / recolección especial">Entrega / recolección especial</option>
                         <option value="Otro">Otro</option>
                     </select>
-                    <div class="form-text">Para una Entrega de producto terminado utiliza Centro Operativo; no se debe crear manualmente desde Viajes.</div>
+                    <div class="form-text">Para una Entrega de producto terminado utiliza Centro Operativo. Usa Ruta multiparada cuando un mismo recorrido tendrá dos o más operaciones o destinos.</div>
                     <span asp-validation-for="TipoViaje"></span>
                 </div>
                 <div class="col-4g">
@@ -444,6 +506,17 @@
             </div>
         </div>
 
+        <div id="avisoMultiparada" class="multiparada-note">
+            <i class="fa-solid fa-code-branch"></i>
+            <div>
+                <strong>Ruta con múltiples paradas</strong>
+                <span>En esta pantalla registra la cabecera del viaje. El Origen y el Destino representan el inicio y el cierre general del recorrido. Después de guardar, entra al Detalle del viaje para agregar y ordenar las paradas intermedias de Entrega, Recolección, Traslado, Servicio u Otro.</span>
+                <div class="multiparada-flow">
+                    <span>Origen</span><i class="fa-solid fa-arrow-right"></i><span>Parada 2</span><i class="fa-solid fa-arrow-right"></i><span>Parada 3</span><i class="fa-solid fa-arrow-right"></i><span>Retorno / destino final</span>
+                </div>
+            </div>
+        </div>
+
         <div class="form-section">
             <div class="form-section-title">Ruta y objetivo</div>
             <div class="form-grid">
@@ -453,8 +526,9 @@
                     <span asp-validation-for="Origen"></span>
                 </div>
                 <div class="col-6g">
-                    <label asp-for="Destino" class="form-label required">Destino</label>
-                    <input asp-for="Destino" class="form-control" maxlength="300" placeholder="Destino del viaje" required />
+                    <label asp-for="Destino" id="labelDestino" class="form-label required">Destino</label>
+                    <input asp-for="Destino" id="Destino" class="form-control" maxlength="300" placeholder="Destino del viaje" required />
+                    <div id="ayudaDestino" class="form-text">Destino general del viaje.</div>
                     <span asp-validation-for="Destino"></span>
                 </div>
                 <div class="col-8g">
@@ -527,11 +601,34 @@
 
         <div class="form-actions">
             <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
-            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Programar viaje independiente</button>
+            <button id="btnProgramarViaje" type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i><span>Programar viaje independiente</span></button>
         </div>
     </form>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const tipo = document.getElementById('TipoViaje');
+            const esMultiParada = document.getElementById('EsMultiParada');
+            const aviso = document.getElementById('avisoMultiparada');
+            const labelDestino = document.getElementById('labelDestino');
+            const destino = document.getElementById('Destino');
+            const ayudaDestino = document.getElementById('ayudaDestino');
+            const boton = document.getElementById('btnProgramarViaje');
+            const actualizarTipo = () => {
+                const multi = tipo?.value === 'Ruta multipropósito';
+                if (esMultiParada) esMultiParada.value = multi ? 'true' : 'false';
+                aviso?.classList.toggle('show', multi);
+                if (labelDestino) labelDestino.textContent = multi ? 'Destino final / retorno' : 'Destino';
+                if (destino) destino.placeholder = multi ? 'Ej. Planta NS Quell si el recorrido regresa a origen' : 'Destino del viaje';
+                if (ayudaDestino) ayudaDestino.textContent = multi ? 'Indica dónde termina el recorrido completo. Las paradas intermedias se agregan después desde Detalle.' : 'Destino general del viaje.';
+                const textoBoton = boton?.querySelector('span');
+                if (textoBoton) textoBoton.textContent = multi ? 'Programar ruta multiparada' : 'Programar viaje independiente';
+            };
+            tipo?.addEventListener('change', actualizarTipo);
+            actualizarTipo();
+        })();
+    </script>
 }
