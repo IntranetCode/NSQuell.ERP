@@ -19,6 +19,43 @@
         .OrderByDescending(x => x.Sum(y => y.Atraso))
         .ThenBy(x => x.Key.Cliente)
         .ToList();
+
+    var programacionImpresion = Model.Filas
+        .SelectMany(fila => fila.Programaciones
+            .Where(p => p.Activo
+                && !string.Equals(p.Estatus, "Cancelada", StringComparison.OrdinalIgnoreCase)
+                && p.CantidadProgramada > 0
+                && p.FechaProgramadaCarga.Date >= Model.FechaInicio.Date
+                && p.FechaProgramadaCarga.Date <= Model.FechaFin.Date)
+            .Select(p => new
+            {
+                Fecha = p.FechaProgramadaCarga.Date,
+                fila.Cliente,
+                fila.Referencia,
+                fila.Designacion,
+                Cantidad = p.CantidadProgramada,
+                Generado = p.CantidadGeneradaEmbarque,
+                Enviado = p.CantidadEnviada,
+                Observaciones = p.Observaciones ?? string.Empty
+            }))
+        .GroupBy(x => new { x.Fecha, x.Cliente, x.Referencia, x.Designacion })
+        .Select(g => new
+        {
+            g.Key.Fecha,
+            g.Key.Cliente,
+            g.Key.Referencia,
+            g.Key.Designacion,
+            Cantidad = g.Sum(x => x.Cantidad),
+            Generado = g.Sum(x => Math.Min(x.Generado, x.Cantidad)),
+            Enviado = g.Sum(x => Math.Min(x.Enviado, x.Cantidad)),
+            Observaciones = string.Join(" | ", g.Select(x => x.Observaciones?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct())
+        })
+        .OrderBy(x => x.Fecha)
+        .ThenBy(x => x.Cliente)
+        .ThenBy(x => x.Referencia)
+        .ToList();
 }
 <!DOCTYPE html>
 <html lang="es">
@@ -1274,6 +1311,565 @@
                 grid-template-columns: repeat(2,1fr)
             }
         }
+
+        .print-sheet {
+            display: none
+        }
+
+        @@media print {
+            @@page {
+                size: A4 landscape;
+                margin: 10mm
+            }
+
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+                color: #111 !important;
+                font-family: Arial, sans-serif !important
+            }
+
+                body > * {
+                    display: none !important
+                }
+
+            #programacionPrint {
+                display: block !important;
+                width: 100% !important;
+                position: static !important;
+                background: #fff !important;
+                color: #111 !important
+            }
+
+            .print-head {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                gap: 18px;
+                border-bottom: 2px solid #173a7a;
+                padding-bottom: 8px;
+                margin-bottom: 12px
+            }
+
+                .print-head h1 {
+                    margin: 0;
+                    font-size: 20px;
+                    color: #101b31
+                }
+
+                .print-head p {
+                    margin: 3px 0 0;
+                    font-size: 10px;
+                    color: #4d5b6d
+                }
+
+            .print-week {
+                text-align: right;
+                white-space: nowrap
+            }
+
+                .print-week strong {
+                    display: block;
+                    font-size: 14px;
+                    color: #173a7a
+                }
+
+                .print-week span {
+                    display: block;
+                    margin-top: 2px;
+                    font-size: 10px;
+                    color: #4d5b6d
+                }
+
+            .print-table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+                font-size: 9px
+            }
+
+                .print-table th {
+                    background: #e9eff6 !important;
+                    color: #26374e !important;
+                    border: 1px solid #aebdce;
+                    padding: 6px 5px;
+                    text-align: left;
+                    font-size: 8px;
+                    text-transform: uppercase;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact
+                }
+
+                .print-table td {
+                    border: 1px solid #c6d0dc;
+                    padding: 6px 5px;
+                    vertical-align: top;
+                    line-height: 1.25
+                }
+
+                .print-table tr {
+                    break-inside: avoid;
+                    page-break-inside: avoid
+                }
+
+                .print-table .print-date {
+                    width: 90px;
+                    white-space: nowrap;
+                    font-weight: 700
+                }
+
+                .print-table .print-client {
+                    width: 150px;
+                    font-weight: 700
+                }
+
+                .print-table .print-ref {
+                    width: 125px;
+                    font-family: Consolas, monospace;
+                    font-weight: 700
+                }
+
+                .print-table .print-qty {
+                    width: 82px;
+                    text-align: right;
+                    white-space: nowrap;
+                    font-weight: 700
+                }
+
+                .print-table .print-status {
+                    width: 105px;
+                    font-weight: 700
+                }
+
+                .print-table .print-obs {
+                    width: 180px
+                }
+
+            .print-day-row td {
+                background: #f5f7fa !important;
+                color: #173a7a !important;
+                font-weight: 800;
+                border-top: 2px solid #9eb1c8;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact
+            }
+
+            .print-empty {
+                border: 1px solid #c6d0dc;
+                padding: 24px;
+                text-align: center;
+                color: #5f6c7b;
+                font-size: 11px
+            }
+        }
+
+        /* ===== Ajuste final del modal de programación ===== */
+        .dialog-backdrop {
+            padding: 12px;
+            overflow: hidden
+        }
+
+        .dialog {
+            width: min(980px,100%);
+            max-height: calc(100dvh - 24px);
+            min-height: 0
+        }
+
+        #formProgramacion {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-height: 0;
+            max-height: calc(100dvh - 24px)
+        }
+
+        .dialog-head, .dialog-foot {
+            flex: 0 0 auto
+        }
+
+        .dialog-head {
+            align-items: flex-start;
+            gap: 12px
+        }
+
+        .dialog-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding-bottom: 18px
+        }
+
+        .dialog-foot {
+            position: relative;
+            z-index: 3;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 -5px 18px rgba(16,27,49,.06)
+        }
+
+        .dialog-foot-actions {
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
+            justify-content: flex-end
+        }
+
+        .dialog-foot-summary {
+            min-width: 0;
+            color: var(--muted);
+            font-size: 10px;
+            line-height: 1.35
+        }
+
+            .dialog-foot-summary strong {
+                color: var(--navy)
+            }
+
+        .planner-top {
+            grid-template-columns: repeat(4,minmax(0,1fr))
+        }
+
+        .planner-kpi.before {
+            background: #f3f7fc;
+            border-color: #cbd8e7
+        }
+
+        .planner-kpi.after {
+            background: var(--blueSoft);
+            border-color: #bfd2ee
+        }
+
+        .planner-kpi.protected {
+            background: #f5f2ff;
+            border-color: #d9cff7
+        }
+
+            .planner-kpi.protected strong {
+                color: var(--purple)
+            }
+
+        .planner-context {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: -2px 0 10px;
+            padding: 7px 9px;
+            border: 1px solid #d8e1ec;
+            border-radius: 8px;
+            background: #fbfcfe;
+            color: var(--muted);
+            font-size: 10px
+        }
+
+            .planner-context strong {
+                color: var(--navy)
+            }
+
+        .planner-list {
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            overflow: hidden;
+            background: #fff
+        }
+
+        .planner-list-head, .planner-row {
+            display: grid;
+            grid-template-columns: 160px 150px minmax(220px,1fr) 44px;
+            gap: 8px;
+            align-items: start
+        }
+
+        .planner-list-head {
+            padding: 7px 9px;
+            background: #eaf0f6;
+            color: #52647b;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .planner-row {
+            padding: 9px;
+            border-top: 1px solid var(--line);
+            transition: .12s
+        }
+
+            .planner-row:first-child {
+                border-top: 0
+            }
+
+            .planner-row.existing {
+                background: #fbfdff
+            }
+
+            .planner-row.new-row {
+                background: #fffdf7
+            }
+
+            .planner-row.changed {
+                box-shadow: inset 3px 0 0 #d99a14
+            }
+
+            .planner-row.duplicate {
+                background: #fff4f2;
+                box-shadow: inset 3px 0 0 var(--danger2)
+            }
+
+        .planner-field label {
+            display: none;
+            margin-bottom: 4px;
+            color: var(--muted);
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .planner-field input {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid var(--line2);
+            border-radius: 7px;
+            padding: 7px 9px;
+            outline: none;
+            background: #fff
+        }
+
+            .planner-field input:focus {
+                border-color: #668ac0;
+                box-shadow: 0 0 0 2px rgba(35,63,128,.07)
+            }
+
+        .planner-row-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #edf3fa;
+            color: var(--blue);
+            font-size: 7px;
+            font-weight: 800
+        }
+
+        .planner-row.new-row .planner-row-tag {
+            background: var(--warnBg);
+            color: var(--warn)
+        }
+
+        .planner-row-note {
+            display: block;
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 7px;
+            line-height: 1.25
+        }
+
+            .planner-row-note.warn {
+                color: var(--warn)
+            }
+
+            .planner-row-note.error {
+                color: var(--danger);
+                font-weight: 800
+            }
+
+        .planner-delete {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 1px
+        }
+
+            .planner-delete .btn {
+                width: 34px;
+                min-width: 34px;
+                padding-left: 0;
+                padding-right: 0
+            }
+
+        .planner-empty {
+            padding: 15px;
+            color: var(--muted);
+            text-align: center;
+            font-size: 10px
+        }
+
+        .planner-message strong {
+            color: inherit
+        }
+
+        .rest-head {
+            gap: 10px
+        }
+
+        .rest-detail {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 9px
+        }
+
+        @@media(max-width:850px) {
+            .dialog-backdrop {
+                padding: 6px
+            }
+
+            .dialog {
+                width: 100%;
+                max-height: calc(100dvh - 12px)
+            }
+
+            .planner-top {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .live-location-grid {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+                .live-location-grid > div:nth-child(2) {
+                    border-right: 0
+                }
+
+                .live-location-grid > div:nth-child(-n+2) {
+                    border-bottom: 1px solid #dbe5f0
+                }
+
+            .planner-list-head {
+                display: none
+            }
+
+            .planner-row {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+                gap: 8px 10px;
+                padding: 11px
+            }
+
+            .planner-field.obs {
+                grid-column: 1 / -1
+            }
+
+            .planner-field label {
+                display: block
+            }
+
+            .planner-delete {
+                grid-column: 1 / -1;
+                justify-content: flex-end;
+                padding-top: 0
+            }
+
+                .planner-delete .btn {
+                    width: auto;
+                    min-width: 92px
+                }
+        }
+
+        @@media(max-width:560px) {
+            .dialog-backdrop {
+                padding: 0;
+                align-items: stretch
+            }
+
+            .dialog {
+                width: 100%;
+                height: 100dvh;
+                max-height: 100dvh;
+                border-radius: 0
+            }
+
+            #formProgramacion {
+                height: 100%;
+                max-height: 100dvh
+            }
+
+            .dialog-head {
+                padding: 11px 12px
+            }
+
+                .dialog-head h3 {
+                    font-size: 15px
+                }
+
+            .dialog-body {
+                padding: 10px
+            }
+
+            .planner-top {
+                grid-template-columns: repeat(2,minmax(0,1fr));
+                gap: 6px
+            }
+
+            .planner-kpi {
+                padding: 7px
+            }
+
+                .planner-kpi strong {
+                    font-size: 15px
+                }
+
+            .live-location-head {
+                align-items: center;
+                gap: 6px
+            }
+
+            .live-location-grid {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            #liveActualizado {
+                float: none;
+                display: block;
+                margin-top: 3px
+            }
+
+            .planner-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr
+            }
+
+                .planner-actions .btn {
+                    width: 100%;
+                    white-space: normal
+                }
+
+            .planner-row {
+                grid-template-columns: 1fr
+            }
+
+            .planner-field.obs, .planner-delete {
+                grid-column: auto
+            }
+
+                .planner-delete .btn {
+                    width: 100%
+                }
+
+            .dialog-foot {
+                display: block;
+                padding: 9px 10px
+            }
+
+            .dialog-foot-summary {
+                margin-bottom: 7px;
+                text-align: center
+            }
+
+            .dialog-foot-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                width: 100%
+            }
+
+                .dialog-foot-actions .btn {
+                    width: 100%;
+                    min-height: 40px
+                }
+        }
     </style>
 </head>
 <body>
@@ -1296,6 +1892,10 @@
             </div>
 
             <div class="header-actions">
+                <button type="button" class="btn btn-soft" id="btnImprimirProgramacion" title="Imprimir la programación de la semana mostrada">
+                    🖨 Imprimir programación
+                </button>
+
                 <a class="btn btn-soft"
                    asp-controller="LogisticaListaCarga"
                    asp-action="DiasCargaClientes"
@@ -1680,6 +2280,7 @@
                                                                 data-generado="@totalGenerado"
                                                                 data-sin-programar="@fila.TotalSinProgramar"
                                                                 data-semana-inicio="@Model.FechaInicio.ToString("yyyy-MM-dd")"
+                                                                data-semana-fin="@Model.FechaInicio.AddDays(5).ToString("yyyy-MM-dd")"
                                                                 data-dias='@diasJson'
                                                                 data-programaciones='@programacionesJson'>
                                                             @(fila.TotalProgramado > 0 ? "Ajustar" : "Programar")
@@ -1713,181 +2314,166 @@
     @if (Model.ListaCargaSemanaID.HasValue)
     {
         <div id="programarBackdrop" class="dialog-backdrop" aria-hidden="true">
-            <div class="dialog">
-                <form method="post"
-                      asp-controller="LogisticaListaCarga"
-                      asp-action="GuardarProgramacion"
-                      id="formProgramacion">
-
+            <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="prTitulo">
+                <form method="post" asp-controller="LogisticaListaCarga" asp-action="GuardarProgramacion" id="formProgramacion">
                     @Html.AntiForgeryToken()
-
-                    <input type="hidden"
-                           name="ListaCargaSemanaID"
-                           value="@Model.ListaCargaSemanaID" />
-
-                    <input type="hidden"
-                           name="ClienteID"
-                           id="prClienteID" />
-
-                    <input type="hidden"
-                           name="ParteID"
-                           id="prParteID" />
-
-                    <input type="hidden"
-                           name="Anio"
-                           value="@Model.Anio" />
-
-                    <input type="hidden"
-                           name="NumeroSemana"
-                           value="@Model.NumeroSemana" />
-
+                    <input type="hidden" name="ListaCargaSemanaID" value="@Model.ListaCargaSemanaID" />
+                    <input type="hidden" name="ClienteID" id="prClienteID" />
+                    <input type="hidden" name="ParteID" id="prParteID" />
+                    <input type="hidden" name="Anio" value="@Model.Anio" />
+                    <input type="hidden" name="NumeroSemana" value="@Model.NumeroSemana" />
                     <div class="dialog-head">
                         <div>
                             <h3 id="prTitulo">Programar día de carga</h3>
                             <small id="prSubtitulo"></small>
                         </div>
-
-                        <button type="button"
-                                class="x js-cerrar">
-                            ×
-                        </button>
+                        <button type="button" class="x js-cerrar" aria-label="Cerrar">×</button>
                     </div>
-
                     <div class="dialog-body">
                         <div class="planner-top">
                             <div class="planner-kpi">
-                                <span>Disponible para ajustar</span>
+                                <span>Saldo editable</span>
                                 <strong id="prTotal">0</strong>
                             </div>
-
-                            <div class="planner-kpi">
-                                <span>Programado ahora</span>
+                            <div class="planner-kpi before">
+                                <span>Programado antes</span>
+                                <strong id="prOriginal">0</strong>
+                            </div>
+                            <div class="planner-kpi after">
+                                <span>Programado al guardar</span>
                                 <strong id="prCapturado">0</strong>
                             </div>
-
-                            <div class="planner-kpi remaining"
-                                 id="cardRestante">
-                                <span>Quedará sin programar</span>
+                            <div class="planner-kpi remaining" id="cardRestante">
+                                <span>Quedará sin fecha</span>
                                 <strong id="prRestante">0</strong>
                             </div>
-
-                            <div class="planner-kpi">
-                                <span>Día habitual</span>
-                                <strong id="prHabitual">-</strong>
-                            </div>
                         </div>
-
+                        <div class="planner-context">
+                            <span>Día habitual: <strong id="prHabitual">-</strong></span>
+                            <span>Ya protegido en embarque: <strong id="prProtegido">0 PZA</strong></span>
+                        </div>
                         <div class="live-location">
                             <div class="live-location-head">
                                 <strong>● Ubicación actual del material</strong>
-
-                                <button type="button"
-                                        class="btn btn-sm"
-                                        id="btnActualizarUbicacion">
-                                    ↻ Actualizar
-                                </button>
+                                <button type="button" class="btn btn-sm" id="btnActualizarUbicacion">↻ Actualizar</button>
                             </div>
-
                             <div class="live-location-grid">
-                                <div>
-                                    <span>Ubicación</span>
-                                    <strong id="liveUbicacion">Consultando...</strong>
-                                </div>
-
-                                <div>
-                                    <span>Almacén PT</span>
-                                    <strong id="liveAlmacen">-</strong>
-                                </div>
-
-                                <div>
-                                    <span>Producción</span>
-                                    <strong id="liveProduccion">-</strong>
-                                </div>
-
-                                <div>
-                                    <span>GP12</span>
-                                    <strong id="liveGP12">-</strong>
-                                </div>
+                                <div><span>Ubicación</span><strong id="liveUbicacion">Consultando...</strong></div>
+                                <div><span>Almacén PT</span><strong id="liveAlmacen">-</strong></div>
+                                <div><span>Producción</span><strong id="liveProduccion">-</strong></div>
+                                <div><span>GP12</span><strong id="liveGP12">-</strong></div>
                             </div>
-
-                            <div class="live-location-foot">
-                                Total localizado:
-                                <strong id="liveTotal">-</strong> PZA
-
-                                <span id="liveActualizado"></span>
-                            </div>
+                            <div class="live-location-foot">Total localizado: <strong id="liveTotal">-</strong> PZA <span id="liveActualizado"></span></div>
                         </div>
-
                         <div class="planner-help">
-                            <strong>¿Cómo funciona?</strong>
-                            La primera fila conserva automáticamente el saldo de la programación. Cuando agregues una cantidad en otra fecha, esa cantidad se descontará de la primera fila para evitar duplicar piezas. Ejemplo: si tienes 6,000 PZA y agregas 2,000 PZA en otra fecha, la primera fila bajará automáticamente a 4,000 PZA. Las cantidades ya convertidas en embarque permanecen protegidas.
+                            <strong>Regla del ajuste:</strong> las cantidades que ya están programadas <strong>no se descuentan automáticamente</strong>. Agregar otra fecha utiliza únicamente el saldo que todavía está sin programar. Si quieres mover piezas de una fecha existente a otra, reduce tú misma la cantidad de la fecha original y después agrégala en la nueva fecha. Lo que ya generó embarque está protegido y no entra en este saldo editable.
                         </div>
-
-                        <div id="mensajePlan"
-                             class="planner-message info">
-                        </div>
-
+                        <div id="mensajePlan" class="planner-message info"></div>
                         <div class="planner-actions">
-                            <button type="button"
-                                    class="btn btn-sm"
-                                    id="btnOtraFecha">
-                                + Dividir en otra fecha
-                            </button>
-
-                            <button type="button"
-                                    class="btn btn-sm btn-soft"
-                                    id="btnRestablecer">
-                                Restablecer
-                            </button>
+                            <button type="button" class="btn btn-sm" id="btnOtraFecha">+ Agregar otra fecha</button>
+                            <button type="button" class="btn btn-sm btn-soft" id="btnRestablecer">Restablecer programación</button>
                         </div>
-
-                        <table class="planner-table">
-                            <thead>
-                                <tr>
-                                    <th class="col-date">Fecha de carga</th>
-                                    <th class="col-qty">Cantidad</th>
-                                    <th>Observaciones</th>
-                                    <th class="col-delete"></th>
-                                </tr>
-                            </thead>
-
-                            <tbody id="programacionFilas"></tbody>
-                        </table>
-
+                        <div class="planner-list">
+                            <div class="planner-list-head">
+                                <div>Fecha de carga</div>
+                                <div>Cantidad</div>
+                                <div>Observaciones</div>
+                                <div></div>
+                            </div>
+                            <div id="programacionFilas"></div>
+                        </div>
                         <div class="rest-bar">
                             <div class="rest-head">
-                                <span>Programado en este ajuste</span>
+                                <span>Resultado del ajuste</span>
                                 <strong id="prAvanceTexto">0 / 0 PZA</strong>
                             </div>
-
-                            <div class="rest-track"
-                                 id="prTrack">
-                                <span id="prTrackBar"></span>
-                            </div>
+                            <div class="rest-track" id="prTrack"><span id="prTrackBar"></span></div>
+                            <span class="rest-detail" id="prDetalleResultado">Sin cambios.</span>
                         </div>
                     </div>
-
                     <div class="dialog-foot">
-                        <button type="button"
-                                class="btn js-cerrar">
-                            Cancelar
-                        </button>
-
-                        <button type="submit"
-                                class="btn btn-primary"
-                                id="btnGuardar">
-                            Guardar programación
-                        </button>
+                        <div class="dialog-foot-summary" id="prFooterResumen"><strong>0 PZA</strong> programadas · 0 PZA sin fecha</div>
+                        <div class="dialog-foot-actions">
+                            <button type="button" class="btn js-cerrar">Cancelar</button>
+                            <button type="submit" class="btn btn-primary" id="btnGuardar">Guardar programación</button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
     }
 
+
+    <section id="programacionPrint" class="print-sheet" aria-hidden="true">
+        <div class="print-head">
+            <div>
+                <h1>Programación semanal de entregas</h1>
+                <p>Lista de carga · Programación registrada para la semana seleccionada</p>
+            </div>
+            <div class="print-week">
+                <strong>@Model.SemanaTexto</strong>
+                <span>@Model.RangoTexto</span>
+            </div>
+        </div>
+        @if (programacionImpresion.Count == 0)
+        {
+            <div class="print-empty">No hay programación registrada para esta semana.</div>
+        }
+        else
+        {
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        <th class="print-date">Fecha</th>
+                        <th class="print-client">Cliente</th>
+                        <th class="print-ref">Referencia</th>
+                        <th>Designación</th>
+                        <th class="print-qty">Cantidad</th>
+                        <th class="print-status">Estado</th>
+                        <th class="print-obs">Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        DateTime? fechaImpresionAnterior = null;
+                    }
+                    @foreach (var item in programacionImpresion)
+                    {
+                        if (!fechaImpresionAnterior.HasValue || fechaImpresionAnterior.Value.Date != item.Fecha.Date)
+                        {
+                            <tr class="print-day-row">
+                                <td colspan="7">@CultureInfo.GetCultureInfo("es-MX").TextInfo.ToTitleCase(item.Fecha.ToString("dddd dd 'de' MMMM 'de' yyyy", CultureInfo.GetCultureInfo("es-MX")))</td>
+                            </tr>
+                            fechaImpresionAnterior = item.Fecha.Date;
+                        }
+                        var estadoImpresion = item.Enviado >= item.Cantidad
+                        ? "Enviado"
+                        : item.Generado >= item.Cantidad
+                        ? "Embarque generado"
+                        : item.Generado > 0
+                        ? "Parcial en embarque"
+                        : "Programado";
+                        <tr>
+                            <td class="print-date">@item.Fecha.ToString("dd/MM/yyyy")</td>
+                            <td class="print-client">@item.Cliente</td>
+                            <td class="print-ref">@item.Referencia</td>
+                            <td>@item.Designacion</td>
+                            <td class="print-qty">@item.Cantidad.ToString("N0")</td>
+                            <td class="print-status">@estadoImpresion</td>
+                            <td class="print-obs">@(string.IsNullOrWhiteSpace(item.Observaciones) ? "-" : item.Observaciones)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
     <script>
         (function(){
+            document.getElementById('btnImprimirProgramacion')?.addEventListener('click',()=>window.print());
             const n=v=>Number(v||0);
-            const nf=v=>n(v).toLocaleString('es-MX');
+            const entero=v=>Math.max(0,Math.floor(n(v)));
+            const nf=v=>entero(v).toLocaleString('es-MX');
             const nombresDias={1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado',7:'Domingo'};
             const acordeones=[...document.querySelectorAll('.client-accordion')];
             const buscar=document.getElementById('buscarClienteParte');
@@ -1912,6 +2498,7 @@
             filtro?.addEventListener('change',filtrar);
             document.getElementById('btnExpandir')?.addEventListener('click',()=>acordeones.filter(x=>x.style.display!=='none').forEach(x=>x.classList.add('open')));
             document.getElementById('btnContraer')?.addEventListener('click',()=>acordeones.forEach(x=>x.classList.remove('open')));
+
             const backdrop=document.getElementById('programarBackdrop');
             const filas=document.getElementById('programacionFilas');
             const form=document.getElementById('formProgramacion');
@@ -1920,15 +2507,20 @@
             const prTitulo=document.getElementById('prTitulo');
             const prSubtitulo=document.getElementById('prSubtitulo');
             const prTotal=document.getElementById('prTotal');
+            const prOriginal=document.getElementById('prOriginal');
             const prCapturado=document.getElementById('prCapturado');
             const prRestante=document.getElementById('prRestante');
             const prHabitual=document.getElementById('prHabitual');
+            const prProtegido=document.getElementById('prProtegido');
             const prAvanceTexto=document.getElementById('prAvanceTexto');
+            const prDetalleResultado=document.getElementById('prDetalleResultado');
+            const prFooterResumen=document.getElementById('prFooterResumen');
             const prTrack=document.getElementById('prTrack');
             const prTrackBar=document.getElementById('prTrackBar');
             const cardRestante=document.getElementById('cardRestante');
             const mensaje=document.getElementById('mensajePlan');
             const btnGuardar=document.getElementById('btnGuardar');
+            const btnOtraFecha=document.getElementById('btnOtraFecha');
             const liveUbicacion=document.getElementById('liveUbicacion');
             const liveAlmacen=document.getElementById('liveAlmacen');
             const liveProduccion=document.getElementById('liveProduccion');
@@ -1937,198 +2529,255 @@
             const liveActualizado=document.getElementById('liveActualizado');
             let totalObjetivo=0;
             let totalGenerado=0;
-            let pendienteSinProgramar=0;
-            let totalBaseDistribucion=0;
+            let totalProgramadoOriginal=0;
             let diasHabituales=[];
             let programacionesOriginales=[];
             let inicioSemana='';
+            let finSemana='';
             let parteActual=0;
             let timerUbicacion=null;
+            let firmaInicial='';
+
             function convertirDiaSemana(fechaTexto){
                 if(!fechaTexto) return 0;
                 const p=fechaTexto.split('-').map(Number);
-                if(p.length!==3) return 0;
+                if(p.length!==3||p.some(Number.isNaN)) return 0;
                 const diaJs=new Date(p[0],p[1]-1,p[2]).getDay();
                 return diaJs===0?7:diaJs;
             }
             function formatearFecha(fecha){ return [fecha.getFullYear(),String(fecha.getMonth()+1).padStart(2,'0'),String(fecha.getDate()).padStart(2,'0')].join('-'); }
-            function fechaSugerida(){
+            function fechasUsadas(){ return new Set([...filas?.querySelectorAll('.js-fecha')||[]].map(x=>x.value).filter(Boolean)); }
+            function fechaSugeridaLibre(){
                 if(!inicioSemana) return '';
                 const p=inicioSemana.split('-').map(Number);
-                if(p.length!==3) return inicioSemana;
-                const fecha=new Date(p[0],p[1]-1,p[2]);
-                if(diasHabituales.length>0){
-                    const preferido=Math.min(...diasHabituales.filter(x=>x>=1&&x<=6));
-                    if(preferido) fecha.setDate(fecha.getDate()+Math.max(0,preferido-1));
-                }
-                return formatearFecha(fecha);
+                if(p.length!==3||p.some(Number.isNaN)) return '';
+                const base=new Date(p[0],p[1]-1,p[2]);
+                const usadas=fechasUsadas();
+                const candidatos=[];
+                diasHabituales.filter(x=>x>=1&&x<=6).forEach(d=>{
+                    const f=new Date(base); f.setDate(base.getDate()+d-1); candidatos.push(formatearFecha(f));
+                });
+                for(let i=0;i<6;i++){ const f=new Date(base); f.setDate(base.getDate()+i); candidatos.push(formatearFecha(f)); }
+                return candidatos.find(x=>!usadas.has(x))||'';
             }
-            function actualizarAdvertenciaDia(tr){
-                const fecha=tr?.querySelector('.js-fecha');
-                const warning=tr?.querySelector('.row-warning');
+            function normalizarProgramacionesOriginales(lista){
+                const mapa=new Map();
+                (Array.isArray(lista)?lista:[]).forEach(item=>{
+                    const fecha=String(item?.fecha||'').trim();
+                    const cantidad=entero(item?.cantidad);
+                    if(!fecha||cantidad<=0) return;
+                    const obs=String(item?.observaciones||'').trim();
+                    if(!mapa.has(fecha)) mapa.set(fecha,{fecha,cantidad:0,observaciones:obs});
+                    const actual=mapa.get(fecha);
+                    actual.cantidad+=cantidad;
+                    if(!actual.observaciones&&obs) actual.observaciones=obs;
+                });
+                return [...mapa.values()].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+            }
+            function actualizarAdvertenciaDia(row){
+                const fecha=row?.querySelector('.js-fecha');
+                const warning=row?.querySelector('.js-dia-warning');
                 if(!fecha||!warning) return;
-                if(!fecha.value||diasHabituales.length===0){ warning.textContent=''; warning.classList.remove('show'); return; }
+                if(!fecha.value||diasHabituales.length===0){ warning.textContent=''; warning.className='planner-row-note js-dia-warning'; return; }
                 const dia=convertirDiaSemana(fecha.value);
-                if(diasHabituales.includes(dia)){ warning.textContent=''; warning.classList.remove('show'); return; }
+                if(diasHabituales.includes(dia)){ warning.textContent='Día habitual del cliente.'; warning.className='planner-row-note js-dia-warning'; return; }
                 warning.textContent='Día distinto al habitual: '+diasHabituales.map(x=>nombresDias[x]||'').filter(Boolean).join(' / ')+'.';
-                warning.classList.add('show');
-            }
-            function obtenerFilaSaldo(){
-                return filas?.querySelector('tr[data-es-saldo="1"]')||null;
-            }
-            function obtenerCantidadOtrasFilas(){
-                if(!filas) return 0;
-                return [...filas.querySelectorAll('tr:not([data-es-saldo="1"]) .js-cantidad')].reduce((total,input)=>total+Math.max(0,n(input.value)),0);
-            }
-            function totalCapturado(){
-                if(!filas) return 0;
-                return [...filas.querySelectorAll('.js-cantidad')].reduce((total,input)=>total+Math.max(0,n(input.value)),0);
-            }
-            function actualizarSaldoAutomatico(){
-                const filaSaldo=obtenerFilaSaldo();
-                const inputSaldo=filaSaldo?.querySelector('.js-cantidad');
-                if(!inputSaldo){ actualizarResumen(); return; }
-                const otras=obtenerCantidadOtrasFilas();
-                const saldo=Math.max(0,totalBaseDistribucion-otras);
-                inputSaldo.value=saldo;
-                actualizarResumen();
-            }
-            function actualizarResumen(){
-                const capturado=totalCapturado();
-                const otras=obtenerCantidadOtrasFilas();
-                const excedente=Math.max(0,capturado-totalObjetivo);
-                const restante=Math.max(0,totalObjetivo-capturado);
-                if(prCapturado) prCapturado.textContent=nf(capturado);
-                if(prRestante) prRestante.textContent=excedente>0?'+'+nf(excedente):nf(restante);
-                if(prAvanceTexto) prAvanceTexto.textContent=`${nf(capturado)} / ${nf(totalObjetivo)} PZA`;
-                const porcentaje=totalObjetivo>0?Math.min(100,capturado*100/totalObjetivo):0;
-                if(prTrackBar) prTrackBar.style.width=porcentaje+'%';
-                cardRestante?.classList.remove('complete');
-                prTrack?.classList.remove('complete','error');
-                if(excedente>0){
-                    if(mensaje){
-                        mensaje.className='planner-message error';
-                        mensaje.innerHTML=`La programación captura <strong>${nf(capturado)} PZA</strong>, superando el saldo editable por <strong>${nf(excedente)} PZA</strong>.`;
-                    }
-                    prTrack?.classList.add('error');
-                    if(btnGuardar) btnGuardar.disabled=true;
-                    return;
-                }
-                if(capturado<=0){
-                    if(mensaje){
-                        mensaje.className='planner-message warning';
-                        mensaje.innerHTML='Captura al menos una fecha con una cantidad mayor a cero para guardar.';
-                    }
-                    if(btnGuardar) btnGuardar.disabled=true;
-                    return;
-                }
-                if(restante===0){
-                    cardRestante?.classList.add('complete');
-                    prTrack?.classList.add('complete');
-                    if(mensaje){
-                        mensaje.className='planner-message info';
-                        mensaje.innerHTML=otras>0
-                            ? `✓ Se distribuyeron <strong>${nf(totalObjetivo)} PZA</strong>. Las fechas adicionales tienen <strong>${nf(otras)} PZA</strong> y la fila principal se ajustó automáticamente.`
-                            : `✓ Quedaron programadas las <strong>${nf(totalObjetivo)} PZA</strong> disponibles para ajustar.`;
-                    }
-                    if(btnGuardar) btnGuardar.disabled=false;
-                    return;
-                }
-                if(mensaje){
-                    mensaje.className='planner-message warning';
-                    const saldoPrincipal=Math.max(0,totalBaseDistribucion-otras);
-                    if(otras>0){
-                        mensaje.innerHTML=`Las fechas adicionales tienen <strong>${nf(otras)} PZA</strong>. La fila principal se ajustó automáticamente a <strong>${nf(saldoPrincipal)} PZA</strong>. Quedarán <strong>${nf(restante)} PZA sin programar</strong>.`;
-                    }else{
-                        mensaje.innerHTML=`Se guardarán <strong>${nf(capturado)} PZA</strong> y quedarán <strong>${nf(restante)} PZA sin programar</strong>. Ese saldo seguirá visible y sugerido en el día habitual del cliente.`;
-                    }
-                }
-                if(btnGuardar) btnGuardar.disabled=false;
+                warning.className='planner-row-note warn js-dia-warning';
             }
             function reindexar(){
                 if(!filas) return;
-                [...filas.querySelectorAll('tr')].forEach((tr,index)=>{
-                    const fecha=tr.querySelector('.js-fecha');
-                    const cantidad=tr.querySelector('.js-cantidad');
-                    const observaciones=tr.querySelector('.js-obs');
+                [...filas.querySelectorAll('.planner-row')].forEach((row,index)=>{
+                    const fecha=row.querySelector('.js-fecha');
+                    const cantidad=row.querySelector('.js-cantidad');
+                    const observaciones=row.querySelector('.js-obs');
                     if(fecha) fecha.name=`Programaciones[${index}].FechaProgramadaCarga`;
                     if(cantidad) cantidad.name=`Programaciones[${index}].Cantidad`;
                     if(observaciones) observaciones.name=`Programaciones[${index}].Observaciones`;
                 });
             }
-            function crearFilaSaldo(fecha='',observaciones=''){
-                if(!filas) return;
-                const tr=document.createElement('tr');
-                tr.dataset.esSaldo='1';
-                tr.innerHTML=`
-                    <td><input type="date" class="js-fecha" required /><div class="row-warning"></div></td>
-                    <td>
-                        <input type="number" class="js-cantidad" min="0" step="1" readonly />
-                        <span class="saldo-tag">Saldo automático</span>
-                    </td>
-                    <td><input type="text" class="js-obs" maxlength="1000" placeholder="Opcional" /></td>
-                    <td></td>`;
-                filas.appendChild(tr);
-                const inputFecha=tr.querySelector('.js-fecha');
-                const inputCantidad=tr.querySelector('.js-cantidad');
-                const inputObservaciones=tr.querySelector('.js-obs');
-                if(inputFecha){
-                    inputFecha.value=fecha||fechaSugerida();
-                    inputFecha.addEventListener('change',()=>actualizarAdvertenciaDia(tr));
-                }
-                if(inputCantidad) inputCantidad.value=totalBaseDistribucion;
-                if(inputObservaciones) inputObservaciones.value=observaciones||'';
-                actualizarAdvertenciaDia(tr);
-                reindexar();
+            function totalCapturado(){
+                if(!filas) return 0;
+                return [...filas.querySelectorAll('.js-cantidad')].reduce((total,input)=>total+entero(input.value),0);
             }
-            function crearFilaAdicional(fecha='',cantidad='',observaciones=''){
-                if(!filas) return;
-                const tr=document.createElement('tr');
-                tr.dataset.esSaldo='0';
-                tr.innerHTML=`
-                    <td><input type="date" class="js-fecha" required /><div class="row-warning"></div></td>
-                    <td><input type="number" class="js-cantidad" min="1" step="1" placeholder="0" required /></td>
-                    <td><input type="text" class="js-obs" maxlength="1000" placeholder="Opcional" /></td>
-                    <td><button type="button" class="btn btn-sm btn-danger js-eliminar" title="Eliminar">×</button></td>`;
-                filas.appendChild(tr);
-                const inputFecha=tr.querySelector('.js-fecha');
-                const inputCantidad=tr.querySelector('.js-cantidad');
-                const inputObservaciones=tr.querySelector('.js-obs');
-                const btnEliminar=tr.querySelector('.js-eliminar');
-                if(inputFecha){
-                    inputFecha.value=fecha||fechaSugerida();
-                    inputFecha.addEventListener('change',()=>actualizarAdvertenciaDia(tr));
-                }
-                if(inputCantidad){
-                    inputCantidad.value=cantidad!==null&&cantidad!==undefined?cantidad:'';
-                    inputCantidad.addEventListener('input',actualizarSaldoAutomatico);
-                    inputCantidad.addEventListener('change',actualizarSaldoAutomatico);
-                }
-                if(inputObservaciones) inputObservaciones.value=observaciones||'';
-                if(btnEliminar) btnEliminar.addEventListener('click',()=>{
-                    tr.remove();
-                    reindexar();
-                    actualizarSaldoAutomatico();
+            function obtenerEstadoFilas(){
+                if(!filas) return [];
+                return [...filas.querySelectorAll('.planner-row')].map(row=>({
+                    fecha:row.querySelector('.js-fecha')?.value||'',
+                    cantidad:entero(row.querySelector('.js-cantidad')?.value),
+                    observaciones:(row.querySelector('.js-obs')?.value||'').trim()
+                })).filter(x=>x.fecha||x.cantidad>0||x.observaciones);
+            }
+            function firmaActual(){
+                return JSON.stringify(obtenerEstadoFilas().filter(x=>x.cantidad>0).sort((a,b)=>a.fecha.localeCompare(b.fecha)||a.cantidad-b.cantidad));
+            }
+            function hayCambios(){ return !!firmaInicial&&firmaActual()!==firmaInicial; }
+            function validarDuplicados(){
+                const grupos=new Map();
+                [...filas?.querySelectorAll('.planner-row')||[]].forEach(row=>{
+                    row.classList.remove('duplicate');
+                    const fecha=row.querySelector('.js-fecha')?.value||'';
+                    if(!fecha) return;
+                    if(!grupos.has(fecha)) grupos.set(fecha,[]);
+                    grupos.get(fecha).push(row);
                 });
-                actualizarAdvertenciaDia(tr);
+                let hay=false;
+                grupos.forEach(rows=>{
+                    if(rows.length<=1) return;
+                    hay=true;
+                    rows.forEach(row=>row.classList.add('duplicate'));
+                });
+                return hay;
+            }
+            function actualizarMarcaCambio(row){
+                if(!row) return;
+                const origen=row.dataset.origen||'nuevo';
+                if(origen==='nuevo'){ row.classList.toggle('changed',entero(row.querySelector('.js-cantidad')?.value)>0||!!row.querySelector('.js-fecha')?.value); return; }
+                const originalFecha=row.dataset.fechaOriginal||'';
+                const originalCantidad=entero(row.dataset.cantidadOriginal);
+                const originalObs=row.dataset.obsOriginal||'';
+                const fecha=row.querySelector('.js-fecha')?.value||'';
+                const cantidad=entero(row.querySelector('.js-cantidad')?.value);
+                const obs=(row.querySelector('.js-obs')?.value||'').trim();
+                row.classList.toggle('changed',fecha!==originalFecha||cantidad!==originalCantidad||obs!==originalObs);
+                const nota=row.querySelector('.js-original-note');
+                if(nota) nota.textContent=`Antes: ${nf(originalCantidad)} PZA${originalFecha?` · ${originalFecha.split('-').reverse().join('/')}`:''}`;
+            }
+            function actualizarResumen(){
+                const capturado=totalCapturado();
+                const restante=Math.max(0,totalObjetivo-capturado);
+                const excedente=Math.max(0,capturado-totalObjetivo);
+                const duplicadas=validarDuplicados();
+                [...filas?.querySelectorAll('.planner-row')||[]].forEach(actualizarMarcaCambio);
+                if(prCapturado) prCapturado.textContent=nf(capturado);
+                if(prRestante) prRestante.textContent=excedente>0?'+'+nf(excedente):nf(restante);
+                if(prAvanceTexto) prAvanceTexto.textContent=`${nf(capturado)} programadas / ${nf(totalObjetivo)} editables`;
+                if(prDetalleResultado) prDetalleResultado.textContent=`Antes había ${nf(totalProgramadoOriginal)} PZA programadas. Al guardar quedarán ${nf(capturado)} PZA programadas y ${nf(restante)} PZA sin fecha.`;
+                if(prFooterResumen) prFooterResumen.innerHTML=`<strong>${nf(capturado)} PZA</strong> programadas · ${nf(restante)} PZA sin fecha`;
+                const porcentaje=totalObjetivo>0?Math.min(100,capturado*100/totalObjetivo):0;
+                if(prTrackBar) prTrackBar.style.width=porcentaje+'%';
+                cardRestante?.classList.remove('complete');
+                prTrack?.classList.remove('complete','error');
+                if(duplicadas){
+                    if(mensaje){ mensaje.className='planner-message error'; mensaje.innerHTML='Hay <strong>dos filas con la misma fecha</strong>. Usa una sola fila por día para evitar duplicar la programación.'; }
+                    prTrack?.classList.add('error');
+                    if(btnGuardar) btnGuardar.disabled=true;
+                    return;
+                }
+                if(excedente>0){
+                    if(mensaje){ mensaje.className='planner-message error'; mensaje.innerHTML=`El resultado supera el saldo editable por <strong>${nf(excedente)} PZA</strong>. Reduce alguna cantidad antes de guardar.`; }
+                    prTrack?.classList.add('error');
+                    if(btnGuardar) btnGuardar.disabled=true;
+                    return;
+                }
+                if(capturado<=0){
+                    if(mensaje){ mensaje.className='planner-message warning'; mensaje.innerHTML='Captura al menos una fecha con una cantidad mayor a cero.'; }
+                    if(btnGuardar) btnGuardar.disabled=true;
+                    return;
+                }
+                const delta=capturado-totalProgramadoOriginal;
+                if(restante===0){ cardRestante?.classList.add('complete'); prTrack?.classList.add('complete'); }
+                if(mensaje){
+                    if(delta>0){
+                        mensaje.className='planner-message info';
+                        mensaje.innerHTML=`Estás agregando <strong>${nf(delta)} PZA</strong> a la programación. Se toman del saldo que estaba sin fecha; <strong>ninguna fecha existente se descuenta automáticamente</strong>. Quedarán <strong>${nf(restante)} PZA</strong> sin programar.`;
+                    }else if(delta<0){
+                        mensaje.className='planner-message warning';
+                        mensaje.innerHTML=`Estás liberando <strong>${nf(Math.abs(delta))} PZA</strong> de la programación actual. Esas piezas volverán a quedar sin fecha. Resultado: <strong>${nf(restante)} PZA</strong> sin programar.`;
+                    }else if(hayCambios()){
+                        mensaje.className='planner-message info';
+                        mensaje.innerHTML=`Estás redistribuyendo las mismas <strong>${nf(capturado)} PZA</strong> entre fechas. El total programado no cambia y quedan <strong>${nf(restante)} PZA</strong> sin fecha.`;
+                    }else{
+                        mensaje.className=restante>0?'planner-message warning':'planner-message info';
+                        mensaje.innerHTML=restante>0
+                            ? `La programación actual se conserva sin cambios: <strong>${nf(totalProgramadoOriginal)} PZA</strong> programadas y <strong>${nf(restante)} PZA</strong> todavía sin fecha.`
+                            : `La programación actual ya cubre las <strong>${nf(totalObjetivo)} PZA</strong> editables.`;
+                    }
+                }
+                if(btnGuardar) btnGuardar.disabled=false;
+            }
+            function configurarEventosFila(row){
+                const fecha=row.querySelector('.js-fecha');
+                const cantidad=row.querySelector('.js-cantidad');
+                const obs=row.querySelector('.js-obs');
+                [fecha,cantidad,obs].forEach(control=>{
+                    control?.addEventListener('input',()=>{ actualizarAdvertenciaDia(row); actualizarResumen(); });
+                    control?.addEventListener('change',()=>{ actualizarAdvertenciaDia(row); actualizarResumen(); });
+                });
+                actualizarAdvertenciaDia(row);
+            }
+            function crearFila({fecha='',cantidad='',observaciones='',origen='nuevo'}={}){
+                if(!filas) return null;
+                const row=document.createElement('div');
+                const existente=origen==='existente';
+                row.className=`planner-row ${existente?'existing':'new-row'}`;
+                row.dataset.origen=origen;
+                row.dataset.fechaOriginal=existente?fecha:'';
+                row.dataset.cantidadOriginal=existente?String(entero(cantidad)):'0';
+                row.dataset.obsOriginal=existente?(observaciones||''):'';
+                row.innerHTML=`
+                    <div class="planner-field">
+                        <label>Fecha de carga</label>
+                        <input type="date" class="js-fecha" required />
+                        <span class="planner-row-tag">${existente?'Programación actual':'Nueva fecha'}</span>
+                        <span class="planner-row-note js-dia-warning"></span>
+                    </div>
+                    <div class="planner-field">
+                        <label>Cantidad</label>
+                        <input type="number" class="js-cantidad" min="0" step="1" inputmode="numeric" placeholder="0" required />
+                        <span class="planner-row-note ${existente?'js-original-note':''}">${existente?`Antes: ${nf(cantidad)} PZA`:'Usa el saldo sin fecha disponible.'}</span>
+                    </div>
+                    <div class="planner-field obs">
+                        <label>Observaciones</label>
+                        <input type="text" class="js-obs" maxlength="1000" placeholder="Opcional" />
+                        <span class="planner-row-note">${existente?'Puedes cambiar fecha o cantidad; el cambio será explícito.':'Esta fila no modifica por sí sola ninguna programación existente.'}</span>
+                    </div>
+                    <div class="planner-delete">${existente?'<button type="button" class="btn btn-sm btn-danger js-eliminar" title="Quitar esta fecha">×</button>':'<button type="button" class="btn btn-sm btn-danger js-eliminar">Quitar</button>'}</div>`;
+                filas.appendChild(row);
+                const inputFecha=row.querySelector('.js-fecha');
+                const inputCantidad=row.querySelector('.js-cantidad');
+                const inputObservaciones=row.querySelector('.js-obs');
+                if(inputFecha){ inputFecha.value=fecha||''; if(inicioSemana) inputFecha.min=inicioSemana; if(finSemana) inputFecha.max=finSemana; }
+                if(inputCantidad) inputCantidad.value=cantidad!==''&&cantidad!==null&&cantidad!==undefined?entero(cantidad):'';
+                if(inputObservaciones) inputObservaciones.value=observaciones||'';
+                row.querySelector('.js-eliminar')?.addEventListener('click',()=>{
+                    const eraExistente=row.dataset.origen==='existente';
+                    const cantidadOriginal=entero(row.dataset.cantidadOriginal);
+                    const texto=eraExistente&&cantidadOriginal>0?`Esta fecha tenía ${nf(cantidadOriginal)} PZA programadas. Al quitarla, esas piezas quedarán sin fecha. ¿Continuar?`:'¿Quitar esta fila?';
+                    if(!confirm(texto)) return;
+                    row.remove();
+                    reindexar();
+                    actualizarResumen();
+                });
+                configurarEventosFila(row);
                 reindexar();
-                actualizarSaldoAutomatico();
+                return row;
             }
             function restaurarProgramacionActual(){
                 if(!filas) return;
                 filas.innerHTML='';
-                const existentes=(programacionesOriginales||[]).filter(x=>n(x.cantidad)>0&&x.fecha);
+                const existentes=normalizarProgramacionesOriginales(programacionesOriginales);
+                totalProgramadoOriginal=existentes.reduce((t,x)=>t+entero(x.cantidad),0);
                 if(existentes.length>0){
-                    const sumaExistente=existentes.reduce((total,x)=>total+Math.max(0,n(x.cantidad)),0);
-                    totalBaseDistribucion=Math.min(totalObjetivo,sumaExistente);
-                    const primera=existentes[0];
-                    crearFilaSaldo(primera.fecha,primera.observaciones||'');
-                    existentes.slice(1).forEach(x=>crearFilaAdicional(x.fecha,n(x.cantidad),x.observaciones||''));
+                    existentes.forEach(x=>crearFila({fecha:x.fecha,cantidad:x.cantidad,observaciones:x.observaciones,origen:'existente'}));
                 }else{
-                    totalBaseDistribucion=pendienteSinProgramar>0?Math.min(pendienteSinProgramar,totalObjetivo):totalObjetivo;
-                    crearFilaSaldo(fechaSugerida(),'');
+                    const sugerida=fechaSugeridaLibre();
+                    crearFila({fecha:sugerida,cantidad:totalObjetivo,observaciones:'',origen:'nuevo'});
                 }
-                actualizarSaldoAutomatico();
+                reindexar();
+                firmaInicial=firmaActual();
+                actualizarResumen();
+            }
+            function agregarOtraFecha(){
+                const capturado=totalCapturado();
+                const saldo=Math.max(0,totalObjetivo-capturado);
+                if(saldo<=0){
+                    alert('Todo el saldo editable ya está programado. Si quieres mover piezas a otra fecha, primero reduce la cantidad de la fecha original para liberar saldo.');
+                    return;
+                }
+                const sugerida=fechaSugeridaLibre();
+                const row=crearFila({fecha:sugerida,cantidad:'',observaciones:'',origen:'nuevo'});
+                actualizarResumen();
+                setTimeout(()=>row?.querySelector('.js-cantidad')?.focus(),30);
             }
             async function cargarUbicacion(){
                 if(!parteActual) return;
@@ -2144,8 +2793,7 @@
                     if(liveGP12) liveGP12.textContent=nf(data.piezasGP12);
                     if(liveTotal) liveTotal.textContent=nf(data.piezasLocalizadas);
                     if(liveActualizado) liveActualizado.textContent='Actualizado '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
-                }
-                catch(error){
+                }catch(error){
                     console.error(error);
                     if(liveUbicacion) liveUbicacion.textContent='No disponible';
                     if(liveAlmacen) liveAlmacen.textContent='-';
@@ -2161,18 +2809,25 @@
                 const cliente=btn.dataset.cliente||'';
                 const referencia=btn.dataset.referencia||'';
                 const designacion=btn.dataset.designacion||'';
-                totalObjetivo=Math.max(0,n(btn.dataset.editable));
-                totalGenerado=Math.max(0,n(btn.dataset.generado));
-                pendienteSinProgramar=Math.max(0,n(btn.dataset.sinProgramar));
-                parteActual=n(parteId);
+                totalObjetivo=entero(btn.dataset.editable);
+                totalGenerado=entero(btn.dataset.generado);
+                parteActual=entero(parteId);
                 inicioSemana=btn.dataset.semanaInicio||'';
-                try{ diasHabituales=JSON.parse(btn.dataset.dias||'[]').map(Number); }catch{ diasHabituales=[]; }
+                finSemana=btn.dataset.semanaFin||'';
+                try{ diasHabituales=JSON.parse(btn.dataset.dias||'[]').map(Number).filter(x=>x>=1&&x<=6); }catch{ diasHabituales=[]; }
                 try{ programacionesOriginales=JSON.parse(btn.dataset.programaciones||'[]')||[]; }catch{ programacionesOriginales=[]; }
+                const normalizadas=normalizarProgramacionesOriginales(programacionesOriginales);
+                totalProgramadoOriginal=normalizadas.reduce((t,x)=>t+entero(x.cantidad),0);
+                if(totalProgramadoOriginal>totalObjetivo) totalProgramadoOriginal=totalObjetivo;
+                const sinFechaInicial=Math.max(0,totalObjetivo-totalProgramadoOriginal);
                 if(prClienteID) prClienteID.value=clienteId;
                 if(prParteID) prParteID.value=parteId;
-                if(prTitulo) prTitulo.textContent=(programacionesOriginales.length>0?'Ajustar programación · ':'Programar día de carga · ')+cliente;
-                if(prSubtitulo) prSubtitulo.textContent=referencia+(designacion?' · '+designacion:'')+(totalGenerado>0?` · ${nf(totalGenerado)} PZA ya protegidas en embarque`: '');
+                if(prTitulo) prTitulo.textContent=(normalizadas.length>0?'Ajustar programación · ':'Programar día de carga · ')+cliente;
+                if(prSubtitulo) prSubtitulo.textContent=referencia+(designacion?' · '+designacion:'');
                 if(prTotal) prTotal.textContent=nf(totalObjetivo);
+                if(prOriginal) prOriginal.textContent=nf(totalProgramadoOriginal);
+                if(prRestante) prRestante.textContent=nf(sinFechaInicial);
+                if(prProtegido) prProtegido.textContent=nf(totalGenerado)+' PZA';
                 if(prHabitual) prHabitual.textContent=diasHabituales.length>0?diasHabituales.map(x=>nombresDias[x]||'').filter(Boolean).join(' / '):'Sin definir';
                 restaurarProgramacionActual();
                 cargarUbicacion();
@@ -2180,46 +2835,53 @@
                 timerUbicacion=setInterval(()=>{ if(backdrop.classList.contains('open')) cargarUbicacion(); },30000);
                 backdrop.classList.add('open');
                 backdrop.setAttribute('aria-hidden','false');
+                document.body.style.overflow='hidden';
             }
-            function cerrarProgramacion(){
+            function cerrarProgramacion(forzar=false){
+                if(!forzar&&hayCambios()&&!confirm('Hay cambios de programación sin guardar. ¿Deseas cerrar y descartarlos?')) return;
                 backdrop?.classList.remove('open');
                 backdrop?.setAttribute('aria-hidden','true');
+                document.body.style.overflow='';
                 if(timerUbicacion){ clearInterval(timerUbicacion); timerUbicacion=null; }
             }
             document.querySelectorAll('.js-programar').forEach(btn=>btn.addEventListener('click',()=>abrirProgramacion(btn)));
-            document.querySelectorAll('.js-cerrar').forEach(btn=>btn.addEventListener('click',cerrarProgramacion));
-            backdrop?.addEventListener('click',e=>{ if(e.target===backdrop) cerrarProgramacion(); });
+            document.querySelectorAll('.js-cerrar').forEach(btn=>btn.addEventListener('click',()=>cerrarProgramacion(false)));
+            backdrop?.addEventListener('click',e=>{ if(e.target===backdrop) cerrarProgramacion(false); });
             document.getElementById('btnActualizarUbicacion')?.addEventListener('click',cargarUbicacion);
-            document.getElementById('btnOtraFecha')?.addEventListener('click',()=>{
-                crearFilaAdicional(fechaSugerida(),'','');
-                setTimeout(()=>{
-                    const inputs=filas?.querySelectorAll('tr:not([data-es-saldo="1"]) .js-cantidad');
-                    if(inputs&&inputs.length>0) inputs[inputs.length-1].focus();
-                },30);
+            btnOtraFecha?.addEventListener('click',agregarOtraFecha);
+            document.getElementById('btnRestablecer')?.addEventListener('click',()=>{
+                if(hayCambios()&&!confirm('¿Restablecer la programación tal como estaba al abrir esta ventana?')) return;
+                restaurarProgramacionActual();
             });
-            document.getElementById('btnRestablecer')?.addEventListener('click',restaurarProgramacionActual);
             form?.addEventListener('submit',e=>{
-                actualizarSaldoAutomatico();
-                const capturado=totalCapturado();
-                if(capturado<=0){ e.preventDefault(); alert('Captura una cantidad mayor a cero.'); return; }
-                if(capturado>totalObjetivo){ e.preventDefault(); alert(`La programación supera el saldo editable de ${nf(totalObjetivo)} PZA.`); return; }
-                const filaSaldo=obtenerFilaSaldo();
-                const cantidadSaldo=n(filaSaldo?.querySelector('.js-cantidad')?.value);
-                if(filaSaldo&&cantidadSaldo<=0&&filas.querySelectorAll('tr').length>1) filaSaldo.remove();
                 reindexar();
-                const registros=[...filas.querySelectorAll('tr')];
-                if(registros.length===0){ e.preventDefault(); alert('Captura al menos una fecha de carga.'); return; }
-                const invalido=registros.some(tr=>{
-                    const fecha=tr.querySelector('.js-fecha');
-                    const cantidad=tr.querySelector('.js-cantidad');
-                    return !fecha?.value||n(cantidad?.value)<=0;
+                actualizarResumen();
+                const capturado=totalCapturado();
+                if(validarDuplicados()){ e.preventDefault(); alert('No puedes guardar dos filas con la misma fecha. Ajusta la cantidad en una sola fila.'); return; }
+                if(capturado<=0){ e.preventDefault(); alert('Captura al menos una fecha con una cantidad mayor a cero.'); return; }
+                if(capturado>totalObjetivo){ e.preventDefault(); alert(`La programación supera el saldo editable de ${nf(totalObjetivo)} PZA.`); return; }
+                const registros=[...filas.querySelectorAll('.planner-row')];
+                const activos=registros.filter(row=>entero(row.querySelector('.js-cantidad')?.value)>0);
+                if(activos.length===0){ e.preventDefault(); alert('Captura al menos una fecha de carga.'); return; }
+                const invalido=activos.some(row=>{
+                    const fecha=row.querySelector('.js-fecha')?.value||'';
+                    const cantidad=entero(row.querySelector('.js-cantidad')?.value);
+                    return !fecha||cantidad<=0||(inicioSemana&&fecha<inicioSemana)||(finSemana&&fecha>finSemana);
                 });
-                if(invalido){ e.preventDefault(); alert('Todas las fechas deben tener una cantidad mayor a cero.'); return; }
+                if(invalido){ e.preventDefault(); alert('Revisa las fechas y cantidades. Todas las filas con piezas deben estar dentro de la semana y tener una cantidad mayor a cero.'); return; }
+                registros.filter(row=>entero(row.querySelector('.js-cantidad')?.value)<=0).forEach(row=>row.remove());
+                reindexar();
                 const restante=Math.max(0,totalObjetivo-capturado);
-                if(restante>0&&!confirm(`Se programarán ${nf(capturado)} PZA y quedarán ${nf(restante)} PZA sin programar. ¿Deseas guardar así?`)){ e.preventDefault(); restaurarProgramacionActual(); return; }
+                const delta=capturado-totalProgramadoOriginal;
+                let confirmacion=`Se guardarán ${nf(capturado)} PZA programadas y quedarán ${nf(restante)} PZA sin fecha.`;
+                if(delta>0) confirmacion+=` Se agregan ${nf(delta)} PZA respecto a la programación anterior.`;
+                else if(delta<0) confirmacion+=` Se liberan ${nf(Math.abs(delta))} PZA respecto a la programación anterior.`;
+                else if(hayCambios()) confirmacion+=' El total no cambia; solo se redistribuyen fechas/cantidades.';
+                if(!confirm(confirmacion+' ¿Deseas continuar?')){ e.preventDefault(); return; }
                 if(btnGuardar){ btnGuardar.disabled=true; btnGuardar.textContent='Guardando...'; }
+                firmaInicial='';
             });
-            document.addEventListener('keydown',e=>{ if(e.key==='Escape') cerrarProgramacion(); });
+            document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&backdrop?.classList.contains('open')) cerrarProgramacion(false); });
         })();
     </script>
 </body>

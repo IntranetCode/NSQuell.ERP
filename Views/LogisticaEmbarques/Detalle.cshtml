@@ -9,6 +9,7 @@
         "Programado" => "bg-primary",
         "Preparando" => "bg-info text-dark",
         "Preparado" => "bg-warning text-dark",
+        "Cargando" => "bg-warning text-dark",
         "Cargado" => "bg-dark",
         "En ruta" => "bg-primary",
         "Entregado" => "bg-success",
@@ -42,14 +43,11 @@
 
     var requiereDefinirSalida = (ViewBag.RequiereDefinirSalida as bool?) == true || Model.TipoOperacion == "Pendiente" || Model.FormaEnvio == "Pendiente" || string.IsNullOrWhiteSpace(Model.TipoOperacion) || string.IsNullOrWhiteSpace(Model.FormaEnvio);
     var puedeDefinirSalida = (ViewBag.PuedeDefinirSalida as bool?) ?? (Model.Estatus is "Programado" or "Preparando" or "Preparado");
-    var puedePreparar = Model.Estatus is "Programado" or "Preparando";
-    var puedeEntregar = Model.Estatus == "En ruta";
     var puedeCancelar = Model.Estatus is "Programado" or "Preparando" or "Preparado";
     var puedeReprogramar = Model.Estatus is "Programado" or "Preparando" or "Preparado";
     var puedeEditarCajas = Model.Estatus is "Programado" or "Preparando";
     var puedeAgregarPartida = Model.Estatus is "Programado" or "Preparando";
     var incidenciasAbiertas = Model.Incidencias?.Count(x => x.EstaAbierta) ?? 0;
-    var totalDocumentos = Model.Documentos?.Count ?? 0;
     var totalEvidencias = Model.Evidencias?.Count ?? 0;
 
     var programacionCompleta = Model.FechaCargaProgramada.HasValue && Model.HoraCargaProgramada.HasValue && Model.TotalPiezasSolicitadas > 0;
@@ -61,6 +59,7 @@
     var entregaCompleta = Model.Estatus == "Entregado";
     var esEntrega = Model.FormaEnvio == "Interno";
     var salidaDesdeCentro = Model.FormaEnvio is "Cliente" or "Paqueteria";
+    var puedeEntregar = Model.Estatus == "En ruta" && salidaDesdeCentro;
     var porcentajeAvanceVista = Model.Estatus == "Cargando" ? 65 : Model.PorcentajeAvance;
 
     string ClasePaso(bool completo, bool actual)
@@ -73,20 +72,22 @@
     var actualProgramacion = Model.Estatus != "Cancelado" && !programacionCompleta;
     var actualSalida = Model.Estatus != "Cancelado" && programacionCompleta && !salidaConfigurada;
     var actualPreparacion = Model.Estatus != "Cancelado" && salidaConfigurada && !preparacionConfirmada;
-    var actualDocumentos = Model.Estatus != "Cancelado" && preparacionConfirmada && !documentacionCompleta;
-    var actualCarga = Model.Estatus != "Cancelado" && preparacionConfirmada && documentacionCompleta && !cargaFisicaCompleta;
-    var actualSalidaPlanta = Model.Estatus != "Cancelado" && cargaFisicaCompleta && !salidaPlantaCompleta;
+    var actualCarga = Model.Estatus != "Cancelado" && preparacionConfirmada && !cargaFisicaCompleta;
+    var actualDocumentos = Model.Estatus != "Cancelado" && cargaFisicaCompleta && !documentacionCompleta;
+    var actualSalidaPlanta = Model.Estatus != "Cancelado" && cargaFisicaCompleta && documentacionCompleta && !salidaPlantaCompleta;
     var actualEntrega = Model.Estatus != "Cancelado" && salidaPlantaCompleta && !entregaCompleta;
 
     var proximaAccionVista = Model.Estatus switch
     {
         "Cancelado" => "Embarque cancelado",
         "Entregado" => "Proceso completado",
+        "En ruta" when esEntrega => "Seguimiento de entrega con chofer",
         "En ruta" => "Confirmar entrega",
-        "Cargado" => esEntrega ? "Esperar salida del chofer" : "Confirmar salida de planta",
-        "Preparado" or "Cargando" when !documentacionCompleta => "Completar documentación",
+        "Cargado" when !documentacionCompleta => "Completar documentación",
+        "Cargado" when esEntrega => "Esperar salida del chofer",
+        "Cargado" => "Confirmar salida de planta",
         "Preparado" or "Cargando" => "Completar carga física",
-        _ when requiereDefinirSalida => "Definir forma de salida",
+        _ when requiereDefinirSalida => "Configurar salida en Centro Operativo",
         _ => "Completar preparación PT"
     };
 
@@ -94,12 +95,14 @@
     {
         "Cancelado" => "No hay acciones operativas pendientes.",
         "Entregado" => "La entrega está cerrada y conserva su trazabilidad.",
+        "En ruta" when esEntrega => "El chofer asignado administra las paradas y confirma la entrega desde su portal. Aquí puedes consultar la trazabilidad.",
         "En ruta" => "Registra quién recibió la mercancía y adjunta una o más evidencias de entrega.",
+        "Cargado" when !documentacionCompleta => "La carga física terminó, pero falta completar la documentación obligatoria antes de permitir la salida de planta.",
         "Cargado" when esEntrega => "La carga física ya terminó. La salida real la confirma el chofer asignado desde su portal.",
         "Cargado" => "La carga física ya terminó. Confirma la salida cuando la mercancía abandone realmente la planta.",
-        "Preparado" or "Cargando" when !documentacionCompleta => "La documentación obligatoria debe estar validada antes de continuar con la carga física.",
+        "Preparado" or "Cargando" when !documentacionCompleta => "Puedes continuar la carga física mientras se completa la documentación. Los documentos obligatorios sí deben quedar completos antes de la salida de planta.",
         "Preparado" or "Cargando" => "Escanea las cajas físicas y confirma la carga cuando el total coincida.",
-        _ when requiereDefinirSalida => "Selecciona Entrega, Cliente recoge o Paquetería y completa sus datos operativos.",
+        _ when requiereDefinirSalida => "La forma de salida, ruta, unidad y chofer se configuran únicamente desde Centro Operativo.",
         _ => "Reserva las cajas necesarias y confirma la preparación cuando las cantidades estén completas."
     };
 }
@@ -1090,13 +1093,13 @@
                 <div class="sp-icon"><i class="fa-solid fa-truck-arrow-right"></i></div>
                 <div>
                     <strong>Falta definir cómo saldrá este embarque</strong>
-                    <small>Este embarque continúa el flujo iniciado desde el Centro Operativo. Antes de continuar con la preparación y salida, define si será Entrega, Cliente recoge o Paquetería.</small>
+                    <small>Este embarque continúa el flujo iniciado desde el Centro Operativo. La configuración de salida se administra únicamente desde Centro Operativo para mantener sincronizados ruta, unidad, chofer y transporte.</small>
                 </div>
             </div>
             @if (puedeDefinirSalida)
             {
-                <a asp-controller="LogisticaEmbarques" asp-action="DefinirSalida" asp-route-id="@Model.EmbarqueID" class="btn-definir">
-                    <i class="fa-solid fa-gear"></i>Definir forma de salida
+                <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="btn-definir">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir Centro Operativo
                 </a>
             }
             else
@@ -1139,11 +1142,11 @@
         {
             <div class="stage-action" style="border-color:#ead28e;background:#fffaf0">
                 <div>
-                    <strong>Define la forma de salida antes de continuar</strong>
-                    <small>La cantidad y fecha ya están programadas. Falta indicar si será Entrega, Cliente recoge o Paquetería.</small>
+                    <strong>Configura la forma de salida desde Centro Operativo</strong>
+                    <small>La cantidad y fecha ya están programadas. Ruta, unidad, chofer y transporte se administran desde una sola pantalla para evitar configuraciones duplicadas.</small>
                 </div>
-                <a asp-controller="LogisticaEmbarques" asp-action="DefinirSalida" asp-route-id="@Model.EmbarqueID" class="stage-btn" style="background:#8b6100">
-                    <i class="fa-solid fa-truck-arrow-right"></i>Definir salida
+                <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>Abrir Centro Operativo
                 </a>
             </div>
         }
@@ -1171,52 +1174,61 @@
         {
             @if (!Model.DocumentacionCompleta)
             {
-                <div class="stage-action" style="border-color:#e8c56f;background:#fffaf0">
+                <div class="stage-action mb-2" style="border-color:#e8c56f;background:#fffaf0">
                     <div>
-                        <strong>Completa la documentación antes de la carga física</strong>
-                        <small>Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s) por cargar o validar.</small>
+                        <strong>Documentación pendiente, pero la carga física puede continuar</strong>
+                        <small>Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s). Complétalos desde Centro Operativo antes de confirmar la salida de planta.</small>
                     </div>
-                    <a href="#tabDocumentos" class="stage-btn" data-bs-toggle="tab" data-bs-target="#tabDocumentos" style="background:#8b6100">
-                        <i class="fa-solid fa-file-circle-check"></i>Ir a documentos
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100">
+                        <i class="fa-solid fa-file-circle-check"></i>Centro Operativo
                     </a>
                 </div>
             }
-            else
-            {
-                <div class="stage-action">
-                    <div>
-                        <strong>Carga física</strong>
-                        <small>Escanea cada caja que se carga realmente. El escaneo se registra inmediatamente en el embarque.</small>
-                    </div>
-                    <button class="stage-btn" id="lgConfirmarCargaFisica" type="button" disabled>
-                        <i class="fa-solid fa-circle-check"></i>Confirmar carga física
+            <div class="stage-action">
+                <div>
+                    <strong>Carga física</strong>
+                    <small>Escanea cada caja que se carga realmente. La documentación puede completarse en paralelo, pero será obligatoria antes de la salida.</small>
+                </div>
+                <button class="stage-btn" id="lgConfirmarCargaFisica" type="button" disabled>
+                    <i class="fa-solid fa-circle-check"></i>Confirmar carga física
+                </button>
+            </div>
+            <div class="scan-box">
+                <div class="scan-row">
+                    <input id="lgCargaScan" class="scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea etiqueta de caja y presiona Enter/Tab..." autofocus />
+                    <button type="button" class="stage-btn" id="lgEscanearCarga">
+                        <i class="fa-solid fa-barcode"></i>Registrar
                     </button>
                 </div>
-                <div class="scan-box">
-                    <div class="scan-row">
-                        <input id="lgCargaScan" class="scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea etiqueta de caja y presiona Enter/Tab..." autofocus />
-                        <button type="button" class="stage-btn" id="lgEscanearCarga">
-                            <i class="fa-solid fa-barcode"></i>Registrar
-                        </button>
-                    </div>
-                    <div class="scan-msg" id="lgCargaMsg">Consultando carga física...</div>
-                    <div class="load-kpis">
-                        <div class="load-kpi"><span>PZA totales</span><strong id="lgCargaTotal">—</strong></div>
-                        <div class="load-kpi"><span>PZA cargadas</span><strong id="lgCargaCargadas">—</strong></div>
-                        <div class="load-kpi"><span>PZA reservadas</span><strong id="lgCargaReservadas">—</strong></div>
-                        <div class="load-kpi"><span>PZA pendientes</span><strong id="lgCargaPendientes">—</strong></div>
-                    </div>
-                    <div class="scan-list" id="lgCargaLista"></div>
+                <div class="scan-msg" id="lgCargaMsg">Consultando carga física...</div>
+                <div class="load-kpis">
+                    <div class="load-kpi"><span>PZA totales</span><strong id="lgCargaTotal">—</strong></div>
+                    <div class="load-kpi"><span>PZA cargadas</span><strong id="lgCargaCargadas">—</strong></div>
+                    <div class="load-kpi"><span>PZA reservadas</span><strong id="lgCargaReservadas">—</strong></div>
+                    <div class="load-kpi"><span>PZA pendientes</span><strong id="lgCargaPendientes">—</strong></div>
                 </div>
-            }
+                <div class="scan-list" id="lgCargaLista"></div>
+            </div>
         }
         else if (Model.Estatus == "Cargado")
         {
-            @if (esEntrega)
+            @if (!Model.DocumentacionCompleta)
+            {
+                <div class="stage-action" style="border-color:#e8c56f;background:#fffaf0">
+                    <div>
+                        <strong>Completa la documentación antes de la salida</strong>
+                        <small>La carga física ya terminó. Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s); la salida permanecerá bloqueada hasta completar el expediente.</small>
+                    </div>
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100">
+                        <i class="fa-solid fa-file-circle-check"></i>Completar documentación
+                    </a>
+                </div>
+            }
+            else if (esEntrega)
             {
                 <div class="stage-action" style="border-color:#b9d7ca;background:#f4fbf7">
                     <div>
-                        <strong>Carga física completa</strong>
+                        <strong>Carga física y documentación completas</strong>
                         <small>La salida real la confirma el chofer asignado desde su portal. Cuando registre la salida, el viaje pasará a En curso y este embarque a En ruta.</small>
                     </div>
                     <span class="badge bg-info text-dark">Esperando salida del chofer</span>
@@ -1241,21 +1253,35 @@
             else
             {
                 <div class="stage-action">
-                    <div><strong>Forma de salida incompleta</strong><small>Revisa la configuración antes de confirmar la salida de planta.</small></div>
+                    <div><strong>Forma de salida incompleta</strong><small>La configuración debe corregirse desde Centro Operativo antes de confirmar la salida.</small></div>
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn"><i class="fa-solid fa-arrow-up-right-from-square"></i>Centro Operativo</a>
                 </div>
             }
         }
         else if (Model.Estatus == "En ruta")
         {
-            <div class="stage-action">
-                <div>
-                    <strong>Embarque en tránsito</strong>
-                    <small>El siguiente paso es confirmar quién recibió la mercancía y adjuntar al menos una evidencia.</small>
+            @if (esEntrega)
+            {
+                <div class="stage-action" style="border-color:#b9d7ca;background:#f4fbf7">
+                    <div>
+                        <strong>Entrega administrada por el chofer</strong>
+                        <small>El viaje está en curso. El chofer confirma llegada, receptor, remisión y evidencias desde su portal; este detalle permanece como consulta y trazabilidad.</small>
+                    </div>
+                    <span class="badge bg-info text-dark">En ruta</span>
                 </div>
-                <a href="#tabEntrega" class="stage-btn" data-bs-toggle="tab" data-bs-target="#tabEntrega">
-                    <i class="fa-solid fa-box-open"></i>Ir a entrega
-                </a>
-            </div>
+            }
+            else
+            {
+                <div class="stage-action">
+                    <div>
+                        <strong>Embarque en tránsito</strong>
+                        <small>El siguiente paso es confirmar quién recibió la mercancía y adjuntar al menos una evidencia.</small>
+                    </div>
+                    <a href="#tabEntrega" class="stage-btn" data-bs-toggle="tab" data-bs-target="#tabEntrega">
+                        <i class="fa-solid fa-box-open"></i>Ir a entrega
+                    </a>
+                </div>
+            }
         }
         else if (Model.Estatus == "Entregado")
         {
@@ -1306,8 +1332,8 @@
                             @FormaEnvioTexto()
                             @if (requiereDefinirSalida && puedeDefinirSalida)
                             {
-                                <a asp-controller="LogisticaEmbarques" asp-action="DefinirSalida" asp-route-id="@Model.EmbarqueID" class="btn btn-outline-warning btn-sm ms-2 py-0 px-2" style="font-size:.65rem">
-                                    Definir
+                                <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="btn btn-outline-warning btn-sm ms-2 py-0 px-2" style="font-size:.65rem">
+                                    Configurar
                                 </a>
                             }
                         </div>
@@ -1509,38 +1535,27 @@
 
             <div class="tab-pane fade" id="tabDocumentos">
                 <div class="section-head">
-                    <div><h3>Documentación</h3><p>@(requiereDefinirSalida ? "Define primero la forma de salida para determinar los requisitos documentales." : $"Requisitos según {FormaEnvioTexto()} y operación {Model.TipoOperacion}.")</p></div>
-                    @if (!requiereDefinirSalida)
-                    {
-                        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#subirDocumento"><i class="fa-solid fa-plus me-1"></i>Subir documento</button>
-                    }
-                    else if (puedeDefinirSalida)
-                    {
-                        <a asp-controller="LogisticaEmbarques" asp-action="DefinirSalida" asp-route-id="@Model.EmbarqueID" class="btn btn-outline-warning btn-sm"><i class="fa-solid fa-gear me-1"></i>Definir salida</a>
-                    }
+                    <div><h3>Documentación</h3><p>@(requiereDefinirSalida ? "Primero configura la forma de salida desde Centro Operativo para determinar los requisitos documentales." : $"Consulta del expediente requerido para {FormaEnvioTexto()} y operación {Model.TipoOperacion}.")</p></div>
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-arrow-up-right-from-square me-1"></i>@(requiereDefinirSalida ? "Configurar en Centro Operativo" : "Gestionar en Centro Operativo")</a>
                 </div>
-
                 <div class="doc-note">
                     @if (requiereDefinirSalida)
                     {
-                        <text><strong>Forma de salida pendiente:</strong> define primero si será Entrega, Cliente recoge o Paquetería. Los documentos requeridos se determinarán con base en esa selección.</text>
+                        <text><strong>Forma de salida pendiente:</strong> la configuración se realiza únicamente desde Centro Operativo. Al definir Entrega, Cliente recoge o Paquetería se calcularán automáticamente los documentos requeridos.</text>
                     }
                     else if (Model.FormaEnvio == "Interno")
                     {
-                        <text><strong>Entrega:</strong> Factura firmada y sellada; si no hay factura por excepción, se permite Remisión indicando motivo.</text>
+                        <text><strong>Entrega:</strong> Factura firmada y sellada; si no hay factura por excepción, se permite Remisión indicando motivo. La carga de documentos se concentra en Centro Operativo.</text>
                     }
                     else if (Model.FormaEnvio == "Cliente")
                     {
-
-                        <text><strong>Cliente recoge:</strong> Factura firmada por quien recoge/transportista; si no hay factura por excepción, se permite Remisión indicando motivo.</text>
+                        <text><strong>Cliente recoge:</strong> Factura firmada por quien recoge/transportista; si no hay factura por excepción, se permite Remisión indicando motivo. La carga de documentos se concentra en Centro Operativo.</text>
                     }
                     else if (Model.FormaEnvio == "Paqueteria")
                     {
-
-                        <text><strong>Paquetería:</strong> Factura firmada por transportista o Remisión por excepción, Guía y documentos adicionales requeridos como Packing List/Carta Porte.</text>
+                        <text><strong>Paquetería:</strong> Factura firmada por transportista o Remisión por excepción, Guía y los documentos adicionales aplicables. La carga se administra desde Centro Operativo.</text>
                     }
                 </div>
-
                 <div class="doc-required">
                     @foreach (var r in Model.DocumentosRequeridos)
                     {
@@ -1548,74 +1563,30 @@
                             <div class="fw-semibold">@r.TipoDocumento</div>
                             <div class="text-muted">@r.AreaResponsable</div>
                             <div class="mt-1">
-                                @if (r.Cargado)
+                                @if (r.Cargado && r.Validado)
                                 {
-                                    <span class="text-success">Cargado</span>@if(r.Validado){
-                                    <span class="text-success ms-2">Validado</span>
+                                    <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Completo</span>
+                                }
+                                else if (r.Cargado)
+                                {
+                                    <span class="text-warning"><i class="fa-solid fa-clock me-1"></i>Pendiente de completar</span>
                                 }
                                 else
                                 {
-
-                                    <span class="text-warning ms-2">Pendiente validar</span>
+                                    <span class="text-danger"><i class="fa-solid fa-circle-exclamation me-1"></i>Faltante</span>
                                 }
-                            }
-                                                        else
-                            {
-                                <span class="text-danger">Faltante</span>
-                            }
-                        </div>
-                    </div>
-                                        }
-                </div>
-
-                <div class="collapse mb-3" id="subirDocumento">
-                    <form asp-controller="LogisticaEmbarques" asp-action="SubirDocumento" method="post" enctype="multipart/form-data" class="compact-form js-single-submit" id="formSubirDocumentos">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                        <div class="f3">
-                            <label class="required">Tipo documento</label>
-                            <select name="tipoDocumento" id="tipoDocumento" class="form-select" required>
-                                <option value="">Selecciona...</option>
-                                <option>Commercial Invoice</option>
-                                <option>Carta Porte</option>
-                                <option>Packing List</option>
-                                <option>Factura</option>
-                                <option>Remisión</option>
-                                <option>Guía</option>
-                                <option>XML</option>
-                                <option>Carta de instrucciones</option>
-                                <option>Booking</option>
-                                <option>Pedimento</option>
-                                <option>Otro</option>
-                            </select>
-                            <div class="doc-picker-help">Todos los archivos seleccionados se guardarán con este mismo tipo documental.</div>
-                        </div>
-                        <div class="doc-upload-box">
-                            <label class="required">Archivos / fotos</label>
-                            <input type="file" id="documentosUpload" name="archivos" multiple hidden />
-                            <input type="file" id="documentosPicker" accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png,.webp,.heic,.heif,image/*" multiple hidden />
-                            <input type="file" id="documentosCamara" accept="image/*" capture="environment" hidden />
-                            <div class="doc-picker">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnElegirDocumentos"><i class="fa-solid fa-folder-open"></i>Elegir varios archivos</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFotoDocumento"><i class="fa-solid fa-camera"></i>Tomar foto</button>
                             </div>
-                            <div class="doc-picker-help">Puedes seleccionar varios archivos de una sola vez y volver a agregar más. Máximo 15 archivos, 10 MB por archivo y 100 MB en total.</div>
-                            <div id="documentosSeleccionadosLista" class="doc-selected-list"></div>
-                            <div id="documentosSeleccionadosResumen" class="doc-selected-summary">0 archivos seleccionados</div>
                         </div>
-                        <div class="f3">
-                            <label id="lblObsDocumento">Observaciones</label>
-                            <input type="text" name="observaciones" id="obsDocumento" maxlength="1000" class="form-control" />
-                        </div>
-                        <div class="f1">
-                            <button class="btn btn-outline-primary btn-sm w-100" type="submit" id="btnSubirDocumentos"><i class="fa-solid fa-cloud-arrow-up me-1"></i><span>Subir</span></button>
-                        </div>
-                    </form>
+                    }
+                    @if (!Model.DocumentosRequeridos.Any())
+                    {
+                        <div class="empty" style="grid-column:1/-1">No hay requisitos documentales definidos para la configuración actual.</div>
+                    }
                 </div>
-
+                <div class="section-head mt-3"><div><h3>Documentos del embarque</h3><p>Esta vista conserva la consulta. Altas, reemplazos y retiros se realizan desde Centro Operativo para evitar dos flujos distintos.</p></div></div>
                 <div class="table-wrap">
                     <table class="table table-sm compact-table">
-                        <thead><tr><th>Tipo</th><th>Archivo</th><th>Área</th><th>Carga</th><th>Validación</th><th></th></tr></thead>
+                        <thead><tr><th>Tipo</th><th>Archivo</th><th>Área</th><th>Carga</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var d in Model.Documentos)
                             {
@@ -1627,23 +1598,14 @@
                                     <td>
                                         @if (d.Validado)
                                         {
-                                            <span class="text-success">Validado @(d.FechaValidacion?.ToString("dd/MM/yyyy HH:mm"))</span>
+                                            <span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>Completo @(d.FechaValidacion?.ToString("dd/MM/yyyy HH:mm"))</span>
                                         }
                                         else
                                         {
-
-                                            <span class="text-warning">Pendiente</span>
+                                            <span class="text-warning"><i class="fa-solid fa-clock me-1"></i>Pendiente</span>
                                         }
                                     </td>
-                                    <td class="text-end text-nowrap">
-                                        <a asp-controller="LogisticaEmbarques" asp-action="VerDocumento" asp-route-id="@d.EmbarqueDocumentoID" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-eye"></i></a>
-                                        @if (!d.Validado)
-                                        {
-                                            <form asp-controller="LogisticaEmbarques" asp-action="ValidarDocumento" method="post" class="d-inline js-single-submit">@Html.AntiForgeryToken()<input type="hidden" name="documentoId" value="@d.EmbarqueDocumentoID" /><input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><button class="btn btn-outline-success btn-sm" type="submit"><i class="fa-solid fa-check"></i></button></form>
-                                        }
-                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="mostrarRetiroDocumento(@d.EmbarqueDocumentoID)"><i class="fa-solid fa-xmark"></i></button>
-                                        <form id="retirar-doc-@d.EmbarqueDocumentoID" asp-controller="LogisticaEmbarques" asp-action="RetirarDocumento" method="post" class="d-none">@Html.AntiForgeryToken()<input type="hidden" name="documentoId" value="@d.EmbarqueDocumentoID" /><input type="hidden" name="embarqueId" value="@Model.EmbarqueID" /><input type="hidden" name="motivo" id="motivo-doc-@d.EmbarqueDocumentoID" /></form>
-                                    </td>
+                                    <td class="text-end text-nowrap"><a asp-controller="LogisticaEmbarques" asp-action="VerDocumento" asp-route-id="@d.EmbarqueDocumentoID" target="_blank" class="btn btn-outline-secondary btn-sm" title="Ver documento"><i class="fa-solid fa-eye"></i></a></td>
                                 </tr>
                             }
                             @if (!Model.Documentos.Any())
@@ -1842,17 +1804,6 @@
                 }
             });
 
-            window.mostrarRetiroDocumento = id => {
-                const motivo = prompt('Motivo para retirar el documento:');
-                if (!motivo || !motivo.trim()) return;
-                const input = document.getElementById(`motivo-doc-${id}`);
-                const form = document.getElementById(`retirar-doc-${id}`);
-                if (input && form) {
-                    input.value = motivo.trim();
-                    form.submit();
-                }
-            };
-
             window.retirarEvidencia = id => {
                 const motivo = prompt('Motivo para retirar la evidencia:');
                 if (!motivo || !motivo.trim()) return;
@@ -1863,155 +1814,6 @@
                     form.submit();
                 }
             };
-
-            const tipoDoc = document.getElementById('tipoDocumento');
-            const obsDoc = document.getElementById('obsDocumento');
-            const lblObs = document.getElementById('lblObsDocumento');
-
-            const syncDocumento = () => {
-                const remision = tipoDoc?.value === 'Remisión';
-                if (obsDoc) obsDoc.required = remision;
-                if (lblObs) lblObs.classList.toggle('required', remision);
-                if (remision && obsDoc) obsDoc.placeholder = 'Motivo obligatorio: cierre de mes, Finanzas fuera de servicio, etc.';
-                else if (obsDoc) obsDoc.placeholder = '';
-            };
-
-            tipoDoc?.addEventListener('change', syncDocumento);
-            syncDocumento();
-
-            const formSubirDocumentos = document.getElementById('formSubirDocumentos');
-            const documentosUpload = document.getElementById('documentosUpload');
-            const documentosPicker = document.getElementById('documentosPicker');
-            const documentosCamara = document.getElementById('documentosCamara');
-            const documentosLista = document.getElementById('documentosSeleccionadosLista');
-            const documentosResumen = document.getElementById('documentosSeleccionadosResumen');
-            const btnElegirDocumentos = document.getElementById('btnElegirDocumentos');
-            const btnFotoDocumento = document.getElementById('btnFotoDocumento');
-            const btnSubirDocumentos = document.getElementById('btnSubirDocumentos');
-            let documentosSeleccionados = [];
-
-            const tamanoArchivo = bytes => {
-                const n = Number(bytes || 0);
-                if (n < 1024) return `${n} B`;
-                if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-                return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-            };
-
-            const claveDocumento = file => `${file.name}|${file.size}|${file.lastModified}`;
-
-            const iconoArchivo = file => {
-                const ext = (file.name.split('.').pop() || '').toLowerCase();
-                if ((file.type || '').startsWith('image/') || ['jpg','jpeg','png','webp','heic','heif'].includes(ext)) return 'fa-image';
-                if (ext === 'pdf') return 'fa-file-pdf';
-                if (['xls','xlsx'].includes(ext)) return 'fa-file-excel';
-                if (['doc','docx'].includes(ext)) return 'fa-file-word';
-                if (ext === 'xml') return 'fa-code';
-                return 'fa-file';
-            };
-
-            function sincronizarInputDocumentos() {
-                if (!documentosUpload) return;
-                const transfer = new DataTransfer();
-                documentosSeleccionados.forEach(file => transfer.items.add(file));
-                documentosUpload.files = transfer.files;
-            }
-
-            function renderDocumentosSeleccionados() {
-                sincronizarInputDocumentos();
-                if (documentosLista) {
-                    documentosLista.innerHTML = '';
-                    documentosSeleccionados.forEach((file, index) => {
-                        const row = document.createElement('div');
-                        row.className = 'doc-selected-item';
-                        const nombreSeguro = String(file.name || '')
-                            .replaceAll('&', '&amp;')
-                            .replaceAll('<', '&lt;')
-                            .replaceAll('>', '&gt;')
-                            .replaceAll('"', '&quot;')
-                            .replaceAll("'", '&#039;');
-                        row.innerHTML = `<span class="doc-selected-icon"><i class="fa-solid ${iconoArchivo(file)}"></i></span><div style="min-width:0"><strong title="${nombreSeguro}">${nombreSeguro}</strong><small>${tamanoArchivo(file.size)}</small></div><button type="button" class="doc-selected-remove" data-remove-doc="${index}" title="Quitar archivo"><i class="fa-solid fa-xmark"></i></button>`;
-                        documentosLista.appendChild(row);
-                    });
-                }
-                const totalBytes = documentosSeleccionados.reduce((s, file) => s + file.size, 0);
-                if (documentosResumen) {
-                    documentosResumen.textContent = documentosSeleccionados.length
-                        ? `${documentosSeleccionados.length} archivo(s) listos · ${tamanoArchivo(totalBytes)}`
-                        : '0 archivos seleccionados';
-                }
-                const span = btnSubirDocumentos?.querySelector('span');
-                if (span) span.textContent = documentosSeleccionados.length
-                    ? `Subir ${documentosSeleccionados.length}`
-                    : 'Subir';
-            }
-
-            function agregarDocumentos(files) {
-                const permitidas = new Set(['pdf','xml','xlsx','xls','docx','doc','jpg','jpeg','png','webp','heic','heif']);
-                const existentes = new Set(documentosSeleccionados.map(claveDocumento));
-                for (const file of files || []) {
-                    const ext = (file.name.split('.').pop() || '').toLowerCase();
-                    const esImagen = (file.type || '').startsWith('image/') || ['jpg','jpeg','png','webp','heic','heif'].includes(ext);
-                    if (!esImagen && !permitidas.has(ext)) {
-                        alert(`${file.name}: formato no permitido.`);
-                        continue;
-                    }
-                    if (file.size <= 0) {
-                        alert(`${file.name}: el archivo está vacío.`);
-                        continue;
-                    }
-                    if (file.size > 10 * 1024 * 1024) {
-                        alert(`${file.name}: excede el máximo de 10 MB.`);
-                        continue;
-                    }
-                    const key = claveDocumento(file);
-                    if (existentes.has(key)) continue;
-                    if (documentosSeleccionados.length >= 15) {
-                        alert('Puedes cargar como máximo 15 archivos por operación.');
-                        break;
-                    }
-                    const totalActual = documentosSeleccionados.reduce((s, x) => s + x.size, 0);
-                    if (totalActual + file.size > 100 * 1024 * 1024) {
-                        alert('El total de los archivos seleccionados no puede exceder 100 MB.');
-                        break;
-                    }
-                    documentosSeleccionados.push(file);
-                    existentes.add(key);
-                }
-                renderDocumentosSeleccionados();
-            }
-
-            btnElegirDocumentos?.addEventListener('click', () => documentosPicker?.click());
-            btnFotoDocumento?.addEventListener('click', () => documentosCamara?.click());
-
-            documentosPicker?.addEventListener('change', event => {
-                agregarDocumentos([...event.target.files]);
-                event.target.value = '';
-            });
-
-            documentosCamara?.addEventListener('change', event => {
-                agregarDocumentos([...event.target.files]);
-                event.target.value = '';
-            });
-
-            documentosLista?.addEventListener('click', event => {
-                const button = event.target.closest('[data-remove-doc]');
-                if (!button) return;
-                const index = Number(button.dataset.removeDoc);
-                if (!Number.isInteger(index) || index < 0 || index >= documentosSeleccionados.length) return;
-                documentosSeleccionados.splice(index, 1);
-                renderDocumentosSeleccionados();
-            });
-
-            formSubirDocumentos?.addEventListener('submit', event => {
-                if (documentosSeleccionados.length === 0) {
-                    event.preventDefault();
-                    alert('Selecciona al menos un archivo o toma una foto.');
-                    return;
-                }
-                sincronizarInputDocumentos();
-            });
-
-            renderDocumentosSeleccionados();
 
             const esc = value => String(value ?? '')
                 .replaceAll('&', '&amp;')
