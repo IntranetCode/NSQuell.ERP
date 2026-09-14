@@ -2,740 +2,438 @@
 @model LogisticaCrearVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Nuevo embarque";
-    var clienteNombre = Model.Clientes.FirstOrDefault(x => Model.ClienteID.HasValue && x.Id == Model.ClienteID.Value)?.Texto ?? string.Empty;
+    ViewData["Title"] = "Iniciar embarque";
 }
+
 @section Styles {
-    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
-}
-<style>
-    :root {
-        --lg-blue: #173a7a;
-        --lg-text: #172033;
-        --lg-muted: #6d7888;
-        --lg-border: #dce4ee;
-        --lg-danger: #b42318;
-        --lg-ok: #17633a;
-        --lg-shadow: 0 8px 24px rgba(22,42,75,.055)
-    }
-
-    .page {
-        max-width: 1680px;
-        margin: 0 auto;
-        padding: 18px 20px 118px;
-        color: var(--lg-text)
-    }
-
-    .head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        flex-wrap: wrap;
-        padding: 15px 17px;
-        margin-bottom: 14px;
-        border: 1px solid var(--lg-border);
-        border-left: 4px solid var(--lg-blue);
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: var(--lg-shadow)
-    }
-
-    .title {
-        margin: 0;
-        font-size: 1.48rem;
-        font-weight: 800
-    }
-
-        .title i {
-            color: var(--lg-blue)
+    <style>
+        :root {
+            --legacy-blue: #173a7a;
+            --legacy-blue-soft: #eef5ff;
+            --legacy-text: #172033;
+            --legacy-muted: #667085;
+            --legacy-border: #dbe4f0;
+            --legacy-surface: #fff;
+            --legacy-bg: #f4f7fb;
+            --legacy-green: #107c41;
+            --legacy-warn: #b54708
         }
 
-    .subtitle {
-        margin: 3px 0 0;
-        color: var(--lg-muted);
-        font-size: .84rem
-    }
-
-    .section {
-        margin-bottom: 12px;
-        padding: 14px 15px;
-        border: 1px solid var(--lg-border);
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: var(--lg-shadow)
-    }
-
-    .section-title {
-        position: relative;
-        padding-left: 11px;
-        margin: 0 0 5px;
-        font-size: .98rem;
-        font-weight: 800
-    }
-
-        .section-title:before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 2px;
-            width: 3px;
-            height: 16px;
-            border-radius: 5px;
-            background: var(--lg-blue)
+        body {
+            background: var(--legacy-bg)
         }
 
-    .section-sub {
-        margin: 0 0 11px;
-        color: var(--lg-muted);
-        font-size: .74rem
-    }
-
-    .grid {
-        display: grid;
-        grid-template-columns: repeat(12,1fr);
-        gap: 10px 12px
-    }
-
-    .g6 {
-        grid-column: span 6
-    }
-
-    .form-label {
-        margin-bottom: 4px;
-        font-size: .75rem;
-        font-weight: 700
-    }
-
-    .required:after {
-        content: " *";
-        color: #dc3545;
-        font-weight: 800
-    }
-
-    .form-control, .form-select {
-        min-height: 38px;
-        border-color: #d3dde8;
-        border-radius: 8px;
-        font-size: .82rem
-    }
-
-    .client-strip {
-        display: flex;
-        gap: 0;
-        flex-wrap: wrap;
-        margin-top: 10px;
-        padding: 9px 12px;
-        border: 1px solid #d6e0eb;
-        border-radius: 9px;
-        background: #f8fafc
-    }
-
-        .client-strip > div {
-            min-width: 150px;
-            padding: 3px 16px;
-            border-right: 1px solid #dfe6ee
+        .legacy-page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 24px 18px 40px;
+            color: var(--legacy-text)
         }
 
-            .client-strip > div:last-child {
+        .legacy-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            padding: 17px 18px;
+            margin-bottom: 14px;
+            border: 1px solid var(--legacy-border);
+            border-left: 4px solid var(--legacy-blue);
+            border-radius: 15px;
+            background: var(--legacy-surface)
+        }
+
+        .legacy-title {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 900;
+            color: var(--legacy-text)
+        }
+
+            .legacy-title i {
+                color: var(--legacy-blue)
+            }
+
+        .legacy-subtitle {
+            margin: 4px 0 0;
+            color: var(--legacy-muted);
+            font-size: .82rem;
+            font-weight: 650
+        }
+
+        .legacy-back {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border-radius: 9px;
+            font-weight: 800
+        }
+
+        .legacy-alert {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 15px 16px;
+            margin-bottom: 14px;
+            border: 1px solid #efcf8d;
+            border-left: 4px solid var(--legacy-warn);
+            border-radius: 13px;
+            background: #fff9ea
+        }
+
+            .legacy-alert > i {
+                margin-top: 2px;
+                color: var(--legacy-warn);
+                font-size: 1.15rem
+            }
+
+            .legacy-alert strong {
+                display: block;
+                margin-bottom: 3px;
+                color: #7c4d00;
+                font-size: .88rem;
+                font-weight: 900
+            }
+
+            .legacy-alert span {
+                display: block;
+                color: #735f37;
+                font-size: .78rem;
+                line-height: 1.5;
+                font-weight: 650
+            }
+
+        .flow-card {
+            overflow: hidden;
+            margin-bottom: 14px;
+            border: 1px solid var(--legacy-border);
+            border-radius: 15px;
+            background: var(--legacy-surface)
+        }
+
+        .flow-card-head {
+            padding: 13px 15px;
+            border-bottom: 1px solid var(--legacy-border);
+            background: #f8fbff
+        }
+
+            .flow-card-head h2 {
+                margin: 0;
+                font-size: .95rem;
+                font-weight: 900;
+                color: var(--legacy-blue)
+            }
+
+            .flow-card-head p {
+                margin: 3px 0 0;
+                color: var(--legacy-muted);
+                font-size: .74rem;
+                font-weight: 650
+            }
+
+        .flow-steps {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 0
+        }
+
+        .flow-step {
+            position: relative;
+            min-height: 135px;
+            padding: 16px;
+            border-right: 1px solid var(--legacy-border)
+        }
+
+            .flow-step:last-child {
                 border-right: 0
             }
 
-        .client-strip span {
-            display: block;
-            color: var(--lg-muted);
-            font-size: .68rem
-        }
-
-        .client-strip strong {
-            display: block;
-            color: var(--lg-blue);
-            font-size: .88rem
-        }
-
-    .scan {
-        position: sticky;
-        top: 10px;
-        z-index: 35;
-        display: grid;
-        grid-template-columns: minmax(0,1fr) auto;
-        gap: 12px;
-        align-items: end;
-        padding: 14px;
-        margin-bottom: 14px;
-        border: 1px solid #cfdced;
-        border-left: 4px solid var(--lg-blue);
-        border-radius: 11px;
-        background: #f8fbff;
-        box-shadow: 0 8px 22px rgba(23,58,122,.08)
-    }
-
-    .scan-label {
-        display: block;
-        margin-bottom: 5px;
-        color: #40516a;
-        font-size: .72rem;
-        font-weight: 800;
-        text-transform: uppercase
-    }
-
-    .scan-wrap {
-        position: relative
-    }
-
-        .scan-wrap > i {
-            position: absolute;
-            left: 13px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--lg-blue)
-        }
-
-    .scan-input {
-        width: 100%;
-        min-height: 48px;
-        padding: 8px 12px 8px 40px;
-        border: 2px solid #9fb7d9;
-        border-radius: 9px;
-        background: #fff;
-        font-size: 1rem;
-        font-weight: 700;
-        outline: none
-    }
-
-    .scan-message {
-        min-height: 20px;
-        margin-top: 6px;
-        color: #53647b;
-        font-size: .76rem;
-        font-weight: 600
-    }
-
-        .scan-message.ok {
-            color: var(--lg-ok)
-        }
-
-        .scan-message.error {
-            color: var(--lg-danger)
-        }
-
-    .scan-actions {
-        display: flex;
-        gap: 7px
-    }
-
-    .parts {
-        display: grid;
-        gap: 9px
-    }
-
-    details.part {
-        overflow: hidden;
-        border: 1px solid #dbe4ee;
-        border-radius: 10px;
-        background: #fff
-    }
-
-        details.part.has-selection {
-            border-color: #7599cf;
-            box-shadow: inset 4px 0 0 var(--lg-blue)
-        }
-
-        details.part > summary {
+        .flow-step-num {
+            width: 31px;
+            height: 31px;
             display: grid;
-            grid-template-columns: minmax(250px,1.5fr) 100px 130px 135px 145px 20px;
-            gap: 10px;
+            place-items: center;
+            margin-bottom: 9px;
+            border-radius: 50%;
+            background: var(--legacy-blue-soft);
+            color: var(--legacy-blue);
+            font-size: .78rem;
+            font-weight: 950
+        }
+
+        .flow-step strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--legacy-text);
+            font-size: .82rem;
+            font-weight: 900
+        }
+
+        .flow-step span {
+            display: block;
+            color: var(--legacy-muted);
+            font-size: .72rem;
+            line-height: 1.45;
+            font-weight: 650
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 12px
+        }
+
+        .action-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 190px;
+            padding: 17px;
+            border: 1px solid var(--legacy-border);
+            border-radius: 14px;
+            background: var(--legacy-surface)
+        }
+
+        .action-icon {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 11px;
+            border-radius: 11px;
+            background: var(--legacy-blue-soft);
+            color: var(--legacy-blue);
+            font-size: 1rem
+        }
+
+        .action-card h3 {
+            margin: 0 0 5px;
+            color: var(--legacy-text);
+            font-size: .9rem;
+            font-weight: 900
+        }
+
+        .action-card p {
+            margin: 0 0 14px;
+            color: var(--legacy-muted);
+            font-size: .74rem;
+            line-height: 1.45;
+            font-weight: 650
+        }
+
+        .action-card .btn {
+            margin-top: auto;
+            min-height: 39px;
+            display: inline-flex;
             align-items: center;
-            min-height: 62px;
-            padding: 10px 12px;
-            list-style: none;
-            background: #f8fafc;
-            cursor: pointer
+            justify-content: center;
+            gap: 7px;
+            border-radius: 9px;
+            font-weight: 850
         }
 
-            details.part > summary::-webkit-details-marker {
-                display: none
+        .btn-main {
+            background: var(--legacy-blue);
+            border-color: var(--legacy-blue);
+            color: #fff
+        }
+
+            .btn-main:hover {
+                background: #102e65;
+                border-color: #102e65;
+                color: #fff
             }
 
-            details.part > summary:after {
-                content: "\f078";
-                font-family: "Font Awesome 6 Free";
-                font-weight: 900;
-                color: #63758c
+        .legacy-footer-note {
+            margin-top: 14px;
+            padding: 11px 13px;
+            border: 1px dashed #cbd7e3;
+            border-radius: 11px;
+            background: #fafbfd;
+            color: var(--legacy-muted);
+            font-size: .73rem;
+            line-height: 1.45;
+            font-weight: 650
+        }
+
+            .legacy-footer-note strong {
+                color: var(--legacy-text)
             }
 
-        details.part[open] > summary:after {
-            content: "\f077"
+        html[data-nsq-theme="dark"] {
+            --legacy-text: #eef4fb;
+            --legacy-muted: #9badc2;
+            --legacy-border: #2b3d53;
+            --legacy-surface: #111c2d;
+            --legacy-bg: #08111e;
+            --legacy-blue-soft: #172b47;
+            color-scheme: dark
         }
 
-    .muted {
-        color: var(--lg-muted);
-        font-size: .68rem
-    }
+            html[data-nsq-theme="dark"] .flow-card-head {
+                background: #0d1828
+            }
 
-    .part-main {
-        font-size: .83rem;
-        font-weight: 800
-    }
+            html[data-nsq-theme="dark"] .legacy-alert {
+                background: #2b2414;
+                border-color: #765f2c
+            }
 
-    .boxes {
-        padding: 10px 11px 11px;
-        border-top: 1px solid #e5ebf1
-    }
+                html[data-nsq-theme="dark"] .legacy-alert strong {
+                    color: #ffd78a
+                }
 
-    .box-list {
-        display: flex;
-        flex-direction: column;
-        gap: 7px
-    }
+                html[data-nsq-theme="dark"] .legacy-alert span {
+                    color: #dfcda8
+                }
 
-    .box {
-        display: grid;
-        grid-template-columns: 34px minmax(280px,1.45fr) minmax(150px,.75fr) minmax(180px,.9fr) 130px;
-        gap: 11px;
-        align-items: center;
-        min-height: 66px;
-        padding: 8px 10px;
-        border: 1px solid #dce4ed;
-        border-radius: 8px;
-        background: #fbfcfe
-    }
+            html[data-nsq-theme="dark"] .legacy-footer-note {
+                background: #0d1828
+            }
 
-        .box.selected {
-            border-color: #6f96ce;
-            background: #eef5ff;
-            box-shadow: inset 3px 0 0 var(--lg-blue)
+        @@media(max-width:900px) {
+            .flow-steps {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .flow-step:nth-child(2) {
+                border-right: 0
+            }
+
+            .flow-step:nth-child(-n+2) {
+                border-bottom: 1px solid var(--legacy-border)
+            }
+
+            .actions-grid {
+                grid-template-columns: 1fr
+            }
+
+            .action-card {
+                min-height: 0
+            }
         }
 
-    .box-main strong, .box-main span, .box-main small, .box-meta span, .box-meta strong, .box-meta small, .box-qty span, .box-qty strong, .box-qty small {
-        display: block
-    }
+        @@media(max-width:600px) {
+            .legacy-page {
+                padding: 12px 9px 28px
+            }
 
-    .box-main strong {
-        font-size: .84rem
-    }
+            .legacy-head {
+                align-items: stretch
+            }
 
-    .box-main span {
-        font-size: .75rem;
-        font-weight: 700
-    }
+            .legacy-back {
+                width: 100%;
+                justify-content: center
+            }
 
-    .box-main small, .box-meta small, .box-qty small {
-        color: #7a8798;
-        font-size: .67rem
-    }
+            .flow-steps {
+                grid-template-columns: 1fr
+            }
 
-    .box-meta span, .box-qty span {
-        color: #748195;
-        font-size: .66rem;
-        text-transform: uppercase
-    }
+            .flow-step {
+                min-height: 0;
+                border-right: 0;
+                border-bottom: 1px solid var(--legacy-border)
+            }
 
-    .box-meta strong {
-        font-size: .75rem
-    }
-
-    .box-qty {
-        text-align: right
-    }
-
-        .box-qty strong {
-            color: var(--lg-blue);
-            font-size: .92rem
+                .flow-step:last-child {
+                    border-bottom: 0
+                }
         }
+    </style>
+}
 
-    .release-panel {
-        margin-top: 9px;
-        overflow: hidden;
-        border: 1px solid #dce5ef;
-        border-radius: 9px;
-        background: #f8fafc
-    }
-
-    .release-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 8px 10px
-    }
-
-        .release-head strong {
-            font-size: .8rem
-        }
-
-        .release-head span {
-            color: #637187;
-            font-size: .7rem
-        }
-
-    .release-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: .73rem
-    }
-
-        .release-table th {
-            padding: 5px 7px;
-            border-top: 1px solid #d8e1eb;
-            border-bottom: 1px solid #d8e1eb;
-            color: #647184;
-            text-align: left;
-            font-size: .65rem;
-            text-transform: uppercase
-        }
-
-        .release-table td {
-            padding: 7px;
-            border-bottom: 1px solid #e6ebf1
-        }
-
-        .release-table .num {
-            text-align: right;
-            font-weight: 800
-        }
-
-    .visual-only {
-        display: inline-flex;
-        padding: 2px 6px;
-        border-radius: 999px;
-        background: #eef2f6;
-        color: #5e6b7c;
-        font-size: .62rem;
-        font-weight: 700;
-        text-transform: uppercase
-    }
-
-    .footer-info {
-        display: grid;
-        grid-template-columns: repeat(4,minmax(130px,1fr));
-        gap: 8px;
-        margin-top: 13px
-    }
-
-        .footer-info > div {
-            padding: 9px 10px;
-            border: 1px solid #dce4ed;
-            border-radius: 8px
-        }
-
-        .footer-info span {
-            display: block;
-            color: #68768a;
-            font-size: .68rem
-        }
-
-        .footer-info strong {
-            display: block;
-            font-size: .88rem
-        }
-
-    .floating {
-        position: fixed;
-        left: 50%;
-        bottom: 14px;
-        transform: translateX(-50%);
-        z-index: 1060;
-        width: min(1180px,calc(100vw - 36px));
-        display: grid;
-        grid-template-columns: minmax(0,1fr) auto;
-        gap: 16px;
-        align-items: center;
-        padding: 11px 13px;
-        border: 1px solid #c9d7e8;
-        border-radius: 12px;
-        background: rgba(255,255,255,.97);
-        box-shadow: 0 16px 40px rgba(20,42,75,.2)
-    }
-
-    .floating-info {
-        display: flex;
-        align-items: center;
-        gap: 16px
-    }
-
-    .step-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 6px 9px;
-        border-radius: 8px;
-        background: #eef4fc;
-        color: var(--lg-blue);
-        font-size: .72rem;
-        font-weight: 800
-    }
-
-    .floating-summary small {
-        display: block;
-        color: #6f7e92;
-        font-size: .68rem
-    }
-
-    .floating-summary strong {
-        display: block;
-        font-size: .9rem
-    }
-
-        .floating-summary strong.error {
-            color: var(--lg-danger)
-        }
-
-    .floating-actions {
-        display: flex;
-        gap: 8px
-    }
-
-        .floating-actions .btn {
-            min-height: 42px;
-            font-weight: 800
-        }
-
-        .floating-actions .btn-primary {
-            min-width: 250px;
-            background: #0b4f8a;
-            border-color: #0b4f8a
-        }
-
-    .empty {
-        padding: 18px;
-        border: 1px dashed #cfd8e3;
-        border-radius: 9px;
-        background: #fafbfd;
-        text-align: center;
-        color: #66758a
-    }
-
-    @@media(max-width:1050px) {
-        details.part > summary {
-            grid-template-columns: minmax(220px,1fr) repeat(2,110px) 20px
-        }
-
-        .box {
-            grid-template-columns: 34px 1fr 120px
-        }
-
-        .footer-info {
-            grid-template-columns: repeat(2,1fr)
-        }
-    }
-
-    @@media(max-width:760px) {
-        .page {
-            padding: 12px 10px 160px
-        }
-
-        .g6 {
-            grid-column: span 12
-        }
-
-        .scan {
-            position: static;
-            grid-template-columns: 1fr
-        }
-
-        .floating {
-            grid-template-columns: 1fr;
-            width: calc(100vw - 20px);
-            bottom: 8px
-        }
-
-        .floating-actions .btn-primary {
-            min-width: 0;
-            flex: 1
-        }
-
-        details.part > summary {
-            grid-template-columns: 1fr 90px 20px
-        }
-
-        .box {
-            grid-template-columns: 34px 1fr
-        }
-
-        .release-panel {
-            overflow-x: auto
-        }
-
-        .release-table {
-            min-width: 680px
-        }
-    }
-</style>
-
-<div class="page">
-    <div class="head">
+<div class="legacy-page">
+    <section class="legacy-head">
         <div>
-            <h1 class="title"><i class="fa-solid fa-truck-ramp-box me-1"></i>Nuevo embarque</h1>
-            <p class="subtitle">Paso 1: selecciona cliente y cajas PT. Los datos de carga y recolección se capturan en el siguiente paso.</p>
+            <h1 class="legacy-title"><i class="fa-solid fa-truck-ramp-box me-2"></i>Iniciar embarque</h1>
+            <p class="legacy-subtitle">El alta operativa de embarques se realiza desde la programación vigente de Logística.</p>
         </div>
-        <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm">Regresar</a>
-    </div>
+        <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm legacy-back">
+            <i class="fa-solid fa-arrow-left"></i>
+            Regresar a embarques
+        </a>
+    </section>
+
     @if (TempData["LogisticaError"] != null)
     {
-        <div class="alert alert-danger py-2 px-3">@TempData["LogisticaError"]</div>
+        <div class="alert alert-danger py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]
+        </div>
     }
-    <form asp-controller="LogisticaEmbarques" asp-action="PrepararDesdePT" method="post" id="formCrear" autocomplete="off">
-        @Html.AntiForgeryToken()
-        <div asp-validation-summary="ModelOnly" class="text-danger small mb-2"></div>
-        <div class="section">
-            <h2 class="section-title">1. Cliente</h2>
-            <p class="section-sub">Solo se muestran cajas PT liberadas relacionadas con Releases pendientes del cliente.</p>
-            <div class="grid">
-                <div class="g6">
-                    <label asp-for="ClienteID" class="form-label required">Cliente</label>
-                    <select asp-for="ClienteID" class="form-select" id="ClienteID" required>
-                        <option value="">Selecciona un cliente...</option>
-                        @foreach (var c in Model.Clientes)
-                        {
-                            <option value="@c.Id">@c.Texto</option>
-                        }
-                    </select>
-                    <span asp-validation-for="ClienteID" class="text-danger small"></span>
-                </div>
-            </div>
-            @if (Model.ClienteID.HasValue)
-            {
-                <div class="client-strip">
-                    <div><span>Cliente</span><strong>@clienteNombre</strong></div>
-                    <div><span>Cajas PT</span><strong>@Model.CajasPT.Count.ToString("N0")</strong></div>
-                    <div><span>Piezas PT</span><strong>@Model.CajasPT.Sum(x => (long)x.Disponible).ToString("N0")</strong></div>
-                    <div><span>Seleccionadas</span><strong id="resCajasPt">0</strong></div>
-                </div>
-            }
+
+    <div class="legacy-alert">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>
+            <strong>Esta pantalla ya no debe crear embarques seleccionando cajas PT directamente.</strong>
+            <span>La selección manual de PT en este punto pertenecía al flujo anterior. Primero se programa la fecha de carga; después, desde Centro Operativo, se inicia el embarque utilizando las programaciones pendientes. La reserva, documentación y carga física se realizan posteriormente dentro del flujo del embarque.</span>
         </div>
+    </div>
 
-        @if (Model.ClienteID.HasValue)
-        {
-            var cajasIndexadas = Model.CajasPT.Select((caja, index) => new { Caja = caja, Index = index }).ToList();
-            var gruposPt = cajasIndexadas.GroupBy(x => new { x.Caja.ParteID, x.Caja.NumeroParte, x.Caja.Descripcion }).OrderBy(g => g.Min(x => x.Caja.FechaEntrada)).ThenBy(g => g.Key.NumeroParte).ToList();
-            <div class="section">
-                <h2 class="section-title">2. Packing List / selección de PT</h2>
-                <p class="section-sub">Escanea o selecciona cajas completas. Esta selección será la base del Packing List del embarque.</p>
-                <div class="scan">
-                    <div>
-                        <label class="scan-label" for="logisticaScanInput">Escáner de cajas PT</label>
-                        <div class="scan-wrap"><i class="fa-solid fa-barcode"></i><input id="logisticaScanInput" class="scan-input" type="text" autocomplete="off" inputmode="none" autofocus placeholder="Escanea la etiqueta y presiona Enter/Tab..." /></div>
-                        <div id="logisticaScanMessage" class="scan-message">Cursor listo.</div>
-                    </div>
-                    <div class="scan-actions">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFocusScan">Enfocar escáner</button>
-                        <button type="button" class="btn btn-outline-danger btn-sm" id="btnClearPtSelection">Limpiar selección</button>
-                    </div>
-                </div>
-                @if (Model.CajasPT.Count == 0)
-                {
-                    <div class="empty"><strong>Sin PT disponible para este cliente</strong><div class="small mt-1">No existen cajas liberadas con saldo disponible y demanda pendiente.</div></div>
-                }
-                else
-                {
-                    <div class="client-strip mb-3">
-                        <div><span>Partes con PT</span><strong>@gruposPt.Count.ToString("N0")</strong></div>
-                        <div><span>Cajas disponibles</span><strong>@Model.CajasPT.Count.ToString("N0")</strong></div>
-                        <div><span>PT disponible</span><strong>@Model.CajasPT.Sum(x => (long)x.Disponible).ToString("N0") PZA</strong></div>
-                        <div><span>Seleccionado</span><strong id="resPiezasPt">0 PZA</strong></div>
-                    </div>
-                    <div class="parts">
-                        @foreach (var grupo in gruposPt)
-                        {
-                            var piezasDisponibles = grupo.Sum(x => (long)x.Caja.Disponible);
-                            var releasesPendientes = grupo.Max(x => x.Caja.ReleasesPendientes);
-                            var piezasPendientesRelease = grupo.Max(x => x.Caja.PiezasPendientesRelease);
-                            var primeraEntrada = grupo.Min(x => x.Caja.FechaEntrada);
-                            var releasesParte = Model.Partidas.Where(x => string.Equals(x.NumeroParte, grupo.Key.NumeroParte, StringComparison.OrdinalIgnoreCase) && x.PendienteProgramar > 0).OrderBy(x => x.FechaCarga ?? x.FechaEntrega).ThenBy(x => x.FechaEntrega).ThenBy(x => x.ReleaseDetalleID).ToList();
-                            <details class="part">
-                                <summary>
-                                    <div><div class="muted">PARTE</div><div class="part-main">@grupo.Key.NumeroParte</div><div class="muted">@(string.IsNullOrWhiteSpace(grupo.Key.Descripcion) ? "Sin descripción" : grupo.Key.Descripcion)</div></div>
-                                    <div><div class="muted">Cajas PT</div><strong>@grupo.Count().ToString("N0")</strong></div>
-                                    <div><div class="muted">PT disponible</div><strong>@piezasDisponibles.ToString("N0")</strong></div>
-                                    <div><div class="muted">Releases</div><strong>@releasesPendientes.ToString("N0")</strong></div>
-                                    <div><div class="muted">Entrada más antigua</div><strong>@primeraEntrada.ToString("dd/MM/yyyy")</strong></div>
-                                    <span></span>
-                                </summary>
-                                <div class="boxes">
-                                    @if (releasesPendientes <= 0 || piezasPendientesRelease <= 0)
-                                    {
-                                        <div class="alert alert-warning py-2 px-3"><strong>SIN RELEASE PENDIENTE</strong></div>
-                                    }
-                                    else
-                                    {
-
-                                        <div class="muted mb-2">Pendiente total de Releases: <strong>@piezasPendientesRelease.ToString("N0") PZA</strong></div>
-                                    }
-                                    <div class="box-list">
-                                        @foreach (var item in grupo.OrderBy(x => x.Caja.FechaEntrada).ThenBy(x => x.Caja.CajaID))
-                                        {
-                                            var i = item.Index; var caja = item.Caja;
-                                            <div class="box js-box-pt-row" data-i="@i" data-parte="@caja.ParteID" data-etiqueta="@caja.Etiqueta" data-lote="@caja.Lote" data-caja-id="@caja.CajaID" data-numero-caja="@caja.NumeroCaja" data-numero-parte="@caja.NumeroParte" data-disponible="@caja.Disponible" data-pendiente-parte="@piezasPendientesRelease">
-                                                @if (caja.TieneReleasePendiente)
-                                                {
-                                                    <input asp-for="CajasPT[i].Seleccionada" class="form-check-input js-caja-pt" data-i="@i" />
-                                                }
-                                                else
-                                                {
-
-                                                    <input type="checkbox" class="form-check-input" disabled />
-                                                    <input type="hidden" name="CajasPT[@i].Seleccionada" value="false" />
-                }
-                                                <input asp-for="CajasPT[i].CajaID" type="hidden" />
-                                                <div class="box-main"><strong>Caja #@caja.NumeroCaja</strong><span>@(string.IsNullOrWhiteSpace(caja.Lote) ? "Sin lote" : caja.Lote)</span><small>Etiqueta: @caja.Etiqueta</small></div>
-                                                <div class="box-meta"><span>OF origen</span><strong>@(string.IsNullOrWhiteSpace(caja.NumeroOF) ? "-" : caja.NumeroOF)</strong><small>@caja.FechaEntrada.ToString("dd/MM/yyyy HH:mm")</small></div>
-                                                <div class="box-meta"><span>Ubicación</span><strong>@(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicar" : caja.Ubicacion)</strong><small>Calidad: @caja.EstadoCalidad</small></div>
-                                                <div class="box-qty"><span>Caja completa</span><strong>@caja.Disponible.ToString("N0") PZA</strong><small>Original @caja.CantidadInicial.ToString("N0")</small></div>
-                                            </div>
-                                        }
-                                    </div>
-                                    <div class="release-panel">
-                                        <div class="release-head"><strong>Releases relacionados</strong><span>Fecha de entrega: solo visual</span></div>
-                                        @if (releasesParte.Count == 0)
-                                        {
-                                            <div class="p-2 text-muted small">No existe Release pendiente para esta parte.</div>
-                                        }
-                                        else
-                                        {
-                                            <table class="release-table">
-                                                <thead><tr><th>Release</th><th>OF</th><th>Fecha carga</th><th>Fecha entrega <span class="visual-only">Visual</span></th><th class="num">Pendiente</th></tr></thead>
-                                                <tbody>
-                                                    @foreach (var rel in releasesParte)
-                                                    {
-                                                        <tr><td><strong>@rel.FolioRelease</strong></td><td>@(string.IsNullOrWhiteSpace(rel.NumeroOF) ? "-" : rel.NumeroOF)</td><td>@(rel.FechaCarga?.ToString("dd/MM/yyyy") ?? "-")</td><td>@rel.FechaEntrega.ToString("dd/MM/yyyy")</td><td class="num">@rel.PendienteProgramar.ToString("N0") PZA</td></tr>
-                                                    }
-                                                </tbody>
-                                            </table>
-                                        }
-                                    </div>
-                                </div>
-                            </details>
-                        }
-                    </div>
-                    <div class="footer-info">
-                        <div><span>Demanda pendiente</span><strong>@Model.Partidas.Sum(x => (long)x.PendienteProgramar).ToString("N0") PZA</strong></div>
-                        <div><span>Cajas físicas</span><strong>@Model.CajasPT.Count.ToString("N0")</strong></div>
-                        <div><span>PT disponible</span><strong>@Model.CajasPT.Sum(x => (long)x.Disponible).ToString("N0") PZA</strong></div>
-                        <div><span>Siguiente paso</span><strong>Datos de carga y recolección</strong></div>
-                    </div>
-                    <div class="alert alert-light border mt-2 mb-0 small"><strong>Importante:</strong> aquí no se captura fecha de entrega, ruta, chofer ni paquetería. Eso se captura en el paso 2.</div>
-                }
-            </div>
-        }
-
-        <div class="floating">
-            <div class="floating-info"><div class="step-badge">Paso 1 de 2</div><div class="floating-summary"><small>Packing List / selección PT</small><strong id="nextSummary">Selecciona o escanea al menos una caja completa</strong></div></div>
-            <div class="floating-actions"><a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a><button type="submit" class="btn btn-primary" id="btnGuardar" disabled>Siguiente: datos del embarque</button></div>
+    <section class="flow-card">
+        <div class="flow-card-head">
+            <h2>Flujo vigente para iniciar un embarque</h2>
+            <p>Las dos vistas principales trabajan sobre la misma programación y el mismo embarque.</p>
         </div>
-    </form>
+        <div class="flow-steps">
+            <div class="flow-step">
+                <div class="flow-step-num">1</div>
+                <strong>Lista de carga</strong>
+                <span>Define el día de carga de los Releases pendientes. Aquí todavía no se crea el embarque.</span>
+            </div>
+            <div class="flow-step">
+                <div class="flow-step-num">2</div>
+                <strong>Centro Operativo</strong>
+                <span>Las programaciones pendientes aparecen disponibles para iniciar el embarque por cliente y fecha.</span>
+            </div>
+            <div class="flow-step">
+                <div class="flow-step-num">3</div>
+                <strong>Iniciar embarque</strong>
+                <span>Se seleccionan las programaciones que formarán el embarque y se crea una sola operación vinculada.</span>
+            </div>
+            <div class="flow-step">
+                <div class="flow-step-num">4</div>
+                <strong>Operar embarque</strong>
+                <span>Preparación, documentación, carga física, salida y entrega continúan sobre el mismo embarque.</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="actions-grid">
+        <section class="action-card">
+            <div class="action-icon"><i class="fa-solid fa-calendar-days"></i></div>
+            <h3>Centro Operativo</h3>
+            <p>Abre el calendario operativo para localizar las programaciones listas e iniciar el embarque desde el flujo vigente.</p>
+            <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-main">
+                <i class="fa-solid fa-table-columns"></i>
+                Ir a Centro Operativo
+            </a>
+        </section>
+
+        <section class="action-card">
+            <div class="action-icon"><i class="fa-solid fa-list-check"></i></div>
+            <h3>Lista de carga</h3>
+            <p>Si el Release todavía no tiene día de carga, prográmalo primero aquí. Esta pantalla solo agenda la carga; no genera el embarque.</p>
+            <a asp-controller="LogisticaListaCarga" asp-action="Index" class="btn btn-outline-primary">
+                <i class="fa-solid fa-calendar-plus"></i>
+                Ir a Lista de carga
+            </a>
+        </section>
+
+        <section class="action-card">
+            <div class="action-icon"><i class="fa-solid fa-truck-fast"></i></div>
+            <h3>Vista lista de embarques</h3>
+            <p>Consulta las programaciones listas para iniciar y los embarques que ya están en operación desde la vista de lista.</p>
+            <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-primary">
+                <i class="fa-solid fa-list"></i>
+                Ver embarques
+            </a>
+        </section>
+    </div>
+
+    <div class="legacy-footer-note">
+        <strong>Importante:</strong> el escaneo de cajas que ocurre durante la <strong>carga física</strong> no desaparece. Ese escaneo se conserva dentro del embarque ya creado y puede realizarse tanto desde Centro Operativo como desde el portal del chofer cuando corresponda. Lo que se elimina de esta pantalla es la selección anticipada de cajas PT para crear un embarque por un camino paralelo.
+    </div>
 </div>
-
-@section Scripts {
-    <script>
-        (()=>{
-         const cliente=document.getElementById('ClienteID'),form=document.getElementById('formCrear'),scanInput=document.getElementById('logisticaScanInput'),scanMessage=document.getElementById('logisticaScanMessage'),btnFocus=document.getElementById('btnFocusScan'),btnClear=document.getElementById('btnClearPtSelection'),btnGuardar=document.getElementById('btnGuardar'),resCajas=document.getElementById('resCajasPt'),resPiezas=document.getElementById('resPiezasPt'),nextSummary=document.getElementById('nextSummary');
-         cliente?.addEventListener('change',()=>{const id=cliente.value;window.location.href=id?'@Url.Action("Crear", "LogisticaEmbarques")?clienteId='+encodeURIComponent(id):'@Url.Action("Crear", "LogisticaEmbarques")';});
-         const norm=v=>(v||'').trim().toUpperCase();
-         const msg=(t,c='')=>{if(!scanMessage)return;scanMessage.textContent=t;scanMessage.classList.remove('ok','error');if(c)scanMessage.classList.add(c);};
-         const actualizar=()=>{let cajas=0,piezas=0,excede=false;const porParte=new Map(),pendientes=new Map();document.querySelectorAll('.js-box-pt-row').forEach(r=>{const p=r.dataset.parte||'',q=Number(r.dataset.pendienteParte||0);if(p&&q>0)pendientes.set(p,q);});document.querySelectorAll('.js-caja-pt').forEach(chk=>{const r=document.querySelector(`.js-box-pt-row[data-i="${chk.dataset.i}"]`);if(!r)return;r.classList.toggle('selected',chk.checked);if(chk.checked){cajas++;const q=Number(r.dataset.disponible||0);piezas+=q;const p=r.dataset.parte||'';porParte.set(p,(porParte.get(p)||0)+q);}});porParte.forEach((q,p)=>{const pend=pendientes.get(p)||0;if(pend>0&&q>pend)excede=true;});document.querySelectorAll('details.part').forEach(d=>{const s=!!d.querySelector('.js-caja-pt:checked');d.classList.toggle('has-selection',s);if(s)d.open=true;});if(resCajas)resCajas.textContent=cajas.toLocaleString('es-MX');if(resPiezas)resPiezas.textContent=piezas.toLocaleString('es-MX')+' PZA';if(btnGuardar)btnGuardar.disabled=cajas===0||excede;if(nextSummary){nextSummary.classList.toggle('error',excede);nextSummary.textContent=excede?'La selección excede el pendiente de un Release.':cajas===0?'Selecciona o escanea al menos una caja completa':`${cajas.toLocaleString('es-MX')} caja(s) · ${piezas.toLocaleString('es-MX')} PZA`;}};
-         const escanear=()=>{if(!scanInput)return;const code=norm(scanInput.value);if(!code){msg('El lector no envió contenido.','error');return;}const rows=Array.from(document.querySelectorAll('.js-box-pt-row'));let cand=rows.filter(r=>norm(r.dataset.etiqueta)===code);if(cand.length===0)cand=rows.filter(r=>norm(r.dataset.lote)===code);if(cand.length!==1){msg(cand.length===0?'La etiqueta no corresponde a una caja disponible.':'La lectura coincide con más de una caja.','error');scanInput.select();return;}const r=cand[0],chk=document.querySelector(`.js-caja-pt[data-i="${r.dataset.i}"]`);if(!chk){msg('La caja no tiene Release pendiente.','error');return;}if(chk.checked){msg('La caja ya estaba seleccionada.','error');scanInput.value='';return;}chk.checked=true;r.closest('details')?.setAttribute('open','open');actualizar();msg(`Caja #${r.dataset.numeroCaja||r.dataset.cajaId||''} seleccionada.`,'ok');scanInput.value='';setTimeout(()=>scanInput.focus(),120);};
-         document.querySelectorAll('.js-caja-pt').forEach(c=>c.addEventListener('change',actualizar));scanInput?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();escanear();}});btnFocus?.addEventListener('click',()=>scanInput?.focus());btnClear?.addEventListener('click',()=>{document.querySelectorAll('.js-caja-pt:checked').forEach(c=>c.checked=false);actualizar();msg('Selección limpia.');scanInput?.focus();});form?.addEventListener('submit',e=>{actualizar();if(btnGuardar?.disabled){e.preventDefault();msg('Selecciona al menos una caja válida.','error');scanInput?.focus();}});actualizar();setTimeout(()=>scanInput?.focus(),120);
-        })();
-    </script>
-}

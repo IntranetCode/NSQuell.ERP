@@ -306,6 +306,13 @@
                 box-shadow: 0 0 0 3px rgba(23,58,122,.07)
             }
 
+            .choice.is-disabled label {
+                opacity: .48;
+                cursor: not-allowed;
+                background: #f3f5f8;
+                border-color: #dde3ea
+            }
+
         .choice-icon {
             display: flex;
             align-items: center;
@@ -669,13 +676,14 @@
             </div>
 
             <form method="post"
-                  asp-controller="LogisticaEmbarques"
-                  asp-action="ConfigurarEnvio"
+                  asp-controller="LogisticaOperacion"
+                  asp-action="ConfirmarSalidaConfigurada"
                   id="formDefinirSalida">
 
                 @Html.AntiForgeryToken()
 
                 <input asp-for="EmbarqueID" type="hidden" />
+                <input type="hidden" id="RowVersion" name="RowVersion" value="" />
 
                 <div class="body">
 
@@ -724,42 +732,11 @@
 
                     <div id="seccionAduana"
                          class="export-box">
-
-                        <div class="export-box-title">
-                            ¿Este embarque pasará por aduana?
+                        <input type="hidden" id="PasaAduana" name="PasaAduana" value="" />
+                        <div class="export-box-title">Operación de exportación</div>
+                        <div class="field-help" style="font-size:10px;color:#705000">
+                            La exportación se registra con paso por aduana. Para exportación solo se permite <strong>Cliente recoge</strong> o <strong>Paquetería</strong>.
                         </div>
-
-                        <div class="aduana-options">
-
-                            <div class="mini-choice">
-                                <input type="radio"
-                                       id="aduanaSi"
-                                       name="PasaAduana"
-                                       value="true"
-                                       @(Model.PasaAduana == true ? "checked" : null) />
-
-                                <label for="aduanaSi">
-                                    Sí pasa por aduana
-                                </label>
-                            </div>
-
-                            <div class="mini-choice">
-                                <input type="radio"
-                                       id="aduanaNo"
-                                       name="PasaAduana"
-                                       value="false"
-                                       @(Model.PasaAduana == false ? "checked" : null) />
-
-                                <label for="aduanaNo">
-                                    No pasa por aduana
-                                </label>
-                            </div>
-
-                        </div>
-
-                        <span asp-validation-for="PasaAduana"
-                              class="validation">
-                        </span>
                     </div>
 
                     <div style="height:18px"></div>
@@ -827,7 +804,7 @@
                          class="section">
 
                         <div class="section-head">
-                            <strong>Entrega realizada por NS</strong>
+                            <strong>Entrega</strong>
                             <span>Selecciona los recursos internos que realizarán el movimiento.</span>
                         </div>
 
@@ -1095,12 +1072,15 @@
                                 </div>
 
                                 <div class="field">
-                                    <label>Placas</label>
+                                    <label>
+                                        Placas
+                                        <span class="req">*</span>
+                                    </label>
 
                                     <input asp-for="PlacasExternas"
                                            id="PaqueteriaPlacasExternas"
                                            maxlength="100"
-                                           placeholder="Opcional" />
+                                           placeholder="Captura las placas del vehículo" />
                                 </div>
 
                             </div>
@@ -1121,7 +1101,7 @@
                                 <span> · @destino</span>
                             }
                             <br />
-                            Después de guardar regresarás al detalle del embarque para continuar con preparación, documentación y salida.
+                            Al guardar se confirmará la forma de salida con el mismo flujo del Centro Operativo y regresarás al detalle del embarque.
                         </div>
 
                         <div class="actions">
@@ -1135,7 +1115,7 @@
                             <button type="submit"
                                     class="btn btn-primary"
                                     id="btnGuardar">
-                                Guardar forma de salida
+                                Guardar y continuar
                             </button>
                         </div>
 
@@ -1150,153 +1130,137 @@
         (function(){
             const form=document.getElementById('formDefinirSalida');
             const btnGuardar=document.getElementById('btnGuardar');
-
+            const token=form?.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+            const urlFlujo='@Url.Action("ObtenerFlujo", "LogisticaOperacion")';
+            const urlDetalle='@Url.Action("Detalle", "LogisticaEmbarques", new { id = Model.EmbarqueID })';
             const tipos=[...document.querySelectorAll('input[name="TipoOperacion"]')];
             const formas=[...document.querySelectorAll('input[name="FormaEnvio"]')];
-
+            const formaInterno=document.getElementById('formaInterno');
             const seccionAduana=document.getElementById('seccionAduana');
             const seccionInterno=document.getElementById('seccionInterno');
             const seccionCliente=document.getElementById('seccionCliente');
             const seccionPaqueteria=document.getElementById('seccionPaqueteria');
-
+            const pasaAduana=document.getElementById('PasaAduana');
             const ruta=document.getElementById('RutaID');
             const unidad=document.getElementById('UnidadID');
             const choferInterno=document.getElementById('ChoferUsuarioID');
-
             const modalidad=document.getElementById('ModalidadEnvio');
             const transportista=document.getElementById('Transportista');
+            const guia=document.getElementById('GuiaReferencia');
+            const clienteChofer=document.getElementById('ClienteChoferExterno');
+            const clienteUnidad=document.getElementById('ClienteUnidadExterna');
+            const clientePlacas=document.getElementById('ClientePlacasExternas');
+            const paqueteriaChofer=document.getElementById('PaqueteriaChoferExterno');
+            const paqueteriaUnidad=document.getElementById('PaqueteriaUnidadExterna');
+            const paqueteriaPlacas=document.getElementById('PaqueteriaPlacasExternas');
 
-            function tipoSeleccionado(){
-                return document.querySelector('input[name="TipoOperacion"]:checked')?.value||'';
-            }
-
-            function formaSeleccionada(){
-                return document.querySelector('input[name="FormaEnvio"]:checked')?.value||'';
-            }
-
-            function mostrarAduana(){
-                const exportacion=tipoSeleccionado()==='Exportacion';
-
+            function tipoSeleccionado(){return document.querySelector('input[name="TipoOperacion"]:checked')?.value||''}
+            function formaSeleccionada(){return document.querySelector('input[name="FormaEnvio"]:checked')?.value||''}
+            function mostrarError(mensaje){alert(mensaje)}
+            function syncVista(){
+                const tipo=tipoSeleccionado();
+                const exportacion=tipo==='Exportacion';
+                if(pasaAduana)pasaAduana.value=exportacion?'true':'';
                 seccionAduana?.classList.toggle('visible',exportacion);
-
-                if(!exportacion){
-                    document.querySelectorAll('input[name="PasaAduana"]').forEach(x=>{
-                        x.checked=false;
-                    });
+                if(formaInterno){
+                    formaInterno.disabled=exportacion;
+                    formaInterno.closest('.choice')?.classList.toggle('is-disabled',exportacion);
+                    if(exportacion&&formaInterno.checked)formaInterno.checked=false;
                 }
-            }
-
-            function mostrarForma(){
                 const forma=formaSeleccionada();
-
-                seccionInterno?.classList.toggle(
-                    'visible',
-                    forma==='Interno');
-
-                seccionCliente?.classList.toggle(
-                    'visible',
-                    forma==='Cliente');
-
-                seccionPaqueteria?.classList.toggle(
-                    'visible',
-                    forma==='Paqueteria');
-
+                seccionInterno?.classList.toggle('visible',forma==='Interno');
+                seccionCliente?.classList.toggle('visible',forma==='Cliente');
+                seccionPaqueteria?.classList.toggle('visible',forma==='Paqueteria');
                 if(ruta)ruta.required=forma==='Interno';
                 if(unidad)unidad.required=forma==='Interno';
                 if(choferInterno)choferInterno.required=forma==='Interno';
-
+                if(clienteChofer)clienteChofer.required=forma==='Cliente';
                 if(modalidad)modalidad.required=forma==='Paqueteria';
                 if(transportista)transportista.required=forma==='Paqueteria';
+                if(paqueteriaPlacas)paqueteriaPlacas.required=forma==='Paqueteria';
             }
+            tipos.forEach(x=>x.addEventListener('change',syncVista));
+            formas.forEach(x=>x.addEventListener('change',syncVista));
+            syncVista();
 
-            tipos.forEach(x=>{
-                x.addEventListener(
-                    'change',
-                    mostrarAduana);
-            });
-
-            formas.forEach(x=>{
-                x.addEventListener(
-                    'change',
-                    mostrarForma);
-            });
-
-            mostrarAduana();
-            mostrarForma();
-
-            form?.addEventListener('submit',e=>{
+            function validar(){
                 const tipo=tipoSeleccionado();
                 const forma=formaSeleccionada();
-
-                if(!tipo){
-                    e.preventDefault();
-                    alert('Selecciona si el embarque es Nacional o Exportación.');
-                    return;
-                }
-
-                if(tipo==='Exportacion'){
-                    const aduana=document.querySelector('input[name="PasaAduana"]:checked');
-
-                    if(!aduana){
-                        e.preventDefault();
-                        alert('Indica si la exportación pasa por aduana.');
-                        return;
-                    }
-                }
-
-                if(!forma){
-                    e.preventDefault();
-                    alert('Selecciona cómo saldrá la mercancía.');
-                    return;
-                }
-
+                if(!tipo){mostrarError('Selecciona si el embarque es Nacional o Exportación.');return false}
+                if(!forma){mostrarError('Selecciona cómo saldrá la mercancía.');return false}
+                if(tipo==='Exportacion'&&forma==='Interno'){mostrarError('En Exportación solo se permite Cliente recoge o Paquetería.');return false}
                 if(forma==='Interno'){
-                    if(!ruta?.value){
-                        e.preventDefault();
-                        alert('Selecciona una ruta.');
-                        return;
-                    }
-
-                    if(!unidad?.value){
-                        e.preventDefault();
-                        alert('Selecciona una unidad.');
-                        return;
-                    }
-
-                    if(!choferInterno?.value){
-                        e.preventDefault();
-                        alert('Selecciona un chofer.');
-                        return;
-                    }
+                    if(!ruta?.value){mostrarError('Selecciona una ruta.');return false}
+                    if(!unidad?.value){mostrarError('Selecciona una unidad.');return false}
+                    if(!choferInterno?.value){mostrarError('Selecciona un chofer.');return false}
                 }
-
-                if(forma==='Cliente'){
-                    const recoge=document.getElementById('ClienteChoferExterno');
-
-                    if(!recoge?.value.trim()){
-                        e.preventDefault();
-                        alert('Captura quién recogerá la mercancía.');
-                        return;
-                    }
-                }
-
+                if(forma==='Cliente'&&!clienteChofer?.value.trim()){mostrarError('Captura quién recogerá la mercancía.');return false}
                 if(forma==='Paqueteria'){
-                    if(!modalidad?.value){
-                        e.preventDefault();
-                        alert('Selecciona la modalidad del envío.');
-                        return;
-                    }
-
-                    if(!transportista?.value.trim()){
-                        e.preventDefault();
-                        alert('Captura la compañía o paquetería.');
-                        return;
-                    }
+                    if(!modalidad?.value){mostrarError('Selecciona la modalidad del envío.');return false}
+                    if(!transportista?.value.trim()){mostrarError('Captura la compañía o paquetería.');return false}
+                    if(!paqueteriaPlacas?.value.trim()){mostrarError('Captura las placas del vehículo de la paquetería.');return false}
                 }
+                return true;
+            }
 
-                if(btnGuardar){
-                    btnGuardar.disabled=true;
-                    btnGuardar.textContent='Guardando...';
+            async function obtenerRowVersion(){
+                const embarqueId=document.getElementById('EmbarqueID')?.value||'@Model.EmbarqueID';
+                const r=await fetch(`${urlFlujo}?embarqueId=${encodeURIComponent(embarqueId)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+                let j;
+                try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible obtener el estado actual del embarque.');
+                const flujo=j.flujo||{};
+                if(['Cargando','Cargado','En ruta','Entregado','Cancelado'].includes(flujo.estatus||''))throw new Error(`La forma de salida ya no puede modificarse porque el embarque está en estatus ${flujo.estatus}.`);
+                const version=flujo.salida?.rowVersion||flujo.rowVersion||'';
+                if(!version)throw new Error('No se recibió la versión actual del embarque. Recarga la página.');
+                return version;
+            }
+
+            function construirDatos(rowVersion){
+                const tipo=tipoSeleccionado();
+                const forma=formaSeleccionada();
+                const fd=new FormData();
+                fd.append('__RequestVerificationToken',token);
+                fd.append('EmbarqueID',document.getElementById('EmbarqueID')?.value||'@Model.EmbarqueID');
+                fd.append('RowVersion',rowVersion);
+                fd.append('TipoOperacion',tipo);
+                fd.append('FormaEnvio',forma);
+                if(tipo==='Exportacion')fd.append('PasaAduana','true');
+                if(forma==='Interno'){
+                    fd.append('RutaID',ruta?.value||'');
+                    fd.append('UnidadID',unidad?.value||'');
+                    fd.append('ChoferUsuarioID',choferInterno?.value||'');
+                }else if(forma==='Cliente'){
+                    fd.append('ChoferExterno',clienteChofer?.value.trim()||'');
+                    fd.append('UnidadExterna',clienteUnidad?.value.trim()||'');
+                    fd.append('PlacasExternas',clientePlacas?.value.trim()||'');
+                }else if(forma==='Paqueteria'){
+                    fd.append('ModalidadEnvio',modalidad?.value||'');
+                    fd.append('Transportista',transportista?.value.trim()||'');
+                    fd.append('GuiaReferencia',guia?.value.trim()||'');
+                    fd.append('ChoferExterno',paqueteriaChofer?.value.trim()||'');
+                    fd.append('UnidadExterna',paqueteriaUnidad?.value.trim()||'');
+                    fd.append('PlacasExternas',paqueteriaPlacas?.value.trim()||'');
+                }
+                return fd;
+            }
+
+            form?.addEventListener('submit',async e=>{
+                e.preventDefault();
+                if(!validar())return;
+                const textoOriginal=btnGuardar?.textContent||'Guardar y continuar';
+                try{
+                    if(btnGuardar){btnGuardar.disabled=true;btnGuardar.textContent='Guardando...'}
+                    const rowVersion=await obtenerRowVersion();
+                    document.getElementById('RowVersion').value=rowVersion;
+                    const r=await fetch(form.action,{method:'POST',body:construirDatos(rowVersion),headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    let j;
+                    try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
+                    if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible guardar la forma de salida.');
+                    window.location.href=urlDetalle;
+                }catch(err){
+                    mostrarError(err.message||'No fue posible guardar la forma de salida.');
+                    if(btnGuardar){btnGuardar.disabled=false;btnGuardar.textContent=textoOriginal}
                 }
             });
         })();

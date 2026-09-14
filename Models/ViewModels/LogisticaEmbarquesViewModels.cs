@@ -22,10 +22,10 @@ public sealed class LogisticaIndexVm
     public long CajasMovilizadas { get; set; }
     public long PiezasMovilizadas { get; set; }
     public List<LogisticaDemandaVm> Demandas { get; set; } = new();
+    public List<LogisticaOperacionEventoVm> Programaciones { get; set; } = new();
     public List<LogisticaEmbarqueResumenVm> Embarques { get; set; } = new();
     public List<LogisticaResumenClienteVm> ResumenClientes { get; set; } = new();
 }
-
 public sealed class LogisticaDemandaVm
 {
     public int ReleaseDetalleID { get; set; }

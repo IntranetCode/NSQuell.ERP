@@ -508,7 +508,7 @@ public sealed class LogisticaOperacionProgramarReleaseVm
     [DataType(DataType.Date)]
     public DateTime FechaProgramadaCarga { get; set; }
 
-    public TimeSpan? HoraProgramadaCarga { get; set; }
+ 
 
     [StringLength(500)]
     public string? Observaciones { get; set; }
@@ -528,7 +528,6 @@ public sealed class LogisticaOperacionMoverProgramacionVm
     [DataType(DataType.Date)]
     public DateTime FechaProgramadaCarga { get; set; }
 
-    public TimeSpan? HoraProgramadaCarga { get; set; }
 
     [StringLength(500)]
     public string? Observaciones { get; set; }
@@ -672,11 +671,28 @@ public sealed class LogisticaOperacionHistorialVm
 public sealed class LogisticaOperacionEvidenciaResumenVm
 {
     public int EvidenciaID { get; set; }
+    public int? ViajeID { get; set; }
+    public string Origen { get; set; } = string.Empty;
     public string TipoEvidencia { get; set; } = string.Empty;
     public string NombreOriginal { get; set; } = string.Empty;
     public string TipoContenido { get; set; } = string.Empty;
+    public long TamanoBytes { get; set; }
+    public string Observaciones { get; set; } = string.Empty;
     public DateTime FechaCarga { get; set; }
     public string Usuario { get; set; } = string.Empty;
+
+    public bool EsDeViaje => string.Equals(Origen, "Viaje", StringComparison.OrdinalIgnoreCase);
+    public bool EsDeEmbarque => string.Equals(Origen, "Embarque", StringComparison.OrdinalIgnoreCase);
+    public bool EsImagen => TipoContenido.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    public bool EsPdf => TipoContenido.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+    public string Extension => Path.GetExtension(NombreOriginal)?.ToLowerInvariant() ?? string.Empty;
+    public string Icono => Extension switch
+    {
+        ".pdf" => "fa-file-pdf",
+        ".jpg" or ".jpeg" or ".png" or ".webp" or ".heic" or ".heif" => "fa-image",
+        _ => "fa-file"
+    };
+    public string TamanoTexto => TamanoBytes <= 0 ? "-" : TamanoBytes < 1024 ? $"{TamanoBytes:N0} B" : TamanoBytes < 1024L * 1024L ? $"{TamanoBytes / 1024d:N1} KB" : $"{TamanoBytes / 1024d / 1024d:N1} MB";
 }
 
 public sealed class LogisticaOperacionCerrarVm
@@ -701,7 +717,7 @@ public sealed class LogisticaOperacionCerrarVm
     [StringLength(1200)]
     public string? Observaciones { get; set; }
 
-    public IFormFile? Evidencia { get; set; }
+    public List<IFormFile> Evidencias { get; set; } = new();
 
     [StringLength(500)]
     [Display(Name = "Observaciones de evidencia")]
@@ -714,11 +730,105 @@ public sealed class LogisticaOperacionGenerarEmbarqueVm
 {
     [Required]
     [Range(1, int.MaxValue)]
-    public int ListaCargaSemanaID { get; set; }
+    public int ClienteID { get; set; }
 
+    [Required]
+    [DataType(DataType.Date)]
+    public DateTime FechaProgramada { get; set; }
+
+    [Required(ErrorMessage = "Selecciona la hora programada del embarque.")]
+    public TimeSpan? HoraProgramada { get; set; }
+
+    [Required(ErrorMessage = "Selecciona al menos una programación.")]
     public List<int> ProgramacionIDs { get; set; } = new();
+
+    [StringLength(1000)]
+    public string? Observaciones { get; set; }
 }
 
+public sealed class LogisticaOperacionPrepararEmbarqueVm
+{
+    public int ClienteID { get; set; }
+    public string Cliente { get; set; } = string.Empty;
+
+    public DateTime FechaProgramada { get; set; }
+
+    public List<LogisticaOperacionProgramacionEmbarqueVm> Programaciones { get; set; } = new();
+
+    public int TotalProgramaciones => Programaciones.Count;
+
+    public int TotalPiezas => Programaciones.Sum(x => x.CantidadPendiente);
+
+    public bool TieneProgramaciones => Programaciones.Count > 0;
+
+    public string FechaTexto => FechaProgramada.ToString("dd/MM/yyyy");
+}
+
+public sealed class LogisticaOperacionProgramacionEmbarqueVm
+{
+    public int ListaCargaProgramacionID { get; set; }
+
+    public int ReleaseDetalleID { get; set; }
+
+    public int ClienteID { get; set; }
+
+    public int ParteID { get; set; }
+
+    public string FolioRelease { get; set; } = string.Empty;
+
+    public string NumeroParte { get; set; } = string.Empty;
+
+    public string Descripcion { get; set; } = string.Empty;
+
+    public string NumeroOF { get; set; } = string.Empty;
+
+    public DateTime FechaRequerida { get; set; }
+
+    public DateTime FechaProgramada { get; set; }
+
+    public int CantidadProgramada { get; set; }
+
+    public int CantidadGenerada { get; set; }
+
+    public string Criticidad { get; set; } = string.Empty;
+
+    public int CantidadPendiente => Math.Max(0, CantidadProgramada - CantidadGenerada);
+
+    public bool DisponibleParaEmbarque => CantidadPendiente > 0;
+
+    public bool EsExpeditado =>
+        string.Equals(Criticidad, "Expeditado", StringComparison.OrdinalIgnoreCase)
+        || FechaRequerida.Date < DateTime.Today;
+
+    public string FechaRequeridaTexto => FechaRequerida.ToString("dd/MM/yyyy");
+}
+
+public sealed class LogisticaOperacionCrearEmbarqueResultadoVm
+{
+    public bool Ok { get; set; }
+
+    public string Mensaje { get; set; } = string.Empty;
+
+    public int EmbarqueID { get; set; }
+
+    public string Folio { get; set; } = string.Empty;
+
+    public int ClienteID { get; set; }
+
+    public DateTime FechaCargaProgramada { get; set; }
+
+    public TimeSpan HoraCargaProgramada { get; set; }
+
+    public int TotalProgramaciones { get; set; }
+
+    public int TotalPiezas { get; set; }
+
+    public string? RowVersion { get; set; }
+
+    public string FechaTexto => FechaCargaProgramada.ToString("dd/MM/yyyy");
+
+    public string HoraTexto => HoraCargaProgramada.ToString(@"hh\:mm");
+}
 public sealed class LogisticaOperacionResultadoVm
 {
     public bool Ok { get; set; }
@@ -751,6 +861,10 @@ public sealed class LogisticaOperacionFlujoVm
     public int TotalCajasCargadas { get; set; }
     public int DocumentosFaltantes { get; set; }
     public int TotalEvidencias { get; set; }
+
+    public int? ViajeID { get; set; }
+    public List<LogisticaOperacionEvidenciaResumenVm> Evidencias { get; set; } = new();
+
     public int IncidenciasAbiertas { get; set; }
     public int IncidenciasCriticas { get; set; }
     public int PasoActual { get; set; }

@@ -2,616 +2,589 @@
 @model LogisticaCrearVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = "Confirmar embarque PT";
-    var seleccionadas = (Model.CajasPT ?? new List<LogisticaCajaPtCrearVm>()).Where(x => x.Seleccionada).OrderBy(x => x.FechaEntrada).ThenBy(x => x.CajaID).ToList();
-    var cliente = seleccionadas.FirstOrDefault()?.Cliente ?? Model.Clientes.FirstOrDefault(x => Model.ClienteID.HasValue && x.Id == Model.ClienteID.Value)?.Texto ?? string.Empty;
+    ViewData["Title"] = "Flujo anterior de embarque";
+    var seleccionadas = (Model.CajasPT ?? new List<LogisticaCajaPtCrearVm>())
+        .Where(x => x.Seleccionada)
+        .OrderBy(x => x.FechaEntrada)
+        .ThenBy(x => x.CajaID)
+        .ToList();
+    var cliente = seleccionadas.FirstOrDefault()?.Cliente
+        ?? Model.Clientes.FirstOrDefault(x => Model.ClienteID.HasValue && x.Id == Model.ClienteID.Value)?.Texto
+        ?? string.Empty;
     var totalPiezas = seleccionadas.Sum(x => (long)x.Disponible);
-    var fechaEntregaVisual = Model.FechaEntregaProgramada?.ToString("dd/MM/yyyy") ?? "-";
 }
+
 @section Styles {
-    <link rel="stylesheet" href="~/css/logistica.css" asp-append-version="true" />
-}
-<style>
-    :root {
-        --lg-blue: #173a7a;
-        --lg-text: #172033;
-        --lg-muted: #6d7888;
-        --lg-border: #dce4ee;
-        --lg-soft: #f7f9fc;
-        --lg-danger: #b42318;
-        --lg-ok: #17633a;
-        --lg-shadow: 0 8px 24px rgba(22,42,75,.055)
-    }
-
-    .page {
-        max-width: 1500px;
-        margin: 0 auto;
-        padding: 18px 20px 32px;
-        color: var(--lg-text)
-    }
-
-    .head {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: center;
-        padding: 15px 17px;
-        margin-bottom: 14px;
-        border: 1px solid var(--lg-border);
-        border-left: 4px solid var(--lg-blue);
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: var(--lg-shadow)
-    }
-
-    .title {
-        margin: 0;
-        font-size: 1.4rem;
-        font-weight: 800
-    }
-
-    .subtitle {
-        margin: 3px 0 0;
-        color: var(--lg-muted);
-        font-size: .82rem
-    }
-
-    .step {
-        font-size: .7rem;
-        color: var(--lg-blue);
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: .05em
-    }
-
-    .card {
-        margin-bottom: 12px;
-        padding: 14px 15px;
-        border: 1px solid var(--lg-border);
-        border-radius: 12px;
-        background: #fff;
-        box-shadow: var(--lg-shadow)
-    }
-
-    .card-title {
-        margin: 0 0 6px;
-        padding-left: 10px;
-        border-left: 3px solid var(--lg-blue);
-        font-size: .96rem;
-        font-weight: 800
-    }
-
-    .card-sub {
-        margin: 0 0 11px;
-        color: var(--lg-muted);
-        font-size: .73rem
-    }
-
-    .summary {
-        display: grid;
-        grid-template-columns: repeat(4,minmax(130px,1fr));
-        gap: 8px
-    }
-
-        .summary > div {
-            padding: 10px;
-            border: 1px solid var(--lg-border);
-            border-radius: 9px;
-            background: #f8fafc
+    <style>
+        :root {
+            --pt-blue: #173a7a;
+            --pt-blue-soft: #eef5ff;
+            --pt-text: #172033;
+            --pt-muted: #667085;
+            --pt-border: #dbe4f0;
+            --pt-bg: #f4f7fb;
+            --pt-surface: #fff;
+            --pt-warning: #b54708;
+            --pt-danger: #b42318
         }
 
-        .summary span {
-            display: block;
-            color: var(--lg-muted);
-            font-size: .68rem
+        body {
+            background: var(--pt-bg)
         }
 
-        .summary strong {
-            display: block;
-            margin-top: 2px;
-            color: var(--lg-blue);
-            font-size: .92rem
+        .legacy-page {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 22px 18px 36px;
+            color: var(--pt-text)
         }
 
-    .box-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: .76rem
-    }
-
-        .box-table th {
-            padding: 7px 8px;
-            border-bottom: 1px solid #d8e1eb;
-            color: #66768b;
-            font-size: .66rem;
-            text-align: left;
-            text-transform: uppercase
+        .legacy-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+            padding: 16px 18px;
+            margin-bottom: 14px;
+            border: 1px solid var(--pt-border);
+            border-left: 4px solid var(--pt-blue);
+            border-radius: 14px;
+            background: var(--pt-surface)
         }
 
-        .box-table td {
-            padding: 8px;
-            border-bottom: 1px solid #e7ecf2;
-            vertical-align: top
+        .legacy-title {
+            margin: 0;
+            color: var(--pt-text);
+            font-size: 1.42rem;
+            font-weight: 900
         }
 
-        .box-table .num {
-            text-align: right;
-            font-weight: 800;
-            color: var(--lg-blue)
-        }
-
-    .grid {
-        display: grid;
-        grid-template-columns: repeat(12,1fr);
-        gap: 10px 12px
-    }
-
-    .g3 {
-        grid-column: span 3
-    }
-
-    .g4 {
-        grid-column: span 4
-    }
-
-    .g5 {
-        grid-column: span 5
-    }
-
-    .g6 {
-        grid-column: span 6
-    }
-
-    .g8 {
-        grid-column: span 8
-    }
-
-    .g12 {
-        grid-column: span 12
-    }
-
-    .form-label {
-        font-size: .73rem;
-        font-weight: 700;
-        color: #4d596a;
-        margin-bottom: 3px
-    }
-
-    .required:after {
-        content: " *";
-        color: #dc3545;
-        font-weight: 800
-    }
-
-    .form-control, .form-select {
-        min-height: 38px;
-        border-color: #d3dde8;
-        border-radius: 8px;
-        font-size: .82rem
-    }
-
-    .readonly-box {
-        min-height: 38px;
-        display: flex;
-        align-items: center;
-        padding: 7px 10px;
-        border: 1px solid #dce4ee;
-        border-radius: 8px;
-        background: #f6f8fb;
-        color: #3f4f64;
-        font-size: .82rem
-    }
-
-        .readonly-box small {
-            margin-left: 6px;
-            color: #7b8798
-        }
-
-    .transport-panel {
-        margin-top: 9px;
-        padding: 11px;
-        border: 1px solid var(--lg-border);
-        border-radius: 9px;
-        background: #f8fafc
-    }
-
-    .hidden {
-        display: none !important
-    }
-
-    .selected-strip {
-        padding: 10px 12px;
-        border: 1px solid #cfdced;
-        border-radius: 9px;
-        background: #f6f9fd;
-        color: #43536a;
-        font-size: .77rem
-    }
-
-        .selected-strip strong {
-            color: var(--lg-blue)
-        }
-
-    .option-note {
-        padding: 9px 10px;
-        border: 1px dashed #ced8e5;
-        border-radius: 8px;
-        background: #fff;
-        color: #627186;
-        font-size: .72rem
-    }
-
-    .footer {
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        align-items: center;
-        margin-top: 14px;
-        padding: 13px 14px;
-        border: 1px solid #d2ddea;
-        border-radius: 11px;
-        background: #fff;
-        box-shadow: 0 8px 24px rgba(22,42,75,.07)
-    }
-
-    .footer-actions {
-        display: flex;
-        gap: 8px
-    }
-
-    .footer small {
-        display: block;
-        color: #6f7d90;
-        max-width: 700px
-    }
-
-    .lg-btn {
-        min-height: 42px !important;
-        padding: 0 16px !important;
-        border-radius: 9px !important;
-        font-size: .78rem !important;
-        font-weight: 800 !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 6px !important;
-        text-decoration: none !important
-    }
-
-    .lg-btn-primary {
-        background: #0b4f8a !important;
-        border: 1px solid #0b4f8a !important;
-        color: #fff !important
-    }
-
-    .lg-btn-secondary {
-        background: #fff !important;
-        border: 1px solid #b8c9dc !important;
-        color: var(--lg-blue) !important
-    }
-
-    html[data-nsq-theme="dark"] .page {
-        color: #e7edf6
-    }
-
-    html[data-nsq-theme="dark"] .head, html[data-nsq-theme="dark"] .card, html[data-nsq-theme="dark"] .footer {
-        background: #111b2d;
-        border-color: #2a3a50;
-        box-shadow: none
-    }
-
-    html[data-nsq-theme="dark"] .summary > div, html[data-nsq-theme="dark"] .transport-panel, html[data-nsq-theme="dark"] .readonly-box, html[data-nsq-theme="dark"] .selected-strip {
-        background: #162237;
-        border-color: #2a3a50
-    }
-
-    html[data-nsq-theme="dark"] .form-control, html[data-nsq-theme="dark"] .form-select {
-        background: #0e1828;
-        border-color: #31445c;
-        color: #eef4fb
-    }
-
-    @@media(max-width:900px) {
-        .g3, .g4, .g5, .g6, .g8 {
-            grid-column: span 6
-        }
-
-        .summary {
-            grid-template-columns: repeat(2,1fr)
-        }
-
-        .footer {
-            align-items: stretch;
-            flex-direction: column
-        }
-
-        .footer-actions {
-            width: 100%
-        }
-
-            .footer-actions .btn {
-                flex: 1
+            .legacy-title i {
+                color: var(--pt-blue)
             }
-    }
 
-    @@media(max-width:600px) {
-        .page {
-            padding: 12px 8px 24px
+        .legacy-subtitle {
+            margin: 4px 0 0;
+            color: var(--pt-muted);
+            font-size: .82rem;
+            font-weight: 650
         }
 
-        .g3, .g4, .g5, .g6, .g8 {
-            grid-column: span 12
+        .notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 11px;
+            padding: 14px 15px;
+            margin-bottom: 14px;
+            border: 1px solid #efcf8d;
+            border-left: 4px solid var(--pt-warning);
+            border-radius: 12px;
+            background: #fff9ea
         }
 
-        .summary {
-            grid-template-columns: 1fr
+            .notice > i {
+                margin-top: 2px;
+                color: var(--pt-warning);
+                font-size: 1.1rem
+            }
+
+            .notice strong {
+                display: block;
+                margin-bottom: 3px;
+                color: #7c4d00;
+                font-size: .86rem;
+                font-weight: 900
+            }
+
+            .notice span {
+                display: block;
+                color: #735f37;
+                font-size: .76rem;
+                line-height: 1.5;
+                font-weight: 650
+            }
+
+        .card-shell {
+            overflow: hidden;
+            margin-bottom: 14px;
+            border: 1px solid var(--pt-border);
+            border-radius: 14px;
+            background: var(--pt-surface)
         }
 
-        .box-table-wrap {
-            overflow-x: auto
+        .card-head {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--pt-border);
+            background: #f8fbff
         }
 
-        .box-table {
-            min-width: 850px
-        }
-    }
-</style>
+            .card-head h2 {
+                margin: 0;
+                color: var(--pt-blue);
+                font-size: .94rem;
+                font-weight: 900
+            }
 
-<div class="page">
-    <div class="head">
+            .card-head p {
+                margin: 3px 0 0;
+                color: var(--pt-muted);
+                font-size: .72rem;
+                font-weight: 650
+            }
+
+        .flow {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr))
+        }
+
+        .flow-item {
+            padding: 15px;
+            min-height: 126px;
+            border-right: 1px solid var(--pt-border)
+        }
+
+            .flow-item:last-child {
+                border-right: 0
+            }
+
+        .flow-number {
+            width: 30px;
+            height: 30px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 8px;
+            border-radius: 50%;
+            background: var(--pt-blue-soft);
+            color: var(--pt-blue);
+            font-size: .76rem;
+            font-weight: 950
+        }
+
+        .flow-item strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--pt-text);
+            font-size: .8rem;
+            font-weight: 900
+        }
+
+        .flow-item span {
+            display: block;
+            color: var(--pt-muted);
+            font-size: .71rem;
+            line-height: 1.45;
+            font-weight: 650
+        }
+
+        .legacy-selection {
+            padding: 14px
+        }
+
+        .selection-summary {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-bottom: 12px
+        }
+
+            .selection-summary > div {
+                padding: 9px 10px;
+                border: 1px solid var(--pt-border);
+                border-radius: 9px;
+                background: #f8fafc
+            }
+
+            .selection-summary span {
+                display: block;
+                color: var(--pt-muted);
+                font-size: .66rem;
+                font-weight: 700;
+                text-transform: uppercase
+            }
+
+            .selection-summary strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--pt-blue);
+                font-size: .85rem;
+                font-weight: 900
+            }
+
+        .selection-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--pt-border);
+            border-radius: 9px
+        }
+
+        .selection-table {
+            width: 100%;
+            min-width: 760px;
+            margin: 0;
+            border-collapse: collapse;
+            font-size: .74rem
+        }
+
+            .selection-table th {
+                padding: 7px 8px;
+                border-bottom: 1px solid var(--pt-border);
+                background: #f5f7fa;
+                color: #5f6d80;
+                font-size: .65rem;
+                text-transform: uppercase;
+                text-align: left;
+                white-space: nowrap
+            }
+
+            .selection-table td {
+                padding: 8px;
+                border-bottom: 1px solid #e9edf2;
+                vertical-align: top
+            }
+
+            .selection-table tr:last-child td {
+                border-bottom: 0
+            }
+
+            .selection-table .num {
+                text-align: right;
+                font-weight: 900;
+                color: var(--pt-blue)
+            }
+
+        .selection-warning {
+            margin-top: 10px;
+            padding: 9px 11px;
+            border: 1px dashed #e5b7b3;
+            border-radius: 9px;
+            background: #fff7f6;
+            color: var(--pt-danger);
+            font-size: .72rem;
+            line-height: 1.45;
+            font-weight: 700
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 11px
+        }
+
+        .action-card {
+            display: flex;
+            flex-direction: column;
+            min-height: 180px;
+            padding: 16px;
+            border: 1px solid var(--pt-border);
+            border-radius: 13px;
+            background: var(--pt-surface)
+        }
+
+        .action-icon {
+            width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            background: var(--pt-blue-soft);
+            color: var(--pt-blue)
+        }
+
+        .action-card h3 {
+            margin: 0 0 4px;
+            color: var(--pt-text);
+            font-size: .88rem;
+            font-weight: 900
+        }
+
+        .action-card p {
+            margin: 0 0 13px;
+            color: var(--pt-muted);
+            font-size: .72rem;
+            line-height: 1.45;
+            font-weight: 650
+        }
+
+        .action-card .btn {
+            min-height: 39px;
+            margin-top: auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            border-radius: 9px;
+            font-weight: 850
+        }
+
+        .btn-primary-flow {
+            background: var(--pt-blue);
+            border-color: var(--pt-blue);
+            color: #fff
+        }
+
+            .btn-primary-flow:hover {
+                background: #102e65;
+                border-color: #102e65;
+                color: #fff
+            }
+
+        .final-note {
+            margin-top: 14px;
+            padding: 11px 13px;
+            border: 1px dashed #cad6e3;
+            border-radius: 10px;
+            background: #fafbfd;
+            color: var(--pt-muted);
+            font-size: .72rem;
+            line-height: 1.5;
+            font-weight: 650
+        }
+
+            .final-note strong {
+                color: var(--pt-text)
+            }
+
+        html[data-nsq-theme="dark"] {
+            --pt-text: #eef4fb;
+            --pt-muted: #9badc2;
+            --pt-border: #2b3d53;
+            --pt-bg: #08111e;
+            --pt-surface: #111c2d;
+            --pt-blue-soft: #172b47;
+            color-scheme: dark
+        }
+
+            html[data-nsq-theme="dark"] .card-head {
+                background: #0d1828
+            }
+
+            html[data-nsq-theme="dark"] .notice {
+                background: #2b2414;
+                border-color: #765f2c
+            }
+
+                html[data-nsq-theme="dark"] .notice strong {
+                    color: #ffd78a
+                }
+
+                html[data-nsq-theme="dark"] .notice span {
+                    color: #dfcda8
+                }
+
+            html[data-nsq-theme="dark"] .selection-summary > div,
+            html[data-nsq-theme="dark"] .selection-table th,
+            html[data-nsq-theme="dark"] .final-note {
+                background: #0d1828
+            }
+
+            html[data-nsq-theme="dark"] .selection-warning {
+                background: #2b1718;
+                border-color: #744247;
+                color: #ffb4ad
+            }
+
+        @@media(max-width:900px) {
+            .flow {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .flow-item:nth-child(2) {
+                border-right: 0
+            }
+
+            .flow-item:nth-child(-n+2) {
+                border-bottom: 1px solid var(--pt-border)
+            }
+
+            .selection-summary {
+                grid-template-columns: repeat(2,minmax(0,1fr))
+            }
+
+            .actions {
+                grid-template-columns: 1fr
+            }
+
+            .action-card {
+                min-height: 0
+            }
+        }
+
+        @@media(max-width:600px) {
+            .legacy-page {
+                padding: 12px 9px 28px
+            }
+
+            .legacy-head {
+                align-items: stretch
+            }
+
+                .legacy-head .btn {
+                    width: 100%;
+                    justify-content: center
+                }
+
+            .flow {
+                grid-template-columns: 1fr
+            }
+
+            .flow-item {
+                min-height: 0;
+                border-right: 0;
+                border-bottom: 1px solid var(--pt-border)
+            }
+
+                .flow-item:last-child {
+                    border-bottom: 0
+                }
+
+            .selection-summary {
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
+}
+
+<div class="legacy-page">
+    <section class="legacy-head">
         <div>
-            <div class="step">Paso 2 de 2</div>
-            <h1 class="title"><i class="fa-solid fa-clipboard-check me-1"></i>Confirmar embarque desde PT</h1>
-            <p class="subtitle">Revisa el Picking List y captura únicamente los datos operativos que sí utiliza Logística.</p>
+            <h1 class="legacy-title"><i class="fa-solid fa-triangle-exclamation me-2"></i>Flujo anterior de embarque</h1>
+            <p class="legacy-subtitle">Esta pantalla se conserva únicamente para evitar que una ruta antigua termine creando un embarque por un proceso paralelo.</p>
         </div>
-        <button type="button" class="btn lg-btn lg-btn-secondary" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i>Volver a cajas</button>
+        <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-arrow-left me-1"></i>
+            Regresar a embarques
+        </a>
+    </section>
+
+    @if (TempData["LogisticaError"] != null)
+    {
+        <div class="alert alert-danger py-2 px-3 mb-3">
+            <i class="fa-solid fa-triangle-exclamation me-1"></i>@TempData["LogisticaError"]
+        </div>
+    }
+
+    <div class="notice">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>
+            <strong>Ya no se confirma un embarque desde una selección previa de cajas PT.</strong>
+            <span>El flujo vigente inicia desde una programación de carga. Centro Operativo toma las programaciones pendientes, crea el embarque y después continúa con preparación, documentación y carga física. Esta vista ya no envía información a CrearDesdePT ni reserva cajas.</span>
+        </div>
     </div>
 
-    <form asp-controller="LogisticaEmbarques" asp-action="CrearDesdePT" method="post" id="formConfirmarPT" autocomplete="off">
-        @Html.AntiForgeryToken()
-        <input asp-for="ClienteID" type="hidden" />
-        <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 px-3"></div>
-
-        @for (var i = 0; i < seleccionadas.Count; i++)
-        {
-            <input type="hidden" name="CajasPT[@i].Seleccionada" value="true" />
-            <input type="hidden" name="CajasPT[@i].CajaID" value="@seleccionadas[i].CajaID" />
-        }
-
-        <section class="card">
-            <h2 class="card-title">Picking List</h2>
-            <p class="card-sub">Estos son los datos físicos seleccionados desde PT para formar el embarque.</p>
-            <div class="summary mb-3">
-                <div><span>Cliente</span><strong>@cliente</strong></div>
-                <div><span>Cajas completas</span><strong>@seleccionadas.Count.ToString("N0")</strong></div>
-                <div><span>Piezas totales</span><strong>@totalPiezas.ToString("N0") PZA</strong></div>
-                <div><span>Partes</span><strong>@seleccionadas.Select(x => x.ParteID).Distinct().Count().ToString("N0")</strong></div>
+    <section class="card-shell">
+        <div class="card-head">
+            <h2>Flujo vigente</h2>
+            <p>Un solo origen de datos para evitar embarques duplicados o cajas reservadas por rutas diferentes.</p>
+        </div>
+        <div class="flow">
+            <div class="flow-item">
+                <div class="flow-number">1</div>
+                <strong>Programar carga</strong>
+                <span>Lista de carga define el día correspondiente a los Releases pendientes.</span>
             </div>
-            <div class="box-table-wrap">
-                <table class="box-table">
-                    <thead><tr><th>Caja</th><th>Parte</th><th>OF origen</th><th>Lote / etiqueta</th><th>Entrada</th><th>Ubicación</th><th class="num">Piezas</th></tr></thead>
-                    <tbody>
-                        @foreach (var caja in seleccionadas)
-                        {
-                            <tr>
-                                <td><strong>#@caja.NumeroCaja</strong><br /><small>ID @caja.CajaID</small></td>
-                                <td><strong>@caja.NumeroParte</strong><br /><small>@caja.Descripcion</small></td>
-                                <td>@(string.IsNullOrWhiteSpace(caja.NumeroOF) ? "-" : caja.NumeroOF)</td>
-                                <td>@(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote)<br /><small>@caja.Etiqueta</small></td>
-                                <td>@caja.FechaEntrada.ToString("dd/MM/yyyy HH:mm")</td>
-                                <td>@(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicar" : caja.Ubicacion)</td>
-                                <td class="num">@caja.Disponible.ToString("N0")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="flow-item">
+                <div class="flow-number">2</div>
+                <strong>Iniciar embarque</strong>
+                <span>Centro Operativo selecciona las programaciones pendientes del cliente y fecha.</span>
             </div>
-            <div class="selected-strip mt-3"><strong>Cajas completas:</strong> la cantidad no se captura manualmente. El servidor vuelve a leer el saldo vigente antes de guardar.</div>
-        </section>
-
-        <section class="card">
-            <h2 class="card-title">Programación de carga</h2>
-            <p class="card-sub">La fecha/hora de carga es la programación operativa de Logística. La fecha de entrega se conserva solo como referencia visual del Release.</p>
-            <div class="grid">
-                <div class="g3">
-                    <label asp-for="TipoOperacion" class="form-label required">Operación</label>
-                    <select asp-for="TipoOperacion" id="TipoOperacion" class="form-select" required>
-                        <option value="Nacional">Nacional</option>
-                        <option value="Exportacion">Exportación</option>
-                    </select>
-                </div>
-                <div class="g3">
-                    <label asp-for="FechaCargaProgramada" class="form-label required">Fecha de carga</label>
-                    <input asp-for="FechaCargaProgramada" type="date" class="form-control" required />
-                    <span asp-validation-for="FechaCargaProgramada" class="text-danger small"></span>
-                </div>
-                <div class="g3">
-                    <label asp-for="HoraCargaProgramada" class="form-label required">Hora de carga</label>
-                    <input asp-for="HoraCargaProgramada" type="time" class="form-control" required />
-                    <span asp-validation-for="HoraCargaProgramada" class="text-danger small"></span>
-                </div>
-                <div class="g3">
-                    <label class="form-label">Fecha de entrega</label>
-                    <div class="readonly-box">@fechaEntregaVisual <small>Solo visual</small></div>
-                </div>
-                <div class="g4">
-                    <label asp-for="Destino" class="form-label required">Destino</label>
-                    <input asp-for="Destino" maxlength="300" class="form-control" required />
-                    <span asp-validation-for="Destino" class="text-danger small"></span>
-                </div>
-                <div class="g8">
-                    <label asp-for="DireccionEntrega" class="form-label">Dirección de entrega</label>
-                    <input asp-for="DireccionEntrega" maxlength="600" class="form-control" />
-                </div>
-                <div class="g3 hidden" id="aduanaWrap">
-                    <label asp-for="PasaAduana" class="form-label required">¿Pasa por aduana?</label>
-                    <select asp-for="PasaAduana" class="form-select">
-                        <option value="">Selecciona...</option>
-                        <option value="true">Sí</option>
-                        <option value="false">No</option>
-                    </select>
-                </div>
+            <div class="flow-item">
+                <div class="flow-number">3</div>
+                <strong>Operar</strong>
+                <span>Preparación, documentos y carga física se realizan sobre el embarque ya creado.</span>
             </div>
-        </section>
-
-        <section class="card">
-            <h2 class="card-title">Quién recoge / salida del embarque</h2>
-            <p class="card-sub">Selecciona el escenario real de recolección. Los campos obligatorios cambian según la opción.</p>
-            <div class="grid">
-                <div class="g4">
-                    <label asp-for="FormaEnvio" class="form-label required">Tipo de recolección</label>
-                    <select asp-for="FormaEnvio" id="FormaEnvio" class="form-select" required>
-                        <option value="Interno">Interno</option>
-                        <option value="Cliente">Cliente recoge</option>
-                        <option value="Paqueteria">Paquetería</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="transport-panel" id="internoPanel">
-                <div class="grid">
-                    <div class="g4">
-                        <label asp-for="RutaID" class="form-label required">Ruta</label>
-                        <select asp-for="RutaID" class="form-select js-interno">
-                            <option value="">Selecciona...</option>
-                            @foreach (var r in Model.Rutas)
-                            {
-                                <option value="@r.Id">@r.Texto</option>
-                            }
-                        </select>
-                        <span asp-validation-for="RutaID" class="text-danger small"></span>
-                    </div>
-                    <div class="g4">
-                        <label asp-for="UnidadID" class="form-label required">Unidad</label>
-                        <select asp-for="UnidadID" class="form-select js-interno">
-                            <option value="">Selecciona...</option>
-                            @foreach (var u in Model.Unidades)
-                            {
-                                <option value="@u.Id">@u.Texto</option>
-                            }
-                        </select>
-                        <span asp-validation-for="UnidadID" class="text-danger small"></span>
-                    </div>
-                    <div class="g4">
-                        <label asp-for="ChoferUsuarioID" class="form-label required">Chofer</label>
-                        <select asp-for="ChoferUsuarioID" class="form-select js-interno">
-                            <option value="">Selecciona...</option>
-                            @foreach (var c in Model.Choferes)
-                            {
-                                <option value="@c.Id">@c.Texto</option>
-                            }
-                        </select>
-                        <span asp-validation-for="ChoferUsuarioID" class="text-danger small"></span>
-                    </div>
-                </div>
-                <div class="option-note mt-2">Para salida interna deben quedar definidos ruta, unidad y chofer.</div>
-            </div>
-
-            <div class="transport-panel hidden" id="clientePanel">
-                <div class="grid">
-                    <div class="g5">
-                        <label asp-for="ChoferExterno" class="form-label required">Persona / transportista que recoge</label>
-                        <input asp-for="ChoferExterno" maxlength="200" class="form-control js-cliente" />
-                        <span asp-validation-for="ChoferExterno" class="text-danger small"></span>
-                    </div>
-                    <div class="g4">
-                        <label asp-for="UnidadExterna" class="form-label">Unidad / vehículo</label>
-                        <input asp-for="UnidadExterna" maxlength="100" class="form-control" />
-                    </div>
-                    <div class="g3">
-                        <label asp-for="PlacasExternas" class="form-label">Placas</label>
-                        <input asp-for="PlacasExternas" maxlength="100" class="form-control" />
-                    </div>
-                </div>
-                <div class="option-note mt-2">Cuando el cliente recolecta, la persona o transportista que recibe la mercancía debe quedar identificado.</div>
-            </div>
-
-            <div class="transport-panel hidden" id="paqueteriaPanel">
-                <div class="grid">
-                    <div class="g3">
-                        <label asp-for="ModalidadEnvio" class="form-label required">Modalidad</label>
-                        <select asp-for="ModalidadEnvio" class="form-select js-paq">
-                            <option value="">Selecciona...</option>
-                            <option value="Terrestre">Terrestre</option>
-                            <option value="Aereo">Aérea</option>
-                            <option value="Maritimo">Marítima</option>
-                        </select>
-                    </div>
-                    <div class="g4">
-                        <label asp-for="Transportista" class="form-label required">Compañía / paquetería</label>
-                        <input asp-for="Transportista" maxlength="200" class="form-control js-paq" />
-                    </div>
-                    <div class="g5">
-                        <label asp-for="GuiaReferencia" class="form-label">Guía / referencia</label>
-                        <input asp-for="GuiaReferencia" maxlength="150" class="form-control" />
-                    </div>
-                    <div class="g4">
-                        <label asp-for="ChoferExterno" class="form-label">Chofer externo</label>
-                        <input asp-for="ChoferExterno" maxlength="200" class="form-control" />
-                    </div>
-                    <div class="g4">
-                        <label asp-for="UnidadExterna" class="form-label">Unidad externa</label>
-                        <input asp-for="UnidadExterna" maxlength="100" class="form-control" />
-                    </div>
-                    <div class="g4">
-                        <label asp-for="PlacasExternas" class="form-label">Placas</label>
-                        <input asp-for="PlacasExternas" maxlength="100" class="form-control" />
-                    </div>
-                </div>
-                <div class="option-note mt-2">La documentación obligatoria se validará después según la operación: factura o remisión por excepción, guía y documentos adicionales correspondientes.</div>
-            </div>
-        </section>
-
-        <section class="card">
-            <h2 class="card-title">Información adicional</h2>
-            <label asp-for="Observaciones" class="form-label">Observaciones</label>
-            <textarea asp-for="Observaciones" maxlength="1200" rows="3" class="form-control"></textarea>
-        </section>
-
-        <div class="footer">
-            <small><strong>Guardar programación</strong> reserva las cajas para Logística. La salida física de PT se confirma posteriormente desde el detalle del embarque, cuando realmente salga de planta.</small>
-            <div class="footer-actions">
-                <button type="button" class="btn lg-btn lg-btn-secondary" onclick="history.back()"><i class="fa-solid fa-arrow-left"></i>Volver</button>
-                <button type="submit" name="confirmarSalidaPT" value="false" class="btn lg-btn lg-btn-primary"><i class="fa-solid fa-calendar-check"></i>Guardar programación</button>
+            <div class="flow-item">
+                <div class="flow-number">4</div>
+                <strong>Salida y entrega</strong>
+                <span>La salida física se confirma en el punto correspondiente y la Entrega interna se sincroniza con el viaje del chofer.</span>
             </div>
         </div>
-    </form>
+    </section>
+
+    @if (seleccionadas.Count > 0)
+    {
+        <section class="card-shell">
+            <div class="card-head">
+                <h2>Selección proveniente del flujo anterior</h2>
+                <p>Se muestra únicamente como referencia. No será guardada ni convertida en embarque desde esta pantalla.</p>
+            </div>
+            <div class="legacy-selection">
+                <div class="selection-summary">
+                    <div><span>Cliente</span><strong>@(string.IsNullOrWhiteSpace(cliente) ? "-" : cliente)</strong></div>
+                    <div><span>Cajas seleccionadas</span><strong>@seleccionadas.Count.ToString("N0")</strong></div>
+                    <div><span>Piezas</span><strong>@totalPiezas.ToString("N0") PZA</strong></div>
+                    <div><span>Partes</span><strong>@seleccionadas.Select(x => x.ParteID).Distinct().Count().ToString("N0")</strong></div>
+                </div>
+
+                <div class="selection-table-wrap">
+                    <table class="selection-table">
+                        <thead>
+                            <tr>
+                                <th>Caja</th>
+                                <th>Parte</th>
+                                <th>OF origen</th>
+                                <th>Lote / etiqueta</th>
+                                <th>Ubicación</th>
+                                <th class="num">Piezas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var caja in seleccionadas)
+                            {
+                                <tr>
+                                    <td><strong>#@caja.NumeroCaja</strong><br /><small>ID @caja.CajaID</small></td>
+                                    <td><strong>@caja.NumeroParte</strong><br /><small>@(string.IsNullOrWhiteSpace(caja.Descripcion) ? "-" : caja.Descripcion)</small></td>
+                                    <td>@(string.IsNullOrWhiteSpace(caja.NumeroOF) ? "-" : caja.NumeroOF)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(caja.Lote) ? "-" : caja.Lote)<br /><small>@caja.Etiqueta</small></td>
+                                    <td>@(string.IsNullOrWhiteSpace(caja.Ubicacion) ? "Sin ubicar" : caja.Ubicacion)</td>
+                                    <td class="num">@caja.Disponible.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="selection-warning">
+                    <i class="fa-solid fa-ban me-1"></i>
+                    Esta selección no se enviará a <strong>CrearDesdePT</strong>. Regresa al flujo vigente para iniciar correctamente el embarque.
+                </div>
+            </div>
+        </section>
+    }
+
+    <div class="actions">
+        <section class="action-card">
+            <div class="action-icon"><i class="fa-solid fa-table-columns"></i></div>
+            <h3>Centro Operativo</h3>
+            <p>Usa las programaciones ya existentes para iniciar el embarque y continuar todas sus etapas operativas.</p>
+            <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-primary-flow">
+                <i class="fa-solid fa-arrow-right"></i>
+                Ir a Centro Operativo
+            </a>
+        </section>
+
+        <section class="action-card">
+            <div class="action-icon"><i class="fa-solid fa-calendar-plus"></i></div>
+            <h3>Lista de carga</h3>
+            <p>Si el Release todavía no tiene fecha de carga, programa primero el día correspondiente sin crear todavía el embarque.</p>
+            <a asp-controller="LogisticaListaCarga" asp-action="Index" class="btn btn-outline-primary">
+                <i class="fa-solid fa-calendar-days"></i>
+                Ir a Lista de carga
+            </a>
+        </section>
+
+        <section class="action-card">
+            <div class="action-icon"><i class="fa-solid fa-list"></i></div>
+            <h3>Embarques</h3>
+            <p>Consulta programaciones listas para iniciar y los embarques que ya se encuentran en operación.</p>
+            <a asp-controller="LogisticaEmbarques" asp-action="Index" class="btn btn-outline-primary">
+                <i class="fa-solid fa-truck-fast"></i>
+                Ver embarques
+            </a>
+        </section>
+    </div>
+
+    <div class="final-note">
+        <strong>Carga física:</strong> el escaneo de cajas sigue existiendo, pero ocurre después de crear el embarque. Tanto Centro Operativo como el chofer autorizado pueden escanear sobre la misma carga, sin importar la hora. Esta pantalla solamente retira el camino antiguo que intentaba formar el embarque directamente desde cajas PT.
+    </div>
 </div>
-
-@section Scripts {
-    <script>
-        (()=>{
-            const forma=document.getElementById('FormaEnvio');
-            const tipo=document.getElementById('TipoOperacion');
-            const interno=document.getElementById('internoPanel');
-            const cliente=document.getElementById('clientePanel');
-            const paq=document.getElementById('paqueteriaPanel');
-            const aduana=document.getElementById('aduanaWrap');
-
-            const actualizarForma=()=>{
-                const valor=forma?.value||'Interno';
-                const esInterno=valor==='Interno';
-                const esCliente=valor==='Cliente';
-                const esPaq=valor==='Paqueteria';
-                interno?.classList.toggle('hidden',!esInterno);
-                cliente?.classList.toggle('hidden',!esCliente);
-                paq?.classList.toggle('hidden',!esPaq);
-                document.querySelectorAll('.js-interno').forEach(x=>x.required=esInterno);
-                document.querySelectorAll('.js-cliente').forEach(x=>x.required=esCliente);
-                document.querySelectorAll('.js-paq').forEach(x=>x.required=esPaq);
-            };
-
-            const actualizarOperacion=()=>{
-                const esExport=tipo?.value==='Exportacion';
-                aduana?.classList.toggle('hidden',!esExport);
-                const control=aduana?.querySelector('select');
-                if(control) control.required=esExport;
-            };
-
-            forma?.addEventListener('change',actualizarForma);
-            tipo?.addEventListener('change',actualizarOperacion);
-            actualizarForma();
-            actualizarOperacion();
-        })();
-    </script>
-}
