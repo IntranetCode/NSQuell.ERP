@@ -31,11 +31,28 @@
     var esProduccionOperador =
         plnController.Equals("ProduccionOperador", StringComparison.OrdinalIgnoreCase);
 
-    var navbarHomeUrl = esProduccionOperador
-        ? (Url.Action("Index", "ProduccionOperador") ?? "/ProduccionOperador/Index")
-        : (Url.Action("Index", "Menu") ?? "/Menu/Index");
+    // NSQ_CHOFER_PORTAL_CERRADO_V1_NAVBAR
+    // La identidad de chofer ya se guarda en sesion y claim durante Login.
+    var esChoferKiosco =
+        string.Equals(
+            Context.Session.GetString("EsChofer"),
+            "1",
+            StringComparison.Ordinal) ||
+        string.Equals(
+            User.FindFirst("EsChofer")?.Value,
+            "1",
+            StringComparison.Ordinal);
 
-    var navbarTitulo = esProduccionOperador ? "NS QUELL" : nombreEmpresa;
+    var esKioscoCerrado =
+        esProduccionOperador || esChoferKiosco;
+
+    var navbarHomeUrl = esChoferKiosco
+        ? (Url.Action("Index", "LogisticaChofer") ?? "/LogisticaChofer/Index")
+        : esProduccionOperador
+            ? (Url.Action("Index", "ProduccionOperador") ?? "/ProduccionOperador/Index")
+            : (Url.Action("Index", "Menu") ?? "/Menu/Index");
+
+    var navbarTitulo = esKioscoCerrado ? "NS QUELL" : nombreEmpresa;
 
     var plnEsModulo =
         plnController.StartsWith("Planeacion", StringComparison.OrdinalIgnoreCase);
@@ -732,7 +749,7 @@
         display: none !important;
     }
     /* NSQ_BRAND_THEME_V7_END */
-</style><nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty) @(esProduccionOperador ? "top-navbar--operador" : string.Empty)" role="navigation" aria-label="Navegación principal">
+</style><nav class="top-navbar @(plnEsModulo ? "top-navbar--planeacion" : string.Empty) @(esKioscoCerrado ? "top-navbar--operador" : string.Empty)" role="navigation" aria-label="Navegación principal">
     <div class="navbar-content">
         <div class="navbar-left">
             <a href="@navbarHomeUrl" class="navbar-brand">
@@ -789,7 +806,11 @@
            Operador puro => componente sin navegacion.
            Auxiliar / Encargado / Admin => navbar ERP completo. *@
         <div class="nsq-global-department-slot">
-            @await Component.InvokeAsync("GlobalDepartmentNavigation")
+            @* CHOFER: no renderizar navegación departamental ni su routebar global. *@
+            @if (!esChoferKiosco)
+            {
+                @await Component.InvokeAsync("GlobalDepartmentNavigation")
+            }
         </div>
 <div class="navbar-right">
             <button type="button"

@@ -780,7 +780,22 @@ ORDER BY
         string currentController,
         bool menuIsActive)
     {
-        var fallback =
+                // NSQ_VISTA_OPERATIVA_HOME_V1
+        // El boton principal "Vista Operativa" debe abrir siempre el calendario
+        // operativo. "Kiosco de operador" permanece disponible como sub-menu.
+        if (NormalizeNavigationToken(menu.Nombre).Equals(
+                "VISTAOPERATIVA",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var vistaOperativaHome = menu.SubMenus.FirstOrDefault(x =>
+                PathOnly(x.Url).Equals(
+                    "/Produccion/CalendarioOperativo",
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (vistaOperativaHome != null)
+                return vistaOperativaHome.Url;
+        }
+var fallback =
             menu.SubMenus.FirstOrDefault()?.Url
             ?? $"/Menu/Grupo/{group.MenuGrupoID}";
 

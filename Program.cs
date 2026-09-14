@@ -476,7 +476,55 @@ app.UseAuthentication();
 // Operador puro = portal cerrado. Auxiliar/Encargado = navegacion ERP normal.
 app.Use(async (context, next) =>
 {
+    // NSQ_CHOFER_PORTAL_CERRADO_V1_MIDDLEWARE
+    // Chofer = portal cerrado de Logistica. La bandera ya se genera en Login.
+    var esChoferPortal =
+        string.Equals(
+            context.Session.GetString("EsChofer"),
+            "1",
+            StringComparison.Ordinal) ||
+        string.Equals(
+            context.User.FindFirst("EsChofer")?.Value,
+            "1",
+            StringComparison.Ordinal);
+
+    if (esChoferPortal)
+    {
+        var rutaChofer = context.Request.Path;
+        var metodoChofer = context.Request.Method;
+        var esGetOHeadChofer =
+            HttpMethods.IsGet(metodoChofer) ||
+            HttpMethods.IsHead(metodoChofer);
+
+        var esControladorChofer =
+            rutaChofer.StartsWithSegments("/LogisticaChofer");
+
+        var esLogoutChofer =
+            rutaChofer.StartsWithSegments("/Login/Logout");
+
+        if (!esControladorChofer && !esLogoutChofer)
+        {
+            if (esGetOHeadChofer)
+            {
+                context.Response.Redirect("/LogisticaChofer/Index");
+            }
+            else
+            {
+                context.Response.StatusCode =
+                    StatusCodes.Status403Forbidden;
+            }
+
+            return;
+        }
+
+        // Si la peticion pertenece al kiosco del chofer o es logout,
+        // continua y NO entra a la regla de portal cerrado del operador.
+        await next();
+        return;
+    }
+
     int? rolIdPortal = context.Session.GetInt32("RolID");
+
     if (!rolIdPortal.HasValue && int.TryParse(context.User.FindFirst("RolID")?.Value, out var rolClaimPortal))
         rolIdPortal = rolClaimPortal;
 
