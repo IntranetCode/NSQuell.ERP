@@ -2212,7 +2212,7 @@
                 }
                 else if (workspaceProduccion == "AUXILIAR")
                 {
-                    <partial name="~/Views/Produccion/Partials/Detalle/_WorkspaceAuxiliar.cshtml"
+                    <partial name="~/Views/Produccion/Partials/Detalle/WorkspaceAuxiliar.cshtml"
                              model="Model" />
                 }
 
@@ -2223,6 +2223,10 @@
                          model="Model" />
 
                 <partial name="~/Views/Produccion/Partials/Detalle/Operacion/_Terminacion.cshtml"
+                         model="Model" />
+
+                @* NSQ_FIN_ANTICIPADO_V1 *@
+                <partial name="~/Views/Produccion/Partials/Detalle/Operacion/_FinalizacionAnticipada.cshtml"
                          model="Model" />
 
             </div>

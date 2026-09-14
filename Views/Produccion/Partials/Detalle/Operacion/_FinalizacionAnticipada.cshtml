@@ -1,0 +1,135 @@
+@model ERP.NSQuell.Models.ProduccionDetalleVm
+
+@{
+    var e = Model.Ejecucion;
+
+    var ejecucionIniciada = e.FechaInicioReal.HasValue;
+
+    var ejecucionActiva =
+        e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnPreparacion ||
+        e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.EnProduccion ||
+        e.EstatusID == ERP.NSQuell.Models.ProduccionEstatus.Pausado;
+
+    var esAdministrador =
+        ViewBag.EsAdministradorERP is bool admin && admin;
+
+    var esEncargado =
+        ViewBag.EsEncargadoProduccion is bool encargado && encargado;
+
+    var esAuxiliar =
+        ViewBag.EsAuxiliarProduccion is bool auxiliar && auxiliar;
+
+    var esTecnico =
+        ViewBag.EsTecnicoProduccion is bool tecnico && tecnico;
+
+    var puedeFinalizar =
+        esAdministrador ||
+        esEncargado ||
+        esAuxiliar ||
+        esTecnico;
+
+    var faltantesOk =
+        Math.Max(
+            0,
+            (e.CantidadPlaneada ?? 0) - e.CantidadOKTotal);
+}
+
+@* NSQ_FIN_ANTICIPADO_V1 *@
+@if (ejecucionIniciada && ejecucionActiva)
+{
+    <div class="panel mb-4"
+         id="panelTerminarAnticipado"
+         data-collapsible
+         data-default-open="false">
+
+        <div class="panel-header">
+            <i class="bi bi-stop-circle me-1"></i>
+            Finalizar producción antes de lo planeado
+        </div>
+
+        <div class="panel-body">
+            <div class="alert alert-warning">
+                <strong>Esta opción es para una corrida que ya no continuará.</strong>
+                <div class="small mt-1">
+                    No exige alcanzar la cantidad planeada. Se conservarán las
+                    cantidades realmente registradas y sólo se cancelarán horas
+                    futuras pendientes; el historial ya capturado no se elimina.
+                </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">OK reales</div>
+                        <div class="mini-stat-value">@e.CantidadOKTotal.ToString("N0")</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Sospechoso</div>
+                        <div class="mini-stat-value">@e.CantidadSospechosaTotal.ToString("N0")</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Scrap</div>
+                        <div class="mini-stat-value">@e.CantidadScrapTotal.ToString("N0")</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="mini-stat">
+                        <div class="mini-stat-label">Faltante vs plan</div>
+                        <div class="mini-stat-value">@faltantesOk.ToString("N0")</div>
+                    </div>
+                </div>
+            </div>
+
+            @if (puedeFinalizar)
+            {
+                <form method="post"
+                      action="@Url.Action("FinalizarAnticipadamente","Produccion")">
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="ejecucionProduccionId"
+                           value="@e.EjecucionProduccionID" />
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Justificación obligatoria
+                        </label>
+                        <textarea name="motivo"
+                                  rows="3"
+                                  minlength="10"
+                                  maxlength="500"
+                                  required
+                                  class="form-control"
+                                  placeholder="Ejemplo: paro prolongado; se determina no continuar por falla de máquina, falta de material, prioridad operativa, etc."></textarea>
+                    </div>
+
+                    <div class="alert alert-danger small">
+                        <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                        La ejecución quedará <strong>TERMINADA PARCIALMENTE</strong>.
+                        Si existe una reliberación pendiente de Calidad, se cancelará
+                        porque no habrá reinicio de serie.
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-danger w-100 btn-strong"
+                            onclick="return confirm('La producción NO continuará. Se conservarán las cantidades reales registradas. ¿Confirmas la finalización anticipada?');">
+                        <i class="bi bi-stop-circle me-1"></i>
+                        Finalizar producción anticipadamente
+                    </button>
+                </form>
+            }
+            else
+            {
+                <div class="alert alert-info mb-0">
+                    La opción está disponible para la corrida, pero sólo puede
+                    confirmarla Administrador ERP, Encargado, Auxiliar o Técnico
+                    de Producción.
+                </div>
+            }
+        </div>
+    </div>
+}

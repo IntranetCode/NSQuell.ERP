@@ -472,93 +472,118 @@ app.UseRouting();
 // ? Session DEBE ir antes de Authentication
 app.UseSession();
 app.UseAuthentication();
-// NSQ_OPERADOR_PORTAL_CERRADO_V1
-// RolID 4 = Operador. El operador trabaja dentro de un portal cerrado:
-// Kiosco + Captura. Los POST/AJAX internos de ProduccionOperador siguen
-// permitidos para no romper captura, paros, turnos ni tiempo extra.
+// NSQ_OPERADOR_PORTAL_CERRADO_V2_POR_CARGO
+// Operador puro = portal cerrado. Auxiliar/Encargado = navegacion ERP normal.
 app.Use(async (context, next) =>
 {
-    int? rolIdOperador = context.Session.GetInt32("RolID");
+    int? rolIdPortal = context.Session.GetInt32("RolID");
+    if (!rolIdPortal.HasValue && int.TryParse(context.User.FindFirst("RolID")?.Value, out var rolClaimPortal))
+        rolIdPortal = rolClaimPortal;
 
-    if (!rolIdOperador.HasValue &&
-        int.TryParse(
-            context.User.FindFirst("RolID")?.Value,
-            out var rolIdDesdeClaim))
+    int? usuarioIdPortal = context.Session.GetInt32("UsuarioID");
+    if (!usuarioIdPortal.HasValue && int.TryParse(context.User.FindFirst("UsuarioID")?.Value, out var usuarioClaimPortal))
+        usuarioIdPortal = usuarioClaimPortal;
+
+    var puestoPortal = context.Session.GetString("NSQ_PuestoProduccionPortal");
+    var activoPortalTexto = context.Session.GetString("NSQ_ColaboradorActivoProduccionPortal");
+    var colaboradorActivoPortal = string.Equals(activoPortalTexto, "1", StringComparison.Ordinal);
+
+    if (usuarioIdPortal.HasValue && (puestoPortal == null || activoPortalTexto == null))
     {
-        rolIdOperador = rolIdDesdeClaim;
+        puestoPortal = string.Empty;
+        colaboradorActivoPortal = false;
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                await using var cnPortal = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+                await cnPortal.OpenAsync();
+
+                const string sqlPortal = @"
+SELECT TOP (1)
+    LTRIM(RTRIM(ISNULL(p.Puesto,N''))) AS Puesto,
+    ISNULL(p.EsColaboradorActivo,0) AS EsColaboradorActivo
+FROM dbo.Usuarios u
+LEFT JOIN dbo.Persona p ON p.PersonaID=u.PersonaID
+WHERE u.UsuarioID=@UsuarioID
+  AND u.Activo=1;";
+
+                await using var cmdPortal = new Microsoft.Data.SqlClient.SqlCommand(sqlPortal, cnPortal);
+                cmdPortal.Parameters.Add("@UsuarioID", System.Data.SqlDbType.Int).Value = usuarioIdPortal.Value;
+                await using var rdPortal = await cmdPortal.ExecuteReaderAsync();
+
+                if (await rdPortal.ReadAsync())
+                {
+                    puestoPortal = rdPortal["Puesto"]?.ToString()?.Trim() ?? string.Empty;
+                    colaboradorActivoPortal = rdPortal["EsColaboradorActivo"] != DBNull.Value && Convert.ToBoolean(rdPortal["EsColaboradorActivo"]);
+                }
+
+                context.Session.SetString("NSQ_PuestoProduccionPortal", puestoPortal ?? string.Empty);
+                context.Session.SetString("NSQ_ColaboradorActivoProduccionPortal", colaboradorActivoPortal ? "1" : "0");
+            }
+        }
+        catch
+        {
+            puestoPortal ??= string.Empty;
+        }
     }
 
-    if (rolIdOperador == 4)
+    puestoPortal ??= string.Empty;
+
+    var esAuxiliarProduccionPortal =
+        colaboradorActivoPortal &&
+        puestoPortal.Contains("AUXILIAR", StringComparison.OrdinalIgnoreCase) &&
+        puestoPortal.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
+    var esEncargadoProduccionPortal =
+        colaboradorActivoPortal &&
+        puestoPortal.Contains("ENCARGAD", StringComparison.OrdinalIgnoreCase) &&
+        puestoPortal.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
+    var esOperadorPorPuestoPortal =
+        colaboradorActivoPortal &&
+        puestoPortal.Contains("OPERADOR", StringComparison.OrdinalIgnoreCase);
+
+    var esOperadorPuroPortal =
+        !esAuxiliarProduccionPortal &&
+        !esEncargadoProduccionPortal &&
+        (esOperadorPorPuestoPortal || (rolIdPortal == 4 && string.IsNullOrWhiteSpace(puestoPortal)));
+
+    if (esOperadorPuroPortal)
     {
         var rutaOperador = context.Request.Path;
         var metodoOperador = context.Request.Method;
+        var esGetOHeadOperador = HttpMethods.IsGet(metodoOperador) || HttpMethods.IsHead(metodoOperador);
+        var esControladorOperador = rutaOperador.StartsWithSegments("/ProduccionOperador");
+        var esLogoutOperador = rutaOperador.StartsWithSegments("/Login/Logout");
 
-        var esGetOHeadOperador =
-            HttpMethods.IsGet(metodoOperador) ||
-            HttpMethods.IsHead(metodoOperador);
-
-        var esControladorOperador =
-            rutaOperador.StartsWithSegments("/ProduccionOperador");
-
-        var esLogoutOperador =
-            rutaOperador.StartsWithSegments("/Login/Logout");
-
-        // Fuera de ProduccionOperador no hay acceso funcional para RolID 4.
         if (!esControladorOperador && !esLogoutOperador)
         {
             if (esGetOHeadOperador)
-            {
                 context.Response.Redirect("/ProduccionOperador/Index");
-            }
             else
-            {
-                context.Response.StatusCode =
-                    StatusCodes.Status403Forbidden;
-            }
-
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
 
         if (esControladorOperador && esGetOHeadOperador)
         {
-            var rutaNormalizadaOperador =
-                (rutaOperador.Value ?? string.Empty)
-                    .TrimEnd('/');
-
+            var rutaNormalizadaOperador = (rutaOperador.Value ?? string.Empty).TrimEnd('/');
             var esKioscoOperador =
-                rutaNormalizadaOperador.Equals(
-                    "/ProduccionOperador",
-                    StringComparison.OrdinalIgnoreCase)
-                ||
-                rutaNormalizadaOperador.Equals(
-                    "/ProduccionOperador/Index",
-                    StringComparison.OrdinalIgnoreCase);
-
+                rutaNormalizadaOperador.Equals("/ProduccionOperador", StringComparison.OrdinalIgnoreCase) ||
+                rutaNormalizadaOperador.Equals("/ProduccionOperador/Index", StringComparison.OrdinalIgnoreCase);
             var esCapturaOperador =
-                rutaNormalizadaOperador.Equals(
-                    "/ProduccionOperador/Captura",
-                    StringComparison.OrdinalIgnoreCase)
-                ||
-                rutaNormalizadaOperador.StartsWith(
-                    "/ProduccionOperador/Captura/",
-                    StringComparison.OrdinalIgnoreCase);
+                rutaNormalizadaOperador.Equals("/ProduccionOperador/Captura", StringComparison.OrdinalIgnoreCase) ||
+                rutaNormalizadaOperador.StartsWith("/ProduccionOperador/Captura/", StringComparison.OrdinalIgnoreCase);
+            var esAjaxOperador = string.Equals(
+                context.Request.Headers["X-Requested-With"].ToString(),
+                "XMLHttpRequest",
+                StringComparison.OrdinalIgnoreCase);
 
-            var esAjaxOperador =
-                string.Equals(
-                    context.Request.Headers["X-Requested-With"].ToString(),
-                    "XMLHttpRequest",
-                    StringComparison.OrdinalIgnoreCase);
-
-            // Historial, Cajas u otra vista GET de ProduccionOperador
-            // tampoco son portales navegables para el operador.
-            // Solo se permiten GET auxiliares cuando son AJAX internos.
-            if (!esKioscoOperador &&
-                !esCapturaOperador &&
-                !esAjaxOperador)
+            if (!esKioscoOperador && !esCapturaOperador && !esAjaxOperador)
             {
-                context.Response.Redirect(
-                    "/ProduccionOperador/Index");
-
+                context.Response.Redirect("/ProduccionOperador/Index");
                 return;
             }
         }
@@ -566,7 +591,6 @@ app.Use(async (context, next) =>
 
     await next();
 });
-
 app.UseMiddleware<MiddlewareContextoSolicitud>();
 
 app.UseAuthorization();

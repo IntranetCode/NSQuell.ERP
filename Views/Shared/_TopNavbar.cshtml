@@ -785,12 +785,12 @@
             </nav>
         }
         <!-- NSQ_GLOBAL_NAV_V1_SLOT -->
-        @if (!esProduccionOperador)
-        {
-            <div class="nsq-global-department-slot">
-                @await Component.InvokeAsync("GlobalDepartmentNavigation")
-            </div>
-        }
+        @* NSQ_KIOSCO_NAV_POR_CARGO_V1:
+           Operador puro => componente sin navegacion.
+           Auxiliar / Encargado / Admin => navbar ERP completo. *@
+        <div class="nsq-global-department-slot">
+            @await Component.InvokeAsync("GlobalDepartmentNavigation")
+        </div>
 <div class="navbar-right">
             <button type="button"
                     class="theme-switcher"

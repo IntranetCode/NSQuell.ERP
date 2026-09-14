@@ -1080,7 +1080,56 @@ public static class GenericReleaseParser
                 : exact;
 
             result.AddRange(exactCandidates.Select(x => (x, raw)));
-            return result;
+
+            // Si la coincidencia exacta sobrevivio al filtro de cliente,
+            // mantiene prioridad absoluta.
+            if (result.Count > 0)
+                return result;
+
+            result.Clear();
+        }
+
+        // NSQ_GENERIC_RELEASE_REVISION_BASE_V1
+        // GOLDE entrega revisiones terminales como _00, _01, _02 (tambien
+        // se han observado -01 y ?01). Si el token completo no existe como
+        // alias activo, intentar la parte base EXACTA dentro del cliente
+        // inferido antes de usar coincidencias parciales globales.
+        //
+        // Ejemplo:
+        //   579.714439_01 -> 579.714439
+        //   579.714440_01 -> 579.714440
+        //
+        // Solo se acepta cuando queda UNA ParteID unica; nunca se inventa
+        // una parte ni se decide entre dos candidatas.
+        var revisionMatch = Regex.Match(
+            (raw ?? string.Empty).Trim(),
+            @"^(?<base>.+?)(?:_|-|\?)\d{2}$",
+            RegexOptions.CultureInvariant);
+
+        if (revisionMatch.Success)
+        {
+            var baseNormalized = Normalize(
+                revisionMatch.Groups["base"].Value);
+
+            if (baseNormalized.Length >= 6 &&
+                index.ByAlias.TryGetValue(baseNormalized, out var baseMatches))
+            {
+                var baseCandidates = preferredClientId.HasValue
+                    ? baseMatches.Where(
+                        x => x.ClienteID == preferredClientId.Value)
+                    : baseMatches;
+
+                var uniqueBaseParts = baseCandidates
+                    .GroupBy(x => x.ParteID)
+                    .Select(x => x.First())
+                    .ToList();
+
+                if (uniqueBaseParts.Count == 1)
+                {
+                    result.Add((uniqueBaseParts[0], raw));
+                    return result;
+                }
+            }
         }
 
         if (normalized.Length < 6)

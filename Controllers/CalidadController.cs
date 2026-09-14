@@ -338,6 +338,20 @@ namespace ERP.NSQuell.Controllers
                     ex.Message);
             }
 
+            // NSQ_MONITOREO_CANONICO_V1
+            // Misma cantidad de horas normales que ProduccionOperador.
+            // Solo limpia filas PENDIENTES y sin RegistroHora.
+            try
+            {
+                await NormalizarMonitoreosCanonicosAsync(id, usuarioId);
+            }
+            catch (Exception ex)
+            {
+                incidenciasCarga.Add(
+                    "No fue posible normalizar las horas de monitoreo con las horas programadas de Producción: " +
+                    ex.Message);
+            }
+
             if (!inspeccionBase.ConfiguracionInvalidada &&
                 CalidadEstados.PuedeAutorizarPrearranque(inspeccionBase.Estado))
             {

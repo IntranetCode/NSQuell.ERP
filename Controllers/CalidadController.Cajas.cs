@@ -107,7 +107,6 @@ CROSS APPLY
         i.InspeccionID,i.ProgramaProduccionID,i.OrdenTrabajo,i.ClienteNombre,i.NumeroParte,i.Maquina,i.Molde
     FROM dbo.Calidad_Inspecciones i
     WHERE i.EjecucionProduccionID=pc.EjecucionProduccionID
-      AND ISNULL(i.ConfiguracionInvalidada,0)=0
       AND i.Estado<>N'CERRADA'
     ORDER BY i.InspeccionID DESC
 ) ci
@@ -219,10 +218,21 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
 
             if (decision == DecisionCajaLiberar)
             {
-                if (!model.EstandarPackCumple || !model.EtiquetaProductoCorrecta || !model.TecnicoConfirmoInformacion)
+                if (!model.EtiquetaProductoCorrecta || !model.TecnicoConfirmoInformacion)
                 {
-                    TempData["Error"] = "Para liberar la caja debes confirmar empaque, etiqueta y validación del técnico.";
+                    TempData["Error"] = "Para liberar la caja debes confirmar etiqueta correcta y validación del técnico.";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
+                }
+
+                if (!model.EstandarPackCumple &&
+                    string.IsNullOrWhiteSpace(model.Observaciones))
+                {
+                    TempData["Error"] =
+                        "La caja puede liberarse incompleta, pero debes justificar en Observaciones por qué el estándar de empaque no está completo.";
+
+                    return RedirectToAction(
+                        nameof(Detalle),
+                        new { id = model.InspeccionID });
                 }
 
                 if (string.IsNullOrWhiteSpace(model.NumeroOperadorEtiqueta))
@@ -275,12 +285,7 @@ ORDER BY ISNULL(pc.NumeroCaja,0),pc.CajaProduccionID;";
                     return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
                 }
 
-                if (caja.ConfiguracionInvalidada)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] = "La configuración de la corrida fue invalidada. No se puede resolver la caja hasta completar la reliberación correspondiente.";
-                    return RedirectToAction(nameof(Detalle), new { id = model.InspeccionID });
-                }
+                // NSQ_CAJAS_INCOMPLETAS_V1 - Cajas: resolver durante reliberacion
 
                 if (EstadoBloqueaRevisionCaja(caja.EstadoInspeccion))
                 {
@@ -1938,17 +1943,7 @@ ORDER BY pc.CajaProduccionID DESC;";
                             new { id = inspeccionExistenteId.Value });
                     }
 
-                    if (configuracionInvalidadaExistente)
-                    {
-                        await tx.RollbackAsync();
-
-                        TempData["Error"] =
-                            "La configuración de la corrida fue invalidada. La caja no puede revisarse hasta completar la reliberación correspondiente.";
-
-                        return RedirectToAction(
-                            nameof(Detalle),
-                            new { id = inspeccionExistenteId.Value });
-                    }
+                    // NSQ_CAJAS_INCOMPLETAS_V1 - Cajas: escaneo existente durante reliberacion
 
                     if (EstadoBloqueaRevisionCaja(estadoInspeccionExistente))
                     {
@@ -2362,17 +2357,7 @@ ORDER BY
                         new { grupo = "CAJAS" });
                 }
 
-                if (configuracionInvalidada)
-                {
-                    await tx.RollbackAsync();
-
-                    TempData["Error"] =
-                        "La configuración de la corrida fue invalidada. La caja no puede registrarse hasta completar la reliberación correspondiente.";
-
-                    return RedirectToAction(
-                        nameof(Detalle),
-                        new { id = inspeccionIdReal });
-                }
+                // NSQ_CAJAS_INCOMPLETAS_V1 - Cajas: nueva caja durante reliberacion
 
                 if (EstadoBloqueaRevisionCaja(estadoInspeccion))
                 {
@@ -2591,13 +2576,13 @@ SELECT
                         capacidadCaja,
                         planeadoPendiente);
 
-                if (parseado.Cantidad != cantidadEsperadaCaja)
+                if (parseado.Cantidad > cantidadEsperadaCaja)
                 {
                     await tx.RollbackAsync();
 
                     TempData["Error"] =
-                        $"La cantidad de la etiqueta no corresponde a la siguiente caja esperada. " +
-                        $"Esperada: {cantidadEsperadaCaja:N0} pieza(s). " +
+                        $"La cantidad de la etiqueta supera la cantidad máxima de la siguiente caja. " +
+                        $"Máximo permitido: {cantidadEsperadaCaja:N0} pieza(s). " +
                         $"Etiqueta: {parseado.Cantidad:N0} pieza(s).";
 
                     return RedirectToAction(
@@ -2630,7 +2615,7 @@ SELECT
                         Convert.ToInt32(
                             Math.Ceiling(cantidadEmbalajes.Value));
 
-                    if (cajasNormales >= cajasEsperadas)
+                    if (cantidadOKTotal >= cantidadPlaneada && cajasNormales >= cajasEsperadas)
                     {
                         await tx.RollbackAsync();
 
