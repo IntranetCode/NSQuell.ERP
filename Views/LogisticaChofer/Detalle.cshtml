@@ -1,19 +1,93 @@
 ﻿@model ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
-    ViewData["Title"] = $"{Model.Folio} | Mis viajes";
-
     var programado = Model.Estatus == "Programado";
     var enCurso = Model.Estatus == "En curso";
     var completado = Model.Estatus == "Completado";
     var cancelado = Model.Estatus == "Cancelado";
     var esEntregaPt = string.Equals(Model.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
+    var paradas = Model.Paradas.OrderBy(x => x.Secuencia).ThenBy(x => x.ViajeParadaID).ToList();
+    var tieneParadas = paradas.Any();
+    var proximaParada = Model.ProximaParada;
+    var embarquesVinculados = paradas.SelectMany(x => x.Embarques).GroupBy(x => x.EmbarqueID).Select(x => x.First()).ToList();
+    var tieneEntregaVinculada = esEntregaPt || embarquesVinculados.Any();
+    var folioOperativo = embarquesVinculados.Count == 1 && !string.IsNullOrWhiteSpace(embarquesVinculados[0].Folio) ? embarquesVinculados[0].Folio : Model.Folio;
+    var mostrarFolioViaje = !string.Equals(folioOperativo, Model.Folio, StringComparison.OrdinalIgnoreCase);
+    var pendientesOperativas = paradas.Where(x => x.TipoParada != "Origen" && !x.CierraViaje && x.Estatus is "Pendiente" or "En camino" or "En sitio").ToList();
+    var paradaRetorno = paradas.FirstOrDefault(x => x.CierraViaje);
+    var puedeRegistrarRegresoRuta = Model.PuedeRegistrarRegreso && (!tieneParadas || (pendientesOperativas.Count == 0 && paradaRetorno != null));
     var puedeIncidencia = !Model.EstaCerrado;
     var ahoraTexto = DateTime.Now.ToString("dd/MM/yyyy HH:mm");
+    var accionTitulo = "Consulta tu viaje";
+    var accionTexto = "Revisa la información asignada por Logística.";
+    var accionIcono = "fa-circle-info";
+    if (programado)
+    {
+        accionTitulo = tieneEntregaVinculada ? "Primero confirma la carga y después la salida" : "Registra tu salida";
+        accionTexto = tieneEntregaVinculada ? "Escanea las cajas pendientes. Cuando todo esté cargado, registra kilometraje y fotografías de salida." : "Antes de salir registra el kilometraje y toma al menos una fotografía.";
+        accionIcono = tieneEntregaVinculada ? "fa-barcode" : "fa-truck-fast";
+    }
+    else if (enCurso && proximaParada != null)
+    {
+        if (proximaParada.CierraViaje)
+        {
+            accionTitulo = "Regresa a planta";
+            accionTexto = "Terminaste las paradas operativas. Al llegar registra kilometraje final y fotografías de regreso.";
+            accionIcono = "fa-flag-checkered";
+        }
+        else if (proximaParada.Estatus == "En sitio")
+        {
+            accionTitulo = $"Completa la parada #{proximaParada.Secuencia}";
+            accionTexto = $"Estás en {proximaParada.Lugar}. Agrega las evidencias necesarias y pulsa Completar parada y continuar.";
+            accionIcono = "fa-check-double";
+        }
+        else
+        {
+            accionTitulo = $"Siguiente parada: {proximaParada.Lugar}";
+            accionTexto = "Cuando llegues, pulsa Ya llegué. Después podrás registrar evidencias y completar la parada.";
+            accionIcono = "fa-location-arrow";
+        }
+    }
+    else if (completado)
+    {
+        accionTitulo = "Viaje completado";
+        accionTexto = "El recorrido ya terminó. Puedes consultar evidencias e historial al final de la pantalla.";
+        accionIcono = "fa-circle-check";
+    }
+    ViewData["Title"] = $"{folioOperativo} | Mis viajes";
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
-    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
+    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase).Replace("Entrega PT", "Entrega", StringComparison.OrdinalIgnoreCase);
+    public static string EstadoParadaClase(string? estatus) => estatus switch
+    {
+        "Completada" => "completada",
+        "Omitida" => "omitida",
+        "En sitio" => "en-sitio",
+        "En camino" => "en-camino",
+        "Cancelada" => "cancelada",
+        _ => "pendiente"
+    };
+    public static string IconoParada(string? tipo) => tipo switch
+    {
+        "Origen" => "fa-industry",
+        "Entrega" => "fa-box",
+        "Recoleccion" => "fa-box-open",
+        "Traslado" => "fa-right-left",
+        "Servicio" => "fa-screwdriver-wrench",
+        "Retorno" => "fa-flag-checkered",
+        _ => "fa-location-dot"
+    };
+    public static string TipoParadaVisible(string? tipo) => tipo switch
+    {
+        "Recoleccion" => "Recolección",
+        "Entrega" => "Entrega",
+        "Origen" => "Origen",
+        "Retorno" => "Retorno",
+        "Traslado" => "Traslado",
+        "Servicio" => "Servicio",
+        _ => Txt(tipo)
+    };
 
     public static string EstadoClase(string? estatus)
     {
@@ -170,9 +244,145 @@
             font-weight: 800
         }
 
+        .next-card {
+            display: grid;
+            grid-template-columns: 48px minmax(0,1fr);
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 14px;
+            border: 2px solid #9fc0e8;
+            border-radius: 15px;
+            background: #f3f8ff
+        }
+
+        .next-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: var(--chofer-azul);
+            color: #fff;
+            font-size: 1.15rem
+        }
+
+        .next-card strong {
+            display: block;
+            color: var(--chofer-azul-oscuro);
+            font-size: .95rem;
+            font-weight: 950
+        }
+
+        .next-card span {
+            display: block;
+            margin-top: 3px;
+            color: #4c6078;
+            font-size: .78rem;
+            line-height: 1.45;
+            font-weight: 750
+        }
+
+        .reference-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 5px;
+            color: rgba(255,255,255,.82);
+            font-size: .7rem;
+            font-weight: 750
+        }
+
+        .info-details > summary {
+            list-style: none;
+            cursor: pointer
+        }
+
+        .info-details > summary::-webkit-details-marker {
+            display: none
+        }
+
+        .info-details > summary .details-open {
+            margin-left: auto;
+            color: var(--chofer-gris);
+            font-size: .68rem;
+            text-transform: none;
+            letter-spacing: 0
+        }
+
+        .info-details[open] > summary .details-open::after {
+            content: "Ocultar"
+        }
+
+        .info-details:not([open]) > summary .details-open::after {
+            content: "Ver datos"
+        }
+
+        .secondary-details {
+            grid-column: 1 / -1;
+            border: 1px dashed #c6d0dc;
+            border-radius: 10px;
+            background: #fafbfd;
+            overflow: hidden
+        }
+
+        .secondary-details > summary {
+            padding: 11px 12px;
+            cursor: pointer;
+            color: #667085;
+            font-size: .72rem;
+            font-weight: 900;
+            list-style: none
+        }
+
+        .secondary-details > summary::-webkit-details-marker {
+            display: none
+        }
+
+        .secondary-details .parada-form {
+            border: 0;
+            border-top: 1px solid #e5eaf0;
+            border-radius: 0
+        }
+
+        .evidencia-botones {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px
+        }
+
+        .btn-tomar-foto,
+        .btn-agregar-evidencia {
+            width: 100%;
+            min-height: 52px;
+            border-radius: 10px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer
+        }
+
+        .btn-tomar-foto {
+            border: 0;
+            background: var(--chofer-azul);
+            color: #fff
+        }
+
+        .btn-agregar-evidencia {
+            border: 1px dashed #75a5d8;
+            background: #f5f9ff;
+            color: var(--chofer-azul)
+        }
+
+        .btn-tomar-foto:hover {
+            filter: brightness(.94)
+        }
+
         .summary-line {
             display: grid;
-            grid-template-columns: repeat(5,minmax(0,1fr));
+            grid-template-columns: repeat(6,minmax(0,1fr));
             background: var(--chofer-superficie);
             border: 1px solid var(--chofer-borde);
             border-radius: 13px;
@@ -528,30 +738,30 @@
             color: #31506f
         }
 
-        .sync-note > i {
-            margin-top: 2px;
-            color: var(--chofer-azul);
-            font-size: 1rem
-        }
+            .sync-note > i {
+                margin-top: 2px;
+                color: var(--chofer-azul);
+                font-size: 1rem
+            }
 
-        .sync-note strong {
-            display: block;
-            margin-bottom: 3px;
-            color: var(--chofer-azul-oscuro);
-            font-size: .79rem;
-            font-weight: 950
-        }
+            .sync-note strong {
+                display: block;
+                margin-bottom: 3px;
+                color: var(--chofer-azul-oscuro);
+                font-size: .79rem;
+                font-weight: 950
+            }
 
-        .sync-note span {
-            display: block;
-            font-size: .72rem;
-            line-height: 1.45;
-            font-weight: 700
-        }
+            .sync-note span {
+                display: block;
+                font-size: .72rem;
+                line-height: 1.45;
+                font-weight: 700
+            }
 
         .flow-state {
             display: grid;
-            grid-template-columns: repeat(4,minmax(0,1fr));
+            grid-template-columns: repeat(5,minmax(0,1fr));
             gap: 7px;
             margin-top: 9px
         }
@@ -567,17 +777,17 @@
             text-align: center
         }
 
-        .flow-state-item.done {
-            border-color: #a9d6be;
-            background: #f0faf5;
-            color: var(--chofer-verde)
-        }
+            .flow-state-item.done {
+                border-color: #a9d6be;
+                background: #f0faf5;
+                color: var(--chofer-verde)
+            }
 
-        .flow-state-item.current {
-            border-color: #8db3df;
-            background: #eaf3ff;
-            color: var(--chofer-azul)
-        }
+            .flow-state-item.current {
+                border-color: #8db3df;
+                background: #eaf3ff;
+                color: var(--chofer-azul)
+            }
 
         .carga-toolbar {
             display: flex;
@@ -591,20 +801,20 @@
             min-width: 0
         }
 
-        .carga-toolbar-texto strong {
-            display: block;
-            color: var(--chofer-texto);
-            font-size: .82rem;
-            font-weight: 950
-        }
+            .carga-toolbar-texto strong {
+                display: block;
+                color: var(--chofer-texto);
+                font-size: .82rem;
+                font-weight: 950
+            }
 
-        .carga-toolbar-texto small {
-            display: block;
-            margin-top: 2px;
-            color: var(--chofer-gris);
-            font-size: .69rem;
-            font-weight: 700
-        }
+            .carga-toolbar-texto small {
+                display: block;
+                margin-top: 2px;
+                color: var(--chofer-gris);
+                font-size: .69rem;
+                font-weight: 700
+            }
 
         .btn-carga-secundario {
             min-height: 38px;
@@ -623,9 +833,9 @@
             white-space: nowrap
         }
 
-        .btn-carga-secundario:hover {
-            background: #f2f7fd
-        }
+            .btn-carga-secundario:hover {
+                background: #f2f7fd
+            }
 
         .carga-mensaje {
             display: none;
@@ -639,27 +849,27 @@
             font-weight: 800
         }
 
-        .carga-mensaje.show {
-            display: block
-        }
+            .carga-mensaje.show {
+                display: block
+            }
 
-        .carga-mensaje.ok {
-            border-color: #add8bf;
-            background: #f0faf5;
-            color: var(--chofer-verde)
-        }
+            .carga-mensaje.ok {
+                border-color: #add8bf;
+                background: #f0faf5;
+                color: var(--chofer-verde)
+            }
 
-        .carga-mensaje.error {
-            border-color: #efb8b4;
-            background: #fef3f2;
-            color: var(--chofer-rojo)
-        }
+            .carga-mensaje.error {
+                border-color: #efb8b4;
+                background: #fef3f2;
+                color: var(--chofer-rojo)
+            }
 
-        .carga-mensaje.warning {
-            border-color: #ecd19a;
-            background: #fffaeb;
-            color: var(--chofer-amarillo)
-        }
+            .carga-mensaje.warning {
+                border-color: #ecd19a;
+                background: #fffaeb;
+                color: var(--chofer-amarillo)
+            }
 
         .carga-embarques {
             display: grid;
@@ -678,11 +888,11 @@
             min-width: 0
         }
 
-        .carga-embarque:hover,
-        .carga-embarque.active {
-            border-color: #7fa9d8;
-            box-shadow: 0 0 0 3px rgba(0,74,173,.06)
-        }
+            .carga-embarque:hover,
+            .carga-embarque.active {
+                border-color: #7fa9d8;
+                box-shadow: 0 0 0 3px rgba(0,74,173,.06)
+            }
 
         .carga-embarque-top {
             display: flex;
@@ -691,11 +901,11 @@
             gap: 8px
         }
 
-        .carga-embarque-top strong {
-            color: var(--chofer-texto);
-            font-size: .78rem;
-            font-weight: 950
-        }
+            .carga-embarque-top strong {
+                color: var(--chofer-texto);
+                font-size: .78rem;
+                font-weight: 950
+            }
 
         .carga-embarque small {
             display: block;
@@ -719,20 +929,20 @@
             color: #475467
         }
 
-        .carga-badge.preparado {
-            background: #fff4e5;
-            color: #9a5b00
-        }
+            .carga-badge.preparado {
+                background: #fff4e5;
+                color: #9a5b00
+            }
 
-        .carga-badge.cargando {
-            background: #eaf3ff;
-            color: var(--chofer-azul)
-        }
+            .carga-badge.cargando {
+                background: #eaf3ff;
+                color: var(--chofer-azul)
+            }
 
-        .carga-badge.cargado {
-            background: #eaf8ef;
-            color: var(--chofer-verde)
-        }
+            .carga-badge.cargado {
+                background: #eaf8ef;
+                color: var(--chofer-verde)
+            }
 
         .carga-detalle {
             border-top: 1px solid var(--chofer-borde);
@@ -753,21 +963,21 @@
             background: #fafcff
         }
 
-        .carga-kpi span {
-            display: block;
-            color: var(--chofer-gris);
-            font-size: .62rem;
-            font-weight: 850;
-            text-transform: uppercase
-        }
+            .carga-kpi span {
+                display: block;
+                color: var(--chofer-gris);
+                font-size: .62rem;
+                font-weight: 850;
+                text-transform: uppercase
+            }
 
-        .carga-kpi strong {
-            display: block;
-            margin-top: 2px;
-            color: var(--chofer-texto);
-            font-size: .92rem;
-            font-weight: 950
-        }
+            .carga-kpi strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--chofer-texto);
+                font-size: .92rem;
+                font-weight: 950
+            }
 
         .carga-progress {
             height: 9px;
@@ -777,13 +987,13 @@
             margin: 8px 0 12px
         }
 
-        .carga-progress > span {
-            display: block;
-            height: 100%;
-            width: 0;
-            background: var(--chofer-verde);
-            transition: width .2s ease
-        }
+            .carga-progress > span {
+                display: block;
+                height: 100%;
+                width: 0;
+                background: var(--chofer-verde);
+                transition: width .2s ease
+            }
 
         .carga-scan-form {
             display: grid;
@@ -792,23 +1002,23 @@
             margin-bottom: 10px
         }
 
-        .carga-scan-form input {
-            min-height: 48px;
-            width: 100%;
-            border: 2px solid #83aeda;
-            border-radius: 10px;
-            padding: 10px 12px;
-            background: #fff;
-            color: var(--chofer-texto);
-            font-size: .88rem;
-            font-weight: 800;
-            outline: none
-        }
+            .carga-scan-form input {
+                min-height: 48px;
+                width: 100%;
+                border: 2px solid #83aeda;
+                border-radius: 10px;
+                padding: 10px 12px;
+                background: #fff;
+                color: var(--chofer-texto);
+                font-size: .88rem;
+                font-weight: 800;
+                outline: none
+            }
 
-        .carga-scan-form input:focus {
-            border-color: var(--chofer-azul);
-            box-shadow: 0 0 0 3px rgba(0,74,173,.08)
-        }
+                .carga-scan-form input:focus {
+                    border-color: var(--chofer-azul);
+                    box-shadow: 0 0 0 3px rgba(0,74,173,.08)
+                }
 
         .btn-escanear-caja {
             min-height: 48px;
@@ -821,13 +1031,13 @@
             cursor: pointer
         }
 
-        .btn-escanear-caja:disabled,
-        .btn-confirmar-carga:disabled,
-        .btn-action:disabled {
-            opacity: .55;
-            cursor: not-allowed;
-            filter: none
-        }
+            .btn-escanear-caja:disabled,
+            .btn-confirmar-carga:disabled,
+            .btn-action:disabled {
+                opacity: .55;
+                cursor: not-allowed;
+                filter: none
+            }
 
         .carga-cajas {
             max-height: 280px;
@@ -847,32 +1057,32 @@
             font-size: .68rem
         }
 
-        .carga-caja:last-child {
-            border-bottom: 0
-        }
+            .carga-caja:last-child {
+                border-bottom: 0
+            }
 
-        .carga-caja strong {
-            color: var(--chofer-texto);
-            font-size: .7rem;
-            font-weight: 900;
-            overflow-wrap: anywhere
-        }
+            .carga-caja strong {
+                color: var(--chofer-texto);
+                font-size: .7rem;
+                font-weight: 900;
+                overflow-wrap: anywhere
+            }
 
-        .carga-caja span,
-        .carga-caja small {
-            color: var(--chofer-gris);
-            font-weight: 700
-        }
+            .carga-caja span,
+            .carga-caja small {
+                color: var(--chofer-gris);
+                font-weight: 700
+            }
 
-        .carga-caja .cargada {
-            color: var(--chofer-verde);
-            font-weight: 950
-        }
+            .carga-caja .cargada {
+                color: var(--chofer-verde);
+                font-weight: 950
+            }
 
-        .carga-caja .reservada {
-            color: var(--chofer-amarillo);
-            font-weight: 950
-        }
+            .carga-caja .reservada {
+                color: var(--chofer-amarillo);
+                font-weight: 950
+            }
 
         .carga-footer {
             display: flex;
@@ -904,8 +1114,335 @@
             font-weight: 800
         }
 
-        .salida-bloqueo.show {
-            display: block
+            .salida-bloqueo.show {
+                display: block
+            }
+
+        .ruta-resumen {
+            padding: 13px 14px;
+            border-bottom: 1px solid var(--chofer-borde);
+            background: #fbfdff
+        }
+
+        .ruta-resumen-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px
+        }
+
+            .ruta-resumen-top strong {
+                color: var(--chofer-texto);
+                font-size: .82rem;
+                font-weight: 950
+            }
+
+            .ruta-resumen-top span {
+                color: var(--chofer-gris);
+                font-size: .7rem;
+                font-weight: 800
+            }
+
+        .ruta-progress {
+            height: 8px;
+            margin-top: 8px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #e7edf5
+        }
+
+            .ruta-progress > span {
+                display: block;
+                height: 100%;
+                border-radius: inherit;
+                background: var(--chofer-verde)
+            }
+
+        .paradas-lista {
+            padding: 12px 14px 14px
+        }
+
+        .parada-card {
+            position: relative;
+            display: grid;
+            grid-template-columns: 42px minmax(0,1fr);
+            gap: 11px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid var(--chofer-borde);
+            border-radius: 13px;
+            background: #fff
+        }
+
+            .parada-card:last-child {
+                margin-bottom: 0
+            }
+
+            .parada-card.proxima {
+                border-color: #77a6da;
+                box-shadow: 0 0 0 3px rgba(0,74,173,.06)
+            }
+
+            .parada-card.completada {
+                border-color: #afd6bf;
+                background: #f7fcf9
+            }
+
+            .parada-card.omitida,
+            .parada-card.cancelada {
+                opacity: .72;
+                background: #fafafa
+            }
+
+        .parada-numero {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: #edf4ff;
+            color: var(--chofer-azul);
+            font-size: .78rem;
+            font-weight: 950
+        }
+
+        .parada-card.completada .parada-numero {
+            background: #e4f6eb;
+            color: var(--chofer-verde)
+        }
+
+        .parada-contenido {
+            min-width: 0
+        }
+
+        .parada-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px
+        }
+
+        .parada-lugar {
+            min-width: 0
+        }
+
+            .parada-lugar strong {
+                display: block;
+                color: var(--chofer-texto);
+                font-size: .84rem;
+                font-weight: 950;
+                overflow-wrap: anywhere
+            }
+
+            .parada-lugar small {
+                display: block;
+                margin-top: 2px;
+                color: var(--chofer-gris);
+                font-size: .69rem;
+                font-weight: 750
+            }
+
+        .parada-estado {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            flex: 0 0 auto;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: .64rem;
+            font-weight: 950;
+            white-space: nowrap
+        }
+
+        .parada-card.en-camino .parada-estado {
+            background: #eaf3ff;
+            color: var(--chofer-azul)
+        }
+
+        .parada-card.en-sitio .parada-estado {
+            background: #fff4e5;
+            color: var(--chofer-amarillo)
+        }
+
+        .parada-card.completada .parada-estado {
+            background: #e8f7ee;
+            color: var(--chofer-verde)
+        }
+
+        .parada-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            margin-top: 8px;
+            color: var(--chofer-gris);
+            font-size: .68rem;
+            font-weight: 700
+        }
+
+            .parada-meta span {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px
+            }
+
+        .parada-direccion,
+        .parada-observaciones {
+            margin-top: 7px;
+            color: var(--chofer-gris);
+            font-size: .7rem;
+            line-height: 1.45;
+            font-weight: 700
+        }
+
+        .parada-embarques {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px
+        }
+
+        .parada-embarque {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 8px;
+            border-radius: 8px;
+            background: #eef5fd;
+            color: var(--chofer-azul-oscuro);
+            font-size: .66rem;
+            font-weight: 850
+        }
+
+        .parada-proxima {
+            margin-top: 8px;
+            padding: 7px 9px;
+            border-left: 3px solid var(--chofer-azul);
+            border-radius: 7px;
+            background: #f4f8ff;
+            color: #31506f;
+            font-size: .69rem;
+            font-weight: 800
+        }
+
+        .parada-operacion {
+            margin-top: 11px;
+            padding-top: 11px;
+            border-top: 1px solid #e7edf4
+        }
+
+        .parada-actions-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 9px
+        }
+
+        .parada-form {
+            padding: 10px;
+            border: 1px solid var(--chofer-borde);
+            border-radius: 10px;
+            background: #fbfdff
+        }
+
+            .parada-form.full {
+                grid-column: 1 / -1
+            }
+
+            .parada-form label {
+                display: block;
+                margin-bottom: 5px;
+                color: #465a70;
+                font-size: .68rem;
+                font-weight: 900
+            }
+
+            .parada-form textarea,
+            .parada-form input[type=file] {
+                width: 100%;
+                border: 1px solid #ccd9e7;
+                border-radius: 9px;
+                background: #fff;
+                color: var(--chofer-texto);
+                padding: 9px 10px;
+                font-size: .72rem
+            }
+
+            .parada-form textarea {
+                min-height: 62px;
+                resize: vertical
+            }
+
+            .parada-form input[type=file] {
+                margin-bottom: 8px
+            }
+
+        .parada-boton {
+            width: 100%;
+            min-height: 40px;
+            border: 0;
+            border-radius: 9px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            color: #fff;
+            font-size: .72rem;
+            font-weight: 950;
+            cursor: pointer
+        }
+
+            .parada-boton.llegada {
+                background: var(--chofer-azul)
+            }
+
+            .parada-boton.completar {
+                background: var(--chofer-verde)
+            }
+
+            .parada-boton.omitir {
+                background: #7a8492
+            }
+
+            .parada-boton:disabled {
+                opacity: .55;
+                cursor: not-allowed
+            }
+
+        .ruta-bloqueada {
+            padding: 12px 14px;
+            border: 1px solid #ecd19a;
+            border-radius: 11px;
+            background: #fffaeb;
+            color: var(--chofer-amarillo);
+            font-size: .73rem;
+            font-weight: 800
+        }
+
+        html[data-nsq-theme="dark"] .ruta-resumen,
+        html[data-nsq-theme="dark"] .parada-card,
+        html[data-nsq-theme="dark"] .parada-form {
+            background: #111c2d
+        }
+
+            html[data-nsq-theme="dark"] .parada-card.completada {
+                background: #10261c
+            }
+
+            html[data-nsq-theme="dark"] .parada-form textarea,
+            html[data-nsq-theme="dark"] .parada-form input[type=file] {
+                background: #0d1828;
+                color: #edf3fb
+            }
+
+        html[data-nsq-theme="dark"] .parada-embarque,
+        html[data-nsq-theme="dark"] .parada-proxima {
+            background: #132844;
+            color: #d9e8fb
+        }
+
+        html[data-nsq-theme="dark"] .ruta-progress {
+            background: #26364b
         }
 
         html[data-nsq-theme="dark"] .carga-embarque,
@@ -952,9 +1489,9 @@
                 color: #b9c8da
             }
 
-            html[data-nsq-theme="dark"] .sync-note strong {
-                color: #dceafe
-            }
+                html[data-nsq-theme="dark"] .sync-note strong {
+                    color: #dceafe
+                }
 
             html[data-nsq-theme="dark"] .flow-state-item {
                 background: #111c2d;
@@ -1019,6 +1556,22 @@
                 grid-template-columns: 1fr
             }
 
+            .parada-top {
+                display: block
+            }
+
+            .parada-estado {
+                margin-top: 6px
+            }
+
+            .parada-actions-grid {
+                grid-template-columns: 1fr
+            }
+
+            .parada-form.full {
+                grid-column: auto
+            }
+
             .field.full {
                 grid-column: auto
             }
@@ -1058,10 +1611,10 @@
                 grid-template-columns: minmax(0,1fr) auto
             }
 
-            .carga-caja .carga-caja-of,
-            .carga-caja .carga-caja-cantidad {
-                display: none
-            }
+                .carga-caja .carga-caja-of,
+                .carga-caja .carga-caja-cantidad {
+                    display: none
+                }
 
             .carga-toolbar {
                 align-items: flex-start
@@ -1071,21 +1624,44 @@
                 font-size: .62rem;
                 padding: 6px 8px
             }
+
+            .field input,
+            .field select,
+            .field textarea,
+            .parada-form textarea {
+                font-size: 16px
+            }
+
+            .parada-boton,
+            .btn-action,
+            .btn-tomar-foto,
+            .btn-agregar-evidencia {
+                min-height: 54px;
+                font-size: .82rem
+            }
+
+            .evidencia-botones {
+                grid-template-columns: 1fr 1fr
+            }
+
+            .chofer-title h1 {
+                white-space: normal;
+                line-height: 1.1
+            }
         }
 
-        .btn-agregar-evidencia {
-            width: 100%;
-            min-height: 52px;
-            border: 1px dashed #75a5d8;
-            border-radius: 10px;
-            background: #f5f9ff;
-            color: var(--chofer-azul);
-            font-weight: 900;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            cursor: pointer
+        @@media(max-width:420px) {
+            .evidencia-botones {
+                grid-template-columns: 1fr
+            }
+
+            .summary-line {
+                grid-template-columns: 1fr 1fr
+            }
+
+            .chofer-head {
+                align-items: flex-start
+            }
         }
 
             .btn-agregar-evidencia:hover {
@@ -1160,8 +1736,18 @@
         }
 
         html[data-nsq-theme="dark"] .btn-agregar-evidencia,
-        html[data-nsq-theme="dark"] .evidencia-captura-item {
+        html[data-nsq-theme="dark"] .evidencia-captura-item,
+        html[data-nsq-theme="dark"] .next-card,
+        html[data-nsq-theme="dark"] .secondary-details {
             background: #0d1828
+        }
+
+        html[data-nsq-theme="dark"] .next-card strong {
+            color: #dceafe
+        }
+
+        html[data-nsq-theme="dark"] .next-card span {
+            color: #aebfd3
         }
     </style>
 }
@@ -1173,8 +1759,12 @@
                 <i class="fa-solid fa-arrow-left"></i>
             </a>
             <div class="chofer-title">
-                <h1>@Model.Folio</h1>
+                <h1>@folioOperativo</h1>
                 <p>@Txt(Model.Origen) → @Txt(Model.Destino)</p>
+                @if (mostrarFolioViaje)
+                {
+                    <span class="reference-note"><i class="fa-solid fa-link"></i>Viaje interno: @Model.Folio</span>
+                }
             </div>
         </div>
         <span class="estado @EstadoClase(Model.Estatus)">
@@ -1208,6 +1798,14 @@
         <div class="alert alert-danger">@TempData["LogisticaError"]</div>
     }
 
+    <div class="next-card">
+        <div class="next-card-icon"><i class="fa-solid @accionIcono"></i></div>
+        <div>
+            <strong>@accionTitulo</strong>
+            <span>@accionTexto</span>
+        </div>
+    </div>
+
     <div class="summary-line">
         <div class="summary-item">
             <span>Fecha programada</span>
@@ -1229,15 +1827,19 @@
             <span>Chofer</span>
             <strong>@Model.ChoferMostrar</strong>
         </div>
+        <div class="summary-item">
+            <span>Paradas</span>
+            <strong>@(tieneParadas ? $"{Model.ParadasCompletadas}/{Model.TotalParadas}" : "Sin ruta")</strong>
+        </div>
     </div>
 
-    @if (esEntregaPt)
+    @if (tieneEntregaVinculada)
     {
         <div class="sync-note">
             <i class="fa-solid fa-arrows-rotate"></i>
             <div>
-                <strong>Entrega vinculada al Centro Operativo</strong>
-                <span>La carga física es compartida: puede escanearse desde Centro Operativo o desde este portal del chofer, sin restricción de horario. Ambos trabajan sobre las mismas cajas del embarque. La salida física real continúa siendo confirmada por el chofer.</span>
+                <strong>Este viaje está ligado al embarque @folioOperativo</strong>
+                <span>Lo que se escanee aquí también lo ve Logística. Cuando la carga esté completa podrás confirmar la salida.</span>
                 <div class="flow-state">
                     <div class="flow-state-item done"><i class="fa-solid fa-check me-1"></i>Viaje asignado</div>
                     <div id="pasoCargaFisicaChofer" class="flow-state-item @(programado ? "current" : (enCurso || completado ? "done" : ""))"><i class="fa-solid fa-barcode me-1"></i>Carga física</div>
@@ -1248,11 +1850,11 @@
         </div>
     }
 
-    <section class="section">
-        <div class="section-title">
-            <span><i class="fa-solid fa-route me-2"></i>Información del viaje</span>
-            <small>Datos asignados por Logística</small>
-        </div>
+    <details class="section info-details">
+        <summary class="section-title">
+            <span><i class="fa-solid fa-circle-info me-2"></i>Datos del viaje</span>
+            <span class="details-open"></span>
+        </summary>
         <div class="info-grid">
             <div class="info-row">
                 <span>Origen</span>
@@ -1331,9 +1933,214 @@
                 </div>
             }
         </div>
+    </details>
+
+    <section class="section" id="rutaParadas">
+        <div class="section-title">
+            <span><i class="fa-solid fa-location-dot me-2"></i>Recorrido y paradas</span>
+            <small>@(tieneParadas ? $"{Model.ParadasCompletadas} de {Model.TotalParadas} atendidas" : "Sin paradas configuradas")</small>
+        </div>
+        @if (!tieneParadas)
+        {
+            <div class="empty">
+                <i class="fa-solid fa-route"></i>
+                Este viaje todavía no tiene una secuencia de paradas registrada.
+            </div>
+        }
+        else
+        {
+            var porcentajeRuta = Model.TotalParadas <= 0 ? 0m : Math.Min(100m, Math.Round((decimal)Model.ParadasCompletadas * 100m / Model.TotalParadas, 1));
+            <div class="ruta-resumen">
+                <div class="ruta-resumen-top">
+                    <strong>@Model.ParadasCompletadas / @Model.TotalParadas paradas atendidas</strong>
+                    <span>@porcentajeRuta.ToString("N0")% · @Model.ParadasPendientes pendiente@(Model.ParadasPendientes == 1 ? "" : "s")</span>
+                </div>
+                <div class="ruta-progress"><span style="width:@porcentajeRuta.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+            </div>
+            <div class="paradas-lista">
+                @foreach (var parada in paradas)
+                {
+                    var esProxima = proximaParada?.ViajeParadaID == parada.ViajeParadaID;
+                    var claseParada = EstadoParadaClase(parada.Estatus);
+                    var puedeOperarParada = enCurso && !parada.CierraViaje && parada.TipoParada != "Origen" && parada.Estatus is "Pendiente" or "En camino" or "En sitio";
+                    var puedeOmitir = puedeOperarParada && !parada.Embarques.Any();
+                    <article class="parada-card @claseParada @(esProxima ? "proxima" : "")">
+                        <div class="parada-numero">@parada.Secuencia</div>
+                        <div class="parada-contenido">
+                            <div class="parada-top">
+                                <div class="parada-lugar">
+                                    <strong><i class="fa-solid @IconoParada(parada.TipoParada) me-1"></i>@Txt(parada.Lugar)</strong>
+                                    <small>@TipoParadaVisible(parada.TipoParada) · @TxtVisible(parada.TipoOperacion)</small>
+                                </div>
+                                <span class="parada-estado">
+                                    @if (parada.Estatus == "Completada")
+                                    {
+                                        <i class="fa-solid fa-check"></i>
+                                    }
+                                    else if (parada.Estatus == "En camino")
+                                    {
+                                        <i class="fa-solid fa-location-arrow"></i>
+                                    }
+                                    else if (parada.Estatus == "En sitio")
+                                    {
+                                        <i class="fa-solid fa-location-dot"></i>
+                                    }
+                                    else if (parada.Estatus == "Omitida")
+                                    {
+                                        <i class="fa-solid fa-forward"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-regular fa-clock"></i>
+                                    }
+                                    @parada.Estatus
+                                </span>
+                            </div>
+                            <div class="parada-meta">
+                                @if (parada.FechaHoraLlegadaProgramada.HasValue)
+                                {
+                                    <span><i class="fa-regular fa-clock"></i>Llegada prog. @parada.FechaHoraLlegadaProgramada.Value.ToString("dd/MM HH:mm")</span>
+                                }
+                                @if (parada.FechaLlegadaReal.HasValue)
+                                {
+                                    <span><i class="fa-solid fa-location-dot"></i>Llegada @parada.FechaLlegadaReal.Value.ToString("dd/MM HH:mm")</span>
+                                }
+                                @if (parada.FechaSalidaReal.HasValue)
+                                {
+                                    <span><i class="fa-solid fa-arrow-right-from-bracket"></i>Salida @parada.FechaSalidaReal.Value.ToString("dd/MM HH:mm")</span>
+                                }
+                                @if (parada.RequiereEvidencia)
+                                {
+                                    <span><i class="fa-solid fa-camera"></i>Evidencia requerida</span>
+                                }
+                                @if (parada.TotalEvidencias > 0)
+                                {
+                                    <span><i class="fa-solid fa-paperclip"></i>@parada.TotalEvidencias evidencia@(parada.TotalEvidencias == 1 ? "" : "s")</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(parada.Direccion))
+                            {
+                                <div class="parada-direccion"><i class="fa-solid fa-map-location-dot me-1"></i>@parada.Direccion</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(parada.ContactoNombre) || !string.IsNullOrWhiteSpace(parada.ContactoTelefono))
+                            {
+                                <div class="parada-direccion"><i class="fa-solid fa-address-book me-1"></i>@Txt(parada.ContactoNombre) @(!string.IsNullOrWhiteSpace(parada.ContactoTelefono) ? $"· {parada.ContactoTelefono}" : "")</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(parada.ReferenciaFolioSnapshot))
+                            {
+                                <div class="parada-direccion"><i class="fa-solid fa-link me-1"></i>Referencia: @parada.ReferenciaFolioSnapshot</div>
+                            }
+                            @if (parada.Embarques.Any())
+                            {
+                                <div class="parada-embarques">
+                                    @foreach (var embarque in parada.Embarques)
+                                    {
+                                        <span class="parada-embarque"><i class="fa-solid fa-box"></i>@embarque.Folio · @embarque.Estatus · @embarque.TotalPiezas.ToString("N0") PZA</span>
+                                    }
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(parada.Observaciones))
+                            {
+                                <div class="parada-observaciones">@parada.Observaciones</div>
+                            }
+                            @if (esProxima && enCurso)
+                            {
+                                <div class="parada-proxima"><i class="fa-solid fa-location-arrow me-1"></i>Esta es la siguiente parada del recorrido.</div>
+                            }
+                            @if (parada.CierraViaje && enCurso && parada.Estatus is "Pendiente" or "En camino" or "En sitio")
+                            {
+                                <div class="parada-operacion">
+                                    @if (pendientesOperativas.Count == 0)
+                                    {
+                                        <div class="parada-proxima"><i class="fa-solid fa-flag-checkered me-1"></i>Última parada. Cuando regreses a planta utiliza la sección <strong>Registrar regreso</strong>.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="parada-proxima"><i class="fa-solid fa-lock me-1"></i>El retorno se habilitará cuando termines las paradas anteriores.</div>
+                                    }
+                                </div>
+                            }
+                            else if (puedeOperarParada && esProxima)
+                            {
+                                <div class="parada-operacion">
+                                    <div class="parada-actions-grid">
+                                        @if (parada.Estatus is "Pendiente" or "En camino")
+                                        {
+                                            <form class="parada-form full" asp-controller="LogisticaChofer" asp-action="RegistrarLlegadaParada" method="post" data-parada-operacion="llegada">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                <label>Observaciones de llegada</label>
+                                                <textarea name="observaciones" maxlength="1200" placeholder="Opcional"></textarea>
+                                                <button type="submit" class="parada-boton llegada"><i class="fa-solid fa-location-dot"></i>Ya llegué a esta parada</button>
+                                            </form>
+                                        }
+                                        @if (parada.Estatus == "En sitio")
+                                        {
+                                            <form class="parada-form full" asp-controller="LogisticaChofer" asp-action="CompletarParada" method="post" enctype="multipart/form-data" data-parada-operacion="completar" data-requiere-evidencia="@(parada.RequiereEvidencia ? "true" : "false")">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                <label>Evidencias de la parada</label>
+                                                <input id="evidenciasParada_@parada.ViajeParadaID"
+                                                       class="js-evidencias-acumulables"
+                                                       type="file"
+                                                       name="evidencias"
+                                                       accept="image/*,.pdf"
+                                                       multiple
+                                                       hidden
+                                                       data-lista="listaEvidenciasParada_@parada.ViajeParadaID" />
+                                                <input id="camaraParada_@parada.ViajeParadaID"
+                                                       class="js-camara-evidencia"
+                                                       type="file"
+                                                       accept="image/*"
+                                                       capture="environment"
+                                                       hidden
+                                                       data-destino="evidenciasParada_@parada.ViajeParadaID" />
+                                                <div class="evidencia-botones">
+                                                    <button type="button" class="btn-tomar-foto" data-input="camaraParada_@parada.ViajeParadaID">
+                                                        <i class="fa-solid fa-camera"></i>Tomar foto
+                                                    </button>
+                                                    <button type="button" class="btn-agregar-evidencia" data-input="evidenciasParada_@parada.ViajeParadaID">
+                                                        <i class="fa-solid fa-images"></i>Elegir varias / PDF
+                                                    </button>
+                                                </div>
+                                                <div id="listaEvidenciasParada_@parada.ViajeParadaID" class="lista-evidencias-captura"></div>
+                                                <div class="field-help">@(parada.RequiereEvidencia ? "Agrega al menos una foto. Puedes tomar varias una por una o seleccionar varias fotos/PDF de una sola vez." : "Opcional. Puedes tomar fotos o seleccionar varias fotos/PDF.")</div>
+                                                <label class="mt-2">Observaciones</label>
+                                                <textarea name="observaciones" maxlength="1200" placeholder="Opcional"></textarea>
+                                                <button type="submit" class="parada-boton completar"><i class="fa-solid fa-check-double"></i>Completar parada y continuar</button>
+                                            </form>
+                                        }
+                                        @if (puedeOmitir)
+                                        {
+                                            <details class="secondary-details">
+                                                <summary><i class="fa-solid fa-circle-exclamation me-1"></i>No pude atender esta parada</summary>
+                                                <form class="parada-form full" asp-controller="LogisticaChofer" asp-action="OmitirParada" method="post" data-parada-operacion="omitir">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                    <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                    <label>¿Por qué no se pudo atender?</label>
+                                                    <textarea name="motivo" maxlength="1000" required placeholder="Escribe el motivo"></textarea>
+                                                    <button type="submit" class="parada-boton omitir"><i class="fa-solid fa-forward"></i>Omitir esta parada</button>
+                                                </form>
+                                            </details>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else if (enCurso && parada.Estatus == "Pendiente" && !esProxima)
+                            {
+                                <div class="parada-proxima"><i class="fa-solid fa-hourglass-half me-1"></i>Esta parada se habilitará al terminar las anteriores.</div>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
     </section>
 
-    @if (esEntregaPt && programado)
+    @if (tieneEntregaVinculada && programado)
     {
         <section class="section" id="seccionCargaFisicaChofer" data-viaje-id="@Model.ViajeID">
             <div class="section-title">
@@ -1398,10 +2205,10 @@
     {
         <section class="section">
             <div class="section-title">
-                <span><i class="fa-solid fa-play me-2"></i>@(esEntregaPt ? "Confirmar salida de planta" : "Registrar salida")</span>
+                <span><i class="fa-solid fa-play me-2"></i>@(tieneEntregaVinculada ? "Confirmar salida de planta" : "Registrar salida")</span>
                 <small>@ahoraTexto</small>
             </div>
-            @if (esEntregaPt)
+            @if (tieneEntregaVinculada)
             {
                 <div id="salidaBloqueoCarga" class="salida-bloqueo show">
                     <i class="fa-solid fa-circle-notch fa-spin me-1"></i>Validando que todos los embarques vinculados tengan la carga física confirmada...
@@ -1413,7 +2220,7 @@
 
                 <div class="action-intro">
                     <i class="fa-solid fa-circle-info"></i>
-                    @if (esEntregaPt)
+                    @if (tieneEntregaVinculada)
                     {
                         <span>Esta es la salida física real. Antes de registrarla, el sistema validará nuevamente que la carga del embarque esté completa y sin bloqueos críticos. Captura el kilometraje inicial y agrega al menos una fotografía.</span>
                     }
@@ -1433,25 +2240,30 @@
                         <label>Evidencias de salida</label>
 
                         <input id="evidenciasSalida"
+                               class="js-evidencias-acumulables"
                                type="file"
                                name="evidencias"
                                accept="image/*,.pdf"
                                multiple
-                               hidden />
-
-                        <button type="button"
-                                class="btn-agregar-evidencia"
-                                data-input="evidenciasSalida">
-                            <i class="fa-solid fa-plus"></i>
-                            Agregar evidencia
-                        </button>
-
-                        <div id="listaEvidenciasSalida"
-                             class="lista-evidencias-captura"></div>
-
-                        <div class="field-help">
-                            Debes agregar al menos una fotografía. Después puedes agregar más fotos o archivos PDF.
+                               hidden
+                               data-lista="listaEvidenciasSalida" />
+                        <input id="camaraSalida"
+                               class="js-camara-evidencia"
+                               type="file"
+                               accept="image/*"
+                               capture="environment"
+                               hidden
+                               data-destino="evidenciasSalida" />
+                        <div class="evidencia-botones">
+                            <button type="button" class="btn-tomar-foto" data-input="camaraSalida">
+                                <i class="fa-solid fa-camera"></i>Tomar foto
+                            </button>
+                            <button type="button" class="btn-agregar-evidencia" data-input="evidenciasSalida">
+                                <i class="fa-solid fa-images"></i>Elegir varias / PDF
+                            </button>
                         </div>
+                        <div id="listaEvidenciasSalida" class="lista-evidencias-captura"></div>
+                        <div class="field-help">Toma una o varias fotos. También puedes seleccionar varias fotos o PDF de una sola vez.</div>
                     </div>
 
                     <div class="field full">
@@ -1463,14 +2275,14 @@
                 <div class="action-footer">
                     <button id="btnRegistrarSalidaChofer" type="submit" class="btn-action btn-start">
                         <i class="fa-solid fa-truck-fast"></i>
-                        @(esEntregaPt ? "Confirmar salida de planta" : "Confirmar salida")
+                        @(tieneEntregaVinculada ? "Confirmar salida de planta" : "Confirmar salida")
                     </button>
                 </div>
             </form>
         </section>
     }
 
-    @if (Model.PuedeRegistrarRegreso)
+    @if (puedeRegistrarRegresoRuta)
     {
         <section class="section">
             <div class="section-title">
@@ -1507,25 +2319,30 @@
                         <label>Evidencias de regreso</label>
 
                         <input id="evidenciasRegreso"
+                               class="js-evidencias-acumulables"
                                type="file"
                                name="evidencias"
                                accept="image/*,.pdf"
                                multiple
-                               hidden />
-
-                        <button type="button"
-                                class="btn-agregar-evidencia"
-                                data-input="evidenciasRegreso">
-                            <i class="fa-solid fa-plus"></i>
-                            Agregar evidencia
-                        </button>
-
-                        <div id="listaEvidenciasRegreso"
-                             class="lista-evidencias-captura"></div>
-
-                        <div class="field-help">
-                            Debes agregar al menos una fotografía. Después puedes agregar más fotos o archivos PDF.
+                               hidden
+                               data-lista="listaEvidenciasRegreso" />
+                        <input id="camaraRegreso"
+                               class="js-camara-evidencia"
+                               type="file"
+                               accept="image/*"
+                               capture="environment"
+                               hidden
+                               data-destino="evidenciasRegreso" />
+                        <div class="evidencia-botones">
+                            <button type="button" class="btn-tomar-foto" data-input="camaraRegreso">
+                                <i class="fa-solid fa-camera"></i>Tomar foto
+                            </button>
+                            <button type="button" class="btn-agregar-evidencia" data-input="evidenciasRegreso">
+                                <i class="fa-solid fa-images"></i>Elegir varias / PDF
+                            </button>
                         </div>
+                        <div id="listaEvidenciasRegreso" class="lista-evidencias-captura"></div>
+                        <div class="field-help">Toma una o varias fotos. También puedes seleccionar varias fotos o PDF de una sola vez.</div>
                     </div>
 
                     <div class="field full">
@@ -1543,14 +2360,37 @@
             </form>
         </section>
     }
+    else if (Model.PuedeRegistrarRegreso && tieneParadas)
+    {
+        var pendienteRuta = pendientesOperativas.FirstOrDefault();
+        <section class="section">
+            <div class="section-title">
+                <span><i class="fa-solid fa-flag-checkered me-2"></i>Regreso a planta</span>
+                <small>Pendiente de recorrido</small>
+            </div>
+            <div class="action-body">
+                <div class="ruta-bloqueada">
+                    <i class="fa-solid fa-route me-1"></i>
+                    @if (pendienteRuta != null)
+                    {
+                        <span>Antes de registrar el regreso debes atender la parada #@pendienteRuta.Secuencia: @Txt(pendienteRuta.Lugar) (@pendienteRuta.Estatus).</span>
+                    }
+                    else
+                    {
+                        <span>El retorno todavía no está disponible. Revisa la secuencia de paradas del viaje.</span>
+                    }
+                </div>
+            </div>
+        </section>
+    }
 
     @if (puedeIncidencia)
     {
-        <section class="section">
-            <div class="section-title">
-                <span><i class="fa-solid fa-triangle-exclamation me-2"></i>Reportar incidencia</span>
-                <small>La evidencia es opcional</small>
-            </div>
+        <details class="section info-details">
+            <summary class="section-title">
+                <span><i class="fa-solid fa-triangle-exclamation me-2"></i>¿Tuviste un problema? Reportar incidencia</span>
+                <span class="details-open"></span>
+            </summary>
             <form class="action-body" asp-controller="LogisticaChofer" asp-action="RegistrarIncidencia" method="post" enctype="multipart/form-data" data-operacion="incidencia">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="viajeId" value="@Model.ViajeID" />
@@ -1588,10 +2428,33 @@
                         <textarea id="descripcionIncidencia" name="descripcion" maxlength="1200" required placeholder="Describe qué ocurrió"></textarea>
                     </div>
 
-                    <div class="field full photo-field">
-                        <label for="evidenciaIncidencia">Foto o archivo de evidencia</label>
-                        <input id="evidenciaIncidencia" type="file" name="evidencia" accept="image/*,.pdf" capture="environment" />
-                        <div class="field-help">Opcional. Puedes tomar una fotografía o adjuntar un PDF.</div>
+                    <div class="field full">
+                        <label>Evidencias (opcional)</label>
+                        <input id="evidenciasIncidencia"
+                               class="js-evidencias-acumulables"
+                               type="file"
+                               name="evidencias"
+                               accept="image/*,.pdf"
+                               multiple
+                               hidden
+                               data-lista="listaEvidenciasIncidencia" />
+                        <input id="camaraIncidencia"
+                               class="js-camara-evidencia"
+                               type="file"
+                               accept="image/*"
+                               capture="environment"
+                               hidden
+                               data-destino="evidenciasIncidencia" />
+                        <div class="evidencia-botones">
+                            <button type="button" class="btn-tomar-foto" data-input="camaraIncidencia">
+                                <i class="fa-solid fa-camera"></i>Tomar foto
+                            </button>
+                            <button type="button" class="btn-agregar-evidencia" data-input="evidenciasIncidencia">
+                                <i class="fa-solid fa-images"></i>Elegir varias / PDF
+                            </button>
+                        </div>
+                        <div id="listaEvidenciasIncidencia" class="lista-evidencias-captura"></div>
+                        <div class="field-help">Puedes agregar varias fotos y varios PDF. No es obligatorio adjuntar evidencia.</div>
                     </div>
                 </div>
 
@@ -1602,7 +2465,7 @@
                     </button>
                 </div>
             </form>
-        </section>
+        </details>
     }
 
     @if (Model.EstaCerrado)
@@ -1726,7 +2589,7 @@
             const tabs = document.querySelectorAll('.tab-btn');
             const panels = document.querySelectorAll('.tab-panel');
             const almacenesEvidencia = new Map();
-            const cargaChoferActiva = @((esEntregaPt && programado) ? "true" : "false");
+            const cargaChoferActiva = @((tieneEntregaVinculada && programado) ? "true" : "false");
             const viajeIdCarga = @Model.ViajeID;
             const urlEmbarquesCarga = '@Url.Action("ObtenerEmbarquesCarga", "LogisticaChofer")';
             const urlObtenerCarga = '@Url.Action("ObtenerCargaFisica", "LogisticaOperacion")';
@@ -2022,13 +2885,17 @@
                 return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
             }
 
-            function obtenerListaId(inputId) {
-                return inputId === 'evidenciasSalida' ? 'listaEvidenciasSalida' : 'listaEvidenciasRegreso';
+            function obtenerListaId(input) {
+                if (!input) return '';
+                if (input.dataset?.lista) return input.dataset.lista;
+                if (input.id === 'evidenciasSalida') return 'listaEvidenciasSalida';
+                if (input.id === 'evidenciasRegreso') return 'listaEvidenciasRegreso';
+                return '';
             }
 
             function renderizarEvidencias(input) {
                 const almacen = obtenerAlmacen(input);
-                const contenedor = document.getElementById(obtenerListaId(input.id));
+                const contenedor = document.getElementById(obtenerListaId(input));
                 if (!contenedor) return;
                 contenedor.innerHTML = '';
                 Array.from(almacen.files).forEach((file, indice) => {
@@ -2060,7 +2927,7 @@
                 if (almacen.files.length > 0) {
                     const contador = document.createElement('div');
                     contador.className = 'contador-evidencias';
-                    contador.textContent = `${almacen.files.length} evidencia${almacen.files.length === 1 ? '' : 's'} agregada${almacen.files.length === 1 ? '' : 's'}. Puedes agregar más.`;
+                    contador.textContent = `${almacen.files.length} archivo${almacen.files.length === 1 ? '' : 's'} listo${almacen.files.length === 1 ? '' : 's'} para guardar. Puedes agregar más.`;
                     contenedor.appendChild(contador);
                 }
             }
@@ -2105,10 +2972,57 @@
                 });
             });
 
-            ['evidenciasSalida', 'evidenciasRegreso'].forEach(id => {
-                const input = document.getElementById(id);
-                if (!input) return;
+            document.querySelectorAll('.btn-tomar-foto').forEach(boton => {
+                boton.addEventListener('click', () => {
+                    const input = document.getElementById(boton.dataset.input);
+                    if (!input) return;
+                    input.value = '';
+                    input.click();
+                });
+            });
+
+            document.querySelectorAll('input.js-camara-evidencia').forEach(inputCamara => {
+                inputCamara.addEventListener('change', () => {
+                    const destino = document.getElementById(inputCamara.dataset.destino);
+                    if (!destino) return;
+                    agregarArchivos(destino, Array.from(inputCamara.files || []));
+                    inputCamara.value = '';
+                });
+            });
+
+            document.querySelectorAll('input.js-evidencias-acumulables').forEach(input => {
                 input.addEventListener('change', () => agregarArchivos(input, Array.from(input.files || [])));
+            });
+
+            document.querySelectorAll('form[data-parada-operacion]').forEach(form => {
+                form.addEventListener('submit', event => {
+                    const operacion = form.dataset.paradaOperacion || '';
+                    if (operacion === 'completar' && form.dataset.requiereEvidencia === 'true') {
+                        const input = form.querySelector('input[name="evidencias"]');
+                        const archivos = Array.from(input?.files || []);
+                        const tieneFoto = archivos.some(file => String(file.type || '').startsWith('image/'));
+                        if (!tieneFoto) {
+                            event.preventDefault();
+                            alert('Esta parada requiere al menos una fotografía como evidencia.');
+                            return;
+                        }
+                    }
+                    const mensaje = operacion === 'llegada'
+                        ? '¿Confirmar que ya llegaste a esta parada?'
+                        : operacion === 'completar'
+                            ? '¿Completar esta parada y continuar con la siguiente?'
+                            : '¿Omitir esta parada y continuar con la siguiente?';
+                    if (!window.confirm(mensaje)) {
+                        event.preventDefault();
+                        return;
+                    }
+                    const boton = form.querySelector('button[type="submit"]');
+                    if (boton) {
+                        boton.disabled = true;
+                        boton.style.opacity = '.7';
+                        boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
+                    }
+                });
             });
 
             document.querySelectorAll('form[data-operacion]').forEach(form => {
@@ -2127,7 +3041,7 @@
                         const almacen = obtenerAlmacen(inputEvidencias);
                         const archivos = Array.from(almacen.files);
                         const tieneFoto = archivos.some(file => file.type?.startsWith('image/'));
-                        if (!tieneFoto) {
+                        if ((operacion === 'salida' || operacion === 'regreso') && !tieneFoto) {
                             event.preventDefault();
                             alert('Debes agregar al menos una fotografía antes de continuar.');
                             return;

@@ -785,6 +785,102 @@
         font-size: .71rem
     }
 
+    .doc-upload-box {
+        grid-column: span 5;
+        min-width: 0
+    }
+
+    .doc-picker {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap
+    }
+
+        .doc-picker .btn {
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 700
+        }
+
+    .doc-picker-help {
+        margin-top: 5px;
+        color: var(--lg-muted);
+        font-size: .67rem;
+        line-height: 1.4
+    }
+
+    .doc-selected-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px
+    }
+
+    .doc-selected-item {
+        display: grid;
+        grid-template-columns: 34px minmax(0,1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 7px 8px;
+        border: 1px solid #dfe6ee;
+        border-radius: 8px;
+        background: #fff
+    }
+
+    .doc-selected-icon {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: #eef5ff;
+        color: var(--lg-blue)
+    }
+
+    .doc-selected-item strong {
+        display: block;
+        overflow: hidden;
+        color: var(--lg-text);
+        font-size: .76rem;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .doc-selected-item small {
+        display: block;
+        margin-top: 1px;
+        color: var(--lg-muted);
+        font-size: .64rem
+    }
+
+    .doc-selected-remove {
+        width: 31px;
+        height: 31px;
+        border: 1px solid #efc5ca;
+        border-radius: 8px;
+        background: #fff8f8;
+        color: #b42318
+    }
+
+    .doc-selected-summary {
+        margin-top: 6px;
+        color: var(--lg-muted);
+        font-size: .68rem;
+        text-align: right
+    }
+
+    html[data-nsq-theme="dark"] .doc-selected-item {
+        background: #162237;
+        border-color: #2a3a50
+    }
+
+    html[data-nsq-theme="dark"] .doc-selected-icon {
+        background: #172b47
+    }
+
     .history-row {
         display: grid;
         grid-template-columns: 140px 155px 1fr 145px;
@@ -926,6 +1022,24 @@
 
         .checklist, .doc-required, .load-kpis {
             grid-template-columns: 1fr
+        }
+
+        .doc-upload-box {
+            grid-column: span 12
+        }
+
+        .doc-picker {
+            display: grid;
+            grid-template-columns: 1fr
+        }
+
+            .doc-picker .btn {
+                width: 100%;
+                min-height: 42px
+            }
+
+        .doc-selected-summary {
+            text-align: left
         }
 
         .history-row {
@@ -1455,13 +1569,47 @@
                 </div>
 
                 <div class="collapse mb-3" id="subirDocumento">
-                    <form asp-controller="LogisticaEmbarques" asp-action="SubirDocumento" method="post" enctype="multipart/form-data" class="compact-form js-single-submit">
+                    <form asp-controller="LogisticaEmbarques" asp-action="SubirDocumento" method="post" enctype="multipart/form-data" class="compact-form js-single-submit" id="formSubirDocumentos">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                        <div class="f3"><label class="required">Tipo documento</label><select name="tipoDocumento" id="tipoDocumento" class="form-select" required><option value="">Selecciona...</option><option>Commercial Invoice</option><option>Carta Porte</option><option>Packing List</option><option>Factura</option><option>Remisión</option><option>Guía</option><option>XML</option><option>Carta de instrucciones</option><option>Booking</option><option>Pedimento</option><option>Otro</option></select></div>
-                        <div class="f4"><label class="required">Archivo</label><input type="file" name="archivo" class="form-control" accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png" required /></div>
-                        <div class="f3"><label id="lblObsDocumento">Observaciones</label><input type="text" name="observaciones" id="obsDocumento" maxlength="1000" class="form-control" /></div>
-                        <div class="f2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Subir</button></div>
+                        <div class="f3">
+                            <label class="required">Tipo documento</label>
+                            <select name="tipoDocumento" id="tipoDocumento" class="form-select" required>
+                                <option value="">Selecciona...</option>
+                                <option>Commercial Invoice</option>
+                                <option>Carta Porte</option>
+                                <option>Packing List</option>
+                                <option>Factura</option>
+                                <option>Remisión</option>
+                                <option>Guía</option>
+                                <option>XML</option>
+                                <option>Carta de instrucciones</option>
+                                <option>Booking</option>
+                                <option>Pedimento</option>
+                                <option>Otro</option>
+                            </select>
+                            <div class="doc-picker-help">Todos los archivos seleccionados se guardarán con este mismo tipo documental.</div>
+                        </div>
+                        <div class="doc-upload-box">
+                            <label class="required">Archivos / fotos</label>
+                            <input type="file" id="documentosUpload" name="archivos" multiple hidden />
+                            <input type="file" id="documentosPicker" accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png,.webp,.heic,.heif,image/*" multiple hidden />
+                            <input type="file" id="documentosCamara" accept="image/*" capture="environment" hidden />
+                            <div class="doc-picker">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnElegirDocumentos"><i class="fa-solid fa-folder-open"></i>Elegir varios archivos</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnFotoDocumento"><i class="fa-solid fa-camera"></i>Tomar foto</button>
+                            </div>
+                            <div class="doc-picker-help">Puedes seleccionar varios archivos de una sola vez y volver a agregar más. Máximo 15 archivos, 10 MB por archivo y 100 MB en total.</div>
+                            <div id="documentosSeleccionadosLista" class="doc-selected-list"></div>
+                            <div id="documentosSeleccionadosResumen" class="doc-selected-summary">0 archivos seleccionados</div>
+                        </div>
+                        <div class="f3">
+                            <label id="lblObsDocumento">Observaciones</label>
+                            <input type="text" name="observaciones" id="obsDocumento" maxlength="1000" class="form-control" />
+                        </div>
+                        <div class="f1">
+                            <button class="btn btn-outline-primary btn-sm w-100" type="submit" id="btnSubirDocumentos"><i class="fa-solid fa-cloud-arrow-up me-1"></i><span>Subir</span></button>
+                        </div>
                     </form>
                 </div>
 
@@ -1730,6 +1878,140 @@
 
             tipoDoc?.addEventListener('change', syncDocumento);
             syncDocumento();
+
+            const formSubirDocumentos = document.getElementById('formSubirDocumentos');
+            const documentosUpload = document.getElementById('documentosUpload');
+            const documentosPicker = document.getElementById('documentosPicker');
+            const documentosCamara = document.getElementById('documentosCamara');
+            const documentosLista = document.getElementById('documentosSeleccionadosLista');
+            const documentosResumen = document.getElementById('documentosSeleccionadosResumen');
+            const btnElegirDocumentos = document.getElementById('btnElegirDocumentos');
+            const btnFotoDocumento = document.getElementById('btnFotoDocumento');
+            const btnSubirDocumentos = document.getElementById('btnSubirDocumentos');
+            let documentosSeleccionados = [];
+
+            const tamanoArchivo = bytes => {
+                const n = Number(bytes || 0);
+                if (n < 1024) return `${n} B`;
+                if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+                return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+            };
+
+            const claveDocumento = file => `${file.name}|${file.size}|${file.lastModified}`;
+
+            const iconoArchivo = file => {
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                if ((file.type || '').startsWith('image/') || ['jpg','jpeg','png','webp','heic','heif'].includes(ext)) return 'fa-image';
+                if (ext === 'pdf') return 'fa-file-pdf';
+                if (['xls','xlsx'].includes(ext)) return 'fa-file-excel';
+                if (['doc','docx'].includes(ext)) return 'fa-file-word';
+                if (ext === 'xml') return 'fa-code';
+                return 'fa-file';
+            };
+
+            function sincronizarInputDocumentos() {
+                if (!documentosUpload) return;
+                const transfer = new DataTransfer();
+                documentosSeleccionados.forEach(file => transfer.items.add(file));
+                documentosUpload.files = transfer.files;
+            }
+
+            function renderDocumentosSeleccionados() {
+                sincronizarInputDocumentos();
+                if (documentosLista) {
+                    documentosLista.innerHTML = '';
+                    documentosSeleccionados.forEach((file, index) => {
+                        const row = document.createElement('div');
+                        row.className = 'doc-selected-item';
+                        const nombreSeguro = String(file.name || '')
+                            .replaceAll('&', '&amp;')
+                            .replaceAll('<', '&lt;')
+                            .replaceAll('>', '&gt;')
+                            .replaceAll('"', '&quot;')
+                            .replaceAll("'", '&#039;');
+                        row.innerHTML = `<span class="doc-selected-icon"><i class="fa-solid ${iconoArchivo(file)}"></i></span><div style="min-width:0"><strong title="${nombreSeguro}">${nombreSeguro}</strong><small>${tamanoArchivo(file.size)}</small></div><button type="button" class="doc-selected-remove" data-remove-doc="${index}" title="Quitar archivo"><i class="fa-solid fa-xmark"></i></button>`;
+                        documentosLista.appendChild(row);
+                    });
+                }
+                const totalBytes = documentosSeleccionados.reduce((s, file) => s + file.size, 0);
+                if (documentosResumen) {
+                    documentosResumen.textContent = documentosSeleccionados.length
+                        ? `${documentosSeleccionados.length} archivo(s) listos · ${tamanoArchivo(totalBytes)}`
+                        : '0 archivos seleccionados';
+                }
+                const span = btnSubirDocumentos?.querySelector('span');
+                if (span) span.textContent = documentosSeleccionados.length
+                    ? `Subir ${documentosSeleccionados.length}`
+                    : 'Subir';
+            }
+
+            function agregarDocumentos(files) {
+                const permitidas = new Set(['pdf','xml','xlsx','xls','docx','doc','jpg','jpeg','png','webp','heic','heif']);
+                const existentes = new Set(documentosSeleccionados.map(claveDocumento));
+                for (const file of files || []) {
+                    const ext = (file.name.split('.').pop() || '').toLowerCase();
+                    const esImagen = (file.type || '').startsWith('image/') || ['jpg','jpeg','png','webp','heic','heif'].includes(ext);
+                    if (!esImagen && !permitidas.has(ext)) {
+                        alert(`${file.name}: formato no permitido.`);
+                        continue;
+                    }
+                    if (file.size <= 0) {
+                        alert(`${file.name}: el archivo está vacío.`);
+                        continue;
+                    }
+                    if (file.size > 10 * 1024 * 1024) {
+                        alert(`${file.name}: excede el máximo de 10 MB.`);
+                        continue;
+                    }
+                    const key = claveDocumento(file);
+                    if (existentes.has(key)) continue;
+                    if (documentosSeleccionados.length >= 15) {
+                        alert('Puedes cargar como máximo 15 archivos por operación.');
+                        break;
+                    }
+                    const totalActual = documentosSeleccionados.reduce((s, x) => s + x.size, 0);
+                    if (totalActual + file.size > 100 * 1024 * 1024) {
+                        alert('El total de los archivos seleccionados no puede exceder 100 MB.');
+                        break;
+                    }
+                    documentosSeleccionados.push(file);
+                    existentes.add(key);
+                }
+                renderDocumentosSeleccionados();
+            }
+
+            btnElegirDocumentos?.addEventListener('click', () => documentosPicker?.click());
+            btnFotoDocumento?.addEventListener('click', () => documentosCamara?.click());
+
+            documentosPicker?.addEventListener('change', event => {
+                agregarDocumentos([...event.target.files]);
+                event.target.value = '';
+            });
+
+            documentosCamara?.addEventListener('change', event => {
+                agregarDocumentos([...event.target.files]);
+                event.target.value = '';
+            });
+
+            documentosLista?.addEventListener('click', event => {
+                const button = event.target.closest('[data-remove-doc]');
+                if (!button) return;
+                const index = Number(button.dataset.removeDoc);
+                if (!Number.isInteger(index) || index < 0 || index >= documentosSeleccionados.length) return;
+                documentosSeleccionados.splice(index, 1);
+                renderDocumentosSeleccionados();
+            });
+
+            formSubirDocumentos?.addEventListener('submit', event => {
+                if (documentosSeleccionados.length === 0) {
+                    event.preventDefault();
+                    alert('Selecciona al menos un archivo o toma una foto.');
+                    return;
+                }
+                sincronizarInputDocumentos();
+            });
+
+            renderDocumentosSeleccionados();
 
             const esc = value => String(value ?? '')
                 .replaceAll('&', '&amp;')

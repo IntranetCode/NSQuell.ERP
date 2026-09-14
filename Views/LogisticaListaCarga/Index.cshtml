@@ -640,7 +640,22 @@
 
         .day-required {
             font-size: 7px;
-            color: #8491a1
+            color: var(--warn2);
+            font-weight: 900;
+            margin-top: 2px
+        }
+
+        .day-programmed-label {
+            font-size: 6px;
+            color: var(--ok);
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-top: 1px
+        }
+
+        .day-value.suggested {
+            color: var(--warn2);
+            font-size: 12px
         }
 
         td.habitual {
@@ -1500,6 +1515,21 @@
                                             .Distinct()
                                             .OrderBy(x => x)
                                             .ToList());
+                                            var programacionesEditables = fila.Programaciones
+                                            .Where(x => x.Activo && !string.Equals(x.Estatus, "Cancelada", StringComparison.OrdinalIgnoreCase) && x.PendienteGenerar > 0)
+                                            .OrderBy(x => x.FechaProgramadaCarga)
+                                            .ThenBy(x => x.ListaCargaProgramacionID)
+                                            .Select(x => new
+                                            {
+                                                fecha = x.FechaProgramadaCarga.ToString("yyyy-MM-dd"),
+                                                cantidad = x.PendienteGenerar,
+                                                observaciones = x.Observaciones ?? string.Empty
+                                            })
+                                            .ToList();
+                                            var programacionesJson = JsonSerializer.Serialize(programacionesEditables);
+                                            var totalGenerado = fila.TotalGeneradoEmbarques;
+                                            var totalEditable = Math.Max(0, fila.TotalPorAtender - totalGenerado);
+                                            var puedeAjustar = Model.SemanaAbierta && totalEditable > 0 && (fila.TotalSinProgramar > 0 || fila.TotalPendienteGenerar > 0);
 
                                             var fechas = new[]
                                             {
@@ -1565,15 +1595,23 @@
                                                 {
                                                     <td class="@(fila.EsDiaHabitual(fechas[i]) ? "habitual" : "")">
                                                         <div class="day-cell">
-                                                            <span class="day-value @(valores[i] <= 0 ? "empty" : "")">
-                                                                @(valores[i] > 0 ? valores[i].ToString("N0") : "-")
-                                                            </span>
-
-                                                            @if (requeridos[i] > 0)
+                                                            @if (valores[i] > 0)
                                                             {
-                                                                <span class="day-required">
-                                                                    Req. @requeridos[i].ToString("N0")
-                                                                </span>
+                                                                <span class="day-value">@valores[i].ToString("N0")</span>
+                                                                <span class="day-programmed-label">Programado</span>
+                                                                @if (requeridos[i] > 0)
+                                                                {
+                                                                    <span class="day-required">Pendiente sugerido @requeridos[i].ToString("N0")</span>
+                                                                }
+                                                            }
+                                                            else if (requeridos[i] > 0)
+                                                            {
+                                                                <span class="day-value suggested">@requeridos[i].ToString("N0")</span>
+                                                                <span class="day-required">Pendiente sugerido</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="day-value empty">-</span>
                                                             }
                                                         </div>
                                                     </td>
@@ -1629,7 +1667,7 @@
                                                 </td>
 
                                                 <td>
-                                                    @if (Model.SemanaAbierta && fila.TotalSinProgramar > 0)
+                                                    @if (puedeAjustar)
                                                     {
                                                         <button type="button"
                                                                 class="btn btn-sm btn-primary js-programar"
@@ -1638,10 +1676,13 @@
                                                                 data-cliente="@fila.Cliente"
                                                                 data-referencia="@fila.Referencia"
                                                                 data-designacion="@fila.Designacion"
+                                                                data-editable="@totalEditable"
+                                                                data-generado="@totalGenerado"
                                                                 data-sin-programar="@fila.TotalSinProgramar"
                                                                 data-semana-inicio="@Model.FechaInicio.ToString("yyyy-MM-dd")"
-                                                                data-dias='@diasJson'>
-                                                            Programar día
+                                                                data-dias='@diasJson'
+                                                                data-programaciones='@programacionesJson'>
+                                                            @(fila.TotalProgramado > 0 ? "Ajustar" : "Programar")
                                                         </button>
                                                     }
                                                     else if (fila.TotalProgramado > 0)
@@ -1715,18 +1756,18 @@
                     <div class="dialog-body">
                         <div class="planner-top">
                             <div class="planner-kpi">
-                                <span>Pendiente inicial</span>
+                                <span>Disponible para ajustar</span>
                                 <strong id="prTotal">0</strong>
                             </div>
 
                             <div class="planner-kpi">
-                                <span>Distribuido</span>
+                                <span>Programado ahora</span>
                                 <strong id="prCapturado">0</strong>
                             </div>
 
                             <div class="planner-kpi remaining"
                                  id="cardRestante">
-                                <span>Sin distribuir</span>
+                                <span>Quedará sin programar</span>
                                 <strong id="prRestante">0</strong>
                             </div>
 
@@ -1779,9 +1820,7 @@
 
                         <div class="planner-help">
                             <strong>¿Cómo funciona?</strong>
-                            La primera fila contiene automáticamente el saldo pendiente.
-                            Cuando agregues cantidades en otras fechas, esa primera cantidad
-                            se reducirá sola para que nunca se duplique el requerimiento.
+                            La primera fila conserva automáticamente el saldo de la programación. Cuando agregues una cantidad en otra fecha, esa cantidad se descontará de la primera fila para evitar duplicar piezas. Ejemplo: si tienes 6,000 PZA y agregas 2,000 PZA en otra fecha, la primera fila bajará automáticamente a 4,000 PZA. Las cantidades ya convertidas en embarque permanecen protegidas.
                         </div>
 
                         <div id="mensajePlan"
@@ -1817,7 +1856,7 @@
 
                         <div class="rest-bar">
                             <div class="rest-head">
-                                <span>Total distribuido</span>
+                                <span>Programado en este ajuste</span>
                                 <strong id="prAvanceTexto">0 / 0 PZA</strong>
                             </div>
 
@@ -1849,1148 +1888,338 @@
         (function(){
             const n=v=>Number(v||0);
             const nf=v=>n(v).toLocaleString('es-MX');
-
-            const nombresDias={
-                1:'Lunes',
-                2:'Martes',
-                3:'Miércoles',
-                4:'Jueves',
-                5:'Viernes',
-                6:'Sábado',
-                7:'Domingo'
-            };
-
-            /* =========================================================
-               ACORDEONES Y FILTROS
-               ========================================================= */
-
+            const nombresDias={1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado',7:'Domingo'};
             const acordeones=[...document.querySelectorAll('.client-accordion')];
             const buscar=document.getElementById('buscarClienteParte');
             const filtro=document.getElementById('filtroEstado');
             const sinResultados=document.getElementById('sinResultados');
-
-            document.querySelectorAll('.js-client-toggle').forEach(btn=>{
-                btn.addEventListener('click',()=>{
-                    const item=btn.closest('.client-accordion');
-
-                    if(item){
-                        item.classList.toggle('open');
-                    }
-                });
-            });
-
+            document.querySelectorAll('.js-client-toggle').forEach(btn=>btn.addEventListener('click',()=>btn.closest('.client-accordion')?.classList.toggle('open')));
             function filtrar(){
                 const q=(buscar?.value||'').trim().toLowerCase();
                 const tipo=filtro?.value||'todos';
                 let visibles=0;
-
                 acordeones.forEach(item=>{
-                    let visible=
-                        !q||
-                        (item.dataset.search||'').includes(q);
-
-                    if(tipo==='expeditado'){
-                        visible=
-                            visible&&
-                            item.dataset.expeditado==='1';
-                    }
-                    else if(tipo==='pendiente'){
-                        visible=
-                            visible&&
-                            item.dataset.pendiente==='1';
-                    }
-                    else if(tipo==='programado'){
-                        visible=
-                            visible&&
-                            item.dataset.programado==='1';
-                    }
-
-                    item.style.display=
-                        visible
-                            ?''
-                            :'none';
-
-                    if(visible){
-                        visibles++;
-
-                        if(q){
-                            item.classList.add('open');
-                        }
-                    }
+                    let visible=!q||(item.dataset.search||'').includes(q);
+                    if(tipo==='expeditado') visible=visible&&item.dataset.expeditado==='1';
+                    else if(tipo==='pendiente') visible=visible&&item.dataset.pendiente==='1';
+                    else if(tipo==='programado') visible=visible&&item.dataset.programado==='1';
+                    item.style.display=visible?'':'none';
+                    if(visible){ visibles++; if(q) item.classList.add('open'); }
                 });
-
-                if(sinResultados){
-                    sinResultados.style.display=
-                        visibles===0
-                            ?'block'
-                            :'none';
-                }
+                if(sinResultados) sinResultados.style.display=visibles===0?'block':'none';
             }
-
-            buscar?.addEventListener(
-                'input',
-                filtrar);
-
-            filtro?.addEventListener(
-                'change',
-                filtrar);
-
-            document.getElementById('btnExpandir')
-                ?.addEventListener('click',()=>{
-                    acordeones
-                        .filter(x=>x.style.display!=='none')
-                        .forEach(x=>x.classList.add('open'));
-                });
-
-            document.getElementById('btnContraer')
-                ?.addEventListener('click',()=>{
-                    acordeones
-                        .forEach(x=>x.classList.remove('open'));
-                });
-
-            /* =========================================================
-               MODAL DE PROGRAMACIÓN
-               ========================================================= */
-
-            const backdrop=
-                document.getElementById('programarBackdrop');
-
-            const filas=
-                document.getElementById('programacionFilas');
-
-            const form=
-                document.getElementById('formProgramacion');
-
-            const prClienteID=
-                document.getElementById('prClienteID');
-
-            const prParteID=
-                document.getElementById('prParteID');
-
-            const prTitulo=
-                document.getElementById('prTitulo');
-
-            const prSubtitulo=
-                document.getElementById('prSubtitulo');
-
-            const prTotal=
-                document.getElementById('prTotal');
-
-            const prCapturado=
-                document.getElementById('prCapturado');
-
-            const prRestante=
-                document.getElementById('prRestante');
-
-            const prHabitual=
-                document.getElementById('prHabitual');
-
-            const prAvanceTexto=
-                document.getElementById('prAvanceTexto');
-
-            const prTrack=
-                document.getElementById('prTrack');
-
-            const prTrackBar=
-                document.getElementById('prTrackBar');
-
-            const cardRestante=
-                document.getElementById('cardRestante');
-
-            const mensaje=
-                document.getElementById('mensajePlan');
-
-            const btnGuardar=
-                document.getElementById('btnGuardar');
-
-            const liveUbicacion=
-                document.getElementById('liveUbicacion');
-
-            const liveAlmacen=
-                document.getElementById('liveAlmacen');
-
-            const liveProduccion=
-                document.getElementById('liveProduccion');
-
-            const liveGP12=
-                document.getElementById('liveGP12');
-
-            const liveTotal=
-                document.getElementById('liveTotal');
-
-            const liveActualizado=
-                document.getElementById('liveActualizado');
-
+            buscar?.addEventListener('input',filtrar);
+            filtro?.addEventListener('change',filtrar);
+            document.getElementById('btnExpandir')?.addEventListener('click',()=>acordeones.filter(x=>x.style.display!=='none').forEach(x=>x.classList.add('open')));
+            document.getElementById('btnContraer')?.addEventListener('click',()=>acordeones.forEach(x=>x.classList.remove('open')));
+            const backdrop=document.getElementById('programarBackdrop');
+            const filas=document.getElementById('programacionFilas');
+            const form=document.getElementById('formProgramacion');
+            const prClienteID=document.getElementById('prClienteID');
+            const prParteID=document.getElementById('prParteID');
+            const prTitulo=document.getElementById('prTitulo');
+            const prSubtitulo=document.getElementById('prSubtitulo');
+            const prTotal=document.getElementById('prTotal');
+            const prCapturado=document.getElementById('prCapturado');
+            const prRestante=document.getElementById('prRestante');
+            const prHabitual=document.getElementById('prHabitual');
+            const prAvanceTexto=document.getElementById('prAvanceTexto');
+            const prTrack=document.getElementById('prTrack');
+            const prTrackBar=document.getElementById('prTrackBar');
+            const cardRestante=document.getElementById('cardRestante');
+            const mensaje=document.getElementById('mensajePlan');
+            const btnGuardar=document.getElementById('btnGuardar');
+            const liveUbicacion=document.getElementById('liveUbicacion');
+            const liveAlmacen=document.getElementById('liveAlmacen');
+            const liveProduccion=document.getElementById('liveProduccion');
+            const liveGP12=document.getElementById('liveGP12');
+            const liveTotal=document.getElementById('liveTotal');
+            const liveActualizado=document.getElementById('liveActualizado');
             let totalObjetivo=0;
+            let totalGenerado=0;
+            let pendienteSinProgramar=0;
+            let totalBaseDistribucion=0;
             let diasHabituales=[];
+            let programacionesOriginales=[];
             let inicioSemana='';
             let parteActual=0;
             let timerUbicacion=null;
-
-            /* =========================================================
-               FECHAS
-               ========================================================= */
-
             function convertirDiaSemana(fechaTexto){
-                if(!fechaTexto){
-                    return 0;
-                }
-
-                const p=
-                    fechaTexto
-                        .split('-')
-                        .map(Number);
-
-                if(p.length!==3){
-                    return 0;
-                }
-
-                const diaJs=
-                    new Date(
-                        p[0],
-                        p[1]-1,
-                        p[2])
-                        .getDay();
-
-                return diaJs===0
-                    ?7
-                    :diaJs;
+                if(!fechaTexto) return 0;
+                const p=fechaTexto.split('-').map(Number);
+                if(p.length!==3) return 0;
+                const diaJs=new Date(p[0],p[1]-1,p[2]).getDay();
+                return diaJs===0?7:diaJs;
             }
-
-            function formatearFecha(fecha){
-                return [
-                    fecha.getFullYear(),
-                    String(fecha.getMonth()+1).padStart(2,'0'),
-                    String(fecha.getDate()).padStart(2,'0')
-                ].join('-');
-            }
-
+            function formatearFecha(fecha){ return [fecha.getFullYear(),String(fecha.getMonth()+1).padStart(2,'0'),String(fecha.getDate()).padStart(2,'0')].join('-'); }
             function fechaSugerida(){
-                if(!inicioSemana){
-                    return '';
-                }
-
-                const p=
-                    inicioSemana
-                        .split('-')
-                        .map(Number);
-
-                if(p.length!==3){
-                    return inicioSemana;
-                }
-
-                const fecha=
-                    new Date(
-                        p[0],
-                        p[1]-1,
-                        p[2]);
-
+                if(!inicioSemana) return '';
+                const p=inicioSemana.split('-').map(Number);
+                if(p.length!==3) return inicioSemana;
+                const fecha=new Date(p[0],p[1]-1,p[2]);
                 if(diasHabituales.length>0){
-                    const preferido=
-                        Math.min(...diasHabituales);
-
-                    fecha.setDate(
-                        fecha.getDate()+
-                        Math.max(
-                            0,
-                            preferido-1));
+                    const preferido=Math.min(...diasHabituales.filter(x=>x>=1&&x<=6));
+                    if(preferido) fecha.setDate(fecha.getDate()+Math.max(0,preferido-1));
                 }
-
                 return formatearFecha(fecha);
             }
-
             function actualizarAdvertenciaDia(tr){
-                const fecha=
-                    tr?.querySelector('.js-fecha');
-
-                const warning=
-                    tr?.querySelector('.row-warning');
-
-                if(!fecha||!warning){
-                    return;
-                }
-
-                if(
-                    !fecha.value||
-                    diasHabituales.length===0){
-
-                    warning.textContent='';
-                    warning.classList.remove('show');
-
-                    return;
-                }
-
-                const dia=
-                    convertirDiaSemana(
-                        fecha.value);
-
-                if(
-                    diasHabituales
-                        .includes(dia)){
-
-                    warning.textContent='';
-                    warning.classList.remove('show');
-
-                    return;
-                }
-
-                warning.textContent=
-                    'Día distinto al habitual: '+
-                    diasHabituales
-                        .map(x=>nombresDias[x]||'')
-                        .filter(Boolean)
-                        .join(' / ')+
-                    '.';
-
+                const fecha=tr?.querySelector('.js-fecha');
+                const warning=tr?.querySelector('.row-warning');
+                if(!fecha||!warning) return;
+                if(!fecha.value||diasHabituales.length===0){ warning.textContent=''; warning.classList.remove('show'); return; }
+                const dia=convertirDiaSemana(fecha.value);
+                if(diasHabituales.includes(dia)){ warning.textContent=''; warning.classList.remove('show'); return; }
+                warning.textContent='Día distinto al habitual: '+diasHabituales.map(x=>nombresDias[x]||'').filter(Boolean).join(' / ')+'.';
                 warning.classList.add('show');
             }
-
-            /* =========================================================
-               CÁLCULO AUTOMÁTICO DE SALDO
-               ========================================================= */
-
             function obtenerFilaSaldo(){
-                return filas
-                    ?.querySelector(
-                        'tr[data-es-saldo="1"]');
+                return filas?.querySelector('tr[data-es-saldo="1"]')||null;
             }
-
             function obtenerCantidadOtrasFilas(){
-                if(!filas){
-                    return 0;
-                }
-
-                return [...filas.querySelectorAll(
-                    'tr:not([data-es-saldo="1"]) .js-cantidad')]
-                    .reduce(
-                        (total,input)=>
-                            total+
-                            Math.max(
-                                0,
-                                n(input.value)),
-                        0);
+                if(!filas) return 0;
+                return [...filas.querySelectorAll('tr:not([data-es-saldo="1"]) .js-cantidad')].reduce((total,input)=>total+Math.max(0,n(input.value)),0);
             }
-
+            function totalCapturado(){
+                if(!filas) return 0;
+                return [...filas.querySelectorAll('.js-cantidad')].reduce((total,input)=>total+Math.max(0,n(input.value)),0);
+            }
             function actualizarSaldoAutomatico(){
-                const filaSaldo=
-                    obtenerFilaSaldo();
-
-                const inputSaldo=
-                    filaSaldo
-                        ?.querySelector(
-                            '.js-cantidad');
-
-                if(!inputSaldo){
-                    return;
-                }
-
-                const otras=
-                    obtenerCantidadOtrasFilas();
-
-                const saldo=
-                    Math.max(
-                        0,
-                        totalObjetivo-otras);
-
-                inputSaldo.value=
-                    saldo;
-
+                const filaSaldo=obtenerFilaSaldo();
+                const inputSaldo=filaSaldo?.querySelector('.js-cantidad');
+                if(!inputSaldo){ actualizarResumen(); return; }
+                const otras=obtenerCantidadOtrasFilas();
+                const saldo=Math.max(0,totalBaseDistribucion-otras);
+                inputSaldo.value=saldo;
                 actualizarResumen();
             }
-
-            function totalDistribuido(){
-                if(!filas){
-                    return 0;
-                }
-
-                return [...filas.querySelectorAll(
-                    '.js-cantidad')]
-                    .reduce(
-                        (total,input)=>
-                            total+
-                            Math.max(
-                                0,
-                                n(input.value)),
-                        0);
-            }
-
             function actualizarResumen(){
-                const otras=
-                    obtenerCantidadOtrasFilas();
-
-                const excedente=
-                    Math.max(
-                        0,
-                        otras-totalObjetivo);
-
-                const saldo=
-                    Math.max(
-                        0,
-                        totalObjetivo-otras);
-
-                const distribuido=
-                    totalDistribuido();
-
-                if(prCapturado){
-                    prCapturado.textContent=
-                        nf(distribuido);
-                }
-
-                if(prRestante){
-                    prRestante.textContent=
-                        nf(saldo);
-                }
-
-                if(prAvanceTexto){
-                    prAvanceTexto.textContent=
-                        `${nf(distribuido)} / ${nf(totalObjetivo)} PZA`;
-                }
-
-                const porcentaje=
-                    totalObjetivo>0
-                        ?Math.min(
-                            100,
-                            distribuido*100/
-                            totalObjetivo)
-                        :0;
-
-                if(prTrackBar){
-                    prTrackBar.style.width=
-                        porcentaje+'%';
-                }
-
-                cardRestante
-                    ?.classList
-                    .remove('complete');
-
-                prTrack
-                    ?.classList
-                    .remove(
-                        'complete',
-                        'error');
-
+                const capturado=totalCapturado();
+                const otras=obtenerCantidadOtrasFilas();
+                const excedente=Math.max(0,capturado-totalObjetivo);
+                const restante=Math.max(0,totalObjetivo-capturado);
+                if(prCapturado) prCapturado.textContent=nf(capturado);
+                if(prRestante) prRestante.textContent=excedente>0?'+'+nf(excedente):nf(restante);
+                if(prAvanceTexto) prAvanceTexto.textContent=`${nf(capturado)} / ${nf(totalObjetivo)} PZA`;
+                const porcentaje=totalObjetivo>0?Math.min(100,capturado*100/totalObjetivo):0;
+                if(prTrackBar) prTrackBar.style.width=porcentaje+'%';
+                cardRestante?.classList.remove('complete');
+                prTrack?.classList.remove('complete','error');
                 if(excedente>0){
-                    if(prRestante){
-                        prRestante.textContent=
-                            '+'+nf(excedente);
-                    }
-
                     if(mensaje){
-                        mensaje.className=
-                            'planner-message error';
-
-                        mensaje.innerHTML=
-                            `Las fechas adicionales suman <strong>${nf(otras)} PZA</strong>, `+
-                            `superando el pendiente por <strong>${nf(excedente)} PZA</strong>.`;
+                        mensaje.className='planner-message error';
+                        mensaje.innerHTML=`La programación captura <strong>${nf(capturado)} PZA</strong>, superando el saldo editable por <strong>${nf(excedente)} PZA</strong>.`;
                     }
-
-                    prTrack
-                        ?.classList
-                        .add('error');
-
-                    if(btnGuardar){
-                        btnGuardar.disabled=true;
-                    }
-
+                    prTrack?.classList.add('error');
+                    if(btnGuardar) btnGuardar.disabled=true;
                     return;
                 }
-
-                if(saldo===0){
-                    cardRestante
-                        ?.classList
-                        .add('complete');
-
-                    prTrack
-                        ?.classList
-                        .add('complete');
-
+                if(capturado<=0){
                     if(mensaje){
-                        mensaje.className=
-                            'planner-message info';
-
-                        mensaje.innerHTML=
-                            `✓ Las <strong>${nf(totalObjetivo)} PZA</strong> `+
-                            `quedaron completamente distribuidas entre las fechas seleccionadas.`;
+                        mensaje.className='planner-message warning';
+                        mensaje.innerHTML='Captura al menos una fecha con una cantidad mayor a cero para guardar.';
                     }
-
-                    if(btnGuardar){
-                        btnGuardar.disabled=false;
-                    }
-
+                    if(btnGuardar) btnGuardar.disabled=true;
                     return;
                 }
-
+                if(restante===0){
+                    cardRestante?.classList.add('complete');
+                    prTrack?.classList.add('complete');
+                    if(mensaje){
+                        mensaje.className='planner-message info';
+                        mensaje.innerHTML=otras>0
+                            ? `✓ Se distribuyeron <strong>${nf(totalObjetivo)} PZA</strong>. Las fechas adicionales tienen <strong>${nf(otras)} PZA</strong> y la fila principal se ajustó automáticamente.`
+                            : `✓ Quedaron programadas las <strong>${nf(totalObjetivo)} PZA</strong> disponibles para ajustar.`;
+                    }
+                    if(btnGuardar) btnGuardar.disabled=false;
+                    return;
+                }
                 if(mensaje){
-                    mensaje.className=
-                        'planner-message info';
-
+                    mensaje.className='planner-message warning';
+                    const saldoPrincipal=Math.max(0,totalBaseDistribucion-otras);
                     if(otras>0){
-                        mensaje.innerHTML=
-                            `Se asignaron <strong>${nf(otras)} PZA</strong> a otras fechas. `+
-                            `La fila de saldo se ajustó automáticamente a <strong>${nf(saldo)} PZA</strong>.`;
-                    }
-                    else{
-                        mensaje.innerHTML=
-                            `Las <strong>${nf(totalObjetivo)} PZA</strong> están asignadas inicialmente a la fecha principal. `+
-                            `Agrega otra fecha para dividir la entrega.`;
+                        mensaje.innerHTML=`Las fechas adicionales tienen <strong>${nf(otras)} PZA</strong>. La fila principal se ajustó automáticamente a <strong>${nf(saldoPrincipal)} PZA</strong>. Quedarán <strong>${nf(restante)} PZA sin programar</strong>.`;
+                    }else{
+                        mensaje.innerHTML=`Se guardarán <strong>${nf(capturado)} PZA</strong> y quedarán <strong>${nf(restante)} PZA sin programar</strong>. Ese saldo seguirá visible y sugerido en el día habitual del cliente.`;
                     }
                 }
-
-                if(btnGuardar){
-                    btnGuardar.disabled=false;
-                }
+                if(btnGuardar) btnGuardar.disabled=false;
             }
-
-            /* =========================================================
-               FILAS
-               ========================================================= */
-
             function reindexar(){
-                if(!filas){
-                    return;
-                }
-
-                [...filas.querySelectorAll('tr')]
-                    .forEach((tr,index)=>{
-
-                        const fecha=
-                            tr.querySelector(
-                                '.js-fecha');
-
-                        const cantidad=
-                            tr.querySelector(
-                                '.js-cantidad');
-
-                        const observaciones=
-                            tr.querySelector(
-                                '.js-obs');
-
-                        if(fecha){
-                            fecha.name=
-                                `Programaciones[${index}].FechaProgramadaCarga`;
-                        }
-
-                        if(cantidad){
-                            cantidad.name=
-                                `Programaciones[${index}].Cantidad`;
-                        }
-
-                        if(observaciones){
-                            observaciones.name=
-                                `Programaciones[${index}].Observaciones`;
-                        }
-                    });
+                if(!filas) return;
+                [...filas.querySelectorAll('tr')].forEach((tr,index)=>{
+                    const fecha=tr.querySelector('.js-fecha');
+                    const cantidad=tr.querySelector('.js-cantidad');
+                    const observaciones=tr.querySelector('.js-obs');
+                    if(fecha) fecha.name=`Programaciones[${index}].FechaProgramadaCarga`;
+                    if(cantidad) cantidad.name=`Programaciones[${index}].Cantidad`;
+                    if(observaciones) observaciones.name=`Programaciones[${index}].Observaciones`;
+                });
             }
-
-            function crearFilaSaldo(){
-                if(!filas){
-                    return;
-                }
-
-                const tr=
-                    document.createElement('tr');
-
+            function crearFilaSaldo(fecha='',observaciones=''){
+                if(!filas) return;
+                const tr=document.createElement('tr');
                 tr.dataset.esSaldo='1';
-
                 tr.innerHTML=`
+                    <td><input type="date" class="js-fecha" required /><div class="row-warning"></div></td>
                     <td>
-                        <input type="date"
-                               class="js-fecha"
-                               required />
-                        <div class="row-warning"></div>
+                        <input type="number" class="js-cantidad" min="0" step="1" readonly />
+                        <span class="saldo-tag">Saldo automático</span>
                     </td>
-                    <td>
-                        <input type="number"
-                               class="js-cantidad"
-                               min="0"
-                               step="1"
-                               readonly />
-                        <span class="saldo-tag">
-                            Saldo automático
-                        </span>
-                    </td>
-                    <td>
-                        <input type="text"
-                               class="js-obs"
-                               maxlength="1000"
-                               placeholder="Opcional" />
-                    </td>
+                    <td><input type="text" class="js-obs" maxlength="1000" placeholder="Opcional" /></td>
                     <td></td>`;
-
                 filas.appendChild(tr);
-
-                const fecha=
-                    tr.querySelector(
-                        '.js-fecha');
-
-                const cantidad=
-                    tr.querySelector(
-                        '.js-cantidad');
-
-                if(fecha){
-                    fecha.value=
-                        fechaSugerida();
-
-                    fecha.addEventListener(
-                        'change',
-                        ()=>actualizarAdvertenciaDia(tr));
-                }
-
-                if(cantidad){
-                    cantidad.value=
-                        totalObjetivo;
-                }
-
-                actualizarAdvertenciaDia(tr);
-
-                reindexar();
-            }
-
-            function crearFilaAdicional(
-                fecha='',
-                cantidad='',
-                observaciones=''){
-
-                if(!filas){
-                    return;
-                }
-
-                const tr=
-                    document.createElement('tr');
-
-                tr.dataset.esSaldo='0';
-
-                tr.innerHTML=`
-                    <td>
-                        <input type="date"
-                               class="js-fecha"
-                               required />
-                        <div class="row-warning"></div>
-                    </td>
-                    <td>
-                        <input type="number"
-                               class="js-cantidad"
-                               min="1"
-                               step="1"
-                               placeholder="0"
-                               required />
-                    </td>
-                    <td>
-                        <input type="text"
-                               class="js-obs"
-                               maxlength="1000"
-                               placeholder="Opcional" />
-                    </td>
-                    <td>
-                        <button type="button"
-                                class="btn btn-sm btn-danger js-eliminar"
-                                title="Eliminar">
-                            ×
-                        </button>
-                    </td>`;
-
-                filas.appendChild(tr);
-
-                const inputFecha=
-                    tr.querySelector(
-                        '.js-fecha');
-
-                const inputCantidad=
-                    tr.querySelector(
-                        '.js-cantidad');
-
-                const inputObservaciones=
-                    tr.querySelector(
-                        '.js-obs');
-
-                const btnEliminar=
-                    tr.querySelector(
-                        '.js-eliminar');
-
+                const inputFecha=tr.querySelector('.js-fecha');
+                const inputCantidad=tr.querySelector('.js-cantidad');
+                const inputObservaciones=tr.querySelector('.js-obs');
                 if(inputFecha){
-                    inputFecha.value=
-                        fecha||
-                        fechaSugerida();
-
-                    inputFecha.addEventListener(
-                        'change',
-                        ()=>actualizarAdvertenciaDia(tr));
+                    inputFecha.value=fecha||fechaSugerida();
+                    inputFecha.addEventListener('change',()=>actualizarAdvertenciaDia(tr));
                 }
-
-                if(inputCantidad){
-                    inputCantidad.value=
-                        cantidad!==null&&
-                        cantidad!==undefined
-                            ?cantidad
-                            :'';
-
-                    inputCantidad.addEventListener(
-                        'input',
-                        actualizarSaldoAutomatico);
-
-                    inputCantidad.addEventListener(
-                        'change',
-                        actualizarSaldoAutomatico);
-                }
-
-                if(inputObservaciones){
-                    inputObservaciones.value=
-                        observaciones||
-                        '';
-                }
-
-                if(btnEliminar){
-                    btnEliminar.addEventListener(
-                        'click',
-                        ()=>{
-                            tr.remove();
-
-                            reindexar();
-
-                            actualizarSaldoAutomatico();
-                        });
-                }
-
+                if(inputCantidad) inputCantidad.value=totalBaseDistribucion;
+                if(inputObservaciones) inputObservaciones.value=observaciones||'';
                 actualizarAdvertenciaDia(tr);
-
                 reindexar();
-
+            }
+            function crearFilaAdicional(fecha='',cantidad='',observaciones=''){
+                if(!filas) return;
+                const tr=document.createElement('tr');
+                tr.dataset.esSaldo='0';
+                tr.innerHTML=`
+                    <td><input type="date" class="js-fecha" required /><div class="row-warning"></div></td>
+                    <td><input type="number" class="js-cantidad" min="1" step="1" placeholder="0" required /></td>
+                    <td><input type="text" class="js-obs" maxlength="1000" placeholder="Opcional" /></td>
+                    <td><button type="button" class="btn btn-sm btn-danger js-eliminar" title="Eliminar">×</button></td>`;
+                filas.appendChild(tr);
+                const inputFecha=tr.querySelector('.js-fecha');
+                const inputCantidad=tr.querySelector('.js-cantidad');
+                const inputObservaciones=tr.querySelector('.js-obs');
+                const btnEliminar=tr.querySelector('.js-eliminar');
+                if(inputFecha){
+                    inputFecha.value=fecha||fechaSugerida();
+                    inputFecha.addEventListener('change',()=>actualizarAdvertenciaDia(tr));
+                }
+                if(inputCantidad){
+                    inputCantidad.value=cantidad!==null&&cantidad!==undefined?cantidad:'';
+                    inputCantidad.addEventListener('input',actualizarSaldoAutomatico);
+                    inputCantidad.addEventListener('change',actualizarSaldoAutomatico);
+                }
+                if(inputObservaciones) inputObservaciones.value=observaciones||'';
+                if(btnEliminar) btnEliminar.addEventListener('click',()=>{
+                    tr.remove();
+                    reindexar();
+                    actualizarSaldoAutomatico();
+                });
+                actualizarAdvertenciaDia(tr);
+                reindexar();
                 actualizarSaldoAutomatico();
             }
-
-            function restablecerProgramacion(){
-                if(!filas){
-                    return;
-                }
-
+            function restaurarProgramacionActual(){
+                if(!filas) return;
                 filas.innerHTML='';
-
-                crearFilaSaldo();
-
+                const existentes=(programacionesOriginales||[]).filter(x=>n(x.cantidad)>0&&x.fecha);
+                if(existentes.length>0){
+                    const sumaExistente=existentes.reduce((total,x)=>total+Math.max(0,n(x.cantidad)),0);
+                    totalBaseDistribucion=Math.min(totalObjetivo,sumaExistente);
+                    const primera=existentes[0];
+                    crearFilaSaldo(primera.fecha,primera.observaciones||'');
+                    existentes.slice(1).forEach(x=>crearFilaAdicional(x.fecha,n(x.cantidad),x.observaciones||''));
+                }else{
+                    totalBaseDistribucion=pendienteSinProgramar>0?Math.min(pendienteSinProgramar,totalObjetivo):totalObjetivo;
+                    crearFilaSaldo(fechaSugerida(),'');
+                }
                 actualizarSaldoAutomatico();
             }
-
-            /* =========================================================
-               UBICACIÓN EN TIEMPO REAL
-               ========================================================= */
-
             async function cargarUbicacion(){
-                if(!parteActual){
-                    return;
-                }
-
-                if(liveUbicacion){
-                    liveUbicacion.textContent=
-                        'Consultando...';
-                }
-
+                if(!parteActual) return;
+                if(liveUbicacion) liveUbicacion.textContent='Consultando...';
                 try{
-                    const url=
-                        `@Url.Action("ObtenerUbicacionParte", "LogisticaListaCarga")`+
-                        `?parteId=${encodeURIComponent(parteActual)}`;
-
-                    const response=
-                        await fetch(
-                            url,
-                            {
-                                method:'GET',
-                                cache:'no-store',
-                                headers:{
-                                    'X-Requested-With':
-                                        'XMLHttpRequest'
-                                }
-                            });
-
-                    if(!response.ok){
-                        throw new Error(
-                            'No fue posible consultar la ubicación.');
-                    }
-
-                    const data=
-                        await response.json();
-
-                    if(liveUbicacion){
-                        liveUbicacion.textContent=
-                            data.ubicacion||
-                            'SIN MATERIAL';
-                    }
-
-                    if(liveAlmacen){
-                        liveAlmacen.textContent=
-                            nf(data.piezasAlmacen);
-                    }
-
-                    if(liveProduccion){
-                        liveProduccion.textContent=
-                            nf(data.piezasProduccion);
-                    }
-
-                    if(liveGP12){
-                        liveGP12.textContent=
-                            nf(data.piezasGP12);
-                    }
-
-                    if(liveTotal){
-                        liveTotal.textContent=
-                            nf(data.piezasLocalizadas);
-                    }
-
-                    if(liveActualizado){
-                        liveActualizado.textContent=
-                            'Actualizado '+
-                            new Date()
-                                .toLocaleTimeString(
-                                    'es-MX',
-                                    {
-                                        hour:'2-digit',
-                                        minute:'2-digit'
-                                    });
-                    }
+                    const url=`@Url.Action("ObtenerUbicacionParte", "LogisticaListaCarga")`+`?parteId=${encodeURIComponent(parteActual)}`;
+                    const response=await fetch(url,{method:'GET',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}});
+                    if(!response.ok) throw new Error('No fue posible consultar la ubicación.');
+                    const data=await response.json();
+                    if(liveUbicacion) liveUbicacion.textContent=data.ubicacion||'SIN MATERIAL';
+                    if(liveAlmacen) liveAlmacen.textContent=nf(data.piezasAlmacen);
+                    if(liveProduccion) liveProduccion.textContent=nf(data.piezasProduccion);
+                    if(liveGP12) liveGP12.textContent=nf(data.piezasGP12);
+                    if(liveTotal) liveTotal.textContent=nf(data.piezasLocalizadas);
+                    if(liveActualizado) liveActualizado.textContent='Actualizado '+new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
                 }
                 catch(error){
                     console.error(error);
-
-                    if(liveUbicacion){
-                        liveUbicacion.textContent=
-                            'No disponible';
-                    }
-
-                    if(liveAlmacen){
-                        liveAlmacen.textContent='-';
-                    }
-
-                    if(liveProduccion){
-                        liveProduccion.textContent='-';
-                    }
-
-                    if(liveGP12){
-                        liveGP12.textContent='-';
-                    }
-
-                    if(liveTotal){
-                        liveTotal.textContent='-';
-                    }
+                    if(liveUbicacion) liveUbicacion.textContent='No disponible';
+                    if(liveAlmacen) liveAlmacen.textContent='-';
+                    if(liveProduccion) liveProduccion.textContent='-';
+                    if(liveGP12) liveGP12.textContent='-';
+                    if(liveTotal) liveTotal.textContent='-';
                 }
             }
-
-            /* =========================================================
-               ABRIR / CERRAR
-               ========================================================= */
-
             function abrirProgramacion(btn){
-                if(!backdrop||!filas){
-                    return;
-                }
-
-                const clienteId=
-                    btn.dataset.clienteId||
-                    '';
-
-                const parteId=
-                    btn.dataset.parteId||
-                    '';
-
-                const cliente=
-                    btn.dataset.cliente||
-                    '';
-
-                const referencia=
-                    btn.dataset.referencia||
-                    '';
-
-                const designacion=
-                    btn.dataset.designacion||
-                    '';
-
-                totalObjetivo=
-                    Math.max(
-                        0,
-                        n(btn.dataset.sinProgramar));
-
-                parteActual=
-                    n(parteId);
-
-                inicioSemana=
-                    btn.dataset.semanaInicio||
-                    '';
-
-                try{
-                    diasHabituales=
-                        JSON.parse(
-                            btn.dataset.dias||
-                            '[]')
-                        .map(Number);
-                }
-                catch{
-                    diasHabituales=[];
-                }
-
-                if(prClienteID){
-                    prClienteID.value=
-                        clienteId;
-                }
-
-                if(prParteID){
-                    prParteID.value=
-                        parteId;
-                }
-
-                if(prTitulo){
-                    prTitulo.textContent=
-                        'Programar día de carga · '+
-                        cliente;
-                }
-
-                if(prSubtitulo){
-                    prSubtitulo.textContent=
-                        referencia+
-                        (
-                            designacion
-                                ?' · '+designacion
-                                :''
-                        );
-                }
-
-                if(prTotal){
-                    prTotal.textContent=
-                        nf(totalObjetivo);
-                }
-
-                if(prHabitual){
-                    prHabitual.textContent=
-                        diasHabituales.length>0
-                            ?diasHabituales
-                                .map(x=>nombresDias[x]||'')
-                                .filter(Boolean)
-                                .join(' / ')
-                            :'Sin definir';
-                }
-
-                /*
-                 * SIEMPRE iniciamos con UNA fila saldo.
-                 *
-                 * Ejemplo:
-                 * pendiente = 18,000
-                 *
-                 * fila principal = 18,000
-                 */
-                restablecerProgramacion();
-
+                if(!backdrop||!filas) return;
+                const clienteId=btn.dataset.clienteId||'';
+                const parteId=btn.dataset.parteId||'';
+                const cliente=btn.dataset.cliente||'';
+                const referencia=btn.dataset.referencia||'';
+                const designacion=btn.dataset.designacion||'';
+                totalObjetivo=Math.max(0,n(btn.dataset.editable));
+                totalGenerado=Math.max(0,n(btn.dataset.generado));
+                pendienteSinProgramar=Math.max(0,n(btn.dataset.sinProgramar));
+                parteActual=n(parteId);
+                inicioSemana=btn.dataset.semanaInicio||'';
+                try{ diasHabituales=JSON.parse(btn.dataset.dias||'[]').map(Number); }catch{ diasHabituales=[]; }
+                try{ programacionesOriginales=JSON.parse(btn.dataset.programaciones||'[]')||[]; }catch{ programacionesOriginales=[]; }
+                if(prClienteID) prClienteID.value=clienteId;
+                if(prParteID) prParteID.value=parteId;
+                if(prTitulo) prTitulo.textContent=(programacionesOriginales.length>0?'Ajustar programación · ':'Programar día de carga · ')+cliente;
+                if(prSubtitulo) prSubtitulo.textContent=referencia+(designacion?' · '+designacion:'')+(totalGenerado>0?` · ${nf(totalGenerado)} PZA ya protegidas en embarque`: '');
+                if(prTotal) prTotal.textContent=nf(totalObjetivo);
+                if(prHabitual) prHabitual.textContent=diasHabituales.length>0?diasHabituales.map(x=>nombresDias[x]||'').filter(Boolean).join(' / '):'Sin definir';
+                restaurarProgramacionActual();
                 cargarUbicacion();
-
-                if(timerUbicacion){
-                    clearInterval(
-                        timerUbicacion);
-                }
-
-                timerUbicacion=
-                    setInterval(
-                        ()=>{
-                            if(
-                                backdrop
-                                    .classList
-                                    .contains('open')){
-
-                                cargarUbicacion();
-                            }
-                        },
-                        30000);
-
+                if(timerUbicacion) clearInterval(timerUbicacion);
+                timerUbicacion=setInterval(()=>{ if(backdrop.classList.contains('open')) cargarUbicacion(); },30000);
                 backdrop.classList.add('open');
-
-                backdrop.setAttribute(
-                    'aria-hidden',
-                    'false');
+                backdrop.setAttribute('aria-hidden','false');
             }
-
             function cerrarProgramacion(){
-                backdrop
-                    ?.classList
-                    .remove('open');
-
-                backdrop
-                    ?.setAttribute(
-                        'aria-hidden',
-                        'true');
-
-                if(timerUbicacion){
-                    clearInterval(
-                        timerUbicacion);
-
-                    timerUbicacion=null;
-                }
+                backdrop?.classList.remove('open');
+                backdrop?.setAttribute('aria-hidden','true');
+                if(timerUbicacion){ clearInterval(timerUbicacion); timerUbicacion=null; }
             }
-
-            document
-                .querySelectorAll(
-                    '.js-programar')
-                .forEach(btn=>{
-                    btn.addEventListener(
-                        'click',
-                        ()=>abrirProgramacion(btn));
+            document.querySelectorAll('.js-programar').forEach(btn=>btn.addEventListener('click',()=>abrirProgramacion(btn)));
+            document.querySelectorAll('.js-cerrar').forEach(btn=>btn.addEventListener('click',cerrarProgramacion));
+            backdrop?.addEventListener('click',e=>{ if(e.target===backdrop) cerrarProgramacion(); });
+            document.getElementById('btnActualizarUbicacion')?.addEventListener('click',cargarUbicacion);
+            document.getElementById('btnOtraFecha')?.addEventListener('click',()=>{
+                crearFilaAdicional(fechaSugerida(),'','');
+                setTimeout(()=>{
+                    const inputs=filas?.querySelectorAll('tr:not([data-es-saldo="1"]) .js-cantidad');
+                    if(inputs&&inputs.length>0) inputs[inputs.length-1].focus();
+                },30);
+            });
+            document.getElementById('btnRestablecer')?.addEventListener('click',restaurarProgramacionActual);
+            form?.addEventListener('submit',e=>{
+                actualizarSaldoAutomatico();
+                const capturado=totalCapturado();
+                if(capturado<=0){ e.preventDefault(); alert('Captura una cantidad mayor a cero.'); return; }
+                if(capturado>totalObjetivo){ e.preventDefault(); alert(`La programación supera el saldo editable de ${nf(totalObjetivo)} PZA.`); return; }
+                const filaSaldo=obtenerFilaSaldo();
+                const cantidadSaldo=n(filaSaldo?.querySelector('.js-cantidad')?.value);
+                if(filaSaldo&&cantidadSaldo<=0&&filas.querySelectorAll('tr').length>1) filaSaldo.remove();
+                reindexar();
+                const registros=[...filas.querySelectorAll('tr')];
+                if(registros.length===0){ e.preventDefault(); alert('Captura al menos una fecha de carga.'); return; }
+                const invalido=registros.some(tr=>{
+                    const fecha=tr.querySelector('.js-fecha');
+                    const cantidad=tr.querySelector('.js-cantidad');
+                    return !fecha?.value||n(cantidad?.value)<=0;
                 });
-
-            document
-                .querySelectorAll(
-                    '.js-cerrar')
-                .forEach(btn=>{
-                    btn.addEventListener(
-                        'click',
-                        cerrarProgramacion);
-                });
-
-            backdrop
-                ?.addEventListener(
-                    'click',
-                    e=>{
-                        if(e.target===backdrop){
-                            cerrarProgramacion();
-                        }
-                    });
-
-            /* =========================================================
-               BOTONES DEL MODAL
-               ========================================================= */
-
-            document
-                .getElementById(
-                    'btnActualizarUbicacion')
-                ?.addEventListener(
-                    'click',
-                    cargarUbicacion);
-
-            document
-                .getElementById(
-                    'btnOtraFecha')
-                ?.addEventListener(
-                    'click',
-                    ()=>{
-                        crearFilaAdicional(
-                            fechaSugerida(),
-                            '',
-                            '');
-
-                        setTimeout(
-                            ()=>{
-                                const inputs=
-                                    filas
-                                        ?.querySelectorAll(
-                                            'tr:not([data-es-saldo="1"]) .js-cantidad');
-
-                                if(
-                                    inputs&&
-                                    inputs.length>0){
-
-                                    inputs[
-                                        inputs.length-1
-                                    ].focus();
-                                }
-                            },
-                            30);
-                    });
-
-            document
-                .getElementById(
-                    'btnRestablecer')
-                ?.addEventListener(
-                    'click',
-                    restablecerProgramacion);
-
-            /* =========================================================
-               GUARDAR
-               ========================================================= */
-
-            form
-                ?.addEventListener(
-                    'submit',
-                    e=>{
-
-                        reindexar();
-
-                        const otras=
-                            obtenerCantidadOtrasFilas();
-
-                        if(
-                            otras>
-                            totalObjetivo){
-
-                            e.preventDefault();
-
-                            alert(
-                                'Las cantidades distribuidas superan el pendiente disponible.');
-
-                            return;
-                        }
-
-                        const registros=
-                            [...filas.querySelectorAll('tr')];
-
-                        const invalido=
-                            registros.some(
-                                tr=>{
-
-                                    const fecha=
-                                        tr.querySelector(
-                                            '.js-fecha');
-
-                                    const cantidad=
-                                        tr.querySelector(
-                                            '.js-cantidad');
-
-                                    return (
-                                        !fecha?.value||
-                                        n(cantidad?.value)<=0
-                                    );
-                                });
-
-                        if(invalido){
-                            e.preventDefault();
-
-                            alert(
-                                'Todas las fechas deben tener una cantidad mayor a cero.');
-
-                            return;
-                        }
-
-                        /*
-                         * Al llegar aquí SIEMPRE:
-                         *
-                         * suma de todas las filas
-                         * =
-                         * totalObjetivo
-                         *
-                         * porque la primera es saldo automático.
-                         */
-                        if(
-                            totalDistribuido()!==
-                            totalObjetivo){
-
-                            e.preventDefault();
-
-                            alert(
-                                'La distribución no coincide con el pendiente inicial.');
-
-                            return;
-                        }
-
-                        if(btnGuardar){
-                            btnGuardar.disabled=
-                                true;
-
-                            btnGuardar.textContent=
-                                'Guardando...';
-                        }
-                    });
-
-
-            document
-                .addEventListener(
-                    'keydown',
-                    e=>{
-                        if(e.key==='Escape'){
-                            cerrarProgramacion();
-                        }
-                    });
+                if(invalido){ e.preventDefault(); alert('Todas las fechas deben tener una cantidad mayor a cero.'); return; }
+                const restante=Math.max(0,totalObjetivo-capturado);
+                if(restante>0&&!confirm(`Se programarán ${nf(capturado)} PZA y quedarán ${nf(restante)} PZA sin programar. ¿Deseas guardar así?`)){ e.preventDefault(); restaurarProgramacionActual(); return; }
+                if(btnGuardar){ btnGuardar.disabled=true; btnGuardar.textContent='Guardando...'; }
+            });
+            document.addEventListener('keydown',e=>{ if(e.key==='Escape') cerrarProgramacion(); });
         })();
     </script>
 </body>

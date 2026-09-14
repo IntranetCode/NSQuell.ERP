@@ -38,6 +38,20 @@ public sealed class LogisticaViajeResumenVm
     public string Estatus { get; set; } = string.Empty;
     public bool TieneIncidencia { get; set; }
 
+    public bool EsMultiParada { get; set; }
+    public int TotalParadas { get; set; }
+    public int ParadasCompletadas { get; set; }
+    public int ParadasPendientes { get; set; }
+    public int? ProximaParadaID { get; set; }
+    public int? ProximaSecuencia { get; set; }
+    public string ProximaTipoParada { get; set; } = string.Empty;
+    public string ProximaOperacion { get; set; } = string.Empty;
+    public string ProximaParada { get; set; } = string.Empty;
+    public string ProximaDireccion { get; set; } = string.Empty;
+    public DateTime? ProximaLlegadaProgramada { get; set; }
+    public string ProximaParadaEstatus { get; set; } = string.Empty;
+    public decimal PorcentajeParadas => TotalParadas <= 0 ? 0 : Math.Round(Math.Min(100m, (decimal)ParadasCompletadas * 100m / TotalParadas), 1);
+
     public bool RetornoPendiente =>
         Estatus == "En curso"
         && !FechaRegresoReal.HasValue;
@@ -77,6 +91,9 @@ public sealed class LogisticaViajeCrearVm
 
     [Display(Name = "Ruta")]
     public int? RutaID { get; set; }
+
+    public bool EsMultiParada { get; set; }
+    public List<LogisticaViajeParadaCapturaVm> Paradas { get; set; } = new();
 
     [Display(Name = "Unidad")]
     public int? UnidadID { get; set; }
@@ -128,6 +145,9 @@ public sealed class LogisticaViajeEditarVm
     [Display(Name = "Ruta")]
     public int? RutaID { get; set; }
 
+    public bool EsMultiParada { get; set; }
+    public List<LogisticaViajeParadaCapturaVm> Paradas { get; set; } = new();
+
     [Display(Name = "Unidad")]
     public int? UnidadID { get; set; }
 
@@ -172,6 +192,14 @@ public sealed class LogisticaViajeDetalleVm
     public string Estatus { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
     public bool TieneIncidencia { get; set; }
+
+    public bool EsMultiParada { get; set; }
+    public int TotalParadas { get; set; }
+    public int ParadasCompletadas { get; set; }
+    public int ParadasPendientes { get; set; }
+    public List<LogisticaViajeParadaVm> Paradas { get; set; } = new();
+    public LogisticaViajeParadaVm? ProximaParada => Paradas.Where(x => x.Activo && x.Estatus is "Pendiente" or "En camino" or "En sitio").OrderBy(x => x.Secuencia).ThenBy(x => x.ViajeParadaID).FirstOrDefault();
+    public decimal PorcentajeParadas => TotalParadas <= 0 ? 0 : Math.Round(Math.Min(100m, (decimal)ParadasCompletadas * 100m / TotalParadas), 1);
 
     public int? KilometrajeSalida { get; set; }
     public int? KilometrajeRegreso { get; set; }
@@ -250,6 +278,121 @@ public sealed class LogisticaViajeDetalleVm
             : Operador;
 }
 
+public sealed class LogisticaViajeParadaVm
+{
+    public int ViajeParadaID { get; set; }
+    public int ViajeID { get; set; }
+    public int Secuencia { get; set; }
+    public string TipoParada { get; set; } = string.Empty;
+    public string TipoOperacion { get; set; } = string.Empty;
+    public string EntidadTipo { get; set; } = string.Empty;
+    public int? EntidadID { get; set; }
+    public string EntidadNombreSnapshot { get; set; } = string.Empty;
+    public string Lugar { get; set; } = string.Empty;
+    public string Direccion { get; set; } = string.Empty;
+    public string ReferenciaTipo { get; set; } = string.Empty;
+    public int? ReferenciaID { get; set; }
+    public string ReferenciaFolioSnapshot { get; set; } = string.Empty;
+    public DateTime? FechaHoraLlegadaProgramada { get; set; }
+    public DateTime? FechaHoraSalidaProgramada { get; set; }
+    public DateTime? FechaLlegadaReal { get; set; }
+    public DateTime? FechaSalidaReal { get; set; }
+    public string Estatus { get; set; } = "Pendiente";
+    public bool RequiereEvidencia { get; set; }
+    public bool CierraViaje { get; set; }
+    public string ContactoNombre { get; set; } = string.Empty;
+    public string ContactoTelefono { get; set; } = string.Empty;
+    public string Observaciones { get; set; } = string.Empty;
+    public bool Activo { get; set; } = true;
+    public int TotalEmbarques { get; set; }
+    public int EmbarquesEntregados { get; set; }
+    public int TotalEvidencias { get; set; }
+    public string? RowVersion { get; set; }
+    public List<LogisticaViajeParadaEmbarqueVm> Embarques { get; set; } = new();
+    public List<LogisticaViajeParadaEvidenciaVm> Evidencias { get; set; } = new();
+    public List<LogisticaViajeParadaHistorialVm> Historial { get; set; } = new();
+    public bool Completada => Estatus == "Completada";
+    public bool Pendiente => Estatus is "Pendiente" or "En camino" or "En sitio";
+    public string TipoParadaTexto => TipoParada switch { "Recoleccion" => "Recolección", "Entrega" => "Entrega", "Origen" => "Origen", "Retorno" => "Retorno", "Traslado" => "Traslado", "Servicio" => "Servicio", _ => TipoParada };
+}
+public sealed class LogisticaViajeParadaCapturaVm
+{
+    public int ViajeParadaID { get; set; }
+    public int ViajeID { get; set; }
+    [Range(1, int.MaxValue, ErrorMessage = "La secuencia debe ser mayor a cero.")]
+    public int Secuencia { get; set; }
+    [Required, StringLength(30)]
+    public string TipoParada { get; set; } = "Otro";
+    [StringLength(80)]
+    public string? TipoOperacion { get; set; }
+    [StringLength(30)]
+    public string? EntidadTipo { get; set; }
+    public int? EntidadID { get; set; }
+    [StringLength(200)]
+    public string? EntidadNombreSnapshot { get; set; }
+    [Required, StringLength(300)]
+    public string Lugar { get; set; } = string.Empty;
+    [StringLength(600)]
+    public string? Direccion { get; set; }
+    [StringLength(50)]
+    public string? ReferenciaTipo { get; set; }
+    public int? ReferenciaID { get; set; }
+    [StringLength(120)]
+    public string? ReferenciaFolioSnapshot { get; set; }
+    public DateTime? FechaHoraLlegadaProgramada { get; set; }
+    public DateTime? FechaHoraSalidaProgramada { get; set; }
+    public bool RequiereEvidencia { get; set; }
+    public bool CierraViaje { get; set; }
+    [StringLength(200)]
+    public string? ContactoNombre { get; set; }
+    [StringLength(50)]
+    public string? ContactoTelefono { get; set; }
+    [StringLength(1200)]
+    public string? Observaciones { get; set; }
+    public int? EmbarqueID { get; set; }
+    public string? RowVersion { get; set; }
+}
+public sealed class LogisticaViajeParadaEmbarqueVm
+{
+    public int ViajeEmbarqueID { get; set; }
+    public int ViajeID { get; set; }
+    public int ViajeParadaID { get; set; }
+    public int EmbarqueID { get; set; }
+    public string Folio { get; set; } = string.Empty;
+    public string Cliente { get; set; } = string.Empty;
+    public string Destino { get; set; } = string.Empty;
+    public int? OrdenEntrega { get; set; }
+    public int TotalPiezas { get; set; }
+    public string Estatus { get; set; } = string.Empty;
+}
+public sealed class LogisticaViajeParadaEvidenciaVm
+{
+    public int ViajeParadaEvidenciaID { get; set; }
+    public int ViajeParadaID { get; set; }
+    public string TipoEvidencia { get; set; } = string.Empty;
+    public string NombreOriginal { get; set; } = string.Empty;
+    public string NombreFisico { get; set; } = string.Empty;
+    public string RutaRelativa { get; set; } = string.Empty;
+    public string TipoContenido { get; set; } = string.Empty;
+    public long TamanoBytes { get; set; }
+    public string Observaciones { get; set; } = string.Empty;
+    public int? UsuarioCargaID { get; set; }
+    public string UsuarioCargaNombre { get; set; } = string.Empty;
+    public DateTime FechaCarga { get; set; }
+    public bool EsImagen => TipoContenido.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+}
+public sealed class LogisticaViajeParadaHistorialVm
+{
+    public int ViajeParadaHistorialID { get; set; }
+    public int ViajeParadaID { get; set; }
+    public string Evento { get; set; } = string.Empty;
+    public string EstadoAnterior { get; set; } = string.Empty;
+    public string EstadoNuevo { get; set; } = string.Empty;
+    public string Observaciones { get; set; } = string.Empty;
+    public int? UsuarioID { get; set; }
+    public string UsuarioNombre { get; set; } = string.Empty;
+    public DateTime FechaEvento { get; set; }
+}
 public sealed class LogisticaChoferesVm
 {
     public List<LogisticaChoferEstadoVm> Choferes { get; set; } = new();

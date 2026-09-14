@@ -12,13 +12,37 @@
     var viajesEnCurso = Model.Where(x => x.Estatus == "En curso").OrderBy(x => x.FechaSalidaReal ?? x.FechaProgramada).ToList();
     var viajesProgramados = Model.Where(x => x.Estatus == "Programado").OrderBy(x => x.FechaProgramada).ThenBy(x => x.HoraSalidaProgramada).ToList();
     var viajesCompletados = Model.Where(x => x.Estatus == "Completado").OrderByDescending(x => x.FechaRegresoReal ?? x.FechaProgramada).ToList();
-    var hayEntregas = Model.Any(x => string.Equals(x.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase));
+    var hayEntregas = Model.Any(x => string.Equals(x.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase) || x.Paradas.Any(p => string.Equals(p.TipoParada, "Entrega", StringComparison.OrdinalIgnoreCase)));
 }
 @functions {
     public static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
-    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
+    public static string TxtVisible(string? value) => Txt(value).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase).Replace("Entrega PT", "Entrega", StringComparison.OrdinalIgnoreCase);
     public static bool EsEntrega(ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm viaje) => string.Equals(viaje.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase);
-
+    public static string TipoViajeVisible(ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm viaje)
+    {
+        if (string.Equals(viaje.TipoViaje, "Entrega PT", StringComparison.OrdinalIgnoreCase)) return "Entrega";
+        if (string.Equals(viaje.TipoViaje, "Ruta multipropósito", StringComparison.OrdinalIgnoreCase)) return "Ruta multiparada";
+        return TxtVisible(viaje.TipoViaje);
+    }
+    public static string TipoParadaVisible(string? tipo)
+    {
+        var valor = Txt(tipo);
+        return valor switch
+        {
+            "Recoleccion" => "Recolección",
+            "Origen" => "Origen",
+            "Entrega" => "Entrega",
+            "Traslado" => "Traslado",
+            "Servicio" => "Servicio",
+            "Retorno" => "Retorno",
+            _ => valor
+        };
+    }
+    public static string OperacionVisible(string? operacion)
+    {
+        if (string.IsNullOrWhiteSpace(operacion)) return "Parada operativa";
+        return operacion.Trim().Replace("Entrega PT", "Entrega", StringComparison.OrdinalIgnoreCase).Replace("Entrega NS", "Entrega", StringComparison.OrdinalIgnoreCase);
+    }
     public static string EstadoClase(string? estatus)
     {
         return estatus switch
@@ -30,12 +54,9 @@
             _ => "estado-neutral"
         };
     }
-
     public static string FechaHoraProgramada(ERP.NSQuell.Models.ViewModels.Logistica.LogisticaViajeDetalleVm viaje)
     {
-        return viaje.HoraSalidaProgramada.HasValue
-            ? $"{viaje.FechaProgramada:dd/MM/yyyy} {viaje.HoraSalidaProgramada.Value:hh\\:mm}"
-            : viaje.FechaProgramada.ToString("dd/MM/yyyy");
+        return viaje.HoraSalidaProgramada.HasValue ? $"{viaje.FechaProgramada:dd/MM/yyyy} {viaje.HoraSalidaProgramada.Value:hh\\:mm}" : viaje.FechaProgramada.ToString("dd/MM/yyyy");
     }
 }
 
@@ -179,7 +200,7 @@
             width: 100%;
             border-collapse: separate;
             border-spacing: 0 8px;
-            min-width: 980px
+            min-width: 1240px
         }
 
             .viajes-table th {
@@ -236,6 +257,127 @@
             color: var(--gris);
             font-size: .78rem;
             font-weight: 650
+        }
+
+        .multi-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 5px;
+            padding: 4px 7px;
+            border: 1px solid #b9d3f6;
+            border-radius: 999px;
+            background: #f0f6ff;
+            color: var(--azul);
+            font-size: .67rem;
+            font-weight: 950;
+            white-space: nowrap
+        }
+
+        .route-progress {
+            min-width: 190px
+        }
+
+        .route-progress-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: var(--texto);
+            font-size: .76rem;
+            font-weight: 900
+        }
+
+        .route-progress-track {
+            height: 6px;
+            margin-top: 5px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #e8eef6
+        }
+
+            .route-progress-track span {
+                display: block;
+                height: 100%;
+                border-radius: inherit;
+                background: var(--azul)
+            }
+
+        .next-stop-box {
+            min-width: 225px;
+            max-width: 300px;
+            margin-top: 7px;
+            padding: 8px 9px;
+            border: 1px solid #d9e7f8;
+            border-radius: 11px;
+            background: #f8fbff
+        }
+
+        .next-stop-head {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px
+        }
+
+        .next-stop-number {
+            display: inline-flex;
+            width: 25px;
+            height: 25px;
+            flex: 0 0 25px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--azul);
+            color: #fff;
+            font-size: .69rem;
+            font-weight: 950
+        }
+
+        .next-stop-name {
+            display: block;
+            max-width: 225px;
+            overflow: hidden;
+            color: var(--azul-oscuro);
+            font-size: .76rem;
+            font-weight: 950;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .next-stop-meta {
+            display: block;
+            margin-top: 1px;
+            color: var(--gris);
+            font-size: .68rem;
+            font-weight: 750
+        }
+
+        .next-stop-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 5px;
+            color: var(--verde);
+            font-size: .68rem;
+            font-weight: 900
+        }
+
+        .route-complete {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 6px;
+            color: var(--verde);
+            font-size: .72rem;
+            font-weight: 950
+        }
+
+        .mobile-route-status {
+            margin-top: 9px;
+            padding: 9px 10px;
+            border: 1px solid #d9e7f8;
+            border-radius: 12px;
+            background: #f8fbff
         }
 
         .estado {
@@ -389,6 +531,26 @@
                 background: #132338
             }
 
+            html[data-nsq-theme="dark"] .multi-tag {
+                background: #142744;
+                border-color: #315b8b;
+                color: #bfd9ff
+            }
+
+            html[data-nsq-theme="dark"] .route-progress-track {
+                background: #26374d
+            }
+
+            html[data-nsq-theme="dark"] .next-stop-box,
+            html[data-nsq-theme="dark"] .mobile-route-status {
+                background: #0d1828;
+                border-color: #29435f
+            }
+
+            html[data-nsq-theme="dark"] .next-stop-name {
+                color: #edf3fb
+            }
+
         @@media(max-width:800px) {
             .page {
                 padding: 10px
@@ -437,7 +599,7 @@
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
                 <h1><i class="fa-solid fa-truck-fast me-2"></i>Mis viajes</h1>
-                <p>@nombreChofer · consulta tus viajes asignados. En las Entregas puedes entrar al detalle para revisar o continuar la carga física y posteriormente registrar la salida.</p>
+                <p>@nombreChofer · consulta tus viajes asignados, el avance de la ruta y la próxima parada. En los viajes de Entrega también puedes revisar o continuar la carga física desde el detalle.</p>
             </div>
             <div class="hero-actions">
                 <a href="@Url.Action("Index", "LogisticaChofer")" class="btn-hero">
@@ -470,7 +632,7 @@
     {
         <div class="alert alert-primary d-flex align-items-start gap-2">
             <i class="fa-solid fa-boxes-stacked mt-1"></i>
-            <div><strong>Carga física compartida.</strong> En los viajes de Entrega, Centro Operativo y el chofer pueden escanear las mismas cajas sin importar la hora. El avance se guarda sobre el mismo embarque; la salida física continúa siendo confirmada por el chofer desde el detalle del viaje.</div>
+            <div><strong>Carga física compartida.</strong> Cuando la ruta incluye una Entrega, Centro Operativo y el chofer trabajan sobre el mismo embarque. Una entrega completada no termina automáticamente un viaje multiparada: el recorrido continúa hasta atender las paradas restantes y regresar a planta.</div>
         </div>
     }
 
@@ -488,7 +650,8 @@
                             <tr>
                                 <th>Viaje</th>
                                 <th>Salida</th>
-                                <th>Origen / destino</th>
+                                <th>Recorrido</th>
+                                <th>Progreso / próxima parada</th>
                                 <th>Unidad</th>
                                 <th>Estado</th>
                                 <th></th>
@@ -497,29 +660,77 @@
                         <tbody>
                             @foreach (var viaje in viajesEnCurso)
                             {
+                                var proxima = viaje.ProximaParada;
+                                var porcentaje = viaje.TotalParadas <= 0 ? 0m : Math.Round(Math.Min(100m, (decimal)viaje.ParadasCompletadas * 100m / viaje.TotalParadas), 1);
+                                var progresoStyle = $"width:{porcentaje.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%;";
                                 <tr class="viaje-curso">
                                     <td>
                                         <div class="main">@viaje.Folio</div>
-                                        <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje))</div>
+                                        <div class="sub">@TipoViajeVisible(viaje)</div>
                                         <div class="sub">@TxtVisible(viaje.Motivo)</div>
+                                        @if (viaje.EsMultiParada)
+                                        {
+                                            <span class="multi-tag"><i class="fa-solid fa-code-branch"></i>Ruta multiparada</span>
+                                        }
                                     </td>
                                     <td>
                                         <div class="main">@(viaje.FechaSalidaReal?.ToString("HH:mm") ?? "-")</div>
                                         <div class="sub">@(viaje.FechaSalidaReal?.ToString("dd/MM/yyyy") ?? viaje.FechaProgramada.ToString("dd/MM/yyyy"))</div>
                                     </td>
                                     <td>
-                                        <div class="main">@Txt(viaje.Destino)</div>
-                                        <div class="sub">@Txt(viaje.Origen)</div>
+                                        <div class="main">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                                        @if (viaje.TotalParadas > 0)
+                                        {
+                                            <div class="sub">@viaje.TotalParadas parada@(viaje.TotalParadas == 1 ? "" : "s") en la ruta</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (viaje.TotalParadas > 0)
+                                        {
+                                            <div class="route-progress">
+                                                <div class="route-progress-top">
+                                                    <span>@viaje.ParadasCompletadas / @viaje.TotalParadas atendidas</span>
+                                                    <span>@porcentaje.ToString("N0")%</span>
+                                                </div>
+                                                <div class="route-progress-track"><span style="@progresoStyle"></span></div>
+                                                @if (viaje.ParadasPendientes > 0)
+                                                {
+                                                    <div class="sub">@viaje.ParadasPendientes pendiente@(viaje.ParadasPendientes == 1 ? "" : "s")</div>
+                                                }
+                                            </div>
+                                        }
+                                        @if (proxima != null)
+                                        {
+                                            <div class="next-stop-box">
+                                                <div class="next-stop-head">
+                                                    <span class="next-stop-number">@proxima.Secuencia</span>
+                                                    <div>
+                                                        <span class="next-stop-name" title="@proxima.Lugar">@Txt(proxima.Lugar)</span>
+                                                        <span class="next-stop-meta">@TipoParadaVisible(proxima.TipoParada) · @OperacionVisible(proxima.TipoOperacion)</span>
+                                                        @if (proxima.FechaHoraLlegadaProgramada.HasValue)
+                                                        {
+                                                            <span class="next-stop-meta"><i class="fa-regular fa-clock me-1"></i>@proxima.FechaHoraLlegadaProgramada.Value.ToString("dd/MM HH:mm")</span>
+                                                        }
+                                                        <span class="next-stop-state"><i class="fa-solid fa-location-dot"></i>@Txt(proxima.Estatus)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (viaje.TotalParadas > 0 && viaje.ParadasPendientes == 0)
+                                        {
+                                            <span class="route-complete"><i class="fa-solid fa-circle-check"></i>Ruta atendida</span>
+                                        }
+                                        else if (viaje.TotalParadas <= 0)
+                                        {
+                                            <div class="sub">Sin paradas configuradas</div>
+                                        }
                                     </td>
                                     <td>
                                         <div class="main">@viaje.UnidadMostrar</div>
                                         <div class="sub">@Txt(viaje.Ruta)</div>
                                     </td>
                                     <td>
-                                        <span class="estado @EstadoClase(viaje.Estatus)">
-                                            <i class="fa-solid fa-circle"></i>
-                                            @viaje.Estatus
-                                        </span>
+                                        <span class="estado @EstadoClase(viaje.Estatus)"><i class="fa-solid fa-circle"></i>@viaje.Estatus</span>
                                         @if (viaje.TieneIncidencia)
                                         {
                                             <div class="sub text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Con incidencia</div>
@@ -536,23 +747,45 @@
                         </tbody>
                     </table>
                 </div>
-
                 <div class="mobile-list">
                     @foreach (var viaje in viajesEnCurso)
                     {
+                        var proxima = viaje.ProximaParada;
+                        var porcentaje = viaje.TotalParadas <= 0 ? 0m : Math.Round(Math.Min(100m, (decimal)viaje.ParadasCompletadas * 100m / viaje.TotalParadas), 1);
+                        var progresoStyle = $"width:{porcentaje.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%;";
                         <div class="mobile-row">
                             <div class="mobile-top">
                                 <div>
                                     <div class="main">@viaje.Folio</div>
-                                    <div class="sub">Salida @(viaje.FechaSalidaReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div class="sub">@TipoViajeVisible(viaje) · salida @(viaje.FechaSalidaReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    @if (viaje.EsMultiParada)
+                                    {
+                                        <span class="multi-tag"><i class="fa-solid fa-code-branch"></i>Ruta multiparada</span>
+                                    }
                                 </div>
                                 <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
                             </div>
-                            @if (EsEntrega(viaje))
-                            {
-                                <div class="sub mt-1"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física compartida</div>
-                            }
                             <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                            @if (viaje.TotalParadas > 0)
+                            {
+                                <div class="mobile-route-status">
+                                    <div class="route-progress-top"><span>@viaje.ParadasCompletadas / @viaje.TotalParadas atendidas</span><span>@porcentaje.ToString("N0")%</span></div>
+                                    <div class="route-progress-track"><span style="@progresoStyle"></span></div>
+                                    @if (proxima != null)
+                                    {
+                                        <div class="next-stop-box">
+                                            <div class="next-stop-head">
+                                                <span class="next-stop-number">@proxima.Secuencia</span>
+                                                <div>
+                                                    <span class="next-stop-name">@Txt(proxima.Lugar)</span>
+                                                    <span class="next-stop-meta">@TipoParadaVisible(proxima.TipoParada) · @OperacionVisible(proxima.TipoOperacion)</span>
+                                                    <span class="next-stop-state"><i class="fa-solid fa-location-dot"></i>@Txt(proxima.Estatus)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
                             <div class="mobile-meta">
                                 <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
                                 <span><i class="fa-solid fa-route me-1"></i>@Txt(viaje.Ruta)</span>
@@ -588,7 +821,8 @@
                             <tr>
                                 <th>Viaje</th>
                                 <th>Programado</th>
-                                <th>Origen / destino</th>
+                                <th>Recorrido</th>
+                                <th>Ruta / primera parada</th>
                                 <th>Unidad</th>
                                 <th>Estado</th>
                                 <th></th>
@@ -597,38 +831,76 @@
                         <tbody>
                             @foreach (var viaje in viajesProgramados)
                             {
+                                var proxima = viaje.ProximaParada;
                                 <tr class="viaje-programado">
                                     <td>
                                         <div class="main">@viaje.Folio</div>
-                                        <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje))</div>
+                                        <div class="sub">@TipoViajeVisible(viaje)</div>
                                         <div class="sub">@TxtVisible(viaje.Motivo)</div>
+                                        @if (viaje.EsMultiParada)
+                                        {
+                                            <span class="multi-tag"><i class="fa-solid fa-code-branch"></i>Ruta multiparada</span>
+                                        }
                                     </td>
                                     <td>
                                         <div class="main">@FechaHoraProgramada(viaje)</div>
                                         <div class="sub">Salida programada</div>
                                     </td>
                                     <td>
-                                        <div class="main">@Txt(viaje.Destino)</div>
-                                        <div class="sub">@Txt(viaje.Origen)</div>
+                                        <div class="main">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                                        @if (viaje.TotalParadas > 0)
+                                        {
+                                            <div class="sub">@viaje.TotalParadas parada@(viaje.TotalParadas == 1 ? "" : "s") programada@(viaje.TotalParadas == 1 ? "" : "s")</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (viaje.TotalParadas > 0)
+                                        {
+                                            <div class="route-progress">
+                                                <div class="route-progress-top"><span>@viaje.ParadasCompletadas / @viaje.TotalParadas atendidas</span><span>@viaje.ParadasPendientes pendientes</span></div>
+                                                <div class="route-progress-track"><span style="width:0%;"></span></div>
+                                            </div>
+                                        }
+                                        @if (proxima != null)
+                                        {
+                                            <div class="next-stop-box">
+                                                <div class="next-stop-head">
+                                                    <span class="next-stop-number">@proxima.Secuencia</span>
+                                                    <div>
+                                                        <span class="next-stop-name" title="@proxima.Lugar">@Txt(proxima.Lugar)</span>
+                                                        <span class="next-stop-meta">@TipoParadaVisible(proxima.TipoParada) · @OperacionVisible(proxima.TipoOperacion)</span>
+                                                        @if (proxima.FechaHoraLlegadaProgramada.HasValue)
+                                                        {
+                                                            <span class="next-stop-meta"><i class="fa-regular fa-clock me-1"></i>@proxima.FechaHoraLlegadaProgramada.Value.ToString("dd/MM HH:mm")</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (viaje.TotalParadas <= 0)
+                                        {
+                                            <div class="sub">Sin paradas configuradas</div>
+                                        }
                                     </td>
                                     <td>
                                         <div class="main">@viaje.UnidadMostrar</div>
                                         <div class="sub">@Txt(viaje.Ruta)</div>
                                     </td>
                                     <td>
-                                        <span class="estado @EstadoClase(viaje.Estatus)">
-                                            <i class="fa-solid fa-clock"></i>
-                                            @viaje.Estatus
-                                        </span>
+                                        <span class="estado @EstadoClase(viaje.Estatus)"><i class="fa-solid fa-clock"></i>@viaje.Estatus</span>
                                         @if (EsEntrega(viaje))
                                         {
-                                            <div class="sub"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física se gestiona desde el detalle</div>
+                                            <div class="sub"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física desde el detalle</div>
+                                        }
+                                        @if (viaje.TieneIncidencia)
+                                        {
+                                            <div class="sub text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Con incidencia</div>
                                         }
                                     </td>
                                     <td class="text-end">
                                         <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
                                             <i class="fa-solid fa-arrow-right"></i>
-                                            @(EsEntrega(viaje) ? "Abrir operación" : "Abrir")
+                                            @(EsEntrega(viaje) ? "Abrir operación" : "Abrir viaje")
                                         </a>
                                     </td>
                                 </tr>
@@ -636,26 +908,52 @@
                         </tbody>
                     </table>
                 </div>
-
                 <div class="mobile-list">
                     @foreach (var viaje in viajesProgramados)
                     {
+                        var proxima = viaje.ProximaParada;
                         <div class="mobile-row">
                             <div class="mobile-top">
                                 <div>
                                     <div class="main">@viaje.Folio</div>
-                                    <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje)) · @FechaHoraProgramada(viaje)</div>
+                                    <div class="sub">@TipoViajeVisible(viaje) · @FechaHoraProgramada(viaje)</div>
+                                    @if (viaje.EsMultiParada)
+                                    {
+                                        <span class="multi-tag"><i class="fa-solid fa-code-branch"></i>Ruta multiparada</span>
+                                    }
                                 </div>
                                 <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
                             </div>
+                            <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                            @if (viaje.TotalParadas > 0)
+                            {
+                                <div class="mobile-route-status">
+                                    <div class="route-progress-top"><span>@viaje.TotalParadas parada@(viaje.TotalParadas == 1 ? "" : "s")</span><span>@viaje.ParadasPendientes pendientes</span></div>
+                                    @if (proxima != null)
+                                    {
+                                        <div class="next-stop-box">
+                                            <div class="next-stop-head">
+                                                <span class="next-stop-number">@proxima.Secuencia</span>
+                                                <div>
+                                                    <span class="next-stop-name">@Txt(proxima.Lugar)</span>
+                                                    <span class="next-stop-meta">@TipoParadaVisible(proxima.TipoParada) · @OperacionVisible(proxima.TipoOperacion)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
                             @if (EsEntrega(viaje))
                             {
-                                <div class="sub mt-1"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física compartida desde el detalle</div>
+                                <div class="sub mt-2"><i class="fa-solid fa-boxes-stacked me-1"></i>Carga física compartida desde el detalle</div>
                             }
-                            <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
                             <div class="mobile-meta">
                                 <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
                                 <span><i class="fa-solid fa-route me-1"></i>@Txt(viaje.Ruta)</span>
+                                @if (viaje.TieneIncidencia)
+                                {
+                                    <span class="text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Incidencia</span>
+                                }
                             </div>
                             <div class="mobile-action">
                                 <a class="btn-abrir" href="@Url.Action("Detalle", "LogisticaChofer", new { id = viaje.ViajeID })">
@@ -691,30 +989,54 @@
                             <tr>
                                 <th>Viaje</th>
                                 <th>Regreso</th>
-                                <th>Destino</th>
-                                <th>Unidad</th>
                                 <th>Recorrido</th>
+                                <th>Paradas</th>
+                                <th>Unidad</th>
+                                <th>Recorrido total</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var viaje in viajesCompletados)
                             {
+                                var porcentaje = viaje.TotalParadas <= 0 ? 0m : Math.Round(Math.Min(100m, (decimal)viaje.ParadasCompletadas * 100m / viaje.TotalParadas), 1);
+                                var progresoStyle = $"width:{porcentaje.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%;";
                                 <tr class="viaje-completado">
                                     <td>
                                         <div class="main">@viaje.Folio</div>
-                                        <div class="sub">@(EsEntrega(viaje) ? "Entrega" : TxtVisible(viaje.TipoViaje))</div>
+                                        <div class="sub">@TipoViajeVisible(viaje)</div>
                                         <div class="sub">@TxtVisible(viaje.Motivo)</div>
+                                        @if (viaje.EsMultiParada)
+                                        {
+                                            <span class="multi-tag"><i class="fa-solid fa-code-branch"></i>Ruta multiparada</span>
+                                        }
                                     </td>
                                     <td>
                                         <div class="main">@(viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
                                     </td>
                                     <td>
-                                        <div class="main">@Txt(viaje.Destino)</div>
-                                        <div class="sub">@Txt(viaje.Origen)</div>
+                                        <div class="main">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                                    </td>
+                                    <td>
+                                        @if (viaje.TotalParadas > 0)
+                                        {
+                                            <div class="route-progress">
+                                                <div class="route-progress-top"><span>@viaje.ParadasCompletadas / @viaje.TotalParadas atendidas</span><span>@porcentaje.ToString("N0")%</span></div>
+                                                <div class="route-progress-track"><span style="@progresoStyle"></span></div>
+                                                @if (viaje.ParadasPendientes == 0)
+                                                {
+                                                    <span class="route-complete"><i class="fa-solid fa-circle-check"></i>Ruta cerrada</span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="sub">Viaje cerrado</div>
+                                        }
                                     </td>
                                     <td>
                                         <div class="main">@viaje.UnidadMostrar</div>
+                                        <div class="sub">@Txt(viaje.Ruta)</div>
                                     </td>
                                     <td>
                                         <div class="main">@(viaje.KilometrosUtilizados.HasValue ? $"{viaje.KilometrosUtilizados.Value:N0} km" : "-")</div>
@@ -730,19 +1052,31 @@
                         </tbody>
                     </table>
                 </div>
-
                 <div class="mobile-list">
                     @foreach (var viaje in viajesCompletados)
                     {
+                        var porcentaje = viaje.TotalParadas <= 0 ? 0m : Math.Round(Math.Min(100m, (decimal)viaje.ParadasCompletadas * 100m / viaje.TotalParadas), 1);
+                        var progresoStyle = $"width:{porcentaje.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%;";
                         <div class="mobile-row">
                             <div class="mobile-top">
                                 <div>
                                     <div class="main">@viaje.Folio</div>
-                                    <div class="sub">Regreso @(viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    <div class="sub">@TipoViajeVisible(viaje) · regreso @(viaje.FechaRegresoReal?.ToString("dd/MM/yyyy HH:mm") ?? "-")</div>
+                                    @if (viaje.EsMultiParada)
+                                    {
+                                        <span class="multi-tag"><i class="fa-solid fa-code-branch"></i>Ruta multiparada</span>
+                                    }
                                 </div>
                                 <span class="estado @EstadoClase(viaje.Estatus)">@viaje.Estatus</span>
                             </div>
-                            <div class="mobile-route">@Txt(viaje.Destino)</div>
+                            <div class="mobile-route">@Txt(viaje.Origen) <i class="fa-solid fa-arrow-right-long mx-1"></i> @Txt(viaje.Destino)</div>
+                            @if (viaje.TotalParadas > 0)
+                            {
+                                <div class="mobile-route-status">
+                                    <div class="route-progress-top"><span>@viaje.ParadasCompletadas / @viaje.TotalParadas atendidas</span><span>@porcentaje.ToString("N0")%</span></div>
+                                    <div class="route-progress-track"><span style="@progresoStyle"></span></div>
+                                </div>
+                            }
                             <div class="mobile-meta">
                                 <span><i class="fa-solid fa-truck me-1"></i>@viaje.UnidadMostrar</span>
                                 <span><i class="fa-solid fa-road me-1"></i>@(viaje.KilometrosUtilizados.HasValue ? $"{viaje.KilometrosUtilizados.Value:N0} km" : "-")</span>
