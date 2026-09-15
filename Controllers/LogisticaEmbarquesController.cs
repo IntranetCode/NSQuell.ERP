@@ -1091,7 +1091,6 @@ VALUES(@EmbarqueID,@DetalleID,@CajaID,@Cantidad,N'Reservada',SYSDATETIME(),@Usua
             return View("ConfirmarDesdePT", vm);
         }
     }
-   
 
     [HttpGet]
     public async Task<IActionResult> Detalle(int id, CancellationToken cancellationToken = default)
@@ -1099,32 +1098,60 @@ VALUES(@EmbarqueID,@DetalleID,@CajaID,@Cantidad,N'Reservada',SYSDATETIME(),@Usua
         var acceso = await ValidarAccesoAsync("Tablero de Logística");
         if (acceso != null) return acceso;
         if (id <= 0) return NotFound();
-
         await using var cn = await AbrirAsync(cancellationToken);
-
         var vm = await CargarDetalleAsync(cn, id, cancellationToken);
         if (vm == null) return NotFound();
-
         vm.TipoOperacion = NormalizarTipoOperacion(vm.TipoOperacion);
         vm.FormaEnvio = NormalizarFormaEnvio(vm.FormaEnvio);
-
-        if (string.IsNullOrWhiteSpace(vm.TipoOperacion))
-            vm.TipoOperacion = "Pendiente";
-
-        if (string.IsNullOrWhiteSpace(vm.FormaEnvio))
-            vm.FormaEnvio = "Pendiente";
-
-        ViewBag.RequiereDefinirSalida =
-            vm.TipoOperacion == "Pendiente" ||
-            vm.FormaEnvio == "Pendiente";
-
-        ViewBag.PuedeDefinirSalida =
-            vm.Estatus is "Programado" or "Preparando" or "Preparado";
-
+        if (string.IsNullOrWhiteSpace(vm.TipoOperacion)) vm.TipoOperacion = "Pendiente";
+        if (string.IsNullOrWhiteSpace(vm.FormaEnvio)) vm.FormaEnvio = "Pendiente";
+        var requiereDefinirSalida = vm.TipoOperacion == "Pendiente" || vm.FormaEnvio == "Pendiente";
+        var puedeDefinirSalida = vm.Estatus is "Programado" or "Preparando" or "Preparado";
+        ViewBag.RequiereDefinirSalida = requiereDefinirSalida;
+        ViewBag.PuedeDefinirSalida = puedeDefinirSalida;
+        if (puedeDefinirSalida) await CargarCatalogosDefinirSalidaAsync(cn, cancellationToken);
         return View(vm);
     }
 
- 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DefinirSalida(int embarqueId, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        if (embarqueId <= 0)
+        {
+            TempData["LogisticaError"] = "El embarque indicado no es válido.";
+            return RedirectToAction(nameof(Index));
+        }
+        await using var cn = await AbrirAsync(cancellationToken);
+        const string sql = @"
+SELECT ISNULL(Folio,N'') Folio,ISNULL(Estatus,N'') Estatus
+FROM dbo.Logistica_Embarques
+WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
+        string folio;
+        string estatus;
+        await using (var cmd = new SqlCommand(sql, cn))
+        {
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken))
+            {
+                TempData["LogisticaError"] = "El embarque ya no existe.";
+                return RedirectToAction(nameof(Index));
+            }
+            folio = Texto(rd, "Folio");
+            estatus = Texto(rd, "Estatus");
+        }
+        if (estatus is "Cargando" or "Cargado" or "En ruta" or "Entregado" or "Cancelado")
+        {
+            TempData["LogisticaError"] = $"La forma de salida ya no puede modificarse porque el embarque está en estatus {estatus}.";
+            return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        }
+        TempData["LogisticaOk"] = "La forma de salida se administra desde Centro Operativo para mantener una sola configuración de ruta, unidad, chofer y transporte.";
+        if (string.IsNullOrWhiteSpace(folio)) return RedirectToAction("Index", "LogisticaOperacion");
+        return RedirectToAction("Index", "LogisticaOperacion", new { q = folio });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -2442,8 +2469,8 @@ WHERE EXISTS
     {
         const string sqlHeader = @"
 SELECT e.EmbarqueID,ISNULL(e.Folio,N'') AS Folio,e.ClienteID,ISNULL(e.ClienteNombreSnapshot,N'') AS ClienteNombreSnapshot,
-ISNULL(e.Destino,N'') AS Destino,ISNULL(e.DireccionEntrega,N'') AS DireccionEntrega,ISNULL(e.TipoOperacion,N'Nacional') AS TipoOperacion,
-ISNULL(e.FormaEnvio,N'Interno') AS FormaEnvio,ISNULL(e.ModalidadEnvio,N'') AS ModalidadEnvio,ISNULL(e.Transportista,N'') AS Transportista,
+ISNULL(e.Destino,N'') AS Destino,ISNULL(e.DireccionEntrega,N'') AS DireccionEntrega,ISNULL(e.TipoOperacion,N'') AS TipoOperacion,
+ISNULL(e.FormaEnvio,N'') AS FormaEnvio,ISNULL(e.ModalidadEnvio,N'') AS ModalidadEnvio,ISNULL(e.Transportista,N'') AS Transportista,
 ISNULL(e.GuiaReferencia,N'') AS GuiaReferencia,e.PasaAduana,ISNULL(e.Estatus,N'') AS Estatus,e.FechaCargaProgramada,e.HoraCargaProgramada,
 e.FechaEntregaProgramada,ISNULL(r.Codigo+N' - '+r.Nombre,N'') AS Ruta,
 ISNULL(u.NumeroEconomico+CASE WHEN NULLIF(u.Placas,N'') IS NULL THEN N'' ELSE N' - '+u.Placas END,N'') AS Unidad,
@@ -2551,36 +2578,23 @@ ORDER BY ec.EmbarqueDetalleID,c.NumeroCaja;";
                 });
             }
         }
-        const string sqlDisponibles = @"
-SELECT
-    objetivo.EmbarqueDetalleID,
-    c.CajaID,
-    c.Etiqueta,
-    c.NumeroCaja,
-    c.NumeroParte,
-    ISNULL(c.NumeroOF,N'') AS NumeroOF,
-    ISNULL(c.LoteEtiqueta,N'') AS Lote,
-    ISNULL(c.UbicacionCodigo,N'') AS Ubicacion,
-    c.Disponible
+        if (vm.Estatus is "Programado" or "Preparando")
+        {
+            const string sqlDisponibles = @"
+SELECT objetivo.EmbarqueDetalleID,c.CajaID,c.Etiqueta,c.NumeroCaja,c.NumeroParte,ISNULL(c.NumeroOF,N'') AS NumeroOF,
+ISNULL(c.LoteEtiqueta,N'') AS Lote,ISNULL(c.UbicacionCodigo,N'') AS Ubicacion,c.Disponible
 FROM dbo.vw_Logistica_CajasDisponibles c
-INNER JOIN dbo.ERP_Partes p
-    ON p.ParteID=c.ParteID
-INNER JOIN dbo.Logistica_Embarques e
-    ON e.EmbarqueID=@EmbarqueID
-   AND e.Activo=1
-   AND e.ClienteID=p.ClienteID
+INNER JOIN dbo.ERP_Partes p ON p.ParteID=c.ParteID
+INNER JOIN dbo.Logistica_Embarques e ON e.EmbarqueID=@EmbarqueID AND e.Activo=1 AND e.ClienteID=p.ClienteID
 CROSS APPLY
 (
-    SELECT TOP(1)
-        d.EmbarqueDetalleID
+    SELECT TOP(1) d.EmbarqueDetalleID
     FROM dbo.Logistica_EmbarqueDetalle d
     OUTER APPLY
     (
         SELECT ISNULL(SUM(ec.CantidadAsignada),0) AS Asignado
         FROM dbo.Logistica_EmbarqueCajas ec
-        WHERE ec.EmbarqueID=d.EmbarqueID
-          AND ec.EmbarqueDetalleID=d.EmbarqueDetalleID
-          AND ec.Activo=1
+        WHERE ec.EmbarqueID=d.EmbarqueID AND ec.EmbarqueDetalleID=d.EmbarqueDetalleID AND ec.Activo=1
     ) a
     WHERE d.EmbarqueID=e.EmbarqueID
       AND d.Activo=1
@@ -2588,8 +2602,7 @@ CROSS APPLY
       AND d.CantidadSolicitada>ISNULL(a.Asignado,0)
     ORDER BY
         CASE
-            WHEN c.SolicitudProduccionID IS NOT NULL
-             AND d.SolicitudProduccionID=c.SolicitudProduccionID THEN 0
+            WHEN c.SolicitudProduccionID IS NOT NULL AND d.SolicitudProduccionID=c.SolicitudProduccionID THEN 0
             WHEN NULLIF(LTRIM(RTRIM(ISNULL(c.NumeroOF,N''))),N'') IS NOT NULL
              AND NULLIF(LTRIM(RTRIM(ISNULL(d.NumeroOFSnapshot,N''))),N'') IS NOT NULL
              AND UPPER(REPLACE(REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(ISNULL(c.NumeroOF,N''))),NCHAR(39),N'/'),N'’',N'/'),N'´',N'/'),N'`',N'/'))
@@ -2601,8 +2614,7 @@ CROSS APPLY
 ) objetivo
 WHERE c.Disponible>0
 ORDER BY objetivo.EmbarqueDetalleID,c.NumeroCaja,c.CajaID;";
-        await using (var cmd = new SqlCommand(sqlDisponibles, cn))
-        {
+            await using var cmd = new SqlCommand(sqlDisponibles, cn);
             cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
             await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
             while (await rd.ReadAsync(cancellationToken))
@@ -2620,10 +2632,10 @@ ORDER BY objetivo.EmbarqueDetalleID,c.NumeroCaja,c.CajaID;";
                     Disponible = Entero(rd, "Disponible")
                 });
             }
+            vm.DemandasDisponibles = await CargarDemandasAsync(cn, null, DateTime.Today.AddDays(-30), DateTime.Today.AddMonths(6), true, vm.ClienteID, cancellationToken);
+            var usados = vm.Partidas.Where(x => x.ReleaseDetalleID.HasValue).Select(x => x.ReleaseDetalleID!.Value).ToHashSet();
+            vm.DemandasDisponibles = vm.DemandasDisponibles.Where(x => !usados.Contains(x.ReleaseDetalleID)).ToList();
         }
-        vm.DemandasDisponibles = await CargarDemandasAsync(cn, null, DateTime.Today.AddDays(-30), DateTime.Today.AddMonths(6), true, vm.ClienteID, cancellationToken);
-        var usados = vm.Partidas.Where(x => x.ReleaseDetalleID.HasValue).Select(x => x.ReleaseDetalleID!.Value).ToHashSet();
-        vm.DemandasDisponibles = vm.DemandasDisponibles.Where(x => !usados.Contains(x.ReleaseDetalleID)).ToList();
         const string sqlHistorial = @"
 SELECT FechaEvento,Evento,ISNULL(EstadoAnterior,N'') AS EstadoAnterior,ISNULL(EstadoNuevo,N'') AS EstadoNuevo,
 ISNULL(Observaciones,N'') AS Observaciones,ISNULL(UsuarioNombre,N'') AS Usuario
@@ -2910,36 +2922,24 @@ SELECT CONVERT(int,SCOPE_IDENTITY());";
     {
         if (string.Equals(tipoEvidencia, "Carga", StringComparison.OrdinalIgnoreCase))
         {
-            if (estatus is not "Preparado" and not "Cargado" and not "En ruta" and not "Entregado")
-                throw new InvalidOperationException("La evidencia de carga solo puede registrarse a partir de la preparación completa.");
-
+            if (estatus is not "Preparado" and not "Cargando" and not "Cargado" and not "En ruta" and not "Entregado") throw new InvalidOperationException("La evidencia de carga solo puede registrarse a partir de la preparación completa.");
             return;
         }
-
         if (string.Equals(tipoEvidencia, "Salida", StringComparison.OrdinalIgnoreCase))
         {
-            if (estatus is not "Cargado" and not "En ruta" and not "Entregado")
-                throw new InvalidOperationException("La evidencia de salida solo puede registrarse cuando la carga ya fue confirmada.");
-
+            if (estatus is not "Cargado" and not "En ruta" and not "Entregado") throw new InvalidOperationException("La evidencia de salida solo puede registrarse cuando la carga ya fue confirmada.");
             return;
         }
-
         if (string.Equals(tipoEvidencia, "Entrega", StringComparison.OrdinalIgnoreCase))
         {
-            if (estatus is not "En ruta" and not "Entregado")
-                throw new InvalidOperationException("La evidencia de entrega solo puede registrarse durante el tránsito o después de confirmar la entrega.");
-
+            if (estatus is not "En ruta" and not "Entregado") throw new InvalidOperationException("La evidencia de entrega solo puede registrarse durante el tránsito o después de confirmar la entrega.");
             return;
         }
-
         if (string.Equals(tipoEvidencia, "Incidencia", StringComparison.OrdinalIgnoreCase))
         {
-            if (estatus == "Cancelado")
-                throw new InvalidOperationException("No se pueden registrar evidencias de incidencia en un embarque cancelado.");
-
+            if (estatus == "Cancelado") throw new InvalidOperationException("No se pueden registrar evidencias de incidencia en un embarque cancelado.");
             return;
         }
-
         throw new InvalidOperationException("El tipo de evidencia no es válido.");
     }
 
@@ -3288,9 +3288,9 @@ ORDER BY FechaCarga DESC,EvidenciaID DESC;";
             var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken) ?? throw new InvalidOperationException("El embarque no existe.");
             if (header.Estatus == "Cancelado") throw new InvalidOperationException("No se pueden agregar documentos a un embarque cancelado.");
             const string sqlOperacion = @"
-SELECT ISNULL(NULLIF(LTRIM(RTRIM(TipoOperacion)),N''),N'Nacional') TipoOperacion,
-ISNULL(NULLIF(LTRIM(RTRIM(FormaEnvio)),N''),N'Interno') FormaEnvio,
-ISNULL(NULLIF(LTRIM(RTRIM(ModalidadEnvio)),N''),N'') ModalidadEnvio,
+SELECT ISNULL(LTRIM(RTRIM(TipoOperacion)),N'') TipoOperacion,
+ISNULL(LTRIM(RTRIM(FormaEnvio)),N'') FormaEnvio,
+ISNULL(LTRIM(RTRIM(ModalidadEnvio)),N'') ModalidadEnvio,
 PasaAduana
 FROM dbo.Logistica_Embarques WITH(UPDLOCK,HOLDLOCK)
 WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
@@ -3306,8 +3306,7 @@ WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
                 modalidadEnvio = NormalizarModalidadEnvio(Texto(rd, "ModalidadEnvio"));
                 pasaAduana = rd.IsDBNull(rd.GetOrdinal("PasaAduana")) ? null : Convert.ToBoolean(rd["PasaAduana"]);
             }
-            if (string.IsNullOrWhiteSpace(tipoOperacion)) tipoOperacion = "Nacional";
-            if (string.IsNullOrWhiteSpace(formaEnvio)) formaEnvio = "Interno";
+            if (string.IsNullOrWhiteSpace(tipoOperacion) || string.IsNullOrWhiteSpace(formaEnvio) || tipoOperacion == "Pendiente" || formaEnvio == "Pendiente") throw new InvalidOperationException("Primero define el tipo de operación y la forma de envío antes de cargar la documentación.");
             var definiciones = ObtenerDefinicionDocumentos(tipoOperacion, formaEnvio, modalidadEnvio, pasaAduana);
             var esObligatorio = false;
             var areaResponsable = ObtenerAreaDocumento(tipoDocumento);
@@ -3816,11 +3815,14 @@ AND Validado=1;";
         vm.TotalCajasAsignadas = vm.CajasAsignadas.Count;
         vm.TotalCajasCargadas = vm.CajasAsignadas.Count(x => string.Equals(x.Estatus, "Cargada", StringComparison.OrdinalIgnoreCase) || string.Equals(x.Estatus, "Despachada", StringComparison.OrdinalIgnoreCase));
         vm.FechaHoraCargaProgramada = CombinarFechaHora(vm.FechaCargaProgramada, vm.HoraCargaProgramada);
+        var salidaDefinida = !string.IsNullOrWhiteSpace(vm.TipoOperacion) && !string.Equals(vm.TipoOperacion, "Pendiente", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(vm.FormaEnvio) && !string.Equals(vm.FormaEnvio, "Pendiente", StringComparison.OrdinalIgnoreCase);
+        var documentacionLista = salidaDefinida && vm.DocumentacionCompleta;
         vm.PorcentajeAvance = vm.Estatus switch
         {
             "Programado" => 10,
             "Preparando" => CalcularAvancePreparacion(vm),
             "Preparado" => 55,
+            "Cargando" => CalcularAvanceCarga(vm),
             "Cargado" => 70,
             "En ruta" => 85,
             "Entregado" => 100,
@@ -3830,11 +3832,24 @@ AND Validado=1;";
         switch (vm.Estatus)
         {
             case "Programado":
-                vm.ProximaAccion = "Iniciar preparación";
-                vm.ProximaAccionDetalle = vm.TotalPiezasPreparadas > 0 ? $"Ya existen {vm.TotalPiezasPreparadas:N0} piezas reservadas." : "Asignar las cajas PT correspondientes al embarque.";
+                if (!salidaDefinida)
+                {
+                    vm.ProximaAccion = "Definir salida";
+                    vm.ProximaAccionDetalle = "Define el tipo de operación y la forma de envío antes de continuar.";
+                }
+                else
+                {
+                    vm.ProximaAccion = "Iniciar preparación";
+                    vm.ProximaAccionDetalle = vm.TotalPiezasPreparadas > 0 ? $"Ya existen {vm.TotalPiezasPreparadas:N0} piezas reservadas." : "Asignar las cajas PT correspondientes al embarque.";
+                }
                 break;
             case "Preparando":
-                if (!vm.PreparacionCompleta)
+                if (!salidaDefinida)
+                {
+                    vm.ProximaAccion = "Definir salida";
+                    vm.ProximaAccionDetalle = "Falta definir el tipo de operación y la forma de envío.";
+                }
+                else if (!vm.PreparacionCompleta)
                 {
                     vm.ProximaAccion = "Completar preparación";
                     vm.ProximaAccionDetalle = $"Faltan {vm.PiezasPendientesPreparar:N0} piezas por preparar.";
@@ -3846,17 +3861,37 @@ AND Validado=1;";
                 }
                 break;
             case "Preparado":
-                vm.ProximaAccion = "Confirmar carga física";
-                vm.ProximaAccionDetalle = vm.FormaEnvio switch
+                if (!salidaDefinida)
                 {
-                    "Paqueteria" => "El producto está preparado para entregarse a la paquetería o transportista.",
-                    "Cliente" => "El producto está preparado para la recolección del cliente.",
-                    _ => "El producto está preparado y puede cargarse en la unidad."
-                };
+                    vm.ProximaAccion = "Definir salida";
+                    vm.ProximaAccionDetalle = "El producto está preparado, pero todavía falta definir cómo saldrá.";
+                }
+                else
+                {
+                    vm.ProximaAccion = "Confirmar carga física";
+                    vm.ProximaAccionDetalle = vm.FormaEnvio switch
+                    {
+                        "Paqueteria" => "El producto está preparado para entregarse a la paquetería o transportista.",
+                        "Cliente" => "El producto está preparado para la recolección del cliente.",
+                        _ => "El producto está preparado y puede cargarse en la unidad."
+                    };
+                }
+                break;
+            case "Cargando":
+                vm.ProximaAccion = "Continuar carga física";
+                vm.ProximaAccionDetalle = vm.TotalCajasAsignadas > 0 ? $"Se han confirmado {vm.TotalCajasCargadas:N0} de {vm.TotalCajasAsignadas:N0} caja(s) en la carga física." : "La carga física está en proceso.";
                 break;
             case "Cargado":
-                vm.ProximaAccion = vm.DocumentacionCompleta ? "Validar salida" : "Completar documentación";
-                vm.ProximaAccionDetalle = vm.DocumentacionCompleta ? "Confirmar checklist de salida y despachar el embarque." : $"Faltan {vm.DocumentosFaltantes} documento(s) obligatorio(s) por cargar o validar.";
+                if (!salidaDefinida)
+                {
+                    vm.ProximaAccion = "Revisar configuración de salida";
+                    vm.ProximaAccionDetalle = "La carga está confirmada, pero la configuración de salida está incompleta.";
+                }
+                else
+                {
+                    vm.ProximaAccion = documentacionLista ? "Validar salida" : "Completar documentación";
+                    vm.ProximaAccionDetalle = documentacionLista ? "Confirmar checklist de salida y despachar el embarque." : $"Faltan {vm.DocumentosFaltantes} documento(s) obligatorio(s) por cargar o validar.";
+                }
                 break;
             case "En ruta":
                 vm.ProximaAccion = "Confirmar entrega";
@@ -3890,16 +3925,16 @@ AND Validado=1;";
         if (vm.FechaHoraCargaProgramada.HasValue)
         {
             vm.MinutosParaCarga = (int)Math.Round((vm.FechaHoraCargaProgramada.Value - ahora).TotalMinutes);
-            vm.CargaAtrasada = vm.Estatus is "Programado" or "Preparando" or "Preparado" && ahora > vm.FechaHoraCargaProgramada.Value;
+            vm.CargaAtrasada = (vm.Estatus is "Programado" or "Preparando" or "Preparado" or "Cargando") && ahora > vm.FechaHoraCargaProgramada.Value;
         }
         if (vm.Estatus is not "Entregado" and not "Cancelado")
         {
             if (vm.CargaAtrasada)
             {
                 vm.EnRiesgo = true;
-                vm.MensajeRiesgo = "La fecha u hora programada de carga ya fue superada.";
+                vm.MensajeRiesgo = vm.Estatus == "Cargando" ? "La hora programada de carga ya fue superada y la carga física continúa en proceso." : "La fecha u hora programada de carga ya fue superada.";
             }
-            else if (vm.FechaHoraCargaProgramada.HasValue && vm.MinutosParaCarga.HasValue && vm.MinutosParaCarga.Value >= 0 && vm.MinutosParaCarga.Value <= 60 && vm.Estatus is "Programado" or "Preparando")
+            else if (vm.FechaHoraCargaProgramada.HasValue && vm.MinutosParaCarga.HasValue && vm.MinutosParaCarga.Value >= 0 && vm.MinutosParaCarga.Value <= 60 && (vm.Estatus is "Programado" or "Preparando" or "Preparado"))
             {
                 vm.EnRiesgo = true;
                 vm.MensajeRiesgo = vm.PiezasPendientesPreparar > 0 ? $"La carga está próxima y faltan {vm.PiezasPendientesPreparar:N0} piezas por preparar." : "La carga está próxima y todavía no se ha confirmado la preparación.";
@@ -3936,6 +3971,13 @@ AND Validado=1;";
             vm.EstadoGeneralIcono = "fa-circle-check";
         }
         vm.Checklist = new List<LogisticaChecklistVm>();
+        vm.Checklist.Add(new LogisticaChecklistVm
+        {
+            Codigo = "SALIDA",
+            Concepto = "Configuración de salida",
+            Descripcion = salidaDefinida ? $"{vm.TipoOperacion} / {vm.FormaEnvio}" : "Falta definir tipo de operación y forma de envío.",
+            Completo = salidaDefinida
+        });
         if (vm.FormaEnvio == "Interno")
         {
             vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "RUTA", Concepto = "Ruta asignada", Descripcion = vm.TieneRuta ? vm.Ruta : "El embarque todavía no tiene ruta.", Completo = vm.TieneRuta });
@@ -3955,9 +3997,16 @@ AND Validado=1;";
             vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "PAQUETERIA", Concepto = "Paquetería / transportista", Descripcion = transportistaCorrecto ? vm.Transportista : "Falta indicar la compañía o paquetería.", Completo = transportistaCorrecto });
         }
         vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "PRODUCTO", Concepto = "Producto preparado", Descripcion = $"{vm.TotalPiezasPreparadas:N0} de {vm.TotalPiezasSolicitadas:N0} piezas", Completo = vm.PreparacionCompleta });
-        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "CARGA", Concepto = "Carga física confirmada", Descripcion = vm.CargaCompleta ? "Carga completa." : "La carga física todavía no se ha confirmado.", Completo = vm.CargaCompleta });
-        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "DOCUMENTOS", Concepto = "Documentación completa", Descripcion = vm.DocumentacionCompleta ? $"{vm.DocumentosObligatoriosCompletos} de {vm.DocumentosObligatorios} documentos obligatorios validados." : $"{vm.DocumentosFaltantes} documento(s) obligatorio(s) pendiente(s) de carga o validación.", Completo = vm.DocumentacionCompleta });
+        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "CARGA", Concepto = "Carga física confirmada", Descripcion = vm.CargaCompleta ? "Carga completa." : vm.Estatus == "Cargando" ? $"{vm.TotalCajasCargadas:N0} de {vm.TotalCajasAsignadas:N0} caja(s) confirmadas." : "La carga física todavía no se ha confirmado.", Completo = vm.CargaCompleta });
+        vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "DOCUMENTOS", Concepto = "Documentación completa", Descripcion = !salidaDefinida ? "Primero debe definirse la salida para determinar la documentación requerida." : documentacionLista ? $"{vm.DocumentosObligatoriosCompletos} de {vm.DocumentosObligatorios} documentos obligatorios validados." : $"{vm.DocumentosFaltantes} documento(s) obligatorio(s) pendiente(s) de carga o validación.", Completo = documentacionLista });
         vm.Checklist.Add(new LogisticaChecklistVm { Codigo = "INCIDENCIAS", Concepto = "Sin incidencias críticas", Descripcion = vm.IncidenciasCriticas == 0 ? "Sin bloqueos críticos." : $"{vm.IncidenciasCriticas} incidencia(s) crítica(s) abierta(s).", Completo = vm.IncidenciasCriticas == 0 });
+    }
+
+    private static int CalcularAvanceCarga(LogisticaDetalleVm vm)
+    {
+        if (vm.TotalCajasAsignadas <= 0) return 60;
+        var proporcion = Math.Clamp((decimal)vm.TotalCajasCargadas / vm.TotalCajasAsignadas, 0m, 1m);
+        return 55 + (int)Math.Round(proporcion * 15m);
     }
     private static DateTime? CombinarFechaHora(
     DateTime? fecha,
@@ -4752,7 +4801,6 @@ ORDER BY
             eventos
         });
     }
-  
     [HttpGet]
     public async Task<IActionResult> ObtenerDocumentosModal(int embarqueId, CancellationToken cancellationToken = default)
     {
@@ -4761,9 +4809,9 @@ ORDER BY
         if (embarqueId <= 0) return BadRequest(new { ok = false, mensaje = "El embarque indicado no es válido." });
         await using var cn = await AbrirAsync(cancellationToken);
         const string sqlHeader = @"
-SELECT ISNULL(NULLIF(LTRIM(RTRIM(TipoOperacion)),N''),N'Nacional') TipoOperacion,
-ISNULL(NULLIF(LTRIM(RTRIM(FormaEnvio)),N''),N'Interno') FormaEnvio,
-ISNULL(NULLIF(LTRIM(RTRIM(ModalidadEnvio)),N''),N'') ModalidadEnvio,
+SELECT ISNULL(LTRIM(RTRIM(TipoOperacion)),N'') TipoOperacion,
+ISNULL(LTRIM(RTRIM(FormaEnvio)),N'') FormaEnvio,
+ISNULL(LTRIM(RTRIM(ModalidadEnvio)),N'') ModalidadEnvio,
 PasaAduana,ISNULL(Estatus,N'') Estatus
 FROM dbo.Logistica_Embarques
 WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
@@ -4780,8 +4828,9 @@ WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
             estatus = Texto(rd, "Estatus");
             pasaAduana = rd.IsDBNull(rd.GetOrdinal("PasaAduana")) ? null : Convert.ToBoolean(rd["PasaAduana"]);
         }
-        if (string.IsNullOrWhiteSpace(tipoOperacion)) tipoOperacion = "Nacional";
-        if (string.IsNullOrWhiteSpace(formaEnvio)) formaEnvio = "Interno";
+        if (string.IsNullOrWhiteSpace(tipoOperacion)) tipoOperacion = "Pendiente";
+        if (string.IsNullOrWhiteSpace(formaEnvio)) formaEnvio = "Pendiente";
+        var salidaDefinida = tipoOperacion != "Pendiente" && formaEnvio != "Pendiente";
         const string sqlDocumentos = @"
 SELECT EmbarqueDocumentoID,ISNULL(TipoDocumento,N'') TipoDocumento,ISNULL(NombreOriginal,N'') NombreOriginal,
 ISNULL(TipoContenido,N'') TipoContenido,ISNULL(TamanoBytes,0) TamanoBytes,ISNULL(AreaResponsable,N'') AreaResponsable,
@@ -4821,7 +4870,7 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
                 });
             }
         }
-        var definiciones = ObtenerDefinicionDocumentos(tipoOperacion, formaEnvio, modalidadEnvio, pasaAduana);
+        var definiciones = salidaDefinida ? ObtenerDefinicionDocumentos(tipoOperacion, formaEnvio, modalidadEnvio, pasaAduana) : new List<(string TipoDocumento, string AreaResponsable, bool Obligatorio)>();
         var requeridos = definiciones.Select(x => new
         {
             tipoDocumento = x.TipoDocumento,
@@ -4839,9 +4888,10 @@ ORDER BY FechaCarga DESC,EmbarqueDocumentoID DESC;";
             formaEnvio,
             modalidadEnvio,
             pasaAduana,
+            requiereDefinirSalida = !salidaDefinida,
             puedeModificar = estatus != "Cancelado",
             documentosFaltantes = faltantes,
-            documentacionCompleta = faltantes == 0,
+            documentacionCompleta = salidaDefinida && faltantes == 0,
             requeridos,
             documentos,
             tiposPermitidos = TiposDocumentoPermitidos.OrderBy(x => x).ToList()

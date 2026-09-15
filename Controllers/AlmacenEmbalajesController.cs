@@ -886,6 +886,16 @@ FechaModificacion=SYSUTCDATETIME(),ActualizadoPor=@Usuario WHERE EmbalajeID=@Id 
             vm.NumeroOF = contexto.NumeroOF;
             vm.Unidad = contexto.Unidad;
             vm.CantidadPendienteOF = contexto.Pendiente;
+
+            // NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+            var productoOF = await AlmacenOFEntregaService.CargarProductoOFAsync(
+                connection,
+                null,
+                solicitudProduccionId.Value,
+                cancellationToken);
+            vm.NumeroParteOF = productoOF?.NumeroParte ?? string.Empty;
+            vm.DesignacionOF = productoOF?.Designacion ?? string.Empty;
+
             vm.Cantidad = contexto.Pendiente;
             vm.Observaciones = $"Entrega de embalaje para {contexto.NumeroOF}.";
         }

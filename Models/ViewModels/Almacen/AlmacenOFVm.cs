@@ -62,6 +62,10 @@ public sealed class AlmacenOFItemVm
     public string MaterialResumen { get; set; } = string.Empty;
     public string EmbalajeResumen { get; set; } = string.Empty;
 
+    // NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+    public string NumeroParteResumen { get; set; } = string.Empty;
+    public string DesignacionResumen { get; set; } = string.Empty;
+
     public decimal MpRequerida { get; set; }
     public decimal MpEntregada { get; set; }
 

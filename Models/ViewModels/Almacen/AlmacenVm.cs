@@ -168,6 +168,12 @@ public sealed class AlmacenMPMovimientoFormVm
     [StringLength(32, MinimumLength = 32)]
     public string OperacionToken { get; set; } = System.Guid.NewGuid().ToString("N");
 
+    // NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+    // Informacion del producto de la OF. Solo se usa como contexto visual
+    // en entregas dirigidas desde AlmacenOF.
+    public string NumeroParteOF { get; set; } = string.Empty;
+    public string DesignacionOF { get; set; } = string.Empty;
+
     public List<AlmacenSelectVm> Materiales { get; set; } = new();
     public List<AlmacenSelectVm> Ubicaciones { get; set; } = new();
     public List<AlmacenSelectVm> TiposMovimiento { get; set; } = new();

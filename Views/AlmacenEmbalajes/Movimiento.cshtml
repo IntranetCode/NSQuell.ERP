@@ -75,7 +75,10 @@
 
         @if (Model.EsEntregaOF)
         {
+            @* NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1 *@
             <input asp-for="SolicitudProduccionID" type="hidden" />
+            <input asp-for="NumeroParteOF" type="hidden" />
+            <input asp-for="DesignacionOF" type="hidden" />
             <input asp-for="TipoMovimiento" type="hidden" />
             <input asp-for="Unidad" type="hidden" />
             <input asp-for="NumeroOF" type="hidden" />
@@ -93,6 +96,18 @@
                 <div>
                     <small>ORDEN DE FABRICACIÓN</small>
                     <strong>@Model.NumeroOF</strong>
+                </div>
+                <div>
+                    <small>NÚMERO DE PARTE</small>
+                    <strong title="@Model.NumeroParteOF">
+                        @(string.IsNullOrWhiteSpace(Model.NumeroParteOF) ? "Sin número de parte" : Model.NumeroParteOF)
+                    </strong>
+                </div>
+                <div>
+                    <small>DESIGNACIÓN</small>
+                    <strong title="@Model.DesignacionOF">
+                        @(string.IsNullOrWhiteSpace(Model.DesignacionOF) ? "Sin designación" : Model.DesignacionOF)
+                    </strong>
                 </div>
                 <div>
                     <small>PENDIENTE ACTUAL</small>

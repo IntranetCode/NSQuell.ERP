@@ -48,7 +48,10 @@
     var incidenciasAbiertas = Model.Incidencias?.Count(x => x.EstaAbierta) ?? 0;
     var totalEvidencias = Model.Evidencias?.Count ?? 0;
     var totalParadas = Model.Paradas?.Count ?? 0;
-    var paradasCompletadas = Model.Paradas?.Count(x => x.Estatus is "Completada" or "Omitida") ?? 0;
+    var tieneEmbarquesVinculados = Model.Paradas?.Any(x => x.Embarques != null && x.Embarques.Count > 0) ?? false;
+    var esFlujoEmbarque = esEntregaPt || tieneEmbarquesVinculados;
+    var usaPortalChofer = esFlujoEmbarque || Model.EsMultiParada || totalParadas > 0;
+    var paradasCompletadas = Model.Paradas?.Count(x => x.Estatus is "Completada" or "Omitida" or "Cancelada") ?? 0;
     var paradasPendientes = Model.Paradas?.Count(x => x.Estatus is "Pendiente" or "En camino" or "En sitio") ?? 0;
     var proximaParada = Model.ProximaParada;
     var puedeAdministrarParadas = Model.Estatus is "Programado" or "En curso";
@@ -58,6 +61,7 @@
         "En sitio" => "bg-info text-dark",
         "En camino" => "bg-primary",
         "Omitida" => "bg-secondary",
+        "Cancelada" => "bg-dark",
         "Pendiente" => "bg-light text-dark border",
         _ => "bg-light text-dark border"
     };
@@ -960,7 +964,7 @@
         </div>
         <div class="head-actions">
             <a asp-controller="LogisticaViajes" asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-arrow-left me-1"></i>Viajes</a>
-            @if (esEntregaPt)
+            @if (esFlujoEmbarque)
             {
                 <a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-table-columns me-1"></i>Centro Operativo</a>
             }
@@ -991,7 +995,7 @@
         <div class="summary-item"><span>KM usados</span><strong>@(Model.KilometrosUtilizados.HasValue? Model.KilometrosUtilizados.Value.ToString("N0") + " km":"-")</strong></div>
     </div>
 
-    @if (esEntregaPt)
+    @if (esFlujoEmbarque)
     {
         <div class="workflow entrega">
             <div class="workflow-step done"><span>Paso 1</span><strong>Programación</strong></div>
@@ -1000,7 +1004,7 @@
             <div class="workflow-step @(Model.Estatus == "En curso" ? "current" : Model.Estatus == "Completado" ? "done" : "")"><span>Paso 4</span><strong>En ruta</strong></div>
             <div class="workflow-step @(Model.Estatus == "Completado" ? "done" : "")"><span>Paso 5</span><strong>Regreso / cierre</strong></div>
         </div>
-        <div class="sync-box"><i class="fa-solid fa-arrows-rotate me-1"></i><strong>Viaje vinculado a una Entrega.</strong> La carga física puede realizarla Centro Operativo o el chofer, sin restricción de horario. La salida física y el regreso los confirma el chofer desde su portal. Esta vista no debe duplicar esas acciones.</div>
+        <div class="sync-box"><i class="fa-solid fa-arrows-rotate me-1"></i><strong>Viaje vinculado al flujo de Embarques.</strong> La programación se mantiene sincronizada desde Centro Operativo. La carga física puede registrarse desde Centro Operativo o por el chofer; la salida, las paradas, la entrega y el regreso los confirma el chofer desde su portal.</div>
     }
     else
     {
@@ -1015,12 +1019,12 @@
     <div class="stage">
         @if (Model.Estatus == "Programado")
         {
-            @if (esEntregaPt)
+            @if (esFlujoEmbarque)
             {
                 <div class="stage-head">
                     <div>
                         <h2 class="stage-title">Etapa actual: carga física y espera de salida</h2>
-                        <div class="stage-sub">Centro Operativo y el chofer pueden registrar la carga física. Cuando el embarque quede Cargado, el chofer confirmará la salida real desde su portal.</div>
+                        <div class="stage-sub">La programación del viaje está ligada a uno o más embarques. Los recursos y la forma de salida se administran desde Centro Operativo y la salida física la confirma el chofer.</div>
                     </div>
                     <span class="badge bg-primary stage-badge">Programado</span>
                 </div>
@@ -1030,7 +1034,7 @@
                 }
                 else
                 {
-                    <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Programación del viaje completa. La carga puede continuar desde Centro Operativo o desde el portal del chofer. La salida física no se registra desde esta pantalla.</div>
+                    <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Programación completa. La carga puede continuar desde Centro Operativo o desde el portal del chofer. La salida física no se registra desde esta pantalla.</div>
                 }
                 <div class="stage-grid">
                     <div class="s3"><div class="info-box"><div class="info-label">Fecha / hora</div><div class="info-value">@Model.FechaProgramada.ToString("dd/MM/yyyy") @(Model.HoraSalidaProgramada?.ToString(@"hh\:mm") ?? "Pendiente")</div></div></div>
@@ -1039,6 +1043,28 @@
                     <div class="s3"><div class="info-box"><div class="info-label">Chofer</div><div class="info-value">@Model.ChoferMostrar</div></div></div>
                     <div class="s12 text-end"><a asp-controller="LogisticaOperacion" asp-action="Index" class="btn btn-primary btn-sm"><i class="fa-solid fa-table-columns me-1"></i>Abrir Centro Operativo</a></div>
                 </div>
+            }
+            else if (usaPortalChofer)
+            {
+                <div class="stage-head">
+                    <div>
+                        <h2 class="stage-title">Etapa actual: preparar recorrido</h2>
+                        <div class="stage-sub">Este viaje tiene una ruta por paradas. Una vez completa la preparación, el chofer debe iniciar el recorrido desde su portal para activar correctamente la primera parada.</div>
+                    </div>
+                    <span class="badge bg-primary stage-badge">Programado</span>
+                </div>
+                @if (!preparacionCompleta)
+                {
+                    <div class="missing mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>Falta completar:</strong> @string.Join(", ", faltantesPreparacion).</div>
+                    @if (Model.PuedeEditar)
+                    {
+                        <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
+                    }
+                }
+                else
+                {
+                    <div class="success-box mb-0"><i class="fa-solid fa-user-shield me-1"></i><strong>Preparación completa.</strong> La salida debe confirmarla el chofer asignado desde su portal para iniciar la secuencia de paradas; no se duplica el inicio desde esta vista administrativa.</div>
+                }
             }
             else
             {
@@ -1052,11 +1078,14 @@
                 @if (!preparacionCompleta)
                 {
                     <div class="missing mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i><strong>Falta completar:</strong> @string.Join(", ", faltantesPreparacion).</div>
-                    <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
+                    @if (Model.PuedeEditar)
+                    {
+                        <a asp-controller="LogisticaViajes" asp-action="Editar" asp-route-id="@Model.ViajeID" class="btn btn-warning btn-sm"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Completar preparación</a>
+                    }
                 }
                 else
                 {
-                    <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Preparación completa. Ya puedes iniciar el viaje.</div>
+                    <div class="success-box mb-2"><i class="fa-solid fa-circle-check me-1"></i>Preparación completa. Ya puedes iniciar este viaje simple.</div>
                     <form asp-controller="LogisticaViajes" asp-action="RegistrarSalida" method="post" class="stage-grid">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
@@ -1072,8 +1101,8 @@
         {
             <div class="stage-head">
                 <div>
-                    <h2 class="stage-title">@(esEntregaPt ? "Entrega en ruta" : "Etapa actual: registrar regreso")</h2>
-                    <div class="stage-sub">@(esEntregaPt ? "La salida física ya fue confirmada por el chofer. El regreso también debe registrarlo el chofer desde su portal." : "La salida ya fue registrada. Captura el kilometraje final para cerrar el viaje.")</div>
+                    <h2 class="stage-title">@(usaPortalChofer ? "Viaje en ruta" : "Etapa actual: registrar regreso")</h2>
+                    <div class="stage-sub">@(usaPortalChofer ? "El recorrido está siendo operado por el chofer. Las paradas y el regreso deben cerrarse desde su portal para conservar una sola trazabilidad." : "La salida ya fue registrada. Captura el kilometraje final para cerrar el viaje.")</div>
                 </div>
                 <span class="badge bg-warning text-dark stage-badge">En curso</span>
             </div>
@@ -1082,13 +1111,9 @@
                 <div class="s4"><div class="info-box"><div class="info-label">Kilometraje inicial</div><div class="info-value">@(Model.KilometrajeSalida.HasValue? Model.KilometrajeSalida.Value.ToString("N0") + " km" : "-")</div></div></div>
                 <div class="s4"><div class="info-box"><div class="info-label">Destino</div><div class="info-value">@Model.Destino</div></div></div>
             </div>
-            @if (esEntregaPt)
+            @if (usaPortalChofer)
             {
-                <div class="sync-box mb-0"><i class="fa-solid fa-user-shield me-1"></i><strong>Acción reservada al chofer.</strong> El regreso de esta Entrega se registra en LogisticaChofer para no crear un segundo cierre del mismo recorrido.</div>
-            }
-            else if (Model.EsMultiParada)
-            {
-                <div class="sync-box mb-0"><i class="fa-solid fa-location-dot me-1"></i><strong>Ruta con múltiples paradas.</strong> El viaje continúa hasta completar u omitir las paradas pendientes y llegar al Retorno final. El cierre operativo debe realizarse desde el portal del chofer.</div>
+                <div class="sync-box mb-0"><i class="fa-solid fa-user-shield me-1"></i><strong>Acción reservada al chofer.</strong> El viaje tiene embarques vinculados o una secuencia de paradas activa. El regreso debe registrarse desde LogisticaChofer después de resolver toda la ruta.</div>
             }
             else if (Model.PuedeRegistrarRegreso)
             {
@@ -1177,7 +1202,7 @@
                     <div class="i4 info-box"><div class="info-label">Fecha creación</div><div class="info-value">@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div></div>
                 </div>
 
-                @if (Model.PuedeCancelar && !esEntregaPt)
+                @if (Model.PuedeCancelar && !esFlujoEmbarque)
                 {
                     <div class="danger-box">
                         <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#cancelarViaje"><i class="fa-solid fa-ban me-1"></i>Cancelar viaje</button>
@@ -1191,7 +1216,7 @@
                         </div>
                     </div>
                 }
-                @if (esEntregaPt && Model.Estatus == "Programado")
+                @if (esFlujoEmbarque && Model.Estatus == "Programado")
                 {
                     <div class="sync-box mt-3 mb-0"><i class="fa-solid fa-link me-1"></i><strong>Entrega sincronizada con Embarque.</strong> Para cancelar o reprogramar esta operación utiliza Centro Operativo; hacerlo directamente sobre el viaje podría separar el estado del Embarque y del Viaje.</div>
                 }
@@ -1202,7 +1227,7 @@
                 <div class="section-head">
                     <div>
                         <h3>Ruta y múltiples paradas</h3>
-                        <div class="text-muted small">El viaje conserva una sola unidad y un solo chofer. Cada parada define qué se entrega, recolecta o atiende antes de continuar.</div>
+                        <div class="text-muted small">El viaje conserva una sola unidad y un solo chofer. Las paradas vinculadas a embarques se consultan aquí, pero sus datos de entrega se administran desde Centro Operativo.</div>
                     </div>
                     @if (puedeAdministrarParadas)
                     {
@@ -1212,7 +1237,7 @@
                 <div class="route-summary">
                     <div class="route-summary-item"><span>Tipo de recorrido</span><strong>@(Model.EsMultiParada ? "Múltiples paradas" : "Ruta simple")</strong></div>
                     <div class="route-summary-item"><span>Paradas</span><strong>@totalParadas total</strong></div>
-                    <div class="route-summary-item"><span>Atendidas</span><strong>@paradasCompletadas de @totalParadas</strong><div class="route-progress"><span style="width:@(totalParadas <= 0 ? 0 : Math.Round((decimal)paradasCompletadas * 100m / totalParadas, 1).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></span></div></div>
+                    <div class="route-summary-item"><span>Resueltas</span><strong>@paradasCompletadas de @totalParadas</strong><div class="route-progress"><span style="width:@(totalParadas <= 0 ? 0 : Math.Round((decimal)paradasCompletadas * 100m / totalParadas, 1).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></span></div></div>
                     <div class="route-summary-item"><span>Próxima parada</span><strong>@(proximaParada == null ? "Sin pendiente" : $"{proximaParada.Secuencia}. {proximaParada.Lugar}")</strong></div>
                 </div>
                 @if (puedeAdministrarParadas)
@@ -1224,7 +1249,7 @@
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
                                 <input type="hidden" name="Secuencia" value="0" />
-                                <div class="f3"><label class="required">Tipo de parada</label><select name="TipoParada" class="form-select" required><option value="Entrega">Entrega</option><option value="Recoleccion">Recolección</option><option value="Traslado">Traslado</option><option value="Servicio">Servicio</option><option value="Otro">Otro</option><option value="Retorno">Retorno final</option></select></div>
+                                <div class="f3"><label class="required">Tipo de parada</label><select name="TipoParada" class="form-select" required><option value="Entrega">Entrega</option><option value="Recoleccion">Recolección</option><option value="Traslado">Traslado</option><option value="Servicio">Servicio</option><option value="Otro">Otro</option></select></div>
                                 <div class="f3"><label>Operación</label><input type="text" name="TipoOperacion" maxlength="80" class="form-control" placeholder="Ej. Recolección MP" /></div>
                                 <div class="f3"><label class="required">Lugar</label><input type="text" name="Lugar" maxlength="300" class="form-control" required placeholder="Cliente, proveedor, planta..." /></div>
                                 <div class="f3"><label>Dirección</label><input type="text" name="Direccion" maxlength="600" class="form-control" placeholder="Dirección de la parada" /></div>
@@ -1236,7 +1261,7 @@
                                 <div class="f2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="RequiereEvidencia" value="true" id="RequiereEvidenciaNueva" /><label class="form-check-label" for="RequiereEvidenciaNueva">Requiere evidencia</label></div></div>
                                 <div class="f2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="fa-solid fa-plus me-1"></i>Agregar</button></div>
                             </form>
-                            <div class="text-muted small mt-2"><i class="fa-solid fa-circle-info me-1"></i>Las entregas generadas desde un Embarque se crean y vinculan automáticamente. Este formulario sirve principalmente para recolecciones, traslados, servicios u otras paradas adicionales.</div>
+                            <div class="text-muted small mt-2"><i class="fa-solid fa-circle-info me-1"></i>Origen y Retorno final los controla el sistema. Las entregas provenientes de un Embarque se crean y vinculan automáticamente; este formulario se usa para paradas adicionales.</div>
                         </div>
                     </div>
                 }
@@ -1246,16 +1271,25 @@
                 }
                 else
                 {
+                    var paradasOrdenadas = Model.Paradas.OrderBy(x => x.Secuencia).ThenBy(x => x.ViajeParadaID).ToList();
                     <div class="route-timeline">
-                        @foreach (var parada in Model.Paradas.OrderBy(x => x.Secuencia).ThenBy(x => x.ViajeParadaID))
+                        @for (var indice = 0; indice < paradasOrdenadas.Count; indice++)
                         {
+                            var parada = paradasOrdenadas[indice];
+                            var anterior = indice > 0 ? paradasOrdenadas[indice - 1] : null;
+                            var siguiente = indice < paradasOrdenadas.Count - 1 ? paradasOrdenadas[indice + 1] : null;
                             var esProxima = proximaParada?.ViajeParadaID == parada.ViajeParadaID;
-                            var resuelta = parada.Estatus is "Completada" or "Omitida";
+                            var resuelta = parada.Estatus is "Completada" or "Omitida" or "Cancelada";
                             var ligadaEmbarque = parada.Embarques != null && parada.Embarques.Count > 0;
-                            var puedeModificar = puedeAdministrarParadas && !resuelta;
-                            var puedeMover = puedeModificar && parada.TipoParada != "Origen" && !parada.CierraViaje;
-                            var puedeEliminar = Model.Estatus == "Programado" && parada.TipoParada != "Origen" && !parada.CierraViaje && !ligadaEmbarque;
-                            var puedeOmitir = Model.Estatus == "En curso" && !resuelta && parada.TipoParada != "Origen" && !parada.CierraViaje && !ligadaEmbarque;
+                            var embarquesResueltos = ligadaEmbarque && parada.Embarques.All(x => x.Estatus is "Entregado" or "Cancelado");
+                            var puedeModificar = puedeAdministrarParadas && !resuelta && !ligadaEmbarque && (Model.Estatus == "Programado" || parada.Estatus == "Pendiente");
+                            var baseMover = puedeAdministrarParadas && !resuelta && parada.TipoParada != "Origen" && !parada.CierraViaje && (Model.Estatus == "Programado" || parada.Estatus == "Pendiente");
+                            var anteriorResuelta = anterior != null && anterior.Estatus is "Completada" or "Omitida" or "Cancelada";
+                            var siguienteResuelta = siguiente != null && siguiente.Estatus is "Completada" or "Omitida" or "Cancelada";
+                            var puedeSubir = baseMover && anterior != null && anterior.TipoParada != "Origen" && !anterior.CierraViaje && !anteriorResuelta && (Model.Estatus == "Programado" || anterior.Estatus == "Pendiente");
+                            var puedeBajar = baseMover && siguiente != null && siguiente.TipoParada != "Origen" && !siguiente.CierraViaje && !siguienteResuelta && (Model.Estatus == "Programado" || siguiente.Estatus == "Pendiente");
+                            var puedeEliminar = Model.Estatus == "Programado" && !resuelta && parada.TipoParada != "Origen" && !parada.CierraViaje && !ligadaEmbarque;
+                            var puedeOmitir = Model.Estatus == "En curso" && esProxima && !resuelta && parada.TipoParada != "Origen" && !parada.CierraViaje && (!ligadaEmbarque || embarquesResueltos);
                             <div class="route-stop @(resuelta ? "complete" : esProxima ? "current" : "")">
                                 <div class="route-stop-marker"><i class="fa-solid @IconoParada(parada.TipoParada)"></i></div>
                                 <div class="route-stop-card">
@@ -1276,10 +1310,10 @@
                                             </div>
                                             <div class="route-stop-sub">@(!string.IsNullOrWhiteSpace(parada.TipoOperacion) ? parada.TipoOperacion : parada.TipoParadaTexto)@(!string.IsNullOrWhiteSpace(parada.Direccion) ? $" · {parada.Direccion}" : "")</div>
                                         </div>
-                                        @if (puedeModificar || puedeEliminar || puedeOmitir)
+                                        @if (puedeSubir || puedeBajar || puedeModificar || puedeEliminar)
                                         {
                                             <div class="route-stop-actions">
-                                                @if (puedeMover)
+                                                @if (puedeSubir)
                                                 {
                                                     <form asp-controller="LogisticaViajes" asp-action="MoverParada" method="post">
                                                         @Html.AntiForgeryToken()
@@ -1288,6 +1322,9 @@
                                                         <input type="hidden" name="direccion" value="subir" />
                                                         <button type="submit" class="btn btn-outline-secondary btn-sm" title="Subir parada"><i class="fa-solid fa-arrow-up"></i></button>
                                                     </form>
+                                                }
+                                                @if (puedeBajar)
+                                                {
                                                     <form asp-controller="LogisticaViajes" asp-action="MoverParada" method="post">
                                                         @Html.AntiForgeryToken()
                                                         <input type="hidden" name="viajeId" value="@Model.ViajeID" />
@@ -1323,96 +1360,115 @@
                                         <div class="route-empty-note mt-2">
                                             @if (!string.IsNullOrWhiteSpace(parada.ContactoNombre) || !string.IsNullOrWhiteSpace(parada.ContactoTelefono))
                                             {
-                                                <div><strong>Contacto:</strong> @TxtVisible(parada.ContactoNombre) @if (!string.IsNullOrWhiteSpace(parada.ContactoTelefono)){
-                                                <span>· @parada.ContactoTelefono</span>
+                                                <div>
+                                                    <strong>Contacto:</strong> @TxtVisible(parada.ContactoNombre)
+                                                    @if (!string.IsNullOrWhiteSpace(parada.ContactoTelefono))
+                                                    {
+                                                        <span>· @parada.ContactoTelefono</span>
+                                                    }
+                                                </div>
                                             }
-            </div>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(parada.Observaciones))
-                                        {
-                                            <div class="mt-1"><strong>Indicaciones:</strong> @TxtVisible(parada.Observaciones)</div>
-                                        }
-                                    </div>
-                                }
-                                @if (ligadaEmbarque)
-                                {
-                                    <div class="route-shipments">
-                                        <div class="fw-bold small"><i class="fa-solid fa-boxes-stacked me-1"></i>Embarques en esta parada</div>
-                                        @foreach (var embarque in parada.Embarques.OrderBy(x => x.OrdenEntrega ?? int.MaxValue).ThenBy(x => x.EmbarqueID))
-                                        {
-                                            <div class="route-shipment">
-                                                <div><strong>@embarque.Folio</strong> · @embarque.Cliente · @embarque.TotalPiezas.ToString("N0") PZA <span class="badge bg-light text-dark border ms-1">@embarque.Estatus</span></div>
-                                                <a asp-controller="LogisticaEmbarques" asp-action="Detalle" asp-route-id="@embarque.EmbarqueID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-up-right-from-square me-1"></i>Ver</a>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                                @if (puedeOmitir)
-                                {
-                                    <div class="collapse mt-2" id="omitirParada-@parada.ViajeParadaID">
-                                        <form asp-controller="LogisticaViajes" asp-action="OmitirParada" method="post" class="d-flex gap-2">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="viajeId" value="@Model.ViajeID" />
-                                            <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
-                                            <input type="text" name="motivo" maxlength="1000" class="form-control form-control-sm" required placeholder="Motivo de omisión" />
-                                            <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('¿Omitir esta parada y continuar con la siguiente?');">Omitir</button>
-                                        </form>
-                                    </div>
-                                    <button type="button" class="btn btn-outline-warning btn-sm mt-2" data-bs-toggle="collapse" data-bs-target="#omitirParada-@parada.ViajeParadaID"><i class="fa-solid fa-forward me-1"></i>Omitir parada</button>
-                                }
-                                @if (puedeModificar)
-                                {
-                                    <div class="collapse route-edit" id="editarParada-@parada.ViajeParadaID">
-                                        <form asp-controller="LogisticaViajes" asp-action="EditarParada" method="post" class="compact-form">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
-                                            <input type="hidden" name="ViajeParadaID" value="@parada.ViajeParadaID" />
-                                            <input type="hidden" name="Secuencia" value="@parada.Secuencia" />
-                                            <input type="hidden" name="RowVersion" value="@parada.RowVersion" />
-                                            <div class="f3"><label>Tipo</label><select name="TipoParada" class="form-select" disabled="@(parada.TipoParada == "Origen" || parada.CierraViaje || ligadaEmbarque ? "disabled" : null)"><option value="Entrega" selected="@(parada.TipoParada == "Entrega")">Entrega</option><option value="Recoleccion" selected="@(parada.TipoParada == "Recoleccion")">Recolección</option><option value="Traslado" selected="@(parada.TipoParada == "Traslado")">Traslado</option><option value="Servicio" selected="@(parada.TipoParada == "Servicio")">Servicio</option><option value="Otro" selected="@(parada.TipoParada == "Otro")">Otro</option><option value="Retorno" selected="@(parada.TipoParada == "Retorno")">Retorno</option><option value="Origen" selected="@(parada.TipoParada == "Origen")">Origen</option></select>@if (parada.TipoParada == "Origen" || parada.CierraViaje || ligadaEmbarque){
-                                            <input type="hidden" name="TipoParada" value="@parada.TipoParada" />
-                                        }
-    </div>
-                                        <div class="f3"><label>Operación</label><input type="text" name="TipoOperacion" maxlength="80" value="@parada.TipoOperacion" class="form-control" /></div>
-                                        <div class="f3"><label class="required">Lugar</label><input type="text" name="Lugar" maxlength="300" value="@parada.Lugar" class="form-control" required /></div>
-                                        <div class="f3"><label>Dirección</label><input type="text" name="Direccion" maxlength="600" value="@parada.Direccion" class="form-control" /></div>
-                                        <div class="f3"><label>Llegada programada</label><input type="datetime-local" name="FechaHoraLlegadaProgramada" value="@(parada.FechaHoraLlegadaProgramada?.ToString("yyyy-MM-ddTHH:mm"))" class="form-control" /></div>
-                                        <div class="f3"><label>Salida programada</label><input type="datetime-local" name="FechaHoraSalidaProgramada" value="@(parada.FechaHoraSalidaProgramada?.ToString("yyyy-MM-ddTHH:mm"))" class="form-control" /></div>
-                                        <div class="f3"><label>Contacto</label><input type="text" name="ContactoNombre" maxlength="200" value="@parada.ContactoNombre" class="form-control" /></div>
-                                        <div class="f3"><label>Teléfono</label><input type="text" name="ContactoTelefono" maxlength="50" value="@parada.ContactoTelefono" class="form-control" /></div>
-                                        <div class="f8"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" value="@parada.Observaciones" class="form-control" /></div>
-                                        <div class="f2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="RequiereEvidencia" value="true" id="Evidencia-@parada.ViajeParadaID" checked="@parada.RequiereEvidencia" /><label class="form-check-label" for="Evidencia-@parada.ViajeParadaID">Requiere evidencia</label></div></div>
-                                        <div class="f2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></div>
-                                    </form>
-                                </div>
-                            }
-                            @if (parada.Historial != null && parada.Historial.Count > 0)
-                            {
-                                <button type="button" class="btn btn-link btn-sm px-0 mt-1" data-bs-toggle="collapse" data-bs-target="#historialParada-@parada.ViajeParadaID"><i class="fa-solid fa-clock-rotate-left me-1"></i>Ver historial de parada</button>
-                                <div class="collapse route-history" id="historialParada-@parada.ViajeParadaID">
-                                    @foreach (var h in parada.Historial.Take(8))
+                                            @if (!string.IsNullOrWhiteSpace(parada.Observaciones))
+                                            {
+                                                <div class="mt-1"><strong>Indicaciones:</strong> @TxtVisible(parada.Observaciones)</div>
+                                            }
+                                        </div>
+                                    }
+                                    @if (ligadaEmbarque)
                                     {
-                                        <div class="route-history-row"><span>@h.FechaEvento.ToString("dd/MM HH:mm")</span><strong>@TxtVisible(h.Evento.Replace("_", " "))</strong><span>@TxtVisible(h.Observaciones)</span></div>
+                                        <div class="route-shipments">
+                                            <div class="fw-bold small"><i class="fa-solid fa-boxes-stacked me-1"></i>Embarques en esta parada</div>
+                                            @foreach (var embarque in parada.Embarques.OrderBy(x => x.OrdenEntrega ?? int.MaxValue).ThenBy(x => x.EmbarqueID))
+                                            {
+                                                <div class="route-shipment">
+                                                    <div><strong>@embarque.Folio</strong> · @embarque.Cliente · @embarque.TotalPiezas.ToString("N0") PZA <span class="badge bg-light text-dark border ms-1">@embarque.Estatus</span></div>
+                                                    <a asp-controller="LogisticaEmbarques" asp-action="Detalle" asp-route-id="@embarque.EmbarqueID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-up-right-from-square me-1"></i>Ver</a>
+                                                </div>
+                                            }
+                                            @if (!resuelta)
+                                            {
+                                                <div class="route-empty-note mt-2"><i class="fa-solid fa-lock me-1"></i>Los datos de esta parada vinculada no se editan desde Viajes. Cambia la programación desde Centro Operativo para mantener sincronizado el embarque.</div>
+                                            }
+                                        </div>
+                                    }
+                                    @if (puedeOmitir)
+                                    {
+                                        <div class="collapse mt-2" id="omitirParada-@parada.ViajeParadaID">
+                                            <form asp-controller="LogisticaViajes" asp-action="OmitirParada" method="post" class="d-flex gap-2">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="viajeId" value="@Model.ViajeID" />
+                                                <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
+                                                <input type="text" name="motivo" maxlength="1000" class="form-control form-control-sm" required placeholder="Motivo de omisión" />
+                                                <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('¿Omitir esta parada y continuar con la siguiente?');">Omitir</button>
+                                            </form>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-warning btn-sm mt-2" data-bs-toggle="collapse" data-bs-target="#omitirParada-@parada.ViajeParadaID"><i class="fa-solid fa-forward me-1"></i>Omitir parada</button>
+                                    }
+                                    @if (puedeModificar)
+                                    {
+                                        <div class="collapse route-edit" id="editarParada-@parada.ViajeParadaID">
+                                            <form asp-controller="LogisticaViajes" asp-action="EditarParada" method="post" class="compact-form">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="ViajeID" value="@Model.ViajeID" />
+                                                <input type="hidden" name="ViajeParadaID" value="@parada.ViajeParadaID" />
+                                                <input type="hidden" name="Secuencia" value="@parada.Secuencia" />
+                                                <input type="hidden" name="RowVersion" value="@parada.RowVersion" />
+                                                <div class="f3">
+                                                    <label>Tipo</label>
+                                                    <select name="TipoParada" class="form-select" disabled="@(parada.TipoParada == "Origen" || parada.CierraViaje ? "disabled" : null)">
+                                                        <option value="Entrega" selected="@(parada.TipoParada == "Entrega")">Entrega</option>
+                                                        <option value="Recoleccion" selected="@(parada.TipoParada == "Recoleccion")">Recolección</option>
+                                                        <option value="Traslado" selected="@(parada.TipoParada == "Traslado")">Traslado</option>
+                                                        <option value="Servicio" selected="@(parada.TipoParada == "Servicio")">Servicio</option>
+                                                        <option value="Otro" selected="@(parada.TipoParada == "Otro")">Otro</option>
+                                                        <option value="Retorno" selected="@(parada.TipoParada == "Retorno")">Retorno</option>
+                                                        <option value="Origen" selected="@(parada.TipoParada == "Origen")">Origen</option>
+                                                    </select>
+                                                    @if (parada.TipoParada == "Origen" || parada.CierraViaje)
+                                                    {
+                                                        <input type="hidden" name="TipoParada" value="@parada.TipoParada" />
+                                                    }
+                                                </div>
+                                                <div class="f3"><label>Operación</label><input type="text" name="TipoOperacion" maxlength="80" value="@parada.TipoOperacion" class="form-control" /></div>
+                                                <div class="f3"><label class="required">Lugar</label><input type="text" name="Lugar" maxlength="300" value="@parada.Lugar" class="form-control" required /></div>
+                                                <div class="f3"><label>Dirección</label><input type="text" name="Direccion" maxlength="600" value="@parada.Direccion" class="form-control" /></div>
+                                                <div class="f3"><label>Llegada programada</label><input type="datetime-local" name="FechaHoraLlegadaProgramada" value="@(parada.FechaHoraLlegadaProgramada?.ToString("yyyy-MM-ddTHH:mm"))" class="form-control" /></div>
+                                                <div class="f3"><label>Salida programada</label><input type="datetime-local" name="FechaHoraSalidaProgramada" value="@(parada.FechaHoraSalidaProgramada?.ToString("yyyy-MM-ddTHH:mm"))" class="form-control" /></div>
+                                                <div class="f3"><label>Contacto</label><input type="text" name="ContactoNombre" maxlength="200" value="@parada.ContactoNombre" class="form-control" /></div>
+                                                <div class="f3"><label>Teléfono</label><input type="text" name="ContactoTelefono" maxlength="50" value="@parada.ContactoTelefono" class="form-control" /></div>
+                                                <div class="f8"><label>Observaciones</label><input type="text" name="Observaciones" maxlength="1200" value="@parada.Observaciones" class="form-control" /></div>
+                                                <div class="f2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="RequiereEvidencia" value="true" id="Evidencia-@parada.ViajeParadaID" checked="@parada.RequiereEvidencia" /><label class="form-check-label" for="Evidencia-@parada.ViajeParadaID">Requiere evidencia</label></div></div>
+                                                <div class="f2"><button type="submit" class="btn btn-primary btn-sm w-100"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar</button></div>
+                                            </form>
+                                        </div>
+                                    }
+                                    @if (parada.Historial != null && parada.Historial.Count > 0)
+                                    {
+                                        <button type="button" class="btn btn-link btn-sm px-0 mt-1" data-bs-toggle="collapse" data-bs-target="#historialParada-@parada.ViajeParadaID"><i class="fa-solid fa-clock-rotate-left me-1"></i>Ver historial de parada</button>
+                                        <div class="collapse route-history" id="historialParada-@parada.ViajeParadaID">
+                                            @foreach (var h in parada.Historial.Take(8))
+                                            {
+                                                <div class="route-history-row"><span>@h.FechaEvento.ToString("dd/MM HH:mm")</span><strong>@TxtVisible(h.Evento.Replace("_", " "))</strong><span>@TxtVisible(h.Observaciones)</span></div>
+                                            }
+                                        </div>
                                     }
                                 </div>
-                            }
-                        </div>
+                            </div>
+                        }
                     </div>
-                                        }
-                </div>
-                                }
+                }
             </div>
 
             <div class="tab-pane fade" id="tabIncidencias">
                 <div class="section-head">
                     <h3>Incidencias del viaje</h3>
-                    @if (Model.Estatus != "Cancelado")
+                    @if (Model.Estatus is not "Cancelado" and not "Completado")
                     {
                         <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nuevaIncidencia"><i class="fa-solid fa-plus me-1"></i>Nueva incidencia</button>
                     }
                 </div>
 
-                @if (Model.Estatus != "Cancelado")
+                @if (Model.Estatus is not "Cancelado" and not "Completado")
                 {
                     <div class="collapse mb-3" id="nuevaIncidencia">
                         <form asp-controller="LogisticaViajes" asp-action="RegistrarIncidencia" method="post" class="compact-form">
@@ -1474,13 +1530,13 @@
             <div class="tab-pane fade" id="tabEvidencias">
                 <div class="section-head">
                     <h3>Evidencias del viaje</h3>
-                    @if (Model.Estatus != "Cancelado")
+                    @if (Model.Estatus is not "Cancelado" and not "Completado")
                     {
                         <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#nuevaEvidencia"><i class="fa-solid fa-plus me-1"></i>Agregar evidencia</button>
                     }
                 </div>
 
-                @if (Model.Estatus != "Cancelado")
+                @if (Model.Estatus is not "Cancelado" and not "Completado")
                 {
                     <div class="collapse mb-3" id="nuevaEvidencia">
                         <form asp-controller="LogisticaViajes" asp-action="SubirEvidencia" method="post" enctype="multipart/form-data" class="compact-form">
@@ -1515,7 +1571,12 @@
                                     </div>
                                     <div class="d-flex gap-1">
                                         <a asp-controller="LogisticaViajes" asp-action="VerEvidencia" asp-route-id="@evidencia.ViajeEvidenciaID" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-eye"></i></a>
-                                        @if (Model.Estatus != "Cancelado")
+                                        @{
+                                            var evidenciaInmutable = Model.Estatus is "Cancelado" or "Completado"
+                                            || (string.Equals(evidencia.TipoEvidencia, "Salida", StringComparison.OrdinalIgnoreCase) && Model.FechaSalidaReal.HasValue)
+                                            || (string.Equals(evidencia.TipoEvidencia, "Regreso", StringComparison.OrdinalIgnoreCase) && Model.FechaRegresoReal.HasValue);
+                                        }
+                                        @if (!evidenciaInmutable)
                                         {
                                             <form asp-controller="LogisticaViajes" asp-action="EliminarEvidencia" method="post" onsubmit="return confirm('¿Retirar esta evidencia?');">
                                                 @Html.AntiForgeryToken()

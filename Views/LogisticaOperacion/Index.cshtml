@@ -9,6 +9,57 @@
     var dias = Model.DiasPeriodo.ToList();
     var hoy = DateTime.Today;
 
+    bool BanderaVista(string clave) => ViewData.TryGetValue(clave, out var valor) && valor is bool bandera && bandera;
+    var permisosVistaDefinidos = ViewData.ContainsKey("EsAdministradorERP") || ViewData.ContainsKey("EsPlaneacion") || ViewData.ContainsKey("EsLogistica");
+    var esAdministradorERP = BanderaVista("EsAdministradorERP");
+    var esPlaneacion = BanderaVista("EsPlaneacion");
+    var esLogistica = BanderaVista("EsLogistica");
+    if (!permisosVistaDefinidos)
+    {
+        esAdministradorERP = true;
+        esPlaneacion = true;
+        esLogistica = true;
+    }
+    var puedeProgramar = esAdministradorERP || esPlaneacion;
+    var puedeOperar = esAdministradorERP || esLogistica;
+    var tituloVista = esAdministradorERP ? "Centro Operativo · Vista Administrador" : puedeProgramar && !puedeOperar ? "Programación de Releases" : "Centro Operativo de Logística";
+    var descripcionVista = esAdministradorERP
+        ? "Vista completa: Planeación programa los Releases y Logística continúa con embarques, preparación, salida, viajes y entrega."
+        : puedeProgramar && !puedeOperar
+            ? "Planeación visualiza únicamente Releases pendientes y su programación. La operación posterior queda reservada para Logística."
+            : "Logística visualiza únicamente lo ya programado y continúa con embarques, preparación, salida, viajes y entrega.";
+    var etiquetaVista = esAdministradorERP ? "ADMINISTRADOR" : puedeProgramar && !puedeOperar ? "PLANEACIÓN" : "LOGÍSTICA";
+
+    bool EventoVisible(LogisticaOperacionEventoVm e)
+    {
+        if (esAdministradorERP) return true;
+        if (puedeProgramar && e.EsRequerimiento) return true;
+        if (puedeOperar && (e.EsProgramacion || e.EsEmbarque)) return true;
+        return false;
+    }
+
+    long PiezasEventoVisible(LogisticaOperacionEventoVm e)
+    {
+        if (e.EsRequerimiento) return Math.Max(0, e.CantidadPendienteProgramar);
+        if (e.EsProgramacion) return Math.Max(0, e.CantidadProgramada - e.CantidadGenerada);
+        return Math.Max(0, e.TotalPiezas);
+    }
+
+    DateTime FechaVisualViaje(LogisticaOperacionUnidadEventoVm e)
+    {
+        var fecha = (e.FechaSalidaReal ?? e.FechaProgramada).Date;
+        if (dias.Count > 0 && string.Equals(e.Estatus, "En curso", StringComparison.OrdinalIgnoreCase) && fecha < dias[0].Date && (!e.FechaRegresoReal.HasValue || e.FechaRegresoReal.Value.Date >= dias[0].Date)) return dias[0].Date;
+        return fecha;
+    }
+
+    var clientesVisibles = Model.Clientes.Where(c => c.Eventos.Any(EventoVisible)).ToList();
+    var eventosVisibles = clientesVisibles.SelectMany(c => c.Eventos.Where(EventoVisible)).ToList();
+    var totalClientesVisibles = clientesVisibles.Count;
+    var totalRequerimientosVisibles = eventosVisibles.Count(x => x.EsRequerimiento);
+    var totalProgramacionesVisibles = eventosVisibles.Count(x => x.EsProgramacion);
+    var totalEmbarquesVisibles = eventosVisibles.Count(x => x.EsEmbarque);
+    var totalPiezasVisibles = eventosVisibles.Sum(PiezasEventoVisible);
+
     string DiaCorto(DateTime f) => f.DayOfWeek switch
     {
         DayOfWeek.Monday => "LUN.",
@@ -92,6 +143,53 @@
         background: var(--lg-bg);
         min-height: calc(100vh - 58px);
         padding: 10px 12px 22px
+    }
+
+    .lg-role-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 25px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: #edf4ff;
+        border: 1px solid #b8cee7;
+        color: var(--lg-navy);
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: .04em;
+        white-space: nowrap
+    }
+
+    .lg-role-pill.plan {
+        background: #f4f7fb;
+        border-color: #c5d0dc;
+        color: #52677f
+    }
+
+    .lg-role-pill.log {
+        background: var(--lg-green-soft);
+        border-color: #addcc7;
+        color: var(--lg-green)
+    }
+
+    .lg-role-note {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 9px;
+        margin-bottom: 8px;
+        border: 1px solid #c7d8ea;
+        border-radius: 8px;
+        background: #f7faff;
+        color: #58708d;
+        font-size: 9px
+    }
+
+    .lg-role-note strong { color: var(--lg-navy) }
+
+    .lg-filterbar-plan {
+        grid-template-columns: 1.25fr .85fr .75fr auto
     }
 
     .lg-toolbar {
@@ -2590,8 +2688,8 @@
 
 
     /* ================================================================
-               FLUJO FLEXIBLE + DISPONIBILIDAD PT
-               ================================================================ */
+                   FLUJO FLEXIBLE + DISPONIBILIDAD PT
+                   ================================================================ */
     .lg-step.navigable {
         cursor: pointer
     }
@@ -2832,9 +2930,9 @@
     }
 
     /* ================================================================
-               CALENDARIO V2 - ALINEACION DE FILAS Y COLUMNAS
-               Corrige el desfase entre encabezados, dias y filas del calendario.
-               ================================================================ */
+                   CALENDARIO V2 - ALINEACION DE FILAS Y COLUMNAS
+                   Corrige el desfase entre encabezados, dias y filas del calendario.
+                   ================================================================ */
     .lg-board,
     .lg-board *,
     .lg-board *::before,
@@ -2996,8 +3094,8 @@
 
 
     /* ================================================================
-               CALENDARIO V3 - DIVISIONES, HORA ACTUAL Y EMBARQUES VENCIDOS
-               ================================================================ */
+                   CALENDARIO V3 - DIVISIONES, HORA ACTUAL Y EMBARQUES VENCIDOS
+                   ================================================================ */
     .lg-client-row > .lg-client,
     .lg-client-row > .lg-client-day {
         box-shadow: inset 0 -2px 0 #9fb3c8;
@@ -3125,8 +3223,8 @@
 
 
     /* ================================================================
-           MODALES V4 - LEGIBLES EN ESCRITORIO + RESPONSIVE + DOCUMENTOS
-           ================================================================ */
+               MODALES V4 - LEGIBLES EN ESCRITORIO + RESPONSIVE + DOCUMENTOS
+               ================================================================ */
     .lg-modal-backdrop {
         padding: 24px;
         background: rgba(8,22,42,.58)
@@ -3686,6 +3784,415 @@
         }
     }
 
+
+    /* ================================================================
+           EXPEDIENTE DOCUMENTAL - UNA FILA POR REQUISITO
+           ================================================================ */
+    .lg-doc-workspace {
+        padding: 0;
+        overflow: hidden
+    }
+
+    .lg-doc-workspace-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--lg-line);
+        background: #f8fafc
+    }
+
+        .lg-doc-workspace-head h4 {
+            margin: 0 !important;
+            font-size: 13px !important;
+            color: var(--lg-navy)
+        }
+
+        .lg-doc-workspace-head p {
+            margin: 4px 0 0;
+            font-size: 10px;
+            line-height: 1.4;
+            color: var(--lg-muted)
+        }
+
+    .lg-doc-counter {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #eef4fb;
+        color: var(--lg-navy);
+        font-size: 10px;
+        font-weight: 900;
+        white-space: nowrap
+    }
+
+    .lg-doc-batch {
+        display: flex;
+        flex-direction: column;
+        gap: 0
+    }
+
+    .lg-doc-batch-row {
+        display: grid;
+        grid-template-columns: minmax(210px,.9fr) minmax(300px,1.35fr) minmax(205px,.75fr);
+        gap: 12px;
+        align-items: center;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--lg-line);
+        background: #fff
+    }
+
+        .lg-doc-batch-row.complete {
+            background: #fbfefc
+        }
+
+        .lg-doc-batch-row:last-child {
+            border-bottom: 0
+        }
+
+    .lg-doc-requirement-info {
+        min-width: 0
+    }
+
+    .lg-doc-title-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap
+    }
+
+        .lg-doc-title-line strong {
+            font-size: 12px;
+            color: var(--lg-navy);
+            line-height: 1.3
+        }
+
+    .lg-doc-requirement-info > small {
+        display: block;
+        margin-top: 3px;
+        font-size: 10px;
+        color: var(--lg-muted)
+    }
+
+    .lg-doc-required-tag {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 3px 6px;
+        font-size: 8px;
+        font-weight: 900
+    }
+
+        .lg-doc-required-tag.required {
+            background: var(--lg-red-soft);
+            color: var(--lg-red)
+        }
+
+        .lg-doc-required-tag.optional {
+            background: #eef2f7;
+            color: #65768a
+        }
+
+    .lg-doc-choice {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-top: 8px
+    }
+
+        .lg-doc-choice label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            min-height: 29px;
+            padding: 4px 8px;
+            border: 1px solid var(--lg-line);
+            border-radius: 7px;
+            background: #fff;
+            color: var(--lg-text);
+            font-size: 9px;
+            font-weight: 800;
+            cursor: pointer
+        }
+
+            .lg-doc-choice label:has(input:checked) {
+                border-color: #8cb1db;
+                background: #eef5ff;
+                color: var(--lg-navy)
+            }
+
+        .lg-doc-choice input {
+            accent-color: var(--lg-blue)
+        }
+
+    .lg-doc-type-fixed {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 7px;
+        padding: 4px 7px;
+        border-radius: 6px;
+        background: #f4f7fb;
+        color: #65768a;
+        font-size: 9px;
+        font-weight: 800
+    }
+
+    .lg-doc-middle {
+        min-width: 0
+    }
+
+    .lg-doc-current {
+        display: grid;
+        grid-template-columns: 34px minmax(0,1fr) auto auto auto;
+        gap: 7px;
+        align-items: center;
+        min-height: 48px;
+        padding: 7px 8px;
+        border: 1px solid var(--lg-line);
+        border-radius: 8px;
+        background: #fff
+    }
+
+        .lg-doc-current > i {
+            width: 34px;
+            height: 34px;
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eef4fb;
+            color: var(--lg-blue)
+        }
+
+        .lg-doc-current.ok {
+            border-color: #b7dfcc;
+            background: #f6fcf9
+        }
+
+        .lg-doc-current.pending {
+            border-color: #ead09a;
+            background: #fffaf0
+        }
+
+        .lg-doc-current.empty {
+            grid-template-columns: 34px minmax(0,1fr);
+            border-style: dashed;
+            background: #fafbfd
+        }
+
+    .lg-doc-current-data {
+        min-width: 0
+    }
+
+        .lg-doc-current-data strong, .lg-doc-current.empty strong {
+            display: block;
+            font-size: 10px;
+            color: var(--lg-navy);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .lg-doc-current-data small, .lg-doc-current.empty small {
+            display: block;
+            margin-top: 2px;
+            font-size: 8px;
+            color: var(--lg-muted)
+        }
+
+    .lg-doc-icon-btn {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--lg-line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--lg-navy);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        cursor: pointer
+    }
+
+        .lg-doc-icon-btn.danger {
+            border-color: #efc3c3;
+            color: var(--lg-red);
+            background: #fff8f8
+        }
+
+    .lg-doc-file-picker {
+        min-height: 58px;
+        border: 1px dashed #aebfd1;
+        border-radius: 9px;
+        background: #fafcff;
+        padding: 9px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: .15s
+    }
+
+        .lg-doc-file-picker:hover {
+            border-color: #7fa4cd;
+            background: #f4f8fd
+        }
+
+        .lg-doc-file-picker.selected {
+            border-style: solid;
+            border-color: #8fc9ad;
+            background: #f3fbf7
+        }
+
+        .lg-doc-file-picker.disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+        .lg-doc-file-picker input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none
+        }
+
+        .lg-doc-file-picker > i {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eaf3ff;
+            color: var(--lg-blue);
+            flex: 0 0 32px
+        }
+
+        .lg-doc-file-picker strong {
+            display: block;
+            font-size: 10px;
+            color: var(--lg-navy);
+            word-break: break-word
+        }
+
+        .lg-doc-file-picker small {
+            display: block;
+            margin-top: 2px;
+            font-size: 8px;
+            line-height: 1.3;
+            color: var(--lg-muted)
+        }
+
+    .lg-doc-remision-reason {
+        margin-top: 7px
+    }
+
+        .lg-doc-remision-reason label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 9px;
+            font-weight: 900;
+            color: #8a5a0b
+        }
+
+        .lg-doc-remision-reason textarea.lg-input {
+            min-height: 58px !important;
+            height: 58px !important;
+            font-size: 11px !important;
+            padding: 7px 8px !important
+        }
+
+    .lg-doc-batch-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--lg-line);
+        background: #fbfcfe;
+        color: var(--lg-muted);
+        font-size: 9px
+    }
+
+        .lg-doc-batch-summary strong {
+            color: var(--lg-navy);
+            white-space: nowrap
+        }
+
+    .lg-doc-extras-wrap {
+        padding: 11px 14px;
+        border-top: 1px solid var(--lg-line);
+        background: #fbfcfe
+    }
+
+    .lg-doc-extras-title {
+        margin-bottom: 7px;
+        font-size: 9px;
+        font-weight: 900;
+        color: var(--lg-muted)
+    }
+
+    .lg-doc-workspace .lg-flow-actions {
+        margin: 0;
+        padding: 11px 14px;
+        border-top: 1px solid var(--lg-line);
+        background: #fff
+    }
+    @@media(max - width:980px) {
+        .lg-doc-batch-row
+
+    {
+        grid-template-columns: 1fr 1.2fr
+    }
+
+    .lg-doc-file-picker {
+        grid-column: 1/-1
+    }
+
+    }
+    @@media(max - width:700px) {
+        .lg-doc-workspace-head,.lg-doc-batch-summary
+
+    {
+        flex-direction: column;
+        align-items: stretch
+    }
+
+    .lg-doc-counter {
+        align-self: flex-start
+    }
+
+    .lg-doc-batch-row {
+        grid-template-columns: 1fr
+    }
+
+    .lg-doc-file-picker {
+        grid-column: auto
+    }
+
+    .lg-doc-current {
+        grid-template-columns: 34px minmax(0,1fr) auto
+    }
+
+        .lg-doc-current .lg-doc-state {
+            grid-column: 2
+        }
+
+        .lg-doc-current .lg-doc-icon-btn {
+            grid-row: 1;
+            align-self: center
+        }
+
+            .lg-doc-current .lg-doc-icon-btn.danger {
+                grid-column: 3
+            }
+
+    }
 </style>
 
 <div class="lg-page">
@@ -3693,22 +4200,42 @@
         <div class="lg-title">
             <div class="lg-title-icon"><i class="fa-solid fa-truck-fast"></i></div>
             <div>
-                <h1>Centro Operativo de Logística</h1>
-                <p>Planeación programa los Releases por día y Logística continúa con embarques, preparación, salida y entrega desde este mismo Centro Operativo.</p>
+                <h1>@tituloVista</h1>
+                <p>@descripcionVista</p>
             </div>
         </div>
         <div class="lg-actions">
+            <span class="lg-role-pill @(esAdministradorERP ? "" : puedeProgramar && !puedeOperar ? "plan" : "log")"><i class="fa-solid @(esAdministradorERP ? "fa-user-shield" : puedeProgramar && !puedeOperar ? "fa-calendar-check" : "fa-truck-fast")"></i> @etiquetaVista</span>
             <div class="lg-segment">
                 <a asp-action="Index" asp-route-vista="Dia" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="@(Model.Vista == "Dia" ? "active" : "")">Día</a>
                 <a asp-action="Index" asp-route-vista="Semana" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="@(Model.Vista == "Semana" ? "active" : "")">Semana</a>
                 <a asp-action="Index" asp-route-vista="Mes" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")" class="@(Model.Vista == "Mes" ? "active" : "")">Mes</a>
             </div>
-            <a class="lg-btn" asp-controller="LogisticaListaCarga" asp-action="Index"><i class="fa-solid fa-list-check"></i> Lista de carga</a>
-            <a class="lg-btn" asp-controller="LogisticaEmbarques" asp-action="Index"><i class="fa-solid fa-boxes-packing"></i> Embarques</a>
+            @if (puedeOperar)
+            {
+                <a class="lg-btn" asp-controller="LogisticaListaCarga" asp-action="Index"><i class="fa-solid fa-list-check"></i> Lista de carga</a>
+                <a class="lg-btn" asp-controller="LogisticaEmbarques" asp-action="Index"><i class="fa-solid fa-boxes-packing"></i> Embarques</a>
+            }
         </div>
     </div>
 
-    <form method="get" asp-action="Index" id="formFiltros" class="lg-filterbar">
+    <div class="lg-role-note">
+        <i class="fa-solid @(esAdministradorERP ? "fa-layer-group" : puedeProgramar && !puedeOperar ? "fa-calendar-days" : "fa-route")"></i>
+        @if (esAdministradorERP)
+        {
+            <span><strong>Vista completa.</strong> Puedes ver pendientes de Planeación, programaciones listas para Logística, embarques y flota en una sola pantalla.</span>
+        }
+        else if (puedeProgramar && !puedeOperar)
+        {
+            <span><strong>Vista Planeación.</strong> Aquí solo aparecen Releases por programar. Lo ya programado deja de mostrarse en esta vista para evitar mezclar responsabilidades.</span>
+        }
+        else
+        {
+            <span><strong>Vista Logística.</strong> Aquí solo aparecen Releases ya programados, embarques y viajes. Los pendientes de Planeación no se muestran.</span>
+        }
+    </div>
+
+    <form method="get" asp-action="Index" id="formFiltros" class="lg-filterbar @(!puedeOperar ? "lg-filterbar-plan" : "")">
         <input type="hidden" name="vista" value="@Model.Vista" />
         <input type="hidden" name="fecha" value="@Model.FechaReferencia.ToString("yyyy-MM-dd")" />
         <div class="lg-field">
@@ -3729,44 +4256,77 @@
             <label>Estatus</label>
             <select class="lg-select" name="estatus">
                 <option value="">Todos</option>
-                @foreach (var s in new[] { "Requerido", "Sin programar", "Por generar", "Programado", "Preparando", "Preparado", "Cargando", "Cargado", "En ruta", "Entregado", "Cancelado" })
+                @if (puedeProgramar)
                 {
-                    <option value="@s" selected="@(Model.Estatus == s)">@s</option>
+                    foreach (var s in new[] { "Requerido", "Sin programar" })
+                    {
+                        <option value="@s" selected="@(Model.Estatus == s)">@s</option>
+                    }
+                }
+                @if (puedeOperar)
+                {
+                    foreach (var s in new[] { "Por generar", "Programado", "Preparando", "Preparado", "Cargando", "Cargado", "En ruta", "Entregado", "Cancelado" })
+                    {
+                        <option value="@s" selected="@(Model.Estatus == s)">@s</option>
+                    }
                 }
             </select>
         </div>
-        <div class="lg-field">
-            <label>Forma salida</label>
-            <select class="lg-select" name="formaEnvio">
-                <option value="">Todas</option>
-                <option value="Pendiente" selected="@(Model.FormaEnvio == "Pendiente")">Por definir</option>
-                <option value="Interno" selected="@(Model.FormaEnvio == "Interno")">Entrega</option>
-                <option value="Cliente" selected="@(Model.FormaEnvio == "Cliente")">Cliente recoge</option>
-                <option value="Paqueteria" selected="@(Model.FormaEnvio == "Paqueteria")">Paquetería</option>
-            </select>
-        </div>
+        @if (puedeOperar)
+        {
+            <div class="lg-field">
+                <label>Forma salida</label>
+                <select class="lg-select" name="formaEnvio">
+                    <option value="">Todas</option>
+                    <option value="Pendiente" selected="@(Model.FormaEnvio == "Pendiente")">Por definir</option>
+                    <option value="Interno" selected="@(Model.FormaEnvio == "Interno")">Entrega</option>
+                    <option value="Cliente" selected="@(Model.FormaEnvio == "Cliente")">Cliente recoge</option>
+                    <option value="Paqueteria" selected="@(Model.FormaEnvio == "Paqueteria")">Paquetería</option>
+                </select>
+            </div>
+        }
+        else
+        {
+            <input type="hidden" name="formaEnvio" value="" />
+        }
         <div class="lg-filter-actions">
             <button class="lg-btn lg-btn-primary" type="submit"><i class="fa-solid fa-filter"></i> Aplicar</button>
             <a class="lg-btn" asp-action="Index" asp-route-vista="@Model.Vista" asp-route-fecha="@Model.FechaReferencia.ToString("yyyy-MM-dd")">Limpiar</a>
         </div>
         <div class="lg-checkline">
             <label><input type="checkbox" name="soloExpeditados" value="true" checked="@Model.SoloExpeditados" /> Solo expeditados</label>
-            <label><input type="checkbox" name="soloIncidencias" value="true" checked="@Model.SoloIncidencias" /> Solo con incidencias</label>
+            @if (puedeOperar)
+            {
+                <label><input type="checkbox" name="soloIncidencias" value="true" checked="@Model.SoloIncidencias" /> Solo con incidencias</label>
+            }
+            else
+            {
+                <input type="hidden" name="soloIncidencias" value="false" />
+            }
         </div>
     </form>
 
     <div class="lg-strip">
         <span><strong>@Model.PeriodoTexto</strong></span>
-        <span>@Model.TotalClientes clientes</span>
-        <span>@Model.TotalRequerimientos requerimientos</span>
-        <span>@Model.TotalProgramaciones programaciones</span>
-        <span>@Model.TotalEmbarques embarques</span>
-        <span>@Model.TotalPiezas.ToString("N0") PZA</span>
-        <span><strong>@Model.TotalUnidades</strong> unidades</span>
-        <span><strong>@Model.UnidadesDisponibles</strong> disponibles</span>
-        @if (Model.ViajesActivos > 0)
+        <span>@totalClientesVisibles clientes</span>
+        @if (puedeProgramar)
         {
-            <span><strong>@Model.ViajesActivos</strong> viajes activos</span>
+            <span>@totalRequerimientosVisibles por programar</span>
+        }
+        @if (puedeOperar)
+        {
+            <span>@totalProgramacionesVisibles programados</span>
+            <span>@totalEmbarquesVisibles embarques</span>
+        }
+        <span>@totalPiezasVisibles.ToString("N0") PZA visibles</span>
+        @if (puedeOperar)
+        {
+            <span><strong>@Model.TotalUnidades</strong> unidades</span>
+            <span><strong>@Model.UnidadesDisponibles</strong> disponibles</span>
+            @if (Model.ViajesActivos > 0)
+            {
+                <span><strong>@Model.ViajesActivos</strong> viajes activos</span>
+            }
         }
         @if (Model.Expeditados > 0)
         {
@@ -3792,7 +4352,7 @@
 
     <section class="lg-board @(Model.Vista == "Mes" ? "lg-month" : "")" style="--dias:@dias.Count">
         <div class="lg-grid-head">
-            <div class="lg-head-client">CLIENTE / OPERACIÓN</div>
+            <div class="lg-head-client">@(puedeProgramar && !puedeOperar ? "CLIENTE / PLANEACIÓN" : "CLIENTE / OPERACIÓN")</div>
             @foreach (var dia in dias)
             {
                 <div class="lg-day-head @(dia.Date == hoy ? "today" : "")">
@@ -3815,22 +4375,22 @@
             }
         </div>
 
-        @if (Model.Clientes.Count == 0)
+        @if (clientesVisibles.Count == 0)
         {
             <div style="padding:45px;text-align:center;color:var(--lg-muted)">
                 <i class="fa-solid fa-calendar-xmark" style="font-size:28px;opacity:.45"></i>
                 <div style="font-size:12px;font-weight:900;color:var(--lg-navy);margin-top:7px">Sin operación para este periodo</div>
-                <div style="font-size:8px;margin-top:2px">No hay requerimientos, programaciones o embarques con los filtros actuales.</div>
+                <div style="font-size:8px;margin-top:2px">@(puedeProgramar && !puedeOperar ? "No hay Releases pendientes por programar con los filtros actuales." : "No hay programaciones, embarques o actividad logística con los filtros actuales.")</div>
             </div>
         }
         else
         {
-            @foreach (var cliente in Model.Clientes)
+            @foreach (var cliente in clientesVisibles)
             {
                 var altoFilaCliente = 78;
                 foreach (var diaAltura in dias)
                 {
-                    var eventosAltura = cliente.EventosDia(diaAltura).ToList();
+                    var eventosAltura = cliente.EventosDia(diaAltura).Where(EventoVisible).ToList();
                     var resumenesAltura = 0;
                     if (eventosAltura.Any(x => x.EsRequerimiento)) resumenesAltura++;
                     if (eventosAltura.Any(x => x.EsProgramacion)) resumenesAltura++;
@@ -3848,17 +4408,26 @@
                         <div class="lg-client-name">@cliente.Cliente</div>
                         <div class="lg-client-sub">@cliente.TotalPiezas.ToString("N0") PZA visibles</div>
                         <div class="lg-client-badges">
-                            @if (cliente.TotalRequerimientos > 0)
+                            @if (puedeProgramar)
                             {
-                                <span class="lg-badge blue">@cliente.TotalRequerimientos req.</span>
+                                var totalReqCliente = cliente.Eventos.Count(x => x.EsRequerimiento);
+                                if (totalReqCliente > 0)
+                                {
+                                    <span class="lg-badge blue">@totalReqCliente req.</span>
+                                }
                             }
-                            @if (cliente.TotalProgramaciones > 0)
+                            @if (puedeOperar)
                             {
-                                <span class="lg-badge amber">@cliente.TotalProgramaciones prog.</span>
-                            }
-                            @if (cliente.TotalEmbarques > 0)
-                            {
-                                <span class="lg-badge">@cliente.TotalEmbarques 🚚</span>
+                                var totalProgCliente = cliente.Eventos.Count(x => x.EsProgramacion);
+                                var totalEmbCliente = cliente.Eventos.Count(x => x.EsEmbarque);
+                                if (totalProgCliente > 0)
+                                {
+                                    <span class="lg-badge amber">@totalProgCliente prog.</span>
+                                }
+                                if (totalEmbCliente > 0)
+                                {
+                                    <span class="lg-badge">@totalEmbCliente 🚚</span>
+                                }
                             }
                             @if (cliente.TieneExpeditados)
                             {
@@ -3873,10 +4442,10 @@
 
                     @foreach (var dia in dias)
                     {
-                        var eventos = cliente.EventosDia(dia).ToList();
-                        var requerimientos = eventos.Where(x => x.EsRequerimiento).ToList();
-                        var programaciones = eventos.Where(x => x.EsProgramacion).ToList();
-                        var embarques = eventos.Where(x => x.EsEmbarque).ToList();
+                        var eventos = cliente.EventosDia(dia).Where(EventoVisible).ToList();
+                        var requerimientos = puedeProgramar ? eventos.Where(x => x.EsRequerimiento).ToList() : new List<LogisticaOperacionEventoVm>();
+                        var programaciones = puedeOperar ? eventos.Where(x => x.EsProgramacion).ToList() : new List<LogisticaOperacionEventoVm>();
+                        var embarques = puedeOperar ? eventos.Where(x => x.EsEmbarque).ToList() : new List<LogisticaOperacionEventoVm>();
                         var reqPiezas = requerimientos.Sum(x => (long)x.CantidadPendienteProgramar);
                         var progPiezas = programaciones.Sum(x => (long)Math.Max(0, x.CantidadProgramada - x.CantidadGenerada));
                         var embPiezas = embarques.Sum(x => (long)x.TotalPiezas);
@@ -4025,6 +4594,8 @@
         }
                 }
 
+        @if (puedeOperar)
+        {
         <div class="lg-row lg-section-divider">
             <aside class="lg-client">
                 <i class="fa-solid fa-truck-moving"></i>
@@ -4078,7 +4649,12 @@
 
                     @foreach (var dia in dias)
                     {
-                        var viajesDia = unidad.EventosDia(dia).ToList();
+                        var viajesDia = unidad.Eventos
+                            .Where(x => FechaVisualViaje(x) == dia.Date)
+                            .GroupBy(x => x.ViajeID)
+                            .Select(x => x.First())
+                            .OrderBy(x => x.FechaSalidaReal?.TimeOfDay ?? x.HoraSalidaProgramada ?? TimeSpan.Zero)
+                            .ToList();
                         <div class="lg-unit-cell @(dia.Date == hoy ? "today" : "")" data-unidad-id="@unidad.UnidadID" data-fecha="@dia.ToString("yyyy-MM-dd")">
                             @if (!viajesDia.Any())
                             {
@@ -4142,21 +4718,29 @@
             }
         }
 
+        }
+
         <div class="lg-legend">
-            <span><i class="lg-dot" style="background:#f4f7fb;border-color:#b9c7d6"></i> Requerimiento Release</span>
-            <span><i class="lg-dot" style="background:#fff7e8;border-color:#e5bd72"></i> Programación</span>
-            <span><i class="lg-dot" style="background:#eaf3ff;border-color:#8ab7ee"></i> Programado</span>
-            <span><i class="lg-dot" style="background:#fff7e1;border-color:#e2be67"></i> Preparando</span>
-            <span><i class="lg-dot" style="background:#fff0e6;border-color:#f0a96d"></i> Preparado</span>
-            <span><i class="lg-dot" style="background:#f1edff;border-color:#bca8ef"></i> Cargado</span>
-            <span><i class="lg-dot" style="background:#e8f8fb;border-color:#8fd6e3"></i> En ruta</span>
-            <span><i class="lg-dot" style="background:#eaf8f2;border-color:#8ed6b7"></i> Entregado</span>
+            @if (puedeProgramar)
+            {
+                <span><i class="lg-dot" style="background:#f4f7fb;border-color:#b9c7d6"></i> Release por programar</span>
+            }
+            @if (puedeOperar)
+            {
+                <span><i class="lg-dot" style="background:#fff7e8;border-color:#e5bd72"></i> Release programado</span>
+                <span><i class="lg-dot" style="background:#eaf3ff;border-color:#8ab7ee"></i> Programado</span>
+                <span><i class="lg-dot" style="background:#fff7e1;border-color:#e2be67"></i> Preparando</span>
+                <span><i class="lg-dot" style="background:#fff0e6;border-color:#f0a96d"></i> Preparado</span>
+                <span><i class="lg-dot" style="background:#f1edff;border-color:#bca8ef"></i> Cargado</span>
+                <span><i class="lg-dot" style="background:#e8f8fb;border-color:#8fd6e3"></i> En ruta</span>
+                <span><i class="lg-dot" style="background:#eaf8f2;border-color:#8ed6b7"></i> Entregado</span>
+                <span><i class="lg-dot" style="background:#f1fbf6;border-color:#a8d6c2"></i> Unidad disponible</span>
+                <span><i class="lg-dot" style="background:#eaf3ff;border-color:#8ab7ee"></i> Viaje programado</span>
+                <span><i class="lg-dot" style="background:#e7f8fb;border-color:#78cbd9"></i> Unidad en ruta</span>
+                <span><i class="lg-dot late"></i> Alerta por atraso operativo</span>
+            }
             <span><i class="lg-dot" style="background:#fff1f1;border-color:#ef8585"></i> Expeditado</span>
-            <span><i class="lg-dot" style="background:#f1fbf6;border-color:#a8d6c2"></i> Unidad disponible</span>
-            <span><i class="lg-dot" style="background:#eaf3ff;border-color:#8ab7ee"></i> Viaje programado</span>
-            <span><i class="lg-dot" style="background:#e7f8fb;border-color:#78cbd9"></i> Unidad en ruta</span>
             <span><i class="lg-dot now"></i> Hora actual</span>
-            <span><i class="lg-dot late"></i> Alerta por atraso operativo</span>
         </div>
     </section>
 </div>
@@ -4170,14 +4754,14 @@
         <div class="lg-modal-body">
             <div class="lg-day-modal-toolbar">
                 <div class="lg-day-modal-tabs">
-                    <button type="button" class="lg-day-tab active" data-day-tab="requerimientos">Releases <span id="cntReq">0</span></button>
-                    <button type="button" class="lg-day-tab" data-day-tab="programaciones">Listos para embarque <span id="cntProg">0</span></button>
-                    <button type="button" class="lg-day-tab" data-day-tab="embarques">Embarques <span id="cntEmb">0</span></button>
+                    <button type="button" class="lg-day-tab @(puedeProgramar && !puedeOperar ? "active" : "")" data-day-tab="requerimientos" style="@(puedeProgramar ? "" : "display:none")">Por programar <span id="cntReq">0</span></button>
+                    <button type="button" class="lg-day-tab @(!puedeProgramar && puedeOperar ? "active" : "")" data-day-tab="programaciones" style="@(puedeOperar ? "" : "display:none")">Programados <span id="cntProg">0</span></button>
+                    <button type="button" class="lg-day-tab" data-day-tab="embarques" style="@(puedeOperar ? "" : "display:none")">Embarques <span id="cntEmb">0</span></button>
                 </div>
                 <div class="lg-selected-count"><strong id="selectedReq">0</strong> release(s) seleccionados</div>
             </div>
 
-            <div class="lg-day-program-bar" id="bulkProgramBar">
+            <div class="lg-day-program-bar" id="bulkProgramBar" style="@(!puedeProgramar ? "display:none" : "")">
                 <div class="lg-field">
                     <label>Programar releases seleccionados</label>
                     <div style="font-size:8px;color:var(--lg-muted)">Usará la cantidad pendiente completa de cada Release.</div>
@@ -4454,7 +5038,7 @@
 
                         <div class="lg-stage" data-stage="documentos">
                             <div class="lg-stage-head">
-                                <div><h3>4. Documentación</h3><p>Puedes cargar y validar documentos desde ahora; deben quedar completos antes de confirmar la salida de planta.</p></div>
+                                <div><h3>4. Documentación</h3><p>Adjunta un archivo por requisito y guarda todo en un solo paso. Los documentos se confirman automáticamente al guardarse.</p></div>
                                 <span class="lg-stage-badge" id="badgeDocumentos">Pendiente</span>
                             </div>
                             <div class="lg-detail-grid">
@@ -4463,54 +5047,27 @@
                                 <div class="lg-detail"><span>Tipo operación</span><strong id="fdTipo">—</strong></div>
                                 <div class="lg-detail"><span>Estado</span><strong id="fdEstado">—</strong></div>
                             </div>
-                            <div class="lg-flex-note" id="fdContexto"><strong>Flujo flexible:</strong> la documentación ya no bloquea el inicio de la carga física. Sí es obligatoria antes de la salida de planta.</div>
-                            <div class="lg-inline-panel">
-                                <h4>DOCUMENTOS REQUERIDOS</h4>
-                                <div id="docRequisitos" class="lg-doc-requirements"><div class="lg-disabled-note" style="grid-column:1/-1;padding:12px">Abre esta etapa para consultar los requisitos.</div></div>
-                            </div>
-                            <div class="lg-inline-panel">
-                                <h4>AGREGAR DOCUMENTOS</h4>
+                            <div class="lg-flex-note" id="fdContexto"><strong>Expediente documental:</strong> cada requisito tiene su propia fila y acepta un solo archivo. Ya no necesitas escoger primero el tipo ni validar documento por documento. La documentación debe quedar completa antes de confirmar la salida de planta.</div>
+                            <div class="lg-inline-panel lg-doc-workspace">
+                                <div class="lg-doc-workspace-head">
+                                    <div><h4>EXPEDIENTE DOCUMENTAL</h4><p>Adjunta únicamente los archivos que falten. Los documentos ya guardados se conservan y puedes reemplazarlos si es necesario.</p></div>
+                                    <span class="lg-doc-counter" id="docContador">—</span>
+                                </div>
                                 <form id="formDocumentoFlow" enctype="multipart/form-data">
-                                    <div class="lg-doc-upload-grid">
-                                        <div class="lg-field">
-                                            <label>Tipo de documento *</label>
-                                            <select class="lg-select" id="docTipo" name="tipoDocumento" required>
-                                                <option value="">Selecciona...</option>
-                                            </select>
-                                            <div class="lg-doc-upload-help">Todos los archivos seleccionados se guardarán con este mismo tipo documental.</div>
-                                        </div>
-                                        <div class="lg-field">
-                                            <label>Archivos / fotos *</label>
-                                            <input type="file" id="docArchivos" accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png,.webp,.heic,.heif,image/*" multiple hidden />
-                                            <input type="file" id="docCamara" accept="image/*" capture="environment" hidden />
-                                            <div class="lg-doc-picker-actions">
-                                                <button class="lg-btn lg-btn-primary" type="button" id="btnElegirDocumentos"><i class="fa-solid fa-folder-open"></i> Elegir varios archivos</button>
-                                                <button class="lg-btn" type="button" id="btnTomarFotoDocumento"><i class="fa-solid fa-camera"></i> Tomar foto</button>
-                                            </div>
-                                            <div class="lg-doc-upload-help">Puedes elegir varios archivos de una sola vez o volver a agregar más. Máximo 15 archivos, 10 MB por archivo y 100 MB en total.</div>
-                                        </div>
-                                        <div class="lg-field full">
-                                            <div id="docArchivosLista" class="lg-file-list"></div>
-                                            <div id="docArchivosResumen" class="lg-file-summary">0 archivos seleccionados</div>
-                                        </div>
-                                        <div class="lg-field full">
-                                            <label>Observaciones</label>
-                                            <textarea class="lg-input lg-doc-observaciones" id="docObservaciones" name="observaciones" maxlength="1000" placeholder="Obligatorio cuando se utilice Remisión como sustituto de Factura."></textarea>
-                                        </div>
+                                    <div id="docRequisitos" class="lg-doc-batch"><div class="lg-disabled-note" style="padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Abre esta etapa para consultar los requisitos.</div></div>
+                                    <div id="docExtrasWrap" class="lg-doc-extras-wrap" style="display:none">
+                                        <div class="lg-doc-extras-title">OTROS DOCUMENTOS CARGADOS</div>
+                                        <div id="docExtras" class="lg-doc-list"></div>
                                     </div>
-                                    <div class="lg-flow-actions" style="margin-top:10px">
-                                        <button class="lg-btn lg-btn-primary" type="submit" id="btnSubirDocumento"><i class="fa-solid fa-cloud-arrow-up"></i> <span>Subir documentos</span></button>
+                                    <div class="lg-doc-batch-summary">
+                                        <div><i class="fa-solid fa-circle-info"></i> Máximo 10 MB por archivo y 100 MB en total. Formatos: PDF, XML, Excel, Word e imágenes.</div>
+                                        <strong id="docArchivosResumen">Sin archivos nuevos</strong>
+                                    </div>
+                                    <div class="lg-flow-actions">
+                                        <button class="lg-btn lg-btn-primary" type="submit" id="btnSubirDocumento"><i class="fa-solid fa-cloud-arrow-up"></i> <span>Guardar documentación</span></button>
+                                        <button class="lg-btn" type="button" data-next-stage="carga"><i class="fa-solid fa-dolly"></i> Ir a carga física</button>
                                     </div>
                                 </form>
-                            </div>
-                            <div class="lg-inline-panel">
-                                <h4>DOCUMENTOS DEL EMBARQUE</h4>
-                                <div id="docLista" class="lg-doc-list"><div class="lg-disabled-note" style="padding:12px">Todavía no se han consultado los documentos.</div></div>
-                            </div>
-                            <div class="lg-flow-actions">
-                                <a class="lg-btn" id="btnDocumentosVista" href="#"><i class="fa-solid fa-arrow-up-right-from-square"></i> Vista completa</a>
-                                <button class="lg-btn" type="button" data-next-stage="preparacion"><i class="fa-solid fa-boxes-stacked"></i> Disponibilidad PT</button>
-                                <button class="lg-btn lg-btn-primary" type="button" data-next-stage="carga"><i class="fa-solid fa-dolly"></i> Ir a carga física</button>
                             </div>
                         </div>
 
@@ -4690,6 +5247,9 @@
 <script>
         (() => {
             const token=document.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+            const puedeProgramar=@puedeProgramar.ToString().ToLowerInvariant();
+            const puedeOperar=@puedeOperar.ToString().ToLowerInvariant();
+            const esAdministradorERP=@esAdministradorERP.ToString().ToLowerInvariant();
             const urlProgramar='@Url.Action("ProgramarRelease", "LogisticaOperacion")';
             const urlProgramarSeleccionados='@Url.Action("ProgramarReleasesSeleccionados", "LogisticaOperacion")';
             const urlMoverProg='@Url.Action("MoverProgramacion", "LogisticaOperacion")';
@@ -4714,7 +5274,7 @@
             const horaInicio=0;
             const horaFin=1440;
             let dragCard=null,flujoActual=null,documentosActual=null,cargaFisicaActual=null;
-            let documentosSeleccionados=[];
+            let documentosFilaSeleccionados=new Map();
 
             document.querySelectorAll('.lg-modal-backdrop').forEach(modal=>{
                 if(modal.parentElement!==document.body)document.body.appendChild(modal);
@@ -4743,21 +5303,24 @@
             }
 
             function setDayTab(tab){
+                if(tab==='requerimientos'&&!puedeProgramar)tab=puedeOperar?'programaciones':'requerimientos';
+                if((tab==='programaciones'||tab==='embarques')&&!puedeOperar)tab=puedeProgramar?'requerimientos':'programaciones';
                 document.querySelectorAll('.lg-day-tab').forEach(x=>x.classList.toggle('active',x.dataset.dayTab===tab));
                 document.querySelectorAll('.lg-day-list').forEach(x=>x.classList.toggle('active',x.dataset.dayList===tab));
-                document.getElementById('bulkProgramBar').style.display=tab==='requerimientos'?'grid':'none';
+                const bulk=document.getElementById('bulkProgramBar');
+                if(bulk)bulk.style.display=puedeProgramar&&tab==='requerimientos'?'grid':'none';
             }
 
             function renderClienteDia(cell,tab='requerimientos'){
                 dayCellActual=cell;
                 const events=dayEvents(cell);
-                const req=events.filter(x=>x.tipo==='requerimiento');
-                const prog=events.filter(x=>x.tipo==='programacion');
-                const emb=events.filter(x=>x.tipo==='embarque');
+                const req=puedeProgramar?events.filter(x=>x.tipo==='requerimiento'):[];
+                const prog=puedeOperar?events.filter(x=>x.tipo==='programacion'):[];
+                const emb=puedeOperar?events.filter(x=>x.tipo==='embarque'):[];
                 const cliente=req[0]?.cliente||prog[0]?.cliente||emb[0]?.cliente||`Cliente ${cell.dataset.clienteId}`;
                 const fecha=cell.dataset.fecha||'';
                 document.getElementById('dayTitulo').textContent=cliente;
-                document.getElementById('daySub').textContent=`Operación del ${fecha} · programa Releases o inicia los embarques que ya estén listos.`;
+                document.getElementById('daySub').textContent=esAdministradorERP?`Operación del ${fecha} · Planeación y Logística en una sola vista.`:puedeProgramar&&!puedeOperar?`Planeación del ${fecha} · programa únicamente los Releases pendientes.`:`Operación logística del ${fecha} · toma lo ya programado y continúa con el embarque.`;
                 document.getElementById('bulkFecha').value=fecha;
                 document.getElementById('cntReq').textContent=req.length;
                 document.getElementById('cntProg').textContent=prog.length;
@@ -4827,7 +5390,8 @@
                     closeModal('modalClienteDia');
                     openModal('modalAsignarHora');
                 }));
-                setDayTab(tab);
+                const tabInicial=puedeProgramar&&!puedeOperar?'requerimientos':!puedeProgramar&&puedeOperar?(prog.length?'programaciones':'embarques'):tab;
+                setDayTab(tabInicial);
                 openModal('modalClienteDia');
             }
 
@@ -4842,6 +5406,7 @@
                 if(startShipment){
                     e.preventDefault();
                     e.stopPropagation();
+                    if(!puedeOperar){toast('Esta acción corresponde a Logística.','error');return}
                     abrirIniciarEmbarque(Number(startShipment.dataset.clienteId||0),startShipment.dataset.fecha||'');
                     return;
                 }
@@ -4857,6 +5422,7 @@
             });
 
             document.getElementById('btnProgramarSeleccionados')?.addEventListener('click',async()=>{
+                if(!puedeProgramar){toast('La programación de Releases corresponde a Planeación.','error');return}
                 const seleccion=[...document.querySelectorAll('#dayReqBody .req-check:checked')];
                 if(!seleccion.length){toast('Selecciona al menos un Release.','error');return}
                 const fecha=document.getElementById('bulkFecha').value;
@@ -4890,6 +5456,7 @@
 
 
             async function abrirIniciarEmbarque(clienteId,fecha){
+                if(!puedeOperar){toast('Esta acción corresponde a Logística.','error');return}
                 if(!clienteId||!fecha){toast('No fue posible identificar el cliente o el día planeado.','error');return}
                 const body=document.getElementById('ieBody');
                 body.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--lg-muted);padding:18px"><i class="fa-solid fa-spinner fa-spin"></i> Cargando programaciones...</td></tr>';
@@ -4945,6 +5512,7 @@
 
             document.getElementById('formIniciarEmbarque')?.addEventListener('submit',async e=>{
                 e.preventDefault();
+                if(!puedeOperar){toast('Esta acción corresponde a Logística.','error');return}
                 const ids=[...document.querySelectorAll('#ieBody .ie-check:checked')].map(x=>x.value).filter(Boolean);
                 const hora=document.getElementById('ieHora').value;
                 if(!ids.length){toast('Selecciona al menos un Release planeado.','error');return}
@@ -5138,7 +5706,9 @@
 
 
             document.getElementById('formProgramar')?.addEventListener('submit',async e=>{
-                e.preventDefault();const fd=new FormData(e.currentTarget);fd.append('__RequestVerificationToken',token);
+                e.preventDefault();
+                if(!puedeProgramar){toast('La programación de Releases corresponde a Planeación.','error');return}
+                const fd=new FormData(e.currentTarget);fd.append('__RequestVerificationToken',token);
                 try{const r=await fetch(urlProgramar,{method:'POST',body:fd});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible programar.');closeModal('modalProgramar');toast(j.mensaje||'Programación guardada.');setTimeout(()=>location.reload(),650)}
                 catch(err){toast(err.message||'Error al programar.','error')}
             });
@@ -5371,9 +5941,7 @@
             async function cargarDocumentosModal(){
                 if(!flujoActual?.embarqueID)return;
                 const req=document.getElementById('docRequisitos');
-                const lista=document.getElementById('docLista');
-                if(req)req.innerHTML='<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Consultando requisitos...</div>';
-                if(lista)lista.innerHTML='<div class="lg-disabled-note" style="padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Consultando documentos...</div>';
+                if(req)req.innerHTML='<div class="lg-disabled-note" style="padding:12px"><i class="fa-solid fa-spinner fa-spin"></i> Consultando expediente documental...</div>';
                 try{
                     const r=await fetch(`${urlObtenerDocumentos}?embarqueId=${encodeURIComponent(flujoActual.embarqueID)}`,{headers:{'X-Requested-With':'XMLHttpRequest'}});
                     let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
@@ -5381,8 +5949,7 @@
                     documentosActual=j;
                     renderDocumentosModal(j);
                 }catch(err){
-                    if(req)req.innerHTML=`<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px;color:var(--lg-red)">${esc(err.message||'Error al consultar requisitos.')}</div>`;
-                    if(lista)lista.innerHTML='';
+                    if(req)req.innerHTML=`<div class="lg-disabled-note" style="padding:12px;color:var(--lg-red)">${esc(err.message||'Error al consultar la documentación.')}</div>`;
                 }
             }
 
@@ -5396,105 +5963,172 @@
                 return'fa-file';
             }
 
-            function claveArchivoDocumento(file){
-                return `${file.name}|${file.size}|${file.lastModified}`;
+            function esRequisitoFacturaRemision(tipo){
+                return tipo==='Factura firmada y sellada / Remisión'||tipo==='Factura firmada por transportista / Remisión';
             }
 
-            function renderDocumentosSeleccionados(){
-                const lista=document.getElementById('docArchivosLista');
+            function opcionesDocumentoRequisito(tipo){
+                if(esRequisitoFacturaRemision(tipo))return['Factura','Remisión'];
+                if(tipo==='Commercial Invoice / Carta Porte')return['Commercial Invoice','Carta Porte'];
+                return[tipo];
+            }
+
+            function documentoCumpleRequisitoUi(requisito,tipoDocumento){
+                const req=String(requisito||'').trim();
+                const tipo=String(tipoDocumento||'').trim();
+                if(esRequisitoFacturaRemision(req))return tipo==='Factura'||tipo==='Remisión';
+                if(req==='Commercial Invoice / Carta Porte')return tipo==='Commercial Invoice'||tipo==='Carta Porte';
+                return req.toLocaleLowerCase('es-MX')===tipo.toLocaleLowerCase('es-MX');
+            }
+
+            function obtenerDocumentoActualRequisito(requisito,documentos){
+                const candidatos=(documentos||[]).filter(x=>documentoCumpleRequisitoUi(requisito,x.tipoDocumento));
+                candidatos.sort((a,b)=>{
+                    const validado=Number(Boolean(b.validado))-Number(Boolean(a.validado));
+                    if(validado!==0)return validado;
+                    return Number(b.documentoId||0)-Number(a.documentoId||0);
+                });
+                return candidatos[0]||null;
+            }
+
+            function validarArchivoDocumento(file){
+                if(!file)return'No se recibió el archivo.';
+                const ext=(file.name.split('.').pop()||'').toLowerCase();
+                const permitidas=['pdf','xml','xlsx','xls','docx','doc','jpg','jpeg','png','webp','heic','heif'];
+                const esImagen=file.type?.startsWith('image/')||['jpg','jpeg','png','webp','heic','heif'].includes(ext);
+                if(!esImagen&&!permitidas.includes(ext))return`${file.name}: formato no permitido.`;
+                if(file.size<=0)return`${file.name}: el archivo está vacío.`;
+                if(file.size>10*1024*1024)return`${file.name}: excede 10 MB.`;
+                return'';
+            }
+
+            function tipoSeleccionadoFila(row){
+                return row.querySelector('[data-doc-tipo]:checked')?.value||row.dataset.tipoUnico||'';
+            }
+
+            function actualizarVisibilidadRemision(row){
+                const bloque=row.querySelector('[data-remision-motivo]');
+                if(!bloque)return;
+                const tipo=tipoSeleccionadoFila(row);
+                const tieneArchivo=documentosFilaSeleccionados.has(row.dataset.docIndex);
+                bloque.style.display=tipo==='Remisión'&&tieneArchivo?'':'none';
+                const textarea=bloque.querySelector('textarea');
+                if(textarea)textarea.required=tipo==='Remisión'&&tieneArchivo;
+            }
+
+            function actualizarArchivoFila(row,file){
+                const index=row.dataset.docIndex;
+                const nombre=row.querySelector('[data-doc-file-name]');
+                const ayuda=row.querySelector('[data-doc-file-help]');
+                const picker=row.querySelector('.lg-doc-file-picker');
+                if(file){
+                    documentosFilaSeleccionados.set(index,file);
+                    if(nombre)nombre.textContent=file.name;
+                    if(ayuda)ayuda.textContent=tamanoArchivo(file.size);
+                    picker?.classList.add('selected');
+                }else{
+                    documentosFilaSeleccionados.delete(index);
+                    if(nombre)nombre.textContent=row.dataset.documentoId?'Reemplazar archivo':'Seleccionar archivo';
+                    if(ayuda)ayuda.textContent=row.dataset.documentoId?'El documento actual se conservará si no eliges otro.':'Un archivo para este requisito.';
+                    picker?.classList.remove('selected');
+                }
+                actualizarVisibilidadRemision(row);
+                actualizarResumenDocumentosLote();
+            }
+
+            function actualizarResumenDocumentosLote(){
+                const archivos=[...documentosFilaSeleccionados.values()];
+                const total=archivos.reduce((s,x)=>s+x.size,0);
                 const resumen=document.getElementById('docArchivosResumen');
+                if(resumen)resumen.textContent=archivos.length?`${archivos.length} archivo(s) nuevo(s) · ${tamanoArchivo(total)}`:'Sin archivos nuevos';
                 const btn=document.getElementById('btnSubirDocumento');
-                if(lista){
-                    lista.innerHTML='';
-                    documentosSeleccionados.forEach((file,index)=>{
-                        const item=document.createElement('div');
-                        item.className='lg-file-item';
-                        item.innerHTML=`<div class="lg-file-item-icon"><i class="fa-solid ${iconoDocumento(file.name,file.type)}"></i></div><div style="min-width:0"><strong title="${esc(file.name)}">${esc(file.name)}</strong><small>${tamanoArchivo(file.size)}</small></div><button type="button" class="lg-file-remove" data-quitar-documento="${index}" title="Quitar archivo"><i class="fa-solid fa-xmark"></i></button>`;
-                        lista.appendChild(item);
-                    });
-                }
-                const total=documentosSeleccionados.reduce((s,x)=>s+x.size,0);
-                if(resumen)resumen.textContent=documentosSeleccionados.length
-                    ?`${documentosSeleccionados.length} archivo(s) listos · ${tamanoArchivo(total)}`
-                    :'0 archivos seleccionados';
+                const pendientes=[...document.querySelectorAll('#docRequisitos [data-doc-row]')].filter(row=>row.dataset.documentoId&&row.dataset.documentoValidado!=='true').length;
                 const texto=btn?.querySelector('span');
-                if(texto)texto.textContent=documentosSeleccionados.length
-                    ?`Subir ${documentosSeleccionados.length} archivo${documentosSeleccionados.length===1?'':'s'}`
-                    :'Subir documentos';
-            }
-
-            function agregarDocumentosSeleccionados(nuevos){
-                const extensionesPermitidas=['pdf','xml','xlsx','xls','docx','doc','jpg','jpeg','png','webp','heic','heif'];
-                const existentes=new Set(documentosSeleccionados.map(claveArchivoDocumento));
-                for(const file of nuevos||[]){
-                    const ext=(file.name.split('.').pop()||'').toLowerCase();
-                    const esImagen=file.type?.startsWith('image/')||['jpg','jpeg','png','webp','heic','heif'].includes(ext);
-                    if(!esImagen&&!extensionesPermitidas.includes(ext)){toast(`${file.name}: formato no permitido.`,'error');continue}
-                    if(file.size<=0){toast(`${file.name}: el archivo está vacío.`,'error');continue}
-                    if(file.size>10*1024*1024){toast(`${file.name}: excede 10 MB.`,'error');continue}
-                    const clave=claveArchivoDocumento(file);
-                    if(existentes.has(clave)){toast(`${file.name}: ya fue agregado.`,'error');continue}
-                    if(documentosSeleccionados.length>=15){toast('Puedes cargar como máximo 15 archivos por operación.','error');break}
-                    const totalActual=documentosSeleccionados.reduce((s,x)=>s+x.size,0);
-                    if(totalActual+file.size>100*1024*1024){toast('El total seleccionado no puede exceder 100 MB.','error');break}
-                    documentosSeleccionados.push(file);
-                    existentes.add(clave);
-                }
-                renderDocumentosSeleccionados();
+                if(texto)texto.textContent=archivos.length||pendientes?`Guardar documentación (${archivos.length+pendientes})`:'Guardar documentación';
             }
 
             function limpiarDocumentosSeleccionados(){
-                documentosSeleccionados=[];
-                const input=document.getElementById('docArchivos');
-                const camara=document.getElementById('docCamara');
-                if(input)input.value='';
-                if(camara)camara.value='';
-                renderDocumentosSeleccionados();
+                documentosFilaSeleccionados.clear();
+                document.querySelectorAll('#docRequisitos [data-doc-input]').forEach(input=>input.value='');
+                actualizarResumenDocumentosLote();
+            }
+
+            function renderDocumentoActual(actual,puedeModificar){
+                if(!actual)return'<div class="lg-doc-current empty"><i class="fa-solid fa-file-circle-xmark"></i><div><strong>Sin archivo cargado</strong><small>Adjunta el archivo correspondiente.</small></div></div>';
+                const estado=actual.validado?'Confirmado':'Pendiente de guardar';
+                return `<div class="lg-doc-current ${actual.validado?'ok':'pending'}"><i class="fa-solid ${iconoDocumento(actual.nombreOriginal,actual.tipoContenido)}"></i><div class="lg-doc-current-data"><strong title="${esc(actual.nombreOriginal||'Documento')}">${esc(actual.nombreOriginal||'Documento')}</strong><small>${esc(actual.fechaCarga||'')} ${actual.usuarioCarga?`· ${esc(actual.usuarioCarga)}`:''}</small></div><span class="lg-doc-state ${actual.validado?'ok':''}">${estado}</span><a class="lg-doc-icon-btn" href="${esc(actual.verUrl||'#')}" target="_blank" rel="noopener" title="Ver archivo"><i class="fa-solid fa-eye"></i></a>${puedeModificar?`<button class="lg-doc-icon-btn danger" type="button" data-retirar-documento="${actual.documentoId}" title="Retirar archivo"><i class="fa-solid fa-trash-can"></i></button>`:''}</div>`;
             }
 
             function renderDocumentosModal(j){
                 const req=document.getElementById('docRequisitos');
-                const lista=document.getElementById('docLista');
-                const select=document.getElementById('docTipo');
+                const extras=document.getElementById('docExtras');
+                const extrasWrap=document.getElementById('docExtrasWrap');
                 const form=document.getElementById('formDocumentoFlow');
                 const btnSubir=document.getElementById('btnSubirDocumento');
+                documentosFilaSeleccionados.clear();
                 document.getElementById('fdFaltantes').textContent=number(j.documentosFaltantes);
                 document.getElementById('fdEstado').textContent=j.documentacionCompleta?'Completa':'Pendiente';
+                const requeridos=j.requeridos||[];
+                const documentos=j.documentos||[];
+                const puedeModificar=Boolean(j.puedeModificar)&&!Boolean(j.requiereDefinirSalida);
+                const contador=document.getElementById('docContador');
+                if(contador)contador.textContent=j.requiereDefinirSalida?'Define primero la salida':j.documentacionCompleta?'Expediente completo':`${number(j.documentosFaltantes)} pendiente(s)`;
                 if(req){
                     req.innerHTML='';
-                    const requeridos=j.requeridos||[];
-                    if(!requeridos.length)req.innerHTML='<div class="lg-disabled-note" style="grid-column:1/-1;padding:12px">No hay requisitos documentales definidos para la forma de salida actual.</div>';
-                    requeridos.forEach(x=>{
-                        const d=document.createElement('div');
-                        d.className='lg-doc-required';
-                        d.innerHTML=`<div style="min-width:0"><strong>${esc(x.tipoDocumento||'Documento')}</strong><small>${esc(x.areaResponsable||'Sin área')} · ${x.obligatorio?'Obligatorio':'Opcional'}</small></div><span class="lg-doc-state ${x.cumplido?'ok':''}"><i class="fa-solid ${x.cumplido?'fa-circle-check':'fa-clock'}"></i> ${x.cumplido?'Cumplido':'Pendiente'}</span>`;
-                        req.appendChild(d);
-                    });
+                    if(j.requiereDefinirSalida){
+                        req.innerHTML='<div class="lg-disabled-note" style="padding:14px"><i class="fa-solid fa-route"></i> Primero define el tipo de operación y la forma de salida para conocer el expediente documental requerido.</div>';
+                    }else if(!requeridos.length){
+                        req.innerHTML='<div class="lg-disabled-note" style="padding:14px">No hay requisitos documentales definidos para la forma de salida actual.</div>';
+                    }else{
+                        requeridos.forEach((x,index)=>{
+                            const actual=obtenerDocumentoActualRequisito(x.tipoDocumento,documentos);
+                            const opciones=opcionesDocumentoRequisito(x.tipoDocumento);
+                            const tipoInicial=actual&&opciones.includes(actual.tipoDocumento)?actual.tipoDocumento:opciones[0];
+                            const row=document.createElement('div');
+                            row.className=`lg-doc-batch-row ${x.cumplido?'complete':''}`;
+                            row.dataset.docRow='true';
+                            row.dataset.docIndex=String(index);
+                            row.dataset.requisito=x.tipoDocumento||'';
+                            row.dataset.obligatorio=String(Boolean(x.obligatorio));
+                            row.dataset.documentoId=actual?.documentoId?String(actual.documentoId):'';
+                            row.dataset.documentoValidado=String(Boolean(actual?.validado));
+                            if(opciones.length===1)row.dataset.tipoUnico=opciones[0];
+                            const selector=opciones.length>1?`<div class="lg-doc-choice">${opciones.map((op,i)=>`<label><input type="radio" name="docTipo_${index}" data-doc-tipo value="${esc(op)}" ${op===tipoInicial?'checked':''} ${!puedeModificar?'disabled':''}/> <span>${esc(op)}</span></label>`).join('')}</div>`:`<div class="lg-doc-type-fixed"><i class="fa-solid fa-file-lines"></i> ${esc(opciones[0])}</div>`;
+                            row.innerHTML=`<div class="lg-doc-requirement-info"><div class="lg-doc-title-line"><strong>${esc(x.tipoDocumento||'Documento')}</strong><span class="lg-doc-required-tag ${x.obligatorio?'required':'optional'}">${x.obligatorio?'Obligatorio':'Opcional'}</span></div><small>${esc(x.areaResponsable||'Sin área responsable')}</small>${selector}</div><div class="lg-doc-middle">${renderDocumentoActual(actual,puedeModificar)}<div class="lg-doc-remision-reason" data-remision-motivo style="display:none"><label>Motivo para usar Remisión *</label><textarea class="lg-input" maxlength="1000" placeholder="Ej. cierre de mes o Factura temporalmente no disponible."></textarea></div></div><label class="lg-doc-file-picker ${!puedeModificar?'disabled':''}"><input type="file" data-doc-input accept=".pdf,.xml,.xlsx,.xls,.docx,.doc,.jpg,.jpeg,.png,.webp,.heic,.heif,image/*" ${!puedeModificar?'disabled':''}/><i class="fa-solid fa-paperclip"></i><div><strong data-doc-file-name>${actual?'Reemplazar archivo':'Seleccionar archivo'}</strong><small data-doc-file-help>${actual?'El documento actual se conservará si no eliges otro.':'Un archivo para este requisito.'}</small></div></label>`;
+                            req.appendChild(row);
+                            actualizarVisibilidadRemision(row);
+                        });
+                    }
                 }
-                if(select){
-                    const actual=select.value;
-                    select.innerHTML='<option value="">Selecciona...</option>';
-                    (j.tiposPermitidos||[]).forEach(tipo=>{const o=document.createElement('option');o.value=tipo;o.textContent=tipo;if(tipo===actual)o.selected=true;select.appendChild(o)});
-                }
-                const puedeModificar=Boolean(j.puedeModificar);
-                if(form)form.querySelectorAll('input,select,textarea').forEach(x=>x.disabled=!puedeModificar);
-                const btnElegir=document.getElementById('btnElegirDocumentos');
-                const btnCamara=document.getElementById('btnTomarFotoDocumento');
-                if(btnElegir)btnElegir.disabled=!puedeModificar;
-                if(btnCamara)btnCamara.disabled=!puedeModificar;
-                if(btnSubir)btnSubir.disabled=!puedeModificar;
-                if(lista){
-                    lista.innerHTML='';
-                    const documentos=j.documentos||[];
-                    if(!documentos.length){lista.innerHTML='<div class="lg-disabled-note" style="padding:12px">Todavía no hay documentos cargados.</div>';return}
-                    documentos.forEach(x=>{
+                const utilizados=new Set();
+                requeridos.forEach(r=>{
+                    documentos.filter(d=>documentoCumpleRequisitoUi(r.tipoDocumento,d.tipoDocumento)).forEach(d=>utilizados.add(Number(d.documentoId)));
+                });
+                const otros=documentos.filter(d=>!utilizados.has(Number(d.documentoId)));
+                if(extras&&extrasWrap){
+                    extras.innerHTML='';
+                    extrasWrap.style.display=otros.length?'':'none';
+                    otros.forEach(x=>{
                         const row=document.createElement('div');
                         row.className='lg-doc-row';
-                        const estado=x.validado?'<span class="lg-doc-state ok"><i class="fa-solid fa-circle-check"></i> Validado</span>':'<span class="lg-doc-state"><i class="fa-solid fa-clock"></i> Pendiente</span>';
-                        row.innerHTML=`<div class="lg-doc-icon"><i class="fa-solid ${iconoDocumento(x.nombreOriginal,x.tipoContenido)}"></i></div><div style="min-width:0"><strong title="${esc(x.nombreOriginal||'Documento')}">${esc(x.tipoDocumento||'Documento')} · ${esc(x.nombreOriginal||'')}</strong><small>${esc(x.areaResponsable||'Sin área')} · ${tamanoArchivo(x.tamanoBytes)} · ${esc(x.fechaCarga||'')} ${x.usuarioCarga?`· ${esc(x.usuarioCarga)}`:''}</small>${x.observaciones?`<small title="${esc(x.observaciones)}">Obs.: ${esc(x.observaciones)}</small>`:''}</div><div class="lg-doc-actions">${estado}<a class="lg-btn" style="height:27px;padding:0 7px" href="${esc(x.verUrl||'#')}" target="_blank" rel="noopener" title="Ver documento"><i class="fa-solid fa-eye"></i></a>${!x.validado&&puedeModificar?`<button class="lg-btn lg-btn-success" style="height:27px;padding:0 7px" type="button" data-validar-documento="${x.documentoId}"><i class="fa-solid fa-check"></i> Validar</button>`:''}${puedeModificar?`<button class="lg-btn lg-btn-danger" style="height:27px;padding:0 7px" type="button" data-retirar-documento="${x.documentoId}"><i class="fa-solid fa-trash-can"></i></button>`:''}</div>`;
-                        lista.appendChild(row);
+                        row.innerHTML=`<div class="lg-doc-icon"><i class="fa-solid ${iconoDocumento(x.nombreOriginal,x.tipoContenido)}"></i></div><div style="min-width:0"><strong title="${esc(x.nombreOriginal||'Documento')}">${esc(x.tipoDocumento||'Documento')} · ${esc(x.nombreOriginal||'')}</strong><small>${esc(x.areaResponsable||'Sin área')} · ${tamanoArchivo(x.tamanoBytes)} · ${esc(x.fechaCarga||'')}</small></div><div class="lg-doc-actions"><span class="lg-doc-state ${x.validado?'ok':''}">${x.validado?'Confirmado':'Cargado'}</span><a class="lg-doc-icon-btn" href="${esc(x.verUrl||'#')}" target="_blank" rel="noopener" title="Ver archivo"><i class="fa-solid fa-eye"></i></a>${puedeModificar?`<button class="lg-doc-icon-btn danger" type="button" data-retirar-documento="${x.documentoId}" title="Retirar archivo"><i class="fa-solid fa-trash-can"></i></button>`:''}</div>`;
+                        extras.appendChild(row);
                     });
                 }
+                if(form)form.querySelectorAll('input,textarea,button').forEach(x=>{if(x.id!=='btnSubirDocumento'&&!x.hasAttribute('data-next-stage')&&!x.hasAttribute('data-retirar-documento'))x.disabled=!puedeModificar});
+                if(btnSubir)btnSubir.disabled=!puedeModificar||!requeridos.length;
+                actualizarResumenDocumentosLote();
+            }
+
+            async function validarDocumentoAutomatico(documentoId){
+                const data=new URLSearchParams();
+                data.append('__RequestVerificationToken',token);
+                data.append('documentoId',String(documentoId));
+                data.append('embarqueId',String(flujoActual.embarqueID));
+                const r=await fetch(urlValidarDocumento,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:data.toString()});
+                let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} al confirmar un documento.`)}
+                if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible confirmar uno de los documentos.');
+                return j;
             }
 
             async function ejecutarAccionDocumento(url,data,mensajeError){
@@ -5724,83 +6358,117 @@
                 }catch(err){toast(err.message||'Error al guardar la hora.','error')}
             });
 
-            document.getElementById('btnElegirDocumentos')?.addEventListener('click',()=>document.getElementById('docArchivos')?.click());
-            document.getElementById('btnTomarFotoDocumento')?.addEventListener('click',()=>document.getElementById('docCamara')?.click());
-            document.getElementById('docArchivos')?.addEventListener('change',e=>{
-                agregarDocumentosSeleccionados([...e.target.files]);
-                e.target.value='';
-            });
-            document.getElementById('docCamara')?.addEventListener('change',e=>{
-                agregarDocumentosSeleccionados([...e.target.files]);
-                e.target.value='';
-            });
-            document.getElementById('docArchivosLista')?.addEventListener('click',e=>{
-                const btn=e.target.closest('[data-quitar-documento]');
-                if(!btn)return;
-                const indice=Number(btn.dataset.quitarDocumento);
-                if(Number.isNaN(indice)||indice<0||indice>=documentosSeleccionados.length)return;
-                documentosSeleccionados.splice(indice,1);
-                renderDocumentosSeleccionados();
-            });
-            document.getElementById('formDocumentoFlow')?.addEventListener('submit',async e=>{
-                e.preventDefault();
-                if(!flujoActual?.embarqueID)return;
-                const btn=document.getElementById('btnSubirDocumento');
-                const tipo=document.getElementById('docTipo')?.value||'';
-                const observaciones=document.getElementById('docObservaciones')?.value||'';
-                if(!tipo){toast('Selecciona el tipo de documento.','error');return}
-                if(!documentosSeleccionados.length){toast('Selecciona al menos un archivo o toma una foto.','error');return}
-                const fd=new FormData();
-                fd.append('__RequestVerificationToken',token);
-                fd.append('embarqueId',String(flujoActual.embarqueID));
-                fd.append('tipoDocumento',tipo);
-                fd.append('observaciones',observaciones);
-                documentosSeleccionados.forEach(file=>fd.append('archivos',file,file.name));
-                const original=btn.innerHTML;
-                try{
-                    btn.disabled=true;
-                    btn.innerHTML=`<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${documentosSeleccionados.length} archivo${documentosSeleccionados.length===1?'':'s'}...`;
-                    const r=await fetch(urlSubirDocumento,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:fd});
-                    let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} y no devolvió JSON.`)}
-                    if(!r.ok||!j.ok)throw new Error(j.mensaje||'No fue posible subir los documentos.');
-                    e.currentTarget.reset();
-                    limpiarDocumentosSeleccionados();
-                    toast(j.mensaje||'Documentos cargados.');
-                    await refrescarFlujoActual('documentos');
-                }catch(err){toast(err.message||'Error al subir los documentos.','error')}
-                finally{
-                    btn.disabled=Boolean(documentosActual&&!documentosActual.puedeModificar);
-                    btn.innerHTML=original;
-                    renderDocumentosSeleccionados();
+            document.getElementById('docRequisitos')?.addEventListener('change',e=>{
+                const input=e.target.closest('[data-doc-input]');
+                if(input){
+                    const row=input.closest('[data-doc-row]');
+                    const file=input.files?.[0]||null;
+                    if(!row)return;
+                    if(file){
+                        const error=validarArchivoDocumento(file);
+                        if(error){toast(error,'error');input.value='';actualizarArchivoFila(row,null);return}
+                        const otros=[...documentosFilaSeleccionados.entries()].filter(([k])=>k!==row.dataset.docIndex).map(([,f])=>f);
+                        const total=otros.reduce((s,x)=>s+x.size,0)+file.size;
+                        if(otros.length+1>15){toast('Puedes guardar como máximo 15 archivos por operación.','error');input.value='';actualizarArchivoFila(row,null);return}
+                        if(total>100*1024*1024){toast('El total seleccionado no puede exceder 100 MB.','error');input.value='';actualizarArchivoFila(row,null);return}
+                    }
+                    actualizarArchivoFila(row,file);
+                    return;
+                }
+                const tipo=e.target.closest('[data-doc-tipo]');
+                if(tipo){
+                    const row=tipo.closest('[data-doc-row]');
+                    if(row)actualizarVisibilidadRemision(row);
                 }
             });
 
-            document.getElementById('docLista')?.addEventListener('click',async e=>{
-                const validar=e.target.closest('[data-validar-documento]');
+            async function retirarDocumentoDesdeExpediente(btn){
+                if(!flujoActual?.embarqueID||!btn)return;
+                const motivo=window.prompt('Motivo por el que se retira el documento:','');
+                if(motivo===null)return;
+                if(!motivo.trim()){toast('Captura el motivo de retiro.','error');return}
+                const data=new URLSearchParams();
+                data.append('__RequestVerificationToken',token);
+                data.append('documentoId',btn.dataset.retirarDocumento);
+                data.append('embarqueId',String(flujoActual.embarqueID));
+                data.append('motivo',motivo.trim());
+                btn.disabled=true;
+                try{await ejecutarAccionDocumento(urlRetirarDocumento,data,'No fue posible retirar el documento.')}
+                catch(err){btn.disabled=false;toast(err.message||'Error al retirar el documento.','error')}
+            }
+
+            document.getElementById('docRequisitos')?.addEventListener('click',e=>{
                 const retirar=e.target.closest('[data-retirar-documento]');
-                if(!flujoActual?.embarqueID||(!validar&&!retirar))return;
-                try{
-                    if(validar){
-                        if(!window.confirm('¿Validar este documento como correcto para el embarque?'))return;
-                        const data=new URLSearchParams();
-                        data.append('__RequestVerificationToken',token);
-                        data.append('documentoId',validar.dataset.validarDocumento);
-                        data.append('embarqueId',String(flujoActual.embarqueID));
-                        validar.disabled=true;
-                        await ejecutarAccionDocumento(urlValidarDocumento,data,'No fue posible validar el documento.');
-                    }else{
-                        const motivo=window.prompt('Motivo por el que se retira el documento:','');
-                        if(motivo===null)return;
-                        if(!motivo.trim()){toast('Captura el motivo de retiro.','error');return}
-                        const data=new URLSearchParams();
-                        data.append('__RequestVerificationToken',token);
-                        data.append('documentoId',retirar.dataset.retirarDocumento);
-                        data.append('embarqueId',String(flujoActual.embarqueID));
-                        data.append('motivo',motivo.trim());
-                        retirar.disabled=true;
-                        await ejecutarAccionDocumento(urlRetirarDocumento,data,'No fue posible retirar el documento.');
+                if(retirar)retirarDocumentoDesdeExpediente(retirar);
+            });
+            document.getElementById('docExtras')?.addEventListener('click',e=>{
+                const retirar=e.target.closest('[data-retirar-documento]');
+                if(retirar)retirarDocumentoDesdeExpediente(retirar);
+            });
+
+            document.getElementById('formDocumentoFlow')?.addEventListener('submit',async e=>{
+                e.preventDefault();
+                if(!flujoActual?.embarqueID||!documentosActual)return;
+                const rows=[...document.querySelectorAll('#docRequisitos [data-doc-row]')];
+                if(!rows.length){toast('No hay requisitos documentales disponibles para guardar.','error');return}
+                const faltantes=[];
+                for(const row of rows){
+                    const tieneArchivo=documentosFilaSeleccionados.has(row.dataset.docIndex);
+                    const tieneActual=Boolean(row.dataset.documentoId);
+                    if(row.dataset.obligatorio==='true'&&!tieneArchivo&&!tieneActual)faltantes.push(row.dataset.requisito||'Documento');
+                    if(tieneArchivo&&tipoSeleccionadoFila(row)==='Remisión'){
+                        const motivo=row.querySelector('[data-remision-motivo] textarea')?.value?.trim()||'';
+                        if(!motivo){toast(`Captura el motivo para utilizar Remisión en ${row.dataset.requisito||'el requisito seleccionado'}.`,'error');return}
                     }
-                }catch(err){toast(err.message||'Error al actualizar el documento.','error')}
+                }
+                if(faltantes.length){toast(`Falta adjuntar: ${faltantes.join(', ')}.`,'error');return}
+                const archivos=[...documentosFilaSeleccionados.values()];
+                const pendientesExistentes=rows.filter(row=>row.dataset.documentoId&&row.dataset.documentoValidado!=='true'&&!documentosFilaSeleccionados.has(row.dataset.docIndex));
+                if(!archivos.length&&!pendientesExistentes.length){
+                    toast(documentosActual.documentacionCompleta?'La documentación ya está completa.':'No hay archivos nuevos por guardar.');
+                    return;
+                }
+                const btn=document.getElementById('btnSubirDocumento');
+                const original=btn.innerHTML;
+                let procesados=0;
+                try{
+                    btn.disabled=true;
+                    for(const row of rows){
+                        const file=documentosFilaSeleccionados.get(row.dataset.docIndex);
+                        if(file){
+                            const tipo=tipoSeleccionadoFila(row);
+                            if(!tipo)throw new Error(`No fue posible determinar el tipo documental de ${row.dataset.requisito||file.name}.`);
+                            const observaciones=tipo==='Remisión'?(row.querySelector('[data-remision-motivo] textarea')?.value?.trim()||''):'';
+                            btn.innerHTML=`<i class="fa-solid fa-spinner fa-spin"></i> Guardando ${procesados+1} de ${archivos.length+pendientesExistentes.length}...`;
+                            const fd=new FormData();
+                            fd.append('__RequestVerificationToken',token);
+                            fd.append('embarqueId',String(flujoActual.embarqueID));
+                            fd.append('tipoDocumento',tipo);
+                            fd.append('observaciones',observaciones);
+                            fd.append('archivo',file,file.name);
+                            const r=await fetch(urlSubirDocumento,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:fd});
+                            let j;try{j=await r.json()}catch{throw new Error(`El servidor respondió ${r.status} al guardar ${file.name}.`)}
+                            if(!r.ok||!j.ok)throw new Error(j.mensaje||`No fue posible guardar ${file.name}.`);
+                            const ids=(j.documentosIds||[j.documentoId]).filter(Boolean);
+                            for(const id of ids)await validarDocumentoAutomatico(id);
+                            procesados++;
+                        }else if(row.dataset.documentoId&&row.dataset.documentoValidado!=='true'){
+                            btn.innerHTML=`<i class="fa-solid fa-spinner fa-spin"></i> Confirmando ${procesados+1} de ${archivos.length+pendientesExistentes.length}...`;
+                            await validarDocumentoAutomatico(row.dataset.documentoId);
+                            procesados++;
+                        }
+                    }
+                    limpiarDocumentosSeleccionados();
+                    toast(`Documentación guardada correctamente. ${procesados} documento(s) procesado(s).`);
+                    await refrescarFlujoActual('documentos');
+                }catch(err){
+                    toast(err.message||'No fue posible guardar la documentación.','error');
+                    await cargarDocumentosModal();
+                }finally{
+                    btn.innerHTML=original;
+                    btn.disabled=Boolean(documentosActual&&!documentosActual.puedeModificar);
+                    actualizarResumenDocumentosLote();
+                }
             });
 
             document.getElementById('formEscanearCajaFlow')?.addEventListener('submit',async e=>{

@@ -543,6 +543,11 @@ else
                                     · @x.TotalRenglones renglón(es)
                                     · Máquina: @NombreMaquina(x.Maquina)
                                 </small>
+                                @* NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1 *@
+                                <small title="Parte: @x.NumeroParteResumen · Designación: @x.DesignacionResumen">
+                                    Parte: @(string.IsNullOrWhiteSpace(x.NumeroParteResumen) ? "Sin número de parte" : x.NumeroParteResumen)
+                                    · Designación: @(string.IsNullOrWhiteSpace(x.DesignacionResumen) ? "Sin designación" : x.DesignacionResumen)
+                                </small>
                             </div>
                         </div>
 

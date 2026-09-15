@@ -37,8 +37,9 @@
         }
         else if (proximaParada.Estatus == "En sitio")
         {
+            var proximaEsEntrega = string.Equals(proximaParada.TipoParada, "Entrega", StringComparison.OrdinalIgnoreCase);
             accionTitulo = $"Completa la parada #{proximaParada.Secuencia}";
-            accionTexto = $"Estás en {proximaParada.Lugar}. Agrega las evidencias necesarias y pulsa Completar parada y continuar.";
+            accionTexto = proximaEsEntrega ? $"Estás en {proximaParada.Lugar}. Registra quién recibe, agrega la evidencia de entrega y completa la parada." : $"Estás en {proximaParada.Lugar}. Agrega las evidencias necesarias y pulsa Completar parada y continuar.";
             accionIcono = "fa-check-double";
         }
         else
@@ -298,17 +299,17 @@
             cursor: pointer
         }
 
-        .info-details > summary::-webkit-details-marker {
-            display: none
-        }
+            .info-details > summary::-webkit-details-marker {
+                display: none
+            }
 
-        .info-details > summary .details-open {
-            margin-left: auto;
-            color: var(--chofer-gris);
-            font-size: .68rem;
-            text-transform: none;
-            letter-spacing: 0
-        }
+            .info-details > summary .details-open {
+                margin-left: auto;
+                color: var(--chofer-gris);
+                font-size: .68rem;
+                text-transform: none;
+                letter-spacing: 0
+            }
 
         .info-details[open] > summary .details-open::after {
             content: "Ocultar"
@@ -326,24 +327,24 @@
             overflow: hidden
         }
 
-        .secondary-details > summary {
-            padding: 11px 12px;
-            cursor: pointer;
-            color: #667085;
-            font-size: .72rem;
-            font-weight: 900;
-            list-style: none
-        }
+            .secondary-details > summary {
+                padding: 11px 12px;
+                cursor: pointer;
+                color: #667085;
+                font-size: .72rem;
+                font-weight: 900;
+                list-style: none
+            }
 
-        .secondary-details > summary::-webkit-details-marker {
-            display: none
-        }
+                .secondary-details > summary::-webkit-details-marker {
+                    display: none
+                }
 
-        .secondary-details .parada-form {
-            border: 0;
-            border-top: 1px solid #e5eaf0;
-            border-radius: 0
-        }
+            .secondary-details .parada-form {
+                border: 0;
+                border-top: 1px solid #e5eaf0;
+                border-radius: 0
+            }
 
         .evidencia-botones {
             display: grid;
@@ -1358,6 +1359,7 @@
             }
 
             .parada-form textarea,
+            .parada-form input[type=text],
             .parada-form input[type=file] {
                 width: 100%;
                 border: 1px solid #ccd9e7;
@@ -1375,6 +1377,23 @@
 
             .parada-form input[type=file] {
                 margin-bottom: 8px
+            }
+
+        .parada-entrega-note {
+            margin-bottom: 10px;
+            padding: 9px 10px;
+            border: 1px solid #b8d2f1;
+            border-left: 4px solid var(--chofer-azul);
+            border-radius: 9px;
+            background: #f4f8ff;
+            color: #31506f;
+            font-size: .69rem;
+            font-weight: 800;
+            line-height: 1.4
+        }
+
+            .parada-entrega-note strong {
+                color: var(--chofer-azul-oscuro)
             }
 
         .parada-boton {
@@ -1430,13 +1449,15 @@
             }
 
             html[data-nsq-theme="dark"] .parada-form textarea,
+            html[data-nsq-theme="dark"] .parada-form input[type=text],
             html[data-nsq-theme="dark"] .parada-form input[type=file] {
                 background: #0d1828;
                 color: #edf3fb
             }
 
         html[data-nsq-theme="dark"] .parada-embarque,
-        html[data-nsq-theme="dark"] .parada-proxima {
+        html[data-nsq-theme="dark"] .parada-proxima,
+        html[data-nsq-theme="dark"] .parada-entrega-note {
             background: #132844;
             color: #d9e8fb
         }
@@ -1628,7 +1649,8 @@
             .field input,
             .field select,
             .field textarea,
-            .parada-form textarea {
+            .parada-form textarea,
+            .parada-form input[type=text] {
                 font-size: 16px
             }
 
@@ -1664,10 +1686,10 @@
             }
         }
 
-            .btn-agregar-evidencia:hover {
-                background: #eaf3ff;
-                border-color: var(--chofer-azul)
-            }
+        .btn-agregar-evidencia:hover {
+            background: #eaf3ff;
+            border-color: var(--chofer-azul)
+        }
 
         .lista-evidencias-captura {
             display: grid;
@@ -1742,13 +1764,13 @@
             background: #0d1828
         }
 
-        html[data-nsq-theme="dark"] .next-card strong {
-            color: #dceafe
-        }
+            html[data-nsq-theme="dark"] .next-card strong {
+                color: #dceafe
+            }
 
-        html[data-nsq-theme="dark"] .next-card span {
-            color: #aebfd3
-        }
+            html[data-nsq-theme="dark"] .next-card span {
+                color: #aebfd3
+            }
     </style>
 }
 
@@ -1964,6 +1986,7 @@
                     var claseParada = EstadoParadaClase(parada.Estatus);
                     var puedeOperarParada = enCurso && !parada.CierraViaje && parada.TipoParada != "Origen" && parada.Estatus is "Pendiente" or "En camino" or "En sitio";
                     var puedeOmitir = puedeOperarParada && !parada.Embarques.Any();
+                    var esParadaEntrega = string.Equals(parada.TipoParada, "Entrega", StringComparison.OrdinalIgnoreCase);
                     <article class="parada-card @claseParada @(esProxima ? "proxima" : "")">
                         <div class="parada-numero">@parada.Secuencia</div>
                         <div class="parada-contenido">
@@ -2077,11 +2100,19 @@
                                         }
                                         @if (parada.Estatus == "En sitio")
                                         {
-                                            <form class="parada-form full" asp-controller="LogisticaChofer" asp-action="CompletarParada" method="post" enctype="multipart/form-data" data-parada-operacion="completar" data-requiere-evidencia="@(parada.RequiereEvidencia ? "true" : "false")">
+                                            <form class="parada-form full" asp-controller="LogisticaChofer" asp-action="CompletarParada" method="post" enctype="multipart/form-data" data-parada-operacion="completar" data-es-entrega="@(esParadaEntrega ? "true" : "false")" data-requiere-evidencia="@((parada.RequiereEvidencia || esParadaEntrega) ? "true" : "false")">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="viajeId" value="@Model.ViajeID" />
                                                 <input type="hidden" name="viajeParadaId" value="@parada.ViajeParadaID" />
-                                                <label>Evidencias de la parada</label>
+                                                @if (esParadaEntrega)
+                                                {
+                                                    <div class="parada-entrega-note"><strong>Confirmación de entrega:</strong> registra quién recibe la mercancía. El folio de remisión es opcional y la evidencia fotográfica es obligatoria.</div>
+                                                    <label>Recibe *</label>
+                                                    <input type="text" name="receptorNombre" maxlength="200" autocomplete="name" required placeholder="Nombre de la persona que recibe" />
+                                                    <label class="mt-2">Folio de remisión</label>
+                                                    <input type="text" name="folioRemision" maxlength="100" placeholder="Opcional" />
+                                                }
+                                                <label class="mt-2">@(esParadaEntrega ? "Evidencias de entrega" : "Evidencias de la parada")</label>
                                                 <input id="evidenciasParada_@parada.ViajeParadaID"
                                                        class="js-evidencias-acumulables"
                                                        type="file"
@@ -2106,7 +2137,7 @@
                                                     </button>
                                                 </div>
                                                 <div id="listaEvidenciasParada_@parada.ViajeParadaID" class="lista-evidencias-captura"></div>
-                                                <div class="field-help">@(parada.RequiereEvidencia ? "Agrega al menos una foto. Puedes tomar varias una por una o seleccionar varias fotos/PDF de una sola vez." : "Opcional. Puedes tomar fotos o seleccionar varias fotos/PDF.")</div>
+                                                <div class="field-help">@(esParadaEntrega ? "Agrega al menos una fotografía que compruebe la entrega. Puedes tomar varias una por una o seleccionar varias fotos/PDF." : parada.RequiereEvidencia ? "Agrega al menos una foto. Puedes tomar varias una por una o seleccionar varias fotos/PDF de una sola vez." : "Opcional. Puedes tomar fotos o seleccionar varias fotos/PDF.")</div>
                                                 <label class="mt-2">Observaciones</label>
                                                 <textarea name="observaciones" maxlength="1200" placeholder="Opcional"></textarea>
                                                 <button type="submit" class="parada-boton completar"><i class="fa-solid fa-check-double"></i>Completar parada y continuar</button>
@@ -2295,9 +2326,9 @@
 
                 <div class="action-intro">
                     <i class="fa-solid fa-circle-info"></i>
-                    @if (esEntregaPt)
+                    @if (tieneEntregaVinculada)
                     {
-                        <span>Cuando termines la entrega y regreses a planta, registra el kilometraje final y agrega al menos una fotografía. Si todavía existe un embarque vinculado sin entregar, el sistema no permitirá cerrar el viaje.</span>
+                        <span>Cuando termines las entregas y regreses a planta, registra el kilometraje final y agrega al menos una fotografía. Si todavía existe un embarque vinculado sin entregar, el sistema no permitirá cerrar el viaje.</span>
                     }
                     else
                     {
@@ -2997,20 +3028,31 @@
             document.querySelectorAll('form[data-parada-operacion]').forEach(form => {
                 form.addEventListener('submit', event => {
                     const operacion = form.dataset.paradaOperacion || '';
+                    const esEntrega = operacion === 'completar' && form.dataset.esEntrega === 'true';
+                    if (esEntrega) {
+                        const receptor = form.querySelector('input[name="receptorNombre"]');
+                        if (!receptor || !String(receptor.value || '').trim()) {
+                            event.preventDefault();
+                            alert('Captura el nombre de la persona que recibe la mercancía.');
+                            receptor?.focus();
+                            return;
+                        }
+                    }
                     if (operacion === 'completar' && form.dataset.requiereEvidencia === 'true') {
                         const input = form.querySelector('input[name="evidencias"]');
                         const archivos = Array.from(input?.files || []);
                         const tieneFoto = archivos.some(file => String(file.type || '').startsWith('image/'));
                         if (!tieneFoto) {
                             event.preventDefault();
-                            alert('Esta parada requiere al menos una fotografía como evidencia.');
+                            alert(esEntrega ? 'La entrega requiere al menos una fotografía como evidencia.' : 'Esta parada requiere al menos una fotografía como evidencia.');
                             return;
                         }
                     }
+                    const receptorEntrega = esEntrega ? String(form.querySelector('input[name="receptorNombre"]')?.value || '').trim() : '';
                     const mensaje = operacion === 'llegada'
                         ? '¿Confirmar que ya llegaste a esta parada?'
                         : operacion === 'completar'
-                            ? '¿Completar esta parada y continuar con la siguiente?'
+                            ? esEntrega ? `¿Confirmar la entrega a ${receptorEntrega} y continuar con la siguiente parada?` : '¿Completar esta parada y continuar con la siguiente?'
                             : '¿Omitir esta parada y continuar con la siguiente?';
                     if (!window.confirm(mensaje)) {
                         event.preventDefault();

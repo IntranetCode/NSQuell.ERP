@@ -1133,6 +1133,16 @@ WHERE MaterialID=@Id AND Activo=1;";
             vm.NumeroOF = contexto.NumeroOF;
             vm.Unidad = "KG";
             vm.CantidadPendienteOF = contexto.Pendiente;
+
+            // NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+            var productoOF = await AlmacenOFEntregaService.CargarProductoOFAsync(
+                connection,
+                null,
+                solicitudProduccionId.Value,
+                cancellationToken);
+            vm.NumeroParteOF = productoOF?.NumeroParte ?? string.Empty;
+            vm.DesignacionOF = productoOF?.Designacion ?? string.Empty;
+
             vm.Cantidad = 0m;
             vm.CantidadVirgen = 0m;
             vm.CantidadMolido = 0m;

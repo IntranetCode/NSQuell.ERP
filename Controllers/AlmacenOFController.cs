@@ -149,6 +149,9 @@ Base AS
         CONVERT(INT, ISNULL(d.TotalPiezas, 0)) AS TotalPiezas,
         ISNULL(resumen.MaterialResumen, N'') AS MaterialResumen,
         ISNULL(resumen.EmbalajeResumen, N'') AS EmbalajeResumen,
+        -- NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+        ISNULL(producto.NumeroParteResumen, N'') AS NumeroParteResumen,
+        ISNULL(producto.DesignacionResumen, N'') AS DesignacionResumen,
         CONVERT(DECIMAL(18,4), ISNULL(d.MpRequerida, 0)) AS MpRequerida,
         CONVERT(DECIMAL(18,4), ISNULL(d.EmbalajeRequerido, 0)) AS EmbalajeRequerido,
 
@@ -243,6 +246,59 @@ Base AS
                     N''
                 )
     ) resumen
+
+    -- NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+    OUTER APPLY
+    (
+        SELECT
+            NumeroParteResumen =
+                STUFF
+                (
+                    (
+                        SELECT DISTINCT
+                            N' | '
+                            + COALESCE
+                              (
+                                  NULLIF(LTRIM(RTRIM(dx.ReferenciaSAP)), N''),
+                                  NULLIF(LTRIM(RTRIM(parte.NumeroParte)), N''),
+                                  N'Sin numero de parte'
+                              )
+                        FROM dbo.SolicitudesProduccionDetalle dx
+                        LEFT JOIN dbo.ERP_Partes parte
+                            ON parte.ParteID = dx.ParteID
+                        WHERE dx.SolicitudProduccionID = s.SolicitudProduccionID
+                          AND dx.Activo = 1
+                        FOR XML PATH(N''), TYPE
+                    ).value(N'.', N'nvarchar(max)'),
+                    1,
+                    3,
+                    N''
+                ),
+            DesignacionResumen =
+                STUFF
+                (
+                    (
+                        SELECT DISTINCT
+                            N' | '
+                            + COALESCE
+                              (
+                                  NULLIF(LTRIM(RTRIM(dx.DesignacionDescripcionSAP)), N''),
+                                  NULLIF(LTRIM(RTRIM(parte.Designacion)), N''),
+                                  NULLIF(LTRIM(RTRIM(parte.Descripcion)), N''),
+                                  N'Sin designacion'
+                              )
+                        FROM dbo.SolicitudesProduccionDetalle dx
+                        LEFT JOIN dbo.ERP_Partes parte
+                            ON parte.ParteID = dx.ParteID
+                        WHERE dx.SolicitudProduccionID = s.SolicitudProduccionID
+                          AND dx.Activo = 1
+                        FOR XML PATH(N''), TYPE
+                    ).value(N'.', N'nvarchar(max)'),
+                    1,
+                    3,
+                    N''
+                )
+    ) producto
 
     OUTER APPLY
     (
@@ -469,6 +525,8 @@ FETCH NEXT @TamanoPagina ROWS ONLY;";
                     TotalPiezas = Entero(reader, "TotalPiezas"),
                     MaterialResumen = Texto(reader, "MaterialResumen"),
                     EmbalajeResumen = Texto(reader, "EmbalajeResumen"),
+                    NumeroParteResumen = Texto(reader, "NumeroParteResumen"),
+                    DesignacionResumen = Texto(reader, "DesignacionResumen"),
                     MpRequerida = DecimalValor(reader, "MpRequerida"),
                     MpEntregada = DecimalValor(reader, "MpEntregada"),
                     EmbalajeRequerido = DecimalValor(reader, "EmbalajeRequerido"),

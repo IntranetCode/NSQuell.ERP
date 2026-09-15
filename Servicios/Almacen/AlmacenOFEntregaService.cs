@@ -15,6 +15,11 @@ public sealed record AlmacenOFEntregaContexto(
         Math.Max(0m, Requerido - Math.Max(0m, Entregado));
 }
 
+// NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+public sealed record AlmacenOFProductoContexto(
+    string NumeroParte,
+    string Designacion);
+
 public static class AlmacenOFEntregaService
 {
     public static string CrearToken() => Guid.NewGuid().ToString("N");
@@ -25,6 +30,87 @@ public static class AlmacenOFEntregaService
 
     public static string CrearReferencia(string prefijo, string token) =>
         $"{prefijo.Trim().ToUpperInvariant()}-{token.Trim().ToUpperInvariant()}";
+
+    // NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1
+    public static async Task<AlmacenOFProductoContexto?> CargarProductoOFAsync(
+        SqlConnection connection,
+        SqlTransaction? transaction,
+        int solicitudProduccionID,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT
+    ISNULL
+    (
+        STUFF
+        (
+            (
+                SELECT DISTINCT
+                    N' | ' +
+                    COALESCE
+                    (
+                        NULLIF(LTRIM(RTRIM(detalle.ReferenciaSAP)), N''),
+                        NULLIF(LTRIM(RTRIM(parte.NumeroParte)), N''),
+                        N'Sin numero de parte'
+                    )
+                FROM dbo.SolicitudesProduccionDetalle detalle
+                LEFT JOIN dbo.ERP_Partes parte
+                    ON parte.ParteID = detalle.ParteID
+                WHERE detalle.SolicitudProduccionID = @SolicitudID
+                  AND detalle.Activo = 1
+                FOR XML PATH(N''), TYPE
+            ).value(N'.', N'nvarchar(max)'),
+            1,
+            3,
+            N''
+        ),
+        N''
+    ) AS NumeroParte,
+    ISNULL
+    (
+        STUFF
+        (
+            (
+                SELECT DISTINCT
+                    N' | ' +
+                    COALESCE
+                    (
+                        NULLIF(LTRIM(RTRIM(detalle.DesignacionDescripcionSAP)), N''),
+                        NULLIF(LTRIM(RTRIM(parte.Designacion)), N''),
+                        NULLIF(LTRIM(RTRIM(parte.Descripcion)), N''),
+                        N'Sin designacion'
+                    )
+                FROM dbo.SolicitudesProduccionDetalle detalle
+                LEFT JOIN dbo.ERP_Partes parte
+                    ON parte.ParteID = detalle.ParteID
+                WHERE detalle.SolicitudProduccionID = @SolicitudID
+                  AND detalle.Activo = 1
+                FOR XML PATH(N''), TYPE
+            ).value(N'.', N'nvarchar(max)'),
+            1,
+            3,
+            N''
+        ),
+        N''
+    ) AS Designacion;";
+
+        await using var command = new SqlCommand(sql, connection);
+        if (transaction != null)
+            command.Transaction = transaction;
+
+        command.Parameters.Add("@SolicitudID", SqlDbType.Int).Value =
+            solicitudProduccionID;
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return new AlmacenOFProductoContexto(
+            Texto(reader, "NumeroParte"),
+            Texto(reader, "Designacion"));
+    }
 
     public static Task<AlmacenOFEntregaContexto?> CargarMateriaPrimaAsync(
         SqlConnection connection,
