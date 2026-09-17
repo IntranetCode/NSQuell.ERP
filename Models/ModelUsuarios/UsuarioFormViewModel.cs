@@ -36,8 +36,8 @@ namespace ERP.NSQuell.Models.ModelUsuarios
 
         public string? ApellidoMaterno { get; set; }
 
+        // NSQ_CORREO_COMPARTIDO_V1: el correo es un buzón de contacto y puede compartirse entre usuarios ERP.
         [EmailAddress(ErrorMessage = "El formato del correo no es válido.")]
-        [Remote(action: "VerificarCorreo", controller: "Usuarios", AdditionalFields = nameof(UsuarioID), ErrorMessage = "Este correo electrónico ya está en uso.")]
         public string? Correo { get; set; }
 
         public string? Telefono { get; set; }

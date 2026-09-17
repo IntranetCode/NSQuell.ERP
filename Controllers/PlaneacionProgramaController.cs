@@ -1179,18 +1179,9 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                         "La cantidad u horas de producción recalculadas no son válidas.");
                 }
 
-                if (vm.MaquinaID.HasValue)
-                {
-                    etapaSql = "Validar máquina compatible con la parte";
-                    var maquinaCompatible = await MaquinaCompatibleConParteAsync(vm.ParteID, vm.MaquinaID.Value, cn, sqlTx);
-                    if (!maquinaCompatible)
-                    {
-                        await tx.RollbackAsync();
-                        ModelState.AddModelError(nameof(vm.MaquinaID), "La máquina seleccionada no está configurada como principal ni sustituta directa para esta parte. No se permiten sustitutas de sustitutas.");
-                        await CargarCatalogosAsync(vm);
-                        return View(vm);
-                    }
-                }
+                // NSQ_PLANEACION_CREAR_TODAS_MAQUINAS_V1_1
+                // En CrearDesdeNecesidad Planeacion puede elegir cualquier maquina activa.
+                // Se conservan las validaciones posteriores de horario, ocupacion y molde.
                 etapaSql = "Calcular horario exacto solicitado";
                 var inicioSolicitado = vm.FechaInicioProgramada!.Value;
                 var arranqueSolicitado = CalcularFechaHoraDesdeHora(inicioSolicitado.Date, vm.Arranque);
@@ -3599,7 +3590,8 @@ WHERE TransferenciaID=@TransferenciaID
                 inicio,
                 fin,
                 vm.MaquinaID,
-                vm.ParteID
+                vm.ParteID,
+                mostrarTodasLasMaquinas: true
             );
 
             vm.Moldes = await CargarSelectAsync(
@@ -3718,7 +3710,8 @@ VALUES
     DateTime inicio,
     DateTime fin,
     int? maquinaSeleccionadaId,
-    int? parteId)
+    int? parteId,
+    bool mostrarTodasLasMaquinas = false)
         {
             const string sql = @"
 ;WITH DatosTecnicos AS
@@ -3788,11 +3781,12 @@ SELECT
     ) AS Ocupada
 FROM dbo.ERP_Maquinas m
 WHERE m.Activo = 1
-  AND UPPER(REPLACE(ISNULL(m.Codigo,N''),N' ',N'')) <> N'1200T'
-  AND UPPER(REPLACE(ISNULL(m.Nombre,N''),N' ',N'')) NOT LIKE N'%1200T%'
+  AND (@MostrarTodasLasMaquinas = 1 OR UPPER(REPLACE(ISNULL(m.Codigo,N''),N' ',N'')) <> N'1200T')
+  AND (@MostrarTodasLasMaquinas = 1 OR UPPER(REPLACE(ISNULL(m.Nombre,N''),N' ',N'')) NOT LIKE N'%1200T%')
   AND
   (
-        @ParteID IS NULL
+        @MostrarTodasLasMaquinas = 1
+     OR @ParteID IS NULL
      OR EXISTS
         (
             SELECT 1
@@ -3811,6 +3805,8 @@ ORDER BY
             cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
             cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value =
                 (object?)parteId ?? DBNull.Value;
+            cmd.Parameters.Add("@MostrarTodasLasMaquinas", SqlDbType.Bit).Value =
+                mostrarTodasLasMaquinas;
 
             await using var rd = await cmd.ExecuteReaderAsync();
 
