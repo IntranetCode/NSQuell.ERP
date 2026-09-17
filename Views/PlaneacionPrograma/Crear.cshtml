@@ -65,17 +65,15 @@
         function redondearSiguienteHora(fecha) {
             const f = new Date(fecha);
 
-            const tieneMinutos =
-                f.getMinutes() !== 0 ||
+            const teniaSegundos =
                 f.getSeconds() !== 0 ||
                 f.getMilliseconds() !== 0;
 
-            f.setMinutes(0);
             f.setSeconds(0);
             f.setMilliseconds(0);
 
-            if (tieneMinutos) {
-                f.setHours(f.getHours() + 1);
+            if (teniaSegundos) {
+                f.setMinutes(f.getMinutes() + 1);
             }
 
             return f;
@@ -86,7 +84,8 @@
         }
 
         function horaCompletaTexto(fecha) {
-            return String(fecha.getHours()).padStart(2, '0') + ':00';
+            return String(fecha.getHours()).padStart(2, '0') + ':' +
+                   String(fecha.getMinutes()).padStart(2, '0');
         }
 
         function normalizarTimeHoraCompleta(input) {
@@ -94,8 +93,14 @@
 
             const partes = input.value.split(':');
             const hh = Number(partes[0] || 0);
+            const mm = Number(partes[1] || 0);
 
-            input.value = String(hh).padStart(2, '0') + ':00';
+            if (!Number.isInteger(hh) || hh < 0 || hh > 23) return;
+            if (!Number.isInteger(mm) || mm < 0 || mm > 59) return;
+
+            input.value =
+                String(hh).padStart(2, '0') + ':' +
+                String(mm).padStart(2, '0');
         }
 
         function sumarUnaHoraCompleta(horaValue) {
@@ -103,15 +108,15 @@
 
             const partes = horaValue.split(':');
             const hh = Number(partes[0] || 0);
+            const mm = Number(partes[1] || 0);
 
-            const fecha = new Date();
-            fecha.setHours(hh);
-            fecha.setMinutes(0);
-            fecha.setSeconds(0);
-            fecha.setMilliseconds(0);
-            fecha.setHours(fecha.getHours() + 1);
+            if (!Number.isInteger(hh) || hh < 0 || hh > 23) return '';
+            if (!Number.isInteger(mm) || mm < 0 || mm > 59) return '';
 
-            return String(fecha.getHours()).padStart(2, '0') + ':00';
+            const nuevaHora = (hh + 1) % 24;
+
+            return String(nuevaHora).padStart(2, '0') + ':' +
+                   String(mm).padStart(2, '0');
         }
 
         function construirFechaArranque() {
@@ -378,7 +383,7 @@
                 }
             }
 
-            recalcularHorasPorCantidad();
+            recalcularHorasPorCantidad(true);
             recalcularFin();
 
             return todoValido;
@@ -416,9 +421,14 @@
             reindexarAumentosRelease();
             recalcularAumentosRelease();
         }
-        function recalcularHorasPorCantidad() {
+        function recalcularHorasPorCantidad(sincronizarHorasInput = false) {
             if (!cantidadInput || objetivoHora <= 0) {
                 if (formulaHoras) formulaHoras.textContent = '0';
+
+                if (sincronizarHorasInput && horasInput) {
+                    horasInput.value = '';
+                }
+
                 return;
             }
 
@@ -427,13 +437,19 @@
                 ? Math.ceil(cantidad / objetivoHora)
                 : 0;
 
-            // V10.6: Cantidad / ObjetivoHora es SOLO una referencia visual.
-            // HorasProgramadas es una decision manual de Planeacion y nunca
-            // debe ser sobrescrita automaticamente por esta formula.
             if (formulaHoras) {
                 formulaHoras.textContent = horasSugeridas > 0
                     ? horasSugeridas.toFixed(0)
                     : '0';
+            }
+
+            // NSQ_PLANEACION_RECALCULO_HORAS_EXTRA_V1
+            // Cuando cambia Base + Piezas extra, HorasProgramadas debe reflejar
+            // inmediatamente el nuevo total redondeado.
+            if (sincronizarHorasInput && horasInput) {
+                horasInput.value = horasSugeridas > 0
+                    ? horasSugeridas.toFixed(0)
+                    : '';
             }
         }
         function obtenerIntervaloOperativoJs(fecha) {
@@ -1586,7 +1602,7 @@
                                    value="@DateTimeLocal(Model.FechaInicioProgramada)"
                                    class="form-control"
                                    id="FechaInicioProgramada"
-                                   step="3600" />
+                                   step="60" lang="en-GB" />
                             <span asp-validation-for="FechaInicioProgramada" class="text-danger small"></span>
                             <div id="avisoHorarioPasado"
                                  class="horario-pasado-aviso"
@@ -1605,7 +1621,7 @@
                                    value="@TimeValue(Model.Cambio)"
                                    class="form-control"
                                    id="Cambio"
-                                   step="3600" />
+                                   step="60" lang="en-GB" />
                             <span asp-validation-for="Cambio" class="text-danger small"></span>
                         </div>
 
@@ -1616,7 +1632,7 @@
                                    value="@TimeValue(Model.Arranque)"
                                    class="form-control"
                                    id="Arranque"
-                                   step="3600" />
+                                   step="60" lang="en-GB" />
                             <span asp-validation-for="Arranque" class="text-danger small"></span>
                         </div>
 
@@ -1638,7 +1654,7 @@
                                    value="@DateTimeLocal(Model.FechaFinProgramada)"
                                    class="form-control"
                                    id="FechaFinProgramada"
-                                   readonly />
+                                   lang="en-GB" readonly />
                         </div>
 
                         <div class="col-12">

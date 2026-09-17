@@ -2125,7 +2125,7 @@ ORDER BY
 
                 if (actual >= cierre)
                 {
-                    actual = SiguienteAperturaOperativaPlaneacion(cierre.AddMinutes(1), trabajarDomingo);
+                    actual = SiguienteAperturaOperativaPlaneacion(cierre, trabajarDomingo);
                     continue;
                 }
 
@@ -2135,7 +2135,7 @@ ORDER BY
                     return actual.AddHours((double)restante);
 
                 restante -= disponibles;
-                actual = SiguienteAperturaOperativaPlaneacion(cierre.AddMinutes(1), trabajarDomingo);
+                actual = SiguienteAperturaOperativaPlaneacion(cierre, trabajarDomingo);
             }
 
             return actual;
@@ -2326,14 +2326,14 @@ WHERE pp.Activo=1
   AND pp.MaquinaID=@MaquinaID
   AND ISNULL(pp.EstatusID,1) NOT IN (5,9,99)
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND pp.FechaInicioProgramada < @Fin
+  AND pp.FechaInicioProgramada < DATEADD(MINUTE, -2, @Fin)
   AND ISNULL(
         pp.FechaFinProgramada,
         DATEADD(
             MINUTE,
             CAST(CEILING(ISNULL(pp.HorasProgramadas,1) * 60) AS INT),
             pp.FechaInicioProgramada)
-      ) > @Inicio
+      ) > DATEADD(MINUTE, 2, @Inicio)
 ORDER BY
     ISNULL(
         pp.FechaFinProgramada,
@@ -3769,11 +3769,11 @@ SELECT
                 WHERE pp.Activo = 1
                   AND pp.MaquinaID = m.MaquinaID
                   AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
-                  AND pp.FechaInicioProgramada < @Fin
+                  AND pp.FechaInicioProgramada < DATEADD(MINUTE, -2, @Fin)
                   AND ISNULL(
                         pp.FechaFinProgramada,
                         DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
-                      ) > @Inicio
+                      ) > DATEADD(MINUTE, 2, @Inicio)
             )
             THEN 1
             ELSE 0
@@ -3915,11 +3915,11 @@ FROM dbo.Planeacion_ProgramaProduccion pp
 WHERE pp.Activo = 1
   AND pp.MaquinaID = @MaquinaID
   AND ISNULL(pp.EstatusID, 1) NOT IN (5, 9, 99)
-  AND pp.FechaInicioProgramada < @Fin
+  AND pp.FechaInicioProgramada < DATEADD(MINUTE, -2, @Fin)
   AND ISNULL(
         pp.FechaFinProgramada,
         DATEADD(MINUTE, CAST(CEILING(ISNULL(pp.HorasProgramadas, 1) * 60) AS INT), pp.FechaInicioProgramada)
-      ) > @Inicio;";
+      ) > DATEADD(MINUTE, 2, @Inicio);";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = maquinaId;
@@ -5303,7 +5303,7 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID;";
 
                 if (disponibles <= 0)
                 {
-                    cursor = SiguienteAperturaCalendario(finVentana.AddMinutes(1));
+                    cursor = SiguienteAperturaCalendario(finVentana);
                     continue;
                 }
 
