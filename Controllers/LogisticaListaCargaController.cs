@@ -121,21 +121,18 @@ WHERE ParteID=@ParteID;";
             piezasLocalizadas = Decimal(rd, "PiezasLocalizadas")
         });
     }
-    [HttpPost]
-    [ValidateAntiForgeryToken]
+
     public async Task<IActionResult> GuardarProgramacion(LogisticaListaCargaProgramarVm model, CancellationToken cancellationToken = default)
     {
         var acceso = await ValidarAccesoAsync();
         if (acceso != null) return acceso;
-        model.Programaciones ??= new();
-        if (model.Programaciones.Any(x => x.Cantidad < 0)) ModelState.AddModelError(nameof(model.Programaciones), "Las cantidades no pueden ser negativas.");
-        model.Programaciones = model.Programaciones.Where(x => x.Cantidad > 0).OrderBy(x => x.FechaProgramadaCarga).ToList();
+        model.Programaciones = model.Programaciones?.Where(x => x.Cantidad > 0).OrderBy(x => x.FechaProgramadaCarga).ToList() ?? new();
         if (model.ListaCargaSemanaID <= 0) ModelState.AddModelError(nameof(model.ListaCargaSemanaID), "La semana no es válida.");
         if (model.ClienteID <= 0) ModelState.AddModelError(nameof(model.ClienteID), "El cliente no es válido.");
         if (model.ParteID <= 0) ModelState.AddModelError(nameof(model.ParteID), "La parte no es válida.");
         if (model.Programaciones.Count == 0) ModelState.AddModelError(nameof(model.Programaciones), "Captura al menos una fecha y cantidad para programar.");
         if (model.Programaciones.Any(x => x.FechaProgramadaCarga == DateTime.MinValue)) ModelState.AddModelError(nameof(model.Programaciones), "Todas las programaciones deben tener una fecha válida.");
-        if (model.Programaciones.Any(x => !string.IsNullOrWhiteSpace(x.Observaciones) && x.Observaciones.Trim().Length > 1000)) ModelState.AddModelError(nameof(model.Programaciones), "Las observaciones de una programación no pueden exceder 1,000 caracteres.");
+        if (model.Programaciones.Any(x => x.Cantidad <= 0)) ModelState.AddModelError(nameof(model.Programaciones), "Todas las cantidades deben ser mayores a cero.");
         if (!ModelState.IsValid)
         {
             TempData["LogisticaError"] = ObtenerErroresModelState();
@@ -147,61 +144,37 @@ WHERE ParteID=@ParteID;";
         {
             DateTime fechaInicio;
             DateTime fechaFin;
-            const string sqlSemana = @"SELECT FechaInicio,FechaFin,ISNULL(Estatus,N'') Estatus FROM dbo.Logistica_ListaCargaSemanas WITH(UPDLOCK,HOLDLOCK) WHERE ListaCargaSemanaID=@Id AND Activo=1;";
+            const string sqlSemana = @"SELECT FechaInicio,FechaFin,Estatus FROM dbo.Logistica_ListaCargaSemanas WITH(UPDLOCK,HOLDLOCK) WHERE ListaCargaSemanaID=@Id AND Activo=1;";
             await using (var cmd = new SqlCommand(sqlSemana, cn, tx))
             {
                 cmd.Parameters.Add("@Id", SqlDbType.Int).Value = model.ListaCargaSemanaID;
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
                 if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("La semana seleccionada ya no existe.");
-                if (Texto(rd, "Estatus").Equals("Cerrada", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("La semana está cerrada y no permite modificar la programación.");
+                if (string.Equals(Texto(rd, "Estatus"), "Cerrada", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("La semana está cerrada y no permite modificar la programación.");
                 fechaInicio = (Fecha(rd, "FechaInicio") ?? DateTime.MinValue).Date;
                 fechaFin = (Fecha(rd, "FechaFin") ?? DateTime.MinValue).Date;
             }
-            if (fechaInicio == DateTime.MinValue.Date || fechaFin == DateTime.MinValue.Date || fechaFin < fechaInicio) throw new InvalidOperationException("La semana seleccionada tiene un rango de fechas inválido.");
-            if (model.Programaciones.Any(x => x.FechaProgramadaCarga.Date < fechaInicio || x.FechaProgramadaCarga.Date > fechaFin)) throw new InvalidOperationException($"Las fechas de carga deben encontrarse dentro de la semana seleccionada, del {fechaInicio:dd/MM/yyyy} al {fechaFin:dd/MM/yyyy}.");
-            const string sqlReducirParciales = @"
-UPDATE p
-SET CantidadProgramada=x.CantidadGenerada,Estatus=N'Generada',FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
-FROM dbo.Logistica_ListaCargaProgramacion p
-CROSS APPLY
-(
-    SELECT ISNULL(SUM(CONVERT(bigint,e.CantidadAsignada)),0) CantidadGenerada
-    FROM dbo.Logistica_ListaCargaProgramacionEmbarques e WITH(UPDLOCK,HOLDLOCK)
-    WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND e.Activo=1
-) x
-WHERE p.ListaCargaSemanaOrigenID=@SemanaID
-AND p.ClienteID=@ClienteID
-AND p.ParteID=@ParteID
-AND p.Activo=1
-AND p.Estatus<>N'Cancelada'
-AND x.CantidadGenerada>0
-AND x.CantidadGenerada<p.CantidadProgramada;";
-            await using (var cmd = new SqlCommand(sqlReducirParciales, cn, tx))
-            {
-                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-                cmd.Parameters.Add("@SemanaID", SqlDbType.Int).Value = model.ListaCargaSemanaID;
-                cmd.Parameters.Add("@ClienteID", SqlDbType.Int).Value = model.ClienteID;
-                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = model.ParteID;
-                await cmd.ExecuteNonQueryAsync(cancellationToken);
-            }
             const string sqlNormalizarGeneradas = @"
 UPDATE p
-SET Estatus=N'Generada',FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+SET Estatus=N'Generada',
+    FechaModificacion=SYSDATETIME(),
+    ActualizadoPor=@Usuario
 FROM dbo.Logistica_ListaCargaProgramacion p
 CROSS APPLY
 (
     SELECT ISNULL(SUM(CONVERT(bigint,e.CantidadAsignada)),0) CantidadGenerada
     FROM dbo.Logistica_ListaCargaProgramacionEmbarques e WITH(UPDLOCK,HOLDLOCK)
-    WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND e.Activo=1
-) x
+    WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID
+      AND e.Activo=1
+)x
 WHERE p.ListaCargaSemanaOrigenID=@SemanaID
-AND p.ClienteID=@ClienteID
-AND p.ParteID=@ParteID
-AND p.Activo=1
-AND p.Estatus<>N'Cancelada'
-AND p.CantidadProgramada>0
-AND x.CantidadGenerada>=p.CantidadProgramada
-AND p.Estatus<>N'Generada';";
+  AND p.ClienteID=@ClienteID
+  AND p.ParteID=@ParteID
+  AND p.Activo=1
+  AND p.Estatus<>N'Cancelada'
+  AND p.CantidadProgramada>0
+  AND x.CantidadGenerada>=p.CantidadProgramada
+  AND p.Estatus<>N'Generada';";
             await using (var cmd = new SqlCommand(sqlNormalizarGeneradas, cn, tx))
             {
                 cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
@@ -212,20 +185,25 @@ AND p.Estatus<>N'Generada';";
             }
             const string sqlDesactivarEditables = @"
 UPDATE p
-SET Activo=0,Estatus=N'Cancelada',FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+SET Activo=0,
+    Estatus=N'Cancelada',
+    FechaModificacion=SYSDATETIME(),
+    ActualizadoPor=@Usuario
 FROM dbo.Logistica_ListaCargaProgramacion p
 OUTER APPLY
 (
     SELECT ISNULL(SUM(CONVERT(bigint,e.CantidadAsignada)),0) CantidadGenerada
     FROM dbo.Logistica_ListaCargaProgramacionEmbarques e WITH(UPDLOCK,HOLDLOCK)
-    WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID AND e.Activo=1
-) x
+    WHERE e.ListaCargaProgramacionID=p.ListaCargaProgramacionID
+      AND e.Activo=1
+)x
 WHERE p.ListaCargaSemanaOrigenID=@SemanaID
-AND p.ClienteID=@ClienteID
-AND p.ParteID=@ParteID
-AND p.Activo=1
-AND p.Estatus<>N'Cancelada'
-AND ISNULL(x.CantidadGenerada,0)=0;";
+  AND p.ClienteID=@ClienteID
+  AND p.ParteID=@ParteID
+  AND p.Activo=1
+  AND p.Estatus<>N'Cancelada'
+  AND ISNULL(p.Estatus,N'Programada')<>N'Parcial'
+  AND ISNULL(x.CantidadGenerada,0)=0;";
             await using (var cmd = new SqlCommand(sqlDesactivarEditables, cn, tx))
             {
                 cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
@@ -239,9 +217,9 @@ AND ISNULL(x.CantidadGenerada,0)=0;";
 SELECT d.ReleaseDetalleID,d.FechaRequerida,ISNULL(d.PendienteProgramar,0) Disponible
 FROM dbo.vw_Logistica_DemandaRelease d
 WHERE d.ClienteID=@ClienteID
-AND d.ParteID=@ParteID
-AND d.FechaRequerida<=@FechaFin
-AND ISNULL(d.PendienteProgramar,0)>0
+  AND d.ParteID=@ParteID
+  AND d.FechaRequerida<=@FechaFin
+  AND ISNULL(d.PendienteProgramar,0)>0
 ORDER BY d.FechaRequerida,d.ReleaseDetalleID;";
             await using (var cmd = new SqlCommand(sqlReleases, cn, tx))
             {
@@ -251,16 +229,12 @@ ORDER BY d.FechaRequerida,d.ReleaseDetalleID;";
                 await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
                 while (await rd.ReadAsync(cancellationToken))
                 {
-                    var releaseDetalleId = Entero(rd, "ReleaseDetalleID");
-                    var fechaRequerida = (Fecha(rd, "FechaRequerida") ?? DateTime.MinValue).Date;
-                    var disponible = Entero(rd, "Disponible");
-                    if (releaseDetalleId > 0 && fechaRequerida != DateTime.MinValue.Date && disponible > 0) releases.Add((releaseDetalleId, fechaRequerida, disponible));
+                    releases.Add((Entero(rd, "ReleaseDetalleID"), (Fecha(rd, "FechaRequerida") ?? DateTime.MinValue).Date, Entero(rd, "Disponible")));
                 }
             }
-            var totalDisponible = releases.Sum(x => (long)x.Disponible);
-            var totalSolicitado = model.Programaciones.Sum(x => (long)x.Cantidad);
+            var totalDisponible = releases.Sum(x => x.Disponible);
+            var totalSolicitado = model.Programaciones.Sum(x => x.Cantidad);
             if (totalDisponible <= 0) throw new InvalidOperationException("Ya no existe cantidad libre pendiente para programar. La cantidad que ya generó embarque permanece protegida.");
-            if (totalSolicitado <= 0) throw new InvalidOperationException("La cantidad total a programar debe ser mayor a cero.");
             if (totalSolicitado > totalDisponible) throw new InvalidOperationException($"Intentas programar {totalSolicitado:N0} PZA, pero actualmente solo existen {totalDisponible:N0} PZA libres para programar.");
             var saldos = releases.Select(x => new { x.ReleaseDetalleID, x.FechaRequerida, Disponible = x.Disponible }).ToList();
             foreach (var detalle in model.Programaciones)
@@ -273,9 +247,35 @@ ORDER BY d.FechaRequerida,d.ReleaseDetalleID;";
                     var tomar = Math.Min(faltante, saldo.Disponible);
                     const string sqlInsert = @"
 INSERT dbo.Logistica_ListaCargaProgramacion
-(ListaCargaSemanaOrigenID,ReleaseDetalleID,ClienteID,ParteID,FechaRequeridaOriginal,FechaProgramadaCarga,CantidadProgramada,EsReprogramacion,Estatus,Observaciones,Activo,FechaCreacion,CreadoPor)
+(
+    ListaCargaSemanaOrigenID,
+    ReleaseDetalleID,
+    ClienteID,
+    ParteID,
+    FechaRequeridaOriginal,
+    FechaProgramadaCarga,
+    CantidadProgramada,
+    Estatus,
+    Observaciones,
+    Activo,
+    FechaCreacion,
+    CreadoPor
+)
 VALUES
-(@SemanaID,@ReleaseDetalleID,@ClienteID,@ParteID,@FechaOriginal,@FechaCarga,@Cantidad,CASE WHEN @FechaCarga<>@FechaOriginal THEN 1 ELSE 0 END,N'Programada',@Observaciones,1,SYSDATETIME(),@Usuario);";
+(
+    @SemanaID,
+    @ReleaseDetalleID,
+    @ClienteID,
+    @ParteID,
+    @FechaOriginal,
+    @FechaCarga,
+    @Cantidad,
+    N'Programada',
+    @Observaciones,
+    1,
+    SYSDATETIME(),
+    @Usuario
+);";
                     await using (var cmd = new SqlCommand(sqlInsert, cn, tx))
                     {
                         cmd.Parameters.Add("@SemanaID", SqlDbType.Int).Value = model.ListaCargaSemanaID;
@@ -287,7 +287,7 @@ VALUES
                         cmd.Parameters.Add("@Cantidad", SqlDbType.Int).Value = tomar;
                         cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1000).Value = Db(string.IsNullOrWhiteSpace(detalle.Observaciones) ? null : detalle.Observaciones.Trim());
                         cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-                        if (await cmd.ExecuteNonQueryAsync(cancellationToken) != 1) throw new InvalidOperationException("No fue posible guardar una de las programaciones.");
+                        await cmd.ExecuteNonQueryAsync(cancellationToken);
                     }
                     saldos[i] = new { saldo.ReleaseDetalleID, saldo.FechaRequerida, Disponible = saldo.Disponible - tomar };
                     faltante -= tomar;
@@ -295,8 +295,10 @@ VALUES
                 if (faltante > 0) throw new InvalidOperationException("No fue posible distribuir completamente la cantidad indicada entre los Releases disponibles.");
             }
             await tx.CommitAsync(cancellationToken);
-            var restante = Math.Max(0L, totalDisponible - totalSolicitado);
-            TempData["LogisticaOk"] = restante > 0 ? $"Programación guardada por {totalSolicitado:N0} PZA. Permanecen {restante:N0} PZA sin programar." : $"Programación guardada correctamente. Total programado: {totalSolicitado:N0} PZA.";
+            var restante = Math.Max(0, totalDisponible - totalSolicitado);
+            TempData["LogisticaOk"] = restante > 0
+                ? $"Programación guardada por {totalSolicitado:N0} PZA. Permanecen {restante:N0} PZA sin programar."
+                : $"Programación guardada correctamente. Total programado: {totalSolicitado:N0} PZA.";
         }
         catch (Exception ex)
         {
@@ -305,6 +307,7 @@ VALUES
         }
         return RedirectSemana(model.Anio, model.NumeroSemana);
     }
+
 
     [HttpPost]
     [ValidateAntiForgeryToken]

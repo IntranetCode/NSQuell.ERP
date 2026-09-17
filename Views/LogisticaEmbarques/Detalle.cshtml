@@ -58,8 +58,11 @@
     var salidaPlantaCompleta = Model.Estatus is "En ruta" or "Entregado";
     var entregaCompleta = Model.Estatus == "Entregado";
     var esEntrega = Model.FormaEnvio == "Interno";
-    var salidaDesdeCentro = Model.FormaEnvio is "Cliente" or "Paqueteria";
+    var esCliente = Model.FormaEnvio == "Cliente";
+    var esPaqueteria = Model.FormaEnvio == "Paqueteria";
+    var salidaDesdeCentro = esCliente || esPaqueteria;
     var puedeEntregar = Model.Estatus == "En ruta" && salidaDesdeCentro;
+    var puedeTrabajarCarga = salidaConfigurada && programacionCompleta && (Model.Estatus is "Programado" or "Preparando" or "Preparado" or "Cargando");
     var porcentajeAvanceVista = Model.Estatus == "Cargando" ? 65 : Model.PorcentajeAvance;
 
     string ClasePaso(bool completo, bool actual)
@@ -84,26 +87,28 @@
         "En ruta" when esEntrega => "Seguimiento de entrega con chofer",
         "En ruta" => "Confirmar entrega",
         "Cargado" when !documentacionCompleta => "Completar documentación",
-        "Cargado" when esEntrega => "Esperar salida del chofer",
-        "Cargado" => "Confirmar salida de planta",
-        "Preparado" or "Cargando" => "Completar carga física",
+        "Cargado" when esCliente => "Confirmar recolección",
+        "Cargado" when esEntrega => "Iniciar viaje",
+        "Cargado" when esPaqueteria => "Confirmar salida de planta",
+        "Programado" or "Preparando" or "Preparado" or "Cargando" when salidaConfigurada => "Carga física",
         _ when requiereDefinirSalida => "Configurar salida en Centro Operativo",
-        _ => "Completar preparación PT"
+        _ => "Revisar operación"
     };
 
     var proximaAccionDetalleVista = Model.Estatus switch
     {
         "Cancelado" => "No hay acciones operativas pendientes.",
         "Entregado" => "La entrega está cerrada y conserva su trazabilidad.",
-        "En ruta" when esEntrega => "El chofer asignado administra las paradas y confirma la entrega desde su portal. Aquí puedes consultar la trazabilidad.",
+        "En ruta" when esEntrega => "El viaje está en curso. El chofer administra las paradas y confirma la entrega desde su portal.",
         "En ruta" => "Registra quién recibió la mercancía y adjunta una o más evidencias de entrega.",
-        "Cargado" when !documentacionCompleta => "La carga física terminó, pero falta completar la documentación obligatoria antes de permitir la salida de planta.",
-        "Cargado" when esEntrega => "La carga física ya terminó. La salida real la confirma el chofer asignado desde su portal.",
-        "Cargado" => "La carga física ya terminó. Confirma la salida cuando la mercancía abandone realmente la planta.",
-        "Preparado" or "Cargando" when !documentacionCompleta => "Puedes continuar la carga física mientras se completa la documentación. Los documentos obligatorios sí deben quedar completos antes de la salida de planta.",
-        "Preparado" or "Cargando" => "Escanea las cajas físicas y confirma la carga cuando el total coincida.",
+        "Cargado" when !documentacionCompleta => "La carga ya quedó confirmada. Completa la documentación obligatoria antes de liberar la mercancía.",
+        "Cargado" when esCliente => "Registra quién recoge y la evidencia. Al confirmar se despacha PT y el embarque queda Entregado.",
+        "Cargado" when esEntrega => "Logística puede iniciar el viaje desde Centro Operativo o el chofer puede iniciarlo desde su portal.",
+        "Cargado" when esPaqueteria => "Confirma la salida cuando la mercancía sea entregada físicamente a la paquetería o transportista.",
+        "Programado" or "Preparando" or "Preparado" or "Cargando" when !documentacionCompleta => "Selecciona o escanea las cajas disponibles. También puedes usar Carga rápida. La documentación puede completarse en paralelo.",
+        "Programado" or "Preparando" or "Preparado" or "Cargando" => "Selecciona cajas por número de parte, escanéalas o utiliza Carga rápida. Si no hay PT completo, el faltante quedará Expeditado.",
         _ when requiereDefinirSalida => "La forma de salida, ruta, unidad y chofer se configuran únicamente desde Centro Operativo.",
-        _ => "Reserva las cajas necesarias y confirma la preparación cuando las cantidades estén completas."
+        _ => "Revisa el estado actual del embarque."
     };
 }
 @section Styles {
@@ -1063,6 +1068,577 @@
                 white-space: nowrap
             }
     }
+
+    /* Ajustes de legibilidad y carga física */
+    .detalle-page {
+        max-width: 1920px;
+        font-size: 15px
+    }
+
+    .detalle-title {
+        font-size: 1.65rem
+    }
+
+    .detalle-subtitle {
+        font-size: .94rem
+    }
+
+    .status-item span {
+        font-size: .72rem
+    }
+
+    .status-item strong {
+        font-size: 1rem
+    }
+
+    .workflow-step span {
+        font-size: .68rem
+    }
+
+    .workflow-step strong {
+        font-size: .82rem
+    }
+
+    .stage-title {
+        font-size: 1.15rem
+    }
+
+    .stage-sub {
+        font-size: .86rem
+    }
+
+    .stage-action strong {
+        font-size: .96rem
+    }
+
+    .stage-action small {
+        font-size: .82rem
+    }
+
+    .stage-btn {
+        min-height: 44px;
+        font-size: .88rem
+    }
+
+    .scan-input {
+        min-height: 45px;
+        font-size: .92rem
+    }
+
+    .load-kpi span {
+        font-size: .68rem
+    }
+
+    .load-kpi strong {
+        font-size: .98rem
+    }
+
+    .info-label {
+        font-size: .69rem
+    }
+
+    .info-value {
+        font-size: .9rem
+    }
+
+    .compact-table {
+        font-size: .84rem
+    }
+
+        .compact-table th {
+            font-size: .71rem
+        }
+
+    .nav-tabs .nav-link {
+        font-size: .84rem
+    }
+
+    .load-kpis-large {
+        margin-top: 10px
+    }
+
+    .load-workspace {
+        display: grid;
+        grid-template-columns: minmax(300px,.34fr) minmax(0,1fr);
+        gap: 12px;
+        margin-top: 10px;
+        align-items: start
+    }
+
+    .load-left {
+        display: grid;
+        gap: 10px;
+        align-content: start
+    }
+
+    .load-card, .quick-load-card {
+        padding: 12px;
+        border: 1px solid #cfdbe9;
+        border-radius: 10px;
+        background: #f8fbff
+    }
+
+    .quick-load-card {
+        border-color: #e6c36d;
+        background: #fff9e9
+    }
+
+    .load-card-title {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        margin-bottom: 9px
+    }
+
+        .load-card-title > i {
+            margin-top: 3px;
+            color: var(--lg-blue);
+            font-size: 1rem
+        }
+
+    .quick-load-card .load-card-title > i {
+        color: #8a5d00
+    }
+
+    .load-card-title strong {
+        display: block;
+        font-size: .92rem
+    }
+
+    .load-card-title span {
+        display: block;
+        margin-top: 2px;
+        color: #6d7888;
+        font-size: .78rem;
+        line-height: 1.35
+    }
+
+    .quick-btn {
+        width: 100%;
+        background: #fff;
+        color: #173a7a;
+        border: 1px solid #d6deea
+    }
+
+        .quick-btn:hover {
+            background: #f4f7fb;
+            color: #173a7a
+        }
+
+    .load-manual-panel {
+        min-width: 0;
+        border: 1px solid #cfdae8;
+        border-radius: 10px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .load-toolbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        padding: 11px 12px;
+        border-bottom: 1px solid #dfe6ef;
+        background: #f7faff
+    }
+
+        .load-toolbar > div:first-child strong {
+            display: block;
+            font-size: .94rem
+        }
+
+        .load-toolbar > div:first-child span {
+            display: block;
+            margin-top: 2px;
+            color: #687689;
+            font-size: .77rem
+        }
+
+    .load-toolbar-actions {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+        .load-toolbar-actions .btn {
+            min-height: 39px;
+            font-size: .78rem;
+            font-weight: 800
+        }
+
+    .load-parts-scroll {
+        max-height: 55vh;
+        overflow-y: auto;
+        padding: 8px;
+        scrollbar-width: auto;
+        scrollbar-color: #8ca0b8 #eef2f6
+    }
+
+        .load-parts-scroll::-webkit-scrollbar {
+            width: 12px
+        }
+
+        .load-parts-scroll::-webkit-scrollbar-track {
+            background: #eef2f6;
+            border-radius: 10px
+        }
+
+        .load-parts-scroll::-webkit-scrollbar-thumb {
+            background: #8ca0b8;
+            border: 3px solid #eef2f6;
+            border-radius: 10px
+        }
+
+    .load-part {
+        border: 1px solid #d7e1ed;
+        border-radius: 10px;
+        background: #fff;
+        overflow: hidden;
+        margin-bottom: 8px
+    }
+
+        .load-part:last-child {
+            margin-bottom: 0
+        }
+
+        .load-part.over {
+            border-color: #d93939
+        }
+
+    .load-part-head {
+        display: grid;
+        grid-template-columns: minmax(180px,1.4fr) repeat(3,minmax(100px,.65fr)) auto auto;
+        gap: 9px;
+        align-items: center;
+        padding: 10px 11px;
+        background: #f6f9fd;
+        cursor: pointer
+    }
+
+        .load-part-head:hover {
+            background: #eef5fd
+        }
+
+    .load-part-title strong {
+        display: block;
+        color: #123b77;
+        font-size: .92rem
+    }
+
+    .load-part-title span, .load-part-kpi span {
+        display: block;
+        color: #748195;
+        font-size: .68rem
+    }
+
+    .load-part-kpi strong {
+        display: block;
+        margin-top: 2px;
+        font-size: .85rem
+    }
+
+    .load-part-kpi.available strong {
+        color: #087443
+    }
+
+    .load-part-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 36px;
+        padding: 0 9px;
+        border: 1px solid #d4dfec;
+        border-radius: 8px;
+        background: #fff;
+        color: #173a7a;
+        font-size: .74rem;
+        font-weight: 800
+    }
+
+    .load-part.collapsed .load-part-toggle i {
+        transform: rotate(-90deg)
+    }
+
+    .load-part.collapsed .load-part-body {
+        display: none
+    }
+
+    .load-part-body {
+        padding: 8px;
+        border-top: 1px solid #e1e8f0
+    }
+
+    .box-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .box-option {
+        display: grid;
+        grid-template-columns: 24px minmax(0,1fr) auto;
+        gap: 9px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid #d8e1ec;
+        border-radius: 9px;
+        background: #fff;
+        cursor: pointer
+    }
+
+        .box-option:hover {
+            border-color: #8fa9ca;
+            background: #f8fbff
+        }
+
+        .box-option.selected {
+            border-color: #3d8a68;
+            background: #f1fbf6
+        }
+
+        .box-option.suggested:not(.selected) {
+            border-color: #d8a122;
+            background: #fff9eb;
+            box-shadow: inset 3px 0 0 #d8a122
+        }
+
+        .box-option input {
+            width: 20px;
+            height: 20px
+        }
+
+    .box-main {
+        min-width: 0
+    }
+
+        .box-main strong {
+            display: block;
+            color: #173a7a;
+            font-size: .86rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .box-main span {
+            display: block;
+            margin-top: 2px;
+            color: #657487;
+            font-size: .72rem;
+            line-height: 1.3
+        }
+
+    .box-qty {
+        text-align: right
+    }
+
+        .box-qty strong {
+            display: block;
+            color: #173a7a;
+            font-size: .9rem
+        }
+
+        .box-qty span {
+            display: block;
+            margin-top: 2px;
+            color: #7a8697;
+            font-size: .66rem
+        }
+
+    .part-empty {
+        padding: 14px;
+        text-align: center;
+        color: #7b8796;
+        font-size: .78rem;
+        border: 1px dashed #d8e0e8;
+        border-radius: 8px
+    }
+
+    .partial-warning {
+        display: none;
+        gap: 8px;
+        align-items: flex-start;
+        margin-top: 9px;
+        padding: 10px 12px;
+        border: 1px solid #e6b95c;
+        border-radius: 9px;
+        background: #fff8e8;
+        color: #7a5200;
+        font-size: .8rem
+    }
+
+        .partial-warning.show {
+            display: flex
+        }
+
+        .partial-warning i {
+            margin-top: 2px
+        }
+
+    .collection-form {
+        display: grid;
+        grid-template-columns: repeat(12,1fr);
+        gap: 9px;
+        padding: 12px;
+        border: 1px solid #dce5ee;
+        border-radius: 10px;
+        background: #fbfcfe
+    }
+
+        .collection-form .field {
+            grid-column: span 4
+        }
+
+            .collection-form .field.wide {
+                grid-column: span 6
+            }
+
+        .collection-form label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: .76rem;
+            font-weight: 800
+        }
+
+        .collection-form .form-control {
+            min-height: 42px;
+            font-size: .87rem
+        }
+
+        .collection-form small {
+            display: block;
+            margin-top: 3px;
+            color: #6d7888;
+            font-size: .7rem
+        }
+
+    .collection-actions {
+        grid-column: 1/-1;
+        display: flex;
+        justify-content: flex-end
+    }
+
+    .quick-modal .modal-dialog {
+        max-width: 760px
+    }
+
+    .quick-modal .modal-content {
+        border-radius: 14px
+    }
+
+    .quick-modal .modal-title {
+        font-weight: 900;
+        color: #173a7a
+    }
+
+    .quick-modal .form-label {
+        font-size: .82rem;
+        font-weight: 800
+    }
+
+    .quick-modal .form-control {
+        min-height: 44px;
+        font-size: .88rem
+    }
+
+    .quick-responsibility {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: 10px;
+        border: 1px solid #e7c46f;
+        border-radius: 9px;
+        background: #fff9e9;
+        font-size: .8rem
+    }
+
+        .quick-responsibility input {
+            width: 20px;
+            height: 20px;
+            margin-top: 1px
+        }
+
+    @@media(max-width:1050px) {
+        .load-workspace {
+            grid-template-columns: 1fr
+        }
+
+        .load-parts-scroll {
+            max-height: 48vh
+        }
+
+        .load-part-head {
+            grid-template-columns: minmax(180px,1fr) repeat(2,minmax(95px,.55fr)) auto
+        }
+
+        .load-part-kpi:nth-of-type(3) {
+            display: none
+        }
+
+        .box-grid {
+            grid-template-columns: 1fr
+        }
+    }
+
+    @@media(max-width:650px) {
+        .detalle-page {
+            padding: 10px 6px 20px;
+            font-size: 16px
+        }
+
+        .detalle-title {
+            font-size: 1.5rem
+        }
+
+        .load-toolbar {
+            align-items: stretch;
+            flex-direction: column
+        }
+
+        .load-toolbar-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr
+        }
+
+            .load-toolbar-actions .btn:last-child {
+                grid-column: 1/-1
+            }
+
+        .load-part-head {
+            grid-template-columns: minmax(0,1fr) auto
+        }
+
+        .load-part-kpi {
+            display: none
+        }
+
+        .load-part-head .btn {
+            display: none
+        }
+
+        .load-parts-scroll {
+            max-height: 46vh
+        }
+
+        .box-option {
+            grid-template-columns: 24px minmax(0,1fr);
+        }
+
+        .box-qty {
+            grid-column: 2;
+            text-align: left
+        }
+
+        .collection-form .field, .collection-form .field.wide {
+            grid-column: 1/-1
+        }
+
+        .collection-actions .stage-btn {
+            width: 100%
+        }
+    }
 </style>
 
 <div class="detalle-page">
@@ -1122,11 +1698,11 @@
     <div class="workflow">
         <div class="workflow-step @(ClasePaso(programacionCompleta, actualProgramacion))"><span>Paso 1</span><strong>Programación</strong></div>
         <div class="workflow-step @(ClasePaso(salidaConfigurada, actualSalida))"><span>Paso 2</span><strong>Forma de salida</strong></div>
-        <div class="workflow-step @(ClasePaso(preparacionConfirmada, actualPreparacion))"><span>Paso 3</span><strong>Preparación PT</strong></div>
+        <div class="workflow-step @(ClasePaso(preparacionConfirmada, actualPreparacion))"><span>Paso 3</span><strong>Disponibilidad PT</strong></div>
         <div class="workflow-step @(ClasePaso(documentacionCompleta, actualDocumentos))"><span>Paso 4</span><strong>Documentación</strong></div>
         <div class="workflow-step @(ClasePaso(cargaFisicaCompleta, actualCarga))"><span>Paso 5</span><strong>Carga física</strong></div>
-        <div class="workflow-step @(ClasePaso(salidaPlantaCompleta, actualSalidaPlanta))"><span>Paso 6</span><strong>Salida de planta</strong></div>
-        <div class="workflow-step @(ClasePaso(entregaCompleta, actualEntrega))"><span>Paso 7</span><strong>Entrega</strong></div>
+        <div class="workflow-step @(ClasePaso(salidaPlantaCompleta, actualSalidaPlanta))"><span>Paso 6</span><strong>@(esCliente ? "Entrega al cliente" : "Salida de planta")</strong></div>
+        <div class="workflow-step @(ClasePaso(entregaCompleta, actualEntrega))"><span>Paso 7</span><strong>@(esCliente ? "Cierre" : "Entrega")</strong></div>
     </div>
 
     <section class="stage">
@@ -1150,64 +1726,58 @@
                 </a>
             </div>
         }
-        else if (Model.Estatus is "Programado" or "Preparando")
-        {
-            <div class="stage-action">
-                <div>
-                    <strong>Confirmar preparación PT</strong>
-                    <small>@Model.TotalPiezasPreparadas.ToString("N0") de @Model.TotalPiezasSolicitadas.ToString("N0") PZA preparadas. La documentación puede completarse en paralelo desde su pestaña.</small>
-                </div>
-                <form asp-controller="LogisticaEmbarques" asp-action="MarcarPreparado" method="post" class="js-single-submit">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
-                    <button class="stage-btn" type="submit" disabled="@(!Model.PreparacionCompleta ? "disabled" : null)" onclick="return confirm('¿Confirmar preparación completa?');">
-                        <i class="fa-solid fa-check"></i>Confirmar preparación
-                    </button>
-                </form>
-            </div>
-            @if (!Model.PreparacionCompleta)
-            {
-                <div class="scan-msg error mt-2">Aún faltan @Model.PiezasPendientesPreparar.ToString("N0") PZA por preparar. Reserva las cajas necesarias en la pestaña Preparación.</div>
-            }
-        }
-        else if (Model.Estatus is "Preparado" or "Cargando")
+        else if (puedeTrabajarCarga)
         {
             @if (!Model.DocumentacionCompleta)
             {
                 <div class="stage-action mb-2" style="border-color:#e8c56f;background:#fffaf0">
                     <div>
-                        <strong>Documentación pendiente, pero la carga física puede continuar</strong>
-                        <small>Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s). Complétalos desde Centro Operativo antes de confirmar la salida de planta.</small>
+                        <strong>La carga puede avanzar mientras completas documentos</strong>
+                        <small>Faltan @Model.DocumentosFaltantes documento(s). No bloquean la carga física, pero sí la salida de planta.</small>
                     </div>
-                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100">
-                        <i class="fa-solid fa-file-circle-check"></i>Centro Operativo
-                    </a>
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100"><i class="fa-solid fa-file-circle-check"></i>Documentación</a>
                 </div>
             }
             <div class="stage-action">
                 <div>
                     <strong>Carga física</strong>
-                    <small>Escanea cada caja que se carga realmente. La documentación puede completarse en paralelo, pero será obligatoria antes de la salida.</small>
+                    <small>Escanea, selecciona cajas de PT o usa Carga rápida. Si el PT es parcial, el faltante regresará a Lista de carga como Expeditado.</small>
                 </div>
-                <button class="stage-btn" id="lgConfirmarCargaFisica" type="button" disabled>
-                    <i class="fa-solid fa-circle-check"></i>Confirmar carga física
-                </button>
+                <button class="stage-btn" id="lgConfirmarCargaFisica" type="button" disabled><i class="fa-solid fa-circle-check"></i>Confirmar carga</button>
             </div>
-            <div class="scan-box">
-                <div class="scan-row">
-                    <input id="lgCargaScan" class="scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea etiqueta de caja y presiona Enter/Tab..." autofocus />
-                    <button type="button" class="stage-btn" id="lgEscanearCarga">
-                        <i class="fa-solid fa-barcode"></i>Registrar
-                    </button>
+            <div class="load-kpis load-kpis-large">
+                <div class="load-kpi"><span>PZA programadas</span><strong id="lgCargaTotal">—</strong></div>
+                <div class="load-kpi"><span>PZA seleccionadas</span><strong id="lgCargaCargadas">—</strong></div>
+                <div class="load-kpi"><span>Cajas seleccionadas</span><strong id="lgCargaCajas">—</strong></div>
+                <div class="load-kpi"><span>PZA pendientes</span><strong id="lgCargaPendientes">—</strong></div>
+            </div>
+            <div class="partial-warning" id="lgCargaParcialAviso"><i class="fa-solid fa-triangle-exclamation"></i><span id="lgCargaParcialTexto"></span></div>
+            <div class="load-workspace">
+                <div class="load-left">
+                    <div class="scan-box load-card">
+                        <div class="load-card-title"><i class="fa-solid fa-barcode"></i><div><strong>Escanear caja</strong><span>Registra una caja físicamente cargada.</span></div></div>
+                        <div class="scan-row">
+                            <input id="lgCargaScan" class="scan-input" type="text" autocomplete="off" inputmode="none" placeholder="Escanea la etiqueta y presiona Enter" autofocus />
+                            <button type="button" class="stage-btn" id="lgEscanearCarga"><i class="fa-solid fa-barcode"></i>Registrar</button>
+                        </div>
+                    </div>
+                    <div class="quick-load-card">
+                        <div class="load-card-title"><i class="fa-solid fa-bolt"></i><div><strong>Carga rápida</strong><span>Selecciona automáticamente el máximo PT posible sin partir cajas.</span></div></div>
+                        <button class="stage-btn quick-btn" type="button" id="lgAbrirCargaRapida"><i class="fa-solid fa-bolt"></i>Usar carga rápida</button>
+                    </div>
+                    <div class="scan-msg" id="lgCargaMsg">Consultando cajas disponibles...</div>
                 </div>
-                <div class="scan-msg" id="lgCargaMsg">Consultando carga física...</div>
-                <div class="load-kpis">
-                    <div class="load-kpi"><span>PZA totales</span><strong id="lgCargaTotal">—</strong></div>
-                    <div class="load-kpi"><span>PZA cargadas</span><strong id="lgCargaCargadas">—</strong></div>
-                    <div class="load-kpi"><span>PZA reservadas</span><strong id="lgCargaReservadas">—</strong></div>
-                    <div class="load-kpi"><span>PZA pendientes</span><strong id="lgCargaPendientes">—</strong></div>
+                <div class="load-manual-panel">
+                    <div class="load-toolbar">
+                        <div><strong>Cajas PT disponibles por parte</strong><span id="lgCargaSeleccionResumen">Selecciona las cajas que realmente saldrán.</span></div>
+                        <div class="load-toolbar-actions">
+                            <button class="btn btn-outline-primary btn-sm" type="button" id="lgMarcarSugeridas"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Usar sugeridas</button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" id="lgRecargarCajas"><i class="fa-solid fa-rotate me-1"></i>Actualizar</button>
+                            <button class="btn btn-primary btn-sm" type="button" id="lgGuardarSeleccion"><i class="fa-solid fa-floppy-disk me-1"></i>Guardar selección</button>
+                        </div>
+                    </div>
+                    <div class="load-parts-scroll" id="lgCargaLista"><div class="empty">Consultando cajas...</div></div>
                 </div>
-                <div class="scan-list" id="lgCargaLista"></div>
             </div>
         }
         else if (Model.Estatus == "Cargado")
@@ -1215,35 +1785,44 @@
             @if (!Model.DocumentacionCompleta)
             {
                 <div class="stage-action" style="border-color:#e8c56f;background:#fffaf0">
-                    <div>
-                        <strong>Completa la documentación antes de la salida</strong>
-                        <small>La carga física ya terminó. Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s); la salida permanecerá bloqueada hasta completar el expediente.</small>
-                    </div>
-                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100">
-                        <i class="fa-solid fa-file-circle-check"></i>Completar documentación
-                    </a>
+                    <div><strong>Completa la documentación antes de liberar la mercancía</strong><small>La carga ya quedó confirmada. Faltan @Model.DocumentosFaltantes documento(s) obligatorio(s).</small></div>
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn" style="background:#8b6100"><i class="fa-solid fa-file-circle-check"></i>Completar documentación</a>
                 </div>
             }
             else if (esEntrega)
             {
                 <div class="stage-action" style="border-color:#b9d7ca;background:#f4fbf7">
-                    <div>
-                        <strong>Carga física y documentación completas</strong>
-                        <small>La salida real la confirma el chofer asignado desde su portal. Cuando registre la salida, el viaje pasará a En curso y este embarque a En ruta.</small>
-                    </div>
-                    <span class="badge bg-info text-dark">Esperando salida del chofer</span>
+                    <div><strong>Viaje listo para iniciar</strong><small>Logística puede iniciarlo desde Centro Operativo. El chofer también puede iniciarlo desde su portal.</small></div>
+                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn"><i class="fa-solid fa-truck-fast"></i>Abrir Centro Operativo</a>
                 </div>
             }
-            else if (salidaDesdeCentro)
+            else if (esCliente)
+            {
+                <div class="stage-action mb-2">
+                    <div><strong>Confirmar recolección del cliente</strong><small>Al confirmar, PT se despacha y el embarque queda Entregado. No pasa por En ruta.</small></div>
+                    <span class="badge bg-success">Cierre directo</span>
+                </div>
+                <form id="formRecoleccionCliente" class="collection-form" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="embarqueId" value="@Model.EmbarqueID" />
+                    <input type="hidden" name="rowVersion" id="lgRecoleccionRowVersion" />
+                    <div class="field"><label class="required">Quién recoge</label><input class="form-control" type="text" name="receptorNombre" maxlength="200" value="@(Model.ChoferMostrar == "Sin asignar" ? "" : Model.ChoferMostrar)" required /></div>
+                    <div class="field"><label>Folio remisión</label><input class="form-control" type="text" name="folioRemision" maxlength="100" /></div>
+                    <div class="field wide"><label>Observaciones</label><input class="form-control" type="text" name="observaciones" maxlength="1200" /></div>
+                    <div class="field wide"><label class="required">Evidencia</label><input class="form-control" type="file" id="lgRecoleccionEvidencias" name="evidencias" accept="image/*,.pdf" multiple required /><small>Foto, remisión firmada o evidencia equivalente. Máximo 15 archivos.</small></div>
+                    <div class="field wide"><label>Observación de evidencia</label><input class="form-control" type="text" name="observacionesEvidencia" maxlength="1000" /></div>
+                    <div class="collection-actions"><button class="stage-btn" type="submit" id="lgConfirmarRecoleccion" @(Model.IncidenciasCriticas > 0 ? "disabled" : null)><i class="fa-solid fa-handshake"></i>Confirmar recolección y cerrar</button></div>
+                </form>
+                @if (Model.IncidenciasCriticas > 0)
+                {
+                    <div class="scan-msg error mt-2">Existen @Model.IncidenciasCriticas incidencia(s) crítica(s) abierta(s). Deben resolverse antes de entregar.</div>
+                }
+            }
+            else if (esPaqueteria)
             {
                 <div class="stage-action">
-                    <div>
-                        <strong>Confirmar salida de planta</strong>
-                        <small>@(Model.FormaEnvio == "Cliente" ? "Confirma cuando el cliente o transportista retire físicamente la mercancía." : "Confirma cuando la mercancía sea entregada físicamente a la paquetería o transportista.")</small>
-                    </div>
-                    <button class="stage-btn" id="lgConfirmarSalidaPlanta" type="button" disabled="@(Model.IncidenciasCriticas > 0 ? "disabled" : null)">
-                        <i class="fa-solid fa-truck-fast"></i>Confirmar salida de planta
-                    </button>
+                    <div><strong>Confirmar salida de planta</strong><small>Confirma cuando la mercancía sea entregada físicamente a la paquetería o transportista.</small></div>
+                    <button class="stage-btn" id="lgConfirmarSalidaPlanta" type="button" disabled="@(Model.IncidenciasCriticas > 0 ? "disabled" : null)"><i class="fa-solid fa-truck-fast"></i>Confirmar salida</button>
                 </div>
                 @if (Model.IncidenciasCriticas > 0)
                 {
@@ -1252,10 +1831,7 @@
             }
             else
             {
-                <div class="stage-action">
-                    <div><strong>Forma de salida incompleta</strong><small>La configuración debe corregirse desde Centro Operativo antes de confirmar la salida.</small></div>
-                    <a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn"><i class="fa-solid fa-arrow-up-right-from-square"></i>Centro Operativo</a>
-                </div>
+                <div class="stage-action"><div><strong>Forma de salida incompleta</strong><small>Corrige la configuración desde Centro Operativo.</small></div><a asp-controller="LogisticaOperacion" asp-action="Index" asp-route-q="@Model.Folio" class="stage-btn"><i class="fa-solid fa-arrow-up-right-from-square"></i>Centro Operativo</a></div>
             }
         }
         else if (Model.Estatus == "En ruta")
@@ -1775,6 +2351,25 @@
     </div>
 </div>
 
+
+<div class="modal fade quick-modal" id="modalCargaRapidaDetalle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header"><div><h5 class="modal-title"><i class="fa-solid fa-bolt me-1"></i>Carga rápida</h5><div class="text-muted small">Usa el máximo PT disponible sin escanear caja por caja.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+            <form id="formCargaRapidaDetalle" enctype="multipart/form-data">
+                <div class="modal-body">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-3"><label class="form-label required">Motivo</label><textarea class="form-control" name="motivo" rows="3" maxlength="1000" placeholder="Ej. salida urgente solicitada por cliente" required></textarea></div>
+                    <div class="mb-3"><label class="form-label required">Tomar fotografía</label><input class="form-control" type="file" id="lgCargaRapidaCamara" accept="image/*" capture="environment" /><div class="form-text">En celular prioriza la cámara trasera.</div></div>
+                    <div class="mb-3"><label class="form-label">Elegir fotografías existentes</label><input class="form-control" type="file" id="lgCargaRapidaGaleria" accept="image/*" multiple /></div>
+                    <label class="quick-responsibility"><input type="checkbox" id="lgCargaRapidaResponsabilidad" /><span><strong>Confirmo que verifiqué físicamente la mercancía seleccionada.</strong><br />Acepto utilizar Carga rápida sin escaneo individual.</span></label>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-warning fw-bold" id="lgConfirmarCargaRapida"><i class="fa-solid fa-bolt me-1"></i>Confirmar carga rápida</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         (() => {
@@ -1782,367 +2377,188 @@
             const estatusInicial = '@Model.Estatus';
             const formaEnvio = '@Model.FormaEnvio';
             const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-
             const urlObtenerCarga = '@Url.Action("ObtenerCargaFisica", "LogisticaOperacion")';
+            const urlSeleccionarCajas = '@Url.Action("SeleccionarCajasCarga", "LogisticaOperacion")';
             const urlEscanearCarga = '@Url.Action("EscanearCajaCarga", "LogisticaOperacion")';
             const urlConfirmarCarga = '@Url.Action("ConfirmarCargaFisica", "LogisticaOperacion")';
+            const urlConfirmarCargaRapida = '@Url.Action("ConfirmarCargaRapida", "LogisticaOperacion")';
             const urlConfirmarSalidaPlanta = '@Url.Action("ConfirmarSalidaPlanta", "LogisticaOperacion")';
+            const urlConfirmarRecoleccion = '@Url.Action("ConfirmarRecoleccionCliente", "LogisticaOperacion")';
             const urlCerrarEntrega = '@Url.Action("CerrarConEvidencia", "LogisticaOperacion")';
-
             let rowVersionActual = '';
             let cargaActual = null;
-
             const release = document.getElementById('releaseAgregar');
             const cantidad = document.getElementById('cantidadAgregar');
-
             release?.addEventListener('change', () => {
                 const option = release.options[release.selectedIndex];
                 const max = Number(option?.dataset?.pendiente || 0);
-                if (cantidad && max > 0) {
-                    cantidad.max = max;
-                    cantidad.value = max;
-                }
+                if (cantidad && max > 0) { cantidad.max = max; cantidad.value = max; }
             });
-
             window.retirarEvidencia = id => {
                 const motivo = prompt('Motivo para retirar la evidencia:');
                 if (!motivo || !motivo.trim()) return;
                 const input = document.getElementById(`motivo-evidencia-${id}`);
                 const form = document.getElementById(`retirar-evidencia-${id}`);
-                if (input && form) {
-                    input.value = motivo.trim();
-                    form.submit();
-                }
+                if (input && form) { input.value = motivo.trim(); form.submit(); }
             };
-
-            const esc = value => String(value ?? '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;');
-
+            const esc = value => String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
             const nf = value => Number(value || 0).toLocaleString('es-MX');
-
-            async function leerJson(response) {
-                try {
-                    return await response.json();
-                } catch {
-                    throw new Error(`El servidor respondió ${response.status} y no devolvió JSON.`);
-                }
-            }
-
+            async function leerJson(response) { try { return await response.json(); } catch { throw new Error(`El servidor respondió ${response.status} y no devolvió JSON.`); } }
             function mostrarMensajeCarga(texto, tipo = '') {
-                const msg = document.getElementById('lgCargaMsg');
-                if (!msg) return;
-                msg.textContent = texto || '';
-                msg.classList.remove('ok', 'error');
-                if (tipo) msg.classList.add(tipo);
+                const msg = document.getElementById('lgCargaMsg'); if (!msg) return;
+                msg.textContent = texto || ''; msg.classList.remove('ok','error'); if (tipo) msg.classList.add(tipo);
             }
-
+            function cajasSugeridasParte(parte) {
+                const cajas = (parte?.cajas || []).filter(x => !x.seleccionada && Number(x.cantidad || 0) > 0).sort((a,b) => String(a.fechaEntrada || '').localeCompare(String(b.fechaEntrada || '')) || Number(a.cajaId || 0) - Number(b.cajaId || 0));
+                let restante = Math.max(0, Number(parte?.requerido || 0) - Number(parte?.piezasSeleccionadas || 0));
+                const ids = new Set();
+                for (const caja of cajas) { const q = Number(caja.cantidad || 0); if (q > 0 && q <= restante) { ids.add(Number(caja.cajaId)); restante -= q; } if (restante <= 0) break; }
+                if (restante > 0) {
+                    for (const caja of cajas.filter(x => !ids.has(Number(x.cajaId))).sort((a,b) => Number(a.cantidad || 0) - Number(b.cantidad || 0))) { const q = Number(caja.cantidad || 0); if (q > 0 && q <= restante) { ids.add(Number(caja.cajaId)); restante -= q; } if (restante <= 0) break; }
+                }
+                return ids;
+            }
+            function alternarParte(grupo, forzar = null) {
+                if (!grupo) return;
+                const abrir = forzar === null ? grupo.classList.contains('collapsed') : Boolean(forzar);
+                grupo.classList.toggle('collapsed', !abrir);
+                const head = grupo.querySelector('.load-part-head'); if (head) head.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+                const btn = grupo.querySelector('.load-part-toggle'); if (btn) { btn.setAttribute('aria-expanded', abrir ? 'true' : 'false'); const t = btn.querySelector('span'); if (t) t.textContent = abrir ? 'Ocultar' : 'Ver cajas'; }
+            }
+            function actualizarResumenSeleccion() {
+                const lista = document.getElementById('lgCargaLista');
+                const resumen = document.getElementById('lgCargaSeleccionResumen');
+                const guardar = document.getElementById('lgGuardarSeleccion');
+                if (!lista || !resumen || !guardar) return;
+                const checks = [...lista.querySelectorAll('.load-box-check')];
+                const marcados = checks.filter(x => x.checked);
+                const piezas = marcados.reduce((a,x) => a + Number(x.dataset.cantidad || 0), 0);
+                let excedido = false;
+                lista.querySelectorAll('.load-part').forEach(grupo => {
+                    const requerido = Number(grupo.dataset.requerido || 0);
+                    const seleccion = [...grupo.querySelectorAll('.load-box-check:checked')].reduce((a,x) => a + Number(x.dataset.cantidad || 0), 0);
+                    grupo.classList.toggle('over', seleccion > requerido); if (seleccion > requerido) excedido = true;
+                    const el = grupo.querySelector('[data-parte-seleccion]'); if (el) el.textContent = `${nf(seleccion)} PZA`;
+                    grupo.querySelectorAll('.box-option').forEach(card => { const chk = card.querySelector('.load-box-check'); if (chk) card.classList.toggle('selected', chk.checked); });
+                });
+                const total = Number(cargaActual?.totalPiezas || 0); const pendiente = Math.max(0, total - piezas);
+                resumen.innerHTML = `<strong>${nf(marcados.length)} caja(s) · ${nf(piezas)} PZA</strong>${pendiente > 0 ? ` · quedarían ${nf(pendiente)} PZA pendientes` : ''}${excedido ? ' · <span class="text-danger fw-bold">Hay una parte excedida</span>' : ''}`;
+                const cerrado = ['Cargado','En ruta','Entregado','Cancelado'].includes(cargaActual?.estatus || '');
+                guardar.disabled = cerrado || marcados.length === 0 || excedido;
+            }
             function renderCarga(data) {
                 cargaActual = data;
                 if (data?.rowVersion) {
                     rowVersionActual = data.rowVersion;
-                    const rowEntrega = document.getElementById('lgEntregaRowVersion');
-                    if (rowEntrega) rowEntrega.value = rowVersionActual;
+                    const r1 = document.getElementById('lgEntregaRowVersion'); if (r1) r1.value = rowVersionActual;
+                    const r2 = document.getElementById('lgRecoleccionRowVersion'); if (r2) r2.value = rowVersionActual;
                 }
-
-                const total = document.getElementById('lgCargaTotal');
-                const cargadas = document.getElementById('lgCargaCargadas');
-                const reservadas = document.getElementById('lgCargaReservadas');
-                const pendientes = document.getElementById('lgCargaPendientes');
+                const total = Number(data?.totalPiezas || 0), cargadas = Number(data?.piezasCargadas || 0), pendientes = Math.max(0, Number(data?.piezasPendientes ?? total - cargadas));
+                const elTotal = document.getElementById('lgCargaTotal'); if (elTotal) elTotal.textContent = `${nf(total)} PZA`;
+                const elCargadas = document.getElementById('lgCargaCargadas'); if (elCargadas) elCargadas.textContent = `${nf(cargadas)} PZA`;
+                const elCajas = document.getElementById('lgCargaCajas'); if (elCajas) elCajas.textContent = nf(data?.cajasAsignadas);
+                const elPend = document.getElementById('lgCargaPendientes'); if (elPend) elPend.textContent = `${nf(pendientes)} PZA`;
+                const aviso = document.getElementById('lgCargaParcialAviso'), avisoTexto = document.getElementById('lgCargaParcialTexto');
+                if (aviso && avisoTexto) { const mostrar = cargadas > 0 && pendientes > 0; aviso.classList.toggle('show', mostrar); avisoTexto.textContent = mostrar ? `Carga parcial: ${nf(cargadas)} de ${nf(total)} PZA. Al confirmar, ${nf(pendientes)} PZA volverán a Lista de carga como Expeditadas.` : ''; }
                 const confirmar = document.getElementById('lgConfirmarCargaFisica');
-
-                if (total) total.textContent = `${nf(data?.totalPiezas)} PZA`;
-                if (cargadas) cargadas.textContent = `${nf(data?.piezasCargadas)} PZA`;
-                if (reservadas) reservadas.textContent = `${nf(data?.piezasReservadas)} PZA`;
-                if (pendientes) pendientes.textContent = `${nf(data?.piezasPendientes)} PZA`;
-                if (confirmar) confirmar.disabled = !data?.puedeConfirmar;
-
+                if (confirmar) { confirmar.disabled = !data?.puedeConfirmar; confirmar.innerHTML = data?.cargaParcial ? '<i class="fa-solid fa-circle-check"></i>Confirmar carga parcial' : '<i class="fa-solid fa-circle-check"></i>Confirmar carga'; }
+                const cerrado = ['Cargado','En ruta','Entregado','Cancelado'].includes(data?.estatus || '');
                 const lista = document.getElementById('lgCargaLista');
                 if (lista) {
-                    const cajas = Array.isArray(data?.cajas) ? data.cajas : [];
-                    if (cajas.length === 0) {
-                        lista.innerHTML = '<div class="empty">Todavía no hay cajas registradas para la carga física.</div>';
-                    } else {
-                        lista.innerHTML = cajas.map(c => {
-                            const cargada = c.estatus === 'Cargada' || c.estatus === 'Despachada';
-                            return `<div class="scan-item ${cargada ? 'checked' : ''}">
-                                <span class="scan-state"><i class="fa-solid ${cargada ? 'fa-check' : 'fa-box'}"></i></span>
-                                <div><strong>Caja #${esc(c.numeroCaja)} · ${esc(c.numeroParte)}</strong><small>${esc(c.etiqueta || 'Sin etiqueta')}</small></div>
-                                <div><strong>${esc(c.lote || 'Sin lote')}</strong><small>OF ${esc(c.numeroOF || '-')} · ${esc(c.estatus || '-')}</small></div>
-                                <div class="qty">${nf(c.cantidadAsignada)} PZA</div>
-                            </div>`;
-                        }).join('');
-                    }
+                    lista.innerHTML = '';
+                    const partes = Array.isArray(data?.partes) ? data.partes : [];
+                    if (!partes.length) lista.innerHTML = '<div class="empty">No hay cajas PT liberadas y disponibles para las partes de este embarque.</div>';
+                    partes.forEach((parte, indice) => {
+                        const cajas = parte.cajas || [], sugeridas = cajasSugeridasParte(parte), tieneSeleccion = cajas.some(x => Boolean(x.seleccionada)), abierto = tieneSeleccion || indice === 0;
+                        const grupo = document.createElement('section'); grupo.className = `load-part${abierto ? '' : ' collapsed'}`; grupo.dataset.requerido = String(Number(parte.requerido || 0));
+                        grupo.innerHTML = `<div class="load-part-head" role="button" tabindex="0" aria-expanded="${abierto ? 'true' : 'false'}"><div class="load-part-title"><strong>${esc(parte.numeroParte || `Parte ${parte.parteId || ''}`)}</strong><span>${nf(cajas.length)} caja(s) disponibles</span></div><div class="load-part-kpi"><span>Requerido</span><strong>${nf(parte.requerido)} PZA</strong></div><div class="load-part-kpi available"><span>PT disponible</span><strong>${nf(parte.disponible)} PZA</strong></div><div class="load-part-kpi"><span>Selección</span><strong data-parte-seleccion>${nf(parte.piezasSeleccionadas)} PZA</strong></div><button class="btn btn-outline-primary btn-sm load-suggest" type="button"><i class="fa-solid fa-wand-magic-sparkles"></i> Sugerir</button><button class="load-part-toggle" type="button" aria-expanded="${abierto ? 'true' : 'false'}"><i class="fa-solid fa-chevron-down"></i><span>${abierto ? 'Ocultar' : 'Ver cajas'}</span></button></div><div class="load-part-body"><div class="box-grid"></div></div>`;
+                        const grid = grupo.querySelector('.box-grid');
+                        if (!cajas.length) grid.innerHTML = '<div class="part-empty">No hay cajas completas disponibles para esta parte.</div>';
+                        cajas.forEach(caja => {
+                            const seleccionada = Boolean(caja.seleccionada), sugerida = !seleccionada && sugeridas.has(Number(caja.cajaId));
+                            const card = document.createElement('label'); card.className = `box-option${seleccionada ? ' selected' : ''}${sugerida ? ' suggested' : ''}`; card.dataset.sugerida = sugerida ? 'true' : 'false';
+                            card.innerHTML = `<input class="load-box-check" type="checkbox" value="${Number(caja.cajaId || 0)}" data-cantidad="${Number(caja.cantidad || 0)}" ${seleccionada ? 'checked' : ''} ${cerrado ? 'disabled' : ''}/><div class="box-main"><strong>${esc(caja.etiqueta || `Caja ${caja.cajaId}`)}</strong><span>Caja ${nf(caja.numeroCaja)} · OF ${esc(caja.numeroOF || '—')}${caja.lote ? ` · Lote ${esc(caja.lote)}` : ''}</span><span><i class="fa-solid fa-location-dot"></i> ${esc(caja.ubicacion || 'Ubicación no registrada')}${caja.fechaEntrada ? ` · ${esc(caja.fechaEntrada)}` : ''}</span></div><div class="box-qty"><strong>${nf(caja.cantidad)} PZA</strong><span>${seleccionada ? 'Seleccionada' : sugerida ? 'Sugerida' : (caja.estatus || 'Disponible')}</span></div>`;
+                            grid.appendChild(card);
+                        });
+                        grupo.querySelector('.load-part-head')?.addEventListener('click', e => { if (e.target.closest('button')) return; alternarParte(grupo); });
+                        grupo.querySelector('.load-part-toggle')?.addEventListener('click', e => { e.stopPropagation(); alternarParte(grupo); });
+                        grupo.querySelector('.load-suggest')?.addEventListener('click', e => { e.stopPropagation(); alternarParte(grupo, true); grupo.querySelectorAll('.load-box-check').forEach(chk => { if (!chk.disabled) chk.checked = chk.closest('.box-option')?.dataset.sugerida === 'true' || chk.closest('.box-option')?.classList.contains('selected'); }); actualizarResumenSeleccion(); });
+                        lista.appendChild(grupo);
+                    });
                 }
-
-                const mensaje = data?.piezasPendientes > 0
-                    ? `${nf(data.piezasCargadas)} de ${nf(data.totalPiezas)} PZA cargadas. Pendientes: ${nf(data.piezasPendientes)} PZA.`
-                    : data?.puedeConfirmar
-                        ? 'Todas las piezas están cargadas. Ya puedes confirmar la carga física.'
-                        : `Carga registrada: ${nf(data?.piezasCargadas)} de ${nf(data?.totalPiezas)} PZA.`;
-
+                actualizarResumenSeleccion();
+                const mensaje = data?.puedeConfirmar ? (data?.cargaParcial ? `${nf(cargadas)} PZA seleccionadas. Puedes confirmar la carga parcial; ${nf(pendientes)} PZA quedarán Expeditadas.` : 'La carga seleccionada cubre el embarque. Ya puedes confirmar.') : `Selecciona o escanea al menos una caja. Pendientes: ${nf(pendientes)} PZA.`;
                 mostrarMensajeCarga(mensaje, data?.puedeConfirmar ? 'ok' : '');
             }
-
             async function cargarCargaFisica() {
-                const response = await fetch(`${urlObtenerCarga}?embarqueId=${encodeURIComponent(embarqueId)}`, {
-                    method: 'GET',
-                    cache: 'no-store',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                const data = await leerJson(response);
-                if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible consultar la carga física.');
-                renderCarga(data);
-                return data;
+                const response = await fetch(`${urlObtenerCarga}?embarqueId=${encodeURIComponent(embarqueId)}`, { method:'GET', cache:'no-store', headers:{'X-Requested-With':'XMLHttpRequest'} });
+                const data = await leerJson(response); if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible consultar la carga física.'); renderCarga(data); return data;
             }
-
-            const scan = document.getElementById('lgCargaScan');
-            const btnEscanear = document.getElementById('lgEscanearCarga');
-
+            document.getElementById('lgCargaLista')?.addEventListener('change', e => { if (e.target.closest('.load-box-check')) actualizarResumenSeleccion(); });
+            document.getElementById('lgMarcarSugeridas')?.addEventListener('click', () => { document.querySelectorAll('#lgCargaLista .load-box-check').forEach(chk => { if (!chk.disabled) { const card = chk.closest('.box-option'); chk.checked = card?.dataset.sugerida === 'true' || card?.classList.contains('selected'); } }); actualizarResumenSeleccion(); });
+            document.getElementById('lgRecargarCajas')?.addEventListener('click', async () => { try { await cargarCargaFisica(); } catch (e) { mostrarMensajeCarga(e.message,'error'); } });
+            document.getElementById('lgGuardarSeleccion')?.addEventListener('click', async () => {
+                const checks = [...document.querySelectorAll('#lgCargaLista .load-box-check:checked')]; if (!checks.length) { mostrarMensajeCarga('Selecciona al menos una caja.','error'); return; }
+                if (!rowVersionActual) await cargarCargaFisica();
+                const btn = document.getElementById('lgGuardarSeleccion'), original = btn.innerHTML, datos = new URLSearchParams();
+                datos.append('__RequestVerificationToken', token); datos.append('embarqueId', String(embarqueId)); datos.append('rowVersion', rowVersionActual); checks.forEach(x => datos.append('cajaIds', x.value));
+                try { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...'; const r = await fetch(urlSeleccionarCajas,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:datos.toString()}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible guardar la selección.'); if (j.rowVersion) rowVersionActual = j.rowVersion; mostrarMensajeCarga(j.mensaje || 'Selección guardada.','ok'); await cargarCargaFisica(); } catch (e) { mostrarMensajeCarga(e.message,'error'); } finally { btn.innerHTML = original; }
+            });
+            const scan = document.getElementById('lgCargaScan'), btnEscanear = document.getElementById('lgEscanearCarga');
             async function escanearCaja() {
-                if (!scan) return;
-                const codigo = (scan.value || '').trim();
-                if (!codigo) {
-                    mostrarMensajeCarga('Escanea o captura una etiqueta de caja.', 'error');
-                    scan.focus();
-                    return;
-                }
-
+                if (!scan) return; const codigo = (scan.value || '').trim(); if (!codigo) { mostrarMensajeCarga('Escanea o captura una etiqueta de caja.','error'); scan.focus(); return; }
                 const original = btnEscanear?.innerHTML;
-                try {
-                    if (btnEscanear) {
-                        btnEscanear.disabled = true;
-                        btnEscanear.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
-                    }
-
-                    const datos = new URLSearchParams();
-                    datos.append('__RequestVerificationToken', token);
-                    datos.append('embarqueId', String(embarqueId));
-                    datos.append('codigo', codigo);
-
-                    const response = await fetch(urlEscanearCarga, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: datos.toString()
-                    });
-
-                    const data = await leerJson(response);
-                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible registrar la caja.');
-
-                    if (data.rowVersion) rowVersionActual = data.rowVersion;
-                    scan.value = '';
-                    mostrarMensajeCarga(data.mensaje || 'Caja registrada correctamente.', 'ok');
-                    await cargarCargaFisica();
-                    scan.focus();
-                } catch (error) {
-                    mostrarMensajeCarga(error.message || 'No fue posible registrar la caja.', 'error');
-                    scan.select();
-                } finally {
-                    if (btnEscanear) {
-                        btnEscanear.disabled = false;
-                        btnEscanear.innerHTML = original || '<i class="fa-solid fa-barcode"></i>Registrar';
-                    }
-                }
+                try { if (btnEscanear) { btnEscanear.disabled = true; btnEscanear.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando...'; } const datos = new URLSearchParams(); datos.append('__RequestVerificationToken',token); datos.append('embarqueId',String(embarqueId)); datos.append('codigo',codigo); const r = await fetch(urlEscanearCarga,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:datos.toString()}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible registrar la caja.'); if (j.rowVersion) rowVersionActual = j.rowVersion; scan.value = ''; mostrarMensajeCarga(j.mensaje || 'Caja registrada.','ok'); await cargarCargaFisica(); scan.focus(); } catch (e) { mostrarMensajeCarga(e.message,'error'); scan.select(); } finally { if (btnEscanear) { btnEscanear.disabled = false; btnEscanear.innerHTML = original || '<i class="fa-solid fa-barcode"></i>Registrar'; } }
             }
-
-            scan?.addEventListener('keydown', event => {
-                if (event.key === 'Enter' || event.key === 'Tab') {
-                    event.preventDefault();
-                    escanearCaja();
-                }
-            });
-
-            btnEscanear?.addEventListener('click', escanearCaja);
-
+            scan?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); escanearCaja(); } }); btnEscanear?.addEventListener('click', escanearCaja);
             document.getElementById('lgConfirmarCargaFisica')?.addEventListener('click', async () => {
-                if (!cargaActual?.puedeConfirmar) {
-                    mostrarMensajeCarga('La carga física todavía no está completa.', 'error');
-                    return;
-                }
-
-                if (!rowVersionActual) {
-                    try { await cargarCargaFisica(); }
-                    catch (error) { mostrarMensajeCarga(error.message, 'error'); return; }
-                }
-
-                if (!confirm('¿Confirmar que la carga física está completa? Después de confirmar, el embarque quedará Cargado.')) return;
-
-                const btn = document.getElementById('lgConfirmarCargaFisica');
-                const original = btn.innerHTML;
-
-                try {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...';
-
-                    const datos = new URLSearchParams();
-                    datos.append('__RequestVerificationToken', token);
-                    datos.append('embarqueId', String(embarqueId));
-                    datos.append('rowVersion', rowVersionActual);
-
-                    const response = await fetch(urlConfirmarCarga, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: datos.toString()
-                    });
-
-                    const data = await leerJson(response);
-                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible confirmar la carga física.');
-
-                    alert(data.mensaje || 'Carga física confirmada.');
-                    window.location.reload();
-                } catch (error) {
-                    mostrarMensajeCarga(error.message || 'No fue posible confirmar la carga física.', 'error');
-                    btn.disabled = false;
-                    btn.innerHTML = original;
-                }
+                if (!cargaActual?.puedeConfirmar) { mostrarMensajeCarga('Selecciona o escanea al menos una caja completa antes de confirmar.','error'); return; }
+                if (!rowVersionActual) await cargarCargaFisica();
+                const parcial = Boolean(cargaActual?.cargaParcial), pendientes = Number(cargaActual?.piezasPendientes || 0);
+                const texto = parcial ? `¿Confirmar carga parcial? ${nf(pendientes)} PZA quedarán automáticamente como Expeditadas para un siguiente embarque.` : '¿Confirmar la carga física?';
+                if (!confirm(texto)) return;
+                const btn = document.getElementById('lgConfirmarCargaFisica'), original = btn.innerHTML;
+                try { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...'; const datos = new URLSearchParams(); datos.append('__RequestVerificationToken',token); datos.append('embarqueId',String(embarqueId)); datos.append('rowVersion',rowVersionActual); const r = await fetch(urlConfirmarCarga,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:datos.toString()}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible confirmar la carga.'); alert(j.mensaje || 'Carga confirmada.'); window.location.reload(); } catch (e) { mostrarMensajeCarga(e.message,'error'); btn.disabled = false; btn.innerHTML = original; }
             });
-
+            let modalCargaRapida = null;
+            document.getElementById('lgAbrirCargaRapida')?.addEventListener('click', () => { const el = document.getElementById('modalCargaRapidaDetalle'); if (!el) return; modalCargaRapida = bootstrap.Modal.getOrCreateInstance(el); modalCargaRapida.show(); });
+            document.getElementById('formCargaRapidaDetalle')?.addEventListener('submit', async e => {
+                e.preventDefault();
+                if (!rowVersionActual) { try { await cargarCargaFisica(); } catch (err) { alert(err.message); return; } }
+                const form = e.currentTarget, motivo = form.querySelector('[name="motivo"]')?.value?.trim() || '', acepta = document.getElementById('lgCargaRapidaResponsabilidad')?.checked === true;
+                const archivos = [...(document.getElementById('lgCargaRapidaCamara')?.files || []), ...(document.getElementById('lgCargaRapidaGaleria')?.files || [])];
+                if (!motivo) { alert('Captura el motivo de la Carga rápida.'); return; } if (!acepta) { alert('Confirma la responsabilidad de la Carga rápida.'); return; } if (!archivos.length) { alert('Adjunta al menos una fotografía.'); return; }
+                const btn = document.getElementById('lgConfirmarCargaRapida'), original = btn.innerHTML, fd = new FormData(); fd.append('__RequestVerificationToken',token); fd.append('embarqueId',String(embarqueId)); fd.append('rowVersion',rowVersionActual); fd.append('motivo',motivo); fd.append('aceptaResponsabilidad','true'); archivos.forEach(x => fd.append('evidencias',x,x.name));
+                try { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Confirmando...'; const r = await fetch(urlConfirmarCargaRapida,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:fd}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible confirmar la Carga rápida.'); modalCargaRapida?.hide(); alert(j.mensaje || 'Carga rápida confirmada.'); window.location.reload(); } catch (err) { alert(err.message || 'No fue posible confirmar la Carga rápida.'); } finally { btn.disabled = false; btn.innerHTML = original; }
+            });
             document.getElementById('lgConfirmarSalidaPlanta')?.addEventListener('click', async () => {
-                if (formaEnvio === 'Interno') {
-                    alert('La salida de una Entrega debe confirmarla el chofer asignado desde su portal.');
-                    return;
-                }
-
-                try {
-                    if (!rowVersionActual) await cargarCargaFisica();
-                } catch (error) {
-                    alert(error.message || 'No fue posible obtener la versión actual del embarque.');
-                    return;
-                }
-
-                const textoForma = formaEnvio === 'Cliente' ? 'Cliente recoge' : 'Paquetería';
-                if (!confirm(`¿Confirmar la salida real de planta para ${textoForma}? El embarque pasará a En ruta.`)) return;
-
-                const btn = document.getElementById('lgConfirmarSalidaPlanta');
-                const original = btn.innerHTML;
-
-                try {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...';
-
-                    const datos = new URLSearchParams();
-                    datos.append('__RequestVerificationToken', token);
-                    datos.append('embarqueId', String(embarqueId));
-                    datos.append('rowVersion', rowVersionActual);
-
-                    const response = await fetch(urlConfirmarSalidaPlanta, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: datos.toString()
-                    });
-
-                    const data = await leerJson(response);
-                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible confirmar la salida de planta.');
-
-                    alert(data.mensaje || 'Salida de planta confirmada.');
-                    window.location.reload();
-                } catch (error) {
-                    alert(error.message || 'No fue posible confirmar la salida de planta.');
-                    btn.disabled = false;
-                    btn.innerHTML = original;
-                }
+                if (formaEnvio !== 'Paqueteria') { alert('Esta acción corresponde únicamente a Paquetería.'); return; }
+                try { if (!rowVersionActual) await cargarCargaFisica(); } catch (e) { alert(e.message); return; }
+                if (!confirm('¿Confirmar que la mercancía fue entregada físicamente a la paquetería? El embarque pasará a En ruta.')) return;
+                const btn = document.getElementById('lgConfirmarSalidaPlanta'), original = btn.innerHTML;
+                try { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Confirmando...'; const datos = new URLSearchParams(); datos.append('__RequestVerificationToken',token); datos.append('embarqueId',String(embarqueId)); datos.append('rowVersion',rowVersionActual); const r = await fetch(urlConfirmarSalidaPlanta,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},body:datos.toString()}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible confirmar la salida.'); alert(j.mensaje || 'Salida confirmada.'); window.location.reload(); } catch (e) { alert(e.message); btn.disabled = false; btn.innerHTML = original; }
             });
-
+            document.getElementById('formRecoleccionCliente')?.addEventListener('submit', async e => {
+                e.preventDefault(); const form = e.currentTarget, files = [...(document.getElementById('lgRecoleccionEvidencias')?.files || [])]; if (!files.length) { alert('Adjunta al menos una evidencia de la recolección.'); return; }
+                try { if (!rowVersionActual) await cargarCargaFisica(); } catch (err) { alert(err.message); return; }
+                const row = document.getElementById('lgRecoleccionRowVersion'); if (row) row.value = rowVersionActual; if (!confirm('¿Confirmar la recolección? Al hacerlo, el embarque quedará Entregado y cerrado.')) return;
+                const btn = document.getElementById('lgConfirmarRecoleccion'), original = btn.innerHTML, fd = new FormData(form); fd.set('rowVersion',rowVersionActual);
+                try { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cerrando...'; const r = await fetch(urlConfirmarRecoleccion,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:fd}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible confirmar la recolección.'); alert(j.mensaje || 'Recolección confirmada.'); window.location.reload(); } catch (err) { alert(err.message); btn.disabled = false; btn.innerHTML = original; }
+            });
             const fechaEntrega = document.getElementById('lgFechaEntrega');
-            if (fechaEntrega && !fechaEntrega.value) {
-                const ahora = new Date();
-                ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset());
-                fechaEntrega.value = ahora.toISOString().slice(0, 16);
-            }
-
-            const evidenciasEntrega = document.getElementById('lgEntregaEvidencias');
-            const infoEvidencias = document.getElementById('lgEntregaEvidenciasInfo');
-
-            evidenciasEntrega?.addEventListener('change', () => {
-                const archivos = [...evidenciasEntrega.files];
-                if (infoEvidencias) {
-                    infoEvidencias.textContent = archivos.length === 0
-                        ? 'Selecciona al menos una foto o PDF. Máximo 15 archivos.'
-                        : `${archivos.length} archivo(s) seleccionado(s) · ${archivos.map(x => x.name).join(' · ')}`;
-                }
+            if (fechaEntrega && !fechaEntrega.value) { const ahora = new Date(); ahora.setMinutes(ahora.getMinutes() - ahora.getTimezoneOffset()); fechaEntrega.value = ahora.toISOString().slice(0,16); }
+            const evidenciasEntrega = document.getElementById('lgEntregaEvidencias'), infoEvidencias = document.getElementById('lgEntregaEvidenciasInfo');
+            evidenciasEntrega?.addEventListener('change', () => { const archivos = [...evidenciasEntrega.files]; if (infoEvidencias) infoEvidencias.textContent = archivos.length ? `${archivos.length} archivo(s) seleccionado(s) · ${archivos.map(x => x.name).join(' · ')}` : 'Selecciona al menos una foto o PDF. Máximo 15 archivos.'; });
+            document.getElementById('formEntregaOperacion')?.addEventListener('submit', async e => {
+                e.preventDefault(); const form = e.currentTarget, archivos = [...(evidenciasEntrega?.files || [])]; if (!archivos.length) { alert('Adjunta al menos una evidencia de entrega.'); return; }
+                try { if (!rowVersionActual) await cargarCargaFisica(); } catch (err) { alert(err.message); return; }
+                const rowInput = document.getElementById('lgEntregaRowVersion'); if (rowInput) rowInput.value = rowVersionActual; if (!confirm('¿Confirmar la entrega y cerrar este embarque?')) return;
+                const btn = document.getElementById('lgConfirmarEntrega'), original = btn.innerHTML, datos = new FormData(form);
+                try { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...'; const r = await fetch(urlCerrarEntrega,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:datos}); const j = await leerJson(r); if (!r.ok || !j.ok) throw new Error(j.mensaje || 'No fue posible confirmar la entrega.'); alert(j.mensaje || 'Entrega confirmada.'); window.location.reload(); } catch (err) { alert(err.message); btn.disabled = false; btn.innerHTML = original; }
             });
-
-            document.getElementById('formEntregaOperacion')?.addEventListener('submit', async event => {
-                event.preventDefault();
-
-                const form = event.currentTarget;
-                const archivos = [...(evidenciasEntrega?.files || [])];
-                if (archivos.length === 0) {
-                    alert('Adjunta al menos una evidencia de entrega.');
-                    return;
-                }
-
-                try {
-                    if (!rowVersionActual) await cargarCargaFisica();
-                } catch (error) {
-                    alert(error.message || 'No fue posible obtener la versión actual del embarque.');
-                    return;
-                }
-
-                const rowInput = document.getElementById('lgEntregaRowVersion');
-                if (rowInput) rowInput.value = rowVersionActual;
-
-                if (!confirm('¿Confirmar la entrega y cerrar este embarque?')) return;
-
-                const btn = document.getElementById('lgConfirmarEntrega');
-                const original = btn.innerHTML;
-                const datos = new FormData(form);
-
-                try {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Guardando...';
-
-                    const response = await fetch(urlCerrarEntrega, {
-                        method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                        body: datos
-                    });
-
-                    const data = await leerJson(response);
-                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible confirmar la entrega.');
-
-                    alert(data.mensaje || 'Entrega confirmada.');
-                    window.location.reload();
-                } catch (error) {
-                    alert(error.message || 'No fue posible confirmar la entrega.');
-                    btn.disabled = false;
-                    btn.innerHTML = original;
-                }
-            });
-
-            document.querySelectorAll('form.js-single-submit').forEach(form => {
-                form.addEventListener('submit', event => {
-                    if (event.defaultPrevented) return;
-                    if (form.dataset.enviando === '1') {
-                        event.preventDefault();
-                        return;
-                    }
-                    form.dataset.enviando = '1';
-                    const btn = form.querySelector('button[type="submit"]');
-                    if (btn) btn.disabled = true;
-                });
-            });
-
-            if (['Preparado', 'Cargando', 'Cargado', 'En ruta'].includes(estatusInicial)) {
-                cargarCargaFisica()
-                    .then(() => {
-                        if (scan) scan.focus();
-                    })
-                    .catch(error => {
-                        if (scan) mostrarMensajeCarga(error.message || 'No fue posible consultar la carga física.', 'error');
-                    });
+            document.querySelectorAll('form.js-single-submit').forEach(form => form.addEventListener('submit', e => { if (e.defaultPrevented) return; if (form.dataset.enviando === '1') { e.preventDefault(); return; } form.dataset.enviando = '1'; const btn = form.querySelector('button[type="submit"]'); if (btn) btn.disabled = true; }));
+            if (['Programado','Preparando','Preparado','Cargando','Cargado','En ruta'].includes(estatusInicial) && formaEnvio && formaEnvio !== 'Pendiente') {
+                cargarCargaFisica().then(() => { if (scan && !scan.disabled) scan.focus(); }).catch(err => { if (scan) mostrarMensajeCarga(err.message || 'No fue posible consultar la carga física.','error'); });
             }
         })();
     </script>

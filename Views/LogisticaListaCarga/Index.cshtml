@@ -1713,6 +1713,101 @@
             font-size: 9px
         }
 
+        .planner-suggestions {
+            margin-bottom: 11px;
+            border: 1px solid #c9d8eb;
+            border-radius: 10px;
+            background: linear-gradient(180deg,#f7faff,#f2f7ff);
+            overflow: hidden
+        }
+
+        .planner-suggestions-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 10px;
+            border-bottom: 1px solid #d9e4f1
+        }
+
+            .planner-suggestions-head strong {
+                display: block;
+                color: var(--navy);
+                font-size: 11px
+            }
+
+            .planner-suggestions-head small {
+                display: block;
+                margin-top: 2px;
+                color: var(--muted);
+                font-size: 9px
+            }
+
+        .planner-suggestion-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit,minmax(175px,1fr));
+            gap: 7px;
+            padding: 9px
+        }
+
+        .planner-suggestion {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            min-width: 0;
+            padding: 8px 9px;
+            border: 1px solid #d4dfed;
+            border-radius: 8px;
+            background: #fff
+        }
+
+            .planner-suggestion.is-covered {
+                opacity: .62;
+                background: #f7faf8;
+                border-color: #cfe5d8
+            }
+
+        .planner-suggestion-main {
+            min-width: 0
+        }
+
+        .planner-suggestion-date {
+            display: block;
+            color: var(--navy);
+            font-weight: 900;
+            font-size: 11px
+        }
+
+        .planner-suggestion-detail {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 8px;
+            line-height: 1.25
+        }
+
+            .planner-suggestion-detail strong {
+                color: var(--blue)
+            }
+
+        .planner-suggestion-habitual {
+            display: inline-flex;
+            margin-left: 4px;
+            padding: 1px 5px;
+            border-radius: 999px;
+            background: var(--blueSoft);
+            color: var(--blue);
+            font-size: 7px;
+            font-weight: 900
+        }
+
+        .planner-suggestions-empty {
+            padding: 11px;
+            color: var(--muted);
+            font-size: 9px
+        }
+
         @@media(max-width:850px) {
             .dialog-backdrop {
                 padding: 6px
@@ -1832,10 +1927,23 @@
                 grid-template-columns: 1fr 1fr
             }
 
-                .planner-actions .btn {
-                    width: 100%;
-                    white-space: normal
+            .planner-suggestions-head {
+                align-items: stretch;
+                flex-direction: column
+            }
+
+                .planner-suggestions-head .btn {
+                    width: 100%
                 }
+
+            .planner-suggestion-list {
+                grid-template-columns: 1fr
+            }
+
+            .planner-actions .btn {
+                width: 100%;
+                white-space: normal
+            }
 
             .planner-row {
                 grid-template-columns: 1fr
@@ -2160,6 +2268,16 @@
                                                                         fila.RequeridoViernes,
                                                                         fila.RequeridoSabado
                                                                         };
+                                            var sugerenciasProgramacion = fechas
+                                            .Select((fechaSugerida, indiceSugerencia) => new
+                                            {
+                                                fecha = fechaSugerida.ToString("yyyy-MM-dd"),
+                                                cantidad = Math.Max(0, requeridos[indiceSugerencia]),
+                                                habitual = fila.EsDiaHabitual(fechaSugerida)
+                                            })
+                                            .Where(x => x.cantidad > 0)
+                                            .ToList();
+                                            var sugerenciasJson = JsonSerializer.Serialize(sugerenciasProgramacion);
 
                                             <tr class="@(fila.EsExpeditado ? "part-exp" : "")">
                                                 <td class="left">
@@ -2282,7 +2400,8 @@
                                                                 data-semana-inicio="@Model.FechaInicio.ToString("yyyy-MM-dd")"
                                                                 data-semana-fin="@Model.FechaInicio.AddDays(5).ToString("yyyy-MM-dd")"
                                                                 data-dias='@diasJson'
-                                                                data-programaciones='@programacionesJson'>
+                                                                data-programaciones='@programacionesJson'
+                                                                data-sugerencias='@sugerenciasJson'>
                                                             @(fila.TotalProgramado > 0 ? "Ajustar" : "Programar")
                                                         </button>
                                                     }
@@ -2352,6 +2471,16 @@
                             <span>Día habitual: <strong id="prHabitual">-</strong></span>
                             <span>Ya protegido en embarque: <strong id="prProtegido">0 PZA</strong></span>
                         </div>
+                        <div class="planner-suggestions" id="bloqueSugerencias">
+                            <div class="planner-suggestions-head">
+                                <div>
+                                    <strong>Sugerencias de esta semana</strong>
+                                    <small>Se calculan con lo que todavía falta por atender. Puedes usarlas con un clic o ignorarlas y capturar otra fecha.</small>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-soft" id="btnCompletarSugerencias">Usar sugerencias</button>
+                            </div>
+                            <div id="prSugerencias" class="planner-suggestion-list"></div>
+                        </div>
                         <div class="live-location">
                             <div class="live-location-head">
                                 <strong>● Ubicación actual del material</strong>
@@ -2366,7 +2495,7 @@
                             <div class="live-location-foot">Total localizado: <strong id="liveTotal">-</strong> PZA <span id="liveActualizado"></span></div>
                         </div>
                         <div class="planner-help">
-                            <strong>Regla del ajuste:</strong> las cantidades que ya están programadas <strong>no se descuentan automáticamente</strong>. Agregar otra fecha utiliza únicamente el saldo que todavía está sin programar. Si quieres mover piezas de una fecha existente a otra, reduce tú misma la cantidad de la fecha original y después agrégala en la nueva fecha. Lo que ya generó embarque está protegido y no entra en este saldo editable.
+                            <strong>Cómo usarlo:</strong> la primera fila es editable. Cambia su fecha o cantidad directamente; si necesitas dividir la entrega, usa <strong>Agregar otra fecha</strong> o una sugerencia. Lo que ya generó embarque permanece protegido.
                         </div>
                         <div id="mensajePlan" class="planner-message info"></div>
                         <div class="planner-actions">
@@ -2521,6 +2650,8 @@
             const mensaje=document.getElementById('mensajePlan');
             const btnGuardar=document.getElementById('btnGuardar');
             const btnOtraFecha=document.getElementById('btnOtraFecha');
+            const btnCompletarSugerencias=document.getElementById('btnCompletarSugerencias');
+            const prSugerencias=document.getElementById('prSugerencias');
             const liveUbicacion=document.getElementById('liveUbicacion');
             const liveAlmacen=document.getElementById('liveAlmacen');
             const liveProduccion=document.getElementById('liveProduccion');
@@ -2532,6 +2663,7 @@
             let totalProgramadoOriginal=0;
             let diasHabituales=[];
             let programacionesOriginales=[];
+            let sugerenciasProgramacion=[];
             let inicioSemana='';
             let finSemana='';
             let parteActual=0;
@@ -2573,6 +2705,110 @@
                     if(!actual.observaciones&&obs) actual.observaciones=obs;
                 });
                 return [...mapa.values()].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+            }
+            function normalizarSugerencias(lista){
+                const mapa=new Map();
+                (Array.isArray(lista)?lista:[]).forEach(item=>{
+                    const fecha=String(item?.fecha||'').trim();
+                    const cantidad=entero(item?.cantidad);
+                    if(!fecha||cantidad<=0) return;
+                    const habitual=item?.habitual===true||String(item?.habitual||'').toLowerCase()==='true';
+                    if(!mapa.has(fecha)) mapa.set(fecha,{fecha,cantidad:0,habitual});
+                    const actual=mapa.get(fecha);
+                    actual.cantidad+=cantidad;
+                    actual.habitual=actual.habitual||habitual;
+                });
+                return [...mapa.values()].sort((a,b)=>{
+                    if(a.habitual!==b.habitual) return a.habitual?-1:1;
+                    return a.fecha.localeCompare(b.fecha);
+                });
+            }
+            function cantidadCapturadaFecha(fecha){
+                if(!filas||!fecha) return 0;
+                return [...filas.querySelectorAll('.planner-row')].reduce((total,row)=>{
+                    const f=row.querySelector('.js-fecha')?.value||'';
+                    return total+(f===fecha?entero(row.querySelector('.js-cantidad')?.value):0);
+                },0);
+            }
+            function saldoEditableActual(){ return Math.max(0,totalObjetivo-totalCapturado()); }
+            function formatoFechaCorta(fechaTexto){
+                if(!fechaTexto) return '';
+                const p=fechaTexto.split('-').map(Number);
+                if(p.length!==3||p.some(Number.isNaN)) return fechaTexto;
+                return new Date(p[0],p[1]-1,p[2]).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'2-digit'});
+            }
+            function obtenerFilaFecha(fecha){
+                return [...filas?.querySelectorAll('.planner-row')||[]].find(row=>(row.querySelector('.js-fecha')?.value||'')===fecha)||null;
+            }
+            function obtenerFilaNuevaVacia(){
+                return [...filas?.querySelectorAll('.planner-row')||[]].find(row=>row.dataset.origen==='nuevo'&&!(row.querySelector('.js-fecha')?.value||'')&&entero(row.querySelector('.js-cantidad')?.value)<=0)||null;
+            }
+            function aplicarCantidadSugerida(fecha,cantidadSolicitada){
+                const saldo=saldoEditableActual();
+                if(saldo<=0){ alert('Todo el saldo editable ya está distribuido. Reduce primero una cantidad si quieres mover piezas a otra fecha.'); return false; }
+                const cantidad=Math.min(saldo,entero(cantidadSolicitada));
+                if(cantidad<=0) return false;
+                let row=obtenerFilaFecha(fecha);
+                if(row){
+                    const input=row.querySelector('.js-cantidad');
+                    if(input) input.value=entero(input.value)+cantidad;
+                }else{
+                    row=obtenerFilaNuevaVacia();
+                    if(row){
+                        const inputFecha=row.querySelector('.js-fecha');
+                        const inputCantidad=row.querySelector('.js-cantidad');
+                        if(inputFecha) inputFecha.value=fecha;
+                        if(inputCantidad) inputCantidad.value=cantidad;
+                        actualizarAdvertenciaDia(row);
+                    }else{
+                        row=crearFila({fecha,cantidad,observaciones:'',origen:'nuevo'});
+                    }
+                }
+                reindexar();
+                actualizarResumen();
+                return true;
+            }
+            function aplicarSugerencia(fecha){
+                const sugerencia=sugerenciasProgramacion.find(x=>x.fecha===fecha);
+                if(!sugerencia) return;
+                const pendiente=Math.max(0,entero(sugerencia.cantidad)-cantidadCapturadaFecha(fecha));
+                if(pendiente<=0){ alert('La sugerencia de ese día ya está cubierta por la programación capturada.'); return; }
+                aplicarCantidadSugerida(fecha,pendiente);
+            }
+            function completarConSugerencias(){
+                let aplicado=0;
+                for(const sugerencia of sugerenciasProgramacion){
+                    if(saldoEditableActual()<=0) break;
+                    const pendiente=Math.max(0,entero(sugerencia.cantidad)-cantidadCapturadaFecha(sugerencia.fecha));
+                    if(pendiente<=0) continue;
+                    if(aplicarCantidadSugerida(sugerencia.fecha,pendiente)) aplicado++;
+                }
+                if(aplicado===0&&saldoEditableActual()>0){
+                    const fecha=fechaSugeridaLibre();
+                    if(fecha) aplicarCantidadSugerida(fecha,saldoEditableActual());
+                }
+                actualizarResumen();
+            }
+            function renderSugerencias(){
+                if(!prSugerencias) return;
+                prSugerencias.innerHTML='';
+                if(sugerenciasProgramacion.length===0){
+                    prSugerencias.innerHTML='<div class="planner-suggestions-empty">No hay cantidades sugeridas por día para esta parte. Puedes usar el día habitual o capturar cualquier fecha de la semana.</div>';
+                    if(btnCompletarSugerencias) btnCompletarSugerencias.disabled=true;
+                    return;
+                }
+                let pendientes=0;
+                sugerenciasProgramacion.forEach(sugerencia=>{
+                    const capturado=cantidadCapturadaFecha(sugerencia.fecha);
+                    const pendiente=Math.max(0,entero(sugerencia.cantidad)-capturado);
+                    pendientes+=pendiente;
+                    const card=document.createElement('div');
+                    card.className='planner-suggestion'+(pendiente<=0?' is-covered':'');
+                    card.innerHTML=`<div class="planner-suggestion-main"><span class="planner-suggestion-date">${formatoFechaCorta(sugerencia.fecha)}${sugerencia.habitual?'<span class="planner-suggestion-habitual">Habitual</span>':''}</span><span class="planner-suggestion-detail">Sugerido <strong>${nf(sugerencia.cantidad)} PZA</strong>${capturado>0?` · Capturado ${nf(capturado)}`:''}${pendiente>0?` · Faltan ${nf(pendiente)}`:' · Cubierto'}</span></div><button type="button" class="btn btn-sm ${pendiente>0?'btn-soft':''} js-usar-sugerencia" ${pendiente<=0?'disabled':''}>${pendiente>0?'Usar':'Listo'}</button>`;
+                    card.querySelector('.js-usar-sugerencia')?.addEventListener('click',()=>aplicarSugerencia(sugerencia.fecha));
+                    prSugerencias.appendChild(card);
+                });
+                if(btnCompletarSugerencias) btnCompletarSugerencias.disabled=pendientes<=0||saldoEditableActual()<=0;
             }
             function actualizarAdvertenciaDia(row){
                 const fecha=row?.querySelector('.js-fecha');
@@ -2661,17 +2897,20 @@
                     if(mensaje){ mensaje.className='planner-message error'; mensaje.innerHTML='Hay <strong>dos filas con la misma fecha</strong>. Usa una sola fila por día para evitar duplicar la programación.'; }
                     prTrack?.classList.add('error');
                     if(btnGuardar) btnGuardar.disabled=true;
+                    renderSugerencias();
                     return;
                 }
                 if(excedente>0){
                     if(mensaje){ mensaje.className='planner-message error'; mensaje.innerHTML=`El resultado supera el saldo editable por <strong>${nf(excedente)} PZA</strong>. Reduce alguna cantidad antes de guardar.`; }
                     prTrack?.classList.add('error');
                     if(btnGuardar) btnGuardar.disabled=true;
+                    renderSugerencias();
                     return;
                 }
                 if(capturado<=0){
                     if(mensaje){ mensaje.className='planner-message warning'; mensaje.innerHTML='Captura al menos una fecha con una cantidad mayor a cero.'; }
                     if(btnGuardar) btnGuardar.disabled=true;
+                    renderSugerencias();
                     return;
                 }
                 const delta=capturado-totalProgramadoOriginal;
@@ -2694,6 +2933,7 @@
                     }
                 }
                 if(btnGuardar) btnGuardar.disabled=false;
+                renderSugerencias();
             }
             function configurarEventosFila(row){
                 const fecha=row.querySelector('.js-fecha');
@@ -2760,8 +3000,10 @@
                 if(existentes.length>0){
                     existentes.forEach(x=>crearFila({fecha:x.fecha,cantidad:x.cantidad,observaciones:x.observaciones,origen:'existente'}));
                 }else{
-                    const sugerida=fechaSugeridaLibre();
-                    crearFila({fecha:sugerida,cantidad:totalObjetivo,observaciones:'',origen:'nuevo'});
+                    const principal=sugerenciasProgramacion.find(x=>entero(x.cantidad)>0);
+                    const sugerida=principal?.fecha||fechaSugeridaLibre();
+                    const cantidadInicial=principal?Math.min(totalObjetivo,entero(principal.cantidad)):totalObjetivo;
+                    crearFila({fecha:sugerida,cantidad:cantidadInicial,observaciones:'',origen:'nuevo'});
                 }
                 reindexar();
                 firmaInicial=firmaActual();
@@ -2774,8 +3016,10 @@
                     alert('Todo el saldo editable ya está programado. Si quieres mover piezas a otra fecha, primero reduce la cantidad de la fecha original para liberar saldo.');
                     return;
                 }
-                const sugerida=fechaSugeridaLibre();
-                const row=crearFila({fecha:sugerida,cantidad:'',observaciones:'',origen:'nuevo'});
+                const sugerenciaPendiente=sugerenciasProgramacion.find(x=>Math.max(0,entero(x.cantidad)-cantidadCapturadaFecha(x.fecha))>0&&!fechasUsadas().has(x.fecha));
+                const sugerida=sugerenciaPendiente?.fecha||fechaSugeridaLibre();
+                const cantidadSugerida=sugerenciaPendiente?Math.min(saldo,Math.max(0,entero(sugerenciaPendiente.cantidad)-cantidadCapturadaFecha(sugerenciaPendiente.fecha))):'';
+                const row=crearFila({fecha:sugerida,cantidad:cantidadSugerida,observaciones:'',origen:'nuevo'});
                 actualizarResumen();
                 setTimeout(()=>row?.querySelector('.js-cantidad')?.focus(),30);
             }
@@ -2816,6 +3060,7 @@
                 finSemana=btn.dataset.semanaFin||'';
                 try{ diasHabituales=JSON.parse(btn.dataset.dias||'[]').map(Number).filter(x=>x>=1&&x<=6); }catch{ diasHabituales=[]; }
                 try{ programacionesOriginales=JSON.parse(btn.dataset.programaciones||'[]')||[]; }catch{ programacionesOriginales=[]; }
+                try{ sugerenciasProgramacion=normalizarSugerencias(JSON.parse(btn.dataset.sugerencias||'[]')||[]); }catch{ sugerenciasProgramacion=[]; }
                 const normalizadas=normalizarProgramacionesOriginales(programacionesOriginales);
                 totalProgramadoOriginal=normalizadas.reduce((t,x)=>t+entero(x.cantidad),0);
                 if(totalProgramadoOriginal>totalObjetivo) totalProgramadoOriginal=totalObjetivo;
@@ -2849,6 +3094,7 @@
             backdrop?.addEventListener('click',e=>{ if(e.target===backdrop) cerrarProgramacion(false); });
             document.getElementById('btnActualizarUbicacion')?.addEventListener('click',cargarUbicacion);
             btnOtraFecha?.addEventListener('click',agregarOtraFecha);
+            btnCompletarSugerencias?.addEventListener('click',completarConSugerencias);
             document.getElementById('btnRestablecer')?.addEventListener('click',()=>{
                 if(hayCambios()&&!confirm('¿Restablecer la programación tal como estaba al abrir esta ventana?')) return;
                 restaurarProgramacionActual();
