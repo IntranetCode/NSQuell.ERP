@@ -1681,30 +1681,105 @@ VALUES(@EmbarqueID,@Evento,@Anterior,@Nuevo,@Observaciones,@UsuarioID,@UsuarioNo
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
-            var header = await ObtenerHeaderAsync(cn, tx, embarqueId, cancellationToken) ?? throw new InvalidOperationException("El embarque no existe.");
-            if (header.Estatus == "Cancelado")
+            var resultado = await CancelarEmbarqueAsync(cn, tx, embarqueId, motivo, null, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            TempData["LogisticaOk"] = resultado.YaCancelado
+                ? "El embarque ya se encontraba cancelado."
+                : resultado.ViajeID.HasValue
+                    ? $"{resultado.Folio} cancelado correctamente y VIA-{resultado.ViajeID.Value:000000} sincronizado."
+                    : $"{resultado.Folio} cancelado correctamente y cajas reservadas liberadas.";
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            TempData["LogisticaError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelarDesdeOperacion(int embarqueId, string? motivo, string? rowVersion, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync("Tablero de Logística");
+        if (acceso != null) return acceso;
+        motivo = motivo?.Trim();
+        if (embarqueId <= 0) return BadRequest(new { ok = false, mensaje = "El embarque indicado no es válido." });
+        if (string.IsNullOrWhiteSpace(motivo)) return BadRequest(new { ok = false, mensaje = "Captura el motivo de cancelación." });
+        if (motivo.Length > 1000) return BadRequest(new { ok = false, mensaje = "El motivo de cancelación no puede exceder 1000 caracteres." });
+        if (string.IsNullOrWhiteSpace(rowVersion)) return Conflict(new { ok = false, recargar = true, mensaje = "No se recibió la versión actual del embarque. Recarga el flujo." });
+        byte[] versionEsperada;
+        try { versionEsperada = Convert.FromBase64String(rowVersion); }
+        catch { return Conflict(new { ok = false, recargar = true, mensaje = "La versión del embarque no es válida. Recarga el flujo." }); }
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var resultado = await CancelarEmbarqueAsync(cn, tx, embarqueId, motivo, versionEsperada, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return Json(new
             {
-                await tx.RollbackAsync(cancellationToken);
-                TempData["LogisticaOk"] = "El embarque ya se encuentra cancelado.";
-                return RedirectToAction(nameof(Detalle), new { id = embarqueId });
-            }
-            if (header.Estatus is "Cargando" or "Cargado" or "En ruta" or "Entregado")
-                throw new InvalidOperationException($"El embarque ya no puede cancelarse porque se encuentra en estatus {header.Estatus}.");
-            const string sqlCajasCargadas = @"
+                ok = true,
+                embarqueId,
+                folio = resultado.Folio,
+                viajeId = resultado.ViajeID,
+                yaCancelado = resultado.YaCancelado,
+                mensaje = resultado.YaCancelado
+                    ? $"{resultado.Folio} ya se encontraba cancelado."
+                    : resultado.ViajeID.HasValue
+                        ? $"{resultado.Folio} cancelado correctamente. El viaje relacionado fue sincronizado."
+                        : $"{resultado.Folio} cancelado correctamente."
+            });
+        }
+        catch (DBConcurrencyException ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            return Conflict(new { ok = false, recargar = true, mensaje = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            return BadRequest(new { ok = false, mensaje = ex.Message });
+        }
+    }
+
+    private async Task<(string Folio, int? ViajeID, bool YaCancelado)> CancelarEmbarqueAsync(SqlConnection cn, SqlTransaction tx, int embarqueId, string motivo, byte[]? rowVersionEsperada, CancellationToken cancellationToken)
+    {
+        const string sqlHeader = @"
+SELECT ISNULL(Folio,N'') Folio,ISNULL(Estatus,N'') Estatus,CONVERT(varbinary(8),RowVersion) RowVersion
+FROM dbo.Logistica_Embarques WITH(UPDLOCK,HOLDLOCK)
+WHERE EmbarqueID=@EmbarqueID AND Activo=1;";
+        string folio;
+        string estatus;
+        byte[] rowVersionActual;
+        await using (var cmd = new SqlCommand(sqlHeader, cn, tx))
+        {
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El embarque no existe.");
+            folio = Texto(rd, "Folio");
+            estatus = Texto(rd, "Estatus");
+            rowVersionActual = (byte[])rd["RowVersion"];
+        }
+        if (rowVersionEsperada != null && !rowVersionActual.SequenceEqual(rowVersionEsperada)) throw new DBConcurrencyException("El embarque fue modificado por otro usuario. Recarga el flujo.");
+        if (estatus == "Cancelado") return (folio, null, true);
+        if (estatus == "Cargado") throw new InvalidOperationException("El embarque ya está Cargado. No canceles el embarque completo; cancela únicamente el viaje para conservar la carga y después reprograma la salida.");
+        if (estatus == "Cargando") throw new InvalidOperationException("El embarque está en carga física. Termina o corrige la carga antes de cancelar.");
+        if (estatus is "En ruta" or "Entregado") throw new InvalidOperationException($"El embarque ya no puede cancelarse porque se encuentra en estatus {estatus}.");
+        if (estatus is not "Programado" and not "Preparando" and not "Preparado") throw new InvalidOperationException($"El embarque se encuentra en un estado que no permite cancelación: {estatus}.");
+        const string sqlCajasCargadas = @"
 SELECT COUNT_BIG(*)
 FROM dbo.Logistica_EmbarqueCajas WITH(UPDLOCK,HOLDLOCK)
-WHERE EmbarqueID=@EmbarqueID
-AND Activo=1
-AND EstatusSeleccion IN(N'Cargada',N'Despachada');";
-            await using (var cmd = new SqlCommand(sqlCajasCargadas, cn, tx))
-            {
-                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
-                var cajasCargadas = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken));
-                if (cajasCargadas > 0) throw new InvalidOperationException($"El embarque ya tiene {cajasCargadas:N0} caja(s) físicamente cargadas o despachadas y no puede cancelarse.");
-            }
-            var viajeId = await SincronizarCancelacionViajeAsync(cn, tx, embarqueId, motivo, cancellationToken);
-            await RevertirListaCargaPorCancelacionAsync(cn, tx, embarqueId, cancellationToken);
-            const string sqlCancelar = @"
+WHERE EmbarqueID=@EmbarqueID AND Activo=1 AND EstatusSeleccion IN(N'Cargada',N'Despachada');";
+        await using (var cmd = new SqlCommand(sqlCajasCargadas, cn, tx))
+        {
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+            var cajasCargadas = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken));
+            if (cajasCargadas > 0) throw new InvalidOperationException($"El embarque ya tiene {cajasCargadas:N0} caja(s) físicamente cargadas o despachadas. Cancela únicamente el viaje o revisa primero la carga física.");
+        }
+        var viajeId = await SincronizarCancelacionViajeAsync(cn, tx, embarqueId, motivo, cancellationToken);
+        await RevertirListaCargaPorCancelacionAsync(cn, tx, embarqueId, cancellationToken);
+        const string sqlCancelar = @"
 UPDATE dbo.Logistica_EmbarqueCajas
 SET Activo=0,
 EstatusSeleccion=N'Liberada',
@@ -1723,30 +1798,23 @@ FechaModificacion=SYSDATETIME(),
 ActualizadoPor=@Usuario
 WHERE EmbarqueID=@EmbarqueID
 AND Activo=1
-AND Estatus IN(N'Programado',N'Preparando',N'Preparado');
+AND Estatus IN(N'Programado',N'Preparando',N'Preparado')
+AND RowVersion=@RowVersion;
 
 SELECT @@ROWCOUNT;";
-            await using (var cmd = new SqlCommand(sqlCancelar, cn, tx))
-            {
-                cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
-                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 1000).Value = motivo;
-                cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) != 1)
-                    throw new InvalidOperationException("El embarque cambió mientras se intentaba cancelar.");
-            }
-            var historial = $"Embarque cancelado. Motivo: {motivo}. Cajas reservadas liberadas y programación de Lista de carga recalculada.";
-            if (viajeId.HasValue) historial += $" Viaje relacionado VIA-{viajeId.Value:000000} sincronizado.";
-            await InsertarHistorialAsync(cn, tx, embarqueId, "CANCELACION", header.Estatus, "Cancelado", historial, cancellationToken);
-            await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = viajeId.HasValue ? $"Embarque cancelado correctamente y VIA-{viajeId.Value:000000} sincronizado." : "Embarque cancelado correctamente y cajas liberadas.";
-        }
-        catch (Exception ex)
+        await using (var cmd = new SqlCommand(sqlCancelar, cn, tx))
         {
-            try { await tx.RollbackAsync(cancellationToken); } catch { }
-            TempData["LogisticaError"] = ex.Message;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+            cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+            cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 1000).Value = motivo;
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarqueId;
+            cmd.Parameters.Add("@RowVersion", SqlDbType.Binary, 8).Value = rowVersionActual;
+            if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) != 1) throw new DBConcurrencyException("El embarque cambió mientras se intentaba cancelar.");
         }
-        return RedirectToAction(nameof(Detalle), new { id = embarqueId });
+        var historial = $"Embarque cancelado. Motivo: {motivo}. Cajas reservadas liberadas y programación de Lista de carga recalculada.";
+        if (viajeId.HasValue) historial += $" Viaje relacionado VIA-{viajeId.Value:000000} sincronizado.";
+        await InsertarHistorialAsync(cn, tx, embarqueId, "CANCELACION", estatus, "Cancelado", historial, cancellationToken);
+        return (folio, viajeId, false);
     }
 
     private async Task<int?> SincronizarCancelacionViajeAsync(SqlConnection cn, SqlTransaction tx, int embarqueId, string motivo, CancellationToken cancellationToken)
@@ -1995,6 +2063,7 @@ VALUES
         }
         return viajeId;
     }
+
 
     private async Task RevertirListaCargaPorCancelacionAsync(SqlConnection cn, SqlTransaction tx, int embarqueId, CancellationToken cancellationToken)
     {

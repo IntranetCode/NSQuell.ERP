@@ -701,36 +701,14 @@ SELECT @@ROWCOUNT;";
         await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
-            var viaje = await ObtenerViajeParaActualizarAsync(cn, tx, model.ViajeID, cancellationToken) ?? throw new InvalidOperationException("El viaje no existe.");
-            if (viaje.Estatus != "Programado") throw new InvalidOperationException("Solo un viaje Programado puede cancelarse.");
-            var embarque = await ObtenerEmbarqueActivoVinculadoAsync(cn, tx, model.ViajeID, cancellationToken);
-            if (embarque.HasValue) throw new InvalidOperationException($"El viaje está vinculado al embarque {embarque.Value.Folio}. Cancela o modifica el embarque desde Centro Operativo para mantener ambos procesos sincronizados.");
-            const string sql = @"
-UPDATE dbo.Logistica_Viajes
-SET Estatus=N'Cancelado',MotivoCancelacion=@Motivo,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
-WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'Programado';
-
-UPDATE dbo.Logistica_ViajeParadas
-SET Estatus=N'Cancelada',FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
-WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus IN(N'Pendiente',N'En camino',N'En sitio');
-
-UPDATE ve
-SET Activo=0
-FROM dbo.Logistica_ViajeEmbarques ve
-INNER JOIN dbo.Logistica_Embarques e ON e.EmbarqueID=ve.EmbarqueID
-WHERE ve.ViajeID=@ViajeID AND ve.Activo=1 AND e.Estatus=N'Cancelado';
-
-SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.Logistica_Viajes WHERE ViajeID=@ViajeID AND Estatus=N'Cancelado') THEN 1 ELSE 0 END;";
-            await using (var cmd = new SqlCommand(sql, cn, tx))
-            {
-                cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 1000).Value = model.Motivo;
-                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
-                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = model.ViajeID;
-                if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) != 1) throw new InvalidOperationException("El viaje cambió mientras se intentaba cancelar.");
-            }
-            await InsertarHistorialAsync(cn, tx, model.ViajeID, "VIAJE_CANCELADO", "Programado", "Cancelado", $"Motivo: {model.Motivo}", cancellationToken);
+            var resultado = await CancelarViajeProgramadoAsync(cn, tx, model.ViajeID, model.Motivo, null, cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            TempData["LogisticaOk"] = "Viaje cancelado correctamente.";
+            TempData["LogisticaOk"] = resultado.EmbarquesPendientes > 0 ? $"{resultado.Folio} cancelado. {resultado.EmbarquesPendientes:N0} embarque(s) quedaron pendientes de reprogramación sin perder su preparación." : $"{resultado.Folio} cancelado correctamente.";
+        }
+        catch (DBConcurrencyException ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            TempData["LogisticaError"] = ex.Message;
         }
         catch (Exception ex)
         {
@@ -739,6 +717,52 @@ SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.Logistica_Viajes WHERE ViajeID=@ViajeI
         }
         return RedirectToAction(nameof(Detalle), new { id = model.ViajeID });
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelarDesdeOperacion(int viajeId, string? motivo, string? rowVersion, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+        motivo = motivo?.Trim();
+        if (viajeId <= 0) return BadRequest(new { ok = false, mensaje = "El viaje indicado no es válido." });
+        if (string.IsNullOrWhiteSpace(motivo)) return BadRequest(new { ok = false, mensaje = "Captura el motivo de cancelación." });
+        if (motivo.Length > 1000) return BadRequest(new { ok = false, mensaje = "El motivo no puede exceder 1,000 caracteres." });
+        if (string.IsNullOrWhiteSpace(rowVersion)) return Conflict(new { ok = false, recargar = true, mensaje = "No se recibió la versión actual del viaje. Recarga Centro Operativo." });
+        byte[] versionEsperada;
+        try { versionEsperada = Convert.FromBase64String(rowVersion); }
+        catch { return Conflict(new { ok = false, recargar = true, mensaje = "La versión del viaje no es válida. Recarga Centro Operativo." }); }
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            var resultado = await CancelarViajeProgramadoAsync(cn, tx, viajeId, motivo, versionEsperada, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return Json(new
+            {
+                ok = true,
+                viajeId,
+                folio = resultado.Folio,
+                embarquesPendientes = resultado.EmbarquesPendientes,
+                embarqueIds = resultado.EmbarqueIds,
+                mensaje = resultado.EmbarquesPendientes > 0
+                    ? $"{resultado.Folio} cancelado. Los {resultado.EmbarquesPendientes:N0} embarque(s) relacionados quedaron pendientes de reprogramación."
+                    : $"{resultado.Folio} cancelado correctamente."
+            });
+        }
+        catch (DBConcurrencyException ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            return Conflict(new { ok = false, recargar = true, mensaje = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            return BadRequest(new { ok = false, mensaje = ex.Message });
+        }
+    }
+
+
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -1066,6 +1090,127 @@ SELECT @@ROWCOUNT;";
             TempData["LogisticaError"] = ex.Message;
         }
         return RedirectToAction(nameof(Detalle), new { id = viajeId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReprogramarDesdeCalendario(int viajeId, DateTime fechaProgramada, TimeSpan horaSalidaProgramada, string? rowVersion, CancellationToken cancellationToken = default)
+    {
+        var acceso = await ValidarAccesoAsync();
+        if (acceso != null) return acceso;
+        if (viajeId <= 0) return BadRequest(new { ok = false, mensaje = "El viaje indicado no es válido." });
+        var nuevaFechaHora = fechaProgramada.Date.Add(horaSalidaProgramada);
+        if (nuevaFechaHora < DateTime.Now) return BadRequest(new { ok = false, mensaje = "No puedes mover el viaje a una fecha u hora que ya pasó." });
+        if (string.IsNullOrWhiteSpace(rowVersion)) return Conflict(new { ok = false, recargar = true, mensaje = "No se recibió la versión actual del viaje. Recarga Centro Operativo." });
+        byte[] versionEsperada;
+        try { versionEsperada = Convert.FromBase64String(rowVersion); }
+        catch { return Conflict(new { ok = false, recargar = true, mensaje = "La versión del viaje no es válida. Recarga Centro Operativo." }); }
+        await using var cn = await AbrirAsync(cancellationToken);
+        await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        try
+        {
+            const string sqlActual = @"
+SELECT ISNULL(v.Folio,N'') Folio,ISNULL(v.Estatus,N'') Estatus,v.FechaProgramada,v.HoraSalidaProgramada,v.UnidadID,v.OperadorUsuarioID,
+CONVERT(varbinary(8),v.RowVersion) RowVersion,
+ISNULL
+(
+    (
+        SELECT COUNT_BIG(*)
+        FROM dbo.Logistica_ViajeEmbarques ve
+        INNER JOIN dbo.Logistica_Embarques e ON e.EmbarqueID=ve.EmbarqueID AND e.Activo=1 AND e.Estatus<>N'Cancelado'
+        WHERE ve.ViajeID=v.ViajeID AND ve.Activo=1
+    ),0
+) EmbarquesActivos
+FROM dbo.Logistica_Viajes v WITH(UPDLOCK,HOLDLOCK)
+WHERE v.ViajeID=@ViajeID AND v.Activo=1;";
+            string folio;
+            string estatus;
+            DateTime fechaAnterior;
+            TimeSpan? horaAnterior;
+            int? unidadId;
+            int? operadorId;
+            long embarquesActivos;
+            byte[] versionActual;
+            await using (var cmd = new SqlCommand(sqlActual, cn, tx))
+            {
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+                await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+                if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
+                folio = Texto(rd, "Folio");
+                estatus = Texto(rd, "Estatus");
+                fechaAnterior = (Fecha(rd, "FechaProgramada") ?? DateTime.Today).Date;
+                horaAnterior = Hora(rd, "HoraSalidaProgramada");
+                unidadId = EnteroNullable(rd, "UnidadID");
+                operadorId = EnteroNullable(rd, "OperadorUsuarioID");
+                embarquesActivos = Convert.ToInt64(rd["EmbarquesActivos"]);
+                versionActual = (byte[])rd["RowVersion"];
+            }
+            if (!versionActual.SequenceEqual(versionEsperada)) throw new DBConcurrencyException("El viaje fue modificado por otro usuario. Recarga Centro Operativo.");
+            if (estatus != "Programado") throw new InvalidOperationException($"Solo un viaje Programado puede reprogramarse. Estado actual: {estatus}.");
+            if (embarquesActivos > 0) throw new InvalidOperationException($"El viaje {folio} contiene {embarquesActivos:N0} embarque(s). Para mantener sincronizado el flujo debes arrastrar/reprogramar el Embarque, no el viaje.");
+            if (fechaAnterior == fechaProgramada.Date && horaAnterior == horaSalidaProgramada) throw new InvalidOperationException("El viaje ya se encuentra programado en esa fecha y hora.");
+            await ValidarDisponibilidadViajeAsync(cn, tx, fechaProgramada.Date, horaSalidaProgramada, unidadId, operadorId, viajeId, cancellationToken);
+            DateTime? fechaHoraAnterior = horaAnterior.HasValue ? fechaAnterior.Add(horaAnterior.Value) : null;
+            var deltaMinutos = fechaHoraAnterior.HasValue ? Convert.ToInt32(Math.Round((nuevaFechaHora - fechaHoraAnterior.Value).TotalMinutes)) : 0;
+            const string sqlUpdate = @"
+UPDATE dbo.Logistica_Viajes
+SET FechaProgramada=@Fecha,HoraSalidaProgramada=@Hora,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+OUTPUT CONVERT(varbinary(8),INSERTED.RowVersion)
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'Programado' AND RowVersion=@RowVersion;";
+            byte[] nuevaVersion;
+            await using (var cmd = new SqlCommand(sqlUpdate, cn, tx))
+            {
+                cmd.Parameters.Add("@Fecha", SqlDbType.Date).Value = fechaProgramada.Date;
+                cmd.Parameters.Add("@Hora", SqlDbType.Time).Value = horaSalidaProgramada;
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+                cmd.Parameters.Add("@RowVersion", SqlDbType.Binary, 8).Value = versionActual;
+                var resultado = await cmd.ExecuteScalarAsync(cancellationToken);
+                if (resultado == null || resultado == DBNull.Value) throw new DBConcurrencyException("El viaje cambió mientras se intentaba reprogramar.");
+                nuevaVersion = (byte[])resultado;
+            }
+            if (fechaHoraAnterior.HasValue)
+            {
+                const string sqlParadas = @"
+UPDATE dbo.Logistica_ViajeParadas
+SET FechaHoraLlegadaProgramada=CASE WHEN FechaHoraLlegadaProgramada IS NULL THEN NULL ELSE DATEADD(MINUTE,@Delta,FechaHoraLlegadaProgramada) END,
+FechaHoraSalidaProgramada=CASE WHEN FechaHoraSalidaProgramada IS NULL THEN NULL ELSE DATEADD(MINUTE,@Delta,FechaHoraSalidaProgramada) END,
+FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'Pendiente';";
+                await using var cmd = new SqlCommand(sqlParadas, cn, tx);
+                cmd.Parameters.Add("@Delta", SqlDbType.Int).Value = deltaMinutos;
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            else
+            {
+                const string sqlOrigen = @"
+UPDATE dbo.Logistica_ViajeParadas
+SET FechaHoraSalidaProgramada=@FechaHora,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND TipoParada=N'Origen' AND Estatus=N'Pendiente';";
+                await using var cmd = new SqlCommand(sqlOrigen, cn, tx);
+                cmd.Parameters.Add("@FechaHora", SqlDbType.DateTime2).Value = nuevaFechaHora;
+                cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+                cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            var anterior = horaAnterior.HasValue ? $"{fechaAnterior:dd/MM/yyyy} {horaAnterior.Value:hh\\:mm}" : $"{fechaAnterior:dd/MM/yyyy} sin hora";
+            var nueva = $"{fechaProgramada:dd/MM/yyyy} {horaSalidaProgramada:hh\\:mm}";
+            await InsertarHistorialAsync(cn, tx, viajeId, "VIAJE_REPROGRAMADO_CALENDARIO", "Programado", "Programado", $"Reprogramación desde Centro Operativo. {anterior} → {nueva}.", cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return Json(new { ok = true, viajeId, folio, fechaProgramada = fechaProgramada.ToString("yyyy-MM-dd"), horaSalidaProgramada = horaSalidaProgramada.ToString(@"hh\:mm"), rowVersion = Convert.ToBase64String(nuevaVersion), mensaje = $"{folio} reprogramado a {nueva}." });
+        }
+        catch (DBConcurrencyException ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            return Conflict(new { ok = false, recargar = true, mensaje = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(cancellationToken); } catch { }
+            return BadRequest(new { ok = false, mensaje = ex.Message });
+        }
     }
     private string ResolverRutaFisicaEvidenciaViaje(string rutaRelativa)
     {
@@ -2569,7 +2714,107 @@ SELECT @@ROWCOUNT;";
         }
     }
 
-   
+    private async Task<(string Folio, int EmbarquesPendientes, List<int> EmbarqueIds)> CancelarViajeProgramadoAsync(SqlConnection cn, SqlTransaction tx, int viajeId, string motivo, byte[]? rowVersionEsperada, CancellationToken cancellationToken)
+    {
+        const string sqlViaje = @"
+SELECT ISNULL(Folio,N'') Folio,ISNULL(Estatus,N'') Estatus,CONVERT(varbinary(8),RowVersion) RowVersion
+FROM dbo.Logistica_Viajes WITH(UPDLOCK,HOLDLOCK)
+WHERE ViajeID=@ViajeID AND Activo=1;";
+        string folio;
+        string estatus;
+        byte[] rowVersionActual;
+        await using (var cmd = new SqlCommand(sqlViaje, cn, tx))
+        {
+            cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await rd.ReadAsync(cancellationToken)) throw new InvalidOperationException("El viaje no existe.");
+            folio = Texto(rd, "Folio");
+            estatus = Texto(rd, "Estatus");
+            rowVersionActual = (byte[])rd["RowVersion"];
+        }
+        if (rowVersionEsperada != null && !rowVersionActual.SequenceEqual(rowVersionEsperada)) throw new DBConcurrencyException("El viaje fue modificado por otro usuario. Recarga Centro Operativo.");
+        if (estatus == "Cancelado") throw new InvalidOperationException("El viaje ya se encuentra cancelado.");
+        if (estatus != "Programado") throw new InvalidOperationException($"Solo un viaje Programado puede cancelarse. Estado actual: {estatus}.");
+        var embarques = new List<(int EmbarqueID, string Folio, string Estatus, DateTime? FechaSalida, long CajasCargadas, long CajasDespachadas)>();
+        const string sqlEmbarques = @"
+SELECT e.EmbarqueID,ISNULL(e.Folio,N'') Folio,ISNULL(e.Estatus,N'') Estatus,e.FechaSalida,
+ISNULL(c.CajasCargadas,0) CajasCargadas,ISNULL(c.CajasDespachadas,0) CajasDespachadas
+FROM dbo.Logistica_ViajeEmbarques ve WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Logistica_Embarques e WITH(UPDLOCK,HOLDLOCK) ON e.EmbarqueID=ve.EmbarqueID AND e.Activo=1
+OUTER APPLY
+(
+    SELECT
+    COUNT(DISTINCT CASE WHEN ec.EstatusSeleccion=N'Cargada' THEN ec.CajaID END) CajasCargadas,
+    COUNT(DISTINCT CASE WHEN ec.EstatusSeleccion=N'Despachada' THEN ec.CajaID END) CajasDespachadas
+    FROM dbo.Logistica_EmbarqueCajas ec WITH(UPDLOCK,HOLDLOCK)
+    WHERE ec.EmbarqueID=e.EmbarqueID AND ec.Activo=1
+) c
+WHERE ve.ViajeID=@ViajeID AND ve.Activo=1 AND e.Estatus<>N'Cancelado'
+ORDER BY ISNULL(ve.OrdenEntrega,2147483647),ve.ViajeEmbarqueID;";
+        await using (var cmd = new SqlCommand(sqlEmbarques, cn, tx))
+        {
+            cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+            await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await rd.ReadAsync(cancellationToken))
+            {
+                embarques.Add((Entero(rd, "EmbarqueID"), Texto(rd, "Folio"), Texto(rd, "Estatus"), Fecha(rd, "FechaSalida"), Convert.ToInt64(rd["CajasCargadas"]), Convert.ToInt64(rd["CajasDespachadas"])));
+            }
+        }
+        foreach (var embarque in embarques)
+        {
+            if (embarque.Estatus is "Cargando" or "En ruta" or "Entregado") throw new InvalidOperationException($"El viaje no puede cancelarse porque el embarque {embarque.Folio} se encuentra en estatus {embarque.Estatus}.");
+            if (embarque.Estatus is not "Programado" and not "Preparando" and not "Preparado" and not "Cargado") throw new InvalidOperationException($"El embarque {embarque.Folio} se encuentra en un estado que no permite cancelar únicamente el viaje: {embarque.Estatus}.");
+            if (embarque.FechaSalida.HasValue || embarque.CajasDespachadas > 0) throw new InvalidOperationException($"El viaje no puede cancelarse porque el embarque {embarque.Folio} ya registró salida física de planta.");
+            if (embarque.Estatus != "Cargado" && embarque.CajasCargadas > 0) throw new InvalidOperationException($"El embarque {embarque.Folio} tiene {embarque.CajasCargadas:N0} caja(s) físicamente cargadas pero su estatus no es Cargado. Revisa la carga antes de cancelar el viaje.");
+        }
+        const string sqlCancelar = @"
+UPDATE dbo.Logistica_Viajes
+SET Estatus=N'Cancelado',MotivoCancelacion=@Motivo,FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus=N'Programado' AND RowVersion=@RowVersion;
+DECLARE @Filas int=@@ROWCOUNT;
+UPDATE dbo.Logistica_ViajeParadas
+SET Estatus=N'Cancelada',FechaModificacion=SYSDATETIME(),ActualizadoPor=@Usuario
+WHERE ViajeID=@ViajeID AND Activo=1 AND Estatus IN(N'Pendiente',N'En camino',N'En sitio');
+UPDATE dbo.Logistica_ViajeEmbarques
+SET Activo=0
+WHERE ViajeID=@ViajeID AND Activo=1;
+SELECT @Filas;";
+        await using (var cmd = new SqlCommand(sqlCancelar, cn, tx))
+        {
+            cmd.Parameters.Add("@Motivo", SqlDbType.NVarChar, 1000).Value = motivo;
+            cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+            cmd.Parameters.Add("@ViajeID", SqlDbType.Int).Value = viajeId;
+            cmd.Parameters.Add("@RowVersion", SqlDbType.Binary, 8).Value = rowVersionActual;
+            if (Convert.ToInt32(await cmd.ExecuteScalarAsync(cancellationToken)) != 1) throw new DBConcurrencyException("El viaje cambió mientras se intentaba cancelar.");
+        }
+        await InsertarHistorialAsync(cn, tx, viajeId, embarques.Count > 0 ? "VIAJE_CANCELADO_EMBARQUES_PENDIENTES" : "VIAJE_CANCELADO", "Programado", "Cancelado", embarques.Count > 0 ? $"Viaje cancelado. Motivo: {motivo}. Los embarques vinculados permanecen activos y deberán reprogramarse." : $"Motivo: {motivo}", cancellationToken);
+        foreach (var embarque in embarques)
+        {
+            const string sqlPendiente = @"
+UPDATE dbo.Logistica_Embarques
+SET HoraCargaProgramada=NULL,
+Observaciones=CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL THEN @Observaciones ELSE CONCAT(Observaciones,NCHAR(13),NCHAR(10),@Observaciones) END,
+FechaModificacion=SYSDATETIME(),
+ActualizadoPor=@Usuario
+WHERE EmbarqueID=@EmbarqueID AND Activo=1 AND Estatus IN(N'Programado',N'Preparando',N'Preparado',N'Cargado');
+INSERT dbo.Logistica_EmbarqueHistorial
+(EmbarqueID,Evento,EstadoAnterior,EstadoNuevo,Observaciones,UsuarioID,UsuarioNombre,FechaEvento)
+VALUES
+(@EmbarqueID,N'VIAJE_CANCELADO_PENDIENTE_REPROGRAMACION',@Estatus,@Estatus,@Historial,@UsuarioID,@Usuario,SYSDATETIME());";
+            var texto = embarque.Estatus == "Cargado"
+                ? $"Viaje {folio} cancelado. El embarque permanece Cargado, conserva sus cajas y queda pendiente de una nueva fecha/hora de salida. Motivo: {motivo}"
+                : $"Viaje {folio} cancelado. El embarque conserva su preparación y queda pendiente de definir una nueva fecha/hora. Motivo: {motivo}";
+            await using var cmd = new SqlCommand(sqlPendiente, cn, tx);
+            cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 1200).Value = texto.Length > 1200 ? texto[..1200] : texto;
+            cmd.Parameters.Add("@Historial", SqlDbType.NVarChar, 1200).Value = texto.Length > 1200 ? texto[..1200] : texto;
+            cmd.Parameters.Add("@Usuario", SqlDbType.NVarChar, 200).Value = UsuarioNombre;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = Db(UsuarioID);
+            cmd.Parameters.Add("@EmbarqueID", SqlDbType.Int).Value = embarque.EmbarqueID;
+            cmd.Parameters.Add("@Estatus", SqlDbType.NVarChar, 30).Value = embarque.Estatus;
+            await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+        return (folio, embarques.Count, embarques.Select(x => x.EmbarqueID).ToList());
+    }
     private static async Task ValidarParadasPreviasResueltasAsync(SqlConnection cn, SqlTransaction tx, int viajeId, int secuencia, CancellationToken cancellationToken)
     {
         const string sql = @"
