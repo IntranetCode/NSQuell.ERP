@@ -765,25 +765,13 @@ namespace ERP.NSQuell.Controllers
         }
 
         [AcceptVerbs("GET", "POST")]
-        public async Task<IActionResult> VerificarCorreo(string? correo, int? usuarioID)
+        public IActionResult VerificarCorreo(string? correo, int? usuarioID)
         {
-            if (string.IsNullOrWhiteSpace(correo)) return Json(true);
-
-            correo = correo.Trim();
-
-            var query = _context.Personas.AsQueryable();
-            if (usuarioID.HasValue)
-            {
-                var personaId = await _context.Usuarios
-                    .Where(u => u.UsuarioID == usuarioID.Value)
-                    .Select(u => u.PersonaID)
-                    .FirstOrDefaultAsync();
-
-                if (personaId > 0) query = query.Where(p => p.PersonaID != personaId);
-            }
-
-            var existe = await query.AnyAsync(p => p.Correo == correo);
-            return existe ? Json($"El correo '{correo}' ya está en uso.") : Json(true);
+            // NSQ_CORREO_COMPARTIDO_V1
+            // Correo es un buzon de contacto, no la identidad de acceso al ERP.
+            // Se permiten varios usuarios/personas con la misma direccion.
+            // El formato sigue validandose mediante [EmailAddress] en el ViewModel.
+            return Json(true);
         }
 
         [HttpPost]

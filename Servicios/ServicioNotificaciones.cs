@@ -219,12 +219,21 @@ namespace ERP.NSQuell.Servicios
         }
 
         // ✅ HELPER MEJORADO
+        // NSQ_CORREO_COMPARTIDO_V1
+        // La notificacion interna sigue siendo por UsuarioID, pero el correo fisico
+        // se consolida por direccion antes de formar lotes BCC.
         public async Task<ResultadoEnvio> EnviarCursosAUsuariosAsync(IEnumerable<int> usuarioIds, string asunto, string html, int batchSize = 40)
         {
             var resultado = new ResultadoEnvio();
-            var idsUsuarios = (usuarioIds ?? Enumerable.Empty<int>()).Distinct().ToList();
+            var idsUsuarios = (usuarioIds ?? Enumerable.Empty<int>())
+                .Where(x => x > 0)
+                .Distinct()
+                .ToList();
 
-            _logger.LogInformation("EnviarCursosAUsuariosAsync: {Count} UsuarioIDs recibidos", idsUsuarios.Count);
+            _logger.LogInformation(
+                "EnviarCursosAUsuariosAsync: {Count} UsuarioIDs recibidos",
+                idsUsuarios.Count);
+
             resultado.Encontrados = idsUsuarios.Count;
 
             if (idsUsuarios.Count == 0)
@@ -233,41 +242,171 @@ namespace ERP.NSQuell.Servicios
                 return resultado;
             }
 
-            // 🔁 Mapea UsuarioID → PersonaID
             var personaIds = await GetPersonaIdsPorUsuariosAsync(idsUsuarios);
-            _logger.LogInformation("GetPersonaIdsPorUsuariosAsync: {UsuariosIn} usuarios → {PersonasOut} personas",
-                idsUsuarios.Count, personaIds.Count);
+            _logger.LogInformation(
+                "GetPersonaIdsPorUsuariosAsync: {UsuariosIn} usuarios -> {PersonasOut} personas",
+                idsUsuarios.Count,
+                personaIds.Count);
 
             if (personaIds.Count == 0)
             {
-                resultado.Mensajes.Add("Ningún UsuarioID tiene PersonaID con correo válido");
+                resultado.Mensajes.Add("Ningun UsuarioID tiene PersonaID con correo valido");
                 return resultado;
             }
 
-            // 📨 Caso 1: una sola persona → To directo
-            if (personaIds.Count == 1)
+            // Resolver todas las personas primero. GetCorreosPersonasAsync ya hace
+            // DISTINCT case-insensitive; repetimos la normalizacion aqui como defensa.
+            var correos = (await GetCorreosPersonasAsync(personaIds))
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Select(c => c.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _logger.LogInformation(
+                "Correo compartido: {Usuarios} usuario(s), {Personas} persona(s), {Correos} direccion(es) fisica(s) unicas.",
+                idsUsuarios.Count,
+                personaIds.Count,
+                correos.Count);
+
+            if (correos.Count == 0)
+            {
+                resultado.Mensajes.Add("Ninguna persona destinataria tiene correo valido");
+                return resultado;
+            }
+
+            if (!_correoOpt.Habilitado)
+            {
+                resultado.FiltradosPorCandados = correos.Count;
+                resultado.Mensajes.Add("Correo deshabilitado globalmente");
+                return resultado;
+            }
+
+            var correosFiltrados = correos
+                .Where(PuedeEnviarA)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            resultado.FiltradosPorCandados = correos.Count - correosFiltrados.Count;
+
+            if (_correoOpt.SoloPruebas &&
+                _correoOpt.MaxDestinatariosEnPrueba > 0 &&
+                correosFiltrados.Count > _correoOpt.MaxDestinatariosEnPrueba)
+            {
+                correosFiltrados = correosFiltrados
+                    .Take(_correoOpt.MaxDestinatariosEnPrueba)
+                    .ToList();
+            }
+
+            if (correosFiltrados.Count == 0)
+            {
+                resultado.Mensajes.Add(
+                    $"Todos los correos fueron bloqueados por candados (SoloPruebas={_correoOpt.SoloPruebas}, ListaBlanca={_correoOpt.ListaBlanca})");
+                return resultado;
+            }
+
+            // Conserva el comportamiento de To directo cuando solo queda un correo.
+            if (correosFiltrados.Count == 1)
             {
                 try
                 {
-                    await EnviarAPersonaAsync(personaIds[0], asunto, html);
+                    await EnviarCorreoAsync(correosFiltrados[0], asunto, html);
                     resultado.Enviados = 1;
                 }
                 catch (Exception ex)
                 {
                     resultado.Errores++;
-                    resultado.Mensajes.Add($"Error enviando a PersonaID={personaIds[0]}: {ex.Message}");
+                    resultado.Mensajes.Add($"Error enviando a {correosFiltrados[0]}: {ex.Message}");
                 }
+
                 return resultado;
             }
 
-            // 📨 Caso N: BCC por lotes
-            foreach (var lote in personaIds.Chunk(batchSize))
+            if (batchSize <= 0)
+                batchSize = 40;
+
+            // IMPORTANTE: el Chunk ahora ocurre DESPUES de deduplicar direcciones.
+            // Una direccion compartida nunca puede aparecer en dos lotes del mismo evento.
+            foreach (var loteCorreos in correosFiltrados.Chunk(batchSize))
             {
-                var resLote = await EnviarABccPersonasAsync(lote, asunto, html);
+                var resLote = await EnviarABccCorreosUnicosAsync(loteCorreos, asunto, html);
                 resultado.Enviados += resLote.Enviados;
                 resultado.Errores += resLote.Errores;
-                resultado.FiltradosPorCandados += resLote.FiltradosPorCandados;
                 resultado.Mensajes.AddRange(resLote.Mensajes);
+            }
+
+            return resultado;
+        }
+
+        private async Task<ResultadoEnvio> EnviarABccCorreosUnicosAsync(
+            IEnumerable<string> correos,
+            string asunto,
+            string html)
+        {
+            var resultado = new ResultadoEnvio();
+            var destinatarios = (correos ?? Enumerable.Empty<string>())
+                .Where(EmailValido)
+                .Select(c => c.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            resultado.Encontrados = destinatarios.Count;
+
+            if (destinatarios.Count == 0)
+            {
+                resultado.Mensajes.Add("Lote sin correos validos");
+                return resultado;
+            }
+
+            if (string.IsNullOrWhiteSpace(_correoOpt.SmtpHost) ||
+                string.IsNullOrWhiteSpace(_correoOpt.Remitente))
+            {
+                resultado.Errores++;
+                resultado.Mensajes.Add("SmtpHost o Remitente vacios. Correo no enviado.");
+                return resultado;
+            }
+
+            try
+            {
+                var msg = new MimeMessage();
+                msg.From.Add(new MailboxAddress(_correoOpt.NombreRemitente ?? "", _correoOpt.Remitente));
+                msg.To.Add(MailboxAddress.Parse(_correoOpt.Remitente));
+
+                foreach (var correo in destinatarios)
+                    msg.Bcc.Add(MailboxAddress.Parse(correo));
+
+                msg.Subject = asunto;
+                msg.Body = new BodyBuilder { HtmlBody = html }.ToMessageBody();
+
+                using var smtp = new SmtpClient
+                {
+                    Timeout = 20000
+                };
+
+                await smtp.ConnectAsync(
+                    _correoOpt.SmtpHost,
+                    _correoOpt.SmtpPort,
+                    ToSecureOption(_correoOpt.Security));
+
+                // Se conserva el transporte SMTP/MailKit actual del proyecto.
+                smtp.AuthenticationMechanisms.Remove("XOAUTH2");
+
+                if (!string.IsNullOrEmpty(_correoOpt.Usuario))
+                    await smtp.AuthenticateAsync(_correoOpt.Usuario, _correoOpt.Contrasena);
+
+                await smtp.SendAsync(msg);
+                resultado.Enviados = destinatarios.Count;
+
+                _logger.LogInformation(
+                    "Correo BCC consolidado enviado a {Count} direccion(es) unicas.",
+                    destinatarios.Count);
+
+                await smtp.DisconnectAsync(true);
+            }
+            catch (Exception ex)
+            {
+                resultado.Errores++;
+                resultado.Mensajes.Add($"Error en SMTP consolidado: {ex.Message}");
+                _logger.LogError(ex, "Error enviando BCC consolidado de correos compartidos");
             }
 
             return resultado;
