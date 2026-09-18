@@ -484,6 +484,9 @@ END;";
         principal.ParejaLhRhNumeroParte = null;
         principal.ParejaLhRhDescripcion = null;
         principal.ParejaLhRhCantidadRequerida = 0;
+        principal.ParejaLhRhCantidadBasePrograma = 0;
+        principal.ParejaLhRhPiezasPorCaja = 0;
+        principal.ParejaLhRhOrigenesAumento = new List<PlaneacionProgramaAumentoOrigenVm>();
 
         if (!principal.ParteID.HasValue ||
             !principal.ClienteID.HasValue ||
@@ -501,7 +504,8 @@ END;";
             cn,
             null);
 
-        if (!TrySepararLhRh(
+        if (!TryResolverParejaLhRh(
+                principal.NumeroParte,
                 textoPrincipal,
                 out var basePrincipal,
                 out var ladoPrincipal))
@@ -557,8 +561,13 @@ ORDER BY
             while (await rd.ReadAsync())
             {
                 var texto = TextoNullableMejora(rd, "TextoParte");
+                var numeroParte = TextoNullableMejora(rd, "NumeroParte");
 
-                if (!TrySepararLhRh(texto, out var baseCandidata, out var lado))
+                if (!TryResolverParejaLhRh(
+                        numeroParte,
+                        texto,
+                        out var baseCandidata,
+                        out var lado))
                     continue;
 
                 if (lado != ladoBuscado ||
@@ -571,7 +580,7 @@ ORDER BY
                 {
                     ReleaseDetalleID = Convert.ToInt32(rd["ReleaseDetalleID"]),
                     ParteID = Convert.ToInt32(rd["ParteID"]),
-                    NumeroParte = TextoNullableMejora(rd, "NumeroParte") ?? string.Empty,
+                    NumeroParte = numeroParte ?? string.Empty,
                     TextoParte = texto ?? string.Empty,
                     CantidadRequerida = Convert.ToInt32(rd["CantidadRequerida"])
                 });
@@ -619,7 +628,8 @@ ORDER BY
             cn,
             tx);
 
-        if (!TrySepararLhRh(
+        if (!TryResolverParejaLhRh(
+                principal.NumeroParte,
                 textoPrincipal,
                 out var basePrincipal,
                 out var ladoPrincipal))
@@ -633,6 +643,7 @@ ORDER BY
         const string sqlPartes = @"
 SELECT
     ParteID,
+    NumeroParte,
     COALESCE(NULLIF(Designacion,N''), NULLIF(Descripcion,N''), NumeroParte) AS TextoParte
 FROM dbo.ERP_Partes
 WHERE ClienteID = @ClienteID
@@ -664,8 +675,13 @@ ORDER BY ParteID;";
             while (await rd.ReadAsync())
             {
                 var texto = TextoNullableMejora(rd, "TextoParte");
+                var numeroParte = TextoNullableMejora(rd, "NumeroParte");
 
-                if (!TrySepararLhRh(texto, out var baseCandidata, out var lado))
+                if (!TryResolverParejaLhRh(
+                        numeroParte,
+                        texto,
+                        out var baseCandidata,
+                        out var lado))
                     continue;
 
                 if (lado == ladoBuscado &&
@@ -912,6 +928,39 @@ WHERE ParteID = @ParteID
         return result == null || result == DBNull.Value
             ? null
             : result.ToString();
+    }
+
+    // NSQ_LHRH_SMALL_PLASTICS_AUMENTO_CONTRAPARTE_V1
+    // Estas dos referencias son una pareja fisica aunque su descripcion no
+    // contenga literalmente LH/RH. La asignacion LH/RH es una clave tecnica
+    // estable para reutilizar todo el flujo de pareja existente.
+    private static bool TryResolverParejaLhRh(
+        string? numeroParte,
+        string? value,
+        out string baseKey,
+        out string lado)
+    {
+        var numeroNormalizado =
+            NormalizarTextoLhRh(numeroParte ?? string.Empty);
+
+        if (numeroNormalizado == "75473448800")
+        {
+            baseKey = "SMALLPLASTICS75473448800489";
+            lado = "LH";
+            return true;
+        }
+
+        if (numeroNormalizado == "75473448900")
+        {
+            baseKey = "SMALLPLASTICS75473448800489";
+            lado = "RH";
+            return true;
+        }
+
+        return TrySepararLhRh(
+            value,
+            out baseKey,
+            out lado);
     }
 
     private static bool TrySepararLhRh(

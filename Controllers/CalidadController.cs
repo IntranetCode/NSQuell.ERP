@@ -63,7 +63,9 @@ namespace ERP.NSQuell.Controllers
             var gruposValidos = new[] { "PENDIENTES", "PROCESO", "CAJAS", "GP12", "HISTORIAL" };
             if (!gruposValidos.Contains(grupo)) grupo = "PENDIENTES";
 
-            var baseQuery = _context.CalidadInspecciones.AsNoTracking();
+            var baseQuery = _context.CalidadInspecciones
+                .AsNoTracking()
+                .Where(x => !x.ConfiguracionInvalidada);
             var query = baseQuery;
 
             if (!string.IsNullOrWhiteSpace(busqueda))

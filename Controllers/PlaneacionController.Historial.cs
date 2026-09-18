@@ -43,6 +43,7 @@ SELECT
     prod.FechaFinReal,
 
     COALESCE(
+        s.FechaCancelacion,
         prod.FechaFinReal,
         prod.FechaInicioReal,
         s.FechaFinPlaneada,
@@ -204,28 +205,33 @@ OUTER APPLY
         ) AS MaquinasTexto
 ) maq
 
-WHERE s.Activo = 1
-  -- NSQ_PLANEACION_EXTENSION_OF_V2: historial solo cuando Logistica ya despacho la cantidad vigente completa.
+WHERE (s.Activo = 1 OR ISNULL(s.EstatusID,0) = 99)
+  -- NSQ_CANCELACION_HISTORIAL_ALMACEN_OF_V2_1
+  -- Historial contiene: canceladas (aunque Activo=0) O despachadas completamente.
   AND
   (
-      (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(edHist.CantidadDespachada,0))),0)
-       FROM dbo.Logistica_EmbarqueDetalle edHist
-       INNER JOIN dbo.Logistica_Embarques eHist
-           ON eHist.EmbarqueID = edHist.EmbarqueID
-          AND eHist.Activo = 1
-       WHERE edHist.SolicitudProduccionID = s.SolicitudProduccionID
-         AND edHist.Activo = 1
-         AND eHist.Estatus IN (N'En ruta', N'Entregado'))
-      >=
-      (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(sdHist.CantidadPiezas,0))),0)
-       FROM dbo.SolicitudesProduccionDetalle sdHist
-       WHERE sdHist.SolicitudProduccionID = s.SolicitudProduccionID
-         AND sdHist.Activo = 1)
-      AND
-      (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(sdHist2.CantidadPiezas,0))),0)
-       FROM dbo.SolicitudesProduccionDetalle sdHist2
-       WHERE sdHist2.SolicitudProduccionID = s.SolicitudProduccionID
-         AND sdHist2.Activo = 1) > 0
+      ISNULL(s.EstatusID,0) = 99
+      OR
+      (
+          (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(edHist.CantidadDespachada,0))),0)
+           FROM dbo.Logistica_EmbarqueDetalle edHist
+           INNER JOIN dbo.Logistica_Embarques eHist
+               ON eHist.EmbarqueID = edHist.EmbarqueID
+              AND eHist.Activo = 1
+           WHERE edHist.SolicitudProduccionID = s.SolicitudProduccionID
+             AND edHist.Activo = 1
+             AND eHist.Estatus IN (N'En ruta', N'Entregado'))
+          >=
+          (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(sdHist.CantidadPiezas,0))),0)
+           FROM dbo.SolicitudesProduccionDetalle sdHist
+           WHERE sdHist.SolicitudProduccionID = s.SolicitudProduccionID
+             AND sdHist.Activo = 1)
+          AND
+          (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(sdHist2.CantidadPiezas,0))),0)
+           FROM dbo.SolicitudesProduccionDetalle sdHist2
+           WHERE sdHist2.SolicitudProduccionID = s.SolicitudProduccionID
+             AND sdHist2.Activo = 1) > 0
+      )
   )
 
 
@@ -235,6 +241,7 @@ WHERE s.Activo = 1
       OR CONVERT(
             date,
             COALESCE(
+                s.FechaCancelacion,
                 prod.FechaFinReal,
                 prod.FechaInicioReal,
                 s.FechaFinPlaneada,
@@ -250,6 +257,7 @@ WHERE s.Activo = 1
       OR CONVERT(
             date,
             COALESCE(
+                s.FechaCancelacion,
                 prod.FechaFinReal,
                 prod.FechaInicioReal,
                 s.FechaFinPlaneada,

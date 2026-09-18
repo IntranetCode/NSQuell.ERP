@@ -8836,6 +8836,20 @@ OUTER APPLY
     ORDER BY p.FechaInicioParo DESC,p.ParoID DESC
 ) paro
 WHERE e.Activo=1
+  AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.SolicitudesProduccion sCancel
+          WHERE sCancel.SolicitudProduccionID=e.SolicitudProduccionID
+            AND ISNULL(sCancel.EstatusID,0)=99
+      )
+  AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.Planeacion_ProgramaProduccion pCancel
+          WHERE pCancel.ProgramaProduccionID=e.ProgramaProduccionID
+            AND ISNULL(pCancel.EstatusID,0)=99
+      )
   AND e.EstatusID IN(@Pendiente,@EnPreparacion,@EnProduccion,@Pausado)
   AND (@MaquinaID IS NULL OR e.MaquinaID=@MaquinaID)
   AND (@EstatusID IS NULL OR e.EstatusID=@EstatusID)

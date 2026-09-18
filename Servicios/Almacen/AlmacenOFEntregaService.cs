@@ -426,7 +426,14 @@ INNER JOIN dbo.ERP_Materiales catalogo
     ON catalogo.MaterialID = @CatalogoID
    AND catalogo.Activo = 1
 WHERE s.SolicitudProduccionID = @SolicitudID
-  AND s.Activo = 1;";
+  AND s.Activo = 1
+  AND ISNULL(s.EstatusID,1) <> 99
+  AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE
+      (
+          NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+          NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
+      ) LIKE N'OF-%/%';";
 
     private const string SqlEmbalaje = @"
 WITH Requerido AS
@@ -538,7 +545,14 @@ INNER JOIN dbo.ERP_Embalajes catalogo
     ON catalogo.EmbalajeID = @CatalogoID
    AND catalogo.Activo = 1
 WHERE s.SolicitudProduccionID = @SolicitudID
-  AND s.Activo = 1;";
+  AND s.Activo = 1
+  AND ISNULL(s.EstatusID,1) <> 99
+  AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE
+      (
+          NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+          NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
+      ) LIKE N'OF-%/%';";
 
     private const string SqlProductoTerminado = @"
 WITH Requerido AS
@@ -565,6 +579,9 @@ WITH Requerido AS
        AND rd.ParteID=@CatalogoID
     WHERE s.SolicitudProduccionID=@SolicitudID
       AND s.Activo=1
+      AND ISNULL(s.EstatusID,1)<>99
+      AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+      AND COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')) LIKE N'OF-%/%'
       AND ISNULL(d.CantidadPiezas,0)>0
     GROUP BY
         s.SolicitudProduccionID,
@@ -635,5 +652,8 @@ INNER JOIN dbo.ERP_Partes catalogo WITH(UPDLOCK,HOLDLOCK)
     ON catalogo.ParteID=@CatalogoID
    AND catalogo.Activo=1
 WHERE s.SolicitudProduccionID=@SolicitudID
-  AND s.Activo=1;";
+  AND s.Activo=1
+  AND ISNULL(s.EstatusID,1)<>99
+  AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')) LIKE N'OF-%/%';";
 }

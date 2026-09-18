@@ -160,6 +160,13 @@ FROM dbo.SolicitudesProduccion s
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = s.ClienteID
 WHERE s.Activo = 1
+  AND ISNULL(s.EstatusID,1) <> 99
+  AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE
+      (
+          NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+          NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
+      ) LIKE N'OF-%/%'
 ORDER BY s.FechaCreacion DESC, s.SolicitudProduccionID DESC;";
 
         await using var command = new SqlCommand(sql, connection);
@@ -199,7 +206,14 @@ SELECT TOP (1)
     )
 FROM dbo.SolicitudesProduccion WITH (UPDLOCK, HOLDLOCK)
 WHERE SolicitudProduccionID = @SolicitudProduccionID
-  AND Activo = 1;";
+  AND Activo = 1
+  AND ISNULL(EstatusID,1) <> 99
+  AND ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE
+      (
+          NULLIF(LTRIM(RTRIM(NumeroOFRecibida)),N''),
+          NULLIF(LTRIM(RTRIM(FolioSolicitud)),N'')
+      ) LIKE N'OF-%/%';";
 
         await using var command = new SqlCommand(sql, connection);
         if (transaction != null)

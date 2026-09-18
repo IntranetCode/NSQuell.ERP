@@ -90,6 +90,9 @@ OUTER APPLY
 LEFT JOIN dbo.ERP_Maquinas m
     ON m.MaquinaID = maquinaResumen.MaquinaID
 WHERE s.Activo = 1
+  AND ISNULL(s.EstatusID,1) <> 99
+  -- NSQ_CANCELACION_HISTORIAL_ALMACEN_OF_V2_1
+  -- Las OF canceladas salen inmediatamente de la bandeja principal.
   -- NSQ_PLANEACION_EXTENSION_OF_V2: una OF permanece en Planeacion hasta despacho completo real.
   AND NOT
   (
@@ -516,7 +519,7 @@ ORDER BY
                 LEFT JOIN dbo.ERP_Clientes c
                     ON c.ClienteID = s.ClienteID
                 WHERE s.SolicitudProduccionID = @SolicitudProduccionID
-                AND s.Activo = 1;";
+                AND (s.Activo = 1 OR ISNULL(s.EstatusID,1) = 99);";
 
             await using (var cmd = new SqlCommand(sql, cn))
             {
@@ -602,6 +605,10 @@ ORDER BY
 UPDATE dbo.SolicitudesProduccion
 SET
     EstatusID = @EstatusID,
+    Activo = 0,
+    EstatusAlmacen = N'CANCELADA',
+    FechaCancelacion = COALESCE(FechaCancelacion,GETDATE()),
+    UsuarioCancelacionID = @UsuarioModificacionID,
     UsuarioModificacionID = @UsuarioModificacionID,
     FechaModificacion = GETDATE()
 WHERE SolicitudProduccionID = @SolicitudProduccionID;";
@@ -628,8 +635,8 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID;";
 
                 await tx.CommitAsync();
 
-                TempData["Success"] = "OF cancelada correctamente.";
-                return RedirectToAction(nameof(Detalle), new { id });
+                TempData["Success"] = "OF cancelada correctamente. La orden fue enviada al historial y retirada de las bandejas operativas.";
+                return RedirectToAction(nameof(Historial));
             }
             catch (Exception ex)
             {
@@ -2916,14 +2923,140 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
                  */
 
                 const string sqlCancelarOF = @"
+-- No permitir cancelar una OF que ya tiene ejecucion real o salida logistica real.
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.Produccion_Ejecucion e
+    WHERE e.SolicitudProduccionID = @SolicitudProduccionID
+      AND e.Activo = 1
+      AND
+      (
+           e.FechaInicioReal IS NOT NULL
+        OR ISNULL(e.CantidadOKTotal,0) > 0
+        OR ISNULL(e.CantidadSospechosaTotal,0) > 0
+        OR ISNULL(e.CantidadScrapTotal,0) > 0
+      )
+)
+    THROW 51020, 'No se puede cancelar la OF: Produccion ya tiene ejecucion real.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.Logistica_EmbarqueDetalle d
+    INNER JOIN dbo.Logistica_Embarques e
+        ON e.EmbarqueID = d.EmbarqueID
+       AND e.Activo = 1
+    WHERE d.SolicitudProduccionID = @SolicitudProduccionID
+      AND d.Activo = 1
+      AND e.Estatus IN (N'En ruta',N'Entregado')
+)
+    THROW 51021, 'No se puede cancelar la OF: Logistica ya tiene una salida o entrega real.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.GP12_Solicitudes g
+    WHERE g.SolicitudProduccionID = @SolicitudProduccionID
+      AND g.Activo = 1
+      AND (ISNULL(g.CantidadRecibida,0) > 0 OR ISNULL(g.CantidadProcesada,0) > 0)
+)
+    THROW 51022, 'No se puede cancelar la OF: GP12 ya tiene material recibido o procesado.', 1;
+
 UPDATE dbo.SolicitudesProduccion
 SET
     EstatusID = @EstatusCancelada,
     MotivoCancelacion = @MotivoCancelacion,
     FechaCancelacion = GETDATE(),
-    UsuarioCancelacionID = @UsuarioCancelacionID
+    UsuarioCancelacionID = @UsuarioCancelacionID,
+    EstatusAlmacen = N'CANCELADA',
+    Activo = 0,
+    UsuarioModificacionID = @UsuarioCancelacionID,
+    FechaModificacion = GETDATE()
 WHERE SolicitudProduccionID = @SolicitudProduccionID
-  AND Activo = 1;";
+  AND Activo = 1;
+
+-- NSQ_CANCELACION_HISTORIAL_ALMACEN_OF_V2_1
+-- Liberar reservas pendientes. Los movimientos historicos NO se modifican.
+UPDATE dbo.AlmacenMP_Reservas
+SET
+    Activo = 0,
+    Estatus = N'CANCELADA',
+    FechaModificacion = SYSDATETIME(),
+    ActualizadoPor = N'Planeacion - OF cancelada'
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;
+
+UPDATE dbo.AlmacenEmbalajes_Reservas
+SET
+    Activo = 0,
+    Estatus = N'CANCELADA',
+    FechaModificacion = SYSDATETIME(),
+    ActualizadoPor = N'Planeacion - OF cancelada'
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;
+
+UPDATE dbo.Planeacion_PT_Apartado
+SET
+    Activo = 0,
+    EstatusID = 99,
+    FechaModificacion = GETDATE(),
+    Observaciones = LEFT(COALESCE(NULLIF(Observaciones,N'') + N' | ',N'') + N'OF cancelada por Planeacion.',300)
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;
+
+UPDATE dbo.Planeacion_ProductoIncompletoApartado
+SET
+    Activo = 0,
+    EstatusID = 99,
+    Observaciones = LEFT(COALESCE(NULLIF(Observaciones,N'') + N' | ',N'') + N'OF cancelada por Planeacion.',500)
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1;
+
+-- Calidad conserva el Estado permitido por CK_Calidad_Inspecciones_Estado.
+-- Para retirar trabajo operativo se usa el mecanismo nativo de invalidacion.
+UPDATE dbo.Calidad_Inspecciones
+SET
+    ConfiguracionInvalidada = 1,
+    FechaInvalidacion = COALESCE(FechaInvalidacion,SYSDATETIME()),
+    UsuarioInvalidacionID = COALESCE(UsuarioInvalidacionID,@UsuarioCancelacionID),
+    MotivoInvalidacion = LEFT(COALESCE(NULLIF(MotivoInvalidacion,N'') + N' | ',N'') + N'OF cancelada por Planeacion.',1000),
+    UsuarioModificacionID = @UsuarioCancelacionID,
+    FechaModificacion = SYSDATETIME(),
+    Observaciones = LEFT(COALESCE(NULLIF(Observaciones,N'') + N' | ',N'') + N'OF cancelada por Planeacion.',1000)
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND ISNULL(ConfiguracionInvalidada,0) = 0
+  AND Estado NOT IN
+      (
+          N'MATERIAL_LIBERADO',N'MATERIAL_NO_CONFORME',N'CERRADA',
+          N'LIBERADA',N'CONTENCION',N'SCRAP'
+      );
+
+-- GP12 solo se retira automaticamente cuando aun no existe material recibido/procesado.
+UPDATE dbo.GP12_Solicitudes
+SET
+    Activo = 0,
+    UsuarioModificacionID = @UsuarioCancelacionID,
+    FechaModificacion = SYSDATETIME(),
+    Observaciones = LEFT(COALESCE(NULLIF(Observaciones,N'') + N' | ',N'') + N'OF cancelada por Planeacion.',2000)
+WHERE SolicitudProduccionID = @SolicitudProduccionID
+  AND Activo = 1
+  AND ISNULL(CantidadRecibida,0) = 0
+  AND ISNULL(CantidadProcesada,0) = 0;
+
+-- Quitar de embarques aun no despachados; los envios reales se protegen con la validacion anterior.
+UPDATE d
+SET
+    d.Activo = 0,
+    d.FechaModificacion = SYSDATETIME(),
+    d.ActualizadoPor = N'Planeacion - OF cancelada'
+FROM dbo.Logistica_EmbarqueDetalle d
+INNER JOIN dbo.Logistica_Embarques e
+    ON e.EmbarqueID = d.EmbarqueID
+   AND e.Activo = 1
+WHERE d.SolicitudProduccionID = @SolicitudProduccionID
+  AND d.Activo = 1
+  AND e.Estatus NOT IN (N'En ruta',N'Entregado');";
 
                 await using (var cmd = new SqlCommand(sqlCancelarOF, cn, tx))
                 {
@@ -2944,14 +3077,47 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
 UPDATE dbo.Planeacion_ProgramaProduccion
 SET
     EstatusID = @EstatusProgramaCancelado,
-    SolicitudProduccionID = NULL,
-    SolicitudProduccionDetalleID = NULL,
-    FechaGeneracionOF = NULL,
-    UsuarioGeneroOFID = NULL,
+    Activo = 0,
     UsuarioModificacionID = @UsuarioID,
     FechaModificacion = GETDATE()
 WHERE ProgramaProduccionID = @ProgramaProduccionID
-  AND Activo = 1;";
+  AND Activo = 1;
+
+-- Se conserva la liga OF/programa en la fila inactiva para auditoria.
+UPDATE dbo.Planeacion_ProgramaOperadores
+SET
+    Activo = 0,
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE()
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1;
+
+UPDATE dbo.Planeacion_SolicitudesReprogramacion
+SET
+    Activo = 0,
+    Estatus = N'CANCELADA',
+    UsuarioResolucionID = @UsuarioID,
+    FechaResolucion = COALESCE(FechaResolucion,SYSDATETIME()),
+    ObservacionesResolucion = LEFT(COALESCE(NULLIF(ObservacionesResolucion,N'') + N' | ',N'') + N'OF cancelada por Planeacion.',500),
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = SYSDATETIME()
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1;
+
+UPDATE dbo.Produccion_Ejecucion
+SET
+    Activo = 0,
+    EstatusID = 99,
+    CodigoEstatusFlujo = N'CANCELADO',
+    UsuarioModificacionID = @UsuarioID,
+    FechaModificacion = GETDATE(),
+    Observaciones = LEFT(COALESCE(NULLIF(Observaciones,N'') + N' | ',N'') + N'OF cancelada antes de iniciar Produccion.',500)
+WHERE ProgramaProduccionID = @ProgramaProduccionID
+  AND Activo = 1
+  AND FechaInicioReal IS NULL
+  AND ISNULL(CantidadOKTotal,0) = 0
+  AND ISNULL(CantidadSospechosaTotal,0) = 0
+  AND ISNULL(CantidadScrapTotal,0) = 0;";
 
                     await using var cmd = new SqlCommand(sqlLiberarPrograma, cn, tx);
                     cmd.Parameters.Add("@EstatusProgramaCancelado", SqlDbType.Int).Value =
@@ -3000,8 +3166,8 @@ WHERE ReleaseDetalleID = @ReleaseDetalleID
 
                 await tx.CommitAsync();
 
-                TempData["Success"] = "OF cancelada correctamente.";
-                return RedirectToAction(nameof(Detalle), new { id });
+                TempData["Success"] = "OF cancelada correctamente. La orden fue enviada al historial y retirada de las bandejas operativas.";
+                return RedirectToAction(nameof(Historial));
             }
             catch (Exception ex)
             {

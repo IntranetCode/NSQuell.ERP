@@ -108,7 +108,14 @@ FROM dbo.SolicitudesProduccion s
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = s.ClienteID
 WHERE s.SolicitudProduccionID = @Id
-  AND s.Activo = 1;";
+  AND s.Activo = 1
+  AND ISNULL(s.EstatusID,1) <> 99
+  AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE
+      (
+          NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+          NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
+      ) LIKE N'OF-%/%';";
 
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@Id", SqlDbType.Int).Value = id;

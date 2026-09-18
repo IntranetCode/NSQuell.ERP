@@ -278,6 +278,13 @@ WITH Requerido AS
            )
        )
     WHERE s.Activo = 1
+      AND ISNULL(s.EstatusID,1) <> 99
+      AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+      AND COALESCE
+          (
+              NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+              NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
+          ) LIKE N'OF-%/%'
       AND ISNULL(detalle.CantidadMpKg, 0) > 0
     GROUP BY
         s.SolicitudProduccionID,

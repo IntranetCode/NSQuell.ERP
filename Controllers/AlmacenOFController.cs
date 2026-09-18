@@ -370,6 +370,13 @@ Base AS
 
 
     WHERE s.Activo = 1
+      AND ISNULL(s.EstatusID,1) <> 99
+      AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+      AND COALESCE
+          (
+              NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+              NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
+          ) LIKE N'OF-%/%'
       AND (@EstatusID IS NULL OR s.EstatusID = @EstatusID)
       AND (@Desde IS NULL OR s.FechaSolicitud >= @Desde)
       AND (@Hasta IS NULL OR s.FechaSolicitud < DATEADD(DAY, 1, @Hasta))
