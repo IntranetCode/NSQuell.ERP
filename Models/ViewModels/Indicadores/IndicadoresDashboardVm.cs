@@ -18,8 +18,13 @@ public sealed class IndicadoresDashboardVm
     public IndicadoresComprasKpiVm Compras { get; set; } = new();
 
     public List<IndicadoresOperadorKpiVm> Operadores { get; set; } = new();
+    public List<IndicadoresPersonalApoyoKpiVm> Tecnicos { get; set; } = new();
+    public List<IndicadoresPersonalApoyoKpiVm> Auxiliares { get; set; } = new();
     public List<IndicadoresMaquinaKpiVm> Maquinas { get; set; } = new();
     public List<IndicadoresTendenciaDiaVm> Tendencia { get; set; } = new();
+    public List<IndicadoresProgramaProduccionVm> ProgramasProduccion { get; set; } = new();
+    public List<IndicadoresParoMotivoVm> ParosMotivos { get; set; } = new();
+    public List<IndicadoresParoMaquinaVm> ParosMaquinas { get; set; } = new();
     public List<IndicadoresAlertaVm> Alertas { get; set; } = new();
 
     public int DiasPeriodo => Math.Max(1, (Hasta.Date - Desde.Date).Days + 1);
@@ -45,6 +50,7 @@ public sealed class IndicadoresProduccionKpiVm
     public long Objetivo { get; set; }
     public int RegistrosHora { get; set; }
     public int Operadores { get; set; }
+    public int ProgramasSinEstandar { get; set; }
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
 
@@ -52,9 +58,13 @@ public sealed class IndicadoresProduccionKpiVm
     public decimal CumplimientoPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
     public decimal ScrapPct => TotalProducido <= 0 ? 0m : PiezasScrap * 100m / TotalProducido;
     public decimal CalidadPct => Math.Clamp(100m - ScrapPct, 0m, 100m);
-    public decimal DisponibilidadPct => MinutosProduccion <= 0 ? 0m : Math.Clamp((1m - (MinutosParo / MinutosProduccion)) * 100m, 0m, 100m);
-    public decimal RendimientoOeePct => Math.Clamp(CumplimientoPct, 0m, 100m);
-    public decimal OeePct => RendimientoOeePct / 100m * CalidadPct / 100m * DisponibilidadPct / 100m * 100m;
+    public decimal ParosPct => MinutosProduccion <= 0 ? 0m : Math.Clamp(MinutosParo * 100m / MinutosProduccion, 0m, 100m);
+    public decimal DisponibilidadPct => Math.Clamp(100m - ParosPct, 0m, 100m);
+    public decimal RqtPct => CumplimientoPct;
+    public decimal RqlPct => CalidadPct;
+    public decimal UePct => DisponibilidadPct;
+    public decimal RendimientoOeePct => Math.Clamp(RqtPct, 0m, 100m);
+    public decimal OeePct => RendimientoOeePct / 100m * RqlPct / 100m * UePct / 100m * 100m;
 }
 
 public sealed class IndicadoresOperadorKpiVm
@@ -69,13 +79,70 @@ public sealed class IndicadoresOperadorKpiVm
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
     public int Registros { get; set; }
+    public int PartesTrabajadas { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int MaquinasTrabajadas { get; set; }
+    public int OfTrabajadas { get; set; }
+    public string MejorParte { get; set; } = string.Empty;
+    public string MejorParteDescripcion { get; set; } = string.Empty;
+    public long MejorParteOK { get; set; }
+    public decimal MejorParteRqtPct { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public long MejorTurnoOK { get; set; }
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorMaquina { get; set; } = string.Empty;
+    public decimal MejorMaquinaRqtPct { get; set; }
+    public string MejorOF { get; set; } = string.Empty;
+    public decimal MejorOFRqtPct { get; set; }
 
     public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal CumplimientoPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
     public decimal ScrapPct => TotalProducido <= 0 ? 0m : PiezasScrap * 100m / TotalProducido;
     public decimal CalidadPct => Math.Clamp(100m - ScrapPct, 0m, 100m);
-    public decimal DisponibilidadPct => MinutosProduccion <= 0 ? 0m : Math.Clamp((1m - MinutosParo / MinutosProduccion) * 100m, 0m, 100m);
-    public decimal OeePct => Math.Clamp(CumplimientoPct, 0m, 100m) / 100m * CalidadPct / 100m * DisponibilidadPct / 100m * 100m;
+    public decimal ParosPct => MinutosProduccion <= 0 ? 0m : Math.Clamp(MinutosParo * 100m / MinutosProduccion,0m,100m);
+    public decimal DisponibilidadPct => Math.Clamp(100m - ParosPct,0m,100m);
+    public decimal RqtPct => CumplimientoPct;
+    public decimal RqlPct => CalidadPct;
+    public decimal UePct => DisponibilidadPct;
+    public decimal OeePct => Math.Clamp(RqtPct,0m,100m) / 100m * RqlPct / 100m * UePct / 100m * 100m;
+}
+
+public sealed class IndicadoresPersonalApoyoKpiVm
+{
+    public string Rol { get; set; } = string.Empty;
+    public int? PersonaID { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public string NumeroControl { get; set; } = string.Empty;
+    public long PiezasOK { get; set; }
+    public long PiezasSospechosas { get; set; }
+    public long PiezasScrap { get; set; }
+    public long Objetivo { get; set; }
+    public decimal MinutosProduccion { get; set; }
+    public decimal MinutosParo { get; set; }
+    public int Registros { get; set; }
+    public int PartesTrabajadas { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int MaquinasTrabajadas { get; set; }
+    public int OfTrabajadas { get; set; }
+    public string MejorParte { get; set; } = string.Empty;
+    public string MejorParteDescripcion { get; set; } = string.Empty;
+    public long MejorParteOK { get; set; }
+    public decimal MejorParteRqtPct { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public long MejorTurnoOK { get; set; }
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorMaquina { get; set; } = string.Empty;
+    public decimal MejorMaquinaRqtPct { get; set; }
+    public string MejorOF { get; set; } = string.Empty;
+    public decimal MejorOFRqtPct { get; set; }
+
+    public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
+    public decimal RqtPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
+    public decimal ScrapPct => TotalProducido <= 0 ? 0m : PiezasScrap * 100m / TotalProducido;
+    public decimal RqlPct => Math.Clamp(100m - ScrapPct,0m,100m);
+    public decimal ParosPct => MinutosProduccion <= 0 ? 0m : Math.Clamp(MinutosParo * 100m / MinutosProduccion,0m,100m);
+    public decimal UePct => Math.Clamp(100m - ParosPct,0m,100m);
+    public decimal OeePct => Math.Clamp(RqtPct,0m,100m) / 100m * RqlPct / 100m * UePct / 100m * 100m;
 }
 
 public sealed class IndicadoresMaquinaKpiVm
@@ -88,12 +155,29 @@ public sealed class IndicadoresMaquinaKpiVm
     public long Objetivo { get; set; }
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
+    public int PartesTrabajadas { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int OperadoresTrabajados { get; set; }
+    public int OfTrabajadas { get; set; }
+    public string MejorParte { get; set; } = string.Empty;
+    public string MejorParteDescripcion { get; set; } = string.Empty;
+    public decimal MejorParteRqtPct { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorOperador { get; set; } = string.Empty;
+    public decimal MejorOperadorRqtPct { get; set; }
+    public string MejorOF { get; set; } = string.Empty;
+    public decimal MejorOFRqtPct { get; set; }
 
     public long Total => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal CumplimientoPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
     public decimal ScrapPct => Total <= 0 ? 0m : PiezasScrap * 100m / Total;
-    public decimal DisponibilidadPct => MinutosProduccion <= 0 ? 0m : Math.Clamp((1m - MinutosParo / MinutosProduccion) * 100m, 0m, 100m);
-    public decimal OeePct => Math.Clamp(CumplimientoPct, 0m, 100m) / 100m * Math.Clamp(100m - ScrapPct, 0m, 100m) / 100m * DisponibilidadPct / 100m * 100m;
+    public decimal ParosPct => MinutosProduccion <= 0 ? 0m : Math.Clamp(MinutosParo * 100m / MinutosProduccion,0m,100m);
+    public decimal DisponibilidadPct => Math.Clamp(100m - ParosPct,0m,100m);
+    public decimal RqtPct => CumplimientoPct;
+    public decimal RqlPct => Math.Clamp(100m - ScrapPct,0m,100m);
+    public decimal UePct => DisponibilidadPct;
+    public decimal OeePct => Math.Clamp(RqtPct,0m,100m) / 100m * RqlPct / 100m * UePct / 100m * 100m;
 }
 
 public sealed class IndicadoresTendenciaDiaVm
@@ -109,10 +193,70 @@ public sealed class IndicadoresTendenciaDiaVm
     public decimal CumplimientoPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
     public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal ScrapPct => TotalProducido <= 0 ? 0m : PiezasScrap * 100m / TotalProducido;
-    public decimal DisponibilidadPct => MinutosProduccion <= 0 ? 0m : Math.Clamp((1m - MinutosParo / MinutosProduccion) * 100m, 0m, 100m);
-    public decimal OeePct => Math.Clamp(CumplimientoPct, 0m, 100m) / 100m * Math.Clamp(100m - ScrapPct, 0m, 100m) / 100m * DisponibilidadPct / 100m * 100m;
+    public decimal ParosPct => MinutosProduccion <= 0 ? 0m : Math.Clamp(MinutosParo * 100m / MinutosProduccion,0m,100m);
+    public decimal DisponibilidadPct => Math.Clamp(100m - ParosPct,0m,100m);
+    public decimal RqtPct => CumplimientoPct;
+    public decimal RqlPct => Math.Clamp(100m - ScrapPct,0m,100m);
+    public decimal UePct => DisponibilidadPct;
+    public decimal OeePct => Math.Clamp(RqtPct,0m,100m) / 100m * RqlPct / 100m * UePct / 100m * 100m;
 }
 
+public sealed class IndicadoresProgramaProduccionVm
+{
+    public int ProgramaProduccionID { get; set; }
+    public int EjecucionProduccionID { get; set; }
+    public int? SolicitudProduccionID { get; set; }
+    public string NumeroOF { get; set; } = string.Empty;
+    public string Parte { get; set; } = string.Empty;
+    public string DescripcionParte { get; set; } = string.Empty;
+    public string Maquina { get; set; } = string.Empty;
+    public int ObjetivoHoraEstandar { get; set; }
+    public string CicloEstandar { get; set; } = string.Empty;
+    public int? CavidadesEstandar { get; set; }
+    public string FuenteEstandar { get; set; } = string.Empty;
+    public long PiezasOK { get; set; }
+    public long PiezasSospechosas { get; set; }
+    public long PiezasScrap { get; set; }
+    public long Objetivo { get; set; }
+    public decimal MinutosProduccion { get; set; }
+    public decimal MinutosParo { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int OperadoresTrabajados { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorOperador { get; set; } = string.Empty;
+    public decimal MejorOperadorRqtPct { get; set; }
+
+    public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
+    public decimal RqtPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
+    public decimal ScrapPct => TotalProducido <= 0 ? 0m : PiezasScrap * 100m / TotalProducido;
+    public decimal RqlPct => Math.Clamp(100m - ScrapPct,0m,100m);
+    public decimal ParosPct => MinutosProduccion <= 0 ? 0m : Math.Clamp(MinutosParo * 100m / MinutosProduccion,0m,100m);
+    public decimal UePct => Math.Clamp(100m - ParosPct,0m,100m);
+    public decimal OeePct => Math.Clamp(RqtPct,0m,100m) / 100m * RqlPct / 100m * UePct / 100m * 100m;
+    public bool TieneEstandar => ObjetivoHoraEstandar > 0;
+}
+
+public sealed class IndicadoresParoMotivoVm
+{
+    public string Motivo { get; set; } = string.Empty;
+    public int Eventos { get; set; }
+    public decimal Minutos { get; set; }
+    public decimal PorcentajeParo { get; set; }
+}
+public sealed class IndicadoresParoMaquinaVm
+{
+    public int MaquinaID { get; set; }
+    public string Maquina { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public int Eventos { get; set; }
+    public decimal Minutos { get; set; }
+    public decimal MinutosProduccion { get; set; }
+    public decimal PorcentajeParoTotal { get; set; }
+    public decimal ParosPct => MinutosProduccion <= 0m
+        ? (Minutos > 0m ? 100m : 0m)
+        : Math.Clamp(Minutos * 100m / MinutosProduccion,0m,100m);
+}
 public sealed class IndicadoresPlaneacionKpiVm
 {
     public long Programado { get; set; }

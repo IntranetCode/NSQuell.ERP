@@ -66,6 +66,9 @@ public sealed class IndicadoresController : Controller
             await CargarOperadoresAsync(connection, vm, cancellationToken);
             await CargarMaquinasAsync(connection, vm, cancellationToken);
             await CargarTendenciaAsync(connection, vm, cancellationToken);
+            await CargarProgramasProduccionAsync(connection, vm, cancellationToken);
+            await CargarParosProduccionAsync(connection, vm, cancellationToken);
+            await CargarPersonalApoyoProduccionAsync(connection, vm, cancellationToken);
         }
 
         if (seccion != "produccion")
@@ -118,29 +121,66 @@ WHERE u.UsuarioID=@UsuarioID
         IndicadoresDashboardVm vm,
         CancellationToken cancellationToken)
     {
+        // NSQ_INDICADORES_PRODUCCION_ANALITICO_V1
+        // El estandar del KPI NO usa ObjetivoHora/ObjetivoBloque de Produccion_RegistroHora
+        // ni Produccion_ConfiguracionCorrida. Primero usa el snapshot guardado por Planeacion
+        // y solo si falta, cae al maestro ERP_ParteDatosTecnicos.
         const string sql = @"
+WITH B AS
+(
+    SELECT
+        rh.RegistroHoraID,
+        rh.ProgramaProduccionID,
+        rh.OperadorID,
+        ISNULL(rh.CantidadOK,0) AS CantidadOK,
+        ISNULL(rh.CantidadSospechosa,0) AS CantidadSospechosa,
+        ISNULL(rh.CantidadScrap,0) AS CantidadScrap,
+        minutos.MinutosBloque,
+        COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0) AS ObjetivoHoraEstandar
+    FROM dbo.Produccion_RegistroHora rh
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ProgramaProduccionID=rh.ProgramaProduccionID
+    LEFT JOIN dbo.Produccion_Ejecucion e
+        ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    OUTER APPLY
+    (
+        SELECT TOP(1) dt0.ObjetivoHora
+        FROM dbo.ERP_ParteDatosTecnicos dt0
+        WHERE dt0.ParteID=COALESCE(pp.ParteID,e.ParteID)
+          AND dt0.Activo=1
+        ORDER BY dt0.ParteDatoTecnicoID DESC
+    ) dt
+    CROSS APPLY
+    (
+        SELECT CONVERT(DECIMAL(18,2),
+            CASE
+                WHEN rh.HoraFin>=rh.HoraInicio THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+                ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            END) AS MinutosBloque
+    ) minutos
+    WHERE rh.Activo=1
+      AND rh.FechaProduccion>=@Desde
+      AND rh.FechaProduccion<@HastaExclusiva
+)
 SELECT
     COUNT(*) AS RegistrosHora,
     COUNT(DISTINCT OperadorID) AS Operadores,
-    SUM(CONVERT(BIGINT,ISNULL(CantidadOK,0))) AS PiezasOK,
-    SUM(CONVERT(BIGINT,ISNULL(CantidadSospechosa,0))) AS PiezasSospechosas,
-    SUM(CONVERT(BIGINT,ISNULL(CantidadScrap,0))) AS PiezasScrap,
-    SUM(CONVERT(BIGINT,COALESCE(NULLIF(ObjetivoBloque,0),NULLIF(ObjetivoHora,0),0))) AS Objetivo,
-    SUM(CONVERT(DECIMAL(18,2),
-        CASE
-            WHEN HoraFin>=HoraInicio THEN DATEDIFF(MINUTE,HoraInicio,HoraFin)
-            ELSE 1440+DATEDIFF(MINUTE,HoraInicio,HoraFin)
-        END)) AS MinutosProduccion
-FROM dbo.Produccion_RegistroHora
-WHERE Activo=1
-  AND FechaProduccion>=@Desde
-  AND FechaProduccion<@HastaExclusiva;
+    SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,
+    SUM(CONVERT(BIGINT,CantidadSospechosa)) AS PiezasSospechosas,
+    SUM(CONVERT(BIGINT,CantidadScrap)) AS PiezasScrap,
+    SUM(CONVERT(BIGINT,ROUND(CONVERT(DECIMAL(18,4),ObjetivoHoraEstandar)*MinutosBloque/60.0,0))) AS Objetivo,
+    SUM(MinutosBloque) AS MinutosProduccion,
+    COUNT(DISTINCT CASE WHEN ObjetivoHoraEstandar<=0 THEN ProgramaProduccionID END) AS ProgramasSinEstandar
+FROM B;
 
 SELECT
     SUM(CONVERT(DECIMAL(18,2),
         CASE
+            WHEN FechaFinParo IS NULL THEN
+                CASE WHEN FechaInicioParo>=GETDATE() THEN 0
+                     ELSE DATEDIFF(MINUTE,FechaInicioParo,GETDATE()) END
             WHEN DuracionMinutos IS NOT NULL THEN DuracionMinutos
-            WHEN FechaFinParo IS NOT NULL THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
+            WHEN FechaFinParo>=FechaInicioParo THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
             ELSE 0
         END)) AS MinutosParo
 FROM dbo.Produccion_Paros
@@ -161,6 +201,7 @@ WHERE Activo=1
             vm.Produccion.PiezasScrap = Long(reader, "PiezasScrap");
             vm.Produccion.Objetivo = Long(reader, "Objetivo");
             vm.Produccion.MinutosProduccion = Decimal(reader, "MinutosProduccion");
+            vm.Produccion.ProgramasSinEstandar = Int(reader, "ProgramasSinEstandar");
         }
 
         if (await reader.NextResultAsync(cancellationToken)
@@ -176,44 +217,134 @@ WHERE Activo=1
         CancellationToken cancellationToken)
     {
         const string sql = @"
-WITH R AS
+WITH B AS
 (
     SELECT
         rh.OperadorID,
-        COUNT(*) AS Registros,
-        SUM(CONVERT(BIGINT,ISNULL(rh.CantidadOK,0))) AS PiezasOK,
-        SUM(CONVERT(BIGINT,ISNULL(rh.CantidadSospechosa,0))) AS PiezasSospechosas,
-        SUM(CONVERT(BIGINT,ISNULL(rh.CantidadScrap,0))) AS PiezasScrap,
-        SUM(CONVERT(BIGINT,COALESCE(NULLIF(rh.ObjetivoBloque,0),NULLIF(rh.ObjetivoHora,0),0))) AS Objetivo,
-        SUM(CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
-            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
-            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END)) AS MinutosProduccion,
-        MAX(NULLIF(LTRIM(RTRIM(e.OperadorNombre)),N'')) AS OperadorSnapshot
+        ISNULL(rh.CantidadOK,0) AS CantidadOK,
+        ISNULL(rh.CantidadSospechosa,0) AS CantidadSospechosa,
+        ISNULL(rh.CantidadScrap,0) AS CantidadScrap,
+        minutos.MinutosBloque,
+        CONVERT(BIGINT,ROUND(CONVERT(DECIMAL(18,4),COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0))*minutos.MinutosBloque/60.0,0)) AS ObjetivoBloque,
+        NULLIF(LTRIM(RTRIM(e.OperadorNombre)),N'') AS OperadorSnapshot,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),N'Sin parte') AS NumeroParte,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.DesignacionDescripcionSAP)),N''),NULLIF(LTRIM(RTRIM(e.DescripcionParte)),N''),N'') AS DescripcionParte,
+        NULLIF(LTRIM(RTRIM(rh.Turno)),N'') AS Turno,
+        COALESCE(NULLIF(LTRIM(RTRIM(m.Codigo)),N''),NULLIF(LTRIM(RTRIM(e.MaquinaCodigo)),N''),NULLIF(LTRIM(RTRIM(pp.MaquinaCodigo)),N''),N'Sin máquina') AS Maquina,
+        COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),CONCAT(N'Programa ',rh.ProgramaProduccionID)) AS NumeroOF
     FROM dbo.Produccion_RegistroHora rh
     LEFT JOIN dbo.Produccion_Ejecucion e
         ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ProgramaProduccionID=rh.ProgramaProduccionID
+    LEFT JOIN dbo.SolicitudesProduccion s
+        ON s.SolicitudProduccionID=COALESCE(rh.SolicitudProduccionID,e.SolicitudProduccionID,pp.SolicitudProduccionID)
+    LEFT JOIN dbo.ERP_Maquinas m
+        ON m.MaquinaID=COALESCE(rh.MaquinaID,e.MaquinaID,pp.MaquinaID)
+    OUTER APPLY
+    (
+        SELECT TOP(1) dt0.ObjetivoHora
+        FROM dbo.ERP_ParteDatosTecnicos dt0
+        WHERE dt0.ParteID=COALESCE(pp.ParteID,e.ParteID)
+          AND dt0.Activo=1
+        ORDER BY dt0.ParteDatoTecnicoID DESC
+    ) dt
+    CROSS APPLY
+    (
+        SELECT CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
+            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END) AS MinutosBloque
+    ) minutos
     WHERE rh.Activo=1
       AND rh.OperadorID IS NOT NULL
       AND rh.FechaProduccion>=@Desde
       AND rh.FechaProduccion<@HastaExclusiva
-    GROUP BY rh.OperadorID
+),
+R AS
+(
+    SELECT
+        OperadorID,
+        COUNT(*) AS Registros,
+        COUNT(DISTINCT NumeroParte) AS PartesTrabajadas,
+        COUNT(DISTINCT Turno) AS TurnosTrabajados,
+        COUNT(DISTINCT Maquina) AS MaquinasTrabajadas,
+        COUNT(DISTINCT NumeroOF) AS OfTrabajadas,
+        SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,
+        SUM(CONVERT(BIGINT,CantidadSospechosa)) AS PiezasSospechosas,
+        SUM(CONVERT(BIGINT,CantidadScrap)) AS PiezasScrap,
+        SUM(ObjetivoBloque) AS Objetivo,
+        SUM(MinutosBloque) AS MinutosProduccion,
+        MAX(OperadorSnapshot) AS OperadorSnapshot
+    FROM B
+    GROUP BY OperadorID
 ),
 P AS
 (
     SELECT
-        OperadorID,
+        COALESCE(p.OperadorID,e.OperadorID) AS OperadorID,
         SUM(CONVERT(DECIMAL(18,2),CASE
-            WHEN DuracionMinutos IS NOT NULL THEN DuracionMinutos
-            WHEN FechaFinParo IS NOT NULL THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
+            WHEN p.FechaFinParo IS NULL THEN CASE WHEN p.FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,p.FechaInicioParo,GETDATE()) END
+            WHEN p.DuracionMinutos IS NOT NULL THEN p.DuracionMinutos
+            WHEN p.FechaFinParo>=p.FechaInicioParo THEN DATEDIFF(MINUTE,p.FechaInicioParo,p.FechaFinParo)
             ELSE 0 END)) AS MinutosParo
-    FROM dbo.Produccion_Paros
-    WHERE Activo=1
-      AND OperadorID IS NOT NULL
-      AND FechaInicioParo>=@Desde
-      AND FechaInicioParo<@HastaExclusiva
-    GROUP BY OperadorID
+    FROM dbo.Produccion_Paros p
+    LEFT JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=p.EjecucionProduccionID
+    WHERE p.Activo=1
+      AND COALESCE(p.OperadorID,e.OperadorID) IS NOT NULL
+      AND p.FechaInicioParo>=@Desde
+      AND p.FechaInicioParo<@HastaExclusiva
+    GROUP BY COALESCE(p.OperadorID,e.OperadorID)
+),
+ParteAgg AS
+(
+    SELECT OperadorID,NumeroParte,MAX(DescripcionParte) AS DescripcionParte,
+           SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY OperadorID,NumeroParte
+),
+ParteRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY OperadorID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,NumeroParte) AS rn
+    FROM ParteAgg WHERE Objetivo>0
+),
+TurnoAgg AS
+(
+    SELECT OperadorID,Turno,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B WHERE Turno IS NOT NULL GROUP BY OperadorID,Turno
+),
+TurnoRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY OperadorID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Turno) AS rn
+    FROM TurnoAgg WHERE Objetivo>0
+),
+MaquinaAgg AS
+(
+    SELECT OperadorID,Maquina,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY OperadorID,Maquina
+),
+MaquinaRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY OperadorID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Maquina) AS rn
+    FROM MaquinaAgg WHERE Objetivo>0
+),
+OfAgg AS
+(
+    SELECT OperadorID,NumeroOF,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY OperadorID,NumeroOF
+),
+OfRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY OperadorID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,NumeroOF) AS rn
+    FROM OfAgg WHERE Objetivo>0
 )
-SELECT TOP (30)
+SELECT TOP (40)
     r.OperadorID,
     COALESCE(
         NULLIF(LTRIM(RTRIM(CONCAT(per.Nombre,N' ',per.ApellidoPaterno,N' ',per.ApellidoMaterno))),N''),
@@ -221,16 +352,27 @@ SELECT TOP (30)
         CONCAT(N'Operador #',r.OperadorID)
     ) AS Operador,
     ISNULL(per.NumeroControl,N'') AS NumeroControl,
-    r.PiezasOK,
-    r.PiezasSospechosas,
-    r.PiezasScrap,
-    r.Objetivo,
-    r.MinutosProduccion,
-    ISNULL(p.MinutosParo,0) AS MinutosParo,
-    r.Registros
+    r.PiezasOK,r.PiezasSospechosas,r.PiezasScrap,r.Objetivo,r.MinutosProduccion,
+    ISNULL(p.MinutosParo,0) AS MinutosParo,r.Registros,
+    r.PartesTrabajadas,r.TurnosTrabajados,r.MaquinasTrabajadas,r.OfTrabajadas,
+    ISNULL(bp.NumeroParte,N'') AS MejorParte,
+    ISNULL(bp.DescripcionParte,N'') AS MejorParteDescripcion,
+    ISNULL(bp.PiezasOK,0) AS MejorParteOK,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bp.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bp.PiezasOK)*100/bp.Objetivo ELSE 0 END) AS MejorParteRqtPct,
+    ISNULL(bt.Turno,N'') AS MejorTurno,
+    ISNULL(bt.PiezasOK,0) AS MejorTurnoOK,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bt.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bt.PiezasOK)*100/bt.Objetivo ELSE 0 END) AS MejorTurnoRqtPct,
+    ISNULL(bm.Maquina,N'') AS MejorMaquina,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bm.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bm.PiezasOK)*100/bm.Objetivo ELSE 0 END) AS MejorMaquinaRqtPct,
+    ISNULL(bo.NumeroOF,N'') AS MejorOF,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bo.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bo.PiezasOK)*100/bo.Objetivo ELSE 0 END) AS MejorOFRqtPct
 FROM R r
 LEFT JOIN P p ON p.OperadorID=r.OperadorID
 LEFT JOIN dbo.Persona per ON per.PersonaID=r.OperadorID
+LEFT JOIN ParteRank bp ON bp.OperadorID=r.OperadorID AND bp.rn=1
+LEFT JOIN TurnoRank bt ON bt.OperadorID=r.OperadorID AND bt.rn=1
+LEFT JOIN MaquinaRank bm ON bm.OperadorID=r.OperadorID AND bm.rn=1
+LEFT JOIN OfRank bo ON bo.OperadorID=r.OperadorID AND bo.rn=1
 ORDER BY r.PiezasOK DESC,r.OperadorID;";
 
         await using var command = new SqlCommand(sql, connection);
@@ -250,14 +392,29 @@ ORDER BY r.PiezasOK DESC,r.OperadorID;";
                 Objetivo = Long(reader, "Objetivo"),
                 MinutosProduccion = Decimal(reader, "MinutosProduccion"),
                 MinutosParo = Decimal(reader, "MinutosParo"),
-                Registros = Int(reader, "Registros")
+                Registros = Int(reader, "Registros"),
+                PartesTrabajadas = Int(reader, "PartesTrabajadas"),
+                TurnosTrabajados = Int(reader, "TurnosTrabajados"),
+                MaquinasTrabajadas = Int(reader, "MaquinasTrabajadas"),
+                OfTrabajadas = Int(reader, "OfTrabajadas"),
+                MejorParte = Text(reader, "MejorParte"),
+                MejorParteDescripcion = Text(reader, "MejorParteDescripcion"),
+                MejorParteOK = Long(reader, "MejorParteOK"),
+                MejorParteRqtPct = Decimal(reader, "MejorParteRqtPct"),
+                MejorTurno = Text(reader, "MejorTurno"),
+                MejorTurnoOK = Long(reader, "MejorTurnoOK"),
+                MejorTurnoRqtPct = Decimal(reader, "MejorTurnoRqtPct"),
+                MejorMaquina = Text(reader, "MejorMaquina"),
+                MejorMaquinaRqtPct = Decimal(reader, "MejorMaquinaRqtPct"),
+                MejorOF = Text(reader, "MejorOF"),
+                MejorOFRqtPct = Decimal(reader, "MejorOFRqtPct")
             });
         }
 
         vm.Operadores = vm.Operadores
             .OrderByDescending(x => x.OeePct)
             .ThenByDescending(x => x.PiezasOK)
-            .Take(12)
+            .Take(20)
             .ToList();
     }
 
@@ -267,54 +424,148 @@ ORDER BY r.PiezasOK DESC,r.OperadorID;";
         CancellationToken cancellationToken)
     {
         const string sql = @"
-WITH R AS
+WITH B AS
 (
     SELECT
         rh.MaquinaID,
-        SUM(CONVERT(BIGINT,ISNULL(rh.CantidadOK,0))) AS PiezasOK,
-        SUM(CONVERT(BIGINT,ISNULL(rh.CantidadSospechosa,0))) AS PiezasSospechosas,
-        SUM(CONVERT(BIGINT,ISNULL(rh.CantidadScrap,0))) AS PiezasScrap,
-        SUM(CONVERT(BIGINT,COALESCE(NULLIF(rh.ObjetivoBloque,0),NULLIF(rh.ObjetivoHora,0),0))) AS Objetivo,
-        SUM(CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
-            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
-            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END)) AS MinutosProduccion,
-        MAX(NULLIF(LTRIM(RTRIM(e.MaquinaNombre)),N'')) AS MaquinaSnapshot
+        ISNULL(rh.CantidadOK,0) AS CantidadOK,
+        ISNULL(rh.CantidadSospechosa,0) AS CantidadSospechosa,
+        ISNULL(rh.CantidadScrap,0) AS CantidadScrap,
+        minutos.MinutosBloque,
+        CONVERT(BIGINT,ROUND(CONVERT(DECIMAL(18,4),COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0))*minutos.MinutosBloque/60.0,0)) AS ObjetivoBloque,
+        NULLIF(LTRIM(RTRIM(e.MaquinaNombre)),N'') AS MaquinaSnapshot,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),N'Sin parte') AS NumeroParte,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.DesignacionDescripcionSAP)),N''),NULLIF(LTRIM(RTRIM(e.DescripcionParte)),N''),N'') AS DescripcionParte,
+        NULLIF(LTRIM(RTRIM(rh.Turno)),N'') AS Turno,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(CONCAT(per.Nombre,N' ',per.ApellidoPaterno,N' ',per.ApellidoMaterno))),N''),
+            NULLIF(LTRIM(RTRIM(e.OperadorNombre)),N''),
+            N'Sin operador') AS Operador,
+        COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),CONCAT(N'Programa ',rh.ProgramaProduccionID)) AS NumeroOF
     FROM dbo.Produccion_RegistroHora rh
-    LEFT JOIN dbo.Produccion_Ejecucion e
-        ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    LEFT JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=rh.ProgramaProduccionID
+    LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=COALESCE(rh.SolicitudProduccionID,e.SolicitudProduccionID,pp.SolicitudProduccionID)
+    LEFT JOIN dbo.Persona per ON per.PersonaID=rh.OperadorID
+    OUTER APPLY
+    (
+        SELECT TOP(1) dt0.ObjetivoHora
+        FROM dbo.ERP_ParteDatosTecnicos dt0
+        WHERE dt0.ParteID=COALESCE(pp.ParteID,e.ParteID)
+          AND dt0.Activo=1
+        ORDER BY dt0.ParteDatoTecnicoID DESC
+    ) dt
+    CROSS APPLY
+    (
+        SELECT CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
+            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END) AS MinutosBloque
+    ) minutos
     WHERE rh.Activo=1
       AND rh.MaquinaID IS NOT NULL
       AND rh.FechaProduccion>=@Desde
       AND rh.FechaProduccion<@HastaExclusiva
-    GROUP BY rh.MaquinaID
 ),
-P AS
+R AS
 (
     SELECT
         MaquinaID,
+        COUNT(DISTINCT NumeroParte) AS PartesTrabajadas,
+        COUNT(DISTINCT Turno) AS TurnosTrabajados,
+        COUNT(DISTINCT Operador) AS OperadoresTrabajados,
+        COUNT(DISTINCT NumeroOF) AS OfTrabajadas,
+        SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,
+        SUM(CONVERT(BIGINT,CantidadSospechosa)) AS PiezasSospechosas,
+        SUM(CONVERT(BIGINT,CantidadScrap)) AS PiezasScrap,
+        SUM(ObjetivoBloque) AS Objetivo,
+        SUM(MinutosBloque) AS MinutosProduccion,
+        MAX(MaquinaSnapshot) AS MaquinaSnapshot
+    FROM B GROUP BY MaquinaID
+),
+P AS
+(
+    SELECT COALESCE(p.MaquinaID,e.MaquinaID,pp.MaquinaID) AS MaquinaID,
         SUM(CONVERT(DECIMAL(18,2),CASE
-            WHEN DuracionMinutos IS NOT NULL THEN DuracionMinutos
-            WHEN FechaFinParo IS NOT NULL THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
+            WHEN p.FechaFinParo IS NULL THEN CASE WHEN p.FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,p.FechaInicioParo,GETDATE()) END
+            WHEN p.DuracionMinutos IS NOT NULL THEN p.DuracionMinutos
+            WHEN p.FechaFinParo>=p.FechaInicioParo THEN DATEDIFF(MINUTE,p.FechaInicioParo,p.FechaFinParo)
             ELSE 0 END)) AS MinutosParo
-    FROM dbo.Produccion_Paros
-    WHERE Activo=1
-      AND MaquinaID IS NOT NULL
-      AND FechaInicioParo>=@Desde
-      AND FechaInicioParo<@HastaExclusiva
-    GROUP BY MaquinaID
+    FROM dbo.Produccion_Paros p
+    LEFT JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=p.EjecucionProduccionID
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=p.ProgramaProduccionID
+    WHERE p.Activo=1
+      AND COALESCE(p.MaquinaID,e.MaquinaID,pp.MaquinaID) IS NOT NULL
+      AND p.FechaInicioParo>=@Desde
+      AND p.FechaInicioParo<@HastaExclusiva
+    GROUP BY COALESCE(p.MaquinaID,e.MaquinaID,pp.MaquinaID)
+),
+ParteAgg AS
+(
+    SELECT MaquinaID,NumeroParte,MAX(DescripcionParte) AS DescripcionParte,
+           SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY MaquinaID,NumeroParte
+),
+ParteRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY MaquinaID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,NumeroParte) AS rn FROM ParteAgg WHERE Objetivo>0
+),
+TurnoAgg AS
+(
+    SELECT MaquinaID,Turno,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B WHERE Turno IS NOT NULL GROUP BY MaquinaID,Turno
+),
+TurnoRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY MaquinaID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Turno) AS rn FROM TurnoAgg WHERE Objetivo>0
+),
+OperadorAgg AS
+(
+    SELECT MaquinaID,Operador,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY MaquinaID,Operador
+),
+OperadorRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY MaquinaID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Operador) AS rn FROM OperadorAgg WHERE Objetivo>0
+),
+OfAgg AS
+(
+    SELECT MaquinaID,NumeroOF,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY MaquinaID,NumeroOF
+),
+OfRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY MaquinaID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,NumeroOF) AS rn FROM OfAgg WHERE Objetivo>0
 )
-SELECT TOP (20)
+SELECT TOP (30)
     r.MaquinaID,
     COALESCE(NULLIF(LTRIM(RTRIM(m.Codigo)),N''),NULLIF(LTRIM(RTRIM(r.MaquinaSnapshot)),N''),CONCAT(N'Máquina #',r.MaquinaID)) AS Maquina,
-    r.PiezasOK,
-    r.PiezasSospechosas,
-    r.PiezasScrap,
-    r.Objetivo,
-    r.MinutosProduccion,
-    ISNULL(p.MinutosParo,0) AS MinutosParo
+    r.PiezasOK,r.PiezasSospechosas,r.PiezasScrap,r.Objetivo,r.MinutosProduccion,
+    ISNULL(p.MinutosParo,0) AS MinutosParo,
+    r.PartesTrabajadas,r.TurnosTrabajados,r.OperadoresTrabajados,r.OfTrabajadas,
+    ISNULL(bp.NumeroParte,N'') AS MejorParte,
+    ISNULL(bp.DescripcionParte,N'') AS MejorParteDescripcion,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bp.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bp.PiezasOK)*100/bp.Objetivo ELSE 0 END) AS MejorParteRqtPct,
+    ISNULL(bt.Turno,N'') AS MejorTurno,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bt.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bt.PiezasOK)*100/bt.Objetivo ELSE 0 END) AS MejorTurnoRqtPct,
+    ISNULL(bop.Operador,N'') AS MejorOperador,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bop.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bop.PiezasOK)*100/bop.Objetivo ELSE 0 END) AS MejorOperadorRqtPct,
+    ISNULL(bo.NumeroOF,N'') AS MejorOF,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bo.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bo.PiezasOK)*100/bo.Objetivo ELSE 0 END) AS MejorOFRqtPct
 FROM R r
 LEFT JOIN P p ON p.MaquinaID=r.MaquinaID
 LEFT JOIN dbo.ERP_Maquinas m ON m.MaquinaID=r.MaquinaID
+LEFT JOIN ParteRank bp ON bp.MaquinaID=r.MaquinaID AND bp.rn=1
+LEFT JOIN TurnoRank bt ON bt.MaquinaID=r.MaquinaID AND bt.rn=1
+LEFT JOIN OperadorRank bop ON bop.MaquinaID=r.MaquinaID AND bop.rn=1
+LEFT JOIN OfRank bo ON bo.MaquinaID=r.MaquinaID AND bo.rn=1
 ORDER BY r.PiezasOK DESC,r.MaquinaID;";
 
         await using var command = new SqlCommand(sql, connection);
@@ -332,14 +583,27 @@ ORDER BY r.PiezasOK DESC,r.MaquinaID;";
                 PiezasScrap = Long(reader, "PiezasScrap"),
                 Objetivo = Long(reader, "Objetivo"),
                 MinutosProduccion = Decimal(reader, "MinutosProduccion"),
-                MinutosParo = Decimal(reader, "MinutosParo")
+                MinutosParo = Decimal(reader, "MinutosParo"),
+                PartesTrabajadas = Int(reader, "PartesTrabajadas"),
+                TurnosTrabajados = Int(reader, "TurnosTrabajados"),
+                OperadoresTrabajados = Int(reader, "OperadoresTrabajados"),
+                OfTrabajadas = Int(reader, "OfTrabajadas"),
+                MejorParte = Text(reader, "MejorParte"),
+                MejorParteDescripcion = Text(reader, "MejorParteDescripcion"),
+                MejorParteRqtPct = Decimal(reader, "MejorParteRqtPct"),
+                MejorTurno = Text(reader, "MejorTurno"),
+                MejorTurnoRqtPct = Decimal(reader, "MejorTurnoRqtPct"),
+                MejorOperador = Text(reader, "MejorOperador"),
+                MejorOperadorRqtPct = Decimal(reader, "MejorOperadorRqtPct"),
+                MejorOF = Text(reader, "MejorOF"),
+                MejorOFRqtPct = Decimal(reader, "MejorOFRqtPct")
             });
         }
 
         vm.Maquinas = vm.Maquinas
             .OrderByDescending(x => x.OeePct)
             .ThenByDescending(x => x.PiezasOK)
-            .Take(8)
+            .Take(12)
             .ToList();
     }
 
@@ -349,30 +613,54 @@ ORDER BY r.PiezasOK DESC,r.MaquinaID;";
         CancellationToken cancellationToken)
     {
         const string sql = @"
-WITH R AS
+WITH B AS
 (
     SELECT
-        FechaProduccion AS Fecha,
-        SUM(CONVERT(BIGINT,ISNULL(CantidadOK,0))) AS PiezasOK,
-        SUM(CONVERT(BIGINT,ISNULL(CantidadSospechosa,0))) AS PiezasSospechosas,
-        SUM(CONVERT(BIGINT,ISNULL(CantidadScrap,0))) AS PiezasScrap,
-        SUM(CONVERT(BIGINT,COALESCE(NULLIF(ObjetivoBloque,0),NULLIF(ObjetivoHora,0),0))) AS Objetivo,
-        SUM(CONVERT(DECIMAL(18,2),CASE WHEN HoraFin>=HoraInicio
-            THEN DATEDIFF(MINUTE,HoraInicio,HoraFin)
-            ELSE 1440+DATEDIFF(MINUTE,HoraInicio,HoraFin) END)) AS MinutosProduccion
-    FROM dbo.Produccion_RegistroHora
-    WHERE Activo=1
-      AND FechaProduccion>=@Desde
-      AND FechaProduccion<@HastaExclusiva
-    GROUP BY FechaProduccion
+        rh.FechaProduccion AS Fecha,
+        ISNULL(rh.CantidadOK,0) AS CantidadOK,
+        ISNULL(rh.CantidadSospechosa,0) AS CantidadSospechosa,
+        ISNULL(rh.CantidadScrap,0) AS CantidadScrap,
+        minutos.MinutosBloque,
+        COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0) AS ObjetivoHoraEstandar
+    FROM dbo.Produccion_RegistroHora rh
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=rh.ProgramaProduccionID
+    LEFT JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    OUTER APPLY
+    (
+        SELECT TOP(1) dt0.ObjetivoHora
+        FROM dbo.ERP_ParteDatosTecnicos dt0
+        WHERE dt0.ParteID=COALESCE(pp.ParteID,e.ParteID)
+          AND dt0.Activo=1
+        ORDER BY dt0.ParteDatoTecnicoID DESC
+    ) dt
+    CROSS APPLY
+    (
+        SELECT CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
+            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END) AS MinutosBloque
+    ) minutos
+    WHERE rh.Activo=1
+      AND rh.FechaProduccion>=@Desde
+      AND rh.FechaProduccion<@HastaExclusiva
+),
+R AS
+(
+    SELECT Fecha,
+        SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,
+        SUM(CONVERT(BIGINT,CantidadSospechosa)) AS PiezasSospechosas,
+        SUM(CONVERT(BIGINT,CantidadScrap)) AS PiezasScrap,
+        SUM(CONVERT(BIGINT,ROUND(CONVERT(DECIMAL(18,4),ObjetivoHoraEstandar)*MinutosBloque/60.0,0))) AS Objetivo,
+        SUM(MinutosBloque) AS MinutosProduccion
+    FROM B
+    GROUP BY Fecha
 ),
 P AS
 (
-    SELECT
-        CAST(FechaInicioParo AS date) AS Fecha,
+    SELECT CAST(FechaInicioParo AS date) AS Fecha,
         SUM(CONVERT(DECIMAL(18,2),CASE
+            WHEN FechaFinParo IS NULL THEN CASE WHEN FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,FechaInicioParo,GETDATE()) END
             WHEN DuracionMinutos IS NOT NULL THEN DuracionMinutos
-            WHEN FechaFinParo IS NOT NULL THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
+            WHEN FechaFinParo>=FechaInicioParo THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
             ELSE 0 END)) AS MinutosParo
     FROM dbo.Produccion_Paros
     WHERE Activo=1
@@ -380,7 +668,8 @@ P AS
       AND FechaInicioParo<@HastaExclusiva
     GROUP BY CAST(FechaInicioParo AS date)
 )
-SELECT r.Fecha,r.PiezasOK,r.PiezasSospechosas,r.PiezasScrap,r.Objetivo,r.MinutosProduccion,ISNULL(p.MinutosParo,0) AS MinutosParo
+SELECT r.Fecha,r.PiezasOK,r.PiezasSospechosas,r.PiezasScrap,r.Objetivo,r.MinutosProduccion,
+       ISNULL(p.MinutosParo,0) AS MinutosParo
 FROM R r
 LEFT JOIN P p ON p.Fecha=r.Fecha
 ORDER BY r.Fecha;";
@@ -402,6 +691,538 @@ ORDER BY r.Fecha;";
                 MinutosParo = Decimal(reader, "MinutosParo")
             });
         }
+    }
+
+    private static async Task CargarProgramasProduccionAsync(
+        SqlConnection connection,
+        IndicadoresDashboardVm vm,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+WITH B AS
+(
+    SELECT
+        rh.ProgramaProduccionID,
+        rh.EjecucionProduccionID,
+        ISNULL(rh.CantidadOK,0) AS CantidadOK,
+        ISNULL(rh.CantidadSospechosa,0) AS CantidadSospechosa,
+        ISNULL(rh.CantidadScrap,0) AS CantidadScrap,
+        minutos.MinutosBloque,
+        CONVERT(BIGINT,ROUND(CONVERT(DECIMAL(18,4),COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0))*minutos.MinutosBloque/60.0,0)) AS ObjetivoBloque,
+        COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0) AS ObjetivoHoraEstandar,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.Ciclo)),N''),NULLIF(CONVERT(NVARCHAR(80),dt.Ciclo),N''),N'') AS CicloEstandar,
+        COALESCE(NULLIF(pp.Cavidades,0),NULLIF(dt.Cavidades,0)) AS CavidadesEstandar,
+        CASE
+            WHEN ISNULL(pp.ObjetivoHora,0)>0 THEN N'Snapshot de Planeación'
+            WHEN ISNULL(dt.ObjetivoHora,0)>0 THEN N'Maestro técnico'
+            ELSE N'Sin estándar'
+        END AS FuenteEstandar,
+        pp.SolicitudProduccionID,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),N'Sin parte') AS Parte,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.DesignacionDescripcionSAP)),N''),NULLIF(LTRIM(RTRIM(e.DescripcionParte)),N''),N'') AS DescripcionParte,
+        COALESCE(NULLIF(LTRIM(RTRIM(m.Codigo)),N''),NULLIF(LTRIM(RTRIM(pp.MaquinaCodigo)),N''),NULLIF(LTRIM(RTRIM(e.MaquinaCodigo)),N''),N'Sin máquina') AS Maquina,
+        COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),CONCAT(N'Programa ',rh.ProgramaProduccionID)) AS NumeroOF,
+        NULLIF(LTRIM(RTRIM(rh.Turno)),N'') AS Turno,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(CONCAT(per.Nombre,N' ',per.ApellidoPaterno,N' ',per.ApellidoMaterno))),N''),
+            NULLIF(LTRIM(RTRIM(e.OperadorNombre)),N''),
+            N'Sin operador') AS Operador
+    FROM dbo.Produccion_RegistroHora rh
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=rh.ProgramaProduccionID
+    LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=COALESCE(rh.SolicitudProduccionID,pp.SolicitudProduccionID)
+    LEFT JOIN dbo.ERP_Maquinas m ON m.MaquinaID=COALESCE(rh.MaquinaID,pp.MaquinaID)
+    LEFT JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    LEFT JOIN dbo.Persona per ON per.PersonaID=rh.OperadorID
+    OUTER APPLY
+    (
+        SELECT TOP(1) dt0.ObjetivoHora,dt0.Ciclo,dt0.Cavidades
+        FROM dbo.ERP_ParteDatosTecnicos dt0
+        WHERE dt0.ParteID=COALESCE(pp.ParteID,e.ParteID)
+          AND dt0.Activo=1
+        ORDER BY dt0.ParteDatoTecnicoID DESC
+    ) dt
+    CROSS APPLY
+    (
+        SELECT CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
+            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END) AS MinutosBloque
+    ) minutos
+    WHERE rh.Activo=1
+      AND rh.FechaProduccion>=@Desde
+      AND rh.FechaProduccion<@HastaExclusiva
+),
+R AS
+(
+    SELECT
+        ProgramaProduccionID,
+        MAX(EjecucionProduccionID) AS EjecucionProduccionID,
+        MAX(SolicitudProduccionID) AS SolicitudProduccionID,
+        MAX(NumeroOF) AS NumeroOF,
+        MAX(Parte) AS Parte,
+        MAX(DescripcionParte) AS DescripcionParte,
+        MAX(Maquina) AS Maquina,
+        MAX(ObjetivoHoraEstandar) AS ObjetivoHoraEstandar,
+        MAX(CicloEstandar) AS CicloEstandar,
+        MAX(CavidadesEstandar) AS CavidadesEstandar,
+        MAX(FuenteEstandar) AS FuenteEstandar,
+        COUNT(DISTINCT Turno) AS TurnosTrabajados,
+        COUNT(DISTINCT Operador) AS OperadoresTrabajados,
+        SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,
+        SUM(CONVERT(BIGINT,CantidadSospechosa)) AS PiezasSospechosas,
+        SUM(CONVERT(BIGINT,CantidadScrap)) AS PiezasScrap,
+        SUM(ObjetivoBloque) AS Objetivo,
+        SUM(MinutosBloque) AS MinutosProduccion
+    FROM B GROUP BY ProgramaProduccionID
+),
+P AS
+(
+    SELECT ProgramaProduccionID,
+        SUM(CONVERT(DECIMAL(18,2),CASE
+            WHEN FechaFinParo IS NULL THEN CASE WHEN FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,FechaInicioParo,GETDATE()) END
+            WHEN DuracionMinutos IS NOT NULL THEN DuracionMinutos
+            WHEN FechaFinParo>=FechaInicioParo THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
+            ELSE 0 END)) AS MinutosParo
+    FROM dbo.Produccion_Paros
+    WHERE Activo=1
+      AND FechaInicioParo>=@Desde
+      AND FechaInicioParo<@HastaExclusiva
+    GROUP BY ProgramaProduccionID
+),
+TurnoAgg AS
+(
+    SELECT ProgramaProduccionID,Turno,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B WHERE Turno IS NOT NULL GROUP BY ProgramaProduccionID,Turno
+),
+TurnoRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY ProgramaProduccionID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Turno) AS rn FROM TurnoAgg WHERE Objetivo>0
+),
+OperadorAgg AS
+(
+    SELECT ProgramaProduccionID,Operador,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY ProgramaProduccionID,Operador
+),
+OperadorRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY ProgramaProduccionID ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Operador) AS rn FROM OperadorAgg WHERE Objetivo>0
+)
+SELECT TOP(60)
+    r.*,
+    ISNULL(p.MinutosParo,0) AS MinutosParo,
+    ISNULL(bt.Turno,N'') AS MejorTurno,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bt.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bt.PiezasOK)*100/bt.Objetivo ELSE 0 END) AS MejorTurnoRqtPct,
+    ISNULL(bop.Operador,N'') AS MejorOperador,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bop.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bop.PiezasOK)*100/bop.Objetivo ELSE 0 END) AS MejorOperadorRqtPct
+FROM R r
+LEFT JOIN P p ON p.ProgramaProduccionID=r.ProgramaProduccionID
+LEFT JOIN TurnoRank bt ON bt.ProgramaProduccionID=r.ProgramaProduccionID AND bt.rn=1
+LEFT JOIN OperadorRank bop ON bop.ProgramaProduccionID=r.ProgramaProduccionID AND bop.rn=1
+ORDER BY r.NumeroOF DESC,r.ProgramaProduccionID DESC;";
+
+        await using var command = new SqlCommand(sql, connection);
+        AddPeriodo(command, vm.Desde, vm.Hasta);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            vm.ProgramasProduccion.Add(new IndicadoresProgramaProduccionVm
+            {
+                ProgramaProduccionID = Int(reader, "ProgramaProduccionID"),
+                EjecucionProduccionID = Int(reader, "EjecucionProduccionID"),
+                SolicitudProduccionID = reader["SolicitudProduccionID"] == DBNull.Value ? null : Convert.ToInt32(reader["SolicitudProduccionID"]),
+                NumeroOF = Text(reader, "NumeroOF"),
+                Parte = Text(reader, "Parte"),
+                DescripcionParte = Text(reader, "DescripcionParte"),
+                Maquina = Text(reader, "Maquina"),
+                ObjetivoHoraEstandar = Int(reader, "ObjetivoHoraEstandar"),
+                CicloEstandar = Text(reader, "CicloEstandar"),
+                CavidadesEstandar = reader["CavidadesEstandar"] == DBNull.Value ? null : Convert.ToInt32(reader["CavidadesEstandar"]),
+                FuenteEstandar = Text(reader, "FuenteEstandar"),
+                PiezasOK = Long(reader, "PiezasOK"),
+                PiezasSospechosas = Long(reader, "PiezasSospechosas"),
+                PiezasScrap = Long(reader, "PiezasScrap"),
+                Objetivo = Long(reader, "Objetivo"),
+                MinutosProduccion = Decimal(reader, "MinutosProduccion"),
+                MinutosParo = Decimal(reader, "MinutosParo"),
+                TurnosTrabajados = Int(reader, "TurnosTrabajados"),
+                OperadoresTrabajados = Int(reader, "OperadoresTrabajados"),
+                MejorTurno = Text(reader, "MejorTurno"),
+                MejorTurnoRqtPct = Decimal(reader, "MejorTurnoRqtPct"),
+                MejorOperador = Text(reader, "MejorOperador"),
+                MejorOperadorRqtPct = Decimal(reader, "MejorOperadorRqtPct")
+            });
+        }
+    }
+
+    // NSQ_INDICADORES_PAROS_MAQUINA_V1_4
+    private static async Task CargarParosProduccionAsync(
+        SqlConnection connection,
+        IndicadoresDashboardVm vm,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+SELECT TOP(12)
+    COALESCE(NULLIF(LTRIM(RTRIM(MotivoParoTexto)),N''),N'Sin motivo') AS Motivo,
+    COUNT(*) AS Eventos,
+    SUM(CONVERT(DECIMAL(18,2),CASE
+        WHEN FechaFinParo IS NULL THEN CASE WHEN FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,FechaInicioParo,GETDATE()) END
+        WHEN DuracionMinutos IS NOT NULL THEN DuracionMinutos
+        WHEN FechaFinParo>=FechaInicioParo THEN DATEDIFF(MINUTE,FechaInicioParo,FechaFinParo)
+        ELSE 0 END)) AS Minutos
+FROM dbo.Produccion_Paros
+WHERE Activo=1
+  AND FechaInicioParo>=@Desde
+  AND FechaInicioParo<@HastaExclusiva
+GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(MotivoParoTexto)),N''),N'Sin motivo')
+ORDER BY Minutos DESC,Eventos DESC;
+
+WITH P AS
+(
+    SELECT
+        COALESCE(p.MaquinaID,e.MaquinaID,pp.MaquinaID) AS MaquinaID,
+        COUNT(*) AS Eventos,
+        SUM(CONVERT(DECIMAL(18,2),CASE
+            WHEN p.FechaFinParo IS NULL THEN CASE WHEN p.FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,p.FechaInicioParo,GETDATE()) END
+            WHEN p.DuracionMinutos IS NOT NULL THEN p.DuracionMinutos
+            WHEN p.FechaFinParo>=p.FechaInicioParo THEN DATEDIFF(MINUTE,p.FechaInicioParo,p.FechaFinParo)
+            ELSE 0 END)) AS Minutos
+    FROM dbo.Produccion_Paros p
+    LEFT JOIN dbo.Produccion_Ejecucion e
+        ON e.EjecucionProduccionID=p.EjecucionProduccionID
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ProgramaProduccionID=p.ProgramaProduccionID
+    WHERE p.Activo=1
+      AND p.FechaInicioParo>=@Desde
+      AND p.FechaInicioParo<@HastaExclusiva
+    GROUP BY COALESCE(p.MaquinaID,e.MaquinaID,pp.MaquinaID)
+),
+R AS
+(
+    SELECT
+        rh.MaquinaID,
+        SUM(CONVERT(DECIMAL(18,2),CASE
+            WHEN rh.HoraFin>=rh.HoraInicio THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+        END)) AS MinutosProduccion
+    FROM dbo.Produccion_RegistroHora rh
+    WHERE rh.Activo=1
+      AND rh.MaquinaID IS NOT NULL
+      AND rh.FechaProduccion>=@Desde
+      AND rh.FechaProduccion<@HastaExclusiva
+    GROUP BY rh.MaquinaID
+)
+SELECT
+    m.MaquinaID,
+    ISNULL(NULLIF(LTRIM(RTRIM(m.Codigo)),N''),CONCAT(N'Maquina #',m.MaquinaID)) AS Maquina,
+    ISNULL(m.Nombre,N'') AS Nombre,
+    ISNULL(p.Eventos,0) AS Eventos,
+    ISNULL(p.Minutos,0) AS Minutos,
+    ISNULL(r.MinutosProduccion,0) AS MinutosProduccion
+FROM dbo.ERP_Maquinas m
+LEFT JOIN P p ON p.MaquinaID=m.MaquinaID
+LEFT JOIN R r ON r.MaquinaID=m.MaquinaID
+WHERE ISNULL(m.Activo,1)=1
+ORDER BY
+    CASE WHEN ISNULL(p.Minutos,0)>0 THEN 0 ELSE 1 END,
+    ISNULL(p.Minutos,0) DESC,
+    m.Codigo,
+    m.MaquinaID;";
+
+        await using var command = new SqlCommand(sql, connection);
+        AddPeriodo(command, vm.Desde, vm.Hasta);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var minutos = Decimal(reader, "Minutos");
+            vm.ParosMotivos.Add(new IndicadoresParoMotivoVm
+            {
+                Motivo = Text(reader, "Motivo"),
+                Eventos = Int(reader, "Eventos"),
+                Minutos = minutos,
+                PorcentajeParo = vm.Produccion.MinutosParo <= 0m
+                    ? 0m
+                    : Math.Clamp(minutos * 100m / vm.Produccion.MinutosParo,0m,100m)
+            });
+        }
+
+        if (await reader.NextResultAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var minutos = Decimal(reader, "Minutos");
+                vm.ParosMaquinas.Add(new IndicadoresParoMaquinaVm
+                {
+                    MaquinaID = Int(reader, "MaquinaID"),
+                    Maquina = Text(reader, "Maquina"),
+                    Nombre = Text(reader, "Nombre"),
+                    Eventos = Int(reader, "Eventos"),
+                    Minutos = minutos,
+                    MinutosProduccion = Decimal(reader, "MinutosProduccion"),
+                    PorcentajeParoTotal = vm.Produccion.MinutosParo <= 0m
+                        ? 0m
+                        : Math.Clamp(minutos * 100m / vm.Produccion.MinutosParo,0m,100m)
+                });
+            }
+        }
+    }
+    // NSQ_INDICADORES_PERSONAL_V2
+    // Personal real confirmado en Produccion_Ejecucion; no usa la sugerencia de Programacion de Personal como resultado.
+    private static async Task CargarPersonalApoyoProduccionAsync(
+        SqlConnection connection,
+        IndicadoresDashboardVm vm,
+        CancellationToken cancellationToken)
+    {
+        const string sql = @"
+WITH B AS
+(
+    SELECT
+        rol.TipoRol,
+        CASE
+            WHEN rol.PersonaID IS NOT NULL THEN CONCAT(N'ID:',rol.PersonaID)
+            ELSE CONCAT(N'N:',UPPER(LTRIM(RTRIM(ISNULL(rol.NombreSnapshot,N'')))))
+        END AS PersonaKey,
+        rol.PersonaID,
+        COALESCE
+        (
+            NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(per.Nombre,N''),N' ',ISNULL(per.ApellidoPaterno,N''),N' ',ISNULL(per.ApellidoMaterno,N'')))),N''),
+            NULLIF(LTRIM(RTRIM(rol.NombreSnapshot)),N''),
+            N'Sin nombre'
+        ) AS Nombre,
+        ISNULL(per.NumeroControl,N'') AS NumeroControl,
+        ISNULL(rh.CantidadOK,0) AS CantidadOK,
+        ISNULL(rh.CantidadSospechosa,0) AS CantidadSospechosa,
+        ISNULL(rh.CantidadScrap,0) AS CantidadScrap,
+        minutos.MinutosBloque,
+        CONVERT(BIGINT,ROUND(CONVERT(DECIMAL(18,4),COALESCE(NULLIF(pp.ObjetivoHora,0),NULLIF(dt.ObjetivoHora,0),0))*minutos.MinutosBloque/60.0,0)) AS ObjetivoBloque,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(e.NumeroParte)),N''),N'Sin parte') AS NumeroParte,
+        COALESCE(NULLIF(LTRIM(RTRIM(pp.DesignacionDescripcionSAP)),N''),NULLIF(LTRIM(RTRIM(e.DescripcionParte)),N''),N'') AS DescripcionParte,
+        NULLIF(LTRIM(RTRIM(rh.Turno)),N'') AS Turno,
+        COALESCE(NULLIF(LTRIM(RTRIM(m.Codigo)),N''),NULLIF(LTRIM(RTRIM(e.MaquinaCodigo)),N''),NULLIF(LTRIM(RTRIM(pp.MaquinaCodigo)),N''),N'Sin máquina') AS Maquina,
+        COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),CONCAT(N'Programa ',rh.ProgramaProduccionID)) AS NumeroOF
+    FROM dbo.Produccion_RegistroHora rh
+    INNER JOIN dbo.Produccion_Ejecucion e
+        ON e.EjecucionProduccionID=rh.EjecucionProduccionID
+    LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+        ON pp.ProgramaProduccionID=rh.ProgramaProduccionID
+    LEFT JOIN dbo.SolicitudesProduccion s
+        ON s.SolicitudProduccionID=COALESCE(rh.SolicitudProduccionID,e.SolicitudProduccionID,pp.SolicitudProduccionID)
+    LEFT JOIN dbo.ERP_Maquinas m
+        ON m.MaquinaID=COALESCE(rh.MaquinaID,e.MaquinaID,pp.MaquinaID)
+    CROSS APPLY
+    (
+        VALUES
+            (N'AUXILIAR',e.OperadorAuxiliarID,e.OperadorAuxiliarNombre),
+            (N'TECNICO',e.TecnicoProduccionID,e.TecnicoProduccionNombre)
+    ) rol(TipoRol,PersonaID,NombreSnapshot)
+    LEFT JOIN dbo.Persona per
+        ON per.PersonaID=rol.PersonaID
+    OUTER APPLY
+    (
+        SELECT TOP(1) dt0.ObjetivoHora
+        FROM dbo.ERP_ParteDatosTecnicos dt0
+        WHERE dt0.ParteID=COALESCE(pp.ParteID,e.ParteID)
+          AND dt0.Activo=1
+        ORDER BY dt0.ParteDatoTecnicoID DESC
+    ) dt
+    CROSS APPLY
+    (
+        SELECT CONVERT(DECIMAL(18,2),CASE WHEN rh.HoraFin>=rh.HoraInicio
+            THEN DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin)
+            ELSE 1440+DATEDIFF(MINUTE,rh.HoraInicio,rh.HoraFin) END) AS MinutosBloque
+    ) minutos
+    WHERE rh.Activo=1
+      AND rh.FechaProduccion>=@Desde
+      AND rh.FechaProduccion<@HastaExclusiva
+      AND
+      (
+          rol.PersonaID IS NOT NULL
+          OR NULLIF(LTRIM(RTRIM(rol.NombreSnapshot)),N'') IS NOT NULL
+      )
+),
+R AS
+(
+    SELECT
+        TipoRol,PersonaKey,
+        MAX(PersonaID) AS PersonaID,
+        MAX(Nombre) AS Nombre,
+        MAX(NumeroControl) AS NumeroControl,
+        COUNT(*) AS Registros,
+        COUNT(DISTINCT NumeroParte) AS PartesTrabajadas,
+        COUNT(DISTINCT Turno) AS TurnosTrabajados,
+        COUNT(DISTINCT Maquina) AS MaquinasTrabajadas,
+        COUNT(DISTINCT NumeroOF) AS OfTrabajadas,
+        SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,
+        SUM(CONVERT(BIGINT,CantidadSospechosa)) AS PiezasSospechosas,
+        SUM(CONVERT(BIGINT,CantidadScrap)) AS PiezasScrap,
+        SUM(ObjetivoBloque) AS Objetivo,
+        SUM(MinutosBloque) AS MinutosProduccion
+    FROM B
+    GROUP BY TipoRol,PersonaKey
+),
+P AS
+(
+    SELECT
+        rol.TipoRol,
+        CASE
+            WHEN rol.PersonaID IS NOT NULL THEN CONCAT(N'ID:',rol.PersonaID)
+            ELSE CONCAT(N'N:',UPPER(LTRIM(RTRIM(ISNULL(rol.NombreSnapshot,N'')))))
+        END AS PersonaKey,
+        SUM(CONVERT(DECIMAL(18,2),CASE
+            WHEN p.FechaFinParo IS NULL THEN CASE WHEN p.FechaInicioParo>=GETDATE() THEN 0 ELSE DATEDIFF(MINUTE,p.FechaInicioParo,GETDATE()) END
+            WHEN p.DuracionMinutos IS NOT NULL THEN p.DuracionMinutos
+            WHEN p.FechaFinParo>=p.FechaInicioParo THEN DATEDIFF(MINUTE,p.FechaInicioParo,p.FechaFinParo)
+            ELSE 0 END)) AS MinutosParo
+    FROM dbo.Produccion_Paros p
+    INNER JOIN dbo.Produccion_Ejecucion e
+        ON e.EjecucionProduccionID=p.EjecucionProduccionID
+    CROSS APPLY
+    (
+        VALUES
+            (N'AUXILIAR',e.OperadorAuxiliarID,e.OperadorAuxiliarNombre),
+            (N'TECNICO',e.TecnicoProduccionID,e.TecnicoProduccionNombre)
+    ) rol(TipoRol,PersonaID,NombreSnapshot)
+    WHERE p.Activo=1
+      AND p.FechaInicioParo>=@Desde
+      AND p.FechaInicioParo<@HastaExclusiva
+      AND
+      (
+          rol.PersonaID IS NOT NULL
+          OR NULLIF(LTRIM(RTRIM(rol.NombreSnapshot)),N'') IS NOT NULL
+      )
+    GROUP BY
+        rol.TipoRol,
+        CASE
+            WHEN rol.PersonaID IS NOT NULL THEN CONCAT(N'ID:',rol.PersonaID)
+            ELSE CONCAT(N'N:',UPPER(LTRIM(RTRIM(ISNULL(rol.NombreSnapshot,N'')))))
+        END
+),
+ParteAgg AS
+(
+    SELECT TipoRol,PersonaKey,NumeroParte,MAX(DescripcionParte) AS DescripcionParte,
+           SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY TipoRol,PersonaKey,NumeroParte
+),
+ParteRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY TipoRol,PersonaKey ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,NumeroParte) AS rn FROM ParteAgg WHERE Objetivo>0
+),
+TurnoAgg AS
+(
+    SELECT TipoRol,PersonaKey,Turno,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B WHERE Turno IS NOT NULL GROUP BY TipoRol,PersonaKey,Turno
+),
+TurnoRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY TipoRol,PersonaKey ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Turno) AS rn FROM TurnoAgg WHERE Objetivo>0
+),
+MaquinaAgg AS
+(
+    SELECT TipoRol,PersonaKey,Maquina,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY TipoRol,PersonaKey,Maquina
+),
+MaquinaRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY TipoRol,PersonaKey ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,Maquina) AS rn FROM MaquinaAgg WHERE Objetivo>0
+),
+OfAgg AS
+(
+    SELECT TipoRol,PersonaKey,NumeroOF,SUM(CONVERT(BIGINT,CantidadOK)) AS PiezasOK,SUM(ObjetivoBloque) AS Objetivo
+    FROM B GROUP BY TipoRol,PersonaKey,NumeroOF
+),
+OfRank AS
+(
+    SELECT *,ROW_NUMBER() OVER(PARTITION BY TipoRol,PersonaKey ORDER BY
+        CASE WHEN Objetivo>0 THEN CONVERT(DECIMAL(18,4),PiezasOK)*100/Objetivo ELSE 0 END DESC,
+        PiezasOK DESC,NumeroOF) AS rn FROM OfAgg WHERE Objetivo>0
+)
+SELECT
+    r.TipoRol,r.PersonaID,r.Nombre,r.NumeroControl,
+    r.PiezasOK,r.PiezasSospechosas,r.PiezasScrap,r.Objetivo,r.MinutosProduccion,
+    ISNULL(p.MinutosParo,0) AS MinutosParo,r.Registros,
+    r.PartesTrabajadas,r.TurnosTrabajados,r.MaquinasTrabajadas,r.OfTrabajadas,
+    ISNULL(bp.NumeroParte,N'') AS MejorParte,
+    ISNULL(bp.DescripcionParte,N'') AS MejorParteDescripcion,
+    ISNULL(bp.PiezasOK,0) AS MejorParteOK,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bp.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bp.PiezasOK)*100/bp.Objetivo ELSE 0 END) AS MejorParteRqtPct,
+    ISNULL(bt.Turno,N'') AS MejorTurno,
+    ISNULL(bt.PiezasOK,0) AS MejorTurnoOK,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bt.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bt.PiezasOK)*100/bt.Objetivo ELSE 0 END) AS MejorTurnoRqtPct,
+    ISNULL(bm.Maquina,N'') AS MejorMaquina,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bm.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bm.PiezasOK)*100/bm.Objetivo ELSE 0 END) AS MejorMaquinaRqtPct,
+    ISNULL(bo.NumeroOF,N'') AS MejorOF,
+    CONVERT(DECIMAL(18,2),CASE WHEN ISNULL(bo.Objetivo,0)>0 THEN CONVERT(DECIMAL(18,4),bo.PiezasOK)*100/bo.Objetivo ELSE 0 END) AS MejorOFRqtPct
+FROM R r
+LEFT JOIN P p ON p.TipoRol=r.TipoRol AND p.PersonaKey=r.PersonaKey
+LEFT JOIN ParteRank bp ON bp.TipoRol=r.TipoRol AND bp.PersonaKey=r.PersonaKey AND bp.rn=1
+LEFT JOIN TurnoRank bt ON bt.TipoRol=r.TipoRol AND bt.PersonaKey=r.PersonaKey AND bt.rn=1
+LEFT JOIN MaquinaRank bm ON bm.TipoRol=r.TipoRol AND bm.PersonaKey=r.PersonaKey AND bm.rn=1
+LEFT JOIN OfRank bo ON bo.TipoRol=r.TipoRol AND bo.PersonaKey=r.PersonaKey AND bo.rn=1
+ORDER BY r.TipoRol,r.PiezasOK DESC,r.Nombre;";
+
+        await using var command = new SqlCommand(sql, connection);
+        AddPeriodo(command, vm.Desde, vm.Hasta);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var item = new IndicadoresPersonalApoyoKpiVm
+            {
+                Rol = Text(reader, "TipoRol"),
+                PersonaID = reader["PersonaID"] == DBNull.Value ? null : Convert.ToInt32(reader["PersonaID"]),
+                Nombre = Text(reader, "Nombre"),
+                NumeroControl = Text(reader, "NumeroControl"),
+                PiezasOK = Long(reader, "PiezasOK"),
+                PiezasSospechosas = Long(reader, "PiezasSospechosas"),
+                PiezasScrap = Long(reader, "PiezasScrap"),
+                Objetivo = Long(reader, "Objetivo"),
+                MinutosProduccion = Decimal(reader, "MinutosProduccion"),
+                MinutosParo = Decimal(reader, "MinutosParo"),
+                Registros = Int(reader, "Registros"),
+                PartesTrabajadas = Int(reader, "PartesTrabajadas"),
+                TurnosTrabajados = Int(reader, "TurnosTrabajados"),
+                MaquinasTrabajadas = Int(reader, "MaquinasTrabajadas"),
+                OfTrabajadas = Int(reader, "OfTrabajadas"),
+                MejorParte = Text(reader, "MejorParte"),
+                MejorParteDescripcion = Text(reader, "MejorParteDescripcion"),
+                MejorParteOK = Long(reader, "MejorParteOK"),
+                MejorParteRqtPct = Decimal(reader, "MejorParteRqtPct"),
+                MejorTurno = Text(reader, "MejorTurno"),
+                MejorTurnoOK = Long(reader, "MejorTurnoOK"),
+                MejorTurnoRqtPct = Decimal(reader, "MejorTurnoRqtPct"),
+                MejorMaquina = Text(reader, "MejorMaquina"),
+                MejorMaquinaRqtPct = Decimal(reader, "MejorMaquinaRqtPct"),
+                MejorOF = Text(reader, "MejorOF"),
+                MejorOFRqtPct = Decimal(reader, "MejorOFRqtPct")
+            };
+
+            if (item.Rol.Equals("TECNICO", StringComparison.OrdinalIgnoreCase))
+                vm.Tecnicos.Add(item);
+            else if (item.Rol.Equals("AUXILIAR", StringComparison.OrdinalIgnoreCase))
+                vm.Auxiliares.Add(item);
+        }
+
+        vm.Tecnicos = vm.Tecnicos
+            .OrderByDescending(x => x.OeePct)
+            .ThenByDescending(x => x.PiezasOK)
+            .Take(20)
+            .ToList();
+
+        vm.Auxiliares = vm.Auxiliares
+            .OrderByDescending(x => x.OeePct)
+            .ThenByDescending(x => x.PiezasOK)
+            .Take(20)
+            .ToList();
     }
 
     private static async Task CargarDepartamentosAsync(

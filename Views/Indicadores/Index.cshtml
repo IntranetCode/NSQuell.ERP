@@ -185,17 +185,6 @@
         </div>
     </header>
 
-    <nav class="ind-nav" aria-label="Departamentos de indicadores">
-        <a href="@UrlArea("general")" class="@(Model.Seccion == "general" ? "active" : string.Empty)"><i class="fa-solid fa-chart-pie"></i><span>General</span></a>
-        <a href="@UrlArea("produccion")" class="@(Model.Seccion == "produccion" ? "active" : string.Empty)"><i class="fa-solid fa-industry"></i><span>Producción</span></a>
-        <a href="@UrlArea("planeacion")" class="@(Model.Seccion == "planeacion" ? "active" : string.Empty)"><i class="fa-solid fa-calendar-check"></i><span>Planeación</span></a>
-        <a href="@UrlArea("calidad")" class="@(Model.Seccion == "calidad" ? "active" : string.Empty)"><i class="fa-solid fa-shield-halved"></i><span>Calidad</span></a>
-        <a href="@UrlArea("gp12")" class="@(Model.Seccion == "gp12" ? "active" : string.Empty)"><i class="fa-solid fa-magnifying-glass-chart"></i><span>GP12</span></a>
-        <a href="@UrlArea("almacen")" class="@(Model.Seccion == "almacen" ? "active" : string.Empty)"><i class="fa-solid fa-warehouse"></i><span>Almacén</span></a>
-        <a href="@UrlArea("logistica")" class="@(Model.Seccion == "logistica" ? "active" : string.Empty)"><i class="fa-solid fa-truck-fast"></i><span>Logística</span></a>
-        <a href="@UrlArea("compras")" class="@(Model.Seccion == "compras" ? "active" : string.Empty)"><i class="fa-solid fa-cart-shopping"></i><span>Compras</span></a>
-    </nav>
-
     <section class="ind-section-head">
         <div>
             <span>@EtiquetaPeriodo() · @Model.Desde.ToString("dd MMM yyyy") — @Model.Hasta.ToString("dd MMM yyyy")</span>
@@ -235,4 +224,8 @@
 
 @section Scripts {
     <script src="~/js/Indicadores/indicadores-filtros.js" asp-append-version="true"></script>
+    @if (Model.Seccion == "produccion")
+    {
+        <script src="~/js/Indicadores/indicadores-produccion.js" asp-append-version="true"></script>
+    }
 }

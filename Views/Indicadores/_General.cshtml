@@ -1,74 +1,28 @@
-@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
-
-<section class="ind-kpis ind-kpis--general">
-    <article class="ind-kpi ind-kpi--featured">
-        <span>OEE Producción</span>
-        <strong>@Model.Produccion.OeePct.ToString("N1")%</strong>
-        <progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.OeePct, 0m, 100m)))"></progress>
-        <small>@Model.Produccion.PiezasOK.ToString("N0") PZA OK</small>
-    </article>
-    <article class="ind-kpi">
-        <span>Cumplimiento Planeación</span>
-        <strong>@Model.Planeacion.CumplimientoPct.ToString("N1")%</strong>
-        <progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Planeacion.CumplimientoPct, 0m, 100m)))"></progress>
-        <small>@Model.Planeacion.Pendiente.ToString("N0") PZA pendientes</small>
-    </article>
-    <article class="ind-kpi">
-        <span>Liberación Calidad</span>
-        <strong>@Model.Calidad.LiberacionPct.ToString("N1")%</strong>
-        <progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Calidad.LiberacionPct, 0m, 100m)))"></progress>
-        <small>@Model.Calidad.Contenciones.ToString("N0") contenciones</small>
-    </article>
-    <article class="ind-kpi">
-        <span>Puntualidad Logística</span>
-        <strong>@Model.Logistica.PuntualidadPct.ToString("N1")%</strong>
-        <progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Logistica.PuntualidadPct, 0m, 100m)))"></progress>
-        <small>@Model.Logistica.Atrasados.ToString("N0") embarques atrasados</small>
-    </article>
+﻿@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+@{
+    decimal Score(decimal value) => Math.Clamp(value,0m,100m);
+}
+<section class="ind-exec-hero">
+    <div><span class="ind-overline">VISTA EJECUTIVA</span><h3>Estado integral de la operación</h3><p>Resumen de los indicadores que ya genera cada departamento para el periodo seleccionado.</p></div>
+    <div class="ind-exec-scores">
+        <a href="/Indicadores/Index?area=produccion&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><span>Producción</span><strong>@Model.Produccion.OeePct.ToString("N1")%</strong><small>OEE</small></a>
+        <a href="/Indicadores/Index?area=planeacion&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><span>Planeación</span><strong>@Model.Planeacion.CumplimientoPct.ToString("N1")%</strong><small>Cumplimiento</small></a>
+        <a href="/Indicadores/Index?area=calidad&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><span>Calidad</span><strong>@Model.Calidad.LiberacionPct.ToString("N1")%</strong><small>Liberación</small></a>
+        <a href="/Indicadores/Index?area=logistica&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><span>Logística</span><strong>@Model.Logistica.PuntualidadPct.ToString("N1")%</strong><small>Puntualidad</small></a>
+    </div>
 </section>
-
-<section class="ind-grid ind-grid--general">
-    <div class="ind-panel ind-panel--departments">
-        <header class="ind-panel__head">
-            <div><span>OPERACIÓN</span><h3>Resumen por departamento</h3></div>
-            <small>Entra a cada área para ver el detalle</small>
-        </header>
-
-        <div class="ind-departments">
-            <a class="ind-dept" href="/Indicadores/Index?area=produccion&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-industry"></i><div><span>Producción</span><strong>@Model.Produccion.OeePct.ToString("N1")% OEE</strong><small>@Model.Produccion.ScrapPct.ToString("N2")% scrap · @Model.Produccion.DisponibilidadPct.ToString("N1")% disponibilidad</small></div>
-            </a>
-            <a class="ind-dept" href="/Indicadores/Index?area=planeacion&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-calendar-check"></i><div><span>Planeación</span><strong>@Model.Planeacion.CumplimientoPct.ToString("N1")% cumplimiento</strong><small>@Model.Planeacion.ProgramasConPendiente programas con pendiente · @Model.Planeacion.Reprogramados reprogramados</small></div>
-            </a>
-            <a class="ind-dept" href="/Indicadores/Index?area=calidad&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-shield-halved"></i><div><span>Calidad</span><strong>@Model.Calidad.LiberacionPct.ToString("N1")% liberación</strong><small>@Model.Calidad.Contenciones contenciones · @Model.Calidad.RequierenReliberacion reliberaciones</small></div>
-            </a>
-            <a class="ind-dept" href="/Indicadores/Index?area=gp12&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-magnifying-glass-chart"></i><div><span>GP12</span><strong>@Model.GP12.ConformidadPct.ToString("N1")% conformidad</strong><small>@Model.GP12.SolicitudesPendientes solicitudes pendientes · @Model.GP12.Scrap.ToString("N0") scrap</small></div>
-            </a>
-            <a class="ind-dept" href="/Indicadores/Index?area=almacen&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-warehouse"></i><div><span>Almacén</span><strong>@Model.Almacen.MovimientosTotales.ToString("N0") movimientos</strong><small>@Model.Almacen.AlertasInventario alertas de inventario · @Model.Almacen.ScrapPendienteRecepcion scrap por recibir</small></div>
-            </a>
-            <a class="ind-dept" href="/Indicadores/Index?area=logistica&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-truck-fast"></i><div><span>Logística</span><strong>@Model.Logistica.EntregaPct.ToString("N1")% entregado</strong><small>@Model.Logistica.Atrasados atrasados · @Model.Logistica.IncidenciasAbiertas incidencias abiertas</small></div>
-            </a>
-            <a class="ind-dept" href="/Indicadores/Index?area=compras&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")">
-                <i class="fa-solid fa-cart-shopping"></i><div><span>Compras</span><strong>@Model.Compras.MontoOrdenes.ToString("C0")</strong><small>@Model.Compras.PendientesFlujo abiertas · @Model.Compras.UrgentesPendientes prioritarias</small></div>
-            </a>
+<section class="ind-grid ind-grid--general ind-grid--general-v2">
+    <div class="ind-panel ind-panel--departments"><header class="ind-panel__head"><div><span>DEPARTAMENTOS</span><h3>Lectura por gestión</h3></div><small>Selecciona un área para profundizar</small></header>
+        <div class="ind-departments ind-departments--analytic">
+            <a class="ind-dept" href="/Indicadores/Index?area=produccion&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-industry"></i><div><span>Producción</span><strong>@Model.Produccion.OeePct.ToString("N1")% OEE</strong><small>RQT @Model.Produccion.RqtPct.ToString("N1")% · Scrap @Model.Produccion.ScrapPct.ToString("N2")% · Paros @Model.Produccion.ParosPct.ToString("N2")%</small></div></a>
+            <a class="ind-dept" href="/Indicadores/Index?area=planeacion&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-calendar-check"></i><div><span>Planeación</span><strong>@Model.Planeacion.CumplimientoPct.ToString("N1")% cumplimiento</strong><small>@Model.Planeacion.Pendiente.ToString("N0") pzas pendientes · @Model.Planeacion.Reprogramados reprogramados</small></div></a>
+            <a class="ind-dept" href="/Indicadores/Index?area=calidad&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-shield-halved"></i><div><span>Calidad</span><strong>@Model.Calidad.LiberacionPct.ToString("N1")% liberación</strong><small>@Model.Calidad.CoberturaPct.ToString("N1")% revisado · @Model.Calidad.Contenciones contenciones</small></div></a>
+            <a class="ind-dept" href="/Indicadores/Index?area=gp12&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-magnifying-glass-chart"></i><div><span>GP12</span><strong>@Model.GP12.ConformidadPct.ToString("N1")% conformidad</strong><small>@Model.GP12.AvancePct.ToString("N1")% avance · @Model.GP12.SolicitudesPendientes pendientes</small></div></a>
+            <a class="ind-dept" href="/Indicadores/Index?area=almacen&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-warehouse"></i><div><span>Almacén</span><strong>@Model.Almacen.MovimientosTotales.ToString("N0") movimientos</strong><small>@Model.Almacen.AlertasInventario alertas · @Model.Almacen.ScrapPendienteRecepcion scrap por recibir</small></div></a>
+            <a class="ind-dept" href="/Indicadores/Index?area=logistica&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-truck-fast"></i><div><span>Logística</span><strong>@Model.Logistica.PuntualidadPct.ToString("N1")% puntualidad</strong><small>@Model.Logistica.Atrasados atrasados · @Model.Logistica.CriticasAbiertas críticas abiertas</small></div></a>
+            <a class="ind-dept" href="/Indicadores/Index?area=compras&periodo=rango&desde=@Model.Desde.ToString("yyyy-MM-dd")&hasta=@Model.Hasta.ToString("yyyy-MM-dd")"><i class="fa-solid fa-cart-shopping"></i><div><span>Compras</span><strong>@Model.Compras.RecepcionATiempoPct.ToString("N1")% recepción a tiempo</strong><small>@Model.Compras.PendientesFlujo abiertas · @Model.Compras.UrgentesPendientes prioritarias</small></div></a>
         </div>
     </div>
-
-    <aside class="ind-panel">
-        <header class="ind-panel__head"><div><span>EXCEPCIONES</span><h3>Requiere atención</h3></div></header>
-        <div class="ind-alerts">
-            @foreach (var alerta in Model.Alertas.Take(8))
-            {
-                <article class="ind-alert ind-alert--@alerta.Nivel">
-                    <i class="fa-solid @(alerta.Nivel == "danger" ? "fa-circle-exclamation" : alerta.Nivel == "warning" ? "fa-triangle-exclamation" : alerta.Nivel == "success" ? "fa-circle-check" : "fa-circle-info")"></i>
-                    <div><small>@alerta.Area</small><strong>@alerta.Titulo</strong><p>@alerta.Detalle</p></div>
-                </article>
-            }
-        </div>
-    </aside>
+    <aside class="ind-panel"><header class="ind-panel__head"><div><span>EXCEPCIONES</span><h3>Requiere atención</h3></div><small>@Model.Alertas.Count evento(s)</small></header><div class="ind-alerts">@if (!Model.Alertas.Any()){<div class="ind-empty">No hay alertas construidas para el periodo.</div>}else{@foreach(var alerta in Model.Alertas.Take(8)){<article class="ind-alert ind-alert--@alerta.Nivel"><i class="fa-solid @(alerta.Nivel == "danger" ? "fa-circle-exclamation" : alerta.Nivel == "warning" ? "fa-triangle-exclamation" : alerta.Nivel == "success" ? "fa-circle-check" : "fa-circle-info")"></i><div><small>@alerta.Area</small><strong>@alerta.Titulo</strong><p>@alerta.Detalle</p></div></article>}}</div></aside>
 </section>
+<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>La vista General no recalcula indicadores: resume los mismos KPI que se detallan dentro de cada gestión.</span></div>
