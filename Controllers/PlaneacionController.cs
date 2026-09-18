@@ -2419,7 +2419,11 @@ SELECT
     d.HorasSecado,
     COALESCE(
         NULLIF(LTRIM(RTRIM(t.HorasSecadoTexto)),N''),
-        NULLIF(LTRIM(RTRIM(hcc.TiempoSecadoTexto)),N'')
+        CASE
+            WHEN d.HorasSecado IS NOT NULL
+                THEN CONCAT(CONVERT(nvarchar(30), CAST(d.HorasSecado AS decimal(10,2))), N' HORAS')
+            ELSE NULL
+        END
     ) AS HorasSecadoTexto,
     d.PesoBrutoPieza,
     d.MaterialCodigo,
@@ -2453,7 +2457,8 @@ OUTER APPLY
 ) hcc
 LEFT JOIN dbo.ERP_ParteDatosTecnicos t
     ON t.ParteID = d.ParteID
-   AND t.Activo = 1WHERE d.SolicitudProduccionID = @SolicitudProduccionID
+   AND t.Activo = 1
+WHERE d.SolicitudProduccionID = @SolicitudProduccionID
   AND d.Activo = 1
 ORDER BY d.Renglon;";
 
