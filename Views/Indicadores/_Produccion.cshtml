@@ -1,62 +1,274 @@
-@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+﻿@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+@using System.Globalization
 
-<section class="ind-kpis">
-    <article class="ind-kpi ind-kpi--featured"><span>OEE</span><strong>@Model.Produccion.OeePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.OeePct,0m,100m)))"></progress><small>Rendimiento × calidad × disponibilidad</small></article>
-    <article class="ind-kpi"><span>Cumplimiento</span><strong>@Model.Produccion.CumplimientoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.CumplimientoPct,0m,100m)))"></progress><small>@Model.Produccion.PiezasOK.ToString("N0") OK / @Model.Produccion.Objetivo.ToString("N0") objetivo</small></article>
-    <article class="ind-kpi"><span>Calidad</span><strong>@Model.Produccion.CalidadPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.CalidadPct,0m,100m)))"></progress><small>@Model.Produccion.ScrapPct.ToString("N2")% scrap</small></article>
-    <article class="ind-kpi"><span>Disponibilidad</span><strong>@Model.Produccion.DisponibilidadPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Produccion.DisponibilidadPct,0m,100m)))"></progress><small>@Model.Produccion.MinutosParo.ToString("N0") min de paro</small></article>
-    <article class="ind-kpi"><span>Piezas OK</span><strong>@Model.Produccion.PiezasOK.ToString("N0")</strong><small>@Model.Produccion.Operadores operadores · @Model.Produccion.RegistrosHora registros/hora</small></article>
+@{
+    var kpi = Model.Produccion;
+    var tendencia = Model.Tendencia.TakeLast(14).ToList();
+    var maxParoMotivo = Model.ParosMotivos.Count == 0 ? 0m : Model.ParosMotivos.Max(x => x.Minutos);
+    var maxParoMaquina = Model.ParosMaquinas.Count == 0 ? 0m : Model.ParosMaquinas.Max(x => x.Minutos);
+
+    decimal Pct(decimal value) => Math.Clamp(value, 0m, 100m);
+    string CssPct(decimal value) => Pct(value).ToString("0.##", CultureInfo.InvariantCulture);
+    string Hue(decimal value) => (Pct(value) * 1.2m).ToString("0.##", CultureInfo.InvariantCulture);
+    string HuePerdida(decimal value) => (Pct(100m - Math.Clamp(value * 10m, 0m, 100m)) * 1.2m).ToString("0.##", CultureInfo.InvariantCulture);
+    string FmtMin(decimal minutos)
+    {
+        var total = Math.Max(0, (int)Math.Round(minutos));
+        var h = total / 60;
+        var m = total % 60;
+        return h > 0 ? $"{h} h {m:00} min" : $"{m} min";
+    }
+}
+
+<section class="ind-prod-hero-v14">
+    <article class="ind-oee-card ind-sem-card" style="--kpi-hue:@Hue(kpi.OeePct)">
+        <div class="ind-oee-card__copy">
+            <span class="ind-overline">OEE · PRODUCCIÓN</span>
+            <h3>Desempeño integral</h3>
+            <p>Calculado contra el estándar técnico congelado por Planeación; los cambios de ciclo o cavidades durante la corrida no modifican este KPI.</p>
+            <div class="ind-oee-components">
+                <span><b>RQT</b>@kpi.RqtPct.ToString("N1")%</span>
+                <span><b>RQL</b>@kpi.RqlPct.ToString("N1")%</span>
+                <span><b>UE</b>@kpi.UePct.ToString("N1")%</span>
+            </div>
+            <button type="button" class="ind-inline-analysis" data-bs-toggle="modal" data-bs-target="#indSourceModal">
+                <i class="fa-solid fa-database"></i> Ver fórmula y fuentes
+            </button>
+        </div>
+        <div class="ind-oee-ring ind-oee-ring--semaforo" style="--oee:@CssPct(kpi.OeePct);--kpi-hue:@Hue(kpi.OeePct)">
+            <div><strong>@kpi.OeePct.ToString("N1")%</strong><span>OEE</span></div>
+        </div>
+    </article>
+
+    <article class="ind-prod-summary">
+        <div><span>Producción OK</span><strong>@kpi.PiezasOK.ToString("N0")</strong><small>de @kpi.Objetivo.ToString("N0") objetivo estándar</small></div>
+        <div><span>Tiempo observado</span><strong>@FmtMin(kpi.MinutosProduccion)</strong><small>@kpi.RegistrosHora registros hora</small></div>
+        <div><span>Tiempo de paro</span><strong>@FmtMin(kpi.MinutosParo)</strong><small>@kpi.ParosPct.ToString("N2")% del tiempo observado</small></div>
+        <div><span>Personal real</span><strong>@(kpi.Operadores + Model.Tecnicos.Count + Model.Auxiliares.Count)</strong><small>@kpi.Operadores operadores · @Model.Tecnicos.Count técnicos · @Model.Auxiliares.Count auxiliares</small></div>
+    </article>
 </section>
 
-<section class="ind-grid ind-grid--wide">
-    <article class="ind-panel">
-        <header class="ind-panel__head"><div><span>PERSONAL</span><h3>Rendimiento por operador</h3></div><small>Top 12 por OEE</small></header>
-        @if (!Model.Operadores.Any())
+@if (kpi.ProgramasSinEstandar > 0)
+{
+    <div class="ind-standard-warning">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div><strong>@kpi.ProgramasSinEstandar programa(s) sin ObjetivoHora estándar.</strong><span>Esos programas necesitan completar el dato técnico para que RQT/OEE sean plenamente comparables.</span></div>
+    </div>
+}
+
+<section class="ind-prod-metrics">
+    <article class="ind-metric-card ind-sem-card" style="--kpi-hue:@Hue(kpi.RqtPct)"><span>RQT</span><strong>@kpi.RqtPct.ToString("N1")%</strong><div class="ind-meter"><i style="width:@CssPct(kpi.RqtPct)%"></i></div><small>OK / objetivo estándar</small></article>
+    <article class="ind-metric-card ind-sem-card" style="--kpi-hue:@Hue(kpi.RqlPct)"><span>RQL</span><strong>@kpi.RqlPct.ToString("N1")%</strong><div class="ind-meter"><i style="width:@CssPct(kpi.RqlPct)%"></i></div><small>Calidad = 100 - % scrap</small></article>
+    <article class="ind-metric-card ind-sem-card" style="--kpi-hue:@Hue(kpi.UePct)"><span>UE</span><strong>@kpi.UePct.ToString("N1")%</strong><div class="ind-meter"><i style="width:@CssPct(kpi.UePct)%"></i></div><small>Utilización efectiva · RU en el formato anterior</small></article>
+    <article class="ind-metric-card ind-sem-card" style="--kpi-hue:@HuePerdida(kpi.ParosPct)"><span>% PAROS</span><strong>@kpi.ParosPct.ToString("N2")%</strong><div class="ind-meter"><i style="width:@CssPct(kpi.ParosPct)%"></i></div><small>@FmtMin(kpi.MinutosParo) acumulados</small></article>
+    <article class="ind-metric-card ind-sem-card" style="--kpi-hue:@HuePerdida(kpi.ScrapPct)"><span>% SCRAP</span><strong>@kpi.ScrapPct.ToString("N2")%</strong><div class="ind-meter"><i style="width:@CssPct(kpi.ScrapPct)%"></i></div><small>@kpi.PiezasScrap.ToString("N0") piezas scrap</small></article>
+    <article class="ind-metric-card"><span>NO CONFORME / SOSPECHOSO</span><strong>@kpi.PiezasSospechosas.ToString("N0")</strong><small>@kpi.TotalProducido.ToString("N0") piezas totales registradas</small></article>
+</section>
+
+<section class="ind-analytics-grid">
+    <article class="ind-panel ind-panel--chart">
+        <header class="ind-panel__head">
+            <div><span>TENDENCIA</span><h3>OEE diario</h3></div>
+            <button type="button" class="ind-panel-modal-btn" data-bs-toggle="modal" data-bs-target="#indSourceModal"><i class="fa-solid fa-circle-info"></i> Fuentes</button>
+        </header>
+        @if (tendencia.Count == 0)
         {
-            <div class="ind-empty">No hay producción por operador en el periodo.</div>
+            <div class="ind-empty">No hay registros diarios en el periodo.</div>
         }
         else
         {
-            <div class="ind-table-wrap"><table class="ind-table"><thead><tr><th>#</th><th>Operador</th><th>OEE</th><th>Cumpl.</th><th>Calidad</th><th>Dispon.</th><th>OK</th></tr></thead><tbody>
-            @{ var rank = 0; }
+            <div class="ind-oee-chart" role="img" aria-label="Gráfica diaria de OEE">
+                @foreach (var dia in tendencia)
+                {
+                    <div class="ind-oee-chart__item" title="@dia.Fecha.ToString("dd/MM/yyyy") · OEE @dia.OeePct.ToString("N1")% · RQT @dia.RqtPct.ToString("N1")% · RQL @dia.RqlPct.ToString("N1")% · UE @dia.UePct.ToString("N1")%">
+                        <div class="ind-oee-chart__plot"><i style="height:@CssPct(dia.OeePct)%;--kpi-hue:@Hue(dia.OeePct)"></i><span>@dia.OeePct.ToString("N0")</span></div>
+                        <small>@dia.Fecha.ToString("dd MMM")</small>
+                    </div>
+                }
+            </div>
+        }
+    </article>
+
+    <article class="ind-panel ind-panel--losses">
+        <header class="ind-panel__head">
+            <div><span>PÉRDIDAS</span><h3>Paros de producción</h3></div>
+            <button type="button" class="ind-panel-modal-btn" data-bs-toggle="modal" data-bs-target="#indParosModal"><i class="fa-solid fa-chart-pie"></i> Abrir análisis</button>
+        </header>
+        <div class="ind-mini-tabs" data-ind-loss-tabs>
+            <button type="button" class="active" data-ind-loss-tab="maquinas"><i class="fa-solid fa-industry"></i> Por máquina</button>
+            <button type="button" data-ind-loss-tab="motivos"><i class="fa-solid fa-triangle-exclamation"></i> Por motivo</button>
+        </div>
+
+        <div data-ind-loss-panel="maquinas" class="ind-loss-machine-list">
+            @foreach (var maq in Model.ParosMaquinas)
+            {
+                var ancho = maxParoMaquina <= 0 ? 0m : Math.Clamp(maq.Minutos * 100m / maxParoMaquina,0m,100m);
+                <button type="button" class="ind-loss-machine-row" data-bs-toggle="modal" data-bs-target="#indParosModal" data-ind-paro-maquina-focus="@maq.MaquinaID">
+                    <div><strong>@maq.Maquina</strong><small>@(string.IsNullOrWhiteSpace(maq.Nombre) ? "Máquina activa" : maq.Nombre)</small></div>
+                    <div class="ind-loss-bar"><i style="width:@CssPct(ancho)%"></i></div>
+                    <div class="ind-loss-machine-metrics"><b>@FmtMin(maq.Minutos)</b><small>@maq.Eventos evento(s)</small></div>
+                </button>
+            }
+        </div>
+
+        <div data-ind-loss-panel="motivos" class="ind-loss-list d-none">
+            @if (!Model.ParosMotivos.Any())
+            {
+                <div class="ind-empty">No hay paros registrados en el periodo.</div>
+            }
+            else
+            {
+                var paroIndex = 0;
+                @foreach (var paro in Model.ParosMotivos)
+                {
+                    var ancho = maxParoMotivo <= 0 ? 0m : Math.Clamp(paro.Minutos * 100m / maxParoMotivo,0m,100m);
+                    <button type="button" class="ind-loss-row ind-loss-row--button" data-bs-toggle="modal" data-bs-target="#indParosModal" data-ind-paro-focus="@paroIndex">
+                        <div><strong>@paro.Motivo</strong><small>@paro.Eventos evento(s) · @FmtMin(paro.Minutos)</small></div>
+                        <div class="ind-loss-bar"><i style="width:@CssPct(ancho)%"></i></div>
+                        <b>@paro.PorcentajeParo.ToString("N1")%</b>
+                    </button>
+                    paroIndex++;
+                }
+            }
+        </div>
+    </article>
+</section>
+
+<section class="ind-panel ind-panel--operators">
+    <header class="ind-panel__head">
+        <div><span>PERSONAL</span><h3>Rendimiento del personal real</h3></div>
+        <small>Haz clic en una persona para ver cálculo y trazabilidad</small>
+    </header>
+    <div class="ind-person-tabs" data-ind-person-tabs>
+        <button type="button" class="active" data-ind-person-tab="operadores"><i class="fa-solid fa-user-gear"></i> Operadores <span>@Model.Operadores.Count</span></button>
+        <button type="button" data-ind-person-tab="tecnicos"><i class="fa-solid fa-screwdriver-wrench"></i> Técnicos <span>@Model.Tecnicos.Count</span></button>
+        <button type="button" data-ind-person-tab="auxiliares"><i class="fa-solid fa-people-arrows"></i> Auxiliares <span>@Model.Auxiliares.Count</span></button>
+    </div>
+
+    <div data-ind-person-panel="operadores">
+        @if (!Model.Operadores.Any()) { <div class="ind-empty">No hay operadores con producción en el periodo.</div> }
+        else
+        {
+            <div class="ind-table-wrap"><table class="ind-table ind-table--analytics"><thead><tr><th>#</th><th>Operador</th><th>OEE</th><th>RQT</th><th>RQL</th><th>UE</th><th>% Paros</th><th>% Scrap</th><th>OK / Obj.</th></tr></thead><tbody>
+            @{ var rankOp = 0; }
             @foreach (var op in Model.Operadores)
             {
-                rank++;
-                <tr><td><span class="ind-rank">@rank</span></td><td><strong>@op.Operador</strong><small>@(string.IsNullOrWhiteSpace(op.NumeroControl) ? $"Persona #{op.OperadorID}" : $"Control {op.NumeroControl}")</small></td><td><strong>@op.OeePct.ToString("N1")%</strong></td><td>@op.CumplimientoPct.ToString("N1")%</td><td>@op.CalidadPct.ToString("N1")%<small>@op.ScrapPct.ToString("N2")% scrap</small></td><td>@op.DisponibilidadPct.ToString("N1")%</td><td>@op.PiezasOK.ToString("N0")</td></tr>
+                rankOp++;
+                <tr class="ind-click-row" tabindex="0" role="button" data-bs-toggle="modal" data-bs-target="#indPersonModal" data-ind-person-detail
+                    data-role="OPERADOR" data-name="@op.Operador" data-control="@op.NumeroControl" data-oee="@op.OeePct.ToString("0.##",CultureInfo.InvariantCulture)" data-rqt="@op.RqtPct.ToString("0.##",CultureInfo.InvariantCulture)" data-rql="@op.RqlPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ue="@op.UePct.ToString("0.##",CultureInfo.InvariantCulture)" data-paros="@op.ParosPct.ToString("0.##",CultureInfo.InvariantCulture)" data-scrap="@op.ScrapPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ok="@op.PiezasOK" data-objetivo="@op.Objetivo" data-sospechosas="@op.PiezasSospechosas" data-scrappiezas="@op.PiezasScrap" data-minutos="@op.MinutosProduccion.ToString(CultureInfo.InvariantCulture)" data-minutosparo="@op.MinutosParo.ToString(CultureInfo.InvariantCulture)" data-registros="@op.Registros">
+                    <td><span class="ind-rank">@rankOp</span></td><td><strong>@op.Operador</strong><small>@(string.IsNullOrWhiteSpace(op.NumeroControl) ? $"Persona #{op.OperadorID}" : $"Control {op.NumeroControl}")</small></td><td><strong>@op.OeePct.ToString("N1")%</strong></td><td>@op.RqtPct.ToString("N1")%</td><td>@op.RqlPct.ToString("N1")%</td><td>@op.UePct.ToString("N1")%</td><td>@op.ParosPct.ToString("N2")%</td><td>@op.ScrapPct.ToString("N2")%</td><td>@op.PiezasOK.ToString("N0") / @op.Objetivo.ToString("N0")</td>
+                </tr>
             }
             </tbody></table></div>
         }
-    </article>
+    </div>
+
+    <div data-ind-person-panel="tecnicos" class="d-none">
+        @if (!Model.Tecnicos.Any()) { <div class="ind-empty">No hay técnicos confirmados en ejecuciones con producción en el periodo.</div> }
+        else
+        {
+            <div class="ind-table-wrap"><table class="ind-table ind-table--analytics"><thead><tr><th>#</th><th>Técnico en Producción</th><th>OEE</th><th>RQT</th><th>RQL</th><th>UE</th><th>% Paros</th><th>% Scrap</th><th>OK / Obj.</th></tr></thead><tbody>
+            @{ var rankTec = 0; }
+            @foreach (var p in Model.Tecnicos)
+            {
+                rankTec++;
+                <tr class="ind-click-row" tabindex="0" role="button" data-bs-toggle="modal" data-bs-target="#indPersonModal" data-ind-person-detail data-role="TECNICO" data-name="@p.Nombre" data-control="@p.NumeroControl" data-oee="@p.OeePct.ToString("0.##",CultureInfo.InvariantCulture)" data-rqt="@p.RqtPct.ToString("0.##",CultureInfo.InvariantCulture)" data-rql="@p.RqlPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ue="@p.UePct.ToString("0.##",CultureInfo.InvariantCulture)" data-paros="@p.ParosPct.ToString("0.##",CultureInfo.InvariantCulture)" data-scrap="@p.ScrapPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ok="@p.PiezasOK" data-objetivo="@p.Objetivo" data-sospechosas="@p.PiezasSospechosas" data-scrappiezas="@p.PiezasScrap" data-minutos="@p.MinutosProduccion.ToString(CultureInfo.InvariantCulture)" data-minutosparo="@p.MinutosParo.ToString(CultureInfo.InvariantCulture)" data-registros="@p.Registros">
+                    <td><span class="ind-rank">@rankTec</span></td><td><strong>@p.Nombre</strong><small>@(string.IsNullOrWhiteSpace(p.NumeroControl) ? "Sin número de control" : $"Control {p.NumeroControl}")</small></td><td><strong>@p.OeePct.ToString("N1")%</strong></td><td>@p.RqtPct.ToString("N1")%</td><td>@p.RqlPct.ToString("N1")%</td><td>@p.UePct.ToString("N1")%</td><td>@p.ParosPct.ToString("N2")%</td><td>@p.ScrapPct.ToString("N2")%</td><td>@p.PiezasOK.ToString("N0") / @p.Objetivo.ToString("N0")</td>
+                </tr>
+            }
+            </tbody></table></div>
+        }
+    </div>
+
+    <div data-ind-person-panel="auxiliares" class="d-none">
+        @if (!Model.Auxiliares.Any()) { <div class="ind-empty">No hay auxiliares confirmados en ejecuciones con producción en el periodo.</div> }
+        else
+        {
+            <div class="ind-table-wrap"><table class="ind-table ind-table--analytics"><thead><tr><th>#</th><th>Auxiliar de Producción</th><th>OEE</th><th>RQT</th><th>RQL</th><th>UE</th><th>% Paros</th><th>% Scrap</th><th>OK / Obj.</th></tr></thead><tbody>
+            @{ var rankAux = 0; }
+            @foreach (var p in Model.Auxiliares)
+            {
+                rankAux++;
+                <tr class="ind-click-row" tabindex="0" role="button" data-bs-toggle="modal" data-bs-target="#indPersonModal" data-ind-person-detail data-role="AUXILIAR" data-name="@p.Nombre" data-control="@p.NumeroControl" data-oee="@p.OeePct.ToString("0.##",CultureInfo.InvariantCulture)" data-rqt="@p.RqtPct.ToString("0.##",CultureInfo.InvariantCulture)" data-rql="@p.RqlPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ue="@p.UePct.ToString("0.##",CultureInfo.InvariantCulture)" data-paros="@p.ParosPct.ToString("0.##",CultureInfo.InvariantCulture)" data-scrap="@p.ScrapPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ok="@p.PiezasOK" data-objetivo="@p.Objetivo" data-sospechosas="@p.PiezasSospechosas" data-scrappiezas="@p.PiezasScrap" data-minutos="@p.MinutosProduccion.ToString(CultureInfo.InvariantCulture)" data-minutosparo="@p.MinutosParo.ToString(CultureInfo.InvariantCulture)" data-registros="@p.Registros">
+                    <td><span class="ind-rank">@rankAux</span></td><td><strong>@p.Nombre</strong><small>@(string.IsNullOrWhiteSpace(p.NumeroControl) ? "Sin número de control" : $"Control {p.NumeroControl}")</small></td><td><strong>@p.OeePct.ToString("N1")%</strong></td><td>@p.RqtPct.ToString("N1")%</td><td>@p.RqlPct.ToString("N1")%</td><td>@p.UePct.ToString("N1")%</td><td>@p.ParosPct.ToString("N2")%</td><td>@p.ScrapPct.ToString("N2")%</td><td>@p.PiezasOK.ToString("N0") / @p.Objetivo.ToString("N0")</td>
+                </tr>
+            }
+            </tbody></table></div>
+        }
+    </div>
 </section>
 
-<section class="ind-grid ind-grid--two">
+<section class="ind-analytics-grid ind-analytics-grid--machines-standard">
     <article class="ind-panel">
-        <header class="ind-panel__head"><div><span>ACTIVOS</span><h3>Máquinas con mejor OEE</h3></div><small>Top 8</small></header>
+        <header class="ind-panel__head"><div><span>ACTIVOS</span><h3>OEE por máquina</h3></div><small>Haz clic para analizar</small></header>
         @if (!Model.Maquinas.Any()) { <div class="ind-empty">Sin datos por máquina.</div> }
         else
         {
-            <div class="ind-list">
-            @foreach (var maquina in Model.Maquinas)
-            {
-                <div class="ind-list-row"><div><strong>@maquina.Maquina</strong><small>@maquina.PiezasOK.ToString("N0") PZA OK · @maquina.ScrapPct.ToString("N2")% scrap</small></div><div class="ind-list-metric"><strong>@maquina.OeePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(maquina.OeePct,0m,100m)))"></progress></div></div>
-            }
+            <div class="ind-machine-list">
+                @foreach (var maq in Model.Maquinas)
+                {
+                    <button type="button" class="ind-machine-row ind-machine-row--button ind-sem-row" style="--kpi-hue:@Hue(maq.OeePct)" data-bs-toggle="modal" data-bs-target="#indMachineModal" data-ind-machine-detail data-name="@maq.Maquina" data-oee="@maq.OeePct.ToString("0.##",CultureInfo.InvariantCulture)" data-rqt="@maq.RqtPct.ToString("0.##",CultureInfo.InvariantCulture)" data-rql="@maq.RqlPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ue="@maq.UePct.ToString("0.##",CultureInfo.InvariantCulture)" data-paros="@maq.ParosPct.ToString("0.##",CultureInfo.InvariantCulture)" data-scrap="@maq.ScrapPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ok="@maq.PiezasOK" data-objetivo="@maq.Objetivo" data-sospechosas="@maq.PiezasSospechosas" data-scrappiezas="@maq.PiezasScrap" data-minutos="@maq.MinutosProduccion.ToString(CultureInfo.InvariantCulture)" data-minutosparo="@maq.MinutosParo.ToString(CultureInfo.InvariantCulture)">
+                        <div><strong>@maq.Maquina</strong><small>@maq.PiezasOK.ToString("N0") OK · @maq.ScrapPct.ToString("N2")% scrap · @maq.ParosPct.ToString("N2")% paros</small></div>
+                        <div class="ind-machine-factors"><span>RQT <b>@maq.RqtPct.ToString("N1")%</b></span><span>RQL <b>@maq.RqlPct.ToString("N1")%</b></span><span>UE <b>@maq.UePct.ToString("N1")%</b></span></div>
+                        <div class="ind-machine-oee"><strong>@maq.OeePct.ToString("N1")%</strong><div class="ind-meter"><i style="width:@CssPct(maq.OeePct)%"></i></div></div>
+                    </button>
+                }
             </div>
         }
     </article>
 
-    <article class="ind-panel">
-        <header class="ind-panel__head"><div><span>TENDENCIA</span><h3>OEE diario</h3></div><small>Últimos 14 días con datos</small></header>
-        @if (!Model.Tendencia.Any()) { <div class="ind-empty">Sin tendencia disponible.</div> }
-        else
-        {
-            <div class="ind-list">
-            @foreach (var dia in Model.Tendencia.TakeLast(14))
-            {
-                <div class="ind-list-row"><div><strong>@dia.Fecha.ToString("dd MMM")</strong><small>@dia.PiezasOK.ToString("N0") PZA OK</small></div><div class="ind-list-metric"><strong>@dia.OeePct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(dia.OeePct,0m,100m)))"></progress></div></div>
-            }
-            </div>
-        }
+    <article class="ind-panel ind-standard-explainer">
+        <header class="ind-panel__head"><div><span>ESTÁNDAR KPI</span><h3>Fuente protegida</h3></div><button type="button" class="ind-panel-modal-btn" data-bs-toggle="modal" data-bs-target="#indSourceModal"><i class="fa-solid fa-database"></i> Ver fuentes</button></header>
+        <div class="ind-source-flow">
+            <div><span>1</span><strong>Planeacion_ProgramaProduccion</strong><small>Snapshot de ObjetivoHora, Ciclo y Cavidades al programar.</small></div>
+            <i class="fa-solid fa-arrow-down"></i>
+            <div><span>2</span><strong>ERP_ParteDatosTecnicos</strong><small>Respaldo solo cuando el snapshot histórico no tiene el dato.</small></div>
+            <i class="fa-solid fa-shield-halved"></i>
+            <div class="protected"><strong>Fuera del KPI</strong><small>Produccion_ConfiguracionCorrida y ObjetivoHora/ObjetivoBloque operativos.</small></div>
+        </div>
     </article>
 </section>
 
-<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>OEE: rendimiento (OK / objetivo) × calidad (1 − scrap) × disponibilidad (1 − paro), acotados a 0–100%.</span></div>
+<section class="ind-panel ind-panel--standards">
+    <header class="ind-panel__head"><div><span>OF / PARTE</span><h3>Desglose contra estándar de base de datos</h3></div><small>Haz clic en Analizar para ver cálculo y fuentes</small></header>
+    @if (!Model.ProgramasProduccion.Any()) { <div class="ind-empty">No hay OF con registros de producción en el periodo.</div> }
+    else
+    {
+        <div class="ind-table-wrap"><table class="ind-table ind-table--standards"><thead><tr><th>OF</th><th>Parte</th><th>Máquina</th><th>Obj/h</th><th>Ciclo</th><th>Cav.</th><th>RQT</th><th>RQL</th><th>UE</th><th>OEE</th><th></th></tr></thead><tbody>
+        @foreach (var item in Model.ProgramasProduccion)
+        {
+            <tr class="@(item.TieneEstandar ? string.Empty : "is-missing-standard")">
+                <td><strong>@item.NumeroOF</strong><small>Programa @item.ProgramaProduccionID</small></td><td><strong>@item.Parte</strong><small>@item.DescripcionParte</small></td><td>@item.Maquina</td><td>@(item.ObjetivoHoraEstandar > 0 ? item.ObjetivoHoraEstandar.ToString("N0") : "—")</td><td>@(string.IsNullOrWhiteSpace(item.CicloEstandar) ? "—" : item.CicloEstandar)</td><td>@(item.CavidadesEstandar?.ToString() ?? "—")</td><td>@item.RqtPct.ToString("N1")%</td><td>@item.RqlPct.ToString("N1")%</td><td>@item.UePct.ToString("N1")%</td><td><strong>@item.OeePct.ToString("N1")%</strong></td>
+                <td><button type="button" class="ind-detail-btn" data-bs-toggle="modal" data-bs-target="#indProgramModal" data-ind-program-detail data-of="@item.NumeroOF" data-programa="@item.ProgramaProduccionID" data-parte="@item.Parte" data-descripcion="@item.DescripcionParte" data-maquina="@item.Maquina" data-fuente="@item.FuenteEstandar" data-objetivohora="@item.ObjetivoHoraEstandar" data-ciclo="@item.CicloEstandar" data-cavidades="@(item.CavidadesEstandar?.ToString() ?? string.Empty)" data-ok="@item.PiezasOK" data-sospechosas="@item.PiezasSospechosas" data-scrap="@item.PiezasScrap" data-objetivo="@item.Objetivo" data-minutos="@item.MinutosProduccion.ToString(CultureInfo.InvariantCulture)" data-minutosparo="@item.MinutosParo.ToString(CultureInfo.InvariantCulture)" data-rqt="@item.RqtPct.ToString("0.##",CultureInfo.InvariantCulture)" data-rql="@item.RqlPct.ToString("0.##",CultureInfo.InvariantCulture)" data-ue="@item.UePct.ToString("0.##",CultureInfo.InvariantCulture)" data-oee="@item.OeePct.ToString("0.##",CultureInfo.InvariantCulture)" data-parospct="@item.ParosPct.ToString("0.##",CultureInfo.InvariantCulture)" data-scrappct="@item.ScrapPct.ToString("0.##",CultureInfo.InvariantCulture)"><i class="fa-solid fa-chart-line"></i> Analizar</button></td>
+            </tr>
+        }
+        </tbody></table></div>
+    }
+</section>
+
+<div class="ind-note ind-note--formula"><i class="fa-solid fa-circle-info"></i><span><b>RQT</b> = piezas OK / objetivo estándar. <b>RQL</b> = 100 - % scrap. <b>UE</b> = 100 - % paros. <b>OEE</b> = RQT (acotado a 100%) × RQL × UE.</span></div>
+
+<div class="modal fade" id="indPersonModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content ind-program-modal"><div class="modal-header"><div><span class="ind-overline" id="indPersonRole">PERSONAL</span><h5 class="modal-title" id="indPersonModalTitle">Detalle</h5><small id="indPersonSubtitle"></small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body">
+    <div class="ind-modal-kpis ind-modal-kpis--person"><div><span>OEE</span><strong id="indPersonOee">—</strong></div><div><span>RQT</span><strong id="indPersonRqt">—</strong></div><div><span>RQL</span><strong id="indPersonRql">—</strong></div><div><span>UE</span><strong id="indPersonUe">—</strong></div><div><span>% Paros</span><strong id="indPersonParos">—</strong></div><div><span>% Scrap</span><strong id="indPersonScrapPct">—</strong></div></div>
+    <div class="ind-modal-production ind-modal-production--person"><div><span>Piezas OK</span><strong id="indPersonOk">—</strong></div><div><span>Objetivo estándar</span><strong id="indPersonObjetivo">—</strong></div><div><span>Sospechosas</span><strong id="indPersonSospechosas">—</strong></div><div><span>Scrap</span><strong id="indPersonScrap">—</strong></div><div><span>Tiempo observado</span><strong id="indPersonTiempo">—</strong></div><div><span>Tiempo de paro</span><strong id="indPersonTiempoParo">—</strong></div></div>
+    <section class="ind-trace"><header><i class="fa-solid fa-code-branch"></i><div><strong>Trazabilidad del indicador</strong><small>De dónde sale cada dato que ves arriba</small></div></header><div class="ind-trace-grid"><div><span>Participación</span><b id="indPersonTraceRole">—</b><small id="indPersonTraceRoleDetail">—</small></div><div><span>Producción real</span><b>Produccion_RegistroHora</b><small>CantidadOK, CantidadSospechosa, CantidadScrap y duración de cada bloque.</small></div><div><span>Objetivo estándar</span><b>Planeacion_ProgramaProduccion</b><small>ObjetivoHora del programa; ERP_ParteDatosTecnicos solo si el snapshot no tiene dato.</small></div><div><span>Paros</span><b id="indPersonTraceParos">—</b><small id="indPersonTraceParosDetail">—</small></div></div></section>
+</div></div></div></div>
+
+<div class="modal fade" id="indMachineModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content ind-program-modal"><div class="modal-header"><div><span class="ind-overline">ANÁLISIS DE MÁQUINA</span><h5 class="modal-title" id="indMachineModalTitle">Detalle</h5><small>Producción, pérdidas y estándar del periodo</small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body"><div class="ind-modal-kpis"><div><span>OEE</span><strong id="indMachineOee">—</strong></div><div><span>RQT</span><strong id="indMachineRqt">—</strong></div><div><span>RQL</span><strong id="indMachineRql">—</strong></div><div><span>UE</span><strong id="indMachineUe">—</strong></div><div><span>% Paros</span><strong id="indMachineParos">—</strong></div><div><span>% Scrap</span><strong id="indMachineScrapPct">—</strong></div></div><div class="ind-modal-production"><div><span>Piezas OK</span><strong id="indMachineOk">—</strong></div><div><span>Objetivo estándar</span><strong id="indMachineObjetivo">—</strong></div><div><span>Sospechosas</span><strong id="indMachineSospechosas">—</strong></div><div><span>Scrap</span><strong id="indMachineScrap">—</strong></div><div><span>Tiempo observado</span><strong id="indMachineTiempo">—</strong></div><div><span>Tiempo de paro</span><strong id="indMachineTiempoParo">—</strong></div></div><section class="ind-trace"><header><i class="fa-solid fa-code-branch"></i><div><strong>Trazabilidad de máquina</strong><small>Fuentes usadas por el dashboard</small></div></header><div class="ind-trace-grid"><div><span>Máquina</span><b>ERP_Maquinas</b><small>Catálogo de código y nombre.</small></div><div><span>Producción</span><b>Produccion_RegistroHora.MaquinaID</b><small>Piezas y duración observada.</small></div><div><span>Estándar</span><b>Planeacion_ProgramaProduccion</b><small>ObjetivoHora; fallback ERP_ParteDatosTecnicos.</small></div><div><span>Paros</span><b>Produccion_Paros.MaquinaID</b><small>Tiempo de paro asociado a la máquina en el periodo.</small></div></div></section></div></div></div></div>
+
+<div class="modal fade" id="indParosModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content ind-program-modal"><div class="modal-header"><div><span class="ind-overline">PÉRDIDAS DE PRODUCCIÓN</span><h5 class="modal-title">Paros por máquina y motivo</h5><small>@Model.Desde.ToString("dd/MM/yyyy") — @Model.Hasta.ToString("dd/MM/yyyy") · @FmtMin(kpi.MinutosParo) acumulados</small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body"><div class="ind-mini-tabs" data-ind-paros-modal-tabs><button type="button" class="active" data-ind-paros-modal-tab="maquinas">Todas las máquinas (@Model.ParosMaquinas.Count)</button><button type="button" data-ind-paros-modal-tab="motivos">Motivos (@Model.ParosMotivos.Count)</button></div><div data-ind-paros-modal-panel="maquinas" class="ind-paros-modal-list">@foreach (var maq in Model.ParosMaquinas){<div class="ind-paro-modal-row" data-ind-paro-maquina-row="@maq.MaquinaID"><div class="ind-paro-modal-row__head"><strong>@maq.Maquina</strong><span>@maq.Nombre</span></div><div class="ind-loss-bar"><i style="width:@CssPct(maq.ParosPct)%"></i></div><div class="ind-paro-modal-row__metrics"><span><b>@FmtMin(maq.Minutos)</b> de paro</span><span><b>@maq.Eventos</b> evento(s)</span><span><b>@maq.ParosPct.ToString("N2")%</b> respecto al tiempo observado</span><span><b>@maq.PorcentajeParoTotal.ToString("N1")%</b> del paro total</span></div></div>}</div><div data-ind-paros-modal-panel="motivos" class="ind-paros-modal-list d-none">
+    @{ var idxMot = 0; }
+    @foreach (var paro in Model.ParosMotivos)
+    {
+        <div class="ind-paro-modal-row" data-ind-paro-modal-row="@idxMot">
+            <div class="ind-paro-modal-row__head"><strong>@paro.Motivo</strong><span>@paro.Eventos evento(s)</span></div>
+            <div class="ind-loss-bar"><i style="width:@CssPct(paro.PorcentajeParo)%"></i></div>
+            <div class="ind-paro-modal-row__metrics"><span><b>@FmtMin(paro.Minutos)</b> de paro</span><span><b>@paro.PorcentajeParo.ToString("N1")%</b> del paro acumulado</span></div>
+        </div>
+        idxMot++;
+    }
+</div><section class="ind-trace"><header><i class="fa-solid fa-code-branch"></i><div><strong>Trazabilidad de paros</strong><small>No se navega a otra pantalla; todo se calcula aquí</small></div></header><div class="ind-trace-grid"><div><span>Fuente</span><b>Produccion_Paros</b><small>FechaInicioParo, FechaFinParo, DuracionMinutos y MotivoParoTexto.</small></div><div><span>Máquina</span><b>MaquinaID</b><small>Si el paro no trae máquina directa, se recupera de Produccion_Ejecucion o Planeacion_ProgramaProduccion.</small></div><div><span>Catálogo completo</span><b>ERP_Maquinas</b><small>Se muestran todas las máquinas activas, incluso con 0 minutos de paro.</small></div><div><span>Tiempo observado</span><b>Produccion_RegistroHora</b><small>Se usa para contextualizar el porcentaje de paro por máquina.</small></div></div></section></div></div></div></div>
+
+<div class="modal fade" id="indProgramModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content ind-program-modal"><div class="modal-header"><div><span class="ind-overline">ANÁLISIS DE OF</span><h5 class="modal-title" id="indProgramModalTitle">Detalle</h5><small id="indProgramSubtitle"></small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body"><div class="ind-modal-standard"><div><span>Objetivo estándar / h</span><strong id="indModalObjetivoHora">—</strong></div><div><span>Tiempo ciclo BD</span><strong id="indModalCiclo">—</strong></div><div><span>Cavidades BD</span><strong id="indModalCavidades">—</strong></div><div><span>Fuente</span><strong id="indModalFuente">—</strong></div></div><div class="ind-modal-kpis"><div><span>RQT</span><strong id="indModalRqt">—</strong></div><div><span>RQL</span><strong id="indModalRql">—</strong></div><div><span>UE</span><strong id="indModalUe">—</strong></div><div class="featured"><span>OEE</span><strong id="indModalOee">—</strong></div><div><span>% Paros</span><strong id="indModalParosPct">—</strong></div><div><span>% Scrap</span><strong id="indModalScrapPct">—</strong></div></div><div class="ind-modal-production"><div><span>Piezas OK</span><strong id="indModalOk">—</strong></div><div><span>Sospechosas</span><strong id="indModalSospechosas">—</strong></div><div><span>Scrap</span><strong id="indModalScrap">—</strong></div><div><span>Objetivo periodo</span><strong id="indModalObjetivo">—</strong></div><div><span>Tiempo observado</span><strong id="indModalTiempo">—</strong></div><div><span>Tiempo de paro</span><strong id="indModalTiempoParo">—</strong></div></div><section class="ind-trace"><header><i class="fa-solid fa-code-branch"></i><div><strong>Trazabilidad de la OF</strong><small>Desglose de las fuentes usadas</small></div></header><div class="ind-trace-grid"><div><span>Piezas reales</span><b>Produccion_RegistroHora</b><small>CantidadOK, CantidadSospechosa y CantidadScrap.</small></div><div><span>Estándar</span><b>Planeacion_ProgramaProduccion</b><small>ObjetivoHora, Ciclo y Cavidades congelados al programar.</small></div><div><span>Fallback técnico</span><b>ERP_ParteDatosTecnicos</b><small>Solo cuando el snapshot del programa no trae el dato.</small></div><div><span>Paros</span><b>Produccion_Paros</b><small>Minutos vinculados a ProgramaProduccionID.</small></div></div></section></div></div></div></div>
+
+<div class="modal fade" id="indSourceModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content ind-program-modal"><div class="modal-header"><div><span class="ind-overline">FUENTES Y FÓRMULAS</span><h5 class="modal-title">Cómo se construye el OEE</h5><small>Sin usar la configuración editable de corrida para redefinir el estándar</small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body"><div class="ind-formula-grid"><div><span>RQT</span><strong>Piezas OK / objetivo estándar</strong><small>Produccion_RegistroHora.CantidadOK ÷ objetivo calculado con ObjetivoHora estándar × minutos observados.</small></div><div><span>RQL</span><strong>100 - % Scrap</strong><small>Scrap / producción total registrada.</small></div><div><span>UE</span><strong>100 - % Paros</strong><small>Produccion_Paros respecto al tiempo observado de Produccion_RegistroHora.</small></div><div><span>OEE</span><strong>RQT × RQL × UE</strong><small>RQT se acota a 100% para el producto OEE, aunque el RQT mostrado pueda superar 100%.</small></div></div><section class="ind-trace"><header><i class="fa-solid fa-database"></i><div><strong>Jerarquía de fuentes</strong><small>Orden real de lectura del dashboard</small></div></header><div class="ind-trace-grid"><div><span>1 · Estándar histórico</span><b>Planeacion_ProgramaProduccion</b><small>ObjetivoHora, Ciclo y Cavidades.</small></div><div><span>2 · Respaldo</span><b>ERP_ParteDatosTecnicos</b><small>Se usa únicamente si el programa histórico carece del estándar.</small></div><div><span>Real producido</span><b>Produccion_RegistroHora</b><small>Piezas, horario y personal operador.</small></div><div><span>Pérdidas</span><b>Produccion_Paros</b><small>Minutos y motivos de paro.</small></div><div><span>Personal de apoyo real</span><b>Produccion_Ejecucion</b><small>TecnicoProduccionID y OperadorAuxiliarID confirmados al inicio.</small></div><div class="protected"><span>Excluido del estándar</span><b>Produccion_ConfiguracionCorrida</b><small>Los cambios operativos de ciclo/cavidades no reescriben el KPI estándar.</small></div></div></section></div></div></div></div>
