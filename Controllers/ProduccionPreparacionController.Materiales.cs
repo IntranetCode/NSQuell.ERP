@@ -2597,6 +2597,22 @@ IF @@ROWCOUNT<>1
             {
                 if (string.IsNullOrWhiteSpace(valor)) continue;
                 var texto = valor.Trim().ToUpperInvariant();
+
+                // NSQ_LHRH_SMALL_PLASTICS_AUMENTO_CONTRAPARTE_V1
+                // La pareja SMALL PLASTICS no trae LH/RH en la descripcion.
+                var claveEspecial =
+                    System.Text.RegularExpressions.Regex.Replace(
+                        texto,
+                        @"[^A-Z0-9]",
+                        string.Empty,
+                        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+                if (claveEspecial.Contains("75473448800", StringComparison.Ordinal))
+                    return "LH";
+
+                if (claveEspecial.Contains("75473448900", StringComparison.Ordinal))
+                    return "RH";
+
                 if (texto.Contains("LH/RH", StringComparison.Ordinal) || texto.Contains("RH/LH", StringComparison.Ordinal)) continue;
                 if (System.Text.RegularExpressions.Regex.IsMatch(texto, @"(?<![A-Z0-9])LH(?![A-Z0-9])", System.Text.RegularExpressions.RegexOptions.CultureInvariant)) tieneLh = true;
                 if (System.Text.RegularExpressions.Regex.IsMatch(texto, @"(?<![A-Z0-9])RH(?![A-Z0-9])", System.Text.RegularExpressions.RegexOptions.CultureInvariant)) tieneRh = true;

@@ -263,13 +263,25 @@
                             </div>
                         }
 
-                        <button type="button"
-                                class="btn btn-danger rounded-3 fw-bold"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modalCancelarOF">
-                            <i class="fa-solid fa-ban me-1"></i>
-                            Cancelar OF
-                        </button>
+                        @if (Model.EstatusID != ERP.NSQuell.Models.PlaneacionOFEstatus.Cancelada)
+                        {
+                            <button type="button"
+                                    class="btn btn-danger rounded-3 fw-bold"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalCancelarOF">
+                                <i class="fa-solid fa-ban me-1"></i>
+                                Cancelar OF
+                            </button>
+                        }
+                        else
+                        {
+                            <a asp-controller="Planeacion"
+                               asp-action="Historial"
+                               class="btn btn-secondary rounded-3 fw-bold">
+                                <i class="fa-solid fa-clock-rotate-left me-1"></i>
+                                Volver al historial
+                            </a>
+                        }
 
                     </div>
                 </div>

@@ -67,8 +67,15 @@ SELECT
     SUM(CASE WHEN EstatusID = 8  THEN 1 ELSE 0 END) AS EnTarima,
     SUM(CASE WHEN EstatusID = 9  THEN 1 ELSE 0 END) AS SalidaRegistrada,
     SUM(CASE WHEN EstatusID = 10 THEN 1 ELSE 0 END) AS Cerrados
-FROM dbo.GP12_Solicitudes
-WHERE Activo = 1;";
+FROM dbo.GP12_Solicitudes sTot
+WHERE sTot.Activo = 1
+  AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.SolicitudesProduccion oCancel
+          WHERE oCancel.SolicitudProduccionID=sTot.SolicitudProduccionID
+            AND ISNULL(oCancel.EstatusID,0)=99
+      );";
 
             await using (var cmd = new SqlCommand(sqlTotales, cn))
             await using (var rd = await cmd.ExecuteReaderAsync())
@@ -110,6 +117,13 @@ FROM dbo.GP12_Solicitudes s
 INNER JOIN dbo.GP12_Estatus e
     ON e.EstatusID = s.EstatusID
 WHERE s.Activo = 1
+  AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.SolicitudesProduccion oCancel
+          WHERE oCancel.SolicitudProduccionID=s.SolicitudProduccionID
+            AND ISNULL(oCancel.EstatusID,0)=99
+      )
   AND (@EstatusID IS NULL OR s.EstatusID = @EstatusID)
   AND (@Origen IS NULL OR s.Origen = @Origen)
   AND
@@ -312,6 +326,13 @@ LEFT JOIN Movimientos m
 LEFT JOIN UltimaInspeccion u
     ON u.SolicitudGP12ID = s.SolicitudGP12ID
 WHERE s.Activo = 1
+  AND NOT EXISTS
+      (
+          SELECT 1
+          FROM dbo.SolicitudesProduccion oCancel
+          WHERE oCancel.SolicitudProduccionID=s.SolicitudProduccionID
+            AND ISNULL(oCancel.EstatusID,0)=99
+      )
   AND
   (
         @Busqueda IS NULL
@@ -3850,6 +3871,8 @@ INNER JOIN dbo.SolicitudesProduccionDetalle d
    AND d.Activo = 1
 WHERE s.Activo = 1
   AND ISNULL(s.EstatusID, 0) <> @EstatusCancelado
+  AND s.ResponsablePlaneacionUsuarioID IS NOT NULL
+  AND COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')) LIKE N'OF-%/%'
 GROUP BY
     s.SolicitudProduccionID,
     s.FolioSolicitud,

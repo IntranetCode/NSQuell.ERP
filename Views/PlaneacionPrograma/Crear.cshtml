@@ -27,6 +27,11 @@
         const btnAgregarAumentoRelease = document.getElementById('btnAgregarAumentoRelease');
         const aumentoPreview = document.getElementById('aumentoReleasePreview');
 
+        // NSQ_LHRH_SMALL_PLASTICS_AUMENTO_CONTRAPARTE_V1
+        const programarParejaLhRhInput = document.getElementById('ProgramarParejaLhRh');
+        const parejaLhRhCantidadBase = Number('@Model.ParejaLhRhCantidadBasePrograma');
+        const parejaLhRhTotalPrograma = document.getElementById('parejaLhRhTotalPrograma');
+
         const inicioInput = document.getElementById('FechaInicioProgramada');
         const horasInput = document.getElementById('HorasProgramadas');
         const finInput = document.getElementById('FechaFinProgramada');
@@ -155,10 +160,15 @@
         function reindexarAumentosRelease() {
             filasAumentoRelease().forEach((fila, index) => {
                 const select = fila.querySelector('.js-aumento-origen');
+                const selectPareja = fila.querySelector('.js-aumento-origen-pareja');
                 const input = fila.querySelector('.js-aumento-cantidad');
 
                 if (select) {
                     select.name = `AumentosRelease[${index}].ReleaseDetalleOrigenAumentoID`;
+                }
+
+                if (selectPareja) {
+                    selectPareja.name = `AumentosRelease[${index}].ReleaseDetalleOrigenParejaAumentoID`;
                 }
 
                 if (input) {
@@ -292,6 +302,101 @@
             return { valido: true, cantidad };
         }
 
+        function actualizarInfoFilaAumentoPareja(fila) {
+            const select = fila.querySelector('.js-aumento-origen-pareja');
+            const info = fila.querySelector('.js-aumento-info-pareja');
+            const opcion = select?.selectedOptions?.[0];
+
+            if (!info) return;
+
+            if (!select?.value || !opcion) {
+                info.textContent =
+                    'Selecciona de que entrega de la contraparte se descontara el mismo aumento.';
+                info.classList.remove('is-ok', 'is-error', 'is-muted');
+                info.classList.add('is-muted');
+                return;
+            }
+
+            const requerido = Number(opcion.dataset.requerido || 0);
+            const disponible = Number(opcion.dataset.disponible || 0);
+
+            info.textContent =
+                `Contraparte · requerido ${textoNumero(requerido)} pzas · ` +
+                `libre ${textoNumero(disponible)} pzas.`;
+
+            info.classList.remove('is-ok', 'is-error', 'is-muted');
+            info.classList.add(disponible > 0 ? 'is-ok' : 'is-error');
+        }
+
+        function sugerirOrigenParejaAumento(fila) {
+            if (!programarParejaLhRhInput?.checked) return;
+
+            const principal = fila.querySelector('.js-aumento-origen');
+            const pareja = fila.querySelector('.js-aumento-origen-pareja');
+
+            if (!principal?.value || !pareja || pareja.value) return;
+
+            const secuencia = principal.selectedOptions?.[0]?.dataset?.secuencia || '';
+            if (!secuencia) return;
+
+            const opcion = Array.from(pareja.options)
+                .find(x => x.value && (x.dataset.secuencia || '') === secuencia);
+
+            if (opcion) pareja.value = opcion.value;
+        }
+
+        function validarFilaAumentoPareja(fila, seleccionadosPareja, cantidad) {
+            const select = fila.querySelector('.js-aumento-origen-pareja');
+
+            if (!select) return true;
+
+            select.setCustomValidity('');
+
+            if (!programarParejaLhRhInput?.checked || cantidad <= 0) {
+                return true;
+            }
+
+            const origenId = select.value || '';
+            const opcion = select.selectedOptions?.[0];
+            const disponible = Number(opcion?.dataset?.disponible || 0);
+
+            if (!origenId) {
+                select.setCustomValidity(
+                    'Selecciona tambien la entrega de la contraparte LH/RH.'
+                );
+                return false;
+            }
+
+            if (seleccionadosPareja.has(origenId)) {
+                select.setCustomValidity(
+                    'Esta entrega de la contraparte ya fue seleccionada en otra fila.'
+                );
+                return false;
+            }
+
+            seleccionadosPareja.add(origenId);
+
+            if (cantidad > disponible) {
+                select.setCustomValidity(
+                    `La entrega de la contraparte solo tiene ${textoNumero(disponible)} piezas libres.`
+                );
+                return false;
+            }
+
+            return true;
+        }
+
+        function actualizarTotalProgramaPareja(totalExtra) {
+            if (!parejaLhRhTotalPrograma) return;
+
+            const total =
+                parejaLhRhCantidadBase +
+                Math.max(0, Math.trunc(Number(totalExtra || 0)));
+
+            parejaLhRhTotalPrograma.textContent =
+                `${textoNumero(total)} pzas`;
+        }
+
         function validarCantidadBase(totalExtra) {
             if (!cantidadInput) return true;
 
@@ -335,15 +440,31 @@
 
         function recalcularAumentosRelease() {
             const seleccionados = new Set();
+            const seleccionadosPareja = new Set();
             let totalExtra = 0;
             let todoValido = true;
 
             filasAumentoRelease().forEach(fila => {
                 actualizarInfoFilaAumento(fila);
+                sugerirOrigenParejaAumento(fila);
+                actualizarInfoFilaAumentoPareja(fila);
+
                 const resultado = validarFilaAumento(fila, seleccionados);
                 totalExtra += Math.max(0, resultado.cantidad || 0);
-                if (!resultado.valido) todoValido = false;
+
+                if (!resultado.valido) {
+                    todoValido = false;
+                }
+
+                if (!validarFilaAumentoPareja(
+                        fila,
+                        seleccionadosPareja,
+                        Math.max(0, resultado.cantidad || 0))) {
+                    todoValido = false;
+                }
             });
+
+            actualizarTotalProgramaPareja(totalExtra);
 
             if (!validarCantidadBase(totalExtra)) {
                 todoValido = false;
@@ -618,9 +739,22 @@
 
         aumentosReleaseFilas?.addEventListener('change', function (event) {
             const select = event.target?.closest?.('.js-aumento-origen');
-            if (!select) return;
-            const fila = select.closest('.js-aumento-fila');
-            if (fila) autocompletarCantidadDesdeOrigen(fila);
+            const selectPareja = event.target?.closest?.('.js-aumento-origen-pareja');
+
+            if (select) {
+                const fila = select.closest('.js-aumento-fila');
+                if (fila) {
+                    sugerirOrigenParejaAumento(fila);
+                    autocompletarCantidadDesdeOrigen(fila);
+                }
+                return;
+            }
+
+            if (selectPareja) {
+                const fila = selectPareja.closest('.js-aumento-fila');
+                if (fila) actualizarInfoFilaAumentoPareja(fila);
+                recalcularAumentosRelease();
+            }
         });
 
         aumentosReleaseFilas?.addEventListener('input', function (event) {
@@ -654,6 +788,7 @@
         });
 
         btnAgregarAumentoRelease?.addEventListener('click', agregarFilaAumentoRelease);
+        programarParejaLhRhInput?.addEventListener('change', recalcularAumentosRelease);
 
         reindexarAumentosRelease();
         filasAumentoRelease().forEach(actualizarInfoFilaAumento);
@@ -1020,6 +1155,8 @@
         <input type="hidden" asp-for="ParejaLhRhNumeroParte" />
         <input type="hidden" asp-for="ParejaLhRhDescripcion" />
         <input type="hidden" asp-for="ParejaLhRhCantidadRequerida" />
+        <input type="hidden" asp-for="ParejaLhRhCantidadBasePrograma" />
+        <input type="hidden" asp-for="ParejaLhRhPiezasPorCaja" />
 
         <div class="layout">
 
@@ -1216,6 +1353,12 @@
                                     <div class="small text-muted mt-1">
                                         Requerido: <strong>@Model.ParejaLhRhCantidadRequerida.ToString("N0") pzas</strong>
                                         &middot; ReleaseDetalle #@Model.ParejaLhRhReleaseDetalleID
+                                    </div>
+                                    <div class="small mt-2">
+                                        Base pendiente contraparte:
+                                        <strong>@Model.ParejaLhRhCantidadBasePrograma.ToString("N0") pzas</strong>
+                                        &middot; Total con aumentos:
+                                        <strong id="parejaLhRhTotalPrograma">@Model.ParejaLhRhCantidadBasePrograma.ToString("N0") pzas</strong>
                                     </div>
                                 </div>
 
@@ -1467,6 +1610,33 @@
                                                 </div>
                                                 <span asp-validation-for="AumentosRelease[i].ReleaseDetalleOrigenAumentoID"
                                                       class="text-danger small"></span>
+
+                                                @if (Model.ParejaLhRhDisponible && Model.ParejaLhRhReleaseDetalleID.HasValue)
+                                                {
+                                                    <div class="mt-2 pt-2 border-top">
+                                                        <label class="field-label">
+                                                            Descontar contraparte @Model.ParejaLhRhNumeroParte
+                                                        </label>
+                                                        <select asp-for="AumentosRelease[i].ReleaseDetalleOrigenParejaAumentoID"
+                                                                class="form-select js-aumento-origen-pareja">
+                                                            <option value="">Selecciona entrega de contraparte...</option>
+                                                            @foreach (var origenPareja in Model.ParejaLhRhOrigenesAumento)
+                                                            {
+                                                                <option value="@origenPareja.ReleaseDetalleID"
+                                                                        data-disponible="@origenPareja.CantidadTransferible"
+                                                                        data-requerido="@origenPareja.CantidadRequerida"
+                                                                        data-secuencia="@(origenPareja.SecuenciaEntrega?.ToString() ?? "")">
+                                                                    Entrega @(origenPareja.SecuenciaEntrega?.ToString() ?? "-") · @origenPareja.FechaRequerida.ToString("dd/MM/yyyy") · libre @origenPareja.CantidadTransferible.ToString("N0") pzas
+                                                                </option>
+                                                            }
+                                                        </select>
+                                                        <div class="aumento-cajas-info is-muted js-aumento-info-pareja">
+                                                            Selecciona de que entrega de la contraparte se descontara el mismo aumento.
+                                                        </div>
+                                                        <span asp-validation-for="AumentosRelease[i].ReleaseDetalleOrigenParejaAumentoID"
+                                                              class="text-danger small"></span>
+                                                    </div>
+                                                }
                                             </div>
 
                                             <div class="aumento-cajas-cantidad-wrap">
@@ -1532,6 +1702,31 @@
                                             <div class="aumento-cajas-info is-muted js-aumento-info">
                                                 Selecciona una entrega. El ERP sugerira solo las piezas que falten para cerrar la caja.
                                             </div>
+
+                                            @if (Model.ParejaLhRhDisponible && Model.ParejaLhRhReleaseDetalleID.HasValue)
+                                            {
+                                                <div class="mt-2 pt-2 border-top">
+                                                    <label class="field-label">
+                                                        Descontar contraparte @Model.ParejaLhRhNumeroParte
+                                                    </label>
+                                                    <select class="form-select js-aumento-origen-pareja"
+                                                            name="AumentosRelease[__INDEX__].ReleaseDetalleOrigenParejaAumentoID">
+                                                        <option value="">Selecciona entrega de contraparte...</option>
+                                                        @foreach (var origenPareja in Model.ParejaLhRhOrigenesAumento)
+                                                        {
+                                                            <option value="@origenPareja.ReleaseDetalleID"
+                                                                    data-disponible="@origenPareja.CantidadTransferible"
+                                                                    data-requerido="@origenPareja.CantidadRequerida"
+                                                                    data-secuencia="@(origenPareja.SecuenciaEntrega?.ToString() ?? "")">
+                                                                Entrega @(origenPareja.SecuenciaEntrega?.ToString() ?? "-") · @origenPareja.NumeroParte · @origenPareja.FechaRequerida.ToString("dd/MM/yyyy") · libre @origenPareja.CantidadTransferible.ToString("N0") pzas
+                                                            </option>
+                                                        }
+                                                    </select>
+                                                    <div class="aumento-cajas-info is-muted js-aumento-info-pareja">
+                                                        Selecciona de que entrega de la contraparte se descontara el mismo aumento.
+                                                    </div>
+                                                </div>
+                                            }
                                         </div>
 
                                         <div class="aumento-cajas-cantidad-wrap">
@@ -1575,8 +1770,8 @@
                                         <strong>LH/RH:</strong>
                                         si mantienes la programación conjunta, el mismo aumento de piezas se aplicará también a
                                         <strong>@Model.ParejaLhRhNumeroParte</strong>.
-                                        El ERP buscará automáticamente la entrega equivalente de su propio renglón y recalculará
-                                        su MP y sus embalajes.
+                                        En cada fila elige tambien de que entrega de su propio renglon se descontaran esas piezas.
+                                        El total de la contraparte se actualiza con Base + extras y conserva su MP/embalaje independientes.
                                     </div>
                                 }
                             </div>

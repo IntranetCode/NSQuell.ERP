@@ -1093,9 +1093,36 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                 var linea = vm.AumentosRelease[i];
                 if (!linea.ReleaseDetalleOrigenAumentoID.HasValue || linea.ReleaseDetalleOrigenAumentoID.Value <= 0) ModelState.AddModelError($"AumentosRelease[{i}].ReleaseDetalleOrigenAumentoID", "Selecciona la entrega del Release de la cual se descontaran las piezas.");
                 if (linea.CantidadPiezas <= 0) ModelState.AddModelError($"AumentosRelease[{i}].CantidadPiezas", "La cantidad de piezas a transferir debe ser mayor que cero.");
+
+                if (vm.ProgramarParejaLhRh &&
+                    linea.CantidadPiezas > 0 &&
+                    (!linea.ReleaseDetalleOrigenParejaAumentoID.HasValue ||
+                     linea.ReleaseDetalleOrigenParejaAumentoID.Value <= 0))
+                {
+                    ModelState.AddModelError(
+                        $"AumentosRelease[{i}].ReleaseDetalleOrigenParejaAumentoID",
+                        "Selecciona tambien la entrega de la contraparte LH/RH de la cual se descontaran las piezas.");
+                }
             }
             var origenesDuplicados = vm.AumentosRelease.Where(x => x.ReleaseDetalleOrigenAumentoID.HasValue).GroupBy(x => x.ReleaseDetalleOrigenAumentoID!.Value).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
             if (origenesDuplicados.Count > 0) ModelState.AddModelError(nameof(vm.AumentosRelease), "No puedes seleccionar la misma entrega del Release mas de una vez.");
+
+            if (vm.ProgramarParejaLhRh)
+            {
+                var origenesParejaDuplicados = vm.AumentosRelease
+                    .Where(x => x.ReleaseDetalleOrigenParejaAumentoID.HasValue)
+                    .GroupBy(x => x.ReleaseDetalleOrigenParejaAumentoID!.Value)
+                    .Where(g => g.Count() > 1)
+                    .Select(g => g.Key)
+                    .ToList();
+
+                if (origenesParejaDuplicados.Count > 0)
+                {
+                    ModelState.AddModelError(
+                        nameof(vm.AumentosRelease),
+                        "No puedes seleccionar la misma entrega de la contraparte LH/RH mas de una vez.");
+                }
+            }
             var totalAumentoLong = vm.AumentosRelease.Where(x => x.CantidadPiezas > 0).Sum(x => (long)x.CantidadPiezas);
             if (totalAumentoLong > int.MaxValue) ModelState.AddModelError(nameof(vm.AumentosRelease), "La suma de piezas extra supera el limite permitido.");
             vm.CantidadAumentoPiezas = totalAumentoLong > int.MaxValue ? 0 : Convert.ToInt32(totalAumentoLong);
@@ -1144,7 +1171,16 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                     if (vm.ProgramarParejaLhRh)
                     {
                         if (!vm.ParejaLhRhReleaseDetalleID.HasValue || vm.ParejaLhRhReleaseDetalleID.Value <= 0) throw new InvalidOperationException("Se solicito programar LH/RH juntas, pero no se encontro el ReleaseDetalle destino de la contraparte.");
-                        var origenParejaId = await ResolverOrigenParejaAumentoAsync(vm.ParejaLhRhReleaseDetalleID.Value, lineaAumento.ReleaseDetalleOrigenAumentoID.Value, cn, sqlTx);
+                        // El usuario puede seleccionar explicitamente la entrega de
+                        // la contraparte. Se conserva el resolver automatico solo
+                        // como fallback para compatibilidad con formularios previos.
+                        var origenParejaId =
+                            lineaAumento.ReleaseDetalleOrigenParejaAumentoID
+                            ?? await ResolverOrigenParejaAumentoAsync(
+                                vm.ParejaLhRhReleaseDetalleID.Value,
+                                lineaAumento.ReleaseDetalleOrigenAumentoID.Value,
+                                cn,
+                                sqlTx);
                         var aumentoPareja = new PlaneacionProgramaCrearDesdeNecesidadVm
                         {
                             ReleaseDetalleID = vm.ParejaLhRhReleaseDetalleID.Value,
@@ -3633,6 +3669,41 @@ WHERE TransferenciaID=@TransferenciaID
                     vm.ReleaseID,
                     vm.ClienteID,
                     cn);
+
+            // NSQ_LHRH_SMALL_PLASTICS_AUMENTO_CONTRAPARTE_V1
+            // La contraparte necesita su propio selector de entregas porque
+            // cada lado conserva ReleaseDetalle y demanda independientes.
+            vm.ParejaLhRhOrigenesAumento =
+                new List<PlaneacionProgramaAumentoOrigenVm>();
+
+            if (vm.ParejaLhRhReleaseDetalleID.HasValue &&
+                vm.ParejaLhRhReleaseDetalleID.Value > 0)
+            {
+                var necesidadPareja =
+                    await ObtenerNecesidadParaProgramaAsync(
+                        vm.ParejaLhRhReleaseDetalleID.Value,
+                        cn,
+                        null);
+
+                if (necesidadPareja != null)
+                {
+                    vm.ParejaLhRhCantidadBasePrograma =
+                        Math.Max(0, necesidadPareja.PiezasAProducir);
+
+                    vm.ParejaLhRhPiezasPorCaja =
+                        necesidadPareja.PiezasPorEmbalaje.HasValue &&
+                        necesidadPareja.PiezasPorEmbalaje.Value > 0
+                            ? Convert.ToInt32(necesidadPareja.PiezasPorEmbalaje.Value)
+                            : Math.Max(0, necesidadPareja.PiezasPorCaja ?? 0);
+                }
+
+                vm.ParejaLhRhOrigenesAumento =
+                    await CargarOrigenesAumentoAsync(
+                        vm.ParejaLhRhReleaseDetalleID.Value,
+                        vm.ReleaseID,
+                        vm.ClienteID,
+                        cn);
+            }
 
             // NSQ_PLANEACION_AUMENTO_MULTIFILA_ES_V1_4
             vm.AumentosRelease ??= new List<PlaneacionProgramaAumentoLineaVm>();

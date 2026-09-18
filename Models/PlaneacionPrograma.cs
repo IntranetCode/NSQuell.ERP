@@ -170,6 +170,12 @@ namespace ERP.NSQuell.Models
         public string? ParejaLhRhDescripcion { get; set; }
         public int ParejaLhRhCantidadRequerida { get; set; }
 
+        // NSQ_LHRH_SMALL_PLASTICS_AUMENTO_CONTRAPARTE_V1
+        // Datos operativos de la contraparte para mostrar y validar su aumento.
+        public int ParejaLhRhCantidadBasePrograma { get; set; }
+        public int ParejaLhRhPiezasPorCaja { get; set; }
+        public List<PlaneacionProgramaAumentoOrigenVm> ParejaLhRhOrigenesAumento { get; set; } = new();
+
         public int ProductoIncompletoApartado { get; set; }
         public int CantidadOriginalAProducir { get; set; }
         public List<PlaneacionProductoIncompletoDisponibleVm> ProductoIncompletoDisponible { get; set; } = new();
@@ -196,6 +202,11 @@ namespace ERP.NSQuell.Models
     public class PlaneacionProgramaAumentoLineaVm
     {
         public int? ReleaseDetalleOrigenAumentoID { get; set; }
+
+        // Cuando se programa LH/RH, Planeacion elige tambien de que entrega
+        // del renglon de la contraparte se descontara el mismo aumento.
+        public int? ReleaseDetalleOrigenParejaAumentoID { get; set; }
+
         public int CantidadPiezas { get; set; }
     }
     public class PlaneacionProgramaAumentoOrigenVm

@@ -1582,6 +1582,12 @@ SELECT
     pp.MoldeCodigo,
     pp.ReleaseDetalleID,
     pp.SolicitudProduccionID,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+        NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),
+        N''
+    ) AS NumeroOF,
     pp.SolicitudProduccionDetalleID,
     pp.FechaInicioProgramada,
     ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada)) AS FechaFinProgramada,
@@ -1604,7 +1610,9 @@ SELECT
     pe.EstatusID AS EstatusProduccionID,
     pe.OperadorID AS OperadorRealID,
     pe.OperadorNombre AS OperadorRealNombre,
-    pe.FechaInicioReal,
+    inicioReal.FechaInicioRealOperativa,
+    COALESCE(pp.FechaFinReal,pe.FechaFinReal) AS FechaFinRealOperativa,
+    pe.FechaLiberacionMaquina,
     opPrincipal.PersonaID AS OperadorProgramadoID,
     opPrincipal.NombreCompleto AS OperadorProgramadoNombre,
     opAuxiliar.PersonaID AS OperadorAuxiliarProgramadoID,
@@ -1617,6 +1625,9 @@ SELECT
     ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionCalidadInvalidada,
     ISNULL(ci.RequiereReliberacion,0) AS RequiereReliberacion
 FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=pp.SolicitudProduccionID
+   AND s.Activo=1
 LEFT JOIN dbo.Planeacion_ReleaseDetalle rd ON rd.ReleaseDetalleID=pp.ReleaseDetalleID
 LEFT JOIN dbo.Planeacion_Releases r ON r.ReleaseID=rd.ReleaseID
 LEFT JOIN dbo.ERP_Clientes c ON c.ClienteID=r.ClienteID
@@ -1625,11 +1636,30 @@ LEFT JOIN dbo.ERP_Maquinas mp ON mp.MaquinaID=t.MaquinaPrincipalID
 LEFT JOIN dbo.ERP_Maquinas ms ON ms.MaquinaID=t.MaquinaSustitutaID
 OUTER APPLY
 (
-    SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.OperadorID,e.OperadorNombre,e.FechaInicioReal
+    SELECT TOP(1)
+        e.EjecucionProduccionID,
+        e.EstatusID,
+        e.OperadorID,
+        e.OperadorNombre,
+        e.FechaInicioReal,
+        e.FechaFinReal,
+        e.FechaLiberacionMaquina
     FROM dbo.Produccion_Ejecucion e
     WHERE e.ProgramaProduccionID=pp.ProgramaProduccionID AND e.Activo=1
     ORDER BY e.EjecucionProduccionID DESC
 ) pe
+CROSS APPLY
+(
+    SELECT
+        CASE
+            WHEN pp.FechaInicioReal IS NOT NULL
+                THEN pp.FechaInicioReal
+            WHEN pe.EstatusID IN(@EnProduccion,@Pausado,@TerminadoParcial,@Terminado,@Cerrado)
+             AND pe.FechaInicioReal IS NOT NULL
+                THEN pe.FechaInicioReal
+            ELSE NULL
+        END AS FechaInicioRealOperativa
+) inicioReal
 OUTER APPLY
 (
     SELECT TOP(1)
@@ -1695,9 +1725,41 @@ WHERE pp.Activo=1
   AND ISNULL(pp.EstatusID,1)<>@EstatusCancelado
   AND pp.MaquinaID IS NOT NULL
   AND pp.FechaInicioProgramada IS NOT NULL
-  AND pp.FechaInicioProgramada<@Fin
-  AND ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada))>@Inicio
-ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaProduccionID;";
+  AND
+  (
+      (
+          inicioReal.FechaInicioRealOperativa IS NULL
+          AND pp.FechaInicioProgramada<@Fin
+          AND ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada))>@Inicio
+      )
+      OR
+      (
+          inicioReal.FechaInicioRealOperativa IS NOT NULL
+          AND inicioReal.FechaInicioRealOperativa<@Fin
+          AND COALESCE
+          (
+              pe.FechaLiberacionMaquina,
+              pp.FechaFinReal,
+              pe.FechaFinReal,
+              DATEADD
+              (
+                  MINUTE,
+                  DATEDIFF
+                  (
+                      MINUTE,
+                      pp.FechaInicioProgramada,
+                      ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CAST(CEILING(ISNULL(pp.HorasProgramadas,1)*60) AS INT),pp.FechaInicioProgramada))
+                  ),
+                  inicioReal.FechaInicioRealOperativa
+              )
+          )>@Inicio
+      )
+  )
+ORDER BY
+    pp.MaquinaID,
+    COALESCE(inicioReal.FechaInicioRealOperativa,pp.FechaInicioProgramada),
+    pp.SecuenciaMaquina,
+    pp.ProgramaProduccionID;";
             var bloques = new List<PlaneacionCalendarioBloqueVm>();
             var ahora = DateTime.Now;
             await using (var cmd = new SqlCommand(sqlProgramas, cn))
@@ -1705,6 +1767,11 @@ ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaPr
                 cmd.Parameters.Add("@Inicio", SqlDbType.DateTime).Value = inicio;
                 cmd.Parameters.Add("@Fin", SqlDbType.DateTime).Value = fin;
                 cmd.Parameters.Add("@EstatusCancelado", SqlDbType.Int).Value = EstatusPrograma.Cancelado;
+                cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = EstatusPrograma.EnProduccion;
+                cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = EstatusPrograma.Pausado;
+                cmd.Parameters.Add("@TerminadoParcial", SqlDbType.Int).Value = EstatusPrograma.TerminadoParcial;
+                cmd.Parameters.Add("@Terminado", SqlDbType.Int).Value = EstatusPrograma.Terminado;
+                cmd.Parameters.Add("@Cerrado", SqlDbType.Int).Value = EstatusPrograma.Cerrado;
                 await using var rd = await cmd.ExecuteReaderAsync();
                 while (await rd.ReadAsync())
                 {
@@ -1715,8 +1782,12 @@ ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaPr
                     var finPrograma = Fecha(rd, "FechaFinProgramada");
                     var cantidadProgramada = Entero(rd, "CantidadProgramada");
                     var cantidadProducida = Entero(rd, "CantidadProducida");
-                    var ordinalFechaInicioReal = rd.GetOrdinal("FechaInicioReal");
+                    var ordinalFechaInicioReal = rd.GetOrdinal("FechaInicioRealOperativa");
                     var fechaInicioReal = rd.IsDBNull(ordinalFechaInicioReal) ? (DateTime?)null : Convert.ToDateTime(rd.GetValue(ordinalFechaInicioReal));
+                    var ordinalFechaFinReal = rd.GetOrdinal("FechaFinRealOperativa");
+                    var fechaFinReal = rd.IsDBNull(ordinalFechaFinReal) ? (DateTime?)null : Convert.ToDateTime(rd.GetValue(ordinalFechaFinReal));
+                    var ordinalFechaLiberacion = rd.GetOrdinal("FechaLiberacionMaquina");
+                    var fechaLiberacionMaquina = rd.IsDBNull(ordinalFechaLiberacion) ? (DateTime?)null : Convert.ToDateTime(rd.GetValue(ordinalFechaLiberacion));
                     var mostrarAlertaNoInicio = false;
                     var alertaNoInicioCritica = false;
                     var minutosAtrasoInicio = 0;
@@ -1737,6 +1808,7 @@ ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaPr
                     {
                         ProgramaProduccionID = programaProduccionId,
                         SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
+                        NumeroOF = Texto(rd, "NumeroOF") ?? string.Empty,
                         MaquinaID = NullableEntero(rd, "MaquinaID") ?? 0,
                         MaquinaCodigo = Texto(rd, "MaquinaCodigo") ?? string.Empty,
                         ClienteNombre = Texto(rd, "ClienteNombre") ?? string.Empty,
@@ -1748,6 +1820,9 @@ ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaPr
                         CantidadProducida = cantidadProducida,
                         Inicio = inicioPrograma,
                         Fin = finPrograma,
+                        FechaInicioRealProduccion = fechaInicioReal,
+                        FechaFinRealProduccion = fechaFinReal,
+                        FechaLiberacionMaquina = fechaLiberacionMaquina,
                         HorasProgramadas = Decimal(rd, "HorasProgramadas"),
                         Cambio = NullableTiempo(rd, "Cambio"),
                         Arranque = NullableTiempo(rd, "Arranque"),
@@ -1787,7 +1862,7 @@ ORDER BY pp.MaquinaID,pp.FechaInicioProgramada,pp.SecuenciaMaquina,pp.ProgramaPr
             }
             foreach (var maquina in maquinas)
             {
-                maquina.Bloques = bloques.Where(x => x.MaquinaID == maquina.MaquinaID).OrderBy(x => x.Inicio).ThenBy(x => x.ProgramaProduccionID).ToList();
+                maquina.Bloques = bloques.Where(x => x.MaquinaID == maquina.MaquinaID).OrderBy(x => x.InicioVisual).ThenBy(x => x.ProgramaProduccionID).ToList();
                 AsignarCarriles(maquina);
             }
             return maquinas;
@@ -1814,13 +1889,17 @@ WHERE ProgramaProduccionID=@ProgramaProduccionID
         {
             var finPorCarril = new List<DateTime>();
 
-            foreach (var bloque in maquina.Bloques.OrderBy(x => x.Inicio))
+            foreach (var bloque in maquina.Bloques.OrderBy(x => x.InicioVisual))
             {
+                var inicioVisual = bloque.InicioVisual;
+                var finVisual = bloque.FinVisual;
+                if (finVisual <= inicioVisual) finVisual = inicioVisual.AddMinutes(1);
+
                 var carril = -1;
 
                 for (var i = 0; i < finPorCarril.Count; i++)
                 {
-                    if (finPorCarril[i] <= bloque.Inicio)
+                    if (finPorCarril[i] <= inicioVisual)
                     {
                         carril = i;
                         break;
@@ -1830,11 +1909,11 @@ WHERE ProgramaProduccionID=@ProgramaProduccionID
                 if (carril < 0)
                 {
                     carril = finPorCarril.Count;
-                    finPorCarril.Add(bloque.Fin);
+                    finPorCarril.Add(finVisual);
                 }
                 else
                 {
-                    finPorCarril[carril] = bloque.Fin;
+                    finPorCarril[carril] = finVisual;
                 }
 
                 bloque.Carril = carril;

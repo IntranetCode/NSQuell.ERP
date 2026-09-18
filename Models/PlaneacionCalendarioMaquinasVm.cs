@@ -184,6 +184,7 @@ namespace ERP.NSQuell.Models
 
         public int ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
+        public string NumeroOF { get; set; } = string.Empty;
         public bool TrabajarDomingo { get; set; }
         public int MaquinaID { get; set; }
         public string MaquinaCodigo { get; set; }
@@ -215,8 +216,67 @@ namespace ERP.NSQuell.Models
         public int MinutosImpactoInterrupcion { get; set; }
         public int MinutosDesplazamientoProyectado { get; set; }
         public bool TieneProyeccionInterrupcion => InicioProyectado.HasValue || FinProyectado.HasValue;
-        public DateTime InicioVisual => InicioProyectado ?? Inicio;
-        public DateTime FinVisual => FinProyectado ?? Fin;
+        // NSQ_CALENDARIOS_INICIO_REAL_SOMBRA_V1_0
+        private TimeSpan DuracionProgramadaVisual
+        {
+            get
+            {
+                var duracion = Fin - Inicio;
+                if (duracion > TimeSpan.Zero)
+                    return duracion;
+
+                if (HorasProgramadas > 0)
+                    return TimeSpan.FromHours((double)HorasProgramadas);
+
+                return TimeSpan.FromMinutes(1);
+            }
+        }
+
+        public bool TieneInicioRealProduccion => FechaInicioRealProduccion.HasValue;
+
+        public bool TieneAtrasoInicioReal =>
+            FechaInicioRealProduccion.HasValue &&
+            FechaInicioRealProduccion.Value > Inicio;
+
+        public int MinutosAtrasoInicioReal =>
+            TieneAtrasoInicioReal
+                ? Math.Max(1, (int)Math.Floor((FechaInicioRealProduccion!.Value - Inicio).TotalMinutes))
+                : 0;
+
+        public DateTime InicioVisual
+        {
+            get
+            {
+                if (FechaInicioRealProduccion.HasValue)
+                    return FechaInicioRealProduccion.Value;
+
+                return InicioProyectado ?? Inicio;
+            }
+        }
+
+        public DateTime FinVisual
+        {
+            get
+            {
+                if (FechaLiberacionMaquina.HasValue && FechaLiberacionMaquina.Value > InicioVisual)
+                    return FechaLiberacionMaquina.Value;
+
+                if (FechaFinRealProduccion.HasValue && FechaFinRealProduccion.Value > InicioVisual)
+                    return FechaFinRealProduccion.Value;
+
+                if (FechaInicioRealProduccion.HasValue)
+                {
+                    var finBase = FechaInicioRealProduccion.Value.Add(DuracionProgramadaVisual);
+
+                    if (FinProyectado.HasValue && FinProyectado.Value > finBase)
+                        return FinProyectado.Value;
+
+                    return finBase;
+                }
+
+                return FinProyectado ?? Fin;
+            }
+        }
 
         public int EstatusID { get; set; }
         public int Carril { get; set; }
@@ -380,9 +440,11 @@ namespace ERP.NSQuell.Models
         }
 
         public string OFTexto =>
-            SolicitudProduccionID.HasValue
-                ? $"OF {SolicitudProduccionID.Value}"
-                : $"Programa {ProgramaProduccionID}";
+            !string.IsNullOrWhiteSpace(NumeroOF)
+                ? NumeroOF.Trim()
+                : SolicitudProduccionID.HasValue
+                    ? $"OF vinculada · ID {SolicitudProduccionID.Value}"
+                    : $"Programa {ProgramaProduccionID} · Sin OF";
 
         public string ParteTexto
         {
