@@ -1,0 +1,438 @@
+﻿@model ERP.NSQuell.Models.ProduccionChecklistArranqueVm
+@using ERP.NSQuell.Models
+@using System.Linq
+
+@{
+    var puedeGestionar = ViewData["PuedeGestionarChecklistArranqueOperativa"] is bool pg && pg;
+    var puedeEditar = ViewData["PuedeEditarChecklistArranqueOperativa"] is bool pe && pe;
+    var esperandoCalidad = Model.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad;
+    var validado = Model.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad;
+    var rechazado = Model.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste;
+    var secciones = Model.Secciones
+        .Select(s => new
+        {
+            Seccion = s,
+            Preguntas = s.Preguntas.Where(p => p.Activo && !p.EsPreguntaCalidad).OrderBy(p => p.OrdenPregunta).ThenBy(p => p.PreguntaID).ToList()
+        })
+        .Where(x => x.Preguntas.Count > 0)
+        .ToList();
+    var preguntas = secciones.SelectMany(x => x.Preguntas).ToList();
+    var respondidas = preguntas.Count(x => x.Confirmado);
+    var nok = preguntas.Count(x => x.Confirmado && string.Equals(x.Resultado, "NOK", StringComparison.OrdinalIgnoreCase));
+    var porcentaje = preguntas.Count > 0 ? Math.Round(respondidas * 100m / preguntas.Count, 0, MidpointRounding.AwayFromZero) : 0m;
+}
+
+<style>
+    .poc {
+        --c-blue: #004aad;
+        --c-navy: #102a56;
+        --c-text: #1d2939;
+        --c-muted: #667085;
+        --c-line: #e4e7ec;
+        --c-soft: #f8fafc;
+        color: var(--c-text)
+    }
+
+        .poc * {
+            box-sizing: border-box
+        }
+
+        .poc .poc-top {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-bottom: 10px
+        }
+
+        .poc .poc-stat {
+            padding: 9px 10px;
+            border: 1px solid var(--c-line);
+            border-radius: 10px;
+            background: #fff
+        }
+
+            .poc .poc-stat span {
+                display: block;
+                color: var(--c-muted);
+                font-size: .59rem;
+                text-transform: uppercase;
+                font-weight: 900
+            }
+
+            .poc .poc-stat strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--c-navy);
+                font-size: .85rem;
+                font-weight: 950
+            }
+
+        .poc .poc-progress {
+            height: 7px;
+            border-radius: 999px;
+            background: #edf1f5;
+            overflow: hidden;
+            margin: 7px 0 12px
+        }
+
+            .poc .poc-progress span {
+                display: block;
+                height: 100%;
+                background: var(--c-blue)
+            }
+
+        .poc .poc-alert {
+            padding: 9px 10px;
+            border-radius: 10px;
+            border: 1px solid #d8e5f4;
+            background: #f5faff;
+            color: #315f85;
+            font-size: .69rem;
+            margin-bottom: 10px
+        }
+
+            .poc .poc-alert.warn {
+                background: #fff8ea;
+                border-color: #efd29d;
+                color: #865600
+            }
+
+            .poc .poc-alert.ok {
+                background: #edf9f3;
+                border-color: #bee2cf;
+                color: #176b48
+            }
+
+            .poc .poc-alert.bad {
+                background: #fff1f1;
+                border-color: #efb8b8;
+                color: #a52b2b
+            }
+
+        .poc .poc-section {
+            border: 1px solid var(--c-line);
+            border-radius: 12px;
+            background: #fff;
+            margin-bottom: 9px;
+            overflow: hidden
+        }
+
+        .poc .poc-section-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            padding: 9px 11px;
+            background: #fbfcfe;
+            border-bottom: 1px solid var(--c-line)
+        }
+
+            .poc .poc-section-head strong {
+                font-size: .72rem;
+                color: var(--c-navy)
+            }
+
+            .poc .poc-section-head span {
+                font-size: .61rem;
+                color: var(--c-muted);
+                font-weight: 850
+            }
+
+        .poc .poc-question {
+            display: grid;
+            grid-template-columns: 28px minmax(0,1fr) minmax(250px,.72fr);
+            gap: 9px;
+            padding: 10px 11px;
+            border-bottom: 1px solid #f0f2f5
+        }
+
+            .poc .poc-question:last-child {
+                border-bottom: 0
+            }
+
+        .poc .poc-num {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            background: #eef4fc;
+            color: var(--c-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .65rem;
+            font-weight: 950
+        }
+
+        .poc .poc-qtext {
+            font-size: .71rem;
+            font-weight: 850;
+            color: #344054;
+            line-height: 1.4
+        }
+
+        .poc .poc-meta {
+            margin-top: 4px;
+            font-size: .6rem;
+            color: var(--c-muted)
+        }
+
+        .poc .poc-options {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap
+        }
+
+            .poc .poc-options input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+            .poc .poc-options label {
+                padding: 5px 8px;
+                border: 1px solid var(--c-line);
+                border-radius: 8px;
+                background: #fff;
+                color: #475467;
+                font-size: .63rem;
+                font-weight: 900;
+                cursor: pointer
+            }
+
+            .poc .poc-options input:checked + label {
+                background: #eef4ff;
+                border-color: #8bb7f0;
+                color: #004aad
+            }
+
+            .poc .poc-options input[value="NOK"]:checked + label {
+                background: #fff1f1;
+                border-color: #efb8b8;
+                color: #a52b2b
+            }
+
+            .poc .poc-options input[value="NA"]:checked + label {
+                background: #f2f4f7;
+                border-color: #d0d5dd;
+                color: #475467
+            }
+
+        .poc .form-control {
+            border-radius: 8px;
+            font-size: .68rem;
+            min-height: 34px
+        }
+
+        .poc textarea.form-control {
+            min-height: 50px
+        }
+
+        .poc .poc-extra {
+            margin-top: 6px
+        }
+
+        .poc .poc-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 7px;
+            flex-wrap: wrap;
+            margin-top: 11px
+        }
+
+        .poc .poc-btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 8px 11px;
+            font-size: .68rem;
+            font-weight: 900
+        }
+
+            .poc .poc-btn.save {
+                background: #eef4fc;
+                color: #004aad;
+                border: 1px solid #cbdcf3
+            }
+
+            .poc .poc-btn.send {
+                background: #004aad;
+                color: #fff
+            }
+
+            .poc .poc-btn:disabled {
+                opacity: .55
+            }
+
+    html[data-nsq-theme="dark"] .poc {
+        --c-text: #eef2f7;
+        --c-muted: #9aacbf;
+        --c-line: rgba(255,255,255,.10);
+        --c-soft: #0e1929;
+        --c-navy: #f5f7fb
+    }
+
+        html[data-nsq-theme="dark"] .poc .poc-stat, html[data-nsq-theme="dark"] .poc .poc-section, html[data-nsq-theme="dark"] .poc .poc-options label {
+            background: #111d2f
+        }
+
+        html[data-nsq-theme="dark"] .poc .poc-section-head {
+            background: #0e1929
+        }
+
+        html[data-nsq-theme="dark"] .poc .poc-qtext {
+            color: #eef2f7
+        }
+
+    @@media(max-width:800px) {
+        .poc .poc-question {
+            grid-template-columns: 28px 1fr
+        }
+
+        .poc .poc-answer {
+            grid-column: 1/-1
+        }
+
+        .poc .poc-top {
+            grid-template-columns: 1fr 1fr
+        }
+    }
+</style>
+
+<div class="poc">
+    <div class="poc-top">
+        <div class="poc-stat"><span>Formato</span><strong>@Model.TextoFormato</strong></div>
+        <div class="poc-stat"><span>Avance Producción</span><strong>@respondidas / @preguntas.Count</strong></div>
+        <div class="poc-stat"><span>NOK</span><strong>@nok</strong></div>
+        <div class="poc-stat"><span>Estatus</span><strong>@Model.EstatusNombre</strong></div>
+    </div>
+    <div class="poc-progress"><span style="width:@porcentaje.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+
+    @if (rechazado && !string.IsNullOrWhiteSpace(Model.CalidadMotivoDevolucion))
+    {
+        <div class="poc-alert bad"><i class="bi bi-arrow-counterclockwise me-1"></i><strong>Devuelto por Calidad:</strong> @Model.CalidadMotivoDevolucion</div>
+    }
+    @if (esperandoCalidad)
+    {
+        <div class="poc-alert warn"><i class="bi bi-hourglass-split me-1"></i><strong>Esperando a Calidad.</strong> Producción ya terminó su captura. Calidad debe validar desde su propio módulo.</div>
+    }
+    else if (validado)
+    {
+        <div class="poc-alert ok"><i class="bi bi-check-circle-fill me-1"></i><strong>Checklist validado por Calidad.</strong> El flujo puede continuar con la configuración técnica.</div>
+    }
+    else if (!puedeGestionar)
+    {
+        <div class="poc-alert"><i class="bi bi-eye me-1"></i>Tu usuario puede consultar el checklist, pero no modificarlo.</div>
+    }
+
+    @if (!esperandoCalidad && !validado && puedeEditar)
+    {
+        <form asp-controller="Produccion" asp-action="GuardarChecklistArranqueOperativa" method="post" data-checklist-operativa-form>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ChecklistArranqueID" value="@Model.ChecklistArranqueID" />
+            <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+            <input type="hidden" name="EnviarACalidad" value="false" />
+            <input type="hidden" name="GuardarBorrador" value="true" />
+
+            @{
+                var index = 0;
+            }
+            @foreach (var bloque in secciones)
+            {
+                var respuestasSeccion = bloque.Preguntas.Count(x => x.Confirmado);
+                <section class="poc-section">
+                    <div class="poc-section-head">
+                        <strong><i class="bi bi-list-check me-1"></i>@bloque.Seccion.Seccion</strong>
+                        <span>@respuestasSeccion / @bloque.Preguntas.Count</span>
+                    </div>
+                    @foreach (var p in bloque.Preguntas)
+                    {
+                        var prefix = $"Respuestas[{index}]";
+                        var resultado = string.IsNullOrWhiteSpace(p.Resultado) ? "OK" : p.Resultado!.Trim().ToUpperInvariant();
+                        if (resultado == "N/A") resultado = "NA";
+                        <div class="poc-question" data-poc-row data-requiere-nok="@p.RequiereObservacionSiNOK.ToString().ToLowerInvariant()" data-requiere-na="@p.RequiereObservacionSiNA.ToString().ToLowerInvariant()" data-requiere-valor="@p.RequiereCapturarValor.ToString().ToLowerInvariant()">
+                            <div class="poc-num">@p.OrdenPregunta</div>
+                            <div>
+                                <div class="poc-qtext">@p.TextoPregunta</div>
+                                @if (p.RequiereCapturarValor || !string.IsNullOrWhiteSpace(p.Especificacion) || !string.IsNullOrWhiteSpace(p.Tolerancia))
+                                {
+                                    <div class="poc-meta">
+                                        @if (p.RequiereCapturarValor)
+                                        {
+                                            <span>Valor requerido@(string.IsNullOrWhiteSpace(p.Unidad) ? "" : $" · {p.Unidad}")</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(p.Especificacion))
+                                        {
+                                            <span> · Esp. @p.Especificacion</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(p.Tolerancia))
+                                        {
+                                            <span> · Tol. @p.Tolerancia</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="poc-answer">
+                                <input type="hidden" name="@(prefix + ".ChecklistArranqueDetalleID")" value="@p.ChecklistArranqueDetalleID" />
+                                <input type="hidden" name="@(prefix + ".PreguntaID")" value="@p.PreguntaID" />
+                                <input type="hidden" name="@(prefix + ".Confirmado")" value="true" />
+                                <div class="poc-options">
+                                    <input id="poc_@p.PreguntaID-ok" type="radio" name="@(prefix + ".Resultado")" value="OK" data-poc-resultado @(resultado == "OK" ? "checked" : null) />
+                                    <label for="poc_@p.PreguntaID-ok">OK</label>
+                                    <input id="poc_@p.PreguntaID-nok" type="radio" name="@(prefix + ".Resultado")" value="NOK" data-poc-resultado @(resultado == "NOK" ? "checked" : null) />
+                                    <label for="poc_@p.PreguntaID-nok">NOK</label>
+                                    @if (p.PermiteNA)
+                                    {
+                                        <input id="poc_@p.PreguntaID-na" type="radio" name="@(prefix + ".Resultado")" value="NA" data-poc-resultado @(resultado == "NA" ? "checked" : null) />
+                                        <label for="poc_@p.PreguntaID-na">N/A</label>
+                                    }
+                                </div>
+                                @if (p.RequiereCapturarValor)
+                                {
+                                    <div class="poc-extra"><input class="form-control" name="@(prefix + ".ValorCapturado")" value="@p.ValorCapturado" maxlength="100" data-poc-valor placeholder="Valor real" /></div>
+                                }
+                                <div class="poc-extra"><textarea class="form-control" name="@(prefix + ".Observaciones")" maxlength="500" rows="2" data-poc-observacion placeholder="Observación si aplica">@p.Observaciones</textarea></div>
+                            </div>
+                        </div>
+                        index++;
+                    }
+                </section>
+            }
+
+            <div class="mt-2">
+                <label class="form-label small fw-bold">Observaciones generales</label>
+                <textarea class="form-control" name="ObservacionesGenerales" maxlength="2000" rows="2">@Model.ObservacionesGenerales</textarea>
+            </div>
+
+            <div class="poc-actions">
+                <button type="button" class="poc-btn save" data-poc-guardar><i class="bi bi-save me-1"></i>Guardar borrador</button>
+                <button type="button" class="poc-btn send" data-poc-enviar><i class="bi bi-send-check me-1"></i>Enviar a Calidad</button>
+            </div>
+        </form>
+    }
+    else
+    {
+        @foreach (var bloque in secciones)
+        {
+            <section class="poc-section">
+                <div class="poc-section-head"><strong>@bloque.Seccion.Seccion</strong><span>@bloque.Preguntas.Count(x => x.Confirmado) / @bloque.Preguntas.Count</span></div>
+                @foreach (var p in bloque.Preguntas)
+                {
+                    <div class="poc-question">
+                        <div class="poc-num">@p.OrdenPregunta</div>
+                        <div><div class="poc-qtext">@p.TextoPregunta</div></div>
+                        <div class="poc-answer small">
+                            <span class="badge @(string.Equals(p.Resultado, "NOK", StringComparison.OrdinalIgnoreCase) ? "bg-danger" : string.Equals(p.Resultado, "NA", StringComparison.OrdinalIgnoreCase) ? "bg-secondary" : "bg-success")">@(string.IsNullOrWhiteSpace(p.Resultado) ? "Pendiente" : p.Resultado)</span>
+                            @if (!string.IsNullOrWhiteSpace(p.ValorCapturado))
+                            {
+                                <span class="ms-2">@p.ValorCapturado @p.Unidad</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(p.Observaciones))
+                            {
+                                <div class="text-muted mt-1">@p.Observaciones</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+    }
+</div>

@@ -1,0 +1,523 @@
+﻿@model ERP.NSQuell.Models.ProduccionInicioSerieOperativaVm
+@using ERP.NSQuell.Models
+@{
+    var e = Model.Ejecucion;
+    var cfg = Model.Configuracion;
+    var calidad = Model.Calidad;
+    var ep = Model.EjecucionPareja;
+    var cfgp = Model.ConfiguracionPareja;
+    var calidadp = Model.CalidadPareja;
+    var estadoActual = ProduccionEstatus.Nombre(e.EstatusID);
+    var estadoPareja = ep != null ? ProduccionEstatus.Nombre(ep.EstatusID) : "Sin ejecución";
+    var cicloSincronizado = !Model.EsParejaLhRh ||
+        (cfg != null && cfgp != null && Math.Abs(cfg.TiempoCicloSegundos - cfgp.TiempoCicloSegundos) <= 0.0001m);
+    var contadorSincronizado = !Model.EsParejaLhRh ||
+        (cfg?.ContadorInicioVigencia.HasValue == true && cfgp?.ContadorInicioVigencia.HasValue == true && cfg.ContadorInicioVigencia == cfgp.ContadorInicioVigencia);
+}
+
+<div class="pis-content">
+    <section class="pis-hero @(Model.YaEstaEnSerie ? "is-done" : Model.PuedeConfirmar ? "is-ready" : "is-waiting")">
+        <div class="pis-hero-icon"><i class="bi @(Model.YaEstaEnSerie ? "bi-check2-circle" : Model.EsReinicio ? "bi-arrow-repeat" : "bi-play-fill")"></i></div>
+        <div class="flex-grow-1">
+            <div class="pis-eyebrow">@(Model.EsParejaLhRh ? $"Operación física LH/RH · Grupo {Model.ParejaLhRh!.GrupoLhRh}" : "Producción")</div>
+            <h3>@(Model.YaEstaEnSerie ? "Producción en serie activa" : Model.TituloAccion)</h3>
+            <p class="mb-0">
+                @if (Model.YaEstaEnSerie)
+                {
+                    <text>La producción ya fue iniciada. El siguiente trabajo operativo corresponde a capturas, monitoreo, paros y control de cajas.</text>
+                }
+                else if (Model.EsReinicio)
+                {
+                    <text>La reliberación quedó lista. Confirma el contador físico actual para crear una nueva base y evitar sumar ciclos realizados durante la interrupción.</text>
+                }
+                else
+                {
+                    <text>Este paso cambia la ejecución de EN PREPARACIÓN a EN PRODUCCIÓN. Calidad y la configuración técnica deben estar listas antes de confirmar.</text>
+                }
+            </p>
+        </div>
+        <span class="pis-state @(Model.YaEstaEnSerie ? "done" : Model.PuedeConfirmar ? "ready" : "waiting")">
+            @(Model.YaEstaEnSerie ? "En producción" : Model.PuedeConfirmar ? "Listo para confirmar" : "Con pendientes")
+        </span>
+    </section>
+
+    <div class="pis-grid-main">
+        <section class="pis-card">
+            <div class="pis-card-title"><i class="bi bi-file-earmark-text"></i>OF actual</div>
+            <div class="pis-of">@Model.NumeroOF</div>
+            <div class="pis-sub">Programa interno #@e.ProgramaProduccionID · @Model.ParteActual</div>
+            <div class="pis-kv-grid mt-3">
+                <div><span>Estado</span><strong>@estadoActual</strong></div>
+                <div><span>Máquina</span><strong>@(string.IsNullOrWhiteSpace(e.MaquinaCodigo) ? "Sin máquina" : e.MaquinaCodigo)</strong></div>
+                <div><span>Molde</span><strong>@(string.IsNullOrWhiteSpace(e.MoldeCodigo) ? "Sin molde" : e.MoldeCodigo)</strong></div>
+                <div><span>Operador</span><strong>@(string.IsNullOrWhiteSpace(e.OperadorNombre) ? "Sin operador" : e.OperadorNombre)</strong></div>
+            </div>
+        </section>
+
+        @if (Model.EsParejaLhRh)
+        {
+            <section class="pis-card pis-card-pair">
+                <div class="pis-card-title"><i class="bi bi-link-45deg"></i>OF pareja</div>
+                <div class="pis-of">@Model.NumeroOFPareja</div>
+                <div class="pis-sub">Programa interno #@Model.ParejaLhRh!.ProgramaParejaID · @Model.PartePareja</div>
+                <div class="pis-kv-grid mt-3">
+                    <div><span>Estado</span><strong>@estadoPareja</strong></div>
+                    <div><span>Máquina conjunta</span><strong>@(Model.ParejaLhRh.MismaMaquina ? "Sí" : "No")</strong></div>
+                    <div><span>Molde conjunto</span><strong>@(Model.ParejaLhRh.MismoMolde ? "Sí" : "No")</strong></div>
+                    <div><span>Operador</span><strong>@(string.IsNullOrWhiteSpace(ep?.OperadorNombre) ? "Sin operador" : ep!.OperadorNombre)</strong></div>
+                </div>
+            </section>
+        }
+    </div>
+
+    <section class="pis-card mt-3">
+        <div class="pis-card-title"><i class="bi bi-list-check"></i>Validaciones para iniciar serie</div>
+        <div class="pis-check-grid mt-3">
+            <div class="pis-check @(Model.CalidadLista ? "ok" : "pending")">
+                <i class="bi @(Model.CalidadLista ? "bi-check-circle-fill" : "bi-hourglass-split")"></i>
+                <div><strong>Calidad OF actual</strong><span>@(Model.CalidadLista ? "Liberada para serie" : calidad?.EstadoTexto ?? "Pendiente de Calidad")</span></div>
+            </div>
+            <div class="pis-check @(Model.ConfiguracionLista ? "ok" : "pending")">
+                <i class="bi @(Model.ConfiguracionLista ? "bi-check-circle-fill" : "bi-sliders")"></i>
+                <div><strong>Configuración técnica</strong><span>@(Model.ConfiguracionLista ? "Completa y vigente" : "Pendiente de cavidades, ciclo o contador base")</span></div>
+            </div>
+            <div class="pis-check @(!e.TieneParoAbierto ? "ok" : "bad")">
+                <i class="bi @(!e.TieneParoAbierto ? "bi-check-circle-fill" : "bi-pause-circle-fill")"></i>
+                <div><strong>Paro actual</strong><span>@(!e.TieneParoAbierto ? "Sin paro abierto" : "Existe un paro abierto")</span></div>
+            </div>
+            <div class="pis-check @(e.EstatusID == ProduccionEstatus.EnPreparacion || e.EstatusID == ProduccionEstatus.EnProduccion ? "ok" : "bad")">
+                <i class="bi bi-activity"></i>
+                <div><strong>Estado de ejecución</strong><span>@estadoActual</span></div>
+            </div>
+
+            @if (Model.EsParejaLhRh)
+            {
+                <div class="pis-check @(Model.CalidadParejaLista ? "ok" : "pending")">
+                    <i class="bi @(Model.CalidadParejaLista ? "bi-check-circle-fill" : "bi-hourglass-split")"></i>
+                    <div><strong>Calidad OF pareja</strong><span>@(Model.CalidadParejaLista ? "Liberada para serie" : calidadp?.EstadoTexto ?? "Pendiente de Calidad")</span></div>
+                </div>
+                <div class="pis-check @(Model.ConfiguracionParejaLista ? "ok" : "pending")">
+                    <i class="bi @(Model.ConfiguracionParejaLista ? "bi-check-circle-fill" : "bi-sliders")"></i>
+                    <div><strong>Configuración OF pareja</strong><span>@(Model.ConfiguracionParejaLista ? "Completa y vigente" : "Pendiente")</span></div>
+                </div>
+                <div class="pis-check @(cicloSincronizado ? "ok" : "bad")">
+                    <i class="bi @(cicloSincronizado ? "bi-check-circle-fill" : "bi-exclamation-octagon-fill")"></i>
+                    <div><strong>Ciclo físico LH/RH</strong><span>@(cicloSincronizado ? "Sincronizado" : "Los tiempos de ciclo son diferentes")</span></div>
+                </div>
+                <div class="pis-check @(contadorSincronizado ? "ok" : "bad")">
+                    <i class="bi @(contadorSincronizado ? "bi-check-circle-fill" : "bi-exclamation-octagon-fill")"></i>
+                    <div><strong>Contador base LH/RH</strong><span>@(contadorSincronizado ? "Sincronizado" : "Los contadores base son diferentes")</span></div>
+                </div>
+            }
+        </div>
+    </section>
+
+    <div class="pis-grid-main mt-3">
+        <section class="pis-card">
+            <div class="pis-card-title"><i class="bi bi-sliders"></i>Configuración vigente · OF actual</div>
+            @if (cfg != null)
+            {
+                <div class="pis-config-grid mt-3">
+                    <div><span>Cavidades</span><strong>@cfg.CavidadesUsadas.ToString("N0")</strong><small>@(string.IsNullOrWhiteSpace(cfg.CavidadesConfiguradas) ? "Por cantidad" : cfg.CavidadesConfiguradas)</small></div>
+                    <div><span>Ciclo real</span><strong>@cfg.TiempoCicloSegundos.ToString("0.####") s</strong><small>Tiempo físico vigente</small></div>
+                    <div><span>Objetivo</span><strong>@cfg.ObjetivoHoraOperativo.ToString("N0")</strong><small>pzas/h</small></div>
+                    <div><span>Contador base</span><strong>@(cfg.ContadorInicioVigencia?.ToString("N0") ?? "—")</strong><small>Inicio de vigencia</small></div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning mb-0 mt-3">La OF todavía no tiene configuración técnica vigente.</div>
+            }
+        </section>
+
+        @if (Model.EsParejaLhRh)
+        {
+            <section class="pis-card pis-card-pair">
+                <div class="pis-card-title"><i class="bi bi-sliders"></i>Configuración vigente · OF pareja</div>
+                @if (cfgp != null)
+                {
+                    <div class="pis-config-grid mt-3">
+                        <div><span>Cavidades</span><strong>@cfgp.CavidadesUsadas.ToString("N0")</strong><small>@(string.IsNullOrWhiteSpace(cfgp.CavidadesConfiguradas) ? "Por cantidad" : cfgp.CavidadesConfiguradas)</small></div>
+                        <div><span>Ciclo real</span><strong>@cfgp.TiempoCicloSegundos.ToString("0.####") s</strong><small>Compartido físicamente</small></div>
+                        <div><span>Objetivo</span><strong>@cfgp.ObjetivoHoraOperativo.ToString("N0")</strong><small>pzas/h</small></div>
+                        <div><span>Contador base</span><strong>@(cfgp.ContadorInicioVigencia?.ToString("N0") ?? "—")</strong><small>Compartido físicamente</small></div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning mb-0 mt-3">La OF pareja todavía no tiene configuración técnica vigente.</div>
+                }
+            </section>
+        }
+    </div>
+
+    @if (Model.Bloqueos.Count > 0 && !Model.YaEstaEnSerie)
+    {
+        <section class="pis-blockers mt-3">
+            <div class="pis-card-title"><i class="bi bi-exclamation-triangle-fill"></i>Pendientes antes de continuar</div>
+            <ul class="mb-0 mt-2">
+                @foreach (var bloqueo in Model.Bloqueos)
+                {
+                    <li>@bloqueo</li>
+                }
+            </ul>
+        </section>
+    }
+
+    @if (!Model.YaEstaEnSerie)
+    {
+        <section class="pis-action mt-3 @(Model.PuedeConfirmar ? "is-ready" : "is-disabled")">
+            <div class="pis-action-copy">
+                <div class="pis-card-title"><i class="bi @(Model.EsReinicio ? "bi-arrow-repeat" : "bi-play-circle-fill")"></i>@Model.TituloAccion</div>
+                <p>
+                    @if (Model.EsReinicio)
+                    {
+                        <text>La lectura capturada se convertirá en la nueva base física. En LH/RH se aplicará a las dos OF como una sola operación de máquina.</text>
+                    }
+                    else if (Model.EsParejaLhRh)
+                    {
+                        <text>La confirmación iniciará las dos OF LH/RH conjuntamente. No se permite iniciar una sola después del arranque físico.</text>
+                    }
+                    else
+                    {
+                        <text>Al confirmar, Producción pasa a serie y Calidad inicia el monitoreo horario correspondiente.</text>
+                    }
+                </p>
+            </div>
+
+            <form method="post"
+                  action="@Url.Action("IniciarSerieOperativa","Produccion")"
+                  data-pis-form
+                  data-requiere-contador="@(Model.EsReinicio?"true":"false")">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ejecucionProduccionId" value="@e.EjecucionProduccionID" />
+
+                @if (Model.EsReinicio)
+                {
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="pisContadorActual">
+                            <i class="bi bi-speedometer2 me-1"></i>Contador físico actual *
+                        </label>
+                        <input id="pisContadorActual"
+                               name="contadorMaquinaActual"
+                               type="number"
+                               min="0"
+                               step="1"
+                               required
+                               autocomplete="off"
+                               class="form-control form-control-lg fw-bold"
+                               placeholder="Ej. 12850" />
+                        <div class="form-text">Captura exactamente la lectura que muestra la máquina. Los ciclos realizados durante la interrupción no se sumarán a la producción de la OF.</div>
+                    </div>
+                }
+
+                <button type="submit"
+                        class="btn btn-success btn-lg w-100 fw-bold"
+                        disabled="@(!Model.PuedeConfirmar)">
+                    <i class="bi @(Model.EsReinicio ? "bi-arrow-repeat" : "bi-play-fill") me-1"></i>
+                    @Model.TextoBoton
+                </button>
+
+                @if (!Model.PuedeEjecutarUsuario)
+                {
+                    <div class="pis-note mt-2"><i class="bi bi-lock-fill"></i>Tu usuario está en modo consulta para esta acción.</div>
+                }
+                else if (Model.PuedeConfirmar)
+                {
+                    <div class="pis-note success mt-2"><i class="bi bi-check-circle-fill"></i>Todos los candados previos están cumplidos.</div>
+                }
+            </form>
+        </section>
+    }
+</div>
+
+<style>
+    .pis-content {
+        display: block
+    }
+
+    .pis-hero, .pis-card, .pis-blockers, .pis-action {
+        border: 1px solid var(--pis-border);
+        border-radius: 1rem;
+        background: #fff
+    }
+
+    .pis-hero {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1.1rem 1.2rem
+    }
+
+        .pis-hero.is-ready {
+            border-color: #86efac;
+            background: #f0fdf4
+        }
+
+        .pis-hero.is-done {
+            border-color: #bbf7d0;
+            background: #f0fdf4
+        }
+
+        .pis-hero.is-waiting {
+            border-color: #fde68a;
+            background: #fffbeb
+        }
+
+    .pis-hero-icon {
+        width: 46px;
+        height: 46px;
+        flex: 0 0 46px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: #fff;
+        border: 1px solid var(--pis-border);
+        font-size: 1.35rem
+    }
+
+    .pis-eyebrow {
+        text-transform: uppercase;
+        letter-spacing: .07em;
+        font-size: .72rem;
+        font-weight: 900;
+        color: var(--pis-muted)
+    }
+
+    .pis-hero h3 {
+        font-size: 1.2rem;
+        font-weight: 900;
+        margin: .15rem 0 .25rem
+    }
+
+    .pis-hero p {
+        color: var(--pis-muted);
+        font-size: .9rem
+    }
+
+    .pis-state {
+        margin-left: auto;
+        white-space: nowrap;
+        border-radius: 999px;
+        padding: .38rem .65rem;
+        font-size: .75rem;
+        font-weight: 900
+    }
+
+        .pis-state.ready, .pis-state.done {
+            background: #dcfce7;
+            color: #166534
+        }
+
+        .pis-state.waiting {
+            background: #fef3c7;
+            color: #92400e
+        }
+
+    .pis-grid-main {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 1rem
+    }
+
+        .pis-grid-main > .pis-card:only-child {
+            grid-column: 1/-1
+        }
+
+    .pis-card {
+        padding: 1rem
+    }
+
+    .pis-card-pair {
+        border-color: #bfdbfe;
+        background: #f8fbff
+    }
+
+    .pis-card-title {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        font-weight: 900;
+        font-size: .88rem
+    }
+
+    .pis-of {
+        font-size: 1.28rem;
+        font-weight: 950;
+        margin-top: .7rem
+    }
+
+    .pis-sub {
+        font-size: .8rem;
+        color: var(--pis-muted);
+        margin-top: .1rem
+    }
+
+    .pis-kv-grid, .pis-config-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: .65rem
+    }
+
+        .pis-kv-grid > div, .pis-config-grid > div {
+            padding: .65rem;
+            border-radius: .75rem;
+            background: var(--pis-soft);
+            border: 1px solid var(--pis-border)
+        }
+
+        .pis-kv-grid span, .pis-config-grid span, .pis-config-grid small {
+            display: block;
+            color: var(--pis-muted);
+            font-size: .7rem
+        }
+
+        .pis-kv-grid strong, .pis-config-grid strong {
+            display: block;
+            font-size: .9rem;
+            margin-top: .15rem
+        }
+
+        .pis-config-grid strong {
+            font-size: 1rem
+        }
+
+    .pis-check-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: .65rem
+    }
+
+    .pis-check {
+        display: flex;
+        gap: .65rem;
+        align-items: flex-start;
+        padding: .75rem;
+        border-radius: .8rem;
+        border: 1px solid var(--pis-border);
+        background: var(--pis-soft)
+    }
+
+        .pis-check > i {
+            font-size: 1.05rem;
+            margin-top: .05rem
+        }
+
+        .pis-check div {
+            display: flex;
+            flex-direction: column
+        }
+
+        .pis-check strong {
+            font-size: .82rem
+        }
+
+        .pis-check span {
+            font-size: .74rem;
+            color: var(--pis-muted)
+        }
+
+        .pis-check.ok > i {
+            color: #16a34a
+        }
+
+        .pis-check.pending > i {
+            color: #d97706
+        }
+
+        .pis-check.bad > i {
+            color: #dc2626
+        }
+
+    .pis-blockers {
+        padding: 1rem;
+        border-color: #fecaca;
+        background: #fef2f2;
+        color: #7f1d1d
+    }
+
+        .pis-blockers ul {
+            padding-left: 1.25rem
+        }
+
+        .pis-blockers li {
+            margin: .25rem 0;
+            font-size: .83rem
+        }
+
+    .pis-action {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) minmax(300px,.7fr);
+        gap: 1rem;
+        padding: 1rem;
+        align-items: center
+    }
+
+        .pis-action.is-ready {
+            border-color: #86efac;
+            background: #f0fdf4
+        }
+
+        .pis-action.is-disabled {
+            background: var(--pis-soft)
+        }
+
+    .pis-action-copy p {
+        margin: .45rem 0 0;
+        color: var(--pis-muted);
+        font-size: .85rem
+    }
+
+    .pis-note {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .35rem;
+        font-size: .76rem;
+        font-weight: 800;
+        color: var(--pis-muted)
+    }
+
+        .pis-note.success {
+            color: #166534
+        }
+
+    html[data-nsq-theme="dark"] .pis-hero, html[data-nsq-theme="dark"] .pis-card, html[data-nsq-theme="dark"] .pis-action {
+        background: #111c2d
+    }
+
+    html[data-nsq-theme="dark"] .pis-card-pair {
+        background: #0e1c32
+    }
+
+    html[data-nsq-theme="dark"] .pis-hero.is-ready, html[data-nsq-theme="dark"] .pis-hero.is-done, html[data-nsq-theme="dark"] .pis-action.is-ready {
+        background: #0f251b
+    }
+
+    html[data-nsq-theme="dark"] .pis-hero.is-waiting {
+        background: #271f0b
+    }
+
+    html[data-nsq-theme="dark"] .pis-blockers {
+        background: #2a1115;
+        color: #fecaca
+    }
+
+    @@media(max-width:900px) {
+        .pis-grid-main, .pis-check-grid, .pis-action {
+            grid-template-columns: 1fr
+        }
+
+        .pis-state {
+            margin-left: 0
+        }
+
+        .pis-hero {
+            flex-wrap: wrap
+        }
+
+        .pis-action form {
+            width: 100%
+        }
+    }
+</style>

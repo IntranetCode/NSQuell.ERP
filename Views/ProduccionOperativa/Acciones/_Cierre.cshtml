@@ -1,0 +1,99 @@
+@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId=$"poCierreProduccion_{Model.ProgramaProduccionID}";
+    var soloLectura=Model.Permisos?.SoloLectura??true;
+    var urlContenido=Url.Action(
+        "CierreOperativo",
+        "Produccion",
+        new
+        {
+            programaProduccionId=Model.ProgramaProduccionID,
+            soloLectura,
+            enfoque=ERP.NSQuell.Models.ProduccionCierreOperativoEnfoque.Cierre
+        })??$"/Produccion/CierreOperativo?programaProduccionId={Model.ProgramaProduccionID}&soloLectura={soloLectura.ToString().ToLowerInvariant()}&enfoque=CIERRE";
+}
+
+<style>
+    .pcl-loader{min-height:300px}
+    .pcl-loader .pcl-loading{min-height:300px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#667085;font-size:.8rem;font-weight:800}
+    .pcl-loader .pcl-spinner{width:31px;height:31px;border:3px solid #dbe5f1;border-top-color:#004aad;border-radius:50%;animation:pclSpin .72s linear infinite}
+    .pcl-loader .pcl-error{border:1px solid #fecaca;background:#fff5f5;color:#991b1b;border-radius:14px;padding:16px;font-size:.82rem;font-weight:750}
+    @@keyframes pclSpin{to{transform:rotate(360deg)}}
+</style>
+
+<div id="@rootId" class="pcl-loader" data-pcl-cierre-loader>
+    <div data-pcl-body>
+        <div class="pcl-loading">
+            <div class="pcl-spinner"></div>
+            <span>Cargando cierre de Producción...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    'use strict';
+    const root=document.getElementById('@rootId');
+    if(!root||root.dataset.inicializado==='1') return;
+    root.dataset.inicializado='1';
+    const body=root.querySelector('[data-pcl-body]');
+    const url='@Html.Raw(urlContenido)';
+    let cargando=false;
+    let timer=null;
+
+    function escapar(texto){return String(texto??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+    async function leerError(response){
+        try{
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')){const data=await response.json();return data?.mensaje||data?.message||`HTTP ${response.status}`;}
+            const texto=await response.text();
+            if(!texto) return `HTTP ${response.status}`;
+            const doc=new DOMParser().parseFromString(texto,'text/html');
+            return doc.body?.innerText?.trim()?.slice(0,500)||texto.slice(0,500);
+        }catch{return `HTTP ${response.status}`;}
+    }
+    function ejecutarScripts(contenedor){
+        [...contenedor.querySelectorAll('script')].forEach(anterior=>{
+            const nuevo=document.createElement('script');
+            [...anterior.attributes].forEach(a=>nuevo.setAttribute(a.name,a.value));
+            nuevo.text=anterior.textContent||'';
+            anterior.replaceWith(nuevo);
+        });
+    }
+    function programar(){
+        if(timer){clearTimeout(timer);timer=null;}
+        if(!body.querySelector('[data-cierre-auto-refrescar="true"]')) return;
+        timer=setTimeout(()=>{
+            if(!root.isConnected) return;
+            if(document.hidden||body.querySelector('input:focus,textarea:focus,select:focus')){programar();return;}
+            cargar(false);
+        },20000);
+    }
+    async function cargar(mostrarCarga=false){
+        if(cargando||!root.isConnected) return;
+        cargando=true;
+        if(mostrarCarga) body.innerHTML='<div class="pcl-loading"><div class="pcl-spinner"></div><span>Cargando cierre de Producción...</span></div>';
+        try{
+            const response=await fetch(url,{method:'GET',cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Cache-Control':'no-cache'}});
+            if(!response.ok) throw new Error(await leerError(response));
+            body.innerHTML=await response.text();
+            ejecutarScripts(body);
+            programar();
+        }catch(error){body.innerHTML=`<div class="pcl-error"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible consultar el cierre de Producción.')}</div>`;}
+        finally{cargando=false;}
+    }
+    root.addEventListener('nsq:cierre-actualizado',()=>{
+        cargar(false);
+        const centro=root.closest('[data-nsq-operativa-centro]');
+        centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
+    });
+    root.addEventListener('click',event=>{
+        if(!event.target.closest?.('[data-cierre-refrescar]')) return;
+        event.preventDefault();
+        cargar(false);
+    });
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&root.isConnected&&body.querySelector('[data-cierre-auto-refrescar="true"]')) cargar(false);});
+    cargar(true);
+})();
+</script>

@@ -1,0 +1,296 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poConfigTecnica_{Model.ProgramaProduccionID}";
+    var ejecucionId = Model.EjecucionProduccionID.GetValueOrDefault();
+    var urlContenido = Url.Action("ConfiguracionTecnicaOperativa", "Produccion") ?? "/Produccion/ConfiguracionTecnicaOperativa";
+    var urlPreview = Url.Action("PrevisualizarCambioConfiguracion", "Produccion") ?? "/Produccion/PrevisualizarCambioConfiguracion";
+}
+
+<style>
+    .po-config-loader .pct-loading {
+        min-height: 220px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 9px;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 800
+    }
+
+    .po-config-loader .pct-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #dbe5f1;
+        border-top-color: #004aad;
+        border-radius: 50%;
+        animation: pctSpin .75s linear infinite
+    }
+
+    .po-config-loader .pct-feedback {
+        display: none;
+        margin-bottom: 10px;
+        padding: 9px 11px;
+        border-radius: 10px;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .po-config-loader .pct-feedback.show {
+            display: block
+        }
+
+        .po-config-loader .pct-feedback.ok {
+            background: #edf9f3;
+            border: 1px solid #bee2cf;
+            color: #176b48
+        }
+
+        .po-config-loader .pct-feedback.warn {
+            background: #fff8ea;
+            border: 1px solid #efd29d;
+            color: #865600
+        }
+
+        .po-config-loader .pct-feedback.bad {
+            background: #fff1f1;
+            border: 1px solid #efb8b8;
+            color: #a52b2b
+        }
+
+    @@keyframes pctSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId" class="po-config-loader" data-po-config-tecnica data-ejecucion-id="@ejecucionId">
+    <div class="pct-feedback" data-pct-feedback></div>
+    <div data-pct-body>
+        @if (ejecucionId <= 0)
+        {
+            <div class="alert alert-warning mb-0"><i class="bi bi-hourglass-split me-1"></i>La configuración técnica se habilita después de iniciar la preparación.</div>
+        }
+        else
+        {
+            <div class="pct-loading"><div class="pct-spinner"></div><span>Cargando configuración técnica...</span></div>
+        }
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const ejecucionId=Number(root.dataset.ejecucionId||0);
+        const body=root.querySelector('[data-pct-body]');
+        const feedback=root.querySelector('[data-pct-feedback]');
+        const urlContenido='@urlContenido';
+        const urlPreview='@urlPreview';
+        let cargando=false;
+        let previewTimer=null;
+
+        function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+        function mostrar(texto,tipo='ok'){
+            if(!feedback) return;
+            feedback.textContent=texto||'';
+            feedback.className='pct-feedback'+(texto?` show ${tipo}`:'');
+        }
+        async function leer(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+        function numeroDecimal(v){const n=Number.parseFloat(String(v??'').replace(',','.'));return Number.isFinite(n)?n:0;}
+
+        function configurarGrupoCavidades(group,scope){
+            const csv=group.querySelector('[data-pct-csv]');
+            const cantidad=group.querySelector('[data-pct-cantidad]');
+            const resumen=group.querySelector('[data-pct-resumen]');
+            const checks=[...group.querySelectorAll('[data-pct-cavidad]')];
+            const cantidadExistente=Number(group.dataset.existingCount||0);
+            const tieneNumeracionExistente=group.dataset.existingNumbered==='true';
+            let huboInteraccion=false;
+
+            function seleccion(){
+                return checks.filter(x=>x.checked).map(x=>Number(x.value)).filter(x=>x>0).sort((a,b)=>a-b);
+            }
+
+            function actualizar(interaccion=false){
+                if(interaccion) huboInteraccion=true;
+                const lista=seleccion();
+                if(csv) csv.value=lista.join(',');
+
+                if(cantidad){
+                    if(lista.length>0) cantidad.value=String(lista.length);
+                    else if(!huboInteraccion&&!tieneNumeracionExistente&&cantidadExistente>0) cantidad.value=String(cantidadExistente);
+                    else if(huboInteraccion&&checks.length>0) cantidad.value='';
+                }
+
+                if(resumen){
+                    if(lista.length>0) resumen.textContent=`${lista.length} · ${lista.join(', ')}`;
+                    else if(!huboInteraccion&&cantidadExistente>0) resumen.textContent=`${cantidadExistente} por cantidad`;
+                    else resumen.textContent='Sin definir';
+                }
+
+                scope.querySelector('[data-pct-ciclo]')?.dispatchEvent(new Event('input',{bubbles:true}));
+            }
+
+            checks.forEach(x=>x.addEventListener('change',()=>actualizar(true)));
+            group.querySelector('[data-pct-todas]')?.addEventListener('click',()=>{checks.forEach(x=>x.checked=true);actualizar(true);});
+            group.querySelector('[data-pct-limpiar]')?.addEventListener('click',()=>{checks.forEach(x=>x.checked=false);actualizar(true);});
+            cantidad?.addEventListener('input',()=>{
+                if(document.activeElement===cantidad&&checks.some(x=>x.checked)){
+                    checks.forEach(x=>x.checked=false);
+                    if(csv) csv.value='';
+                    huboInteraccion=true;
+                    if(resumen) resumen.textContent=cantidad.value?`${cantidad.value} por cantidad`:'Sin definir';
+                }
+                scope.querySelector('[data-pct-ciclo]')?.dispatchEvent(new Event('input',{bubbles:true}));
+            });
+            actualizar(false);
+        }
+
+        function configurar(scope){
+            scope.querySelectorAll('[data-pct-cavidades]').forEach(group=>configurarGrupoCavidades(group,scope));
+
+            const form=scope.querySelector('form[data-config-operativa-form]');
+            if(!form||form.dataset.wired==='1') return;
+            form.dataset.wired='1';
+
+            const ciclo=form.querySelector('[data-pct-ciclo]');
+            const contador=form.querySelector('[data-pct-contador]');
+            const motivo=form.querySelector('[data-pct-motivo]');
+            const requiereMotivo=form.dataset.requiereMotivo==='true';
+            const esPareja=form.dataset.esPareja==='true';
+            const esCambio=form.dataset.esCambio==='true';
+            const cantActual=form.querySelector('[name="CavidadesUsadas"]');
+            const csvActual=form.querySelector('[name="CavidadesConfiguradas"]');
+            const cantPareja=form.querySelector('[name="CavidadesUsadasPareja"]');
+            const objActual=scope.querySelector('[data-pct-objetivo-actual]');
+            const objPareja=scope.querySelector('[data-pct-objetivo-pareja]');
+            const boton=form.querySelector('button[type="submit"]');
+            const preview=scope.querySelector('[data-pct-preview]');
+            const previewTitle=scope.querySelector('[data-pct-preview-title]');
+            const previewText=scope.querySelector('[data-pct-preview-text]');
+
+            function objetivo(cavidades){
+                const c=numeroDecimal(ciclo?.value);
+                return c>0&&cavidades>0?Math.round((3600/c)*cavidades):null;
+            }
+
+            function recalcular(){
+                const ca=Number(cantActual?.value||0);
+                const cp=Number(cantPareja?.value||0);
+                const oa=objetivo(ca);
+                const op=objetivo(cp);
+                if(objActual) objActual.textContent=oa?`${oa.toLocaleString('es-MX')} pzas/h`:'Pendiente';
+                if(objPareja) objPareja.textContent=op?`${op.toLocaleString('es-MX')} pzas/h`:'Pendiente';
+                programarPreview();
+            }
+
+            async function cargarPreview(){
+                if(!preview||!esCambio||esPareja) return;
+                const cavidades=Number(cantActual?.value||0);
+                const tiempo=String(ciclo?.value||'').trim();
+                if(cavidades<=0||numeroDecimal(tiempo)<=0){preview.classList.remove('show');return;}
+
+                preview.classList.add('show');
+                if(previewTitle) previewTitle.textContent='Calculando impacto...';
+                if(previewText) previewText.textContent='';
+
+                try{
+                    const qs=new URLSearchParams({
+                        ejecucionProduccionId:String(ejecucionId),
+                        cavidadesUsadas:String(cavidades),
+                        tiempoCicloSegundos:tiempo,
+                        cavidadesConfiguradas:String(csvActual?.value||'')
+                    });
+                    const response=await fetch(`${urlPreview}?${qs.toString()}`,{cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});
+                    const data=await leer(response);
+                    if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                    if(previewTitle){
+                        if(data.extiendeProgramacion) previewTitle.textContent=`Extiende ${Math.abs(Number(data.deltaMinutos||0)).toLocaleString('es-MX')} min`;
+                        else if(data.reduceProgramacion) previewTitle.textContent=`Reduce ${Math.abs(Number(data.deltaMinutos||0)).toLocaleString('es-MX')} min`;
+                        else previewTitle.textContent='Sin cambio relevante de duración';
+                    }
+                    if(previewText) previewText.textContent=data.mensaje||'';
+                }catch(error){
+                    if(previewTitle) previewTitle.textContent='Vista previa no disponible';
+                    if(previewText) previewText.textContent=error?.message||'';
+                }
+            }
+
+            function programarPreview(){
+                if(!preview||!esCambio||esPareja) return;
+                window.clearTimeout(previewTimer);
+                previewTimer=window.setTimeout(cargarPreview,350);
+            }
+
+            ciclo?.addEventListener('input',recalcular);
+            cantActual?.addEventListener('input',recalcular);
+            cantPareja?.addEventListener('input',recalcular);
+            csvActual?.addEventListener('change',recalcular);
+            recalcular();
+
+            form.addEventListener('submit',async e=>{
+                e.preventDefault();
+                const errores=[];
+                if(Number(cantActual?.value||0)<=0) errores.push('Indica las cavidades activas de la OF.');
+                if(esPareja&&Number(cantPareja?.value||0)<=0) errores.push('Indica las cavidades activas de la OF pareja.');
+                if(numeroDecimal(ciclo?.value)<=0) errores.push('Captura un tiempo de ciclo válido.');
+                if(contador?.value===''||Number(contador?.value)<0) errores.push('Captura el contador físico actual de la máquina.');
+                if(requiereMotivo&&!String(motivo?.value||'').trim()) errores.push('Indica el motivo del cambio de configuración.');
+                if(errores.length){mostrar(errores.join(' '),'bad');return;}
+                if(!form.reportValidity()) return;
+
+                boton&&(boton.disabled=true);
+                mostrar('');
+                try{
+                    const response=await fetch(form.action,{method:'POST',body:new FormData(form),credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','X-NSQ-Operativa':'1','Accept':'application/json'}});
+                    const data=await leer(response);
+                    if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                    mostrar(data.mensaje||'Configuración guardada.',data.advertencia?'warn':'ok');
+                    await cargar(false);
+                    window.setTimeout(()=>root.closest('[data-nsq-operativa-centro]')?.querySelector('[data-nsq-operativa-refrescar]')?.click(),450);
+                }catch(error){
+                    mostrar(error?.message||'No fue posible guardar la configuración.','bad');
+                }finally{
+                    boton&&(boton.disabled=false);
+                }
+            });
+        }
+
+        async function cargar(mostrarCarga=true){
+            if(cargando||ejecucionId<=0) return;
+            cargando=true;
+            if(mostrarCarga) body.innerHTML='<div class="pct-loading"><div class="pct-spinner"></div><span>Cargando configuración técnica...</span></div>';
+            try{
+                const response=await fetch(`${urlContenido}?ejecucionProduccionId=${encodeURIComponent(ejecucionId)}`,{cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/html,application/json'}});
+                if(!response.ok){
+                    const data=await leer(response);
+                    if(data?.esperandoCalidad){
+                        body.innerHTML=`<div class="alert alert-warning mb-0"><i class="bi bi-hourglass-split me-1"></i>${escapeHtml(data.mensaje||'Esperando a Calidad.')}</div>`;
+                        return;
+                    }
+                    throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                }
+                body.innerHTML=await response.text();
+                configurar(body);
+            }catch(error){
+                body.innerHTML=`<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapeHtml(error?.message||'No fue posible cargar la configuración.')}</div>`;
+            }finally{
+                cargando=false;
+            }
+        }
+
+        cargar();
+    })();
+</script>

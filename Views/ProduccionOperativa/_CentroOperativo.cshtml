@@ -1,0 +1,1922 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+@using System.Linq
+
+@functions {
+    public static string ClaseEstadoGeneral(string? estado)
+    {
+        var e = (estado ?? string.Empty).Trim().ToUpperInvariant();
+        return e switch
+        {
+            "PRODUCIENDO" => "is-running",
+            "EN_PREPARACION" => "is-preparation",
+            "PREPARACION" => "is-preparation",
+            "ESPERANDO_CALIDAD" => "is-quality",
+            "PAUSADA" => "is-warning",
+            "PAUSADO" => "is-warning",
+            "BLOQUEADA" => "is-danger",
+            "INTERRUMPIDA_URGENTE" => "is-danger",
+            "TERMINADA" => "is-done",
+            "CERRADA" => "is-done",
+            _ => "is-neutral"
+        };
+    }
+
+    public static string ClasePrioridad(string? prioridad)
+    {
+        var p = (prioridad ?? string.Empty).Trim().ToUpperInvariant();
+        return p switch
+        {
+            "CRITICA" => "is-danger",
+            "CRÍTICA" => "is-danger",
+            "ALTA" => "is-warning",
+            "BAJA" => "is-muted",
+            _ => "is-neutral"
+        };
+    }
+
+    public static string ClaseSeveridad(string? severidad)
+    {
+        var s = (severidad ?? string.Empty).Trim().ToUpperInvariant();
+        return s switch
+        {
+            "PELIGRO" => "is-danger",
+            "ADVERTENCIA" => "is-warning",
+            "EXITO" => "is-success",
+            "ÉXITO" => "is-success",
+            _ => "is-info"
+        };
+    }
+
+    public static string ClasePaso(ProduccionOperativaPasoVm paso)
+    {
+        if (paso.Completado) return "is-complete";
+        if (paso.Bloqueado) return "is-blocked";
+        if (paso.EnProceso) return "is-progress";
+        return "is-pending";
+    }
+
+    public static string IconoPaso(ProduccionOperativaPasoVm paso)
+    {
+        if (paso.Completado) return "bi-check-lg";
+        if (paso.Bloqueado) return "bi-lock-fill";
+        if (paso.EnProceso) return "bi-play-fill";
+        return "bi-circle";
+    }
+
+    public static decimal ProgresoEtapa(IEnumerable<ProduccionOperativaPasoVm>? pasos, string etapa)
+    {
+        if (pasos == null) return 0m;
+        var lista = pasos.Where(x => x.Aplica && string.Equals(x.Etapa, etapa, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (lista.Count == 0) return 0m;
+        return Math.Round(lista.Count(x => x.Completado) * 100m / lista.Count, 0, MidpointRounding.AwayFromZero);
+    }
+
+    public static decimal ProgresoClaves(IEnumerable<ProduccionOperativaPasoVm>? pasos, IEnumerable<string> claves)
+    {
+        if (pasos == null || claves == null) return 0m;
+        var set = claves.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var lista = pasos.Where(x => x.Aplica && set.Contains(x.Clave)).ToList();
+        if (lista.Count == 0) return 0m;
+        return Math.Round(lista.Count(x => x.Completado) * 100m / lista.Count, 0, MidpointRounding.AwayFromZero);
+    }
+
+    public static bool ContieneClave(IEnumerable<string> claves, string? clave)
+    {
+        if (string.IsNullOrWhiteSpace(clave)) return false;
+        return claves.Any(x => string.Equals(x, clave, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static string Pct(decimal value)
+    {
+        var v = Math.Max(0m, Math.Min(100m, value));
+        return v.ToString("0.##", CultureInfo.InvariantCulture);
+    }
+
+    public static string TextoFecha(DateTime? fecha)
+    {
+        return fecha.HasValue ? fecha.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    public static bool EsAccionExterna(ProduccionOperativaAccionVm? accion)
+    {
+        if (accion == null) return false;
+        var area = (accion.AreaResponsable ?? string.Empty).Trim().ToUpperInvariant();
+        var clave = (accion.Clave ?? string.Empty).Trim().ToUpperInvariant();
+        if (area == AgendaOperativaArea.Calidad) return true;
+        return clave == AgendaOperativaPasoClave.PrimerasPiezas
+            || clave == AgendaOperativaPasoClave.Calidad
+            || clave == AgendaOperativaPasoClave.CalidadFinal
+            || clave == "RELIBERACION_CALIDAD"
+            || clave == "GP12";
+    }
+
+    public static string TextoEsperaArea(ProduccionOperativaAccionVm accion)
+    {
+        var area = (accion.AreaResponsable ?? string.Empty).Trim().ToUpperInvariant();
+        return area == AgendaOperativaArea.Calidad ? "Esperando a Calidad" : "Esperando área responsable";
+    }
+}
+
+@{
+    var accionActual = Model.AccionActual;
+    var siguiente = Model.SiguienteAccion;
+    var pasos = Model.PasosVisibles.ToList();
+    var accionesVisibles = Model.AccionesVisibles.ToList();
+
+    var clavesPrevio = new[]
+    {
+        AgendaOperativaPasoClave.Planeacion,
+        AgendaOperativaPasoClave.Personal
+    };
+    var clavesMateriales = new[]
+    {
+        AgendaOperativaPasoClave.Material,
+        AgendaOperativaPasoClave.Secado,
+        AgendaOperativaPasoClave.Embalaje
+    };
+    var clavesMolde = new[]
+    {
+        AgendaOperativaPasoClave.CambioMolde,
+        ProduccionOperativaAccionClave.ChecklistCambioMolde
+    };
+    var clavesArranque = new[]
+    {
+        "INICIAR_PREPARACION",
+        AgendaOperativaPasoClave.ChecklistArranque,
+        AgendaOperativaPasoClave.ConfiguracionCorrida
+    };
+    var clavesCalidadArranque = new[]
+    {
+        AgendaOperativaPasoClave.PrimerasPiezas,
+        AgendaOperativaPasoClave.Calidad
+    };
+    var clavesSerie = new[]
+    {
+        AgendaOperativaPasoClave.InicioSerie,
+        AgendaOperativaPasoClave.Produccion,
+        AgendaOperativaPasoClave.Capturas,
+        AgendaOperativaPasoClave.Cajas
+    };
+    var clavesCierre = new[]
+    {
+        AgendaOperativaPasoClave.CalidadFinal,
+        AgendaOperativaPasoClave.LiberacionMaquina,
+        AgendaOperativaPasoClave.Cierre
+    };
+
+    var fasesVisuales = new[]
+    {
+        new { Clave="PREVIO", Nombre="Prerequisitos", Icono="bi-clipboard-check", Claves=clavesPrevio },
+        new { Clave="MATERIALES", Nombre="Materiales", Icono="bi-box-seam", Claves=clavesMateriales },
+        new { Clave="MOLDE", Nombre="Molde + checklist", Icono="bi-tools", Claves=clavesMolde },
+        new { Clave="ARRANQUE", Nombre="Preparación de arranque", Icono="bi-ui-checks", Claves=clavesArranque },
+        new { Clave="CALIDAD", Nombre="Calidad de arranque", Icono="bi-patch-check", Claves=clavesCalidadArranque },
+        new { Clave="SERIE", Nombre="Serie", Icono="bi-gear-wide-connected", Claves=clavesSerie },
+        new { Clave="CIERRE", Nombre="Cierre", Icono="bi-flag", Claves=clavesCierre }
+    }
+    .Where(f => pasos.Any(p => p.Aplica && ContieneClave(f.Claves, p.Clave)))
+    .ToList();
+
+    var accionesHerramientaClaves = new[]
+    {
+        ProduccionOperativaAccionClave.CambioTurno,
+        ProduccionOperativaAccionClave.RelevoOperador,
+        ProduccionOperativaAccionClave.MonitoreoTurno,
+        ProduccionOperativaAccionClave.TiempoExtra,
+        ProduccionOperativaAccionClave.Historial,
+        ProduccionOperativaAccionClave.DetalleCompleto
+    };
+
+    var accionesSecundarias = accionesVisibles
+        .Where(x => accionesHerramientaClaves.Any(k => string.Equals(k, x.Clave, StringComparison.OrdinalIgnoreCase)))
+        .Where(x => !x.Completada || string.Equals(x.Clave, ProduccionOperativaAccionClave.Historial, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Clave, ProduccionOperativaAccionClave.DetalleCompleto, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(x => x.Orden)
+        .ThenBy(x => x.Titulo)
+        .ToList();
+
+    var clavesDuranteSerie = new[]
+    {
+        AgendaOperativaPasoClave.Capturas,
+        AgendaOperativaPasoClave.Cajas,
+        AgendaOperativaPasoClave.Paro,
+        ProduccionOperativaAccionClave.CambioTurno,
+        ProduccionOperativaAccionClave.TiempoExtra
+    };
+
+    var accionesDuranteSerie = accionesVisibles
+        .Where(x => clavesDuranteSerie.Any(k => string.Equals(k, x.Clave, StringComparison.OrdinalIgnoreCase)))
+        .Where(x => !x.Completada)
+        .Where(x => accionActual == null || !string.Equals(x.Clave, accionActual.Clave, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(x => x.Orden)
+        .ThenBy(x => x.Titulo)
+        .ToList();
+
+    var mostrarAccionesDuranteSerie = Model.EstatusEjecucionID is ProduccionEstatus.EnProduccion or ProduccionEstatus.Pausado
+        && accionesDuranteSerie.Any();
+
+    var detalleCompleto = accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, ProduccionOperativaAccionClave.DetalleCompleto, StringComparison.OrdinalIgnoreCase));
+    var historial = accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, ProduccionOperativaAccionClave.Historial, StringComparison.OrdinalIgnoreCase));
+
+    var pasoCambioMolde = pasos.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.CambioMolde, StringComparison.OrdinalIgnoreCase));
+    var pasoChecklistMolde = pasos.FirstOrDefault(x => string.Equals(x.Clave, ProduccionOperativaAccionClave.ChecklistCambioMolde, StringComparison.OrdinalIgnoreCase));
+    var accionCambioMolde = accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.CambioMolde, StringComparison.OrdinalIgnoreCase));
+    var accionChecklistMolde = accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, ProduccionOperativaAccionClave.ChecklistCambioMolde, StringComparison.OrdinalIgnoreCase));
+    var mostrarTrabajoParaleloMolde = pasoCambioMolde?.Aplica == true && !(pasoCambioMolde.Completado && pasoChecklistMolde?.Completado == true);
+
+    var urlCentro = Url.Action("Centro", "ProduccionOperativa", new { programaProduccionId = Model.ProgramaProduccionID, origen = Model.Origen, soloLectura = Model.Permisos.SoloLectura }) ?? $"/Produccion/Operativa/Centro/{Model.ProgramaProduccionID}";
+    var urlDetalle = Model.EjecucionProduccionID.HasValue
+        ? Url.Action("Detalle", "Produccion", new { id = Model.EjecucionProduccionID.Value })
+        : Url.Action("Index", "Produccion", new { busqueda = Model.OFTexto });
+
+    var estadoClase = ClaseEstadoGeneral(Model.EstadoGeneral);
+    var prioridadClase = ClasePrioridad(Model.Prioridad);
+    var porcentajeGeneral = Math.Max(Model.Resumen.PorcentajeGeneral, Model.Metricas.PorcentajeAvance);
+}
+<style>
+    .nsq-op-center {
+        --op-primary: #004aad;
+        --op-primary-2: #0f6bdf;
+        --op-navy: #0f2747;
+        --op-text: #172033;
+        --op-muted: #667085;
+        --op-border: #e3e8ef;
+        --op-soft: #f6f8fb;
+        --op-success: #138a56;
+        --op-warning: #b86b00;
+        --op-danger: #c93636;
+        --op-info: #1769aa;
+        color: var(--op-text);
+        background: #fff;
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+        .nsq-op-center * {
+            box-sizing: border-box
+        }
+
+    .nsq-op-header {
+        position: relative;
+        padding: 20px 22px 18px;
+        color: #fff;
+        background: radial-gradient(circle at 88% 0%,rgba(255,255,255,.16),transparent 28%), linear-gradient(135deg,#0f2747 0%,#004aad 58%,#0f6bdf 100%);
+    }
+
+    .nsq-op-header-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px
+    }
+
+    .nsq-op-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap
+    }
+
+    .nsq-op-of {
+        font-size: 1.55rem;
+        line-height: 1;
+        font-weight: 950;
+        letter-spacing: -.02em;
+    }
+
+    .nsq-op-program {
+        padding: 5px 9px;
+        border: 1px solid rgba(255,255,255,.24);
+        border-radius: 999px;
+        background: rgba(255,255,255,.12);
+        color: rgba(255,255,255,.88);
+        font-size: .7rem;
+        font-weight: 800;
+    }
+
+    .nsq-op-subtitle {
+        display: flex;
+        align-items: center;
+        gap: 8px 14px;
+        flex-wrap: wrap;
+        margin-top: 9px;
+        color: rgba(255,255,255,.82);
+        font-size: .82rem;
+        font-weight: 650;
+    }
+
+        .nsq-op-subtitle span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px
+        }
+
+    .nsq-op-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+    .nsq-op-icon-btn {
+        width: 36px;
+        height: 36px;
+        border: 1px solid rgba(255,255,255,.28);
+        border-radius: 11px;
+        background: rgba(255,255,255,.12);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        transition: .16s ease;
+    }
+
+        .nsq-op-icon-btn:hover {
+            background: rgba(255,255,255,.22);
+            color: #fff;
+            transform: translateY(-1px)
+        }
+
+    .nsq-op-badges {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin-top: 15px
+    }
+
+    .nsq-op-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: .7rem;
+        font-weight: 900;
+        letter-spacing: .01em;
+        background: rgba(255,255,255,.14);
+        border: 1px solid rgba(255,255,255,.18);
+        color: #fff;
+    }
+
+        .nsq-op-badge.is-danger {
+            background: #b42318;
+            border-color: #b42318
+        }
+
+        .nsq-op-badge.is-warning {
+            background: #b86b00;
+            border-color: #b86b00
+        }
+
+        .nsq-op-badge.is-running, .nsq-op-badge.is-success, .nsq-op-badge.is-done {
+            background: #087a4e;
+            border-color: #087a4e
+        }
+
+        .nsq-op-badge.is-quality {
+            background: #7a4db7;
+            border-color: #7a4db7
+        }
+
+        .nsq-op-badge.is-preparation {
+            background: #1367a7;
+            border-color: #1367a7
+        }
+
+        .nsq-op-badge.is-muted {
+            opacity: .82
+        }
+
+    .nsq-op-body {
+        padding: 18px 20px 20px;
+        background: var(--op-soft)
+    }
+
+    .nsq-op-stagebar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(125px,1fr));
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .nsq-op-stage {
+        position: relative;
+        min-width: 0;
+        padding: 10px 10px 9px;
+        border: 1px solid var(--op-border);
+        border-radius: 13px;
+        background: #fff;
+        color: var(--op-muted);
+    }
+
+        .nsq-op-stage.is-current {
+            border-color: #9fc2f5;
+            box-shadow: 0 0 0 2px rgba(0,74,173,.07);
+            color: var(--op-primary)
+        }
+
+        .nsq-op-stage.is-past {
+            color: var(--op-success)
+        }
+
+    .nsq-op-stage-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .nsq-op-stage-progress {
+        height: 4px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: #edf1f5;
+        overflow: hidden
+    }
+
+        .nsq-op-stage-progress span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: currentColor;
+            opacity: .78
+        }
+
+    .nsq-op-route-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin: -5px 0 14px;
+        padding: 9px 11px;
+        border: 1px solid #d6e4f7;
+        border-radius: 12px;
+        background: #f4f8ff;
+        color: #28517f;
+        font-size: .72rem;
+        line-height: 1.35;
+    }
+
+    .nsq-op-parallel {
+        margin-bottom: 14px;
+        padding: 12px;
+        border: 1px solid #b8d2f4;
+        border-radius: 15px;
+        background: linear-gradient(180deg,#f7fbff,#f1f7ff);
+    }
+
+    .nsq-op-parallel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 9px;
+    }
+
+    .nsq-op-parallel-title {
+        color: var(--op-navy);
+        font-size: .78rem;
+        font-weight: 950;
+    }
+
+    .nsq-op-parallel-help {
+        margin-top: 2px;
+        color: var(--op-muted);
+        font-size: .67rem;
+        line-height: 1.3;
+    }
+
+    .nsq-op-parallel-badge {
+        flex: 0 0 auto;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: .62rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .nsq-op-parallel-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px;
+    }
+
+    .nsq-op-parallel-task {
+        display: grid;
+        grid-template-columns: 34px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        padding: 9px;
+        border: 1px solid var(--op-border);
+        border-radius: 11px;
+        background: #fff;
+    }
+
+    .nsq-op-parallel-task-icon {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: #eef5ff;
+        color: var(--op-primary);
+    }
+
+    .nsq-op-parallel-task strong {
+        display: block;
+        color: var(--op-navy);
+        font-size: .72rem;
+    }
+
+    .nsq-op-parallel-task small {
+        display: block;
+        margin-top: 2px;
+        color: var(--op-muted);
+        font-size: .62rem;
+        line-height: 1.2;
+    }
+
+    .nsq-op-parallel-state {
+        white-space: nowrap;
+        color: var(--op-muted);
+        font-size: .62rem;
+        font-weight: 900;
+    }
+
+    .nsq-op-parallel-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 5px;
+        color: var(--op-primary);
+        font-size: .64rem;
+        font-weight: 900;
+        text-decoration: none;
+    }
+
+    .nsq-op-flow-phase + .nsq-op-flow-phase {
+        margin-top: 11px;
+        padding-top: 11px;
+        border-top: 1px dashed var(--op-border);
+    }
+
+    .nsq-op-flow-phase-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 6px;
+        color: var(--op-navy);
+        font-size: .66rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+        .nsq-op-flow-phase-head .badge {
+            margin-left: auto;
+            font-size: .56rem;
+        }
+
+    .nsq-op-flow-phase.is-parallel .nsq-op-flow {
+        grid-template-columns: repeat(2,minmax(0,1fr));
+    }
+
+    .nsq-op-grid {
+        display: grid;
+        grid-template-columns: minmax(0,1.65fr) minmax(270px,.85fr);
+        gap: 14px
+    }
+
+    .nsq-op-card {
+        border: 1px solid var(--op-border);
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(15,39,71,.04);
+    }
+
+    .nsq-op-card-body {
+        padding: 15px
+    }
+
+    .nsq-op-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        color: var(--op-navy);
+        font-size: .74rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .055em;
+    }
+
+    .nsq-op-action {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #cfe0f7;
+        border-radius: 17px;
+        background: linear-gradient(180deg,#fff,#f9fbff);
+    }
+
+        .nsq-op-action::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: var(--op-primary)
+        }
+
+        .nsq-op-action.is-blocked::before {
+            background: var(--op-danger)
+        }
+
+        .nsq-op-action.is-waiting::before {
+            background: var(--op-warning)
+        }
+
+    .nsq-op-action-main {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 14px;
+        padding: 17px
+    }
+
+    .nsq-op-action-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eaf2ff;
+        color: var(--op-primary);
+        font-size: 1.25rem;
+        flex: none;
+    }
+
+    .nsq-op-action.is-blocked .nsq-op-action-icon {
+        background: #fff0f0;
+        color: var(--op-danger)
+    }
+
+    .nsq-op-action.is-waiting .nsq-op-action-icon {
+        background: #fff7e6;
+        color: var(--op-warning)
+    }
+
+    .nsq-op-action-kicker {
+        font-size: .68rem;
+        text-transform: uppercase;
+        letter-spacing: .075em;
+        color: var(--op-muted);
+        font-weight: 900
+    }
+
+    .nsq-op-action-title {
+        margin-top: 2px;
+        color: var(--op-navy);
+        font-size: 1.03rem;
+        font-weight: 950;
+        line-height: 1.15
+    }
+
+    .nsq-op-action-desc {
+        margin-top: 5px;
+        color: var(--op-muted);
+        font-size: .79rem;
+        line-height: 1.4
+    }
+
+    .nsq-op-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px 13px;
+        flex-wrap: wrap;
+        margin-top: 9px;
+        font-size: .71rem;
+        color: #475467;
+        font-weight: 750
+    }
+
+        .nsq-op-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px
+        }
+
+    .nsq-op-action-btn {
+        min-width: 128px;
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 13px;
+        background: var(--op-primary);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        text-decoration: none;
+        font-size: .78rem;
+        font-weight: 900;
+        box-shadow: 0 5px 14px rgba(0,74,173,.18);
+        transition: .16s ease;
+        white-space: nowrap;
+    }
+
+        .nsq-op-action-btn:hover {
+            color: #fff;
+            background: #003f93;
+            transform: translateY(-1px)
+        }
+
+        .nsq-op-action-btn.is-view {
+            background: #eef4fc;
+            color: var(--op-primary);
+            box-shadow: none;
+            border: 1px solid #cfdff5
+        }
+
+            .nsq-op-action-btn.is-view:hover {
+                background: #e3eefc;
+                color: #003f93
+            }
+
+        .nsq-op-action-btn.is-external {
+            background: #f3f4f6;
+            color: #667085;
+            border: 1px solid #d9dee7;
+            box-shadow: none;
+            cursor: default;
+            pointer-events: none
+        }
+
+    .nsq-op-tool.is-disabled {
+        background: #f7f8fa;
+        color: #98a2b3;
+        border-color: #e4e7ec;
+        cursor: default;
+        pointer-events: none
+    }
+
+    .nsq-op-next {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 11px 13px;
+        border-radius: 13px;
+        background: #f8fafc;
+        border: 1px dashed #d5dce6;
+        color: #475467;
+    }
+
+    .nsq-op-next-icon {
+        width: 31px;
+        height: 31px;
+        border-radius: 9px;
+        background: #fff;
+        border: 1px solid var(--op-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--op-primary)
+    }
+
+    .nsq-op-next strong {
+        display: block;
+        color: var(--op-navy);
+        font-size: .78rem
+    }
+
+    .nsq-op-next small {
+        display: block;
+        margin-top: 2px;
+        font-size: .69rem;
+        color: var(--op-muted)
+    }
+
+    .nsq-op-alerts {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 12px
+    }
+
+    .nsq-op-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid #dbe6f2;
+        background: #f5faff;
+        color: #24557f;
+        font-size: .76rem;
+    }
+
+        .nsq-op-alert.is-warning {
+            background: #fff8ea;
+            border-color: #f3d8a5;
+            color: #895600
+        }
+
+        .nsq-op-alert.is-danger {
+            background: #fff1f1;
+            border-color: #efb9b9;
+            color: #a72828
+        }
+
+        .nsq-op-alert.is-success {
+            background: #edf9f3;
+            border-color: #bfe2cf;
+            color: #176b48
+        }
+
+        .nsq-op-alert i {
+            margin-top: 1px
+        }
+
+        .nsq-op-alert strong {
+            display: block;
+            font-size: .76rem
+        }
+
+        .nsq-op-alert span {
+            display: block;
+            margin-top: 2px;
+            line-height: 1.35
+        }
+
+    .nsq-op-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .nsq-op-kpi {
+        min-width: 0;
+        padding: 11px;
+        border: 1px solid var(--op-border);
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .nsq-op-kpi-label {
+        font-size: .64rem;
+        color: var(--op-muted);
+        font-weight: 850;
+        text-transform: uppercase;
+        letter-spacing: .045em
+    }
+
+    .nsq-op-kpi-value {
+        margin-top: 3px;
+        color: var(--op-navy);
+        font-size: 1.03rem;
+        font-weight: 950;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .nsq-op-kpi-note {
+        margin-top: 2px;
+        color: var(--op-muted);
+        font-size: .64rem
+    }
+
+    .nsq-op-progress-line {
+        height: 8px;
+        border-radius: 999px;
+        background: #edf1f5;
+        overflow: hidden;
+        margin-top: 9px
+    }
+
+        .nsq-op-progress-line span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg,var(--op-primary),#2b82eb)
+        }
+
+    .nsq-op-progress-label {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 6px;
+        font-size: .68rem;
+        color: var(--op-muted);
+        font-weight: 750
+    }
+
+    .nsq-op-series-tools {
+        margin-top: 10px;
+        padding: 10px 11px;
+        border: 1px solid var(--op-border);
+        border-radius: 13px;
+        background: #fbfcfe;
+    }
+
+    .nsq-op-series-tools-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px;
+    }
+
+        .nsq-op-series-tools-head strong {
+            color: var(--op-navy);
+            font-size: .72rem;
+        }
+
+        .nsq-op-series-tools-head span {
+            color: var(--op-muted);
+            font-size: .62rem;
+        }
+
+    .nsq-op-series-tools-list {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .nsq-op-lhrh {
+        margin-top: 10px;
+        padding: 11px 12px;
+        border: 1px solid #d7c8f0;
+        border-radius: 13px;
+        background: #faf7ff;
+    }
+
+    .nsq-op-lhrh-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #6941a5;
+        font-size: .73rem;
+        font-weight: 950
+    }
+
+    .nsq-op-lhrh-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-top: 8px
+    }
+
+    .nsq-op-lhrh-item {
+        padding: 8px 9px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid #e6ddf5;
+        font-size: .69rem;
+        color: #5b4b72
+    }
+
+        .nsq-op-lhrh-item strong {
+            display: block;
+            color: #39265c;
+            font-size: .76rem
+        }
+
+    .nsq-op-details {
+        margin-top: 12px;
+        border: 1px solid var(--op-border);
+        border-radius: 14px;
+        background: #fff;
+        overflow: hidden
+    }
+
+        .nsq-op-details > summary {
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            padding: 12px 14px;
+            color: var(--op-navy);
+            font-size: .76rem;
+            font-weight: 900;
+        }
+
+            .nsq-op-details > summary::-webkit-details-marker {
+                display: none
+            }
+
+            .nsq-op-details > summary::after {
+                content: "\F282";
+                font-family: "bootstrap-icons";
+                font-size: .75rem;
+                color: var(--op-muted);
+                transition: .16s ease
+            }
+
+        .nsq-op-details[open] > summary::after {
+            transform: rotate(180deg)
+        }
+
+    .nsq-op-details-body {
+        padding: 0 14px 13px
+    }
+
+    .nsq-op-flow {
+        display: grid;
+        gap: 6px
+    }
+
+    .nsq-op-flow-item {
+        display: grid;
+        grid-template-columns: 27px minmax(0,1fr) auto;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 9px;
+        border-radius: 10px;
+        background: #fafbfc;
+        border: 1px solid #edf0f4;
+    }
+
+    .nsq-op-flow-icon {
+        width: 27px;
+        height: 27px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border: 1px solid var(--op-border);
+        color: #98a2b3
+    }
+
+    .nsq-op-flow-item.is-complete .nsq-op-flow-icon {
+        background: #eaf8f1;
+        border-color: #b8e0ca;
+        color: var(--op-success)
+    }
+
+    .nsq-op-flow-item.is-progress .nsq-op-flow-icon {
+        background: #eaf2ff;
+        border-color: #c9dcf8;
+        color: var(--op-primary)
+    }
+
+    .nsq-op-flow-item.is-blocked .nsq-op-flow-icon {
+        background: #fff0f0;
+        border-color: #f1c0c0;
+        color: var(--op-danger)
+    }
+
+    .nsq-op-flow-title {
+        font-size: .73rem;
+        color: var(--op-navy);
+        font-weight: 850
+    }
+
+    .nsq-op-flow-detail {
+        margin-top: 2px;
+        font-size: .65rem;
+        color: var(--op-muted);
+        line-height: 1.3
+    }
+
+    .nsq-op-flow-state {
+        font-size: .64rem;
+        color: var(--op-muted);
+        font-weight: 850;
+        white-space: nowrap
+    }
+
+    .nsq-op-tools {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap
+    }
+
+    .nsq-op-tool {
+        border: 1px solid var(--op-border);
+        border-radius: 10px;
+        padding: 7px 9px;
+        background: #fff;
+        color: #344054;
+        text-decoration: none;
+        font-size: .69rem;
+        font-weight: 850;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .nsq-op-tool:hover {
+            color: var(--op-primary);
+            border-color: #b9d0ef;
+            background: #f7faff
+        }
+
+    .nsq-op-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 11px 20px;
+        border-top: 1px solid var(--op-border);
+        background: #fff;
+        color: var(--op-muted);
+        font-size: .68rem;
+    }
+
+    .nsq-op-footer-user {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0
+    }
+
+        .nsq-op-footer-user strong {
+            color: #344054
+        }
+
+    .nsq-op-action-view {
+        display: none
+    }
+
+        .nsq-op-action-view.is-active {
+            display: block
+        }
+
+    .nsq-op-action-view-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .nsq-op-back {
+        border: 1px solid var(--op-border);
+        border-radius: 10px;
+        background: #fff;
+        color: #344054;
+        padding: 8px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: .72rem;
+        font-weight: 850;
+    }
+
+    .nsq-op-loading {
+        min-height: 220px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 10px;
+        color: var(--op-muted);
+        font-size: .78rem;
+        font-weight: 800;
+    }
+
+    .nsq-op-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #d9e4f2;
+        border-top-color: var(--op-primary);
+        border-radius: 50%;
+        animation: nsqOpSpin .75s linear infinite;
+    }
+
+    @@keyframes nsqOpSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-center {
+        --op-text: #edf2f7;
+        --op-muted: #9bacbf;
+        --op-border: rgba(255,255,255,.10);
+        --op-soft: #0b1422;
+        --op-navy: #f6f8fb;
+        background: #101b2c;
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-body,
+    html[data-nsq-theme="dark"] .nsq-op-footer {
+        background: #0b1422
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-card,
+    html[data-nsq-theme="dark"] .nsq-op-stage,
+    html[data-nsq-theme="dark"] .nsq-op-kpi,
+    html[data-nsq-theme="dark"] .nsq-op-details,
+    html[data-nsq-theme="dark"] .nsq-op-flow-icon,
+    html[data-nsq-theme="dark"] .nsq-op-tool,
+    html[data-nsq-theme="dark"] .nsq-op-lhrh-item,
+    html[data-nsq-theme="dark"] .nsq-op-action {
+        background: #111d2f
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-action {
+        background: linear-gradient(180deg,#111d2f,#0e1929)
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-flow-item,
+    html[data-nsq-theme="dark"] .nsq-op-next {
+        background: #0e1929
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-route-note,
+    html[data-nsq-theme="dark"] .nsq-op-parallel {
+        background: #0e1929;
+        border-color: #27466d;
+        color: #b7cdf0;
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-parallel-task {
+        background: #111d2f;
+    }
+
+    html[data-nsq-theme="dark"] .nsq-op-series-tools {
+        background: #0e1929;
+    }
+
+    @@media(max-width:991.98px) {
+        .nsq-op-grid {
+            grid-template-columns: 1fr
+        }
+
+        .nsq-op-stagebar {
+            grid-template-columns: repeat(7,minmax(118px,1fr));
+            overflow-x: auto;
+            padding-bottom: 3px
+        }
+    }
+
+    @@media(max-width:767.98px) {
+        .nsq-op-header {
+            padding: 16px
+        }
+
+        .nsq-op-header-top {
+            flex-direction: column
+        }
+
+        .nsq-op-header-actions {
+            position: absolute;
+            right: 12px;
+            top: 12px
+        }
+
+        .nsq-op-body {
+            padding: 12px
+        }
+
+        .nsq-op-parallel-grid,
+        .nsq-op-flow-phase.is-parallel .nsq-op-flow {
+            grid-template-columns: 1fr
+        }
+
+        .nsq-op-action-main {
+            grid-template-columns: auto 1fr
+        }
+
+            .nsq-op-action-main > .nsq-op-action-btn {
+                grid-column: 1/-1;
+                width: 100%
+            }
+
+        .nsq-op-kpi-grid {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .nsq-op-footer {
+            padding: 10px 12px
+        }
+    }
+</style>
+
+<div class="nsq-op-center"
+     data-nsq-operativa-centro
+     data-programa-id="@Model.ProgramaProduccionID"
+     data-ejecucion-id="@(Model.EjecucionProduccionID?.ToString() ?? "")"
+     data-of="@Model.OFTexto"
+     data-origen="@Model.Origen"
+     data-solo-lectura="@(Model.Permisos.SoloLectura ? "true" : "false")">
+
+    <div class="nsq-op-header">
+        <div class="nsq-op-header-top">
+            <div>
+                <div class="nsq-op-title-row">
+                    <div class="nsq-op-of">OF @Model.OFTexto</div>
+                    <span class="nsq-op-program">@Model.ProgramaTexto</span>
+                    @if (Model.EsParejaLhRh)
+                    {
+                        <span class="nsq-op-program"><i class="bi bi-link-45deg"></i> LH/RH</span>
+                    }
+                </div>
+                <div class="nsq-op-subtitle">
+                    <span><i class="bi bi-gear-wide-connected"></i>@Model.MaquinaTexto</span>
+                    <span><i class="bi bi-box"></i>@Model.ParteTexto</span>
+                    @if (!string.IsNullOrWhiteSpace(Model.ClienteNombre))
+                    {
+                        <span><i class="bi bi-building"></i>@Model.ClienteNombre</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.MoldeCodigo))
+                    {
+                        <span><i class="bi bi-grid-3x3-gap"></i>@Model.MoldeTexto</span>
+                    }
+                </div>
+            </div>
+
+            <div class="nsq-op-header-actions">
+                <a href="@urlCentro"
+                   class="nsq-op-icon-btn"
+                   title="Actualizar"
+                   data-nsq-operativa-refrescar>
+                    <i class="bi bi-arrow-clockwise"></i>
+                </a>
+                @if (!string.IsNullOrWhiteSpace(urlDetalle) && detalleCompleto != null)
+                {
+                    <a href="@urlDetalle"
+                       class="nsq-op-icon-btn"
+                       title="Abrir detalle completo"
+                       target="_blank"
+                       rel="noopener">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                }
+                <button type="button"
+                        class="nsq-op-icon-btn"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"
+                        title="Cerrar">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="nsq-op-badges">
+            <span class="nsq-op-badge @estadoClase">
+                <i class="bi bi-activity"></i>@Model.EstadoGeneralTexto
+            </span>
+            <span class="nsq-op-badge @prioridadClase">
+                <i class="bi bi-flag-fill"></i>@Model.PrioridadTexto
+            </span>
+            <span class="nsq-op-badge">
+                <i class="bi @ProduccionOperativaEtapa.Icono(Model.EtapaActual)"></i>@Model.EtapaActualTexto
+            </span>
+            @if (Model.Permisos.SoloLectura)
+            {
+                <span class="nsq-op-badge is-muted"><i class="bi bi-eye"></i>Solo lectura</span>
+            }
+            @if (Model.TieneParoAbierto)
+            {
+                <span class="nsq-op-badge is-warning"><i class="bi bi-pause-circle-fill"></i>Paro abierto</span>
+            }
+            @if (Model.TieneInterrupcionUrgente)
+            {
+                <span class="nsq-op-badge is-danger"><i class="bi bi-exclamation-octagon-fill"></i>Interrupción urgente</span>
+            }
+        </div>
+    </div>
+
+    <div class="nsq-op-body">
+        <div data-nsq-operativa-resumen>
+            <div class="nsq-op-stagebar">
+                @foreach (var fase in fasesVisuales)
+                {
+                    var pasosFase = pasos.Where(x => ContieneClave(fase.Claves, x.Clave)).ToList();
+                    var porcentajeFase = ProgresoClaves(pasos, fase.Claves);
+                    var actualFase = accionActual != null && ContieneClave(fase.Claves, accionActual.Clave);
+                    var pasadaFase = porcentajeFase >= 100m;
+                    <div class="nsq-op-stage @(actualFase ? "is-current" : pasadaFase ? "is-past" : "")">
+                        <div class="nsq-op-stage-head">
+                            <i class="bi @fase.Icono"></i>
+                            <span>@fase.Nombre</span>
+                            <span class="ms-auto">@porcentajeFase.ToString("0")%</span>
+                        </div>
+                        <div class="nsq-op-stage-progress"><span style="width:@Pct(porcentajeFase)%"></span></div>
+                    </div>
+                }
+            </div>
+            <div class="nsq-op-route-note">
+                <i class="bi bi-signpost-split-fill mt-1"></i>
+                <div>
+                    <strong>Orden operativo:</strong> preparación de insumos → cambio de molde + checklist GQ-F-PR01-03 en paralelo → iniciar preparación de Producción → checklist GQ-F-PR01-06 → configuración técnica → primeras piezas / liberación de Calidad → inicio de serie → producción → cierre.
+                </div>
+            </div>
+
+            @if (Model.Alertas.Any() || Model.Bloqueos.Any(x => x.Activo))
+            {
+                <div class="nsq-op-alerts">
+                    @foreach (var bloqueo in Model.Bloqueos.Where(x => x.Activo && x.BloqueaFlujo))
+                    {
+                        <div class="nsq-op-alert is-danger">
+                            <i class="bi bi-lock-fill"></i>
+                            <div>
+                                <strong>@bloqueo.Titulo</strong>
+                                <span>@(string.IsNullOrWhiteSpace(bloqueo.Descripcion) ? "El flujo está bloqueado hasta resolver esta condición." : bloqueo.Descripcion)</span>
+                            </div>
+                        </div>
+                    }
+                    @foreach (var alerta in Model.Alertas.Where(x => x.RequiereAtencion).Take(3))
+                    {
+                        <div class="nsq-op-alert @ClaseSeveridad(alerta.Severidad)">
+                            <i class="bi @alerta.Icono"></i>
+                            <div>
+                                <strong>@alerta.Titulo</strong>
+                                @if (!string.IsNullOrWhiteSpace(alerta.Mensaje))
+                                {
+                                    <span>@alerta.Mensaje</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (mostrarTrabajoParaleloMolde)
+            {
+                <section class="nsq-op-parallel">
+                    <div class="nsq-op-parallel-head">
+                        <div>
+                            <div class="nsq-op-parallel-title"><i class="bi bi-arrows-angle-contract me-1"></i>Cambio de molde: dos actividades simultáneas</div>
+                            <div class="nsq-op-parallel-help">El desmontaje/montaje físico y el checklist GQ-F-PR01-03 se trabajan al mismo tiempo. El cambio de molde no puede finalizar hasta completar el checklist.</div>
+                        </div>
+                        <span class="nsq-op-parallel-badge">En paralelo</span>
+                    </div>
+                    <div class="nsq-op-parallel-grid">
+                        @if (pasoCambioMolde != null)
+                        {
+                            var urlCambioMolde = accionCambioMolde == null ? null : Url.Action("Contenido", "ProduccionOperativa", new
+                            {
+                                programaProduccionId = Model.ProgramaProduccionID,
+                                accionClave = accionCambioMolde.Clave,
+                                origen = Model.Origen,
+                                soloLectura = !accionCambioMolde.DisponibleParaUsuario || Model.Permisos.SoloLectura
+                            });
+                            <div class="nsq-op-parallel-task">
+                                <span class="nsq-op-parallel-task-icon"><i class="bi bi-tools"></i></span>
+                                <div>
+                                    <strong>Cambio físico de molde</strong>
+                                    <small>@(pasoCambioMolde.Detalle ?? pasoCambioMolde.MotivoBloqueo ?? "Desmontaje y montaje del molde correspondiente.")</small>
+                                    @if (!string.IsNullOrWhiteSpace(urlCambioMolde))
+                                    {
+                                        <a href="@urlCambioMolde" class="nsq-op-parallel-link" data-nsq-operativa-accion data-accion-clave="@accionCambioMolde!.Clave" data-solo-lectura="@((!accionCambioMolde.DisponibleParaUsuario || Model.Permisos.SoloLectura) ? "true" : "false")">
+                                            <i class="bi bi-arrow-right-circle"></i>@(accionCambioMolde.DisponibleParaUsuario? accionCambioMolde.TextoBoton: "Ver actividad")
+                                        </a>
+                                    }
+                                </div>
+                                <span class="nsq-op-parallel-state">@pasoCambioMolde.EstadoTexto</span>
+                            </div>
+                        }
+                        @if (pasoChecklistMolde != null)
+                        {
+                            var urlChecklistMolde = accionChecklistMolde == null ? null : Url.Action("Contenido", "ProduccionOperativa", new
+                            {
+                                programaProduccionId = Model.ProgramaProduccionID,
+                                accionClave = accionChecklistMolde.Clave,
+                                origen = Model.Origen,
+                                soloLectura = !accionChecklistMolde.DisponibleParaUsuario || Model.Permisos.SoloLectura
+                            });
+                            <div class="nsq-op-parallel-task">
+                                <span class="nsq-op-parallel-task-icon"><i class="bi bi-ui-checks-grid"></i></span>
+                                <div>
+                                    <strong>Checklist GQ-F-PR01-03</strong>
+                                    <small>@(pasoChecklistMolde.Detalle ?? "Checklist de desmontaje y montaje de molde.")</small>
+                                    @if (!string.IsNullOrWhiteSpace(urlChecklistMolde))
+                                    {
+                                        <a href="@urlChecklistMolde" class="nsq-op-parallel-link" data-nsq-operativa-accion data-accion-clave="@accionChecklistMolde!.Clave" data-solo-lectura="@((!accionChecklistMolde.DisponibleParaUsuario || Model.Permisos.SoloLectura) ? "true" : "false")">
+                                            <i class="bi bi-arrow-right-circle"></i>@(accionChecklistMolde.DisponibleParaUsuario? accionChecklistMolde.TextoBoton: "Ver checklist")
+                                        </a>
+                                    }
+                                </div>
+                                <span class="nsq-op-parallel-state">@pasoChecklistMolde.EstadoTexto</span>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <div class="nsq-op-grid">
+                <div>
+                    <section class="nsq-op-card">
+                        <div class="nsq-op-card-body">
+                            <div class="nsq-op-section-title">
+                                <span><i class="bi bi-lightning-charge-fill me-1"></i>Acción actual</span>
+                                @if (accionActual != null)
+                                {
+                                    <span>@accionActual.AreaResponsableTexto</span>
+                                }
+                            </div>
+
+                            @if (accionActual == null)
+                            {
+                                <div class="nsq-op-action @(Model.EstaFinalizada ? "" : "is-waiting")">
+                                    <div class="nsq-op-action-main">
+                                        <div class="nsq-op-action-icon">
+                                            <i class="bi @(Model.EstaFinalizada ? "bi-check-circle-fill" : "bi-hourglass-split")"></i>
+                                        </div>
+                                        <div>
+                                            <div class="nsq-op-action-kicker">Estado operativo</div>
+                                            <div class="nsq-op-action-title">@(Model.EstaFinalizada ? "Proceso finalizado" : "Sin acción operativa disponible")</div>
+                                            <div class="nsq-op-action-desc">
+                                                @(Model.EstaFinalizada
+                                                                                            ? "La OF no tiene actividades pendientes en el Centro Operativo."
+                                                                                            : "La Agenda Operativa no determinó una actividad ejecutable para este momento.")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                                                        }
+                            else
+                            {
+                                var esAccionExterna = EsAccionExterna(accionActual);
+                                var claseAccion = accionActual.Bloqueada ? "is-blocked" : !accionActual.DisponibleParaUsuario ? "is-waiting" : "";
+                                var urlAccion = Url.Action("Contenido", "ProduccionOperativa", new
+                                {
+                                    programaProduccionId = Model.ProgramaProduccionID,
+                                    accionClave = accionActual.Clave,
+                                    origen = Model.Origen,
+                                    soloLectura = !accionActual.DisponibleParaUsuario || Model.Permisos.SoloLectura
+                                }) ?? $"/Produccion/Operativa/Contenido/{Model.ProgramaProduccionID}/{Uri.EscapeDataString(accionActual.Clave)}";
+
+                                <div class="nsq-op-action @claseAccion">
+                                    <div class="nsq-op-action-main">
+                                        <div class="nsq-op-action-icon">
+                                            <i class="bi @accionActual.Icono"></i>
+                                        </div>
+                                        <div>
+                                            <div class="nsq-op-action-kicker">
+                                                @(accionActual.DisponibleParaUsuario ? "Te corresponde ahora" : "Actividad actual de la OF")
+                                            </div>
+                                            <div class="nsq-op-action-title">@accionActual.Titulo</div>
+                                            @if (!string.IsNullOrWhiteSpace(accionActual.Descripcion))
+                                            {
+                                                <div class="nsq-op-action-desc">@accionActual.Descripcion</div>
+                                            }
+                                            <div class="nsq-op-meta">
+                                                <span><i class="bi bi-people-fill"></i>@accionActual.AreaResponsableTexto</span>
+                                                @if (!string.IsNullOrWhiteSpace(accionActual.ResponsableNombre))
+                                                {
+                                                    <span><i class="bi bi-person-fill"></i>@accionActual.ResponsableNombre</span>
+                                                }
+                                                @if (accionActual.FechaObjetivo.HasValue)
+                                                {
+                                                    <span><i class="bi bi-clock"></i>@TextoFecha(accionActual.FechaObjetivo)</span>
+                                                }
+                                                @if (accionActual.EstaVencida)
+                                                {
+                                                    <span class="text-danger"><i class="bi bi-exclamation-circle-fill"></i>@accionActual.MinutosDesfase min de desfase</span>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @if (esAccionExterna)
+                                        {
+                                            <span class="nsq-op-action-btn is-external" title="Esta actividad se atiende únicamente desde su módulo responsable.">
+                                                <i class="bi bi-hourglass-split"></i>@TextoEsperaArea(accionActual)
+                                            </span>
+                                        }
+                                        else if (accionActual.Bloqueada && !accionActual.DisponibleParaUsuario)
+                                        {
+                                            <a href="@urlAccion"
+                                               class="nsq-op-action-btn is-view"
+                                               data-nsq-operativa-accion
+                                               data-accion-clave="@accionActual.Clave"
+                                               data-solo-lectura="true">
+                                                <i class="bi bi-eye"></i>Ver estado
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@urlAccion"
+                                               class="nsq-op-action-btn @(accionActual.DisponibleParaUsuario ? "" : "is-view")"
+                                               data-nsq-operativa-accion
+                                               data-accion-clave="@accionActual.Clave"
+                                               data-solo-lectura="@((!accionActual.DisponibleParaUsuario || Model.Permisos.SoloLectura) ? "true" : "false")">
+                                                <i class="bi @(accionActual.DisponibleParaUsuario ? "bi-arrow-right-circle-fill" : "bi-eye")"></i>
+                                                @(accionActual.DisponibleParaUsuario? accionActual.TextoBoton: "Ver actividad")
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (siguiente != null)
+                            {
+                                <div class="nsq-op-next">
+                                    <div class="nsq-op-next-icon"><i class="bi bi-skip-forward-fill"></i></div>
+                                    <div>
+                                        <strong>Después sigue: @siguiente.Titulo</strong>
+                                        <small>@siguiente.AreaResponsableTexto@(string.IsNullOrWhiteSpace(siguiente.ResponsableNombre) ? "" : $" · {siguiente.ResponsableNombre}")</small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    @if (mostrarAccionesDuranteSerie)
+                    {
+                        <section class="nsq-op-series-tools">
+                            <div class="nsq-op-series-tools-head">
+                                <strong><i class="bi bi-activity me-1"></i>Durante la serie</strong>
+                                <span>Acciones concurrentes; no cambian el orden del arranque</span>
+                            </div>
+                            <div class="nsq-op-series-tools-list">
+                                @foreach (var accionSerie in accionesDuranteSerie)
+                                {
+                                    var urlSerie = Url.Action("Contenido", "ProduccionOperativa", new
+                                    {
+                                        programaProduccionId = Model.ProgramaProduccionID,
+                                        accionClave = accionSerie.Clave,
+                                        origen = Model.Origen,
+                                        soloLectura = !accionSerie.DisponibleParaUsuario || Model.Permisos.SoloLectura
+                                    }) ?? $"/Produccion/Operativa/Contenido/{Model.ProgramaProduccionID}/{Uri.EscapeDataString(accionSerie.Clave)}";
+                                    <a class="nsq-op-tool"
+                                       href="@urlSerie"
+                                       data-nsq-operativa-accion
+                                       data-accion-clave="@accionSerie.Clave"
+                                       data-solo-lectura="@((!accionSerie.DisponibleParaUsuario || Model.Permisos.SoloLectura) ? "true" : "false")">
+                                        <i class="bi @accionSerie.Icono"></i>
+                                        @(accionSerie.DisponibleParaUsuario? accionSerie.Titulo: $"Ver {accionSerie.Titulo}")
+                                    </a>
+                                }
+                            </div>
+                        </section>
+                    }
+
+                    @if (Model.EsParejaLhRh)
+                    {
+                        <section class="nsq-op-lhrh">
+                            <div class="nsq-op-lhrh-title">
+                                <i class="bi bi-link-45deg"></i>
+                                Operación conjunta LH/RH
+                                @if (Model.LhRh.GrupoLhRh.HasValue)
+                                {
+                                    <span>· Grupo @Model.LhRh.GrupoLhRh.Value</span>
+                                }
+                            </div>
+                            <div class="nsq-op-lhrh-grid">
+                                <div class="nsq-op-lhrh-item">
+                                    <strong>OF actual · @(string.IsNullOrWhiteSpace(Model.LhRh.LadoActual) ? "Lado" : Model.LhRh.LadoActual)</strong>
+                                    @Model.OFTexto · @Model.ParteTexto
+                                </div>
+                                <div class="nsq-op-lhrh-item">
+                                    <strong>OF pareja · @(string.IsNullOrWhiteSpace(Model.LhRh.LadoPareja) ? "Lado" : Model.LhRh.LadoPareja)</strong>
+                                    @Model.LhRh.OFParejaTexto · @Model.LhRh.ParteParejaTexto
+                                </div>
+                            </div>
+                            @if (!Model.LhRh.ParejaConsistente && !string.IsNullOrWhiteSpace(Model.LhRh.MotivoInconsistencia))
+                            {
+                                <div class="mt-2 small text-danger fw-bold">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>@Model.LhRh.MotivoInconsistencia
+                                </div>
+                            }
+                        </section>
+                    }
+
+                    <details class="nsq-op-details">
+                        <summary>
+                            <span><i class="bi bi-diagram-3 me-1"></i>Ver flujo completo de la OF</span>
+                            <span class="text-muted">@pasos.Count paso(s)</span>
+                        </summary>
+                        <div class="nsq-op-details-body">
+                            @foreach (var fase in fasesVisuales)
+                            {
+                                var pasosFase = pasos.Where(x => ContieneClave(fase.Claves, x.Clave)).OrderBy(x => x.Orden).ToList();
+                                if (!pasosFase.Any()) continue;
+                                var faseParalela = string.Equals(fase.Clave, "MOLDE", StringComparison.OrdinalIgnoreCase);
+                                <div class="nsq-op-flow-phase @(faseParalela ? "is-parallel" : "")">
+                                    <div class="nsq-op-flow-phase-head">
+                                        <i class="bi @fase.Icono"></i>
+                                        <span>@fase.Nombre</span>
+                                        @if (faseParalela && pasosFase.Count > 1)
+                                        {
+                                            <span class="badge text-bg-primary">simultáneo</span>
+                                        }
+                                    </div>
+                                    <div class="nsq-op-flow">
+                                        @foreach (var paso in pasosFase)
+                                        {
+                                            <div class="nsq-op-flow-item @ClasePaso(paso)">
+                                                <div class="nsq-op-flow-icon"><i class="bi @IconoPaso(paso)"></i></div>
+                                                <div>
+                                                    <div class="nsq-op-flow-title">@paso.Nombre</div>
+                                                    @if (!string.IsNullOrWhiteSpace(paso.Detalle))
+                                                    {
+                                                        <div class="nsq-op-flow-detail">@paso.Detalle</div>
+                                                    }
+                                                    else if (!string.IsNullOrWhiteSpace(paso.MotivoBloqueo))
+                                                    {
+                                                        <div class="nsq-op-flow-detail">@paso.MotivoBloqueo</div>
+                                                    }
+                                                </div>
+                                                <div class="nsq-op-flow-state">@paso.EstadoTexto</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </details>
+
+                    @if (accionesSecundarias.Any())
+                    {
+                        <details class="nsq-op-details">
+                            <summary>
+                                <span><i class="bi bi-grid me-1"></i>Herramientas y consultas</span>
+                                <span class="text-muted">@accionesSecundarias.Count</span>
+                            </summary>
+                            <div class="nsq-op-details-body">
+                                <div class="nsq-op-tools">
+                                    @foreach (var accion in accionesSecundarias)
+                                    {
+                                        if (string.Equals(accion.Clave, ProduccionOperativaAccionClave.DetalleCompleto, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(urlDetalle))
+                                            {
+                                                <a class="nsq-op-tool" href="@urlDetalle" target="_blank" rel="noopener">
+                                                    <i class="bi @accion.Icono"></i>@accion.Titulo
+                                                </a>
+                                            }
+                                        }
+                                        else if (EsAccionExterna(accion))
+                                        {
+                                            <span class="nsq-op-tool is-disabled" title="Esta actividad se atiende desde su módulo responsable.">
+                                                <i class="bi bi-hourglass-split"></i>@accion.Titulo · @TextoEsperaArea(accion)
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            var urlSecundaria = Url.Action("Contenido", "ProduccionOperativa", new
+                                            {
+                                                programaProduccionId = Model.ProgramaProduccionID,
+                                                accionClave = accion.Clave,
+                                                origen = Model.Origen,
+                                                soloLectura = !accion.DisponibleParaUsuario || Model.Permisos.SoloLectura
+                                            }) ?? $"/Produccion/Operativa/Contenido/{Model.ProgramaProduccionID}/{Uri.EscapeDataString(accion.Clave)}";
+
+                                            <a class="nsq-op-tool"
+                                               href="@urlSecundaria"
+                                               data-nsq-operativa-accion
+                                               data-accion-clave="@accion.Clave"
+                                               data-solo-lectura="@((!accion.DisponibleParaUsuario || Model.Permisos.SoloLectura) ? "true" : "false")">
+                                                <i class="bi @accion.Icono"></i>@accion.Titulo
+                                            </a>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </details>
+                    }
+                </div>
+
+                <aside>
+                    <section class="nsq-op-card">
+                        <div class="nsq-op-card-body">
+                            <div class="nsq-op-section-title">
+                                <span><i class="bi bi-speedometer2 me-1"></i>Avance</span>
+                                <span>@Model.Metricas.PorcentajeAvance.ToString("0.##")%</span>
+                            </div>
+                            <div class="nsq-op-progress-line">
+                                <span style="width:@Pct(Model.Metricas.PorcentajeAvance)%"></span>
+                            </div>
+                            <div class="nsq-op-progress-label">
+                                <span>@Model.Metricas.CantidadProducida.ToString("N0") producidas</span>
+                                <span>@Model.Metricas.CantidadProgramada.ToString("N0") programadas</span>
+                            </div>
+
+                            <div class="nsq-op-kpi-grid mt-3">
+                                <div class="nsq-op-kpi">
+                                    <div class="nsq-op-kpi-label">Pendientes</div>
+                                    <div class="nsq-op-kpi-value">@Model.Metricas.CantidadPendiente.ToString("N0")</div>
+                                    <div class="nsq-op-kpi-note">piezas</div>
+                                </div>
+                                <div class="nsq-op-kpi">
+                                    <div class="nsq-op-kpi-label">Capturas</div>
+                                    <div class="nsq-op-kpi-value">@Model.Metricas.CapturasCompletadas / @Model.Metricas.CapturasRequeridas</div>
+                                    <div class="nsq-op-kpi-note">@Model.Metricas.CapturasPendientes pendiente(s)</div>
+                                </div>
+                                @if (Model.Metricas.ObjetivoHoraActual.HasValue)
+                                {
+                                    <div class="nsq-op-kpi">
+                                        <div class="nsq-op-kpi-label">Objetivo vigente</div>
+                                        <div class="nsq-op-kpi-value">@Model.Metricas.ObjetivoHoraActual.Value.ToString("N0")</div>
+                                        <div class="nsq-op-kpi-note">pzas/h</div>
+                                    </div>
+                                }
+                                @if (Model.Metricas.ContadorActual.HasValue)
+                                {
+                                    <div class="nsq-op-kpi">
+                                        <div class="nsq-op-kpi-label">Contador</div>
+                                        <div class="nsq-op-kpi-value">@Model.Metricas.ContadorActual.Value.ToString("N0")</div>
+                                        <div class="nsq-op-kpi-note">actual</div>
+                                    </div>
+                                }
+                                @if (Model.Metricas.CajasFormadas > 0 || Model.Metricas.CajasPendientesCalidad > 0 || Model.Metricas.CajasEnZonaVerde > 0)
+                                {
+                                    <div class="nsq-op-kpi">
+                                        <div class="nsq-op-kpi-label">Cajas</div>
+                                        <div class="nsq-op-kpi-value">@Model.Metricas.CajasFormadas</div>
+                                        <div class="nsq-op-kpi-note">@Model.Metricas.CajasPendientesCalidad pendiente(s) Calidad</div>
+                                    </div>
+                                }
+                                @if (Model.Metricas.MinutosParoActual > 0)
+                                {
+                                    <div class="nsq-op-kpi">
+                                        <div class="nsq-op-kpi-label">Paro actual</div>
+                                        <div class="nsq-op-kpi-value">@Model.Metricas.MinutosParoActual min</div>
+                                        <div class="nsq-op-kpi-note">acumulados</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="nsq-op-card mt-3">
+                        <div class="nsq-op-card-body">
+                            <div class="nsq-op-section-title"><span><i class="bi bi-calendar3 me-1"></i>Programa</span></div>
+                            <div class="small text-muted">
+                                <div class="d-flex justify-content-between gap-3 py-1">
+                                    <span>Inicio programado</span>
+                                    <strong class="text-body">@TextoFecha(Model.FechaInicioProgramada)</strong>
+                                </div>
+                                <div class="d-flex justify-content-between gap-3 py-1">
+                                    <span>Fin programado</span>
+                                    <strong class="text-body">@TextoFecha(Model.FechaFinProgramada)</strong>
+                                </div>
+                                @if (Model.FechaInicioReal.HasValue)
+                                {
+                                    <div class="d-flex justify-content-between gap-3 py-1">
+                                        <span>Inicio real</span>
+                                        <strong class="text-body">@TextoFecha(Model.FechaInicioReal)</strong>
+                                    </div>
+                                }
+                                @if (Model.FechaFinReal.HasValue)
+                                {
+                                    <div class="d-flex justify-content-between gap-3 py-1">
+                                        <span>Fin real</span>
+                                        <strong class="text-body">@TextoFecha(Model.FechaFinReal)</strong>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        </div>
+
+        <section class="nsq-op-action-view"
+                 data-nsq-operativa-vista-accion>
+            <div class="nsq-op-action-view-head">
+                <button type="button"
+                        class="nsq-op-back"
+                        data-nsq-operativa-volver>
+                    <i class="bi bi-arrow-left"></i>
+                    Volver al Centro Operativo
+                </button>
+                <div class="small text-muted fw-bold" data-nsq-operativa-accion-titulo></div>
+            </div>
+            <div data-nsq-operativa-contenido-body>
+                <div class="nsq-op-loading">
+                    <div class="nsq-op-spinner"></div>
+                    <span>Cargando actividad...</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="nsq-op-footer">
+        <div class="nsq-op-footer-user">
+            <i class="bi bi-person-circle"></i>
+            <span>
+                Sesión: <strong>@Model.Usuario.NombreVisible</strong>
+                @if (!string.IsNullOrWhiteSpace(Model.Usuario.Puesto))
+                {
+                    <span> · @Model.Usuario.Puesto</span>
+                }
+            </span>
+        </div>
+        <div>
+            Actualizado @Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss")
+        </div>
+    </div>
+</div>

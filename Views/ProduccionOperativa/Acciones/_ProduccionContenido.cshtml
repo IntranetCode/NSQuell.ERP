@@ -1,0 +1,1172 @@
+﻿@model ERP.NSQuell.Models.ProduccionSeguimientoTecnicoOperativoVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+@using System.Linq
+
+@functions {
+    public static string Fecha(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    }
+
+    public static string Numero(int value)
+    {
+        return value.ToString("N0");
+    }
+
+    public static string DecimalTexto(decimal? value, string formato = "0.##")
+    {
+        return value.HasValue ? value.Value.ToString(formato) : "-";
+    }
+
+    public static string EstadoCaptura(ProduccionSeguimientoTecnicoCapturaVm captura)
+    {
+        if (!captura.CumplioObjetivo.HasValue) return "is-neutral";
+        return captura.CumplioObjetivo.Value ? "is-ok" : "is-bad";
+    }
+
+    public static string EstadoCalidad(ProduccionSeguimientoTecnicoCalidadVm? calidad)
+    {
+        if (calidad == null) return "is-neutral";
+        if (calidad.ConfiguracionInvalidada || calidad.RequiereReliberacion || calidad.MonitoreosVencidos > 0 || calidad.DisposicionesPendientes > 0) return "is-bad";
+        if (calidad.MonitoreosConHallazgo > 0) return "is-warn";
+        if (calidad.Liberado) return "is-ok";
+        return "is-warn";
+    }
+
+    public static string EstadoEjecucion(int estatusId)
+    {
+        return estatusId switch
+        {
+            ProduccionEstatus.EnProduccion => "is-running",
+            ProduccionEstatus.Pausado => "is-warn",
+            ProduccionEstatus.EnPreparacion => "is-prep",
+            ProduccionEstatus.Terminado or ProduccionEstatus.TerminadoParcial or ProduccionEstatus.Cerrado => "is-ok",
+            _ => "is-neutral"
+        };
+    }
+
+    public static string Pct(decimal value)
+    {
+        return Math.Max(0m, Math.Min(100m, value)).ToString("0.##", CultureInfo.InvariantCulture);
+    }
+}
+
+@{
+    var ultima = Model.UltimaCaptura;
+    var lectura = Model.UltimaLecturaContador;
+    var configuracionFisica = Model.ConfiguracionFisicaReferencia;
+    var tieneAlertas = Model.TieneParoAbierto || Model.RequiereReliberacion || Model.TieneHallazgosCalidad || (Model.EsParejaLhRh && !Model.ConfiguracionFisicaSincronizada);
+    var urlHistorial = Url.Action("Contenido", "ProduccionOperativa", new
+    {
+        programaProduccionId = Model.ProgramaProduccionID,
+        accionClave = ProduccionOperativaAccionClave.Historial,
+        origen = ProduccionOperativaOrigen.Calendario,
+        soloLectura = true
+    }) ?? $"/Produccion/Operativa/Contenido/{Model.ProgramaProduccionID}/{ProduccionOperativaAccionClave.Historial}?origen=CALENDARIO&soloLectura=true";
+}
+
+<style>
+    .pst {
+        --pst-blue: #004aad;
+        --pst-navy: #102542;
+        --pst-text: #172033;
+        --pst-muted: #667085;
+        --pst-line: #dfe7f0;
+        --pst-soft: #f6f9fc;
+        --pst-green: #138a5b;
+        --pst-amber: #b7791f;
+        --pst-red: #c0362c;
+        color: var(--pst-text);
+        font-size: .83rem
+    }
+
+        .pst * {
+            box-sizing: border-box
+        }
+
+        .pst button, .pst a {
+            font: inherit
+        }
+
+    .pst-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border: 1px solid var(--pst-line);
+        border-radius: 16px;
+        background: linear-gradient(135deg,#f8fbff,#fff);
+        box-shadow: 0 7px 20px rgba(16,37,66,.05)
+    }
+
+    .pst-head-main {
+        min-width: 0;
+        display: flex;
+        gap: 13px;
+        align-items: flex-start
+    }
+
+    .pst-head-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 13px;
+        background: #e8f1ff;
+        color: var(--pst-blue);
+        display: grid;
+        place-items: center;
+        font-size: 1.2rem;
+        flex: none
+    }
+
+    .pst-kicker {
+        font-size: .67rem;
+        font-weight: 950;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--pst-blue)
+    }
+
+    .pst-title {
+        font-size: 1.15rem;
+        font-weight: 950;
+        color: var(--pst-navy);
+        line-height: 1.15;
+        margin-top: 2px
+    }
+
+    .pst-sub {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px 14px;
+        color: var(--pst-muted);
+        margin-top: 6px;
+        font-size: .75rem;
+        font-weight: 700
+    }
+
+        .pst-sub span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px
+        }
+
+    .pst-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+    .pst-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 9px;
+        border-radius: 999px;
+        font-size: .67rem;
+        font-weight: 950;
+        white-space: nowrap;
+        border: 1px solid #cdd9e8;
+        background: #fff;
+        color: #42526b
+    }
+
+        .pst-badge.is-read {
+            background: #eef5ff;
+            color: #174d91;
+            border-color: #c8dcf7
+        }
+
+    .pst-btn {
+        border: 1px solid #cbd8e8;
+        background: #fff;
+        color: #28415f;
+        border-radius: 10px;
+        padding: 7px 10px;
+        font-size: .72rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+        cursor: pointer
+    }
+
+        .pst-btn:hover {
+            background: #f2f7fc;
+            color: #173754
+        }
+
+    .pst-note {
+        margin-top: 10px;
+        border-radius: 12px;
+        background: #eef6ff;
+        border: 1px solid #cfe0f5;
+        color: #24476f;
+        padding: 10px 12px;
+        font-size: .74rem;
+        font-weight: 750;
+        display: flex;
+        gap: 8px;
+        align-items: flex-start
+    }
+
+    .pst-alerts {
+        margin-top: 10px;
+        display: grid;
+        gap: 7px
+    }
+
+    .pst-alert {
+        border: 1px solid;
+        border-radius: 12px;
+        padding: 9px 11px;
+        font-size: .73rem;
+        font-weight: 800;
+        display: flex;
+        gap: 8px;
+        align-items: flex-start
+    }
+
+        .pst-alert.is-bad {
+            background: #fff2f1;
+            border-color: #f0beb9;
+            color: #9a2d25
+        }
+
+        .pst-alert.is-warn {
+            background: #fff8e8;
+            border-color: #ead39e;
+            color: #805815
+        }
+
+        .pst-alert.is-info {
+            background: #eef6ff;
+            border-color: #cfe0f5;
+            color: #24476f
+        }
+
+    .pst-kpis {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 9px;
+        margin-top: 11px
+    }
+
+    .pst-kpi {
+        border: 1px solid var(--pst-line);
+        border-radius: 14px;
+        background: #fff;
+        padding: 11px 12px;
+        min-width: 0
+    }
+
+    .pst-kpi-label {
+        color: var(--pst-muted);
+        font-size: .66rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .04em
+    }
+
+    .pst-kpi-value {
+        font-size: 1.18rem;
+        font-weight: 950;
+        color: var(--pst-navy);
+        margin-top: 3px;
+        line-height: 1
+    }
+
+    .pst-kpi-note {
+        font-size: .66rem;
+        color: var(--pst-muted);
+        margin-top: 5px;
+        font-weight: 700
+    }
+
+    .pst-grid {
+        display: grid;
+        grid-template-columns: minmax(0,1.35fr) minmax(290px,.65fr);
+        gap: 11px;
+        margin-top: 11px;
+        align-items: start
+    }
+
+    .pst-card {
+        border: 1px solid var(--pst-line);
+        border-radius: 15px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .pst-card-head {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--pst-line);
+        background: #fafcff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px
+    }
+
+    .pst-card-title {
+        font-size: .78rem;
+        font-weight: 950;
+        color: var(--pst-navy);
+        display: flex;
+        align-items: center;
+        gap: 7px
+    }
+
+    .pst-card-sub {
+        font-size: .65rem;
+        color: var(--pst-muted);
+        font-weight: 750
+    }
+
+    .pst-card-body {
+        padding: 12px 13px
+    }
+
+    .pst-physical-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .pst-physical {
+        border: 1px solid var(--pst-line);
+        background: var(--pst-soft);
+        border-radius: 12px;
+        padding: 10px
+    }
+
+        .pst-physical small {
+            display: block;
+            color: var(--pst-muted);
+            font-size: .64rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .pst-physical strong {
+            display: block;
+            margin-top: 3px;
+            font-size: .94rem;
+            color: var(--pst-navy);
+            font-weight: 950;
+            word-break: break-word
+        }
+
+    .pst-lados {
+        display: grid;
+        grid-template-columns: repeat(auto-fit,minmax(330px,1fr));
+        gap: 11px;
+        margin-top: 11px
+    }
+
+    .pst-lado {
+        border: 1px solid var(--pst-line);
+        border-radius: 15px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .pst-lado-head {
+        padding: 11px 13px;
+        background: #f9fbfd;
+        border-bottom: 1px solid var(--pst-line);
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start
+    }
+
+    .pst-lado-of {
+        font-weight: 950;
+        font-size: .94rem;
+        color: var(--pst-navy)
+    }
+
+    .pst-lado-meta {
+        font-size: .67rem;
+        color: var(--pst-muted);
+        font-weight: 750;
+        margin-top: 2px
+    }
+
+    .pst-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: .64rem;
+        font-weight: 950;
+        border: 1px solid
+    }
+
+        .pst-state.is-running, .pst-state.is-ok {
+            background: #ecf9f2;
+            border-color: #bee4ce;
+            color: #147047
+        }
+
+        .pst-state.is-prep {
+            background: #eef5ff;
+            border-color: #c8dcf7;
+            color: #174d91
+        }
+
+        .pst-state.is-warn {
+            background: #fff8e8;
+            border-color: #ead39e;
+            color: #805815
+        }
+
+        .pst-state.is-bad {
+            background: #fff1f0;
+            border-color: #f0beb9;
+            color: #9a2d25
+        }
+
+        .pst-state.is-neutral {
+            background: #f5f7fa;
+            border-color: #dde3ea;
+            color: #596579
+        }
+
+    .pst-lado-body {
+        padding: 12px 13px
+    }
+
+    .pst-progress-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: .69rem;
+        font-weight: 850;
+        color: #536174
+    }
+
+    .pst-progress {
+        height: 8px;
+        border-radius: 999px;
+        background: #edf1f5;
+        overflow: hidden;
+        margin-top: 5px
+    }
+
+        .pst-progress > span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg,#004aad,#1683ee);
+            border-radius: 999px
+        }
+
+    .pst-mini-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 7px;
+        margin-top: 10px
+    }
+
+    .pst-mini {
+        border: 1px solid var(--pst-line);
+        border-radius: 10px;
+        padding: 8px;
+        background: #fcfdff;
+        min-width: 0
+    }
+
+        .pst-mini label {
+            display: block;
+            color: var(--pst-muted);
+            font-size: .61rem;
+            font-weight: 900;
+            text-transform: uppercase
+        }
+
+        .pst-mini div {
+            font-size: .75rem;
+            font-weight: 900;
+            color: #253a56;
+            margin-top: 2px;
+            word-break: break-word
+        }
+
+    .pst-section-label {
+        font-size: .66rem;
+        font-weight: 950;
+        color: #42526b;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        margin: 12px 0 6px
+    }
+
+    .pst-config {
+        border: 1px solid #dce5ef;
+        border-radius: 12px;
+        padding: 10px;
+        background: #f8fbff
+    }
+
+    .pst-config-grid {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 7px
+    }
+
+    .pst-config-item small {
+        display: block;
+        color: var(--pst-muted);
+        font-size: .59rem;
+        font-weight: 900;
+        text-transform: uppercase
+    }
+
+    .pst-config-item strong {
+        display: block;
+        color: #203b5e;
+        font-size: .72rem;
+        margin-top: 2px;
+        font-weight: 900;
+        word-break: break-word
+    }
+
+    .pst-quality {
+        border-radius: 12px;
+        border: 1px solid var(--pst-line);
+        padding: 10px
+    }
+
+        .pst-quality.is-ok {
+            background: #f4fbf7;
+            border-color: #c6e8d4
+        }
+
+        .pst-quality.is-warn {
+            background: #fffaf0;
+            border-color: #ead9ae
+        }
+
+        .pst-quality.is-bad {
+            background: #fff5f4;
+            border-color: #f1c7c3
+        }
+
+        .pst-quality.is-neutral {
+            background: #fafbfc
+        }
+
+    .pst-quality-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center
+    }
+
+    .pst-quality-title {
+        font-weight: 950;
+        font-size: .74rem;
+        color: #283d59
+    }
+
+    .pst-quality-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px
+    }
+
+    .pst-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 4px 7px;
+        background: #fff;
+        border: 1px solid #dbe3ec;
+        color: #526176;
+        font-size: .61rem;
+        font-weight: 850
+    }
+
+    .pst-paro-open {
+        margin-top: 10px;
+        border: 1px solid #efc0bc;
+        background: #fff3f2;
+        border-radius: 12px;
+        padding: 10px;
+        color: #922d26
+    }
+
+        .pst-paro-open strong {
+            font-size: .73rem
+        }
+
+        .pst-paro-open div {
+            font-size: .68rem;
+            font-weight: 700;
+            margin-top: 3px
+        }
+
+    .pst-table-wrap {
+        overflow: auto
+    }
+
+    .pst-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: .7rem;
+        min-width: 940px
+    }
+
+        .pst-table th {
+            background: #f7f9fc;
+            color: #536174;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+            font-size: .59rem;
+            font-weight: 950;
+            padding: 8px 9px;
+            border-bottom: 1px solid var(--pst-line);
+            text-align: left;
+            white-space: nowrap
+        }
+
+        .pst-table td {
+            padding: 8px 9px;
+            border-bottom: 1px solid #edf1f5;
+            vertical-align: middle;
+            color: #33455e;
+            font-weight: 700
+        }
+
+        .pst-table tr:last-child td {
+            border-bottom: 0
+        }
+
+    .pst-num {
+        text-align: right !important;
+        font-variant-numeric: tabular-nums
+    }
+
+    .pst-capture-result {
+        font-weight: 950
+    }
+
+        .pst-capture-result.is-ok {
+            color: #137449
+        }
+
+        .pst-capture-result.is-bad {
+            color: #b2332a
+        }
+
+        .pst-capture-result.is-neutral {
+            color: #667085
+        }
+
+    .pst-tags {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap
+    }
+
+    .pst-tag {
+        font-size: .56rem;
+        border-radius: 999px;
+        padding: 3px 5px;
+        background: #eef3f8;
+        color: #506176;
+        font-weight: 900
+    }
+
+        .pst-tag.is-blue {
+            background: #eaf3ff;
+            color: #18559e
+        }
+
+        .pst-tag.is-amber {
+            background: #fff4d9;
+            color: #815b13
+        }
+
+        .pst-tag.is-green {
+            background: #eaf8f0;
+            color: #166c46
+        }
+
+    .pst-empty {
+        padding: 18px;
+        text-align: center;
+        color: #748196;
+        font-size: .73rem;
+        font-weight: 750
+    }
+
+    .pst-paros {
+        display: grid;
+        gap: 7px
+    }
+
+    .pst-paro {
+        border: 1px solid var(--pst-line);
+        border-radius: 10px;
+        padding: 9px;
+        display: grid;
+        grid-template-columns: auto minmax(0,1fr) auto;
+        gap: 8px;
+        align-items: start
+    }
+
+    .pst-paro-icon {
+        width: 29px;
+        height: 29px;
+        border-radius: 9px;
+        background: #fff1f0;
+        color: #b1372f;
+        display: grid;
+        place-items: center
+    }
+
+    .pst-paro-title {
+        font-size: .7rem;
+        font-weight: 950;
+        color: #35465e
+    }
+
+    .pst-paro-desc {
+        font-size: .63rem;
+        color: var(--pst-muted);
+        font-weight: 700;
+        margin-top: 2px
+    }
+
+    .pst-paro-time {
+        text-align: right;
+        font-size: .61rem;
+        color: #69778a;
+        font-weight: 850;
+        white-space: nowrap
+    }
+
+    .pst-footer-tools {
+        margin-top: 11px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        border-top: 1px dashed #dce4ed;
+        padding-top: 10px
+    }
+
+    .pst-updated {
+        font-size: .65rem;
+        color: var(--pst-muted);
+        font-weight: 750
+    }
+
+    html[data-nsq-theme="dark"] .pst {
+        --pst-text: #e7edf6;
+        --pst-muted: #94a3b8;
+        --pst-line: #29384c;
+        --pst-soft: #111d2c;
+        --pst-navy: #f4f7fb
+    }
+
+    html[data-nsq-theme="dark"] .pst-head, html[data-nsq-theme="dark"] .pst-card, html[data-nsq-theme="dark"] .pst-lado {
+        background: #101a29;
+        border-color: #29384c
+    }
+
+    html[data-nsq-theme="dark"] .pst-head {
+        background: linear-gradient(135deg,#12243c,#101a29)
+    }
+
+    html[data-nsq-theme="dark"] .pst-card-head, html[data-nsq-theme="dark"] .pst-lado-head {
+        background: #121e2e;
+        border-color: #29384c
+    }
+
+    html[data-nsq-theme="dark"] .pst-kpi, html[data-nsq-theme="dark"] .pst-mini, html[data-nsq-theme="dark"] .pst-config, html[data-nsq-theme="dark"] .pst-physical {
+        background: #121e2e;
+        border-color: #29384c
+    }
+
+    html[data-nsq-theme="dark"] .pst-table th {
+        background: #121e2e;
+        color: #a9b6c8;
+        border-color: #29384c
+    }
+
+    html[data-nsq-theme="dark"] .pst-table td {
+        color: #dbe4ef;
+        border-color: #233246
+    }
+
+    html[data-nsq-theme="dark"] .pst-btn, html[data-nsq-theme="dark"] .pst-badge, html[data-nsq-theme="dark"] .pst-chip {
+        background: #162337;
+        border-color: #34455c;
+        color: #d9e4f1
+    }
+
+    html[data-nsq-theme="dark"] .pst-quality.is-neutral {
+        background: #121e2e
+    }
+
+    @@media(max-width:991.98px) {
+        .pst-grid {
+            grid-template-columns: 1fr
+        }
+
+        .pst-kpis {
+            grid-template-columns: repeat(2,minmax(0,1fr))
+        }
+    }
+
+    @@media(max-width:575.98px) {
+        .pst-head {
+            flex-direction: column
+        }
+
+        .pst-head-actions {
+            justify-content: flex-start
+        }
+
+        .pst-kpis {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .pst-physical-grid, .pst-mini-grid, .pst-config-grid {
+            grid-template-columns: 1fr
+        }
+
+        .pst-lados {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div class="pst">
+    <section class="pst-head">
+        <div class="pst-head-main">
+            <div class="pst-head-icon"><i class="bi bi-activity"></i></div>
+            <div>
+                <div class="pst-kicker">Producción en serie · seguimiento</div>
+                <div class="pst-title">Seguimiento técnico de @Model.NumeroOF</div>
+                <div class="pst-sub">
+                    <span><i class="bi bi-hash"></i>Programa @Model.ProgramaProduccionID</span>
+                    <span><i class="bi bi-gear-wide-connected"></i>@Model.Maquina</span>
+                    <span><i class="bi bi-box"></i>@(!string.IsNullOrWhiteSpace(Model.ReferenciaSAP) ? Model.ReferenciaSAP : Model.NumeroParte)</span>
+                    @if (!string.IsNullOrWhiteSpace(Model.Molde))
+                    {
+                        <span><i class="bi bi-grid-3x3-gap"></i>@Model.Molde</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="pst-head-actions">
+            <span class="pst-badge is-read"><i class="bi bi-eye-fill"></i>Solo consulta</span>
+            <button type="button" class="pst-btn" data-pst-refrescar><i class="bi bi-arrow-clockwise"></i>Actualizar</button>
+        </div>
+    </section>
+
+    <div class="pst-note">
+        <i class="bi bi-info-circle-fill"></i>
+        <div><strong>Las capturas por hora las realiza el operador.</strong> Este bloque permite al técnico y a supervisión consultar lo capturado, el contador, la configuración vigente, los paros y el estado de Calidad sin modificar la producción horaria.</div>
+    </div>
+
+    @if (tieneAlertas)
+    {
+        <div class="pst-alerts">
+            @if (Model.TieneParoAbierto)
+            {
+                <div class="pst-alert is-bad"><i class="bi bi-pause-circle-fill"></i><span>Existe un paro abierto en la operación. Revisa el motivo y el tiempo acumulado antes de asumir que la corrida continúa normalmente.</span></div>
+            }
+            @if (Model.RequiereReliberacion)
+            {
+                <div class="pst-alert is-bad"><i class="bi bi-shield-exclamation"></i><span>Calidad requiere reliberación o existe una configuración invalidada. El estado se muestra aquí únicamente para seguimiento.</span></div>
+            }
+            @if (Model.TieneHallazgosCalidad)
+            {
+                <div class="pst-alert is-warn"><i class="bi bi-exclamation-triangle-fill"></i><span>Existen hallazgos o disposiciones pendientes en Calidad. Consulta el detalle del lado correspondiente.</span></div>
+            }
+            @if (Model.EsParejaLhRh && !Model.ConfiguracionFisicaSincronizada)
+            {
+                <div class="pst-alert is-bad"><i class="bi bi-link-45deg"></i><span>La pareja LH/RH no tiene sincronizados el ciclo y el contador base de la configuración física vigente. Debe revisarse antes de interpretar el seguimiento conjunto.</span></div>
+            }
+        </div>
+    }
+
+    <section class="pst-kpis">
+        <div class="pst-kpi"><div class="pst-kpi-label">Planeado</div><div class="pst-kpi-value">@Numero(Model.CantidadPlaneadaTotal)</div><div class="pst-kpi-note">pieza(s) de la operación</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">OK acumulado</div><div class="pst-kpi-value">@Numero(Model.CantidadOKTotal)</div><div class="pst-kpi-note">@Model.PorcentajeAvance.ToString("0.#")% del plan</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">Capturas operador</div><div class="pst-kpi-value">@Numero(Model.CapturasRegistradasTotal)</div><div class="pst-kpi-note">bloques horarios registrados</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">Cumplimiento horario</div><div class="pst-kpi-value">@(Model.ObjetivoAcumuladoTotal > 0 ? $"{Model.PorcentajeCumplimientoHoras:0.#}%" : "-")</div><div class="pst-kpi-note">OK vs objetivo acumulado</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">Sospechoso</div><div class="pst-kpi-value">@Numero(Model.CantidadSospechosaTotal)</div><div class="pst-kpi-note">clasificación reportada</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">Scrap / rojo</div><div class="pst-kpi-value">@Numero(Model.CantidadScrapTotal)</div><div class="pst-kpi-note">clasificación reportada</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">Objetivo acumulado</div><div class="pst-kpi-value">@(Model.ObjetivoAcumuladoTotal > 0 ? Numero(Model.ObjetivoAcumuladoTotal) : "-")</div><div class="pst-kpi-note">según bloques capturados</div></div>
+        <div class="pst-kpi"><div class="pst-kpi-label">Último contador</div><div class="pst-kpi-value">@(lectura != null ? lectura.ValorContador.ToString("N0") : "-")</div><div class="pst-kpi-note">@(lectura != null ? lectura.FechaLectura.ToString("dd/MM HH:mm") : "sin lectura")</div></div>
+    </section>
+
+    <div class="pst-grid">
+        <section class="pst-card">
+            <div class="pst-card-head">
+                <div>
+                    <div class="pst-card-title"><i class="bi bi-speedometer2"></i>Estado físico de la corrida</div>
+                    <div class="pst-card-sub">Datos vigentes de máquina; no modifica configuración ni capturas.</div>
+                </div>
+                @if (Model.EsParejaLhRh)
+                {
+                    <span class="pst-state @(Model.ConfiguracionFisicaSincronizada ? "is-ok" : "is-bad")"><i class="bi bi-link-45deg"></i>@(Model.ConfiguracionFisicaSincronizada ? "LH/RH sincronizado" : "Revisar LH/RH")</span>
+                }
+            </div>
+            <div class="pst-card-body">
+                <div class="pst-physical-grid">
+                    <div class="pst-physical"><small>Contador actual consultado</small><strong>@(lectura != null ? lectura.ValorContador.ToString("N0") : "Sin lectura")</strong></div>
+                    <div class="pst-physical"><small>Ciclo vigente</small><strong>@(configuracionFisica != null ? $"{configuracionFisica.TiempoCicloSegundos:0.####} s" : "Sin configuración")</strong></div>
+                    <div class="pst-physical"><small>Objetivo vigente</small><strong>@(configuracionFisica != null ? $"{configuracionFisica.ObjetivoHoraOperativo:N0} pza/h" : "-")</strong></div>
+                    <div class="pst-physical"><small>Última captura operador</small><strong>@(ultima != null ? $"{ultima.NumeroOF} · {ultima.RangoHora}" : "Sin capturas")</strong></div>
+                </div>
+                @if (ultima != null)
+                {
+                    <div class="pst-mini-grid">
+                        <div class="pst-mini"><label>Operador última captura</label><div>@(string.IsNullOrWhiteSpace(ultima.OperadorNombre) ? "Sin nombre" : ultima.OperadorNombre)</div></div>
+                        <div class="pst-mini"><label>Resultado última captura</label><div>@ultima.CantidadOK.ToString("N0") OK · @ultima.CantidadScrap.ToString("N0") scrap · @(ultima.PorcentajeCumplimiento.HasValue ? $"{ultima.PorcentajeCumplimiento:0.#}%" : "sin objetivo")</div></div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="pst-card">
+            <div class="pst-card-head"><div><div class="pst-card-title"><i class="bi bi-calendar3"></i>Programa vs ejecución</div><div class="pst-card-sub">Conserva diferencia entre lo planeado y lo realmente ejecutado.</div></div></div>
+            <div class="pst-card-body">
+                <div class="pst-mini-grid">
+                    <div class="pst-mini"><label>Inicio planeado</label><div>@Fecha(Model.FechaInicioProgramada)</div></div>
+                    <div class="pst-mini"><label>Inicio real</label><div>@Fecha(Model.FechaInicioReal)</div></div>
+                    <div class="pst-mini"><label>Fin planeado</label><div>@Fecha(Model.FechaFinProgramada)</div></div>
+                    <div class="pst-mini"><label>Fin real</label><div>@Fecha(Model.FechaFinReal)</div></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="pst-lados">
+        @foreach (var lado in Model.Lados.OrderBy(x => x.ProgramaProduccionID))
+        {
+            var avance = Pct(lado.PorcentajeAvance);
+            var calidadClase = EstadoCalidad(lado.Calidad);
+            <article class="pst-lado">
+                <div class="pst-lado-head">
+                    <div>
+                        <div class="pst-lado-of">
+                            @lado.NumeroOF
+                            @if (!string.IsNullOrWhiteSpace(lado.LadoLhRh))
+                            {
+                                <span class="pst-badge ms-1">@lado.LadoLhRh</span>
+                            }
+                        </div>
+                        <div class="pst-lado-meta">Programa @lado.ProgramaProduccionID · @lado.ParteTexto</div>
+                    </div>
+                    <span class="pst-state @EstadoEjecucion(lado.EstatusID)">@lado.EstatusNombre</span>
+                </div>
+                <div class="pst-lado-body">
+                    <div class="pst-progress-row"><span>Avance OK</span><strong>@lado.CantidadOK.ToString("N0") / @lado.CantidadPlaneada.ToString("N0") · @lado.PorcentajeAvance.ToString("0.#")%</strong></div>
+                    <div class="pst-progress"><span style="width:@avance%"></span></div>
+
+                    <div class="pst-mini-grid">
+                        <div class="pst-mini"><label>Operador principal</label><div>@(string.IsNullOrWhiteSpace(lado.OperadorNombre) ? "Sin asignar" : lado.OperadorNombre)</div></div>
+                        <div class="pst-mini"><label>Auxiliar</label><div>@(string.IsNullOrWhiteSpace(lado.OperadorAuxiliarNombre) ? "Sin asignar" : lado.OperadorAuxiliarNombre)</div></div>
+                        <div class="pst-mini"><label>Inicio planeado / real</label><div>@Fecha(lado.FechaInicioProgramada)<br />@Fecha(lado.FechaInicioReal)</div></div>
+                        <div class="pst-mini"><label>Capturas / objetivo</label><div>@lado.CapturasRegistradas.ToString("N0") captura(s) · @(lado.ObjetivoAcumulado > 0 ? $"{lado.ObjetivoAcumulado:N0} pza" : "-")</div></div>
+                    </div>
+
+                    <div class="pst-section-label">Configuración vigente</div>
+                    @if (lado.Configuracion != null)
+                    {
+                        <div class="pst-config">
+                            <div class="pst-config-grid">
+                                <div class="pst-config-item"><small>Cavidades usadas</small><strong>@lado.Configuracion.CavidadesUsadas.ToString("N0")</strong></div>
+                                <div class="pst-config-item"><small>Cavidades activas</small><strong>@lado.Configuracion.CavidadesTexto</strong></div>
+                                <div class="pst-config-item"><small>Ciclo</small><strong>@lado.Configuracion.TiempoCicloSegundos.ToString("0.####") s</strong></div>
+                                <div class="pst-config-item"><small>Objetivo/h</small><strong>@lado.Configuracion.ObjetivoHoraOperativo.ToString("N0") pza</strong></div>
+                                <div class="pst-config-item"><small>Contador base</small><strong>@(lado.Configuracion.ContadorInicioVigencia.HasValue? lado.Configuracion.ContadorInicioVigencia.Value.ToString("N0"):"-")</strong></div>
+                                <div class="pst-config-item"><small>Vigente desde</small><strong>@lado.Configuracion.FechaInicioVigencia.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(lado.Configuracion.TecnicoProduccionNombre) || !string.IsNullOrWhiteSpace(lado.Configuracion.MotivoCambio))
+                            {
+                                <div class="pst-mini-grid mt-2">
+                                    <div class="pst-mini"><label>Técnico</label><div>@(string.IsNullOrWhiteSpace(lado.Configuracion.TecnicoProduccionNombre) ? "-" : lado.Configuracion.TecnicoProduccionNombre)</div></div>
+                                    <div class="pst-mini"><label>Motivo / referencia</label><div>@(string.IsNullOrWhiteSpace(lado.Configuracion.MotivoCambio) ? (lado.Configuracion.EsConfiguracionInicial ? "Configuración inicial" : "-") : lado.Configuracion.MotivoCambio)</div></div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pst-empty">No hay una configuración de corrida vigente para esta ejecución.</div>
+                    }
+
+                    <div class="pst-section-label">Calidad</div>
+                    @if (lado.Calidad != null)
+                    {
+                        <div class="pst-quality @calidadClase">
+                            <div class="pst-quality-head">
+                                <div class="pst-quality-title"><i class="bi bi-shield-check me-1"></i>@lado.Calidad.EstadoTexto</div>
+                                @if (!string.IsNullOrWhiteSpace(lado.Calidad.Etiqueta))
+                                {
+                                    <span class="pst-chip">Etiqueta @lado.Calidad.Etiqueta</span>
+                                }
+                            </div>
+                            <div class="pst-quality-stats">
+                                <span class="pst-chip">@lado.Calidad.MonitoreosConformes conforme(s)</span>
+                                <span class="pst-chip">@lado.Calidad.MonitoreosPendientes pendiente(s)</span>
+                                @if (lado.Calidad.MonitoreosVencidos > 0)
+                                {
+                                    <span class="pst-chip">@lado.Calidad.MonitoreosVencidos vencido(s)</span>
+                                }
+                                @if (lado.Calidad.MonitoreosConHallazgo > 0)
+                                {
+                                    <span class="pst-chip">@lado.Calidad.MonitoreosConHallazgo hallazgo(s)</span>
+                                }
+                                @if (lado.Calidad.DisposicionesPendientes > 0)
+                                {
+                                    <span class="pst-chip">@lado.Calidad.DisposicionesPendientes disposición(es)</span>
+                                }
+                            </div>
+                            @if (lado.Calidad.ProximoMonitoreo.HasValue)
+                            {
+                                <div class="pst-card-sub mt-2">Próximo monitoreo: <strong>@lado.Calidad.ProximoMonitoreo.Value.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(lado.Calidad.MotivoDevolucion))
+                            {
+                                <div class="pst-card-sub mt-2">@lado.Calidad.MotivoDevolucion</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pst-empty">No se encontró inspección de Calidad relacionada.</div>
+                    }
+
+                    @if (lado.ParoAbierto != null)
+                    {
+                        <div class="pst-paro-open">
+                            <strong><i class="bi bi-pause-circle-fill me-1"></i>Paro abierto · @lado.ParoAbierto.DuracionTexto</strong>
+                            <div>@(string.IsNullOrWhiteSpace(lado.ParoAbierto.MotivoParoTexto) ? "Sin motivo capturado" : lado.ParoAbierto.MotivoParoTexto)</div>
+                            @if (!string.IsNullOrWhiteSpace(lado.ParoAbierto.Descripcion))
+                            {
+                                <div>@lado.ParoAbierto.Descripcion</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+
+    <section class="pst-card mt-3">
+        <div class="pst-card-head">
+            <div><div class="pst-card-title"><i class="bi bi-clock-history"></i>Capturas hora por hora</div><div class="pst-card-sub">Información registrada por los operadores. Solo lectura para el seguimiento técnico.</div></div>
+            <span class="pst-badge">@Model.CapturasRecientes.Count reciente(s)</span>
+        </div>
+        @if (Model.CapturasRecientes.Any())
+        {
+            <div class="pst-table-wrap">
+                <table class="pst-table">
+                    <thead><tr><th>OF / lado</th><th>Fecha</th><th>Hora</th><th>Operador</th><th class="pst-num">Físicas</th><th class="pst-num">OK</th><th class="pst-num">Sospechoso</th><th class="pst-num">Scrap</th><th class="pst-num">Objetivo</th><th class="pst-num">Cumplimiento</th><th>Eventos</th></tr></thead>
+                    <tbody>
+                        @foreach (var captura in Model.CapturasRecientes.OrderByDescending(x => x.FechaHoraFin).ThenByDescending(x => x.RegistroHoraID))
+                        {
+                            var objetivo = captura.ObjetivoBloque.GetValueOrDefault() > 0 ? captura.ObjetivoBloque : captura.ObjetivoHora;
+                            <tr>
+                                <td><strong>@captura.NumeroOF</strong>@if(!string.IsNullOrWhiteSpace(captura.LadoLhRh)){
+                                <span class="pst-tag ms-1">@captura.LadoLhRh</span>
+                            }
+    </td>
+                            <td>@captura.FechaProduccion.ToString("dd/MM/yyyy")</td>
+                            <td>@captura.RangoHora</td>
+                            <td>@(string.IsNullOrWhiteSpace(captura.OperadorNombre) ? "-" : captura.OperadorNombre)</td>
+                            <td class="pst-num">@(captura.PiezasCalculadasContador.HasValue? captura.PiezasCalculadasContador.Value.ToString("N0"):captura.TotalClasificado.ToString("N0"))</td>
+                            <td class="pst-num">@captura.CantidadOK.ToString("N0")</td>
+                            <td class="pst-num">@captura.CantidadSospechosa.ToString("N0")</td>
+                            <td class="pst-num">@captura.CantidadScrap.ToString("N0")</td>
+                            <td class="pst-num">@(objetivo.HasValue && objetivo.Value > 0 ? objetivo.Value.ToString("N0") : "-")</td>
+                            <td class="pst-num"><span class="pst-capture-result @EstadoCaptura(captura)">@(captura.PorcentajeCumplimiento.HasValue ? $"{captura.PorcentajeCumplimiento.Value:0.#}%" : "-")</span></td>
+                            <td>
+                                <div class="pst-tags">
+                                    @if (captura.TieneCambioConfiguracion)
+                                    {
+                                        <span class="pst-tag is-blue">Cambio config.</span>
+                                    }
+                                    @if (captura.TieneReinicioContador)
+                                    {
+                                        <span class="pst-tag is-amber">Reinicio contador</span>
+                                    }
+                                    @if (captura.AjustadoPorCalidad)
+                                    {
+                                        <span class="pst-tag is-green">Ajustado Calidad</span>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+                }
+                else
+        {
+            <div class="pst-empty"><i class="bi bi-hourglass me-1"></i>Todavía no existen capturas horarias del operador para mostrar.</div>
+        }
+    </section>
+
+    <section class="pst-card mt-3">
+        <div class="pst-card-head"><div><div class="pst-card-title"><i class="bi bi-pause-circle"></i>Paros recientes</div><div class="pst-card-sub">Incluye paros abiertos y cerrados relacionados con la ejecución.</div></div><span class="pst-badge">@Model.ParosRecientes.Count</span></div>
+        <div class="pst-card-body">
+            @if (Model.ParosRecientes.Any())
+            {
+                <div class="pst-paros">
+                    @foreach (var paro in Model.ParosRecientes.OrderByDescending(x => x.FechaInicioParo).ThenByDescending(x => x.ParoID))
+                    {
+                        <div class="pst-paro">
+                            <div class="pst-paro-icon"><i class="bi @(paro.EsInterrupcionUrgente ? "bi-lightning-charge-fill" : "bi-pause-fill")"></i></div>
+                            <div>
+                                <div class="pst-paro-title">@paro.NumeroOF@if(!string.IsNullOrWhiteSpace(paro.LadoLhRh)){
+                                <span> · @paro.LadoLhRh</span>
+                            }
+     · @(string.IsNullOrWhiteSpace(paro.MotivoParoTexto) ? "Paro" : paro.MotivoParoTexto)</div>
+                            <div class="pst-paro-desc">@(!string.IsNullOrWhiteSpace(paro.Descripcion) ? paro.Descripcion : (paro.EsInterrupcionUrgente ? "Interrupción urgente de Planeación" : "Sin descripción"))</div>
+                        </div>
+                        <div class="pst-paro-time"><strong>@paro.DuracionTexto</strong><br />@paro.FechaInicioParo.ToString("dd/MM HH:mm")<br /><span class="pst-state @(paro.EstaAbierto ? "is-bad" : "is-neutral")">@(paro.EstaAbierto ? "Abierto" : "Cerrado")</span></div>
+                    </div>
+                }
+            </div>
+                        }
+                        else
+            {
+                <div class="pst-empty">No hay paros registrados para las ejecuciones mostradas.</div>
+            }
+        </div>
+    </section>
+
+    <div class="pst-footer-tools">
+        <a href="@urlHistorial"
+           class="pst-btn"
+           data-nsq-operativa-accion
+           data-accion-clave="@ProduccionOperativaAccionClave.Historial"
+           data-solo-lectura="true">
+            <i class="bi bi-journal-text"></i>Ver historial, checklists y pasos anteriores
+        </a>
+        <div class="pst-updated"><i class="bi bi-arrow-repeat me-1"></i>Actualizado @Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss") · refresco automático cada 20 s</div>
+    </div>
+</div>

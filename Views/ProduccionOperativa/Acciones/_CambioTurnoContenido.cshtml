@@ -1,0 +1,1017 @@
+﻿@model ERP.NSQuell.Models.ProduccionCambioTurnoOperativoVm
+@using ERP.NSQuell.Models
+@using System.Collections.Generic
+
+@functions {
+    public static string TextoEstadoCambio(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            ProduccionCambioTurnoEstado.PendienteRecepcion => "Pendiente de recepción",
+            ProduccionCambioTurnoEstado.Recibido => "Recibido",
+            ProduccionCambioTurnoEstado.Cancelado => "Cancelado",
+            _ => string.IsNullOrWhiteSpace(estado) ? "Sin estado" : estado!
+        };
+    }
+
+    public static string ClaseEstadoCambio(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            ProduccionCambioTurnoEstado.PendienteRecepcion => "is-waiting",
+            ProduccionCambioTurnoEstado.Recibido => "is-ok",
+            ProduccionCambioTurnoEstado.Cancelado => "is-off",
+            _ => "is-off"
+        };
+    }
+
+    public static string TextoOrigen(string? origen)
+    {
+        return (origen ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            ProduccionCambioTurnoOrigen.Escala => "Escala",
+            ProduccionCambioTurnoOrigen.Tecnico => "Sugerencia técnica",
+            ProduccionCambioTurnoOrigen.Manual => "Selección manual",
+            _ => "-"
+        };
+    }
+}
+
+@{
+    var rootId = $"pctContenido_{Model.EjecucionProduccionID}";
+    var cambio = Model.CambioPendiente;
+    var resumen = Model.Resumen;
+    var candidatos = resumen?.Operadores ?? new List<ProduccionCambioTurnoCandidatoVm>();
+    var seleccionado = Model.OperadorProgramadoID.HasValue && candidatos.Any(x => x.PersonaID == Model.OperadorProgramadoID.Value)
+        ? Model.OperadorProgramadoID
+        : resumen?.OperadorSugeridoID;
+    var autoRefrescar = Model.TieneCambioPendiente && !Model.PuedeRecibir;
+    var urlEntregar = Url.Action("EntregarTurnoOperativo", "ProduccionOperador") ?? "/ProduccionOperador/EntregarTurnoOperativo";
+    var urlRecibir = Url.Action("RecibirTurnoOperativo", "ProduccionOperador") ?? "/ProduccionOperador/RecibirTurnoOperativo";
+}
+
+<style>
+    .pct {
+        --pct-blue: #004aad;
+        --pct-navy: #102a43;
+        --pct-text: #25364f;
+        --pct-muted: #667085;
+        --pct-line: #dce5f0;
+        --pct-soft: #f6f9fc;
+        --pct-green: #168052;
+        --pct-green-soft: #edf9f3;
+        --pct-orange: #b45309;
+        --pct-orange-soft: #fff7ed;
+        --pct-red: #b42318;
+        --pct-red-soft: #fff5f5;
+        color: var(--pct-text)
+    }
+
+        .pct * {
+            box-sizing: border-box
+        }
+
+    .pct-card {
+        border: 1px solid var(--pct-line);
+        border-radius: 16px;
+        background: #fff;
+        overflow: hidden
+    }
+
+        .pct-card + .pct-card {
+            margin-top: 12px
+        }
+
+    .pct-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 17px;
+        border-bottom: 1px solid var(--pct-line);
+        background: linear-gradient(135deg,#f8fbff,#fff)
+    }
+
+    .pct-head-main {
+        display: flex;
+        gap: 12px;
+        min-width: 0
+    }
+
+    .pct-icon {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        border-radius: 12px;
+        background: #eaf2ff;
+        color: var(--pct-blue);
+        font-size: 1.1rem
+    }
+
+    .pct-title {
+        font-size: 1rem;
+        font-weight: 950;
+        color: var(--pct-navy);
+        line-height: 1.15
+    }
+
+    .pct-sub {
+        margin-top: 4px;
+        color: var(--pct-muted);
+        font-size: .72rem;
+        font-weight: 650
+    }
+
+    .pct-tools {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+    .pct-btn {
+        min-height: 36px;
+        border: 1px solid var(--pct-line);
+        border-radius: 10px;
+        background: #fff;
+        color: #344054;
+        padding: 7px 11px;
+        font-size: .7rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        text-decoration: none;
+        cursor: pointer
+    }
+
+        .pct-btn:hover {
+            background: #f8fafc
+        }
+
+    .pct-btn-primary {
+        background: var(--pct-blue);
+        border-color: var(--pct-blue);
+        color: #fff
+    }
+
+        .pct-btn-primary:hover {
+            background: #003b8d;
+            color: #fff
+        }
+
+    .pct-btn-success {
+        background: var(--pct-green);
+        border-color: var(--pct-green);
+        color: #fff
+    }
+
+        .pct-btn-success:hover {
+            background: #116b44;
+            color: #fff
+        }
+
+    .pct-btn:disabled {
+        opacity: .55;
+        cursor: not-allowed
+    }
+
+    .pct-body {
+        padding: 16px 17px
+    }
+
+    .pct-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px
+    }
+
+    .pct-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 25px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #edf2f7;
+        color: #475467;
+        font-size: .62rem;
+        font-weight: 900
+    }
+
+        .pct-badge.is-blue {
+            background: #eaf2ff;
+            color: #174ea6
+        }
+
+        .pct-badge.is-green {
+            background: var(--pct-green-soft);
+            color: #147a4e
+        }
+
+        .pct-badge.is-orange {
+            background: var(--pct-orange-soft);
+            color: var(--pct-orange)
+        }
+
+        .pct-badge.is-red {
+            background: var(--pct-red-soft);
+            color: var(--pct-red)
+        }
+
+    .pct-grid {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 9px
+    }
+
+    .pct-data {
+        min-height: 68px;
+        padding: 10px 11px;
+        border: 1px solid var(--pct-line);
+        border-radius: 12px;
+        background: var(--pct-soft)
+    }
+
+        .pct-data span {
+            display: block;
+            color: var(--pct-muted);
+            font-size: .58rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .025em
+        }
+
+        .pct-data strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--pct-navy);
+            font-size: .78rem;
+            font-weight: 900;
+            line-height: 1.2;
+            word-break: break-word
+        }
+
+        .pct-data small {
+            display: block;
+            margin-top: 3px;
+            color: var(--pct-muted);
+            font-size: .61rem;
+            font-weight: 650
+        }
+
+    .pct-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 16px 0 8px;
+        color: var(--pct-navy);
+        font-size: .73rem;
+        font-weight: 950
+    }
+
+    .pct-note {
+        display: flex;
+        gap: 10px;
+        padding: 12px 13px;
+        border: 1px solid #bfdbfe;
+        border-radius: 12px;
+        background: #eff6ff;
+        color: #1e4d8e;
+        font-size: .71rem;
+        font-weight: 700;
+        line-height: 1.45
+    }
+
+        .pct-note.is-warning {
+            border-color: #fed7aa;
+            background: var(--pct-orange-soft);
+            color: #9a4b08
+        }
+
+        .pct-note.is-danger {
+            border-color: #fecaca;
+            background: var(--pct-red-soft);
+            color: #991b1b
+        }
+
+        .pct-note.is-success {
+            border-color: #bbf7d0;
+            background: var(--pct-green-soft);
+            color: #166534
+        }
+
+        .pct-note i {
+            margin-top: 1px;
+            flex: none
+        }
+
+    .pct-pair {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 10px;
+        align-items: stretch
+    }
+
+    .pct-side {
+        padding: 12px;
+        border: 1px solid var(--pct-line);
+        border-radius: 13px;
+        background: #fff
+    }
+
+        .pct-side span {
+            display: block;
+            color: var(--pct-muted);
+            font-size: .58rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .pct-side strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--pct-navy);
+            font-size: .82rem;
+            font-weight: 950
+        }
+
+        .pct-side small {
+            display: block;
+            margin-top: 3px;
+            color: var(--pct-muted);
+            font-size: .63rem
+        }
+
+    .pct-link {
+        display: grid;
+        place-items: center;
+        color: var(--pct-blue);
+        font-size: 1.15rem
+    }
+
+    .pct-form {
+        margin-top: 12px;
+        padding: 14px;
+        border: 1px solid var(--pct-line);
+        border-radius: 14px;
+        background: #fbfdff
+    }
+
+    .pct-form-grid {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+        gap: 10px
+    }
+
+    .pct-field label {
+        display: block;
+        margin-bottom: 5px;
+        color: #475467;
+        font-size: .62rem;
+        font-weight: 900
+    }
+
+    .pct-field .form-control, .pct-field .form-select {
+        font-size: .76rem;
+        border-radius: 10px;
+        border-color: #ccd8e6
+    }
+
+    .pct-field textarea {
+        resize: vertical;
+        min-height: 74px
+    }
+
+    .pct-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 11px;
+        flex-wrap: wrap
+    }
+
+    .pct-history {
+        display: grid;
+        gap: 8px
+    }
+
+    .pct-history-item {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 10px;
+        padding: 11px 12px;
+        border: 1px solid var(--pct-line);
+        border-radius: 12px;
+        background: #fff
+    }
+
+    .pct-history-main {
+        min-width: 0
+    }
+
+        .pct-history-main strong {
+            display: block;
+            color: var(--pct-navy);
+            font-size: .72rem;
+            font-weight: 900
+        }
+
+        .pct-history-main span {
+            display: block;
+            margin-top: 3px;
+            color: var(--pct-muted);
+            font-size: .62rem;
+            font-weight: 650
+        }
+
+    .pct-state {
+        height: 25px;
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #edf2f7;
+        color: #475467;
+        font-size: .57rem;
+        font-weight: 900;
+        white-space: nowrap
+    }
+
+        .pct-state.is-waiting {
+            background: var(--pct-orange-soft);
+            color: var(--pct-orange)
+        }
+
+        .pct-state.is-ok {
+            background: var(--pct-green-soft);
+            color: #147a4e
+        }
+
+        .pct-state.is-off {
+            background: #f2f4f7;
+            color: #667085
+        }
+
+    .pct-empty {
+        padding: 18px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 13px;
+        background: #f8fafc;
+        color: #667085;
+        text-align: center;
+        font-size: .72rem;
+        font-weight: 750
+    }
+
+    .pct-flash {
+        display: none;
+        margin-bottom: 12px;
+        padding: 11px 12px;
+        border-radius: 11px;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .pct-flash.is-visible {
+            display: block
+        }
+
+        .pct-flash.is-success {
+            border: 1px solid #bbf7d0;
+            background: var(--pct-green-soft);
+            color: #166534
+        }
+
+        .pct-flash.is-error {
+            border: 1px solid #fecaca;
+            background: var(--pct-red-soft);
+            color: #991b1b
+        }
+
+    html[data-nsq-theme="dark"] .pct {
+        --pct-text: #e5e7eb;
+        --pct-muted: #9aa6b2;
+        --pct-line: rgba(255,255,255,.1);
+        --pct-soft: #0e1828;
+        --pct-navy: #f8fafc
+    }
+
+    html[data-nsq-theme="dark"] .pct-card, html[data-nsq-theme="dark"] .pct-side, html[data-nsq-theme="dark"] .pct-history-item {
+        background: #111c2d
+    }
+
+    html[data-nsq-theme="dark"] .pct-head {
+        background: #0e1828
+    }
+
+    html[data-nsq-theme="dark"] .pct-form {
+        background: #0e1828
+    }
+
+    html[data-nsq-theme="dark"] .pct-field .form-control, html[data-nsq-theme="dark"] .pct-field .form-select {
+        background: #0b1422;
+        color: #f8fafc;
+        border-color: rgba(255,255,255,.13)
+    }
+
+    @@media(max-width:900px) {
+        .pct-grid {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .pct-pair {
+            grid-template-columns: 1fr
+        }
+
+        .pct-link {
+            transform: rotate(90deg)
+        }
+
+        .pct-form-grid {
+            grid-template-columns: 1fr
+        }
+    }
+
+    @@media(max-width:560px) {
+        .pct-head {
+            flex-direction: column
+        }
+
+        .pct-tools {
+            justify-content: flex-start
+        }
+
+        .pct-grid {
+            grid-template-columns: 1fr
+        }
+
+        .pct-actions {
+            justify-content: stretch
+        }
+
+            .pct-actions .pct-btn {
+                width: 100%
+            }
+
+        .pct-history-item {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="pct"
+     data-cambio-turno-contenido
+     data-cambio-turno-auto-refrescar="@(autoRefrescar ? "true" : "false")">
+
+    <div class="pct-flash" data-pct-flash></div>
+
+    <section class="pct-card">
+        <div class="pct-head">
+            <div class="pct-head-main">
+                <div class="pct-icon"><i class="bi bi-arrow-left-right"></i></div>
+                <div>
+                    <div class="pct-title">Cambio de turno</div>
+                    <div class="pct-sub">
+                        OF @Model.OFTexto · Programa interno @Model.ProgramaProduccionID · @Model.MaquinaTexto
+                    </div>
+                    <div class="pct-badges mt-2">
+                        <span class="pct-badge is-blue"><i class="bi bi-person-fill"></i>@Model.OperadorActualTexto</span>
+                        <span class="pct-badge"><i class="bi bi-activity"></i>@Model.EstatusTexto</span>
+                        @if (Model.EsLhRh)
+                        {
+                            <span class="pct-badge is-blue"><i class="bi bi-link-45deg"></i>LH/RH conjunto</span>
+                        }
+                        @if (Model.TieneCambioPendiente)
+                        {
+                            <span class="pct-badge is-orange"><i class="bi bi-hourglass-split"></i>Pendiente de recepción</span>
+                        }
+                        else if (Model.CambioProgramadoIniciado)
+                        {
+                            <span class="pct-badge is-red"><i class="bi bi-exclamation-circle-fill"></i>Cambio requerido</span>
+                        }
+                        else if (Model.RequiereCambioTurno)
+                        {
+                            <span class="pct-badge is-orange"><i class="bi bi-clock"></i>Próximo cambio</span>
+                        }
+                        else
+                        {
+                            <span class="pct-badge is-green"><i class="bi bi-check-circle-fill"></i>Sin cambio requerido</span>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="pct-tools">
+                <button type="button" class="pct-btn" data-cambio-turno-refrescar>
+                    <i class="bi bi-arrow-clockwise"></i>Actualizar
+                </button>
+            </div>
+        </div>
+
+        <div class="pct-body">
+            @if (Model.EsLhRh)
+            {
+                <div class="pct-pair">
+                    <div class="pct-side">
+                        <span>OF abierta</span>
+                        <strong>@Model.OFTexto</strong>
+                        <small>@Model.ParteTexto</small>
+                    </div>
+                    <div class="pct-link"><i class="bi bi-link-45deg"></i></div>
+                    <div class="pct-side">
+                        <span>OF pareja</span>
+                        <strong>@(Model.OFParejaTexto ?? "Programa pareja")</strong>
+                        <small>@(Model.ParteParejaTexto ?? "Sin parte")</small>
+                    </div>
+                </div>
+
+                @if (!Model.ParejaConsistente)
+                {
+                    <div class="pct-note is-danger mt-2">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <div>
+                            <strong>No se puede realizar el cambio LH/RH.</strong><br />
+                            @(Model.MotivoInconsistenciaPareja ?? "La pareja LH/RH dejó de ser consistente.")
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="pct-note mt-2">
+                        <i class="bi bi-link-45deg"></i>
+                        <div>
+                            La entrega y la recepción aplican a las dos OF en una sola operación. El controlador actual valida ambas ejecuciones y no permite una recepción parcial.
+                        </div>
+                    </div>
+                }
+            }
+
+            <div class="pct-section-title">
+                <span><i class="bi bi-clock-history me-1"></i>Situación del turno</span>
+            </div>
+
+            @if (Model.InicioTurnoProgramado.HasValue)
+            {
+                <div class="pct-grid">
+                    <div class="pct-data">
+                        <span>Turno / tramo entrante</span>
+                        <strong>@Model.TurnoProgramadoTexto</strong>
+                        <small>@Model.InicioTurnoProgramado.Value.ToString("dd/MM/yyyy HH:mm") - @Model.FinTurnoProgramado?.ToString("HH:mm")</small>
+                    </div>
+                    <div class="pct-data">
+                        <span>Operador programado</span>
+                        <strong>@Model.OperadorProgramadoTexto</strong>
+                        <small>Asignación de Producción</small>
+                    </div>
+                    <div class="pct-data">
+                        <span>Operador actual</span>
+                        <strong>@Model.OperadorActualTexto</strong>
+                        <small>Responsable vigente de la ejecución</small>
+                    </div>
+                    <div class="pct-data">
+                        <span>Momento</span>
+                        @if (Model.CambioProgramadoIniciado)
+                        {
+                            <strong>Cambio ya requerido</strong>
+                            <small>El siguiente tramo ya comenzó</small>
+                        }
+                        else
+                        {
+                            <strong>@Model.MinutosParaCambio min</strong>
+                            <small>para el siguiente tramo</small>
+                        }
+                    </div>
+                </div>
+            }
+            else if (!Model.TieneCambioPendiente)
+            {
+                <div class="pct-empty">
+                    <i class="bi bi-check-circle me-1"></i>
+                    No hay un cambio de turno requerido en este momento. Esta acción desaparece normalmente del Centro Operativo fuera de la ventana de relevo.
+                </div>
+            }
+
+            @if (Model.TieneCambioPendiente && cambio != null)
+            {
+                <div class="pct-section-title">
+                    <span><i class="bi bi-box-arrow-right me-1"></i>Entrega pendiente</span>
+                    <span class="pct-state is-waiting">Pendiente de recepción</span>
+                </div>
+
+                <div class="pct-grid">
+                    <div class="pct-data">
+                        <span>Operador saliente</span>
+                        <strong>@cambio.OperadorSalienteNombre</strong>
+                        <small>@(string.IsNullOrWhiteSpace(cambio.TurnoSalienteNombre) ? "Turno anterior" : cambio.TurnoSalienteNombre)</small>
+                    </div>
+                    <div class="pct-data">
+                        <span>Operador entrante</span>
+                        <strong>@cambio.OperadorEntranteNombre</strong>
+                        <small>@(string.IsNullOrWhiteSpace(cambio.TurnoEntranteNombre) ? "Turno entrante" : cambio.TurnoEntranteNombre)</small>
+                    </div>
+                    <div class="pct-data">
+                        <span>Entrega registrada</span>
+                        <strong>@cambio.FechaEntrega.ToString("dd/MM/yyyy HH:mm")</strong>
+                        <small>@TextoOrigen(cambio.OrigenOperadorEntrante)</small>
+                    </div>
+                    <div class="pct-data">
+                        <span>Producción al entregar</span>
+                        <strong>@cambio.CantidadOK.ToString("N0") OK</strong>
+                        <small>@cambio.CantidadSospechosa.ToString("N0") sospechosa · @cambio.CantidadScrap.ToString("N0") scrap</small>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(cambio.ObservacionesEntrega))
+                {
+                    <div class="pct-note mt-2">
+                        <i class="bi bi-chat-left-text"></i>
+                        <div><strong>Observaciones de entrega:</strong><br />@cambio.ObservacionesEntrega</div>
+                    </div>
+                }
+
+                @if (Model.PuedeRecibir)
+                {
+                    <form method="post"
+                          action="@urlRecibir"
+                          class="pct-form"
+                          data-cambio-turno-form
+                          data-tipo="recibir">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="CambioTurnoID" value="@cambio.CambioTurnoID" />
+                        <div class="pct-note is-success mb-3">
+                            <i class="bi bi-person-check-fill"></i>
+                            <div>
+                                Esta entrega está asignada a tu usuario. Al confirmar, el ERP actualizará la responsabilidad de la ejecución. Si es LH/RH, actualizará las dos OF juntas.
+                            </div>
+                        </div>
+                        <div class="pct-field">
+                            <label for="pctObsRecepcion_@Model.EjecucionProduccionID">Observaciones de recepción</label>
+                            <textarea id="pctObsRecepcion_@Model.EjecucionProduccionID"
+                              name="ObservacionesRecepcion"
+                              maxlength="1000"
+                              class="form-control"
+                              placeholder="Opcional: condición de la máquina, material, cajas o información recibida."></textarea>
+                        </div>
+                        <div class="pct-actions">
+                            <button type="submit" class="pct-btn pct-btn-success">
+                                <i class="bi bi-check2-circle"></i>Recibir turno
+                            </button>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <div class="pct-note is-warning mt-2">
+                        <i class="bi bi-hourglass-split"></i>
+                        <div>
+                            @if (Model.UsuarioEsOperadorActual)
+                            {
+                                <text>La entrega ya fue registrada. Esperando a que <strong>@cambio.OperadorEntranteNombre</strong> confirme la recepción.</text>
+                            }
+                            else
+                            {
+                                <text>Esta vista es de consulta. La recepción únicamente puede confirmarla <strong>@cambio.OperadorEntranteNombre</strong>.</text>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else if (Model.RequiereCambioTurno)
+            {
+                <div class="pct-section-title">
+                    <span><i class="bi bi-send me-1"></i>Preparar entrega</span>
+                </div>
+
+                @if (resumen != null)
+                {
+                    <div class="pct-grid">
+                        <div class="pct-data">
+                            <span>Producción acumulada</span>
+                            <strong>@resumen.CantidadOK.ToString("N0") OK</strong>
+                            <small>@resumen.CantidadSospechosa.ToString("N0") sospechosa · @resumen.CantidadScrap.ToString("N0") scrap</small>
+                        </div>
+                        <div class="pct-data">
+                            <span>Última captura</span>
+                            <strong>@(string.IsNullOrWhiteSpace(resumen.UltimaHoraTexto) ? "Sin captura" : resumen.UltimaHoraTexto)</strong>
+                            <small>Consulta; aquí no se captura producción</small>
+                        </div>
+                        <div class="pct-data">
+                            <span>Cajas formadas</span>
+                            <strong>@resumen.TotalCajas.ToString("N0")</strong>
+                            <small>@resumen.TotalCajasPendientes.ToString("N0") pendiente(s) de entregar a Calidad</small>
+                        </div>
+                        <div class="pct-data">
+                            <span>Sugerencia actual</span>
+                            <strong>@(resumen.TieneOperadorSugerido? resumen.OperadorSugeridoNombre: "Sin sugerencia")</strong>
+                            <small>@resumen.OrigenSugerenciaTexto</small>
+                        </div>
+                    </div>
+
+                    @if (!resumen.PuedeEntregar)
+                    {
+                        <div class="pct-note is-danger mt-2">
+                            <i class="bi bi-lock-fill"></i>
+                            <div>
+                                <strong>La entrega todavía está bloqueada.</strong><br />
+                                @(resumen.MotivoBloqueo ?? "La ejecución no cumple las condiciones para entregar turno.")
+                            </div>
+                        </div>
+                    }
+
+                    @if (Model.PuedeEntregar)
+                    {
+                        <form method="post"
+                              action="@urlEntregar"
+                              class="pct-form"
+                              data-cambio-turno-form
+                              data-tipo="entregar">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+
+                            <div class="pct-form-grid">
+                                <div class="pct-field">
+                                    <label for="pctOperadorEntrante_@Model.EjecucionProduccionID">Operador que recibirá el turno</label>
+                                    <select id="pctOperadorEntrante_@Model.EjecucionProduccionID"
+                                            name="OperadorEntranteID"
+                                            class="form-select"
+                                            required>
+                                        <option value="">Selecciona...</option>
+                                        @foreach (var operador in candidatos)
+                                        {
+                                            var textoOperador = operador.Nombre;
+                                            if (!string.IsNullOrWhiteSpace(operador.TurnoNombre)) textoOperador += " · " + operador.TurnoNombre;
+                                            if (operador.EnEscala) textoOperador += " · En escala";
+                                            if (seleccionado.HasValue && seleccionado.Value == operador.PersonaID)
+                                            {
+                                                <option value="@operador.PersonaID" selected>@textoOperador</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@operador.PersonaID">@textoOperador</option>
+                                            }
+                                        }
+                                    </select>
+                                    @if (Model.OperadorProgramadoID.HasValue)
+                                    {
+                                        <div class="form-text">La programación de personal propone a @Model.OperadorProgramadoTexto.</div>
+                                    }
+                                </div>
+                                <div class="pct-field">
+                                    <label for="pctObsEntrega_@Model.EjecucionProduccionID">Observaciones de entrega</label>
+                                    <textarea id="pctObsEntrega_@Model.EjecucionProduccionID"
+                                  name="Observaciones"
+                                  maxlength="1000"
+                                  class="form-control"
+                                  placeholder="Opcional: información que debe conocer el operador entrante."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="pct-actions">
+                                @if (candidatos.Count == 0)
+                                {
+                                    <button type="submit" class="pct-btn pct-btn-primary" disabled>
+                                        <i class="bi bi-send-check"></i>Entregar turno
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="submit" class="pct-btn pct-btn-primary">
+                                        <i class="bi bi-send-check"></i>Entregar turno
+                                    </button>
+                                }
+                            </div>
+                        </form>
+                    }
+                    else if (Model.SoloLecturaSolicitado || !Model.UsuarioEsOperador)
+                    {
+                        <div class="pct-note mt-2">
+                            <i class="bi bi-eye-fill"></i>
+                            <div>
+                                Vista de consulta. Técnicos y supervisión pueden revisar el estado del relevo, acumulados, cajas y responsables, pero la entrega la realiza el operador saliente.
+                            </div>
+                        </div>
+                    }
+                    else if (!Model.UsuarioEsOperadorActual)
+                    {
+                        <div class="pct-note is-warning mt-2">
+                            <i class="bi bi-person-lock"></i>
+                            <div>El cambio debe iniciarlo el operador que actualmente tiene asignada la ejecución: <strong>@Model.OperadorActualTexto</strong>.</div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="pct-note is-danger">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <div>No fue posible construir el resumen de entrega de turno para esta ejecución.</div>
+                    </div>
+                }
+            }
+
+            @if (Model.HistorialReciente.Any())
+            {
+                <div class="pct-section-title">
+                    <span><i class="bi bi-clock-history me-1"></i>Cambios recientes</span>
+                    <span>@Model.HistorialReciente.Count</span>
+                </div>
+                <div class="pct-history">
+                    @foreach (var item in Model.HistorialReciente)
+                    {
+                        <div class="pct-history-item">
+                            <div class="pct-history-main">
+                                <strong>@item.OperadorSalienteNombre → @item.OperadorEntranteNombre</strong>
+                                <span>
+                                    Entrega @item.FechaEntrega.ToString("dd/MM/yyyy HH:mm")
+                                    @if (item.FechaRecepcion.HasValue)
+                                    {
+                                        <text> · Recepción @item.FechaRecepcion.Value.ToString("dd/MM/yyyy HH:mm")</text>
+                                    }
+                                    <text> · @TextoOrigen(item.OrigenOperadorEntrante)</text>
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(item.ObservacionesRecepcion))
+                                {
+                                    <span>Recepción: @item.ObservacionesRecepcion</span>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(item.ObservacionesEntrega))
+                                {
+                                    <span>Entrega: @item.ObservacionesEntrega</span>
+                                }
+                            </div>
+                            <span class="pct-state @ClaseEstadoCambio(item.Estado)">@TextoEstadoCambio(item.Estado)</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const flash=root.querySelector('[data-pct-flash]');
+        let enviando=false;
+
+        function mostrar(mensaje,tipo){
+            if(!flash) return;
+            flash.className=`pct-flash is-visible ${tipo==='success'?'is-success':'is-error'}`;
+            flash.textContent=mensaje||'';
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        root.addEventListener('submit',async event=>{
+            const form=event.target.closest?.('[data-cambio-turno-form]');
+            if(!form) return;
+            event.preventDefault();
+            if(enviando) return;
+            enviando=true;
+
+            const boton=form.querySelector('button[type="submit"]');
+            const textoOriginal=boton?.innerHTML;
+            if(boton){
+                boton.disabled=true;
+                boton.innerHTML='<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Procesando...';
+            }
+
+            try{
+                const response=await fetch(form.action,{
+                    method:'POST',
+                    body:new FormData(form),
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest'}
+                });
+                const data=await leerRespuesta(response);
+                if(!response.ok||data?.ok===false) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                mostrar(data?.mensaje||'Cambio de turno actualizado correctamente.','success');
+                window.setTimeout(()=>{
+                    if(root.isConnected)
+                        root.dispatchEvent(new CustomEvent('nsq:cambio-turno-actualizado',{bubbles:true}));
+                },450);
+            }catch(error){
+                mostrar(error?.message||'No fue posible completar el cambio de turno.','error');
+                if(boton){
+                    boton.disabled=false;
+                    boton.innerHTML=textoOriginal||'Continuar';
+                }
+            }finally{
+                enviando=false;
+            }
+        });
+    })();
+</script>

@@ -1,0 +1,79 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poHistorial_{Model.ProgramaProduccionID}";
+    var url = Url.Action("HistorialOperativo", "ProduccionOperativa", new { programaProduccionId = Model.ProgramaProduccionID }) ?? $"/Produccion/Operativa/Historial/{Model.ProgramaProduccionID}";
+}
+
+<style>
+    .po-history-loader {
+        min-height: 240px
+    }
+
+        .po-history-loader .poh-loading {
+            min-height: 240px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            color: #667085;
+            font-size: .78rem;
+            font-weight: 800
+        }
+
+        .po-history-loader .poh-spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid #dbe5f1;
+            border-top-color: #004aad;
+            border-radius: 50%;
+            animation: pohSpin .75s linear infinite
+        }
+
+    @@keyframes pohSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId" class="po-history-loader" data-po-history>
+    <div data-poh-body>
+        <div class="poh-loading"><div class="poh-spinner"></div><span>Cargando trazabilidad de la OF...</span></div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+        const body=root.querySelector('[data-poh-body]');
+        const url='@url';
+        function escapar(texto){return String(texto??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+        async function errorRespuesta(response){
+            try{
+                const tipo=(response.headers.get('content-type')||'').toLowerCase();
+                if(tipo.includes('application/json')){
+                    const data=await response.json();
+                    return data?.mensaje||data?.message||`HTTP ${response.status}`;
+                }
+                const texto=await response.text();
+                return texto||`HTTP ${response.status}`;
+            }catch{return `HTTP ${response.status}`;}
+        }
+        async function cargar(){
+            body.innerHTML='<div class="poh-loading"><div class="poh-spinner"></div><span>Cargando trazabilidad de la OF...</span></div>';
+            try{
+                const response=await fetch(url,{cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/html'}});
+                if(!response.ok) throw new Error(await errorRespuesta(response));
+                body.innerHTML=await response.text();
+            }catch(error){
+                body.innerHTML=`<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible cargar el historial operativo.')}</div>`;
+            }
+        }
+        cargar();
+    })();
+</script>

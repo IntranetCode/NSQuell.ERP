@@ -1,0 +1,5 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+@{
+    ViewData["TipoInsumoOperativo"] = "MP";
+}
+@await Html.PartialAsync("~/Views/ProduccionOperativa/Acciones/_RecepcionInsumo.cshtml", Model, ViewData)

@@ -1,0 +1,934 @@
+﻿@model ERP.NSQuell.Models.ProduccionChecklistVm
+@using ERP.NSQuell.Models
+@using System.Linq
+
+@functions {
+    string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+    string ResultadoNormalizado(string? value)
+    {
+        var r = (value ?? string.Empty).Trim().ToUpperInvariant();
+        if (r == "N/A") return "NA";
+        if (r == "SI" || r == "SÍ") return "OK";
+        if (r == "NO") return "NOK";
+        return r;
+    }
+}
+
+@{
+    var programaId = ViewData["ProgramaProduccionID"] != null ? Convert.ToInt32(ViewData["ProgramaProduccionID"]) : Model.ProgramaProduccionID;
+    var preparacionId = ViewData["PreparacionAnticipadaID"] != null ? Convert.ToInt32(ViewData["PreparacionAnticipadaID"]) : 0;
+    var puedeGestionar = ViewData["PuedeGestionarCambioMolde"] != null && Convert.ToBoolean(ViewData["PuedeGestionarCambioMolde"]);
+    var estadoCambio = Convert.ToString(ViewData["EstadoCambioMolde"]) ?? string.Empty;
+    DateTime? fechaInicio = ViewData["FechaInicioCambioMolde"] != null ? Convert.ToDateTime(ViewData["FechaInicioCambioMolde"]) : (DateTime?)null;
+    var limite = ViewData["LimiteCambioMoldeMinutos"] != null ? Convert.ToInt32(ViewData["LimiteCambioMoldeMinutos"]) : 0;
+    var esPareja = ViewData["EsParejaLhRh"] != null && Convert.ToBoolean(ViewData["EsParejaLhRh"]);
+    int? grupoLhRh = ViewData["GrupoLhRh"] != null ? Convert.ToInt32(ViewData["GrupoLhRh"]) : (int?)null;
+    var puedeEditar = puedeGestionar && !Model.EstaCompleto;
+    var secciones = Model.Secciones.OrderBy(x => x.OrdenSeccion).ToList();
+    var rootId = $"pccChecklist_{Model.ChecklistArranqueID}_{programaId}";
+}
+
+<style>
+    .pcc-op {
+        --pcc-purple: #5b3fd4;
+        --pcc-text: #1d2939;
+        --pcc-muted: #667085;
+        --pcc-line: #e4e7ec;
+        --pcc-soft: #f8fafc;
+        --pcc-green: #128254;
+        --pcc-red: #c93636;
+        --pcc-orange: #b66900;
+        color: var(--pcc-text)
+    }
+
+        .pcc-op * {
+            box-sizing: border-box
+        }
+
+        .pcc-op .pcc-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 13px;
+            border: 1px solid #ddd0f1;
+            border-radius: 13px;
+            background: #faf7ff;
+            margin-bottom: 10px
+        }
+
+            .pcc-op .pcc-top strong {
+                display: block;
+                color: #3f2b67;
+                font-size: .82rem
+            }
+
+            .pcc-op .pcc-top small {
+                display: block;
+                margin-top: 2px;
+                color: #75658f;
+                font-size: .64rem
+            }
+
+        .pcc-op .pcc-back {
+            border: 1px solid #d9d0ea;
+            border-radius: 8px;
+            padding: 7px 9px;
+            background: #fff;
+            color: #5b3fd4;
+            font-size: .65rem;
+            font-weight: 900
+        }
+
+        .pcc-op .pcc-info {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 7px;
+            margin-bottom: 10px
+        }
+
+        .pcc-op .pcc-info-box {
+            padding: 8px;
+            border: 1px solid var(--pcc-line);
+            border-radius: 9px;
+            background: #fff
+        }
+
+            .pcc-op .pcc-info-box span {
+                display: block;
+                color: var(--pcc-muted);
+                font-size: .56rem;
+                font-weight: 850;
+                text-transform: uppercase
+            }
+
+            .pcc-op .pcc-info-box strong {
+                display: block;
+                margin-top: 2px;
+                color: #344054;
+                font-size: .68rem
+            }
+
+        .pcc-op .pcc-pair {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 7px;
+            margin-bottom: 10px
+        }
+
+        .pcc-op .pcc-pair-item {
+            padding: 8px 9px;
+            border-radius: 9px;
+            border: 1px solid #e4daf4;
+            background: #fff;
+            font-size: .63rem;
+            color: #667085
+        }
+
+            .pcc-op .pcc-pair-item strong {
+                display: block;
+                color: #3e2a61;
+                font-size: .69rem
+            }
+
+        .pcc-op .pcc-progress-card {
+            padding: 10px 11px;
+            border: 1px solid var(--pcc-line);
+            border-radius: 11px;
+            background: #fff;
+            margin-bottom: 10px
+        }
+
+        .pcc-op .pcc-progress-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: #344054;
+            font-size: .67rem;
+            font-weight: 900
+        }
+
+        .pcc-op .pcc-progress {
+            height: 7px;
+            margin-top: 7px;
+            border-radius: 999px;
+            background: #edf1f5;
+            overflow: hidden
+        }
+
+            .pcc-op .pcc-progress span {
+                display: block;
+                height: 100%;
+                background: var(--pcc-purple)
+            }
+
+        .pcc-op .pcc-alert {
+            padding: 8px 9px;
+            border-radius: 9px;
+            margin-bottom: 9px;
+            font-size: .65rem;
+            line-height: 1.4;
+            background: #f5faff;
+            border: 1px solid #d8e5f4;
+            color: #315f85
+        }
+
+            .pcc-op .pcc-alert.success {
+                background: #edf9f3;
+                border-color: #bee2cf;
+                color: #176b48
+            }
+
+        .pcc-op .pcc-section {
+            border: 1px solid var(--pcc-line);
+            border-radius: 12px;
+            background: #fff;
+            overflow: hidden;
+            margin-top: 9px
+        }
+
+        .pcc-op .pcc-section-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 11px;
+            background: #fbfcfe;
+            border-bottom: 1px solid var(--pcc-line)
+        }
+
+        .pcc-op .pcc-section-title {
+            color: #102a56;
+            font-size: .74rem;
+            font-weight: 950
+        }
+
+        .pcc-op .pcc-section-sub {
+            margin-top: 2px;
+            color: var(--pcc-muted);
+            font-size: .59rem
+        }
+
+        .pcc-op .pcc-section-state {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap
+        }
+
+        .pcc-op .pcc-pill {
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #f2f4f7;
+            color: #667085;
+            font-size: .57rem;
+            font-weight: 900
+        }
+
+            .pcc-op .pcc-pill.complete {
+                background: #edf9f3;
+                color: #176b48
+            }
+
+            .pcc-op .pcc-pill.process {
+                background: #eef4fc;
+                color: #245484
+            }
+
+        .pcc-op .pcc-questions {
+            padding: 0 11px
+        }
+
+        .pcc-op .pcc-question {
+            display: grid;
+            grid-template-columns: 30px minmax(0,1fr) minmax(300px,.85fr);
+            gap: 9px;
+            padding: 10px 0;
+            border-top: 1px solid #eef1f5
+        }
+
+            .pcc-op .pcc-question:first-child {
+                border-top: 0
+            }
+
+            .pcc-op .pcc-question.invalid {
+                background: #fff8f8
+            }
+
+        .pcc-op .pcc-number {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            background: #f1edff;
+            color: #5b3fd4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .61rem;
+            font-weight: 950
+        }
+
+        .pcc-op .pcc-question-text {
+            color: #344054;
+            font-size: .68rem;
+            font-weight: 850;
+            line-height: 1.4
+        }
+
+        .pcc-op .pcc-meta {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 4px
+        }
+
+            .pcc-op .pcc-meta span {
+                font-size: .54rem;
+                color: #667085;
+                padding: 2px 5px;
+                border-radius: 6px;
+                background: #f8fafc;
+                border: 1px solid #eef1f5
+            }
+
+        .pcc-op .pcc-options {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap
+        }
+
+        .pcc-op .pcc-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none
+        }
+
+        .pcc-op .pcc-option label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 8px;
+            border: 1px solid var(--pcc-line);
+            border-radius: 8px;
+            background: #fff;
+            color: #667085;
+            font-size: .61rem;
+            font-weight: 900;
+            cursor: pointer
+        }
+
+        .pcc-op .pcc-option input:checked + label {
+            border-color: #a994f1;
+            background: #f3f0ff;
+            color: #5035c4
+        }
+
+        .pcc-op .pcc-option.ok input:checked + label {
+            border-color: #a8ddc0;
+            background: #edf9f3;
+            color: #176b48
+        }
+
+        .pcc-op .pcc-option.nok input:checked + label {
+            border-color: #efb8b8;
+            background: #fff1f1;
+            color: #a52b2b
+        }
+
+        .pcc-op .pcc-option input:disabled + label {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+        .pcc-op .pcc-observation {
+            margin-top: 6px
+        }
+
+            .pcc-op .pcc-observation label {
+                display: block;
+                margin-bottom: 3px;
+                color: #667085;
+                font-size: .56rem;
+                font-weight: 850
+            }
+
+            .pcc-op .pcc-observation textarea {
+                width: 100%;
+                min-height: 48px;
+                resize: vertical;
+                border: 1px solid var(--pcc-line);
+                border-radius: 8px;
+                padding: 7px 8px;
+                font-size: .64rem;
+                color: #344054;
+                background: #fff
+            }
+
+                .pcc-op .pcc-observation textarea.is-invalid {
+                    border-color: #e57373;
+                    background: #fff8f8
+                }
+
+        .pcc-op .pcc-saved {
+            margin-top: 4px;
+            color: #98a2b3;
+            font-size: .54rem
+        }
+
+        .pcc-op .pcc-section-actions {
+            display: flex;
+            justify-content: flex-end;
+            padding: 9px 11px;
+            border-top: 1px solid var(--pcc-line);
+            background: #fbfcfe
+        }
+
+        .pcc-op .pcc-btn {
+            border: 0;
+            border-radius: 8px;
+            padding: 7px 10px;
+            background: var(--pcc-purple);
+            color: #fff;
+            font-size: .63rem;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px
+        }
+
+            .pcc-op .pcc-btn.green {
+                background: var(--pcc-green)
+            }
+
+            .pcc-op .pcc-btn.secondary {
+                background: #fff;
+                color: #344054;
+                border: 1px solid var(--pcc-line)
+            }
+
+            .pcc-op .pcc-btn:disabled {
+                opacity: .5;
+                cursor: not-allowed
+            }
+
+        .pcc-op .pcc-general {
+            margin-top: 9px;
+            padding: 10px 11px;
+            border: 1px solid var(--pcc-line);
+            border-radius: 11px;
+            background: #fff
+        }
+
+            .pcc-op .pcc-general label {
+                display: block;
+                margin-bottom: 4px;
+                color: #344054;
+                font-size: .62rem;
+                font-weight: 900
+            }
+
+            .pcc-op .pcc-general textarea {
+                width: 100%;
+                min-height: 62px;
+                border: 1px solid var(--pcc-line);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: .65rem
+            }
+
+        .pcc-op .pcc-final {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 9px;
+            padding: 10px 11px;
+            border: 1px solid var(--pcc-line);
+            border-radius: 11px;
+            background: #fff
+        }
+
+            .pcc-op .pcc-final strong {
+                display: block;
+                color: #102a56;
+                font-size: .69rem
+            }
+
+            .pcc-op .pcc-final span {
+                display: block;
+                margin-top: 2px;
+                color: #667085;
+                font-size: .59rem
+            }
+
+        .pcc-op .pcc-toast {
+            display: none;
+            margin-top: 9px;
+            padding: 8px 9px;
+            border-radius: 9px;
+            font-size: .65rem;
+            font-weight: 850
+        }
+
+            .pcc-op .pcc-toast.show {
+                display: block
+            }
+
+            .pcc-op .pcc-toast.success {
+                background: #edf9f3;
+                border: 1px solid #bee2cf;
+                color: #176b48
+            }
+
+            .pcc-op .pcc-toast.error {
+                background: #fff1f1;
+                border: 1px solid #efb8b8;
+                color: #a52b2b
+            }
+
+    html[data-nsq-theme="dark"] .pcc-op {
+        --pcc-text: #eef2f7;
+        --pcc-muted: #9aacbf;
+        --pcc-line: rgba(255,255,255,.10)
+    }
+
+        html[data-nsq-theme="dark"] .pcc-op .pcc-section, html[data-nsq-theme="dark"] .pcc-op .pcc-info-box, html[data-nsq-theme="dark"] .pcc-op .pcc-progress-card, html[data-nsq-theme="dark"] .pcc-op .pcc-general, html[data-nsq-theme="dark"] .pcc-op .pcc-final {
+            background: #111d2f
+        }
+
+        html[data-nsq-theme="dark"] .pcc-op .pcc-section-head, html[data-nsq-theme="dark"] .pcc-op .pcc-section-actions {
+            background: #0e1929
+        }
+
+        html[data-nsq-theme="dark"] .pcc-op .pcc-section-title, html[data-nsq-theme="dark"] .pcc-op .pcc-question-text, html[data-nsq-theme="dark"] .pcc-op .pcc-final strong, html[data-nsq-theme="dark"] .pcc-op .pcc-general label {
+            color: #f5f7fb
+        }
+
+    @@media(max-width:900px) {
+        .pcc-op .pcc-question {
+            grid-template-columns: 30px minmax(0,1fr)
+        }
+
+        .pcc-op .pcc-answer {
+            grid-column: 2
+        }
+
+        .pcc-op .pcc-info {
+            grid-template-columns: 1fr 1fr
+        }
+    }
+
+    @@media(max-width:560px) {
+        .pcc-op .pcc-info, .pcc-op .pcc-pair {
+            grid-template-columns: 1fr
+        }
+
+        .pcc-op .pcc-question {
+            grid-template-columns: 1fr
+        }
+
+        .pcc-op .pcc-answer {
+            grid-column: 1
+        }
+
+        .pcc-op .pcc-number {
+            display: none
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="pcc-op"
+     data-pcc-root
+     data-programa-id="@programaId"
+     data-preparacion-id="@preparacionId"
+     data-checklist-id="@Model.ChecklistArranqueID"
+     data-puede-editar="@(puedeEditar ? "true" : "false")">
+
+    <div class="pcc-top">
+        <div>
+            <strong><i class="bi bi-ui-checks-grid me-1"></i>Check List Desmontaje y Montaje de Molde</strong>
+            <small>@Txt(Model.CodigoFormato) · @Txt(Model.VersionFormato) · @Model.TextoAvanceSecciones</small>
+        </div>
+        <button type="button" class="pcc-back" data-pcm-volver-cambio>
+            <i class="bi bi-arrow-left me-1"></i>Volver al cambio
+        </button>
+    </div>
+
+    @if (Model.EstaCompleto)
+    {
+        <div class="pcc-alert success"><i class="bi bi-check-circle-fill me-1"></i>Checklist completo. Sus respuestas están bloqueadas y el cambio físico ya puede finalizarse.</div>
+    }
+    else if (!string.Equals(estadoCambio, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase))
+    {
+        <div class="pcc-alert"><i class="bi bi-info-circle-fill me-1"></i>Puedes capturar la preparación previa antes de iniciar el cambio. Las secciones de desmontaje y montaje se completan durante la intervención física.</div>
+    }
+
+    <div class="pcc-info">
+        <div class="pcc-info-box"><span>Máquina</span><strong>@Model.TextoMaquina</strong></div>
+        <div class="pcc-info-box"><span>Molde</span><strong>@Txt(Model.MoldeCodigo)</strong></div>
+        <div class="pcc-info-box"><span>Inicio cambio</span><strong>@(fechaInicio.HasValue? fechaInicio.Value.ToString("dd/MM/yyyy HH:mm"):"Pendiente")</strong></div>
+        <div class="pcc-info-box"><span>Límite</span><strong>@(limite > 0 ? $"{limite} min" : "—")</strong></div>
+    </div>
+
+    @if (Model.Programas.Any())
+    {
+        <div class="pcc-pair">
+            @foreach (var p in Model.Programas.OrderBy(x => x.TextoLado).ThenBy(x => x.ProgramaProduccionID))
+            {
+                <div class="pcc-pair-item">
+                    <strong>@(string.IsNullOrWhiteSpace(p.TextoLado) ? "OF" : p.TextoLado) · @p.TextoOF</strong>
+                    @Txt(!string.IsNullOrWhiteSpace(p.ReferenciaSAP) ? p.ReferenciaSAP : p.NumeroParte) · Programa @p.ProgramaProduccionID
+                </div>
+            }
+        </div>
+    }
+
+    <div class="pcc-progress-card">
+        <div class="pcc-progress-top">
+            <span><span data-pcc-respondidas>@Model.RespuestasContestadas</span> de <span data-pcc-total>@Model.TotalPreguntas</span> respuestas</span>
+            <span data-pcc-porcentaje>@Model.PorcentajeAvance%</span>
+        </div>
+        <div class="pcc-progress"><span data-pcc-barra style="width:@Model.PorcentajeAvance%"></span></div>
+    </div>
+
+    <form data-pcc-token class="d-none">@Html.AntiForgeryToken()</form>
+
+    @if (!secciones.Any())
+    {
+        <div class="pcc-alert"><i class="bi bi-exclamation-triangle-fill me-1"></i>No se encontraron preguntas activas para este formato.</div>
+    }
+
+    @foreach (var seccion in secciones)
+    {
+        var preguntas = seccion.Preguntas.Where(x => x.Activo).OrderBy(x => x.OrdenPregunta).ThenBy(x => x.PreguntaID).ToList();
+        var respondidasSeccion = preguntas.Count(x => x.EstaRespondida);
+        var seccionCompleta = seccion.EstaCompleta;
+
+        <section class="pcc-section" data-pcc-section="@seccion.OrdenSeccion">
+            <div class="pcc-section-head">
+                <div>
+                    <div class="pcc-section-title">@seccion.OrdenSeccion. @seccion.Seccion</div>
+                    <div class="pcc-section-sub">
+                        @if (!string.IsNullOrWhiteSpace(seccion.ResponsableSugerido))
+                        {
+                            <span>@seccion.ResponsableSugerido · </span>
+                        }
+                        @preguntas.Count punto(s)
+                    </div>
+                </div>
+                <div class="pcc-section-state">
+                    <span class="pcc-pill" data-pcc-section-count>@respondidasSeccion / @preguntas.Count</span>
+                    <span class="pcc-pill @(seccionCompleta ? "complete" : respondidasSeccion > 0 ? "process" : "")" data-pcc-section-status>
+                        @(seccionCompleta ? "COMPLETA" : respondidasSeccion > 0 ? "EN PROCESO" : "PENDIENTE")
+                    </span>
+                </div>
+            </div>
+
+            <div class="pcc-questions">
+                @foreach (var pregunta in preguntas)
+                {
+                    var resultado = ResultadoNormalizado(pregunta.Resultado);
+                    <div class="pcc-question"
+                         data-pcc-question
+                         data-question-id="@pregunta.PreguntaID"
+                         data-required="@(pregunta.EsObligatoria ? "true" : "false")"
+                         data-permite-na="@(pregunta.PermiteNA ? "true" : "false")"
+                         data-requiere-nok="@(pregunta.RequiereObservacionSiNOK ? "true" : "false")"
+                         data-requiere-na="@(pregunta.RequiereObservacionSiNA ? "true" : "false")">
+                        <div><div class="pcc-number">@pregunta.OrdenPregunta</div></div>
+                        <div>
+                            <div class="pcc-question-text">@pregunta.TextoPregunta</div>
+                            <div class="pcc-meta">
+                                @if (pregunta.EsObligatoria)
+                                {
+                                    <span>Obligatoria</span>
+                                }
+                                @if (pregunta.PermiteNA)
+                                {
+                                    <span>Permite N/A</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(pregunta.ResponsableSugerido))
+                                {
+                                    <span>@pregunta.ResponsableSugerido</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="pcc-answer">
+                            <input type="hidden" data-pcc-question-id value="@pregunta.PreguntaID" />
+                            <div class="pcc-options">
+                                <div class="pcc-option ok">
+                                    <input type="radio" id="pcc_ok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="OK" @(resultado == "OK" ? "checked" : null) @(!puedeEditar ? "disabled" : null) />
+                                    <label for="pcc_ok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)"><i class="bi bi-check-circle"></i>OK</label>
+                                </div>
+                                <div class="pcc-option nok">
+                                    <input type="radio" id="pcc_nok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="NOK" @(resultado == "NOK" ? "checked" : null) @(!puedeEditar ? "disabled" : null) />
+                                    <label for="pcc_nok_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)"><i class="bi bi-x-circle"></i>NOK</label>
+                                </div>
+                                <div class="pcc-option">
+                                    <input type="radio" id="pcc_na_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" name="pcc_resultado_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)" value="NA" @(resultado == "NA" ? "checked" : null) @(!pregunta.PermiteNA || !puedeEditar ? "disabled" : null) />
+                                    <label for="pcc_na_@(Model.ChecklistArranqueID)_@(pregunta.PreguntaID)"><i class="bi bi-dash-circle"></i>N/A</label>
+                                </div>
+                            </div>
+                            <div class="pcc-observation">
+                                <label>Observaciones <span data-pcc-observation-required class="text-danger d-none">· requerida</span></label>
+                                <textarea maxlength="1000" data-pcc-observation @(!puedeEditar ? "readonly" : null) placeholder="Captura una observación cuando sea necesario">@pregunta.Observaciones</textarea>
+                            </div>
+                            @if (pregunta.FechaRespuesta.HasValue)
+                            {
+                                <div class="pcc-saved"><i class="bi bi-clock-history me-1"></i>@pregunta.FechaRespuesta.Value.ToString("dd/MM/yyyy HH:mm") @if(!string.IsNullOrWhiteSpace(pregunta.UsuarioRespuestaNombre)){
+                                <span>· @pregunta.UsuarioRespuestaNombre</span>
+                            }
+        </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="pcc-section-actions">
+            @if (puedeEditar)
+            {
+                <button type="button" class="pcc-btn" data-pcc-save-section="@seccion.OrdenSeccion"><i class="bi bi-save"></i>Guardar sección</button>
+            }
+            else
+            {
+                <span class="pcc-pill @(Model.EstaCompleto ? "complete" : "")"><i class="bi bi-lock me-1"></i>@(Model.EstaCompleto ? "Checklist finalizado" : "Solo lectura")</span>
+            }
+        </div>
+    </section>
+        }
+
+    <div class="pcc-general">
+        <label>Observaciones generales</label>
+        <textarea maxlength="2000" data-pcc-general @(!puedeEditar ? "readonly" : null) placeholder="Comentarios generales del desmontaje y montaje de molde">@Model.ObservacionesGenerales</textarea>
+    </div>
+
+    <div class="pcc-final">
+        <div>
+            <strong>Cierre del checklist</strong>
+            <span data-pcc-final-message>@(Model.EstaCompleto ? "El checklist ya fue finalizado." : "Para finalizar deben estar contestadas todas las preguntas obligatorias.")</span>
+        </div>
+        @if (puedeEditar)
+        {
+            <button type="button" class="pcc-btn green" data-pcc-finalizar><i class="bi bi-check2-circle"></i>Finalizar checklist</button>
+        }
+    </div>
+
+    <div class="pcc-toast" data-pcc-toast></div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const preparacionId=Number(root.dataset.preparacionId||0);
+        const checklistId=Number(root.dataset.checklistId||0);
+        const puedeEditar=root.dataset.puedeEditar==='true';
+        const token=root.querySelector('[data-pcc-token] input[name="__RequestVerificationToken"]')?.value||'';
+        const btnFinalizar=root.querySelector('[data-pcc-finalizar]');
+        const toast=root.querySelector('[data-pcc-toast]');
+        const urlGuardar='@Url.Action("GuardarSeccionChecklistCambioMolde", "ProduccionPreparacion")';
+        const urlFinalizar='@Url.Action("FinalizarChecklistCambioMolde", "ProduccionPreparacion")';
+
+        function mostrar(mensaje,tipo='success'){
+            if(!toast) return;
+            toast.textContent=mensaje||'';
+            toast.className='pcc-toast'+(mensaje?` show ${tipo}`:'');
+        }
+
+        function resultado(row){
+            return row.querySelector('input[type="radio"]:checked')?.value||'';
+        }
+
+        function requiereObservacion(row){
+            const r=resultado(row);
+            return (r==='NOK'&&row.dataset.requiereNok==='true')||(r==='NA'&&row.dataset.requiereNa==='true');
+        }
+
+        function respuestaValida(row){
+            const r=resultado(row);
+            const required=row.dataset.required==='true';
+            const permiteNa=row.dataset.permiteNa==='true';
+            const obs=row.querySelector('[data-pcc-observation]')?.value.trim()||'';
+            if(!r) return !required;
+            if(r==='NA'&&!permiteNa) return false;
+            if(requiereObservacion(row)&&!obs) return false;
+            return true;
+        }
+
+        function actualizarPregunta(row){
+            const req=requiereObservacion(row);
+            const marca=row.querySelector('[data-pcc-observation-required]');
+            marca?.classList.toggle('d-none',!req);
+        }
+
+        function actualizarResumen(){
+            const rows=[...root.querySelectorAll('[data-pcc-question]')];
+            const respondidas=rows.filter(x=>!!resultado(x)).length;
+            const total=rows.length;
+            const porcentaje=total>0?Math.round(respondidas*100/total):0;
+
+            const totalEl=root.querySelector('[data-pcc-total]');
+            const respEl=root.querySelector('[data-pcc-respondidas]');
+            const pctEl=root.querySelector('[data-pcc-porcentaje]');
+            const barra=root.querySelector('[data-pcc-barra]');
+            if(totalEl) totalEl.textContent=String(total);
+            if(respEl) respEl.textContent=String(respondidas);
+            if(pctEl) pctEl.textContent=`${porcentaje}%`;
+            if(barra) barra.style.width=`${porcentaje}%`;
+
+            root.querySelectorAll('[data-pcc-section]').forEach(section=>{
+                const sectionRows=[...section.querySelectorAll('[data-pcc-question]')];
+                const sectionRespondidas=sectionRows.filter(x=>!!resultado(x)).length;
+                const completa=sectionRows.length>0&&sectionRows.every(respuestaValida);
+                const count=section.querySelector('[data-pcc-section-count]');
+                const status=section.querySelector('[data-pcc-section-status]');
+                if(count) count.textContent=`${sectionRespondidas} / ${sectionRows.length}`;
+                if(status){
+                    status.classList.remove('complete','process');
+                    if(completa){status.classList.add('complete');status.textContent='COMPLETA';}
+                    else if(sectionRespondidas>0){status.classList.add('process');status.textContent='EN PROCESO';}
+                    else status.textContent='PENDIENTE';
+                }
+            });
+
+            const todas=rows.length>0&&rows.every(respuestaValida);
+            const msg=root.querySelector('[data-pcc-final-message]');
+            if(msg&&puedeEditar) msg.textContent=todas?'Todas las preguntas obligatorias están completas. Ya puedes finalizar el checklist.':'Para finalizar deben estar contestadas todas las preguntas obligatorias.';
+            if(btnFinalizar&&puedeEditar) btnFinalizar.disabled=!todas;
+        }
+
+        function validarSeccion(section){
+            let valido=true;
+            const rows=[...section.querySelectorAll('[data-pcc-question]')];
+            rows.forEach(row=>{
+                row.classList.remove('invalid');
+                const textarea=row.querySelector('[data-pcc-observation]');
+                textarea?.classList.remove('is-invalid');
+                if(!respuestaValida(row)){
+                    valido=false;
+                    row.classList.add('invalid');
+                    if(requiereObservacion(row)&&textarea&&!textarea.value.trim()) textarea.classList.add('is-invalid');
+                }
+            });
+            return valido;
+        }
+
+        async function guardarSeccion(numero,boton){
+            if(!puedeEditar) return true;
+            const section=root.querySelector(`[data-pcc-section="${numero}"]`);
+            if(!section) return false;
+            const rows=[...section.querySelectorAll('[data-pcc-question]')];
+            const fd=new FormData();
+            fd.append('__RequestVerificationToken',token);
+            fd.append('PreparacionAnticipadaID',String(preparacionId));
+            fd.append('ChecklistArranqueID',String(checklistId));
+            fd.append('OrdenSeccion',String(numero));
+
+            rows.forEach((row,index)=>{
+                fd.append(`Respuestas[${index}].PreguntaID`,row.querySelector('[data-pcc-question-id]')?.value||'');
+                fd.append(`Respuestas[${index}].Resultado`,resultado(row));
+                fd.append(`Respuestas[${index}].Observaciones`,row.querySelector('[data-pcc-observation]')?.value.trim()||'');
+                fd.append(`Respuestas[${index}].ValorCapturado`,'');
+            });
+
+            const original=boton?.innerHTML;
+            if(boton){boton.disabled=true;boton.innerHTML='<span class="spinner-border spinner-border-sm"></span> Guardando...';}
+
+            try{
+                const response=await fetch(urlGuardar,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});
+                const data=await response.json();
+                if(!response.ok||!data?.ok) throw new Error(data?.mensaje||'No fue posible guardar la sección.');
+                mostrar(data.mensaje||'Sección guardada correctamente.','success');
+                actualizarResumen();
+                return true;
+            }catch(error){
+                mostrar(error?.message||'No fue posible guardar la sección.','error');
+                return false;
+            }finally{
+                if(boton){boton.disabled=false;boton.innerHTML=original;}
+            }
+        }
+
+        async function guardarTodas(){
+            const sections=[...root.querySelectorAll('[data-pcc-section]')];
+            for(const section of sections){
+                const numero=section.dataset.pccSection;
+                const boton=section.querySelector('[data-pcc-save-section]');
+                const ok=await guardarSeccion(numero,boton);
+                if(!ok) return false;
+            }
+            return true;
+        }
+
+        async function finalizar(){
+            if(!puedeEditar||!btnFinalizar) return;
+            const sections=[...root.querySelectorAll('[data-pcc-section]')];
+            const invalida=sections.find(x=>!validarSeccion(x));
+            if(invalida){
+                mostrar('Faltan respuestas obligatorias o alguna observación requerida.','error');
+                invalida.scrollIntoView({behavior:'smooth',block:'nearest'});
+                actualizarResumen();
+                return;
+            }
+
+            const original=btnFinalizar.innerHTML;
+            btnFinalizar.disabled=true;
+            btnFinalizar.innerHTML='<span class="spinner-border spinner-border-sm"></span> Finalizando...';
+
+            try{
+                if(!await guardarTodas()) throw new Error('No fue posible guardar todas las secciones antes de finalizar.');
+
+                const fd=new FormData();
+                fd.append('__RequestVerificationToken',token);
+                fd.append('PreparacionAnticipadaID',String(preparacionId));
+                fd.append('ChecklistArranqueID',String(checklistId));
+                fd.append('ObservacionesGenerales',root.querySelector('[data-pcc-general]')?.value.trim()||'');
+
+                const response=await fetch(urlFinalizar,{method:'POST',body:fd,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});
+                const data=await response.json();
+                if(!response.ok||!data?.ok) throw new Error(data?.mensaje||'No fue posible finalizar el checklist.');
+
+                mostrar(data.mensaje||'Checklist finalizado correctamente.','success');
+                document.dispatchEvent(new CustomEvent('nsq:checklist-cambio-actualizado',{detail:{programaProduccionId:programaId,preparacionAnticipadaId:preparacionId,mensaje:data.mensaje||'Checklist finalizado correctamente.'}}));
+            }catch(error){
+                mostrar(error?.message||'No fue posible finalizar el checklist.','error');
+                btnFinalizar.disabled=false;
+                btnFinalizar.innerHTML=original;
+            }
+        }
+
+        root.querySelectorAll('[data-pcc-question]').forEach(row=>{
+            actualizarPregunta(row);
+            row.querySelectorAll('input[type="radio"]').forEach(input=>input.addEventListener('change',()=>{
+                row.classList.remove('invalid');
+                actualizarPregunta(row);
+                actualizarResumen();
+            }));
+            row.querySelector('[data-pcc-observation]')?.addEventListener('input',event=>{
+                event.currentTarget.classList.remove('is-invalid');
+                row.classList.remove('invalid');
+                actualizarResumen();
+            });
+        });
+
+        root.querySelectorAll('[data-pcc-save-section]').forEach(button=>button.addEventListener('click',()=>guardarSeccion(button.dataset.pccSaveSection,button)));
+        btnFinalizar?.addEventListener('click',finalizar);
+
+        const back=root.querySelector('[data-pcm-volver-cambio]');
+        if(back&&!root.closest('[data-po-cambio-molde]')){
+            back.addEventListener('click',()=>{
+                root.closest('[data-nsq-operativa-centro]')?.querySelector('[data-nsq-operativa-volver]')?.click();
+            });
+        }
+
+        actualizarResumen();
+    })();
+</script>

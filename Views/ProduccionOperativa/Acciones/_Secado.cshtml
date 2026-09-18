@@ -1,0 +1,284 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poSecado_{Model.ProgramaProduccionID}";
+    var urlContenido = Url.Action("SecadoOperativa", "ProduccionPreparacion") ?? "/ProduccionPreparacion/SecadoOperativa";
+}
+
+<style>
+    .po-secado-loader {
+        min-height: 220px
+    }
+
+        .po-secado-loader .ps-loading {
+            min-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 9px;
+            color: #667085;
+            font-size: .76rem;
+            font-weight: 800
+        }
+
+        .po-secado-loader .ps-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid #dbe5f1;
+            border-top-color: #004aad;
+            border-radius: 50%;
+            animation: psSpin .75s linear infinite
+        }
+
+        .po-secado-loader .ps-feedback {
+            display: none;
+            margin-bottom: 10px;
+            padding: 9px 11px;
+            border-radius: 10px;
+            font-size: .72rem;
+            font-weight: 800
+        }
+
+            .po-secado-loader .ps-feedback.show {
+                display: block
+            }
+
+            .po-secado-loader .ps-feedback.ok {
+                background: #edf9f3;
+                border: 1px solid #bee2cf;
+                color: #176b48
+            }
+
+            .po-secado-loader .ps-feedback.warn {
+                background: #fff8ea;
+                border: 1px solid #efd29d;
+                color: #865600
+            }
+
+            .po-secado-loader .ps-feedback.bad {
+                background: #fff1f1;
+                border: 1px solid #efb8b8;
+                color: #a52b2b
+            }
+
+    @@keyframes psSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="po-secado-loader"
+     data-po-secado
+     data-programa-id="@Model.ProgramaProduccionID">
+    <div class="ps-feedback" data-ps-feedback></div>
+    <div data-ps-body>
+        <div class="ps-loading">
+            <div class="ps-spinner"></div>
+            <span>Cargando Secado...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const body=root.querySelector('[data-ps-body]');
+        const feedback=root.querySelector('[data-ps-feedback]');
+        const urlContenido='@urlContenido';
+        let intervalId=null;
+        let cargando=false;
+
+        function mostrarFeedback(texto,tipo='ok'){
+            if(!feedback) return;
+            feedback.textContent=texto||'';
+            feedback.className='ps-feedback'+(texto?` show ${tipo}`:'');
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        function numero(value){
+            const n=Number(String(value??'').replace(',','.'));
+            return Number.isFinite(n)?n:0;
+        }
+
+        function configurarTotales(scope){
+            scope.querySelectorAll('[data-ps-start-form]').forEach(form=>{
+                const total=form.querySelector('[data-ps-total]');
+                const summary=form.querySelector('[data-ps-total-text]');
+                const select=form.querySelector('[data-ps-tolva]');
+                const components=[...form.querySelectorAll('[data-ps-componente-cantidad]')];
+
+                const recalcular=()=>{
+                    const suma=components.reduce((a,x)=>a+numero(x.value),0);
+                    if(total) total.value=suma.toFixed(4);
+                    if(summary) summary.textContent=`Total de la carga: ${suma.toLocaleString('es-MX',{maximumFractionDigits:4})} KG`;
+
+                    if(select){
+                        const option=select.options[select.selectedIndex];
+                        const capacidad=numero(option?.dataset?.capacity);
+                        select.setCustomValidity(capacidad>0&&suma-capacidad>0.0005
+                            ?`La carga supera la capacidad de la tolva (${capacidad} KG).`
+                            :'');
+                    }
+                };
+
+                components.forEach(x=>x.addEventListener('input',recalcular));
+                select?.addEventListener('change',recalcular);
+                recalcular();
+            });
+        }
+
+        function configurarFinalizacion(scope){
+            scope.querySelectorAll('[data-ps-finish-form]').forEach(form=>{
+                const anticipada=form.dataset.anticipada==='true';
+                const motivo=form.querySelector('[data-ps-motivo-anticipado]');
+                if(motivo) motivo.required=anticipada;
+            });
+        }
+
+        function actualizarContadores(scope){
+            const ahora=Date.now();
+
+            scope.querySelectorAll('[data-ps-fin-esperada]').forEach(el=>{
+                const raw=el.dataset.psFinEsperada;
+                if(!raw) return;
+                const fin=new Date(raw).getTime();
+                if(!Number.isFinite(fin)) return;
+
+                const diff=Math.ceil((fin-ahora)/60000);
+                const estado=el.querySelector('[data-ps-tiempo]');
+
+                if(!estado) return;
+
+                if(diff>0){
+                    const h=Math.floor(diff/60);
+                    const m=diff%60;
+                    estado.textContent=h>0?`${h} h ${m} min restantes`:`${m} min restantes`;
+                }else{
+                    estado.textContent=diff===0?'Tiempo cumplido':`${Math.abs(diff)} min sobre el objetivo`;
+                }
+            });
+        }
+
+        function configurarForms(scope){
+            configurarTotales(scope);
+            configurarFinalizacion(scope);
+
+            scope.querySelectorAll('form[data-secado-form]').forEach(form=>{
+                if(form.dataset.wired==='1') return;
+                form.dataset.wired='1';
+
+                form.addEventListener('submit',async event=>{
+                    event.preventDefault();
+
+                    if(!form.reportValidity()) return;
+
+                    const confirmacion=form.dataset.confirm;
+                    if(confirmacion&&!window.confirm(confirmacion)) return;
+
+                    const boton=form.querySelector('button[type="submit"]');
+                    if(boton) boton.disabled=true;
+                    mostrarFeedback('');
+
+                    try{
+                        const response=await fetch(form.action,{
+                            method:'POST',
+                            body:new FormData(form),
+                            credentials:'same-origin',
+                            headers:{
+                                'X-Requested-With':'XMLHttpRequest',
+                                'X-NSQ-Operativa':'1',
+                                'Accept':'application/json'
+                            }
+                        });
+
+                        const data=await leerRespuesta(response);
+
+                        if(!response.ok||!data?.ok)
+                            throw new Error(data?.mensaje||`HTTP ${response.status}`);
+
+                        mostrarFeedback(
+                            data.mensaje||'Operación realizada correctamente.',
+                            data.advertencia?'warn':'ok');
+
+                        await cargar(false);
+
+                        window.setTimeout(()=>{
+                            const centro=root.closest('[data-nsq-operativa-centro]');
+                            const refrescar=centro?.querySelector('[data-nsq-operativa-refrescar]');
+                            refrescar?.click();
+                        },500);
+                    }catch(error){
+                        mostrarFeedback(error?.message||'No fue posible completar la operación.','bad');
+                    }finally{
+                        if(boton) boton.disabled=false;
+                    }
+                });
+            });
+        }
+
+        async function cargar(mostrarCarga=true){
+            if(cargando||!programaId) return;
+            cargando=true;
+
+            if(mostrarCarga){
+                body.innerHTML=`
+                    <div class="ps-loading">
+                        <div class="ps-spinner"></div>
+                        <span>Cargando Secado...</span>
+                    </div>`;
+            }
+
+            try{
+                const qs=new URLSearchParams({programaProduccionId:String(programaId)});
+                const response=await fetch(`${urlContenido}?${qs.toString()}`,{
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest'}
+                });
+
+                if(!response.ok){
+                    const data=await leerRespuesta(response);
+                    throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                }
+
+                body.innerHTML=await response.text();
+                configurarForms(body);
+                actualizarContadores(body);
+            }catch(error){
+                body.innerHTML=`
+                    <div class="alert alert-danger mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        ${String(error?.message||'No fue posible cargar Secado.')
+                            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+                    </div>`;
+            }finally{
+                cargando=false;
+            }
+        }
+
+        cargar();
+
+        intervalId=window.setInterval(()=>{
+            if(!document.body.contains(root)){
+                window.clearInterval(intervalId);
+                return;
+            }
+            actualizarContadores(body);
+        },30000);
+    })();
+</script>

@@ -1,0 +1,682 @@
+﻿@model ERP.NSQuell.Models.ProduccionPreparacionIndexVm
+@using ERP.NSQuell.Models
+@using System.Linq
+
+@functions {
+    string Fecha(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+    string LadoActual(ProduccionPreparacionTareaVm tarea)
+    {
+        if (string.Equals(tarea.LadoLhRh, "LH", StringComparison.OrdinalIgnoreCase)) return "LH";
+        if (string.Equals(tarea.LadoLhRh, "RH", StringComparison.OrdinalIgnoreCase)) return "RH";
+        return "OF";
+    }
+    string LadoPareja(ProduccionPreparacionTareaVm tarea)
+    {
+        var actual = LadoActual(tarea);
+        if (actual == "LH") return "RH";
+        if (actual == "RH") return "LH";
+        return "OF pareja";
+    }
+}
+
+@{
+    var programaId = ViewData["ProgramaProduccionID"] != null ? Convert.ToInt32(ViewData["ProgramaProduccionID"]) : 0;
+    var tarea = Model.Tareas.FirstOrDefault();
+    var checklist = tarea?.ChecklistCambioMolde;
+}
+
+<style>
+    .pcm-op {
+        --pcm-blue: #004aad;
+        --pcm-purple: #5b3fd4;
+        --pcm-text: #1d2939;
+        --pcm-muted: #667085;
+        --pcm-line: #e4e7ec;
+        --pcm-soft: #f8fafc;
+        --pcm-green: #128254;
+        --pcm-orange: #b66900;
+        --pcm-red: #c93636;
+        color: var(--pcm-text)
+    }
+
+        .pcm-op * {
+            box-sizing: border-box
+        }
+
+        .pcm-op .pcm-card {
+            border: 1px solid var(--pcm-line);
+            border-radius: 14px;
+            background: #fff;
+            overflow: hidden
+        }
+
+        .pcm-op .pcm-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 13px 14px;
+            border-bottom: 1px solid var(--pcm-line);
+            background: #fbfcfe
+        }
+
+            .pcm-op .pcm-head strong {
+                display: block;
+                color: #102a56;
+                font-size: .9rem
+            }
+
+            .pcm-op .pcm-head small {
+                display: block;
+                margin-top: 2px;
+                color: var(--pcm-muted);
+                font-size: .67rem
+            }
+
+        .pcm-op .pcm-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            font-size: .61rem;
+            font-weight: 900;
+            background: #eef4fc;
+            color: var(--pcm-blue);
+            white-space: nowrap
+        }
+
+            .pcm-op .pcm-status.green {
+                background: #edf9f3;
+                color: #176b48
+            }
+
+            .pcm-op .pcm-status.orange {
+                background: #fff8ea;
+                color: #865600
+            }
+
+            .pcm-op .pcm-status.red {
+                background: #fff1f1;
+                color: #a52b2b
+            }
+
+        .pcm-op .pcm-body {
+            padding: 13px 14px
+        }
+
+        .pcm-op .pcm-pair {
+            padding: 9px 10px;
+            border: 1px solid #ddd0f1;
+            border-radius: 10px;
+            background: #faf7ff;
+            margin-bottom: 10px
+        }
+
+        .pcm-op .pcm-pair-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: #6544a5;
+            font-size: .68rem;
+            font-weight: 950
+        }
+
+        .pcm-op .pcm-pair-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 7px;
+            margin-top: 7px
+        }
+
+        .pcm-op .pcm-pair-side {
+            padding: 8px;
+            border-radius: 9px;
+            background: #fff;
+            border: 1px solid #e4daf4;
+            font-size: .64rem;
+            color: #667085
+        }
+
+            .pcm-op .pcm-pair-side strong {
+                display: block;
+                color: #3e2a61;
+                font-size: .71rem
+            }
+
+        .pcm-op .pcm-molds {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px
+        }
+
+        .pcm-op .pcm-mold {
+            padding: 9px 10px;
+            border: 1px solid var(--pcm-line);
+            border-radius: 10px;
+            background: var(--pcm-soft)
+        }
+
+            .pcm-op .pcm-mold span {
+                display: block;
+                color: var(--pcm-muted);
+                font-size: .59rem;
+                font-weight: 850;
+                text-transform: uppercase
+            }
+
+            .pcm-op .pcm-mold strong {
+                display: block;
+                margin-top: 2px;
+                color: #102a56;
+                font-size: .8rem
+            }
+
+        .pcm-op .pcm-arrow {
+            color: var(--pcm-blue);
+            font-size: 1.05rem
+        }
+
+        .pcm-op .pcm-info {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 7px;
+            margin-bottom: 10px
+        }
+
+        .pcm-op .pcm-info-box {
+            padding: 8px;
+            border-radius: 9px;
+            border: 1px solid var(--pcm-line);
+            background: #fff
+        }
+
+            .pcm-op .pcm-info-box span {
+                display: block;
+                color: var(--pcm-muted);
+                font-size: .57rem;
+                text-transform: uppercase;
+                font-weight: 850
+            }
+
+            .pcm-op .pcm-info-box strong {
+                display: block;
+                margin-top: 2px;
+                color: #344054;
+                font-size: .68rem
+            }
+
+        .pcm-op .pcm-sequence {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-top: 10px
+        }
+
+        .pcm-op .pcm-step {
+            position: relative;
+            padding: 10px;
+            border: 1px solid var(--pcm-line);
+            border-radius: 11px;
+            background: #fff;
+            min-height: 92px
+        }
+
+            .pcm-op .pcm-step.done {
+                border-color: #bee2cf;
+                background: #f6fcf8
+            }
+
+            .pcm-op .pcm-step.current {
+                border-color: #b9d0ef;
+                background: #f7faff;
+                box-shadow: 0 0 0 2px rgba(0,74,173,.05)
+            }
+
+            .pcm-op .pcm-step.blocked {
+                background: #fbfcfe;
+                color: #98a2b3
+            }
+
+        .pcm-op .pcm-step-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eef4fc;
+            color: var(--pcm-blue);
+            font-size: .75rem
+        }
+
+        .pcm-op .pcm-step.done .pcm-step-icon {
+            background: #eaf8f1;
+            color: var(--pcm-green)
+        }
+
+        .pcm-op .pcm-step-title {
+            margin-top: 6px;
+            color: #102a56;
+            font-size: .69rem;
+            font-weight: 950
+        }
+
+        .pcm-op .pcm-step-text {
+            margin-top: 2px;
+            color: var(--pcm-muted);
+            font-size: .61rem;
+            line-height: 1.35
+        }
+
+        .pcm-op .pcm-progress {
+            height: 6px;
+            border-radius: 999px;
+            background: #edf1f5;
+            overflow: hidden;
+            margin-top: 7px
+        }
+
+            .pcm-op .pcm-progress span {
+                display: block;
+                height: 100%;
+                background: var(--pcm-purple)
+            }
+
+        .pcm-op .pcm-timer {
+            margin-top: 10px;
+            padding: 10px 11px;
+            border-radius: 11px;
+            border: 1px solid #cfe0f7;
+            background: #f7faff
+        }
+
+        .pcm-op .pcm-timer-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px
+        }
+
+        .pcm-op .pcm-timer-value {
+            color: #102a56;
+            font-size: 1.05rem;
+            font-weight: 950
+        }
+
+        .pcm-op .pcm-timer-detail {
+            color: #667085;
+            font-size: .64rem;
+            font-weight: 750
+        }
+
+        .pcm-op .pcm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 7px;
+            flex-wrap: wrap;
+            margin-top: 10px
+        }
+
+        .pcm-op .pcm-btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 8px 11px;
+            background: var(--pcm-blue);
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px
+        }
+
+            .pcm-op .pcm-btn.purple {
+                background: var(--pcm-purple)
+            }
+
+            .pcm-op .pcm-btn.green {
+                background: var(--pcm-green)
+            }
+
+            .pcm-op .pcm-btn.secondary {
+                background: #fff;
+                color: #344054;
+                border: 1px solid var(--pcm-line)
+            }
+
+            .pcm-op .pcm-btn:disabled {
+                opacity: .5;
+                cursor: not-allowed
+            }
+
+        .pcm-op .pcm-final {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid var(--pcm-line);
+            border-radius: 11px;
+            background: #fbfcfe
+        }
+
+        .pcm-op .pcm-final-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px
+        }
+
+        .pcm-op label {
+            display: block;
+            margin-bottom: 3px;
+            color: #344054;
+            font-size: .62rem;
+            font-weight: 900
+        }
+
+        .pcm-op textarea.form-control {
+            min-height: 62px;
+            border-radius: 8px;
+            font-size: .7rem
+        }
+
+        .pcm-op .pcm-note {
+            margin-top: 8px;
+            padding: 8px 9px;
+            border-radius: 9px;
+            background: #fff8ea;
+            border: 1px solid #efd29d;
+            color: #865600;
+            font-size: .64rem;
+            line-height: 1.4
+        }
+
+        .pcm-op .pcm-empty {
+            padding: 22px;
+            text-align: center;
+            color: #667085;
+            border: 1px dashed #cfd7e3;
+            border-radius: 12px;
+            background: #fbfcfe
+        }
+
+            .pcm-op .pcm-empty i {
+                display: block;
+                font-size: 1.35rem;
+                color: #98a2b3;
+                margin-bottom: 5px
+            }
+
+            .pcm-op .pcm-empty strong {
+                display: block;
+                color: #344054;
+                font-size: .78rem
+            }
+
+    html[data-nsq-theme="dark"] .pcm-op {
+        --pcm-text: #eef2f7;
+        --pcm-muted: #9aacbf;
+        --pcm-line: rgba(255,255,255,.10);
+        --pcm-soft: #0e1929
+    }
+
+        html[data-nsq-theme="dark"] .pcm-op .pcm-card, html[data-nsq-theme="dark"] .pcm-op .pcm-step, html[data-nsq-theme="dark"] .pcm-op .pcm-info-box {
+            background: #111d2f
+        }
+
+        html[data-nsq-theme="dark"] .pcm-op .pcm-head {
+            background: #0e1929
+        }
+
+            html[data-nsq-theme="dark"] .pcm-op .pcm-head strong, html[data-nsq-theme="dark"] .pcm-op .pcm-mold strong, html[data-nsq-theme="dark"] .pcm-op .pcm-step-title, html[data-nsq-theme="dark"] .pcm-op label {
+                color: #f5f7fb
+            }
+
+    @@media(max-width:850px) {
+        .pcm-op .pcm-info {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .pcm-op .pcm-sequence {
+            grid-template-columns: 1fr
+        }
+
+        .pcm-op .pcm-final-grid {
+            grid-template-columns: 1fr
+        }
+    }
+
+    @@media(max-width:560px) {
+        .pcm-op .pcm-pair-grid, .pcm-op .pcm-info {
+            grid-template-columns: 1fr
+        }
+
+        .pcm-op .pcm-molds {
+            grid-template-columns: 1fr
+        }
+
+        .pcm-op .pcm-arrow {
+            transform: rotate(90deg);
+            text-align: center
+        }
+    }
+</style>
+
+<div class="pcm-op">
+    @if (tarea == null)
+    {
+        <div class="pcm-empty">
+            <i class="bi bi-check2-circle"></i>
+            <strong>Esta OF no tiene cambio de molde pendiente.</strong>
+            <span>La preparación solo genera esta actividad cuando detecta un cambio físico real de molde.</span>
+        </div>
+    }
+    else
+    {
+        var checklistCompleto = checklist?.EstaCompleto == true;
+        var checklistExiste = checklist != null;
+        var puedeGestionar = Model.PuedeGestionarCambioMolde;
+        var cambioIniciado = tarea.EstaEnProceso || tarea.EstaConfirmada;
+        var cambioFinalizado = tarea.EstaConfirmada;
+        var porcentajeChecklist = checklist?.PorcentajeAvance ?? 0;
+        var seccionPrevia = checklist?.Secciones.OrderBy(x => x.OrdenSeccion).FirstOrDefault();
+        var preparacionPreviaCompleta = seccionPrevia?.EstaCompleta == true;
+        var porcentajeTiempo = tarea.EstaEnProceso ? Math.Min(100m, Math.Round((decimal)tarea.MinutosTranscurridosCambioMolde * 100m / Math.Max(1, tarea.LimiteCambioMoldeMinutos), 0)) : 0m;
+        var nivel = tarea.NivelAlertaCambioMolde;
+        var claseEstado = cambioFinalizado ? "green" : tarea.EstaEnProceso ? (nivel == "EXCEDIDO" ? "red" : nivel == "CRITICO" || nivel == "ADVERTENCIA" ? "orange" : "") : tarea.EsVencida ? "red" : "";
+
+        <section class="pcm-card">
+            <div class="pcm-head">
+                <div>
+                    <strong><i class="bi bi-tools me-1"></i>Cambio de molde</strong>
+                    <small>OF @Txt(tarea.NumeroOF) · @tarea.TextoMaquina · Programa #@tarea.ProgramaProduccionID</small>
+                </div>
+                <span class="pcm-status @claseEstado">
+                    <i class="bi @(cambioFinalizado ? "bi-check-circle-fill" : tarea.EstaEnProceso ? "bi-stopwatch-fill" : "bi-clock-fill")"></i>
+                    @(cambioFinalizado ? "Finalizado" : tarea.EstaEnProceso ? "En proceso" : "Pendiente")
+                </span>
+            </div>
+
+            <div class="pcm-body">
+                @if (tarea.EsParejaLhRh)
+                {
+                    <div class="pcm-pair">
+                        <div class="pcm-pair-head">
+                            <span><i class="bi bi-link-45deg me-1"></i>Operación física conjunta LH/RH</span>
+                            <span>Grupo @tarea.GrupoLhRh</span>
+                        </div>
+                        <div class="pcm-pair-grid">
+                            <div class="pcm-pair-side">
+                                <strong>@LadoActual(tarea) · OF @Txt(tarea.NumeroOF)</strong>
+                                @tarea.TextoParte · Programa @tarea.ProgramaProduccionID
+                            </div>
+                            <div class="pcm-pair-side">
+                                <strong>@LadoPareja(tarea) · OF @Txt(tarea.NumeroOFPareja)</strong>
+                                @Txt(!string.IsNullOrWhiteSpace(tarea.ReferenciaSAPPareja) ? tarea.ReferenciaSAPPareja : tarea.NumeroPartePareja) · Programa @(tarea.ProgramaParejaID?.ToString() ?? "—")
+                            </div>
+                        </div>
+                    </div>
+                }
+
+            <div class="pcm-molds">
+                <div class="pcm-mold"><span>Molde anterior</span><strong>@Txt(tarea.MoldeAnteriorCodigo)</strong></div>
+                <div class="pcm-arrow"><i class="bi bi-arrow-right"></i></div>
+                <div class="pcm-mold"><span>Molde nuevo</span><strong>@Txt(tarea.MoldeCodigo)</strong></div>
+            </div>
+
+            <div class="pcm-info">
+                <div class="pcm-info-box"><span>Cambio programado</span><strong>@Fecha(tarea.FechaCambioMolde)</strong></div>
+                <div class="pcm-info-box"><span>Arranque programado</span><strong>@Fecha(tarea.FechaArranque)</strong></div>
+                <div class="pcm-info-box"><span>Inicio real</span><strong>@Fecha(tarea.FechaInicioReal)</strong></div>
+                <div class="pcm-info-box"><span>Límite máquina</span><strong>@tarea.LimiteCambioMoldeMinutos min</strong></div>
+            </div>
+
+            <div class="pcm-sequence">
+                <div class="pcm-step @(preparacionPreviaCompleta ? "done" : !cambioIniciado ? "current" : "")">
+                    <div class="pcm-step-icon"><i class="bi @(preparacionPreviaCompleta ? "bi-check-lg" : "bi-clipboard-check")"></i></div>
+                    <div class="pcm-step-title">Preparación previa</div>
+                    <div class="pcm-step-text">
+                        @(preparacionPreviaCompleta
+                                                ? "La primera sección del checklist ya quedó atendida."
+                                                : "El formato permite comenzar la preparación previa antes del trabajo físico.")
+                    </div>
+                    @if (!cambioIniciado && (puedeGestionar || checklistExiste))
+                        {
+                            <button type="button" class="pcm-btn purple mt-2" data-pcm-abrir-checklist>
+                                <i class="bi bi-ui-checks-grid"></i>@(checklistExiste ? "Abrir preparación" : "Abrir checklist")
+                            </button>
+                        }
+                    </div>
+
+                    <div class="pcm-step @(cambioIniciado ? "done" : "current")">
+                        <div class="pcm-step-icon"><i class="bi @(cambioIniciado ? "bi-check-lg" : "bi-play-fill")"></i></div>
+                        <div class="pcm-step-title">Iniciar cambio físico</div>
+                        <div class="pcm-step-text">Inicia una sola intervención. En LH/RH sincroniza ambas OF.</div>
+                        @if (!cambioIniciado && puedeGestionar)
+                        {
+                            <form asp-controller="ProduccionPreparacion" asp-action="IniciarCambioMoldeOperativa" method="post" class="mt-2" data-pcm-form data-operacion="iniciar" data-confirm="@(tarea.EsParejaLhRh?"¿Confirmas iniciar el cambio físico LH/RH para ambas OF?":"¿Confirmas iniciar el cambio de molde?")">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="PreparacionAnticipadaID" value="@tarea.PreparacionAnticipadaID" />
+                                <button type="submit" class="pcm-btn"><i class="bi bi-play-fill"></i>@(tarea.EsParejaLhRh ? "Iniciar LH/RH" : "Iniciar cambio")</button>
+                            </form>
+                        }
+                </div>
+
+                <div class="pcm-step @(checklistCompleto ? "done" : cambioIniciado ? "current" : "blocked")">
+                    <div class="pcm-step-icon"><i class="bi @(checklistCompleto ? "bi-check-lg" : "bi-ui-checks-grid")"></i></div>
+                    <div class="pcm-step-title">Desmontaje y montaje</div>
+                    <div class="pcm-step-text">
+                        @(checklistCompleto
+                                                ? "GQ-F-PR01-03 completo. El cierre físico ya puede continuar."
+                                                : checklistExiste
+                                                ? $"{checklist!.TextoAvance} · {checklist.TextoAvanceSecciones}."
+                                                : "Continúa las secciones físicas del checklist durante el cambio de molde.")
+                    </div>
+                    @if (checklistExiste)
+                        {
+                            <div class="pcm-progress"><span style="width:@porcentajeChecklist%"></span></div>
+                        }
+                        @if (cambioIniciado && (puedeGestionar || checklistExiste))
+                        {
+                            <button type="button" class="pcm-btn purple mt-2" data-pcm-abrir-checklist>
+                                <i class="bi bi-ui-checks-grid"></i>@(checklistCompleto ? "Ver checklist" : "Continuar checklist")
+                            </button>
+                        }
+                </div>
+
+                <div class="pcm-step @(cambioFinalizado ? "done" : tarea.EstaEnProceso && checklistCompleto ? "current" : "blocked")">
+                    <div class="pcm-step-icon"><i class="bi @(cambioFinalizado ? "bi-check-lg" : "bi-flag-fill")"></i></div>
+                    <div class="pcm-step-title">Finalizar cambio</div>
+                    <div class="pcm-step-text">
+                        @(cambioFinalizado
+                                                ? "El cambio físico quedó cerrado."
+                                                : !tarea.EstaEnProceso
+                                                ? "Primero debe iniciar el cambio físico."
+                                                : !checklistCompleto
+                                                ? "El checklist debe quedar completo antes del cierre."
+                                                : "Checklist completo. Ya puede finalizar el cambio físico.")
+                    </div>
+                </div>
+            </div>
+
+            @if (tarea.EstaEnProceso && tarea.FechaInicioReal.HasValue)
+                {
+                    <div class="pcm-timer"
+                         data-pcm-inicio-real="@tarea.FechaInicioReal.Value.ToString("O")"
+                         data-pcm-limite="@tarea.LimiteCambioMoldeMinutos">
+                        <div class="pcm-timer-top">
+                            <div>
+                                <div class="pcm-timer-value" data-pcm-tiempo>@tarea.MinutosTranscurridosCambioMolde min</div>
+                                <div class="pcm-timer-detail" data-pcm-tiempo-detalle>
+                                    @(tarea.MinutosExcesoCambioMolde > 0
+                                                                ? $"Exceso: {tarea.MinutosExcesoCambioMolde} min"
+                                                                : $"Restan {tarea.MinutosRestantesLimiteCambioMolde} min antes del límite")
+                        </div>
+                    </div>
+                    <span class="pcm-status @(tarea.MinutosExcesoCambioMolde > 0 ? "red" : tarea.NivelAlertaCambioMolde == "CRITICO" || tarea.NivelAlertaCambioMolde == "ADVERTENCIA" ? "orange" : "")">
+                        Máximo @tarea.LimiteCambioMoldeMinutos min
+                    </span>
+                </div>
+                <div class="pcm-progress"><span data-pcm-progreso style="width:@porcentajeTiempo%"></span></div>
+            </div>
+                        }
+
+                @if (tarea.EstaEnProceso && puedeGestionar)
+                {
+                    <div class="pcm-final">
+                        <form asp-controller="ProduccionPreparacion"
+                              asp-action="FinalizarCambioMoldeOperativa"
+                              method="post"
+                              data-pcm-form
+                              data-operacion="finalizar"
+                              data-confirm="@(tarea.EsParejaLhRh?"¿Confirmas finalizar el cambio físico LH/RH para ambas OF?":"¿Confirmas finalizar el cambio de molde?")">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="PreparacionAnticipadaID" value="@tarea.PreparacionAnticipadaID" />
+
+                            <div class="pcm-final-grid">
+                                <div>
+                                    <label>Observaciones</label>
+                                    <textarea name="Observaciones" class="form-control" maxlength="500" placeholder="Opcional"></textarea>
+                                </div>
+                                <div>
+                                    <label>Motivo de excedente</label>
+                                    <textarea name="MotivoExceso"
+                                      class="form-control"
+                                      maxlength="500"
+                                      data-pcm-motivo-exceso
+                                      @(tarea.MinutosExcesoCambioMolde > 0 ? "required" : null)
+                                      placeholder="Obligatorio si se supera el límite de la máquina"></textarea>
+                                </div>
+                            </div>
+
+                            @if (!checklistCompleto)
+                            {
+                                <div class="pcm-note"><i class="bi bi-lock-fill me-1"></i>El cierre está bloqueado hasta finalizar el checklist GQ-F-PR01-03.</div>
+                            }
+
+                            <div class="pcm-actions">
+                                <button type="submit" class="pcm-btn green" @(!checklistCompleto ? "disabled" : null)>
+                                    <i class="bi bi-check2-circle"></i>@(tarea.EsParejaLhRh ? "Finalizar cambio LH/RH" : "Finalizar cambio")
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                }
+
+                @if (cambioFinalizado)
+                {
+                    <div class="pcm-note" style="background:#edf9f3;border-color:#bee2cf;color:#176b48">
+                        <i class="bi bi-check-circle-fill me-1"></i>
+                        Cambio finalizado @Fecha(tarea.FechaFinReal ?? tarea.FechaConfirmacion)
+                        @if (tarea.DuracionRealMinutos.HasValue)
+                        {
+                            <span> · Duración real @tarea.DuracionRealMinutos min</span>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>

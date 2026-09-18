@@ -1,0 +1,993 @@
+﻿@using System
+@using System.Collections.Generic
+@using System.Linq
+@using ERP.NSQuell.Models
+@model ERP.NSQuell.Models.ProduccionCajasOperativasVm
+
+@{
+    var rootId = $"pcjContenido_{Model.Actual.ProgramaProduccionID}_{Model.Actual.EjecucionProduccionID}";
+    var urlFormar = Url.Action("FormarCajaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/FormarCajaOperativa";
+    var urlEscanear = Url.Action("EscanearCajaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/EscanearCajaOperativa";
+    var urlCorregir = Url.Action("CorregirCajaDevueltaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/CorregirCajaDevueltaOperativa";
+    var urlSolicitar = Url.Action("SolicitarLiberacionCajaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/SolicitarLiberacionCajaOperativa";
+    var urlZona = Url.Action("MoverCajaZonaVerdeOperativa", "ProduccionOperador") ?? "/ProduccionOperador/MoverCajaZonaVerdeOperativa";
+    var urlSalida = Url.Action("EscanearSalidaCajaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/EscanearSalidaCajaOperativa";
+    var urlReservar = Url.Action("ReservarCajaIncompletaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/ReservarCajaIncompletaOperativa";
+    var urlCompletar = Url.Action("CompletarCajaIncompletaOperativa", "ProduccionOperador") ?? "/ProduccionOperador/CompletarCajaIncompletaOperativa";
+
+    var lados = new List<(ProduccionOperadorCajasVm Vm, string Lado)> { (Model.Actual, Model.LadoActual ?? string.Empty) };
+    if (Model.Pareja != null) lados.Add((Model.Pareja, Model.LadoPareja ?? string.Empty));
+}
+
+<style>
+    # @rootId {
+        --pcj-blue: #004aad;
+        --pcj-blue2: #2563eb;
+        --pcj-green: #168052;
+        --pcj-orange: #d97706;
+        --pcj-red: #c7342d;
+        --pcj-purple: #6d49d8;
+        --pcj-text: #182230;
+        --pcj-muted: #667085;
+        --pcj-line: #dbe4ef;
+        --pcj-soft: #f7f9fc;
+        display: grid;
+        gap: 12px;
+        color: var(--pcj-text);
+        font-size: .78rem
+    }
+
+        # @rootId * {
+            box-sizing: border-box
+        }
+
+        # @rootId .pcj-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border: 1px solid var(--pcj-line);
+            border-radius: 16px;
+            background: linear-gradient(135deg,#f8fbff,#fff)
+        }
+
+            # @rootId .pcj-head h3 {
+                margin: 0;
+                font-size: 1rem;
+                font-weight: 950;
+                color: #17345f
+            }
+
+            # @rootId .pcj-head p {
+                margin: 4px 0 0;
+                color: var(--pcj-muted);
+                font-size: .72rem;
+                font-weight: 650;
+                max-width: 760px
+            }
+
+        # @rootId .pcj-head-actions {
+            display: flex;
+            gap: 7px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end
+        }
+
+        # @rootId .pcj-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: #edf4ff;
+            color: #174ea6;
+            font-size: .68rem;
+            font-weight: 850;
+            white-space: nowrap
+        }
+
+            # @rootId .pcj-chip.warn {
+                background: #fff7e6;
+                color: #9a5b00
+            }
+
+            # @rootId .pcj-chip.green {
+                background: #eaf7f1;
+                color: #116b44
+            }
+
+            # @rootId .pcj-chip.red {
+                background: #fff0ef;
+                color: #a62b25
+            }
+
+        # @rootId .pcj-summary {
+            display: grid;
+            grid-template-columns: repeat(6,minmax(0,1fr));
+            gap: 8px
+        }
+
+        # @rootId .pcj-stat {
+            border: 1px solid var(--pcj-line);
+            border-radius: 13px;
+            background: #fff;
+            padding: 10px 11px;
+            min-width: 0
+        }
+
+            # @rootId .pcj-stat span {
+                display: block;
+                color: var(--pcj-muted);
+                font-size: .61rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: .02em
+            }
+
+            # @rootId .pcj-stat strong {
+                display: block;
+                margin-top: 4px;
+                font-size: 1.05rem;
+                font-weight: 950;
+                color: #203150
+            }
+
+        # @rootId .pcj-alert {
+            border-radius: 12px;
+            padding: 10px 12px;
+            border: 1px solid #fed7aa;
+            background: #fff7ed;
+            color: #9a4b00;
+            font-size: .72rem;
+            font-weight: 700
+        }
+
+            # @rootId .pcj-alert.info {
+                border-color: #bfdbfe;
+                background: #eff6ff;
+                color: #1e4b8f
+            }
+
+            # @rootId .pcj-alert.read {
+                border-color: #d8dee8;
+                background: #f8fafc;
+                color: #475467
+            }
+
+        # @rootId .pcj-side {
+            border: 1px solid var(--pcj-line);
+            border-radius: 16px;
+            background: #fff;
+            overflow: hidden
+        }
+
+        # @rootId .pcj-side-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            background: #f8fbff;
+            border-bottom: 1px solid var(--pcj-line)
+        }
+
+        # @rootId .pcj-side-title {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            min-width: 0
+        }
+
+        # @rootId .pcj-side-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: #eaf2ff;
+            color: var(--pcj-blue);
+            display: grid;
+            place-items: center;
+            flex: none
+        }
+
+        # @rootId .pcj-side-title strong {
+            display: block;
+            font-size: .86rem;
+            font-weight: 950;
+            color: #17345f
+        }
+
+        # @rootId .pcj-side-title small {
+            display: block;
+            margin-top: 2px;
+            color: var(--pcj-muted);
+            font-size: .63rem;
+            font-weight: 650
+        }
+
+        # @rootId .pcj-side-badges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end
+        }
+
+        # @rootId .pcj-body {
+            padding: 12px 14px;
+            display: grid;
+            gap: 12px
+        }
+
+        # @rootId .pcj-kpis {
+            display: grid;
+            grid-template-columns: repeat(5,minmax(0,1fr));
+            gap: 7px
+        }
+
+        # @rootId .pcj-kpi {
+            padding: 8px 9px;
+            border: 1px solid #e5eaf1;
+            border-radius: 10px;
+            background: #fbfcfe
+        }
+
+            # @rootId .pcj-kpi b {
+                display: block;
+                font-size: .84rem;
+                font-weight: 950
+            }
+
+            # @rootId .pcj-kpi span {
+                display: block;
+                margin-top: 2px;
+                color: var(--pcj-muted);
+                font-size: .58rem;
+                font-weight: 750
+            }
+
+        # @rootId .pcj-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 9px
+        }
+
+        # @rootId .pcj-panel {
+            border: 1px solid #e2e8f0;
+            border-radius: 13px;
+            background: #fff;
+            padding: 11px
+        }
+
+            # @rootId .pcj-panel h4 {
+                margin: 0 0 8px;
+                font-size: .75rem;
+                font-weight: 950;
+                color: #263a58;
+                display: flex;
+                align-items: center;
+                gap: 6px
+            }
+
+        # @rootId .pcj-form-row {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) auto;
+            gap: 7px;
+            align-items: end
+        }
+
+        # @rootId .pcj-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 7px
+        }
+
+        # @rootId label {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--pcj-muted);
+            font-size: .58rem;
+            font-weight: 850;
+            text-transform: uppercase
+        }
+
+        # @rootId .form-control, # @rootId .form-select {
+            min-height: 35px;
+            border-radius: 8px;
+            border-color: #ccd7e5;
+            font-size: .72rem
+        }
+
+        # @rootId textarea.form-control {
+            min-height: 58px;
+            resize: vertical
+        }
+
+        # @rootId .pcj-btn {
+            border: 0;
+            border-radius: 8px;
+            min-height: 35px;
+            padding: 7px 10px;
+            font-size: .68rem;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            white-space: nowrap
+        }
+
+            # @rootId .pcj-btn.primary {
+                background: var(--pcj-blue);
+                color: #fff
+            }
+
+            # @rootId .pcj-btn.green {
+                background: var(--pcj-green);
+                color: #fff
+            }
+
+            # @rootId .pcj-btn.orange {
+                background: var(--pcj-orange);
+                color: #fff
+            }
+
+            # @rootId .pcj-btn.purple {
+                background: var(--pcj-purple);
+                color: #fff
+            }
+
+            # @rootId .pcj-btn.outline {
+                background: #fff;
+                color: #344054;
+                border: 1px solid #cdd8e5
+            }
+
+            # @rootId .pcj-btn:disabled {
+                opacity: .55;
+                cursor: not-allowed
+            }
+
+        # @rootId .pcj-section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin: 2px 0 0
+        }
+
+            # @rootId .pcj-section-title h4 {
+                margin: 0;
+                font-size: .76rem;
+                font-weight: 950;
+                color: #263a58
+            }
+
+        # @rootId .pcj-boxes {
+            display: grid;
+            gap: 7px
+        }
+
+        # @rootId .pcj-box {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+            padding: 10px 11px;
+            display: grid;
+            grid-template-columns: minmax(150px,.85fr) minmax(120px,.65fr) minmax(160px,1fr) auto;
+            gap: 9px;
+            align-items: center
+        }
+
+        # @rootId .pcj-box-main strong {
+            display: block;
+            font-size: .75rem;
+            font-weight: 950;
+            color: #203150
+        }
+
+        # @rootId .pcj-box-main span, # @rootId .pcj-box-info span {
+            display: block;
+            margin-top: 2px;
+            color: var(--pcj-muted);
+            font-size: .6rem;
+            font-weight: 650
+        }
+
+        # @rootId .pcj-state {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            font-size: .58rem;
+            font-weight: 900;
+            background: #eef2f6;
+            color: #475467;
+            width: max-content;
+            max-width: 100%
+        }
+
+            # @rootId .pcj-state.quality {
+                background: #fff7e6;
+                color: #9a5b00
+            }
+
+            # @rootId .pcj-state.good {
+                background: #eaf7f1;
+                color: #116b44
+            }
+
+            # @rootId .pcj-state.bad {
+                background: #fff0ef;
+                color: #a62b25
+            }
+
+            # @rootId .pcj-state.blue {
+                background: #edf4ff;
+                color: #174ea6
+            }
+
+        # @rootId .pcj-box-actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            max-width: 300px
+        }
+
+        # @rootId .pcj-inline-form {
+            display: flex;
+            gap: 5px;
+            align-items: end;
+            flex-wrap: wrap;
+            justify-content: flex-end
+        }
+
+            # @rootId .pcj-inline-form .form-control {
+                min-width: 150px
+            }
+
+        # @rootId .pcj-incomplete {
+            border: 1px dashed #c7b8f7;
+            border-radius: 13px;
+            background: #faf8ff;
+            padding: 11px;
+            display: grid;
+            gap: 8px
+        }
+
+        # @rootId .pcj-incomplete-card {
+            border: 1px solid #ddd4f7;
+            border-radius: 10px;
+            background: #fff;
+            padding: 9px 10px;
+            display: grid;
+            grid-template-columns: minmax(160px,1fr) minmax(130px,.6fr) auto;
+            gap: 8px;
+            align-items: center
+        }
+
+        # @rootId .pcj-progress {
+            height: 6px;
+            border-radius: 999px;
+            background: #eceff4;
+            overflow: hidden;
+            margin-top: 5px
+        }
+
+            # @rootId .pcj-progress > span {
+                display: block;
+                height: 100%;
+                background: var(--pcj-purple)
+            }
+
+        # @rootId .pcj-empty {
+            border: 1px dashed #d7dee8;
+            border-radius: 11px;
+            padding: 12px;
+            color: var(--pcj-muted);
+            font-size: .68rem;
+            font-weight: 700;
+            text-align: center;
+            background: #fafbfc
+        }
+
+        # @rootId .pcj-message {
+            display: none;
+            border-radius: 10px;
+            padding: 9px 11px;
+            font-size: .7rem;
+            font-weight: 800
+        }
+
+            # @rootId .pcj-message.show {
+                display: block
+            }
+
+            # @rootId .pcj-message.ok {
+                background: #eaf7f1;
+                color: #116b44;
+                border: 1px solid #b7e1ce
+            }
+
+            # @rootId .pcj-message.error {
+                background: #fff0ef;
+                color: #a62b25;
+                border: 1px solid #f0b8b4
+            }
+
+    html[data-nsq-theme="dark"] # @rootId {
+        --pcj-text: #e5e7eb;
+        --pcj-muted: #94a3b8;
+        --pcj-line: rgba(255,255,255,.1)
+    }
+
+        html[data-nsq-theme="dark"] # @rootId .pcj-head, html[data-nsq-theme="dark"] # @rootId .pcj-side, html[data-nsq-theme="dark"] # @rootId .pcj-stat, html[data-nsq-theme="dark"] # @rootId .pcj-panel, html[data-nsq-theme="dark"] # @rootId .pcj-box, html[data-nsq-theme="dark"] # @rootId .pcj-incomplete-card {
+            background: #111c2d
+        }
+
+        html[data-nsq-theme="dark"] # @rootId .pcj-side-head, html[data-nsq-theme="dark"] # @rootId .pcj-kpi, html[data-nsq-theme="dark"] # @rootId .pcj-incomplete {
+            background: #0e1828
+        }
+
+        html[data-nsq-theme="dark"] # @rootId .pcj-head h3, html[data-nsq-theme="dark"] # @rootId .pcj-side-title strong, html[data-nsq-theme="dark"] # @rootId .pcj-stat strong, html[data-nsq-theme="dark"] # @rootId .pcj-panel h4, html[data-nsq-theme="dark"] # @rootId .pcj-box-main strong, html[data-nsq-theme="dark"] # @rootId .pcj-section-title h4 {
+            color: #f8fafc
+        }
+
+        html[data-nsq-theme="dark"] # @rootId .form-control, html[data-nsq-theme="dark"] # @rootId .form-select {
+            background: #0b1422;
+            color: #f8fafc;
+            border-color: rgba(255,255,255,.13)
+        }
+
+    @@media(max-width:1100px) {
+        # @rootId .pcj-summary {
+            grid-template-columns: repeat(3,1fr)
+        }
+
+        # @rootId .pcj-kpis {
+            grid-template-columns: repeat(3,1fr)
+        }
+
+        # @rootId .pcj-box {
+            grid-template-columns: 1fr 1fr
+        }
+
+        # @rootId .pcj-box-actions {
+            max-width: none;
+            justify-content: flex-start
+        }
+    }
+
+    @@media(max-width:760px) {
+        # @rootId .pcj-head, # @rootId .pcj-side-head {
+            flex-direction: column
+        }
+
+        # @rootId .pcj-head-actions, # @rootId .pcj-side-badges {
+            justify-content: flex-start
+        }
+
+        # @rootId .pcj-summary, # @rootId .pcj-kpis, # @rootId .pcj-actions {
+            grid-template-columns: 1fr 1fr
+        }
+
+        # @rootId .pcj-box, # @rootId .pcj-incomplete-card {
+            grid-template-columns: 1fr
+        }
+
+        # @rootId .pcj-box-actions, # @rootId .pcj-inline-form {
+            justify-content: flex-start
+        }
+    }
+
+    @@media(max-width:480px) {
+        # @rootId .pcj-summary, # @rootId .pcj-kpis, # @rootId .pcj-actions, # @rootId .pcj-form-grid {
+            grid-template-columns: 1fr
+        }
+
+        # @rootId .pcj-form-row {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div id="@rootId"
+     data-cajas-contenido
+     data-cajas-auto-refrescar="@(Model.RequiereAutoRefresco ? "true" : "false")">
+    <div class="pcj-head">
+        <div>
+            <h3><i class="bi bi-boxes me-1"></i>Cajas de Produccion</h3>
+            <p>Formacion, trazabilidad, producto incompleto, envio a Calidad, zona verde y salida hacia Almacen PT desde el mismo Centro Operativo.</p>
+        </div>
+        <div class="pcj-head-actions">
+            @if (Model.EsLhRh)
+            {
+                <span class="pcj-chip"><i class="bi bi-link-45deg"></i>LH/RH · grupo @Model.GrupoLhRh</span>
+            }
+            @if (Model.PendientesCalidad > 0)
+            {
+                <span class="pcj-chip warn"><i class="bi bi-hourglass-split"></i>@Model.PendientesCalidad esperando Calidad</span>
+            }
+            @if (Model.PendientesAlmacen > 0)
+            {
+                <span class="pcj-chip"><i class="bi bi-truck"></i>@Model.PendientesAlmacen esperando Almacen</span>
+            }
+            <button type="button" class="pcj-btn outline" data-cajas-refrescar><i class="bi bi-arrow-clockwise"></i>Actualizar</button>
+        </div>
+    </div>
+
+    <div class="pcj-summary">
+        <div class="pcj-stat"><span>Cajas</span><strong>@Model.TotalCajas</strong></div>
+        <div class="pcj-stat"><span>Esperando Calidad</span><strong>@Model.PendientesCalidad</strong></div>
+        <div class="pcj-stat"><span>Retenidas</span><strong>@Model.RetenidasCalidadGp12</strong></div>
+        <div class="pcj-stat"><span>Zona verde</span><strong>@Model.EnZonaVerde</strong></div>
+        <div class="pcj-stat"><span>Salida / Almacen</span><strong>@Model.PendientesAlmacen</strong></div>
+        <div class="pcj-stat"><span>Producto incompleto</span><strong>@Model.ProductoIncompleto</strong></div>
+    </div>
+
+    @if (Model.SoloLectura || !Model.UsuarioEsOperador)
+    {
+        <div class="pcj-alert read"><i class="bi bi-eye me-1"></i>Modo consulta. Puedes revisar cajas, estados de Calidad, producto incompleto y trazabilidad, pero las acciones operativas corresponden al operador/auxiliar autorizado.</div>
+    }
+    <div class="pcj-message" data-pcj-message></div>
+
+    @foreach (var lado in lados)
+    {
+        var vm = lado.Vm;
+        var puedeCapturar = Model.PuedeGestionar && vm.EstatusID == ProduccionEstatus.EnProduccion && !vm.TieneParoAbierto && !vm.MaquinaLiberada;
+        var cajas = vm.Cajas.OrderByDescending(x => x.CajaProduccionID).ToList();
+        var propiasIncompletas = cajas.Where(x => x.EsCajaIncompleta).ToList();
+        var asignadas = vm.CajasIncompletasDisponibles ?? new List<ProduccionCajaIncompletaDisponibleVm>();
+        <section class="pcj-side" data-pcj-side="@vm.EjecucionProduccionID">
+            <div class="pcj-side-head">
+                <div class="pcj-side-title">
+                    <div class="pcj-side-icon"><i class="bi bi-box-seam"></i></div>
+                    <div>
+                        <strong>@vm.TextoOF @(!string.IsNullOrWhiteSpace(lado.Lado) ? $"· {lado.Lado}" : string.Empty)</strong>
+                        <small>@vm.TextoParte · @vm.TextoMaquina · Programa @vm.ProgramaProduccionID</small>
+                    </div>
+                </div>
+                <div class="pcj-side-badges">
+                    <span class="pcj-chip">@vm.EstatusNombre</span>
+                    @if (vm.TieneParoAbierto)
+                    {
+                        <span class="pcj-chip red"><i class="bi bi-pause-circle"></i>Paro abierto</span>
+                    }
+                    @if (vm.MaquinaLiberada)
+                    {
+                        <span class="pcj-chip green"><i class="bi bi-unlock"></i>Maquina liberada</span>
+                    }
+                </div>
+            </div>
+            <div class="pcj-body">
+                <div class="pcj-kpis">
+                    <div class="pcj-kpi"><b>@vm.CantidadOKDisponible.ToString("N0")</b><span>OK disponible</span></div>
+                    <div class="pcj-kpi"><b>@vm.CantidadSospechosaDisponible.ToString("N0")</b><span>Sospechoso disponible</span></div>
+                    <div class="pcj-kpi"><b>@vm.CantidadScrapDisponible.ToString("N0")</b><span>Scrap disponible</span></div>
+                    <div class="pcj-kpi"><b>@vm.PiezasPorCajaSugeridas.ToString("N0")</b><span>Capacidad por caja</span></div>
+                    <div class="pcj-kpi"><b>@vm.Cajas.Count.ToString("N0")</b><span>Cajas reales</span></div>
+                </div>
+
+                @if (Model.PuedeGestionar && !puedeCapturar)
+                {
+                    var motivo = vm.MaquinaLiberada ? "La maquina ya fue liberada." : vm.TieneParoAbierto ? "Existe un paro abierto." : "La ejecucion no se encuentra en Produccion activa.";
+                    <div class="pcj-alert"><i class="bi bi-exclamation-triangle me-1"></i>@motivo No se habilita formacion/escaneo de nuevas cajas.</div>
+                }
+
+                @if (puedeCapturar)
+                {
+                    <div class="pcj-actions">
+                        <div class="pcj-panel">
+                            <h4><i class="bi bi-upc-scan"></i>Escanear etiqueta fisica</h4>
+                            <form action="@urlEscanear" method="post" data-pcj-form data-reset="true">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="EjecucionProduccionID" value="@vm.EjecucionProduccionID" />
+                                <div class="pcj-form-row">
+                                    <div>
+                                        <label>Codigo de barras</label>
+                                        <input class="form-control" name="CodigoBarras" autocomplete="off" placeholder="Escanea la etiqueta de la caja" required />
+                                    </div>
+                                    <button class="pcj-btn primary" type="submit"><i class="bi bi-upc-scan"></i>Registrar</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="pcj-panel">
+                            <h4><i class="bi bi-box-seam"></i>Formar caja manual</h4>
+                            <form action="@urlFormar" method="post" data-pcj-form data-confirm="¿Registrar esta caja con las cantidades capturadas?" data-reset="true">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ejecucionProduccionId" value="@vm.EjecucionProduccionID" />
+                                <div class="pcj-form-grid">
+                                    <div>
+                                        <label>Tipo</label>
+                                        <select class="form-select" name="tipoCaja" required>
+                                            <option value="OK">OK</option>
+                                            <option value="SOSPECHOSO">Sospechoso</option>
+                                            <option value="SCRAP">Scrap</option>
+                                            <option value="RETENCION">Retencion</option>
+                                            <option value="INCOMPLETA">Producto incompleto</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label>Piezas</label>
+                                        <input class="form-control" type="number" min="1" name="cantidadPiezas" value="@(vm.CantidadSugeridaSiguienteCaja > 0 ? vm.CantidadSugeridaSiguienteCaja : 1)" required />
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label>Observaciones</label>
+                                    <input class="form-control" name="observaciones" maxlength="500" placeholder="Opcional" />
+                                </div>
+                                <div class="mt-2 d-flex justify-content-end"><button class="pcj-btn green" type="submit"><i class="bi bi-plus-circle"></i>Formar caja</button></div>
+                            </form>
+                        </div>
+                    </div>
+                }
+
+                <div class="pcj-section-title">
+                    <h4><i class="bi bi-list-check me-1"></i>Cajas registradas</h4>
+                    <span class="pcj-chip">@cajas.Count registro(s)</span>
+                </div>
+
+                @if (cajas.Count == 0)
+                {
+                    <div class="pcj-empty">Todavia no existen cajas registradas para esta OF.</div>
+                }
+                else
+                {
+                    <div class="pcj-boxes">
+                        @foreach (var caja in cajas)
+                        {
+                            var estatusCalidad = Model.ObtenerEstatusCalidad(caja.CajaProduccionID);
+                            var devuelta = Model.CajaDevuelta(caja);
+                            var corregida = Model.CajaCorregida(caja);
+                            var etiqueta = !string.IsNullOrWhiteSpace(caja.EtiquetaFolio) ? caja.EtiquetaFolio : !string.IsNullOrWhiteSpace(caja.EtiquetaBlanca) ? caja.EtiquetaBlanca : caja.FolioCaja;
+                            var estadoClase = caja.EstaPendienteCalidad || caja.EstaRetenida ? "quality" : caja.RecibidaAlmacen || caja.EstaLiberadaCalidad || caja.EstaEnZonaVerde || caja.TieneSalidaProduccion ? "good" : devuelta ? "bad" : "blue";
+                            <article class="pcj-box">
+                                <div class="pcj-box-main">
+                                    <strong>@(caja.EsCajaIncompleta ? "Etiqueta blanca" : $"Caja {caja.NumeroCaja:N0}") · @caja.CantidadPiezas.ToString("N0") pza</strong>
+                                    <span>@(etiqueta ?? "Sin etiqueta") · @caja.TipoCaja</span>
+                                </div>
+                                <div>
+                                    @if (caja.EstaPendienteCalidad)
+                                    {
+                                        <span class="pcj-state quality"><i class="bi bi-hourglass-split"></i>Esperando a Calidad</span>
+                                    }
+                                    else if (caja.EstaRetenida)
+                                    {
+                                        <span class="pcj-state quality"><i class="bi bi-shield-exclamation"></i>Esperando Calidad / GP12</span>
+                                    }
+                                    else if (devuelta)
+                                    {
+                                        <span class="pcj-state bad"><i class="bi bi-arrow-counterclockwise"></i>Devuelta por Calidad</span>
+                                    }
+                                    else if (corregida)
+                                    {
+                                        <span class="pcj-state blue"><i class="bi bi-tools"></i>Corregida · lista para reenvio</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pcj-state @estadoClase">@caja.EstadoCajaNombre</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(caja.ResultadoCalidad))
+                                    {
+                                        <div class="pcj-box-info"><span>Resultado: @caja.ResultadoCalidad</span></div>
+                                    }
+                                </div>
+                                <div class="pcj-box-info">
+                                    <span>Formada: @caja.FechaFormacion.ToString("dd/MM HH:mm")</span>
+                                    @if (caja.FechaLiberacionCalidad.HasValue)
+                                    {
+                                        <span>Calidad: @caja.FechaLiberacionCalidad.Value.ToString("dd/MM HH:mm")</span>
+                                    }
+                                    @if (caja.FechaSalidaProduccion.HasValue)
+                                    {
+                                        <span>Salida Produccion: @caja.FechaSalidaProduccion.Value.ToString("dd/MM HH:mm")</span>
+                                    }
+                                    @if (caja.FechaRecepcionAlmacen.HasValue)
+                                    {
+                                        <span>Almacen PT: @caja.FechaRecepcionAlmacen.Value.ToString("dd/MM HH:mm")</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(caja.MotivoCalidad))
+                                    {
+                                        <span>Calidad: @caja.MotivoCalidad</span>
+                                    }
+                                </div>
+                                <div class="pcj-box-actions">
+                                    @if (Model.PuedeGestionar)
+                                    {
+                                        @if (devuelta && caja.EstaFormada)
+                                        {
+                                            <form action="@urlCorregir" method="post" data-pcj-form data-confirm="¿Registrar la correccion realizada en Produccion?" class="pcj-inline-form">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="cajaProduccionId" value="@caja.CajaProduccionID" />
+                                                <input class="form-control" name="correccionRealizada" maxlength="500" placeholder="Correccion realizada" required />
+                                                <button class="pcj-btn orange" type="submit"><i class="bi bi-tools"></i>Registrar correccion</button>
+                                            </form>
+                                        }
+                                        else if (caja.PuedeSolicitarCalidad && !caja.EsCajaIncompleta && !caja.EstaPendienteCalidad && !caja.EstaRetenida && (string.IsNullOrWhiteSpace(estatusCalidad) || string.Equals(estatusCalidad, "FORMADA", StringComparison.OrdinalIgnoreCase) || corregida))
+                                        {
+                                            <form action="@urlSolicitar" method="post" data-pcj-form data-confirm="¿Enviar esta caja a Calidad para revision?">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="cajaProduccionId" value="@caja.CajaProduccionID" />
+                                                <button class="pcj-btn orange" type="submit"><i class="bi bi-send"></i>@(corregida ? "Reenviar a Calidad" : "Enviar a Calidad")</button>
+                                            </form>
+                                        }
+                                        @if (caja.PuedeMoverZonaVerde)
+                                        {
+                                            <form action="@urlZona" method="post" data-pcj-form data-confirm="¿Mover esta caja liberada a zona verde?">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="cajaProduccionId" value="@caja.CajaProduccionID" />
+                                                <button class="pcj-btn green" type="submit"><i class="bi bi-arrow-right-circle"></i>Zona verde</button>
+                                            </form>
+                                        }
+                                        @if (caja.PuedeEscanearSalidaProduccion)
+                                        {
+                                            <form action="@urlSalida" method="post" data-pcj-form class="pcj-inline-form">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="cajaProduccionId" value="@caja.CajaProduccionID" />
+                                                <input class="form-control" name="etiquetaEscaneada" autocomplete="off" placeholder="Escanea etiqueta" value="@(caja.TieneEtiquetaFisica ? string.Empty : caja.EtiquetaFolio)" />
+                                                <button class="pcj-btn primary" type="submit"><i class="bi bi-box-arrow-right"></i>Salida Produccion</button>
+                                            </form>
+                                        }
+                                    }
+                                    @if (caja.EstaPendienteCalidad)
+                                    {
+                                        <span class="pcj-state quality"><i class="bi bi-shield-check"></i>Sin acciones de Calidad aqui</span>
+                                    }
+                                    else if (caja.TieneSalidaProduccion)
+                                    {
+                                        <span class="pcj-state blue"><i class="bi bi-hourglass"></i>Esperando Almacen PT</span>
+                                    }
+                                    else if (caja.RecibidaAlmacen)
+                                    {
+                                        <span class="pcj-state good"><i class="bi bi-check-circle"></i>Recibida por Almacen PT</span>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+
+                <div class="pcj-incomplete">
+                    <div class="pcj-section-title">
+                        <h4><i class="bi bi-box2-heart me-1"></i>Producto incompleto</h4>
+                        <span class="pcj-chip">Planeacion define que etiqueta puede usar esta OF</span>
+                    </div>
+                    <div class="pcj-alert info"><i class="bi bi-info-circle me-1"></i>Produccion no puede tomar producto incompleto libre. Aqui solo aparecen etiquetas que Planeacion ya asigno a esta OF, ademas de las etiquetas blancas originadas por sobreproduccion de esta misma ejecucion.</div>
+
+                    @if (propiasIncompletas.Count == 0 && asignadas.Count == 0)
+                    {
+                        <div class="pcj-empty">No existe producto incompleto relacionado o asignado a esta OF.</div>
+                    }
+                    @foreach (var incompleta in propiasIncompletas)
+                    {
+                        var porcentaje = Math.Clamp(incompleta.PorcentajeLlenadoIncompleto, 0m, 100m);
+                        <div class="pcj-incomplete-card">
+                            <div>
+                                <strong>@(incompleta.EtiquetaBlanca ?? incompleta.EtiquetaFolio ?? incompleta.FolioCaja ?? $"Caja {incompleta.CajaProduccionID}")</strong>
+                                <div class="text-muted small">@incompleta.CantidadPiezas.ToString("N0") / @(incompleta.CapacidadObjetivoCaja?.ToString("N0") ?? "-") pza · @incompleta.EstadoProductoIncompletoTexto</div>
+                                <div class="pcj-progress"><span style="width:@porcentaje.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+                            </div>
+                            <div><span class="pcj-state">Faltan @incompleta.PiezasFaltantesIncompleto.ToString("N0") pza</span></div>
+                            <div></div>
+                        </div>
+                    }
+                    @foreach (var asignada in asignadas)
+                    {
+                        var porcentaje = Math.Clamp(asignada.PorcentajeLlenado, 0m, 100m);
+                        <div class="pcj-incomplete-card">
+                            <div>
+                                <strong>@(asignada.EtiquetaBlanca ?? asignada.FolioCaja ?? $"Caja {asignada.CajaProduccionID}")</strong>
+                                <div class="text-muted small">Origen: @asignada.TextoOFOrigen · @asignada.TextoCantidad · @asignada.TextoEstado</div>
+                                <div class="pcj-progress"><span style="width:@porcentaje.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+                            </div>
+                            <div>
+                                <span class="pcj-state blue">Faltan @asignada.CantidadPendienteCompletar.ToString("N0") pza</span>
+                                <div class="text-muted small mt-1">@asignada.TextoUbicacion</div>
+                            </div>
+                            <div class="pcj-box-actions">
+                                @if (Model.PuedeGestionar)
+                                {
+                                    <form action="@urlReservar" method="post" data-pcj-form data-confirm="¿Confirmar esta etiqueta asignada por Planeacion para la OF actual?">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="CajaProduccionID" value="@asignada.CajaProduccionID" />
+                                        <input type="hidden" name="EjecucionProduccionID" value="@vm.EjecucionProduccionID" />
+                                        <button class="pcj-btn outline" type="submit"><i class="bi bi-link-45deg"></i>Confirmar asignacion</button>
+                                    </form>
+                                    @if (puedeCapturar)
+                                    {
+                                        <form action="@urlCompletar" method="post" data-pcj-form data-confirm="¿Aplicar estas piezas para completar la etiqueta blanca?" class="pcj-inline-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="CajaProduccionID" value="@asignada.CajaProduccionID" />
+                                            <input type="hidden" name="EjecucionProduccionID" value="@vm.EjecucionProduccionID" />
+                                            <input class="form-control" type="number" min="1" max="@asignada.CantidadPendienteCompletar" name="CantidadPiezas" value="@Math.Max(1, asignada.CantidadPendienteCompletar)" required />
+                                            <input class="form-control" name="Observaciones" maxlength="500" placeholder="Observaciones" />
+                                            <button class="pcj-btn purple" type="submit"><i class="bi bi-box2-heart"></i>Completar</button>
+                                        </form>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const mensaje=root.querySelector('[data-pcj-message]');
+        let enviando=false;
+
+        function mostrar(texto,tipo){
+            if(!mensaje) return;
+            mensaje.textContent=texto||'';
+            mensaje.className=`pcj-message show ${tipo==='error'?'error':'ok'}`;
+            mensaje.scrollIntoView({block:'nearest',behavior:'smooth'});
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            if(response.ok) return {ok:true,mensaje:texto||'Operacion completada.'};
+            const doc=new DOMParser().parseFromString(texto,'text/html');
+            return {ok:false,mensaje:doc.body?.innerText?.trim()?.slice(0,700)||texto.slice(0,700)||`HTTP ${response.status}`};
+        }
+
+        root.addEventListener('submit',async event=>{
+            const form=event.target.closest?.('[data-pcj-form]');
+            if(!form) return;
+            event.preventDefault();
+            if(enviando) return;
+            const confirmar=form.dataset.confirm;
+            if(confirmar&&!window.confirm(confirmar)) return;
+
+            enviando=true;
+            const boton=form.querySelector('button[type="submit"]');
+            const htmlOriginal=boton?.innerHTML;
+            if(boton){
+                boton.disabled=true;
+                boton.innerHTML='<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Procesando';
+            }
+            try{
+                const response=await fetch(form.action,{
+                    method:(form.method||'POST').toUpperCase(),
+                    body:new FormData(form),
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest'}
+                });
+                const data=await leerRespuesta(response);
+                if(!response.ok||data?.ok===false) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                mostrar(data?.mensaje||'Operacion completada.','ok');
+                if(form.dataset.reset==='true') form.reset();
+                window.setTimeout(()=>root.dispatchEvent(new CustomEvent('nsq:cajas-actualizadas',{bubbles:true})),350);
+            }catch(error){
+                mostrar(error?.message||'No fue posible completar la operacion.','error');
+            }finally{
+                enviando=false;
+                if(boton){
+                    boton.disabled=false;
+                    boton.innerHTML=htmlOriginal||'Guardar';
+                }
+            }
+        });
+
+        root.querySelectorAll('input[name="CodigoBarras"],input[name="etiquetaEscaneada"]').forEach(input=>{
+            input.addEventListener('keydown',event=>{
+                if(event.key!=='Enter') return;
+                event.preventDefault();
+                input.form?.requestSubmit();
+            });
+        });
+    })();
+</script>

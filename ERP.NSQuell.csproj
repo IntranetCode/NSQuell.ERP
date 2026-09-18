@@ -8,6 +8,7 @@
 	  <RazorCompileOnBuild>true</RazorCompileOnBuild>
 	  <RazorCompileOnPublish>true</RazorCompileOnPublish>
 	  <UserSecretsId>973f14ac-f219-4430-8112-d07e3f642c14</UserSecretsId>
+	  <Features>$(Features);experimental-data-section-string-literals</Features>
   </PropertyGroup>
 
   <ItemGroup>
@@ -45,6 +46,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Views\GP12\" />
     <Folder Include="wwwroot\contenidos\thumbnails\" />
     <Folder Include="wwwroot\contenidos\videos\" />
     <Folder Include="wwwroot\Imagenes\Fondos\" />

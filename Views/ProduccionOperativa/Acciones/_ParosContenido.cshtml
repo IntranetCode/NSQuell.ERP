@@ -1,0 +1,1042 @@
+﻿@model ERP.NSQuell.Models.ProduccionParosOperativosVm
+@using ERP.NSQuell.Models
+@using System.Linq
+
+@functions {
+    public static string Fecha(DateTime? value) => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    public static string EstadoClase(int estatusId) => estatusId switch
+    {
+        ProduccionEstatus.EnProduccion => "is-running",
+        ProduccionEstatus.Pausado => "is-paused",
+        ProduccionEstatus.EnPreparacion => "is-prep",
+        ProduccionEstatus.Terminado or ProduccionEstatus.TerminadoParcial or ProduccionEstatus.Cerrado => "is-ok",
+        _ => "is-neutral"
+    };
+}
+
+@{
+    var abierto = Model.ParoAbierto;
+    var urlIniciar = Url.Action("IniciarParoOperativa", "Produccion") ?? "/Produccion/IniciarParoOperativa";
+    var urlCerrar = Url.Action("CerrarParoOperativa", "Produccion") ?? "/Produccion/CerrarParoOperativa";
+    var historial = Model.Paros.Take(10).ToList();
+}
+
+<style>
+    .por {
+        --por-blue: #004aad;
+        --por-navy: #102542;
+        --por-text: #172033;
+        --por-muted: #667085;
+        --por-line: #dfe7f0;
+        --por-soft: #f6f9fc;
+        --por-green: #138a5b;
+        --por-amber: #b7791f;
+        --por-red: #c0362c;
+        color: var(--por-text);
+        font-size: .82rem
+    }
+
+        .por * {
+            box-sizing: border-box
+        }
+
+        .por button, .por input, .por select, .por textarea {
+            font: inherit
+        }
+
+        .por a {
+            color: inherit
+        }
+
+    .por-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 15px 17px;
+        border: 1px solid var(--por-line);
+        border-radius: 16px;
+        background: linear-gradient(135deg,#f8fbff,#fff);
+        box-shadow: 0 7px 20px rgba(16,37,66,.05)
+    }
+
+    .por-head-main {
+        display: flex;
+        gap: 12px;
+        min-width: 0
+    }
+
+    .por-head-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 13px;
+        display: grid;
+        place-items: center;
+        background: #fff1df;
+        color: #a45a00;
+        font-size: 1.2rem;
+        flex: none
+    }
+
+    .por-kicker {
+        font-size: .66rem;
+        font-weight: 950;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: #9a5a12
+    }
+
+    .por-title {
+        font-size: 1.12rem;
+        font-weight: 950;
+        color: var(--por-navy);
+        line-height: 1.18;
+        margin-top: 2px
+    }
+
+    .por-sub {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 13px;
+        margin-top: 6px;
+        color: var(--por-muted);
+        font-size: .74rem;
+        font-weight: 750
+    }
+
+        .por-sub span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px
+        }
+
+    .por-head-right {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+    .por-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid #cbd8e8;
+        background: #fff;
+        color: #3d516b;
+        padding: 6px 9px;
+        border-radius: 999px;
+        font-size: .66rem;
+        font-weight: 950;
+        white-space: nowrap
+    }
+
+        .por-badge.is-read {
+            background: #eef5ff;
+            color: #174d91;
+            border-color: #c8dcf7
+        }
+
+        .por-badge.is-running {
+            background: #eaf8f1;
+            color: #107047;
+            border-color: #bfe5d0
+        }
+
+        .por-badge.is-paused {
+            background: #fff4e5;
+            color: #8a570b;
+            border-color: #edd3a6
+        }
+
+        .por-badge.is-prep {
+            background: #eef5ff;
+            color: #174d91;
+            border-color: #c8dcf7
+        }
+
+        .por-badge.is-ok {
+            background: #eaf8f1;
+            color: #107047;
+            border-color: #bfe5d0
+        }
+
+        .por-badge.is-neutral {
+            background: #f5f6f8;
+            color: #5c6676;
+            border-color: #dce1e8
+        }
+
+    .por-lhrh {
+        margin-top: 10px;
+        border: 1px solid #cddcf0;
+        background: #f5f9ff;
+        border-radius: 13px;
+        padding: 10px 12px
+    }
+
+    .por-lhrh-title {
+        font-weight: 950;
+        color: #214a7b;
+        display: flex;
+        gap: 7px;
+        align-items: center
+    }
+
+    .por-lhrh-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px;
+        margin-top: 8px
+    }
+
+    .por-lhrh-item {
+        border: 1px solid #dce7f5;
+        background: #fff;
+        border-radius: 10px;
+        padding: 8px 10px
+    }
+
+        .por-lhrh-item small {
+            display: block;
+            color: var(--por-muted);
+            font-size: .65rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .04em
+        }
+
+        .por-lhrh-item strong {
+            display: block;
+            margin-top: 2px;
+            color: var(--por-navy);
+            font-size: .82rem
+        }
+
+    .por-alert {
+        margin-top: 10px;
+        border: 1px solid;
+        border-radius: 13px;
+        padding: 10px 12px;
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        font-size: .75rem;
+        font-weight: 780
+    }
+
+        .por-alert i {
+            font-size: 1rem;
+            margin-top: 1px
+        }
+
+        .por-alert strong {
+            display: block;
+            font-weight: 950;
+            margin-bottom: 2px
+        }
+
+        .por-alert.is-danger {
+            background: #fff2f1;
+            border-color: #f0beb9;
+            color: #972c24
+        }
+
+        .por-alert.is-warn {
+            background: #fff8e8;
+            border-color: #ead39e;
+            color: #7b5515
+        }
+
+        .por-alert.is-info {
+            background: #eef6ff;
+            border-color: #cfe0f5;
+            color: #24476f
+        }
+
+        .por-alert.is-ok {
+            background: #edf9f2;
+            border-color: #c3e7d1;
+            color: #17613f
+        }
+
+    .por-grid {
+        display: grid;
+        grid-template-columns: minmax(0,1.1fr) minmax(310px,.9fr);
+        gap: 12px;
+        margin-top: 12px
+    }
+
+    .por-card {
+        border: 1px solid var(--por-line);
+        border-radius: 15px;
+        background: #fff;
+        overflow: hidden;
+        box-shadow: 0 5px 16px rgba(16,37,66,.035)
+    }
+
+    .por-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--por-line);
+        background: #fbfcfe
+    }
+
+    .por-card-title {
+        font-size: .79rem;
+        font-weight: 950;
+        color: var(--por-navy);
+        display: flex;
+        align-items: center;
+        gap: 7px
+    }
+
+    .por-card-sub {
+        font-size: .67rem;
+        color: var(--por-muted);
+        font-weight: 700;
+        margin-top: 2px
+    }
+
+    .por-card-body {
+        padding: 13px
+    }
+
+    .por-open {
+        border: 1px solid #edc592;
+        background: linear-gradient(135deg,#fff8ec,#fff);
+        border-radius: 14px;
+        padding: 13px
+    }
+
+        .por-open.is-urgent {
+            border-color: #eab0ad;
+            background: linear-gradient(135deg,#fff1f0,#fff)
+        }
+
+    .por-open-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start
+    }
+
+    .por-open-kicker {
+        font-size: .65rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+        color: #966016
+    }
+
+    .por-open.is-urgent .por-open-kicker {
+        color: #a43129
+    }
+
+    .por-open-title {
+        font-size: 1rem;
+        font-weight: 950;
+        color: var(--por-navy);
+        margin-top: 2px
+    }
+
+    .por-duration {
+        font-size: 1.18rem;
+        font-weight: 950;
+        color: #9a5a12;
+        text-align: right;
+        white-space: nowrap
+    }
+
+    .por-open.is-urgent .por-duration {
+        color: #ae352c
+    }
+
+    .por-open-meta {
+        display: flex;
+        gap: 7px 12px;
+        flex-wrap: wrap;
+        margin-top: 9px;
+        color: #5f6e81;
+        font-size: .7rem;
+        font-weight: 750
+    }
+
+    .por-open-desc {
+        margin-top: 9px;
+        border-top: 1px dashed #e4cfb0;
+        padding-top: 9px;
+        color: #39495e;
+        font-size: .76rem;
+        line-height: 1.45
+    }
+
+    .por-open.is-urgent .por-open-desc {
+        border-color: #ecc4c1
+    }
+
+    .por-form-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 9px
+    }
+
+    .por-field label {
+        display: block;
+        font-size: .67rem;
+        font-weight: 950;
+        color: #3f5168;
+        margin-bottom: 4px
+    }
+
+    .por-field .form-control, .por-field .form-select {
+        font-size: .77rem;
+        border-radius: 10px;
+        border-color: #cfd9e6;
+        min-height: 39px
+    }
+
+    .por-field textarea.form-control {
+        min-height: 76px;
+        resize: vertical
+    }
+
+    .por-hint {
+        font-size: .64rem;
+        color: var(--por-muted);
+        font-weight: 700;
+        margin-top: 4px;
+        line-height: 1.35
+    }
+
+    .por-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        margin-top: 10px
+    }
+
+    .por-btn {
+        border: 1px solid #cbd8e8;
+        background: #fff;
+        color: #28415f;
+        border-radius: 10px;
+        padding: 8px 11px;
+        font-size: .72rem;
+        font-weight: 950;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
+        text-decoration: none
+    }
+
+        .por-btn:hover {
+            background: #f2f7fc
+        }
+
+        .por-btn.is-stop {
+            background: #f2a51a;
+            border-color: #f2a51a;
+            color: #332200
+        }
+
+            .por-btn.is-stop:hover {
+                background: #db9110
+            }
+
+        .por-btn.is-resume {
+            background: #1267b2;
+            border-color: #1267b2;
+            color: #fff
+        }
+
+            .por-btn.is-resume:hover {
+                background: #0d5799
+            }
+
+        .por-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+    .por-feedback {
+        display: none;
+        margin-top: 9px;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: .72rem;
+        font-weight: 850
+    }
+
+        .por-feedback.is-visible {
+            display: block
+        }
+
+        .por-feedback.is-error {
+            background: #fff1f0;
+            border: 1px solid #efc0bc;
+            color: #962e27
+        }
+
+        .por-feedback.is-ok {
+            background: #edf9f2;
+            border: 1px solid #c3e7d1;
+            color: #17613f
+        }
+
+    .por-side-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .por-side {
+        border: 1px solid #e0e7ef;
+        border-radius: 11px;
+        padding: 9px 10px;
+        background: #fbfcfe
+    }
+
+        .por-side small {
+            font-size: .63rem;
+            color: var(--por-muted);
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            display: block
+        }
+
+        .por-side strong {
+            font-size: .76rem;
+            color: #243952;
+            display: block;
+            margin-top: 2px;
+            line-height: 1.35
+        }
+
+    .por-history {
+        margin-top: 12px
+    }
+
+    .por-table-wrap {
+        overflow: auto
+    }
+
+    .por-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 790px;
+        font-size: .72rem
+    }
+
+        .por-table th {
+            background: #f7f9fc;
+            color: #52647a;
+            font-size: .62rem;
+            text-transform: uppercase;
+            letter-spacing: .035em;
+            font-weight: 950;
+            padding: 8px 9px;
+            border-bottom: 1px solid var(--por-line);
+            white-space: nowrap
+        }
+
+        .por-table td {
+            padding: 9px;
+            border-bottom: 1px solid #edf1f5;
+            vertical-align: top
+        }
+
+        .por-table tbody tr:last-child td {
+            border-bottom: 0
+        }
+
+    .por-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 4px 7px;
+        border: 1px solid #d6dfe9;
+        background: #f8fafc;
+        color: #506177;
+        font-size: .61rem;
+        font-weight: 900;
+        white-space: nowrap
+    }
+
+        .por-tag.is-red {
+            background: #fff1f0;
+            border-color: #efc0bc;
+            color: #9b3028
+        }
+
+        .por-tag.is-amber {
+            background: #fff7e8;
+            border-color: #edd09b;
+            color: #7d5716
+        }
+
+        .por-tag.is-blue {
+            background: #eef6ff;
+            border-color: #cfe0f5;
+            color: #24588d
+        }
+
+    .por-empty {
+        border: 1px dashed #d8e0e9;
+        background: #fafbfd;
+        border-radius: 11px;
+        padding: 14px;
+        text-align: center;
+        color: #6d7888;
+        font-size: .74rem;
+        font-weight: 750
+    }
+
+    .por-footer {
+        margin-top: 10px;
+        color: var(--por-muted);
+        font-size: .64rem;
+        font-weight: 720;
+        text-align: right
+    }
+
+    html[data-nsq-theme="dark"] .por {
+        --por-text: #e8eef7;
+        --por-muted: #98a7ba;
+        --por-line: #2c3e55;
+        --por-soft: #111c2d;
+        --por-navy: #f7f9fc
+    }
+
+    .dark .por-card, html[data-nsq-theme="dark"] .por-card, html[data-nsq-theme="dark"] .por-head {
+        background: #111c2d;
+        border-color: #2c3e55
+    }
+
+    .dark .por-card-head, html[data-nsq-theme="dark"] .por-card-head {
+        background: #0e1828;
+        border-color: #2c3e55
+    }
+
+    .dark .por-lhrh, html[data-nsq-theme="dark"] .por-lhrh {
+        background: #0f1d30;
+        border-color: #294a70
+    }
+
+    .dark .por-lhrh-item, html[data-nsq-theme="dark"] .por-lhrh-item {
+        background: #111c2d;
+        border-color: #2c3e55
+    }
+
+    .dark .por-side, html[data-nsq-theme="dark"] .por-side {
+        background: #0e1828;
+        border-color: #2c3e55
+    }
+
+    .dark .por-field .form-control, .dark .por-field .form-select, html[data-nsq-theme="dark"] .por-field .form-control, html[data-nsq-theme="dark"] .por-field .form-select {
+        background: #0b1422;
+        color: #f5f7fa;
+        border-color: #354961
+    }
+
+    .dark .por-open, html[data-nsq-theme="dark"] .por-open {
+        background: #281f12;
+        border-color: #725222
+    }
+
+        .dark .por-open.is-urgent, html[data-nsq-theme="dark"] .por-open.is-urgent {
+            background: #2d1718;
+            border-color: #744044
+        }
+
+    @@media(max-width:900px) {
+        .por-grid {
+            grid-template-columns: 1fr
+        }
+
+        .por-lhrh-grid, .por-side-grid {
+            grid-template-columns: 1fr
+        }
+
+        .por-head {
+            flex-direction: column
+        }
+
+        .por-head-right {
+            justify-content: flex-start
+        }
+
+        .por-open-top {
+            flex-direction: column
+        }
+
+        .por-duration {
+            text-align: left
+        }
+    }
+</style>
+
+<div class="por"
+     data-paros-operativos-root
+     data-programa-id="@Model.ProgramaProduccionID"
+     data-paro-abierto="@(abierto != null ? "1" : "0")"
+     data-interrupcion-urgente="@(abierto?.EsInterrupcionUrgente == true ? "1" : "0")">
+    <div class="por-head">
+        <div class="por-head-main">
+            <div class="por-head-icon"><i class="bi bi-pause-circle-fill"></i></div>
+            <div>
+                <div class="por-kicker">Producción · operación física</div>
+                <div class="por-title">Paros e interrupciones de @Model.Actual.NumeroOF</div>
+                <div class="por-sub">
+                    <span><i class="bi bi-diagram-3"></i>Programa @Model.Actual.ProgramaProduccionID</span>
+                    <span><i class="bi bi-cpu"></i>@Model.Actual.MaquinaTexto</span>
+                    <span><i class="bi bi-box"></i>@Model.Actual.ParteTexto</span>
+                    @if (!string.IsNullOrWhiteSpace(Model.Actual.MoldeCodigo))
+                    {
+                        <span><i class="bi bi-tools"></i>Molde @Model.Actual.MoldeCodigo</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="por-head-right">
+            <span class="por-badge @EstadoClase(Model.Actual.EstatusID)">@Model.Actual.EstatusNombre</span>
+            @if (!Model.PuedeGestionar)
+            {
+                <span class="por-badge is-read"><i class="bi bi-eye"></i>Solo consulta</span>
+            }
+        </div>
+    </div>
+
+    @if (Model.EsParejaLhRh && Model.Pareja != null)
+    {
+        <div class="por-lhrh">
+            <div class="por-lhrh-title"><i class="bi bi-link-45deg"></i>Paro físico conjunto LH/RH@if(Model.GrupoLhRh.HasValue){<span> · Grupo @Model.GrupoLhRh.Value</span>}</div>
+            <div class="por-lhrh-grid">
+                <div class="por-lhrh-item"><small>OF actual @(string.IsNullOrWhiteSpace(Model.Actual.LadoLhRh) ? "" : $"· {Model.Actual.LadoLhRh}")</small><strong>@Model.Actual.NumeroOF · @Model.Actual.ParteTexto</strong></div>
+                <div class="por-lhrh-item"><small>OF pareja @(string.IsNullOrWhiteSpace(Model.Pareja.LadoLhRh) ? "" : $"· {Model.Pareja.LadoLhRh}")</small><strong>@Model.Pareja.NumeroOF · @Model.Pareja.ParteTexto</strong></div>
+            </div>
+            <div class="por-card-sub mt-2">La máquina es una sola operación física: iniciar o cerrar un paro normal afecta a las dos ejecuciones en la misma transacción.</div>
+        </div>
+    }
+
+    @if (!Model.ParejaConsistente)
+    {
+        <div class="por-alert is-danger"><i class="bi bi-exclamation-triangle-fill"></i><div><strong>Pareja LH/RH inconsistente</strong>@Model.MotivoInconsistenciaPareja</div></div>
+    }
+
+    @if (abierto?.EsInterrupcionUrgente == true)
+    {
+        <div class="por-alert is-danger"><i class="bi bi-lightning-charge-fill"></i><div><strong>Interrupción urgente controlada por Planeación</strong>Este paro no puede cerrarse manualmente. El ERP procesará el retorno cuando termine la producción urgente y determinará si la OF puede continuar o debe regresar a preparación y reliberación de Calidad.</div></div>
+    }
+    else if (abierto != null && (abierto.EsMayorA15Minutos || abierto.DuracionMinutos > 15))
+    {
+        <div class="por-alert is-warn"><i class="bi bi-shield-exclamation"></i><div><strong>Paro mayor a 15 minutos</strong>Al cerrar este paro, el flujo existente regresará la ejecución a preparación y solicitará reliberación. Calidad atiende esa validación únicamente desde su propio módulo.</div></div>
+    }
+    else if (abierto != null)
+    {
+        <div class="por-alert is-info"><i class="bi bi-info-circle-fill"></i><div><strong>Paro normal abierto</strong>Si al momento del cierre la duración supera 15 minutos, el ERP aplicará automáticamente el flujo de reliberación correspondiente.</div></div>
+    }
+
+    <div class="por-grid">
+        <section class="por-card">
+            <div class="por-card-head">
+                <div><div class="por-card-title"><i class="bi bi-stopwatch"></i>Estado del paro</div><div class="por-card-sub">Una sola intervención física; LH/RH se maneja de forma conjunta.</div></div>
+                @if (abierto != null)
+                {
+                    <span class="por-badge @(abierto.EsInterrupcionUrgente ? "is-paused" : "is-paused")">Abierto</span>
+                }
+                else
+                {
+
+                    <span class="por-badge is-running">Sin paro abierto</span>
+                }
+            </div>
+            <div class="por-card-body">
+                @if (abierto != null)
+                {
+                    <div class="por-open @(abierto.EsInterrupcionUrgente ? "is-urgent" : "")">
+                        <div class="por-open-top">
+                            <div>
+                                <div class="por-open-kicker">@(abierto.EsInterrupcionUrgente ? "Interrupción urgente" : "Paro de Producción")</div>
+                                <div class="por-open-title">@(string.IsNullOrWhiteSpace(abierto.MotivoParoTexto) ? "Paro sin motivo textual" : abierto.MotivoParoTexto)</div>
+                            </div>
+                            <div class="por-duration" data-por-duracion data-inicio="@abierto.FechaInicioParo.ToString("yyyy-MM-ddTHH:mm:ss")">@abierto.DuracionTexto</div>
+                        </div>
+                        <div class="por-open-meta">
+                            <span><i class="bi bi-calendar-event"></i>Inicio @abierto.FechaInicioParo.ToString("dd/MM/yyyy HH:mm")</span>
+                            <span><i class="bi bi-card-list"></i>@abierto.OFsTexto</span>
+                            @if (abierto.EsParoLhRh)
+                            {
+                                <span><i class="bi bi-link-45deg"></i>Evento LH/RH compartido</span>
+                            }
+                            <span class="por-tag is-amber" data-por-supera15 style="@((abierto.EsMayorA15Minutos || abierto.DuracionMinutos > 15) ? "" : "display:none")"><i class="bi bi-exclamation-circle-fill"></i>Superó 15 min</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(abierto.Descripcion))
+                        {
+                            <div class="por-open-desc">@abierto.Descripcion</div>
+                        }
+                        @if (abierto.EsInterrupcionUrgente)
+                        {
+                            <div class="por-open-desc">
+                                <strong>Producción urgente:</strong>
+                                @if (!string.IsNullOrWhiteSpace(abierto.NumeroOFUrgente))
+                                {
+                                    <span>@abierto.NumeroOFUrgente</span>
+                                }
+                                else if (abierto.ProgramaUrgenteID.HasValue)
+                                {
+                                    <span>Programa @abierto.ProgramaUrgenteID.Value</span>
+                                }
+                                else
+                                {
+                                    <span>Sin referencia visible</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="por-empty"><i class="bi bi-check-circle me-1"></i>No existe un paro abierto para la operación mostrada.</div>
+                }
+
+                <div class="por-side-grid mt-3">
+                    <div class="por-side"><small>Operador principal</small><strong>@(string.IsNullOrWhiteSpace(Model.Actual.OperadorNombre) ? "Sin asignar" : Model.Actual.OperadorNombre)</strong></div>
+                    <div class="por-side"><small>Auxiliar</small><strong>@(string.IsNullOrWhiteSpace(Model.Actual.OperadorAuxiliarNombre) ? "Sin asignar" : Model.Actual.OperadorAuxiliarNombre)</strong></div>
+                    @if (Model.Pareja != null)
+                    {
+                        <div class="por-side"><small>OF pareja · operador</small><strong>@Model.Pareja.NumeroOF · @(string.IsNullOrWhiteSpace(Model.Pareja.OperadorNombre) ? "Sin asignar" : Model.Pareja.OperadorNombre)</strong></div>
+                        <div class="por-side"><small>OF pareja · estatus</small><strong>@Model.Pareja.EstatusNombre</strong></div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="por-card">
+            <div class="por-card-head"><div><div class="por-card-title"><i class="bi bi-sliders"></i>Acción</div><div class="por-card-sub">Los técnicos mantienen consulta; iniciar o cerrar depende del permiso operativo vigente de Paros.</div></div></div>
+            <div class="por-card-body">
+                @if (Model.PuedeCerrarParo && abierto != null)
+                {
+                    <form method="post" action="@urlCerrar" data-por-form data-confirm="¿Confirmas cerrar el paro y aplicar el flujo de reanudación correspondiente?">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ProgramaProduccionID" value="@Model.ProgramaProduccionID" />
+                        <input type="hidden" name="ParoID" value="@abierto.ParoID" />
+                        <div class="por-field">
+                            <label>Observaciones de cierre</label>
+                            <textarea class="form-control" name="ObservacionesCierre" maxlength="500" rows="3" placeholder="Opcional. Describe la condición al reanudar."></textarea>
+                            <div class="por-hint">Si el paro ya supera 15 minutos, el backend conservará el flujo actual de regreso a preparación y solicitud de reliberación.</div>
+                        </div>
+                        <div class="por-actions"><button type="submit" class="por-btn is-resume"><i class="bi bi-play-circle-fill"></i>Cerrar paro y continuar flujo</button></div>
+                        <div class="por-feedback" data-por-feedback></div>
+                    </form>
+                }
+                else if (Model.PuedeIniciarParo)
+                {
+                    <form method="post" action="@urlIniciar" data-por-form data-confirm="¿Confirmas iniciar el paro de Producción?">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ProgramaProduccionID" value="@Model.ProgramaProduccionID" />
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                        <div class="por-form-grid">
+                            <div class="por-field">
+                                <label>Motivo del paro</label>
+                                <select class="form-select" name="MotivoParoID" required>
+                                    <option value="">-- Selecciona motivo --</option>
+                                    @foreach (var motivo in Model.Motivos)
+                                    {
+                                        <option value="@motivo.MotivoParoID">@motivo.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="por-field">
+                                <label>Descripción</label>
+                                <textarea class="form-control" name="Descripcion" maxlength="500" rows="3" placeholder="Opcional. Agrega contexto operativo del paro."></textarea>
+                            </div>
+                        </div>
+                        @if (Model.EsParejaLhRh)
+                        {
+                            <div class="por-alert is-info"><i class="bi bi-link-45deg"></i><div><strong>LH/RH</strong>Este botón abrirá el paro físico en las dos ejecuciones; no se generará un paro parcial por lado.</div></div>
+                        }
+                        <div class="por-actions"><button type="submit" class="por-btn is-stop"><i class="bi bi-pause-fill"></i>Iniciar paro</button></div>
+                        <div class="por-feedback" data-por-feedback></div>
+                    </form>
+                }
+                else if (abierto?.EsInterrupcionUrgente == true)
+                {
+                    <div class="por-empty"><i class="bi bi-lock-fill me-1"></i>La interrupción urgente es automática y no admite cierre manual.</div>
+                }
+                else if (!Model.PuedeGestionar)
+                {
+                    <div class="por-empty"><i class="bi bi-eye me-1"></i>Tu perfil tiene acceso de consulta. El registro o cierre solo está disponible para perfiles con permiso operativo de Paros.</div>
+                }
+                else if (!Model.ParejaConsistente)
+                {
+                    <div class="por-empty"><i class="bi bi-exclamation-triangle me-1"></i>Primero debe corregirse la relación LH/RH antes de gestionar un paro físico.</div>
+                }
+                else if (Model.Actual.EjecucionProduccionID <= 0)
+                {
+                    <div class="por-empty">Todavía no existe una ejecución de Producción para gestionar paros.</div>
+                }
+                else if (Model.Actual.EstatusID != ProduccionEstatus.EnProduccion && abierto == null)
+                {
+                    <div class="por-empty">La ejecución debe encontrarse en Producción para iniciar un nuevo paro. Estado actual: <strong>@Model.Actual.EstatusNombre</strong>.</div>
+                }
+                else
+                {
+                    <div class="por-empty">No hay una acción de paro disponible para el estado actual.</div>
+                }
+            </div>
+        </section>
+    </div>
+
+    <section class="por-card por-history">
+        <div class="por-card-head"><div><div class="por-card-title"><i class="bi bi-clock-history"></i>Historial reciente de paros</div><div class="por-card-sub">Los eventos LH/RH se muestran una sola vez como intervención física conjunta.</div></div><span class="por-badge">@historial.Count</span></div>
+        @if (historial.Any())
+        {
+            <div class="por-table-wrap">
+                <table class="por-table">
+                    <thead><tr><th>OF</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Motivo</th><th>Tipo</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var paro in historial)
+                        {
+                            <tr>
+                                <td><strong>@paro.OFsTexto</strong>@if(paro.EsParoLhRh){
+                                <div><span class="por-tag is-blue">LH/RH conjunto</span></div>
+                            }
+    </td>
+                            <td>@paro.FechaInicioParo.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@Fecha(paro.FechaFinParo)</td>
+                            <td><strong>@paro.DuracionTexto</strong></td>
+                            <td>@(string.IsNullOrWhiteSpace(paro.MotivoParoTexto) ? "-" : paro.MotivoParoTexto)@if(!string.IsNullOrWhiteSpace(paro.Descripcion)){
+                            <div class="por-card-sub">@paro.Descripcion</div>
+                        }
+</td>
+                        <td>
+                            @if (paro.EsInterrupcionUrgente)
+                            {
+                                <span class="por-tag is-red"><i class="bi bi-lightning-charge-fill"></i>Urgente</span>
+                            }
+                            else
+                            {
+
+                                <span class="por-tag">Normal</span>
+                            }
+                            @if (paro.EsMayorA15Minutos)
+                            {
+                                <span class="por-tag is-amber">&gt; 15 min</span>
+                            }
+                        </td>
+                        <td>@if(paro.EstaAbierto){
+                        <span class="por-tag is-red">Abierto</span>
+                                                }else
+                        {
+
+                            <span class="por-tag">Cerrado</span>
+                        }
+</td>
+                    </tr>
+                                        }
+                </tbody>
+            </table>
+        </div>
+                }
+                else
+        {
+            <div class="por-card-body"><div class="por-empty">No hay paros registrados para esta operación.</div></div>
+        }
+    </section>
+
+    <div class="por-footer">Actualizado @Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss")</div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const script=document.currentScript;
+        const root=script?.previousElementSibling;
+        if(!root||!root.matches?.('[data-paros-operativos-root]')||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        function feedback(form,mensaje,ok){
+            const box=form.querySelector('[data-por-feedback]');
+            if(!box) return;
+            box.textContent=mensaje||'';
+            box.className='por-feedback is-visible '+(ok?'is-ok':'is-error');
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        function refrescarCentro(){
+            const centro=root.closest('[data-nsq-operativa-centro]');
+            const boton=centro?.querySelector('[data-nsq-operativa-refrescar]');
+            if(boton) boton.click();
+        }
+
+        root.querySelectorAll('[data-por-form]').forEach(form=>{
+            form.addEventListener('submit',async event=>{
+                event.preventDefault();
+                if(form.dataset.enviando==='1') return;
+                const confirmacion=form.dataset.confirm;
+                if(confirmacion&&!window.confirm(confirmacion)) return;
+
+                const submit=form.querySelector('button[type="submit"]');
+                form.dataset.enviando='1';
+                if(submit) submit.disabled=true;
+                feedback(form,'Procesando...',true);
+
+                try{
+                    const response=await fetch(form.action,{
+                        method:'POST',
+                        body:new FormData(form),
+                        credentials:'same-origin',
+                        cache:'no-store',
+                        headers:{
+                            'X-Requested-With':'XMLHttpRequest',
+                            'X-NSQ-Operativa':'1',
+                            'Accept':'application/json'
+                        }
+                    });
+                    const data=await leerRespuesta(response);
+                    if(!response.ok||data?.ok===false) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                    feedback(form,data?.mensaje||'Operación realizada correctamente.',true);
+                    window.setTimeout(refrescarCentro,550);
+                }catch(error){
+                    feedback(form,error?.message||'No fue posible procesar el paro.',false);
+                    form.dataset.enviando='0';
+                    if(submit) submit.disabled=false;
+                }
+            });
+        });
+
+        function actualizarDuracion(){
+            root.querySelectorAll('[data-por-duracion][data-inicio]').forEach(el=>{
+                const inicio=new Date(el.dataset.inicio);
+                if(Number.isNaN(inicio.getTime())) return;
+                const minutos=Math.max(0,Math.floor((Date.now()-inicio.getTime())/60000));
+                el.textContent=minutos<60?`${minutos} min`:`${Math.floor(minutos/60)} h ${minutos%60} min`;
+                const indicador=root.querySelector('[data-por-supera15]');
+                if(indicador) indicador.style.display=minutos>15?'inline-flex':'none';
+            });
+        }
+
+        actualizarDuracion();
+        const timer=window.setInterval(()=>{
+            if(!root.isConnected){window.clearInterval(timer);return;}
+            actualizarDuracion();
+        },30000);
+    })();
+</script>

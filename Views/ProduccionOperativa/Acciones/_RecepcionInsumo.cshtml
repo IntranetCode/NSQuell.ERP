@@ -1,0 +1,598 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+@using ERP.NSQuell.Models
+
+@{
+    var tipo = (Convert.ToString(ViewData["TipoInsumoOperativo"]) ?? "MP").Trim().ToUpperInvariant();
+    var esMp = tipo == ProduccionRecepcionMaterialTipo.MP;
+    var soloLectura = ViewData["SoloLectura"] is bool sr ? sr : Model.Permisos.SoloLectura;
+    var rootId = $"poInsumo_{tipo}_{Model.ProgramaProduccionID}";
+    var titulo = esMp ? "Recepción de materia prima" : "Recepción de embalaje";
+    var icono = esMp ? "bi-box-arrow-in-down" : "bi-box2-heart";
+}
+
+<style>
+    .po-insumo {
+        --pi: #004aad;
+        --pi-text: #182230;
+        --pi-muted: #667085;
+        --pi-border: #e4e7ec;
+        --pi-soft: #f8fafc;
+        --pi-ok: #128254;
+        --pi-warn: #b66900;
+        --pi-bad: #c93636;
+        color: var(--pi-text)
+    }
+
+        .po-insumo * {
+            box-sizing: border-box
+        }
+
+        .po-insumo .pi-card {
+            border: 1px solid var(--pi-border);
+            border-radius: 14px;
+            background: #fff;
+            overflow: hidden
+        }
+
+        .po-insumo .pi-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 13px 14px;
+            border-bottom: 1px solid var(--pi-border);
+            background: #fbfcfe
+        }
+
+            .po-insumo .pi-head strong {
+                display: block;
+                color: #102a56;
+                font-size: .9rem
+            }
+
+            .po-insumo .pi-head small {
+                display: block;
+                margin-top: 2px;
+                color: var(--pi-muted);
+                font-size: .68rem
+            }
+
+        .po-insumo .pi-body {
+            padding: 14px
+        }
+
+        .po-insumo .pi-summary {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px
+        }
+
+        .po-insumo .pi-kpi {
+            padding: 9px 10px;
+            border: 1px solid var(--pi-border);
+            border-radius: 10px;
+            background: var(--pi-soft)
+        }
+
+            .po-insumo .pi-kpi span {
+                display: block;
+                color: var(--pi-muted);
+                font-size: .6rem;
+                font-weight: 850;
+                text-transform: uppercase
+            }
+
+            .po-insumo .pi-kpi strong {
+                display: block;
+                margin-top: 2px;
+                color: #102a56;
+                font-size: .94rem;
+                font-weight: 950
+            }
+
+        .po-insumo .pi-status {
+            display: none;
+            margin: 10px 0;
+            padding: 9px 10px;
+            border-radius: 9px;
+            font-size: .7rem;
+            font-weight: 750
+        }
+
+            .po-insumo .pi-status.show {
+                display: block
+            }
+
+            .po-insumo .pi-status.ok {
+                background: #edf9f3;
+                border: 1px solid #bee2cf;
+                color: #176b48
+            }
+
+            .po-insumo .pi-status.warn {
+                background: #fff8ea;
+                border: 1px solid #f0d39d;
+                color: #8a5700
+            }
+
+            .po-insumo .pi-status.bad {
+                background: #fff1f1;
+                border: 1px solid #efb8b8;
+                color: #a52b2b
+            }
+
+        .po-insumo .pi-list {
+            display: grid;
+            gap: 9px;
+            margin-top: 11px
+        }
+
+        .po-insumo .pi-item {
+            border: 1px solid var(--pi-border);
+            border-radius: 12px;
+            padding: 11px;
+            background: #fff
+        }
+
+            .po-insumo .pi-item.is-pending {
+                border-left: 4px solid var(--pi)
+            }
+
+            .po-insumo .pi-item.is-ok {
+                border-left: 4px solid var(--pi-ok)
+            }
+
+            .po-insumo .pi-item.is-diff {
+                border-left: 4px solid var(--pi-warn)
+            }
+
+        .po-insumo .pi-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px
+        }
+
+        .po-insumo .pi-name {
+            color: #102a56;
+            font-size: .78rem;
+            font-weight: 900
+        }
+
+        .po-insumo .pi-meta {
+            display: flex;
+            gap: 6px 11px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+            color: var(--pi-muted);
+            font-size: .64rem
+        }
+
+        .po-insumo .pi-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: .61rem;
+            font-weight: 850
+        }
+
+            .po-insumo .pi-pill.ok {
+                background: #edf9f3;
+                color: #176b48
+            }
+
+            .po-insumo .pi-pill.warn {
+                background: #fff8ea;
+                color: #8a5700
+            }
+
+            .po-insumo .pi-pill.bad {
+                background: #fff1f1;
+                color: #a52b2b
+            }
+
+        .po-insumo .pi-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--pi-border)
+        }
+
+            .po-insumo .pi-form .full {
+                grid-column: 1/-1
+            }
+
+        .po-insumo label {
+            display: block;
+            margin-bottom: 4px;
+            color: #344054;
+            font-size: .64rem;
+            font-weight: 850
+        }
+
+        .po-insumo .form-control, .po-insumo .form-select {
+            min-height: 36px;
+            border-radius: 8px;
+            font-size: .72rem
+        }
+
+        .po-insumo .pi-actions {
+            grid-column: 1/-1;
+            display: flex;
+            justify-content: flex-end;
+            gap: 7px
+        }
+
+        .po-insumo .pi-btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 8px 11px;
+            background: var(--pi);
+            color: #fff;
+            font-size: .7rem;
+            font-weight: 900
+        }
+
+            .po-insumo .pi-btn:disabled {
+                opacity: .55
+            }
+
+        .po-insumo .pi-empty {
+            padding: 18px;
+            border: 1px dashed #cfd7e3;
+            border-radius: 11px;
+            text-align: center;
+            color: var(--pi-muted);
+            font-size: .72rem;
+            background: #fbfcfe
+        }
+
+        .po-insumo .pi-wait {
+            margin-top: 10px;
+            padding: 9px 10px;
+            border-radius: 9px;
+            background: #f5f7fa;
+            border: 1px solid var(--pi-border);
+            color: #475467;
+            font-size: .68rem
+        }
+
+        .po-insumo details {
+            margin-top: 10px
+        }
+
+            .po-insumo details summary {
+                cursor: pointer;
+                color: #475467;
+                font-size: .67rem;
+                font-weight: 850
+            }
+
+        .po-insumo .pi-history {
+            display: grid;
+            gap: 6px;
+            margin-top: 7px
+        }
+
+        .po-insumo .pi-history-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 7px 8px;
+            border-radius: 8px;
+            background: var(--pi-soft);
+            font-size: .65rem;
+            color: #667085
+        }
+
+            .po-insumo .pi-history-row strong {
+                color: #344054
+            }
+
+        .po-insumo .pi-lhrh {
+            margin-top: 9px;
+            padding: 8px 9px;
+            border: 1px solid #ddd0f1;
+            border-radius: 9px;
+            background: #faf7ff;
+            color: #5f4a7b;
+            font-size: .65rem
+        }
+
+        .po-insumo .pi-loading {
+            padding: 22px;
+            text-align: center;
+            color: var(--pi-muted);
+            font-size: .72rem
+        }
+
+        .po-insumo .pi-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #d7e2f1;
+            border-top-color: var(--pi);
+            border-radius: 50%;
+            animation: piSpin .7s linear infinite
+        }
+    @@keyframes
+
+    piSpin {
+        to
+
+    {
+        transform: rotate(360deg)
+    }
+
+    }
+
+    html[data-nsq-theme="dark"] .po-insumo {
+        --pi-text: #eef2f7;
+        --pi-muted: #9aacbf;
+        --pi-border: rgba(255,255,255,.10);
+        --pi-soft: #0e1929
+    }
+
+        .po-insumo[data-dark="1"] .pi-card, html[data-nsq-theme="dark"] .po-insumo .pi-card, html[data-nsq-theme="dark"] .po-insumo .pi-head, html[data-nsq-theme="dark"] .po-insumo .pi-item {
+            background: #111d2f
+        }
+
+            html[data-nsq-theme="dark"] .po-insumo .pi-head strong, html[data-nsq-theme="dark"] .po-insumo .pi-name, html[data-nsq-theme="dark"] .po-insumo .pi-kpi strong, html[data-nsq-theme="dark"] .po-insumo label {
+                color: #f5f7fb
+            }
+    @@media(max - width:760px)
+
+    {
+        .po-insumo .pi-summary
+
+    {
+        grid-template-columns: 1fr 1fr
+    }
+
+    .po-insumo .pi-form {
+        grid-template-columns: 1fr
+    }
+
+        .po-insumo .pi-form .full, .po-insumo .pi-actions {
+            grid-column: 1
+        }
+
+    }
+</style>
+
+<div id="@rootId" class="po-insumo" data-po-insumo data-programa-id="@Model.ProgramaProduccionID" data-tipo="@tipo" data-solo-lectura="@(soloLectura ? "true" : "false")">
+    <form class="d-none" data-po-token>@Html.AntiForgeryToken()</form>
+    <div class="pi-card">
+        <div class="pi-head">
+            <div>
+                <strong><i class="bi @icono me-1"></i>@titulo</strong>
+                <small>@Model.OFTexto · @Model.MaquinaTexto · @Model.ParteTexto</small>
+            </div>
+            <span class="badge bg-light text-dark border">Programa #@Model.ProgramaProduccionID</span>
+        </div>
+        <div class="pi-body">
+            <div class="pi-summary">
+                <div class="pi-kpi"><span>Requerido</span><strong data-pi-requerido>-</strong></div>
+                <div class="pi-kpi"><span>Entregado</span><strong data-pi-entregado>-</strong></div>
+                <div class="pi-kpi"><span>Confirmado</span><strong data-pi-confirmado>-</strong></div>
+                <div class="pi-kpi"><span>Pend. confirmar</span><strong data-pi-pendiente>-</strong></div>
+            </div>
+            <div class="pi-status" data-pi-status></div>
+            <div data-pi-contenido><div class="pi-loading"><span class="pi-spinner"></span><div class="mt-2">Consultando entregas...</div></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const tipo=root.dataset.tipo||'MP';
+        const soloLectura=root.dataset.soloLectura==='true';
+        const token=root.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+        const contenido=root.querySelector('[data-pi-contenido]');
+        const status=root.querySelector('[data-pi-status]');
+        const requerido=root.querySelector('[data-pi-requerido]');
+        const entregado=root.querySelector('[data-pi-entregado]');
+        const confirmado=root.querySelector('[data-pi-confirmado]');
+        const pendiente=root.querySelector('[data-pi-pendiente]');
+        const urlDatos='@Url.Action("OperativaInsumosDatos", "ProduccionPreparacion")';
+        const urlGuardar='@Url.Action("ConfirmarRecepcionMaterialOperativa", "ProduccionPreparacion")';
+
+        const esc=value=>String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+        const n=value=>Number(value||0).toLocaleString('es-MX',{maximumFractionDigits:4});
+        const fecha=value=>{if(!value)return '-';const d=new Date(value);return Number.isNaN(d.getTime())?'-':d.toLocaleString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});};
+
+        function mensaje(texto,tipoClase){
+            status.textContent=texto||'';
+            status.className='pi-status'+(texto?' show ':' ')+(tipoClase||'');
+        }
+
+        function claseRecepcion(x){
+            if(x.estaPendiente) return 'is-pending';
+            if(x.estaRecibidoCompleto) return 'is-ok';
+            return 'is-diff';
+        }
+
+        function badgeEstado(x){
+            if(x.estaPendiente) return '<span class="pi-pill">Pendiente</span>';
+            if(x.estaRecibidoCompleto) return '<span class="pi-pill ok">Recibido</span>';
+            if(x.estaRecibidoParcial) return '<span class="pi-pill warn">Parcial</span>';
+            return '<span class="pi-pill bad">No recibido</span>';
+        }
+
+        function formRecepcion(x,puedeGestionar){
+            if(!x.estaPendiente||soloLectura||!puedeGestionar) return '';
+            return `
+            <form class="pi-form" data-pi-form data-id="${Number(x.recepcionMaterialID||0)}">
+                <div>
+                    <label>Confirmación</label>
+                    <select class="form-select" name="Decision" data-pi-decision required>
+                        <option value="COMPLETO">Recibí completo</option>
+                        <option value="PARCIAL">Recibí parcialmente</option>
+                        <option value="NO_RECIBIDO">No recibí</option>
+                    </select>
+                </div>
+                <div data-pi-cantidad-wrap style="display:none">
+                    <label>Cantidad realmente recibida</label>
+                    <input class="form-control" type="number" min="0.0001" step="0.0001" max="${Number(x.cantidadEntregadaAlmacen||0)}" name="CantidadRecibida" data-pi-cantidad />
+                </div>
+                <div class="full" data-pi-motivo-wrap style="display:none">
+                    <label>Motivo de diferencia</label>
+                    <textarea class="form-control" rows="2" maxlength="500" name="MotivoDiferencia" data-pi-motivo placeholder="Indica qué ocurrió"></textarea>
+                </div>
+                <div class="full">
+                    <label>Observaciones opcionales</label>
+                    <textarea class="form-control" rows="2" maxlength="800" name="Observaciones" placeholder="Opcional"></textarea>
+                </div>
+                <div class="pi-actions"><button type="submit" class="pi-btn"><i class="bi bi-check2-circle me-1"></i>Confirmar recepción</button></div>
+            </form>`;
+        }
+
+        function render(data){
+            const r=data.resumen||{};
+            requerido.textContent=n(r.cantidadRequerida);
+            entregado.textContent=n(r.cantidadEntregada);
+            confirmado.textContent=n(r.cantidadConfirmada);
+            pendiente.textContent=n(r.pendienteConfirmar);
+
+            const recepciones=Array.isArray(data.recepciones)?data.recepciones:[];
+            const esperados=Array.isArray(data.esperados)?data.esperados:[];
+
+            if(r.completo){
+                mensaje(`${data.tipoTexto} completo para esta OF.`,'ok');
+            }else if(Number(r.pendientesConfirmacion||0)>0){
+                mensaje(`Hay ${r.pendientesConfirmacion} entrega(s) pendientes de confirmar.`,'warn');
+            }else if(Number(r.pendienteAlmacen||0)>0){
+                mensaje(`Esperando ${n(r.pendienteAlmacen)} por entregar desde Almacén.`,'warn');
+            }else{
+                mensaje('Sin entregas pendientes de confirmar.','');
+            }
+
+            let html='';
+            const pendientes=recepciones.filter(x=>x.estaPendiente);
+            const historico=recepciones.filter(x=>!x.estaPendiente);
+
+            if(pendientes.length){
+                html+='<div class="pi-list">';
+                pendientes.forEach(x=>{
+                    html+=`<article class="pi-item ${claseRecepcion(x)}">
+                        <div class="pi-item-top">
+                            <div>
+                                <div class="pi-name">${esc(x.textoEntregado||x.textoSolicitado||'Insumo')}</div>
+                                <div class="pi-meta">
+                                    <span><i class="bi bi-box-arrow-in-down me-1"></i>${n(x.cantidadEntregadaAlmacen)} ${esc(x.unidad||'')}</span>
+                                    ${x.lote?`<span><i class="bi bi-upc-scan me-1"></i>Lote ${esc(x.lote)}</span>`:''}
+                                    <span><i class="bi bi-clock me-1"></i>${fecha(x.fechaEntregaAlmacen)}</span>
+                                    ${x.usuarioEntregaAlmacenNombre?`<span><i class="bi bi-person me-1"></i>${esc(x.usuarioEntregaAlmacenNombre)}</span>`:''}
+                                </div>
+                            </div>
+                            ${badgeEstado(x)}
+                        </div>
+                        ${x.esSustitucion?`<div class="pi-wait"><i class="bi bi-arrow-left-right me-1"></i>Solicitado: ${esc(x.textoSolicitado)} · Entregado: ${esc(x.textoEntregado)}</div>`:''}
+                        ${x.observacionesAlmacen?`<div class="pi-wait">${esc(x.observacionesAlmacen)}</div>`:''}
+                        ${x.grupoLhRh?`<div class="pi-lhrh"><i class="bi bi-link-45deg me-1"></i>LH/RH grupo ${esc(x.grupoLhRh)}${x.ladoLhRh?` · ${esc(x.ladoLhRh)}`:''}${x.numeroOFPareja?` · Pareja ${esc(x.numeroOFPareja)}`:''}</div>`:''}
+                        ${formRecepcion(x,!!data.puedeGestionar)}
+                    </article>`;
+                });
+                html+='</div>';
+            }else if(esperados.length){
+                html+='<div class="pi-list">';
+                esperados.forEach(x=>{
+                    html+=`<article class="pi-item">
+                        <div class="pi-item-top"><div><div class="pi-name">${esc(x.codigo)}${x.descripcion?` - ${esc(x.descripcion)}`:''}</div><div class="pi-meta"><span>Requerido ${n(x.cantidadRequerida)} ${esc(x.unidad||'')}</span><span>Entregado ${n(x.cantidadEntregadaAlmacen)} ${esc(x.unidad||'')}</span></div></div><span class="pi-pill warn">${esc(x.estadoAlmacenTexto||'Pendiente de Almacén')}</span></div>
+                    </article>`;
+                });
+                html+='</div><div class="pi-wait"><i class="bi bi-hourglass-split me-1"></i>Producción no puede confirmar hasta que Almacén registre una entrega.</div>';
+            }else if(r.completo){
+                html='<div class="pi-empty"><i class="bi bi-check-circle-fill text-success me-1"></i>El insumo requerido ya está confirmado.</div>';
+            }else{
+                html='<div class="pi-empty">No hay movimientos de este insumo para la OF.</div>';
+            }
+
+            if(historico.length){
+                html+='<details><summary>Recepciones anteriores ('+historico.length+')</summary><div class="pi-history">';
+                historico.slice(0,12).forEach(x=>{
+                    html+=`<div class="pi-history-row"><span>${esc(x.textoEntregado||x.textoSolicitado||'Insumo')} · ${n(x.cantidadRecibidaProduccion)} ${esc(x.unidad||'')}</span><strong>${esc(x.estadoRecepcionTexto||x.estadoRecepcion||'')}</strong></div>`;
+                });
+                html+='</div></details>';
+            }
+
+            contenido.innerHTML=html;
+            enlazarFormularios();
+        }
+
+        function actualizarCampos(form){
+            const decision=form.querySelector('[data-pi-decision]')?.value||'COMPLETO';
+            const wrapCantidad=form.querySelector('[data-pi-cantidad-wrap]');
+            const wrapMotivo=form.querySelector('[data-pi-motivo-wrap]');
+            const cantidad=form.querySelector('[data-pi-cantidad]');
+            const motivo=form.querySelector('[data-pi-motivo]');
+            const parcial=decision==='PARCIAL';
+            const diferencia=decision==='PARCIAL'||decision==='NO_RECIBIDO';
+            if(wrapCantidad) wrapCantidad.style.display=parcial?'block':'none';
+            if(wrapMotivo) wrapMotivo.style.display=diferencia?'block':'none';
+            if(cantidad) cantidad.required=parcial;
+            if(motivo) motivo.required=diferencia;
+        }
+
+        function enlazarFormularios(){
+            root.querySelectorAll('[data-pi-form]').forEach(form=>{
+                const decision=form.querySelector('[data-pi-decision]');
+                decision?.addEventListener('change',()=>actualizarCampos(form));
+                actualizarCampos(form);
+                form.addEventListener('submit',guardarRecepcion);
+            });
+        }
+
+        async function guardarRecepcion(event){
+            event.preventDefault();
+            const form=event.currentTarget;
+            const boton=form.querySelector('button[type="submit"]');
+            const data=new FormData(form);
+            data.append('RecepcionMaterialID',form.dataset.id||'0');
+            data.append('__RequestVerificationToken',token);
+            boton.disabled=true;
+            mensaje('Guardando recepción...','');
+            try{
+                const response=await fetch(urlGuardar,{method:'POST',body:data,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','X-NSQ-Operativa':'1','Accept':'application/json'}});
+                let result=null;try{result=await response.json();}catch{}
+                if(!response.ok||result?.ok!==true) throw new Error(result?.mensaje||`HTTP ${response.status}`);
+                mensaje(result.mensaje||'Recepción actualizada.',result.advertencia?'warn':'ok');
+                await cargar();
+                window.setTimeout(()=>{
+                    const centro=root.closest('[data-nsq-operativa-centro]');
+                    centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
+                },350);
+            }catch(error){
+                mensaje(error?.message||'No fue posible confirmar la recepción.','bad');
+                boton.disabled=false;
+            }
+        }
+
+        async function cargar(){
+            contenido.innerHTML='<div class="pi-loading"><span class="pi-spinner"></span><div class="mt-2">Consultando entregas...</div></div>';
+            try{
+                const qs=new URLSearchParams({programaProduccionId:String(programaId),tipo});
+                const response=await fetch(`${urlDatos}?${qs.toString()}`,{cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});
+                let data=null;try{data=await response.json();}catch{}
+                if(!response.ok||data?.ok!==true) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                render(data);
+            }catch(error){
+                contenido.innerHTML='<div class="pi-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i>'+esc(error?.message||'No fue posible consultar las entregas.')+'</div>';
+                mensaje(error?.message||'No fue posible consultar las entregas.','bad');
+            }
+        }
+
+        cargar();
+    })();
+</script>

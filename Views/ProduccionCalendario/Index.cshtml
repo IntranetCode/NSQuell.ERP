@@ -717,9 +717,9 @@
 
 
         /* =========================================================
-                                           MODAL OPERATIVO COMPACTO
-                                           Aprovecha el ancho para evitar scroll vertical en escritorio.
-                                           ========================================================= */
+                                                   MODAL OPERATIVO COMPACTO
+                                                   Aprovecha el ancho para evitar scroll vertical en escritorio.
+                                                   ========================================================= */
         .modal-operativa .modal-dialog {
             width: calc(100vw - 28px);
             max-width: 1480px;
@@ -1120,9 +1120,9 @@
         }
 
         /* =========================================================
-                                   TIMELINE OPERATIVO V3
-                                   Conserva la geometría del calendario de Planeación.
-                                   ========================================================= */
+                                           TIMELINE OPERATIVO V3
+                                           Conserva la geometría del calendario de Planeación.
+                                           ========================================================= */
         .production-calendar-readonly .timeline-scroll {
             overflow-x: auto;
             overflow-y: visible;
@@ -1212,10 +1212,10 @@
         }
 
         /* =========================================================
-                   VISTA DIA SIN SCROLL HORIZONTAL
-                   Las 24 horas se reparten dentro del ancho disponible.
-                   El ancho de cada OF sigue siendo proporcional a su horario.
-                   ========================================================= */
+                           VISTA DIA SIN SCROLL HORIZONTAL
+                           Las 24 horas se reparten dentro del ancho disponible.
+                           El ancho de cada OF sigue siendo proporcional a su horario.
+                           ========================================================= */
         .production-calendar-readonly.vista-dia .timeline-scroll {
             width: 100%;
             max-width: 100%;
@@ -1291,6 +1291,179 @@
             font-weight: 900;
             box-shadow: 0 5px 18px rgba(15, 23, 42, .22);
             pointer-events: none;
+        }
+
+        /* =========================================================
+                   CENTRO OPERATIVO UNICO
+                   Mantiene el calendario, sus sombras planeado/real y los
+                   modales heredados como respaldo durante la migracion.
+                   ========================================================= */
+        .modal-centro-operativo .modal-dialog {
+            width: calc(100vw - 28px);
+            max-width: 1480px;
+            margin: 14px auto;
+        }
+
+        .modal-centro-operativo .modal-content {
+            max-height: calc(100vh - 28px);
+            overflow: hidden;
+            border: 0;
+            border-radius: 20px;
+            background: transparent;
+            box-shadow: 0 18px 60px rgba(15, 23, 42, .28);
+        }
+
+        .modal-centro-operativo .nsq-op-center {
+            max-height: calc(100vh - 28px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-centro-operativo .nsq-op-header,
+        .modal-centro-operativo .nsq-op-footer {
+            flex: 0 0 auto;
+        }
+
+        .modal-centro-operativo .nsq-op-body {
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .centro-operativo-loading,
+        .centro-operativo-error {
+            min-height: 420px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+            background: var(--bs-body-bg);
+            border-radius: 20px;
+        }
+
+        .centro-operativo-loading-card,
+        .centro-operativo-error-card {
+            width: min(520px, 100%);
+            text-align: center;
+            border: 1px solid var(--bs-border-color);
+            border-radius: 18px;
+            padding: 26px;
+            background: var(--bs-tertiary-bg);
+        }
+
+            .centro-operativo-loading-card .spinner-border {
+                width: 2.2rem;
+                height: 2.2rem;
+            }
+
+        .nsq-op-timing-compare {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--bs-border-color);
+        }
+
+        .nsq-op-timing-compare-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            color: var(--bs-emphasis-color);
+            font-size: .68rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .045em;
+        }
+
+        .nsq-op-timing-compare-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 7px;
+        }
+
+        .nsq-op-timing-compare-item {
+            min-width: 0;
+            padding: 8px 9px;
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
+            background: var(--bs-tertiary-bg);
+        }
+
+            .nsq-op-timing-compare-item small {
+                display: block;
+                margin-bottom: 2px;
+                color: var(--bs-secondary-color);
+                font-size: .58rem;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
+
+            .nsq-op-timing-compare-item strong {
+                display: block;
+                overflow: hidden;
+                color: var(--bs-emphasis-color);
+                font-size: .72rem;
+                font-weight: 900;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .nsq-op-timing-compare-item.is-delay {
+                border-color: rgba(220, 38, 38, .28);
+                background: rgba(220, 38, 38, .06);
+            }
+
+                .nsq-op-timing-compare-item.is-delay strong {
+                    color: #b91c1c;
+                }
+
+            .nsq-op-timing-compare-item.is-early {
+                border-color: rgba(22, 163, 74, .28);
+                background: rgba(22, 163, 74, .06);
+            }
+
+                .nsq-op-timing-compare-item.is-early strong {
+                    color: #15803d;
+                }
+
+            .nsq-op-timing-compare-item.is-ontime {
+                border-color: rgba(37, 99, 235, .25);
+                background: rgba(37, 99, 235, .05);
+            }
+
+                .nsq-op-timing-compare-item.is-ontime strong {
+                    color: #1d4ed8;
+                }
+
+        .nsq-op-calendar-tools {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .nsq-op-calendar-tool-danger {
+            color: #fff !important;
+            border-color: rgba(255,255,255,.35) !important;
+            background: rgba(185, 28, 28, .72) !important;
+        }
+
+            .nsq-op-calendar-tool-danger:hover {
+                background: rgba(185, 28, 28, .92) !important;
+            }
+
+        @@media (max-width: 767.98px) {
+            .modal-centro-operativo .modal-dialog {
+                width: calc(100vw - 12px);
+                margin: 6px auto;
+            }
+
+            .modal-centro-operativo .modal-content,
+            .modal-centro-operativo .nsq-op-center {
+                max-height: calc(100vh - 12px);
+            }
+
+            .nsq-op-timing-compare-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
     </style>
@@ -1645,7 +1818,7 @@
                                 var sombraLeft = 0d;
                                 var sombraWidth = 0d;
                                 var textoAtrasoHoras = (bloque.MinutosAtrasoInicioReal / 60d)
-                                    .ToString("0.##", CultureInfo.InvariantCulture) + " h";
+                                .ToString("0.##", CultureInfo.InvariantCulture) + " h";
 
                                 if (mostrarSombraAtraso)
                                 {
@@ -1758,8 +1931,18 @@
                                         data-fin-oficial="@bloque.FinVisual.ToString("yyyy-MM-ddTHH:mm:ss")"
                                         data-inicio-proyectado="@(bloque.InicioProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
                                         data-fin-proyectado="@(bloque.FinProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#ofModal_@bloque.ProgramaProduccionID"
+                                        data-nsq-centro-operativo
+                                        data-of="@bloque.OFTexto"
+                                        data-parte="@bloque.ParteTexto"
+                                        data-descripcion="@bloque.Descripcion"
+                                        data-molde="@bloque.MoldeCodigo"
+                                        data-maquina-codigo="@bloque.MaquinaCodigo"
+                                        data-inicio-planeado="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-fin-planeado="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-inicio-real="@(bloque.FechaInicioRealProduccion?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
+                                        data-minutos-atraso-real="@bloque.MinutosAtrasoInicioReal"
+                                        data-puede-interrupcion="@((bloque.PuedeMoverCalendario || bloque.EstaProduciendo) ? "true" : "false")"
+                                        data-interrupcion-modo="@(bloque.EstaProduciendo ? "activa" : "urgente")"
                                         title="@bloque.OFTexto · @bloque.ParteTexto · @estadoOperativoTexto · @bloque.InicioVisual.ToString("dd/MM HH:mm") - @bloque.FinVisual.ToString("dd/MM HH:mm") · Operador @origenOperador: @textoOperador · Turno: @textoTurno · Calidad: @textoCalidad">
 
                                     @if (mostrarAlertaNoInicio)
@@ -1809,6 +1992,34 @@
     </section>
 </div>
 
+@* ================================================================
+   CENTRO OPERATIVO UNICO
+   Los modales anteriores por OF se conservan mas abajo como respaldo
+   durante la migracion. El clic normal del bloque abre este modal.
+   ================================================================ *@
+<div class="modal fade modal-centro-operativo"
+     id="modalCentroOperativo"
+     tabindex="-1"
+     aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content"
+             id="modalCentroOperativoContenido">
+            <div class="centro-operativo-loading">
+                <div class="centro-operativo-loading-card">
+                    <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                    <div class="fw-bold mt-3">Cargando Centro Operativo...</div>
+                    <div class="small text-muted mt-1">
+                        Consultando la actividad actual de la OF.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Modales operativos heredados.
+   Se mantienen por ahora como respaldo para no perder ninguna funcion
+   mientras todas las acciones se migran al Centro Operativo unico. *@
 @foreach (var bloque in Model.Maquinas.SelectMany(x => x.Bloques))
 {
     operativaPorPrograma.TryGetValue(
@@ -2364,6 +2575,16 @@
             let timelineElement = calendarKiosk?.querySelector('.timeline');
             const fitScaleLabel = document.getElementById('fitScaleLabel');
             const calendarPage = document.querySelector('.production-calendar-readonly');
+            const centroOperativoEndpoint = '@Url.Content("~/Produccion/Operativa/Centro")';
+            const contenidoOperativoEndpoint = '@Url.Content("~/Produccion/Operativa/Contenido")';
+            const centroModalEl = document.getElementById('modalCentroOperativo');
+            const centroContenido = document.getElementById('modalCentroOperativoContenido');
+            const centroModal = centroModalEl
+                ? bootstrap.Modal.getOrCreateInstance(centroModalEl)
+                : null;
+
+            let centroProgramaActual = 0;
+            let centroBloqueActual = null;
 
             if (calendarPage) {
                 calendarPage.style.setProperty('--dias-periodo', '@totalDias');
@@ -2388,6 +2609,494 @@
             function textoFechaHoraLocal(fecha) {
                 return `${pad2(fecha.getDate())}/${pad2(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad2(fecha.getHours())}:${pad2(fecha.getMinutes())}`;
             }
+
+            function centroEscapeHtml(value) {
+                return (value ?? '')
+                    .toString()
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function centroLoadingHtml(texto = 'Cargando Centro Operativo...') {
+                return `
+                    <div class="centro-operativo-loading">
+                        <div class="centro-operativo-loading-card">
+                            <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+                            <div class="fw-bold mt-3">${centroEscapeHtml(texto)}</div>
+                            <div class="small text-muted mt-1">
+                                Consultando el estado mas reciente de la OF.
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            function centroErrorHtml(mensaje, programaId) {
+                const legacyId = `ofModal_${programaId}`;
+                const tieneLegado = !!document.getElementById(legacyId);
+
+                return `
+                    <div class="centro-operativo-error">
+                        <div class="centro-operativo-error-card">
+                            <div class="text-danger fs-2 mb-2">
+                                <i class="fa-solid fa-circle-exclamation"></i>
+                            </div>
+                            <div class="fw-bold">No fue posible abrir el Centro Operativo</div>
+                            <div class="small text-muted mt-2">
+                                ${centroEscapeHtml(mensaje || 'Ocurrio un error al consultar la OF.')}
+                            </div>
+                            <div class="d-flex justify-content-center gap-2 flex-wrap mt-3">
+                                <button type="button"
+                                        class="btn btn-primary btn-sm fw-bold"
+                                        data-nsq-reintentar-centro
+                                        data-programa-id="${programaId}">
+                                    <i class="fa-solid fa-rotate-right me-1"></i>
+                                    Reintentar
+                                </button>
+                                ${tieneLegado
+                                    ? `<button type="button"
+                                               class="btn btn-outline-secondary btn-sm fw-bold"
+                                               data-nsq-abrir-modal-legado
+                                               data-programa-id="${programaId}">
+                                           <i class="fa-solid fa-table-list me-1"></i>
+                                           Abrir resumen anterior
+                                       </button>`
+                                    : ''}
+                                <button type="button"
+                                        class="btn btn-outline-secondary btn-sm fw-bold"
+                                        data-bs-dismiss="modal">
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            function centroParseFecha(value) {
+                if (!value) return null;
+                const fecha = new Date(value);
+                return Number.isNaN(fecha.getTime()) ? null : fecha;
+            }
+
+            function centroTextoDiferenciaMinutos(minutos) {
+                const total = Math.abs(Math.round(Number(minutos || 0)));
+                const horas = Math.floor(total / 60);
+                const mins = total % 60;
+
+                if (horas <= 0) return `${mins} min`;
+                if (mins <= 0) return `${horas} h`;
+                return `${horas} h ${mins} min`;
+            }
+
+            function centroInyectarComparacionHoraria(root, bloque) {
+                if (!root || !bloque) return;
+
+                root.querySelectorAll('[data-nsq-comparacion-horaria]').forEach(x => x.remove());
+
+                const iconoPrograma = root.querySelector('.nsq-op-card .bi-calendar3');
+                const cuerpoPrograma = iconoPrograma
+                    ?.closest('.nsq-op-card')
+                    ?.querySelector('.nsq-op-card-body');
+
+                if (!cuerpoPrograma) return;
+
+                const planeado = centroParseFecha(bloque.dataset.inicioPlaneado);
+                const real = centroParseFecha(bloque.dataset.inicioReal);
+
+                if (!planeado) return;
+
+                let clase = 'is-ontime';
+                let diferenciaTexto = 'Sin inicio real';
+                let diferenciaDetalle = 'Pendiente';
+
+                if (real) {
+                    const diferencia = Math.round((real.getTime() - planeado.getTime()) / 60000);
+
+                    if (diferencia > 0) {
+                        clase = 'is-delay';
+                        diferenciaTexto = `+${centroTextoDiferenciaMinutos(diferencia)}`;
+                        diferenciaDetalle = 'Inicio despues de lo planeado';
+                    }
+                    else if (diferencia < 0) {
+                        clase = 'is-early';
+                        diferenciaTexto = `-${centroTextoDiferenciaMinutos(diferencia)}`;
+                        diferenciaDetalle = 'Inicio antes de lo planeado';
+                    }
+                    else {
+                        clase = 'is-ontime';
+                        diferenciaTexto = 'En horario';
+                        diferenciaDetalle = 'Inicio conforme a planeacion';
+                    }
+                }
+
+                const bloqueComparacion = document.createElement('div');
+                bloqueComparacion.className = 'nsq-op-timing-compare';
+                bloqueComparacion.setAttribute('data-nsq-comparacion-horaria', '');
+
+                bloqueComparacion.innerHTML = `
+                    <div class="nsq-op-timing-compare-title">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        Planeado vs inicio real
+                    </div>
+                    <div class="nsq-op-timing-compare-grid">
+                        <div class="nsq-op-timing-compare-item">
+                            <small>Inicio planeado</small>
+                            <strong>${centroEscapeHtml(textoFechaHoraLocal(planeado))}</strong>
+                        </div>
+                        <div class="nsq-op-timing-compare-item">
+                            <small>Inicio real</small>
+                            <strong>${real ? centroEscapeHtml(textoFechaHoraLocal(real)) : 'Pendiente'}</strong>
+                        </div>
+                        <div class="nsq-op-timing-compare-item ${clase}">
+                            <small>Diferencia</small>
+                            <strong title="${centroEscapeHtml(diferenciaDetalle)}">${centroEscapeHtml(diferenciaTexto)}</strong>
+                        </div>
+                    </div>`;
+
+                cuerpoPrograma.appendChild(bloqueComparacion);
+            }
+
+            function centroInsertarAntesDeCerrar(header, element) {
+                if (!header || !element) return;
+                const cerrar = header.querySelector('[data-bs-dismiss="modal"]');
+                if (cerrar) header.insertBefore(element, cerrar);
+                else header.appendChild(element);
+            }
+
+            function centroInyectarHerramientasCalendario(root, bloque) {
+                if (!root || !bloque) return;
+
+                const header = root.querySelector('.nsq-op-header-actions');
+                if (!header) return;
+
+                header
+                    .querySelectorAll('[data-nsq-calendario-inyectado]')
+                    .forEach(x => x.remove());
+
+                const programaId = Number(bloque.dataset.programaId || 0);
+                if (!programaId) return;
+
+                const modalLegado = document.getElementById(`ofModal_${programaId}`);
+                if (modalLegado) {
+                    const resumen = document.createElement('button');
+                    resumen.type = 'button';
+                    resumen.className = 'nsq-op-icon-btn';
+                    resumen.title = 'Abrir resumen operativo anterior';
+                    resumen.setAttribute('data-nsq-calendario-inyectado', '');
+                    resumen.setAttribute('data-nsq-abrir-modal-legado', '');
+                    resumen.dataset.programaId = String(programaId);
+                    resumen.innerHTML = '<i class="bi bi-layout-text-window"></i>';
+                    centroInsertarAntesDeCerrar(header, resumen);
+                }
+
+                if ((bloque.dataset.puedeInterrupcion || '').toLowerCase() === 'true') {
+                    const interrupcion = document.createElement('button');
+                    interrupcion.type = 'button';
+                    interrupcion.className = 'nsq-op-icon-btn nsq-op-calendar-tool-danger';
+                    interrupcion.title = (bloque.dataset.interrupcionModo || '').toLowerCase() === 'activa'
+                        ? 'Interrumpir esta produccion'
+                        : 'Interrupcion urgente';
+                    interrupcion.setAttribute('data-nsq-calendario-inyectado', '');
+                    interrupcion.setAttribute('data-op-interrupcion-urgente', '');
+                    interrupcion.dataset.interrupcionModo = bloque.dataset.interrupcionModo || 'urgente';
+                    interrupcion.dataset.programaId = String(programaId);
+                    interrupcion.dataset.of = bloque.dataset.of || '';
+                    interrupcion.dataset.parte = bloque.dataset.parte || '';
+                    interrupcion.dataset.descripcion = bloque.dataset.descripcion || '';
+                    interrupcion.dataset.molde = bloque.dataset.molde || '';
+                    interrupcion.dataset.maquinaId = bloque.dataset.maquinaId || '';
+                    interrupcion.dataset.maquinaCodigo = bloque.dataset.maquinaCodigo || '';
+                    interrupcion.innerHTML = '<i class="fa-solid fa-bolt"></i>';
+                    centroInsertarAntesDeCerrar(header, interrupcion);
+                }
+            }
+
+            function centroEjecutarScriptsInyectados(contenedor) {
+                if (!contenedor) return;
+
+                contenedor.querySelectorAll('script').forEach(scriptAnterior => {
+                    const scriptNuevo = document.createElement('script');
+
+                    Array.from(scriptAnterior.attributes).forEach(attr => {
+                        scriptNuevo.setAttribute(attr.name, attr.value);
+                    });
+
+                    scriptNuevo.textContent = scriptAnterior.textContent;
+                    scriptAnterior.replaceWith(scriptNuevo);
+                });
+            }
+
+            function centroMostrarResumen() {
+                if (!centroContenido) return;
+
+                const resumen = centroContenido.querySelector('[data-nsq-operativa-resumen]');
+                const vistaAccion = centroContenido.querySelector('[data-nsq-operativa-vista-accion]');
+
+                resumen?.classList.remove('d-none');
+                vistaAccion?.classList.remove('is-active');
+
+                const cuerpo = centroContenido.querySelector('[data-nsq-operativa-contenido-body]');
+                if (cuerpo) cuerpo.innerHTML = '';
+            }
+
+            function centroMostrarVistaAccion(titulo) {
+                if (!centroContenido) return null;
+
+                const resumen = centroContenido.querySelector('[data-nsq-operativa-resumen]');
+                const vistaAccion = centroContenido.querySelector('[data-nsq-operativa-vista-accion]');
+                const tituloElemento = centroContenido.querySelector('[data-nsq-operativa-accion-titulo]');
+                const cuerpo = centroContenido.querySelector('[data-nsq-operativa-contenido-body]');
+
+                resumen?.classList.add('d-none');
+                vistaAccion?.classList.add('is-active');
+
+                if (tituloElemento) tituloElemento.textContent = titulo || '';
+                return cuerpo;
+            }
+
+            async function centroLeerErrorRespuesta(respuesta) {
+                try {
+                    const tipo = respuesta.headers.get('content-type') || '';
+
+                    if (tipo.includes('application/json')) {
+                        const data = await respuesta.json();
+                        return data?.mensaje || data?.message || `HTTP ${respuesta.status}`;
+                    }
+
+                    const texto = await respuesta.text();
+                    if (!texto) return `HTTP ${respuesta.status}`;
+
+                    const doc = new DOMParser().parseFromString(texto, 'text/html');
+                    return doc.body?.innerText?.trim()?.slice(0, 500)
+                        || texto.slice(0, 500);
+                }
+                catch {
+                    return `HTTP ${respuesta.status}`;
+                }
+            }
+
+            async function centroCargar(programaId, bloque = null, mostrarModal = true) {
+                if (!centroModal || !centroContenido || !programaId) return;
+
+                centroProgramaActual = Number(programaId);
+                centroBloqueActual = bloque
+                    || document.querySelector(`.block[data-programa-id="${centroProgramaActual}"]`);
+
+                centroContenido.innerHTML = centroLoadingHtml();
+
+                if (mostrarModal) centroModal.show();
+
+                try {
+                    const url = `${centroOperativoEndpoint}/${encodeURIComponent(centroProgramaActual)}?origen=CALENDARIO`;
+
+                    const respuesta = await fetch(url, {
+                        method: 'GET',
+                        cache: 'no-store',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+
+                    if (respuesta.redirected && respuesta.url) {
+                        const destino = new URL(respuesta.url, window.location.origin);
+                        const actual = new URL(window.location.href);
+
+                        if (destino.pathname !== actual.pathname &&
+                            !destino.pathname.toLowerCase().includes('/produccion/operativa/')) {
+                            window.location.href = respuesta.url;
+                            return;
+                        }
+                    }
+
+                    if (!respuesta.ok) {
+                        const mensaje = await centroLeerErrorRespuesta(respuesta);
+                        centroContenido.innerHTML = centroErrorHtml(mensaje, centroProgramaActual);
+                        return;
+                    }
+
+                    const html = await respuesta.text();
+                    centroContenido.innerHTML = html;
+
+                    aplicarEstilosDinamicosCalendario(centroContenido);
+                    centroEjecutarScriptsInyectados(centroContenido);
+
+                    if (centroBloqueActual) {
+                        centroInyectarComparacionHoraria(
+                            centroContenido,
+                            centroBloqueActual);
+
+                        centroInyectarHerramientasCalendario(
+                            centroContenido,
+                            centroBloqueActual);
+                    }
+                }
+                catch (error) {
+                    centroContenido.innerHTML = centroErrorHtml(
+                        error?.message || 'No fue posible consultar el Centro Operativo.',
+                        centroProgramaActual);
+                }
+            }
+
+            async function centroCargarContenido(url, titulo) {
+                const cuerpo = centroMostrarVistaAccion(titulo);
+                if (!cuerpo || !url) return;
+
+                cuerpo.innerHTML = `
+                    <div class="nsq-op-loading">
+                        <div class="nsq-op-spinner"></div>
+                        <span>Cargando actividad...</span>
+                    </div>`;
+
+                try {
+                    const respuesta = await fetch(url, {
+                        method: 'GET',
+                        cache: 'no-store',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+
+                    if (respuesta.redirected && respuesta.url) {
+                        const destino = new URL(respuesta.url, window.location.origin);
+
+                        if (!destino.pathname.toLowerCase().includes('/produccion/operativa/')) {
+                            window.location.href = respuesta.url;
+                            return;
+                        }
+                    }
+
+                    if (!respuesta.ok) {
+                        const mensaje = await centroLeerErrorRespuesta(respuesta);
+                        throw new Error(mensaje);
+                    }
+
+                    cuerpo.innerHTML = await respuesta.text();
+                    aplicarEstilosDinamicosCalendario(cuerpo);
+                    centroEjecutarScriptsInyectados(cuerpo);
+                }
+                catch (error) {
+                    cuerpo.innerHTML = `
+                        <div class="alert alert-danger rounded-4 mb-0">
+                            <div class="fw-bold">
+                                <i class="fa-solid fa-circle-exclamation me-1"></i>
+                                No fue posible abrir la actividad
+                            </div>
+                            <div class="small mt-1">${centroEscapeHtml(error?.message || 'Error no identificado.')}</div>
+                        </div>`;
+                }
+            }
+
+            function centroAbrirModalLegado(programaId) {
+                const legacy = document.getElementById(`ofModal_${programaId}`);
+                if (!legacy) return;
+
+                const abrirLegado = () => {
+                    bootstrap.Modal.getOrCreateInstance(legacy).show();
+                };
+
+                if (centroModalEl?.classList.contains('show')) {
+                    centroModalEl.addEventListener(
+                        'hidden.bs.modal',
+                        abrirLegado,
+                        { once: true });
+
+                    centroModal.hide();
+                }
+                else {
+                    abrirLegado();
+                }
+            }
+
+            document.addEventListener('click', event => {
+                const bloque = event.target?.closest?.('.block[data-nsq-centro-operativo]');
+
+                if (bloque) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const programaId = Number(bloque.dataset.programaId || 0);
+                    if (programaId) centroCargar(programaId, bloque, true);
+                    return;
+                }
+
+                const reintentar = event.target?.closest?.('[data-nsq-reintentar-centro]');
+                if (reintentar) {
+                    event.preventDefault();
+
+                    const programaId = Number(
+                        reintentar.dataset.programaId
+                        || centroProgramaActual
+                        || 0);
+
+                    if (programaId) centroCargar(programaId, centroBloqueActual, false);
+                    return;
+                }
+
+                const refrescar = event.target?.closest?.('[data-nsq-operativa-refrescar]');
+                if (refrescar) {
+                    event.preventDefault();
+
+                    if (centroProgramaActual) {
+                        centroCargar(
+                            centroProgramaActual,
+                            centroBloqueActual,
+                            false);
+                    }
+                    return;
+                }
+
+                const accion = event.target?.closest?.('[data-nsq-operativa-accion]');
+                if (accion) {
+                    event.preventDefault();
+
+                    const url = accion.getAttribute('href');
+                    const clave = accion.dataset.accionClave || '';
+                    const titulo = accion.textContent?.trim() || clave || 'Actividad';
+
+                    if (url) centroCargarContenido(url, titulo);
+                    return;
+                }
+
+                const volver = event.target?.closest?.('[data-nsq-operativa-volver]');
+                if (volver) {
+                    event.preventDefault();
+                    centroMostrarResumen();
+                    return;
+                }
+
+                const refrescarAccion = event.target?.closest?.('[data-nsq-operativa-refrescar-accion]');
+                if (refrescarAccion) {
+                    event.preventDefault();
+
+                    const clave = refrescarAccion.dataset.accionClave || '';
+                    if (!centroProgramaActual || !clave) return;
+
+                    const url =
+                        `${contenidoOperativoEndpoint}/${encodeURIComponent(centroProgramaActual)}/${encodeURIComponent(clave)}?origen=CALENDARIO`;
+
+                    centroCargarContenido(url, refrescarAccion.textContent?.trim() || clave);
+                    return;
+                }
+
+                const abrirLegado = event.target?.closest?.('[data-nsq-abrir-modal-legado]');
+                if (abrirLegado) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const programaId = Number(
+                        abrirLegado.dataset.programaId
+                        || centroProgramaActual
+                        || 0);
+
+                    if (programaId) centroAbrirModalLegado(programaId);
+                }
+            });
 
             function configurarReglaHorariaComoPlaneacion() {
                 const days = document.querySelector('.timeline-header .days');
@@ -3360,12 +4069,7 @@
                     opProcesando = false;
                 }
             });
-            /*
-             * IMPORTANTE:
-             * Esta vista NO registra dragstart, dragover, drop ni dragend.
-             * Todos los bloques tienen draggable="false".
-             * El calendario operativo jamás modifica Planeación.
-             */
+         
 
             aplicarEstilosDinamicosCalendario(document);
             configurarReglaHorariaComoPlaneacion();

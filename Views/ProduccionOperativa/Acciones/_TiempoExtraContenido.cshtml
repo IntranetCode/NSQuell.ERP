@@ -1,0 +1,1113 @@
+﻿@model ERP.NSQuell.Models.ProduccionTiempoExtraOperativoVm
+@using ERP.NSQuell.Models
+@using System.Linq
+
+@functions {
+    public static string ClaseEstado(string? estado)
+    {
+        return (estado ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            ProduccionTiempoExtraEstado.EnCurso => "is-running",
+            ProduccionTiempoExtraEstado.Pausado => "is-warning",
+            ProduccionTiempoExtraEstado.Finalizado => "is-ok",
+            ProduccionTiempoExtraEstado.Cancelado => "is-off",
+            _ => "is-off"
+        };
+    }
+}
+
+@{
+    var rootId = $"pteContenido_{Model.EjecucionProduccionID}";
+    var sesion = Model.TiempoExtraActivo;
+    var sesionPareja = Model.TiempoExtraParejaActivo;
+    var autoRefrescar = Model.TieneSesionAbierta && !Model.PuedeGestionar;
+
+    var urlIniciar = Url.Action("IniciarTiempoExtraOperativo", "ProduccionOperador") ?? "/ProduccionOperador/IniciarTiempoExtraOperativo";
+    var urlPrevisualizar = Url.Action("PrevisualizarCorteTiempoExtraOperativo", "ProduccionOperador") ?? "/ProduccionOperador/PrevisualizarCorteTiempoExtraOperativo";
+    var urlCorte = Url.Action("CapturarCorteTiempoExtraOperativo", "ProduccionOperador") ?? "/ProduccionOperador/CapturarCorteTiempoExtraOperativo";
+    var urlFinalizar = Url.Action("FinalizarTiempoExtraOperativo", "ProduccionOperador") ?? "/ProduccionOperador/FinalizarTiempoExtraOperativo";
+}
+
+<style>
+    .pte {
+        --pte-blue: #004aad;
+        --pte-navy: #102a43;
+        --pte-text: #25364f;
+        --pte-muted: #667085;
+        --pte-line: #dce5f0;
+        --pte-soft: #f6f9fc;
+        --pte-green: #168052;
+        --pte-green-soft: #edf9f3;
+        --pte-orange: #b45309;
+        --pte-orange-soft: #fff7ed;
+        --pte-red: #b42318;
+        --pte-red-soft: #fff5f5;
+        color: var(--pte-text)
+    }
+
+        .pte * {
+            box-sizing: border-box
+        }
+
+    .pte-card {
+        border: 1px solid var(--pte-line);
+        border-radius: 16px;
+        background: #fff;
+        overflow: hidden
+    }
+
+        .pte-card + .pte-card {
+            margin-top: 12px
+        }
+
+    .pte-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 17px;
+        border-bottom: 1px solid var(--pte-line);
+        background: linear-gradient(135deg,#f8fbff,#fff)
+    }
+
+    .pte-head-main {
+        display: flex;
+        gap: 12px;
+        min-width: 0
+    }
+
+    .pte-icon {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        border-radius: 12px;
+        background: #eaf2ff;
+        color: var(--pte-blue);
+        font-size: 1.1rem
+    }
+
+    .pte-title {
+        font-size: 1rem;
+        font-weight: 950;
+        color: var(--pte-navy);
+        line-height: 1.15
+    }
+
+    .pte-sub {
+        margin-top: 4px;
+        color: var(--pte-muted);
+        font-size: .72rem;
+        font-weight: 650
+    }
+
+    .pte-tools {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end
+    }
+
+    .pte-btn {
+        min-height: 36px;
+        border: 1px solid var(--pte-line);
+        border-radius: 10px;
+        background: #fff;
+        color: #344054;
+        padding: 7px 11px;
+        font-size: .7rem;
+        font-weight: 900;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        text-decoration: none;
+        cursor: pointer
+    }
+
+        .pte-btn:hover {
+            background: #f8fafc
+        }
+
+    .pte-btn-primary {
+        background: var(--pte-blue);
+        border-color: var(--pte-blue);
+        color: #fff
+    }
+
+        .pte-btn-primary:hover {
+            background: #003b8d;
+            color: #fff
+        }
+
+    .pte-btn-success {
+        background: var(--pte-green);
+        border-color: var(--pte-green);
+        color: #fff
+    }
+
+        .pte-btn-success:hover {
+            background: #116b44;
+            color: #fff
+        }
+
+    .pte-btn-danger {
+        background: var(--pte-red);
+        border-color: var(--pte-red);
+        color: #fff
+    }
+
+        .pte-btn-danger:hover {
+            background: #8f1c14;
+            color: #fff
+        }
+
+    .pte-btn:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+        transform: none
+    }
+
+    .pte-body {
+        padding: 16px 17px
+    }
+
+    .pte-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px
+    }
+
+    .pte-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 25px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #edf2f7;
+        color: #475467;
+        font-size: .62rem;
+        font-weight: 900
+    }
+
+        .pte-badge.is-blue {
+            background: #eaf2ff;
+            color: #174ea6
+        }
+
+        .pte-badge.is-green {
+            background: var(--pte-green-soft);
+            color: #147a4e
+        }
+
+        .pte-badge.is-orange {
+            background: var(--pte-orange-soft);
+            color: var(--pte-orange)
+        }
+
+        .pte-badge.is-red {
+            background: var(--pte-red-soft);
+            color: var(--pte-red)
+        }
+
+    .pte-grid {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 9px
+    }
+
+    .pte-data {
+        min-height: 68px;
+        padding: 10px 11px;
+        border: 1px solid var(--pte-line);
+        border-radius: 12px;
+        background: #fff
+    }
+
+        .pte-data span {
+            display: block;
+            color: var(--pte-muted);
+            font-size: .56rem;
+            font-weight: 850;
+            text-transform: uppercase
+        }
+
+        .pte-data strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--pte-navy);
+            font-size: .82rem;
+            font-weight: 950;
+            line-height: 1.15
+        }
+
+        .pte-data small {
+            display: block;
+            margin-top: 3px;
+            color: var(--pte-muted);
+            font-size: .61rem;
+            font-weight: 650
+        }
+
+    .pte-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 15px 0 8px;
+        color: var(--pte-navy);
+        font-size: .68rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .02em
+    }
+
+    .pte-note {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: 11px 12px;
+        border: 1px solid #bfdbfe;
+        border-radius: 12px;
+        background: #eff6ff;
+        color: #1e40af;
+        font-size: .69rem;
+        font-weight: 700
+    }
+
+        .pte-note.is-warning {
+            border-color: #fed7aa;
+            background: var(--pte-orange-soft);
+            color: #9a3412
+        }
+
+        .pte-note.is-danger {
+            border-color: #fecaca;
+            background: var(--pte-red-soft);
+            color: #991b1b
+        }
+
+        .pte-note.is-success {
+            border-color: #bbf7d0;
+            background: var(--pte-green-soft);
+            color: #166534
+        }
+
+    .pte-pair {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 10px;
+        align-items: stretch
+    }
+
+    .pte-side {
+        padding: 12px;
+        border: 1px solid var(--pte-line);
+        border-radius: 13px;
+        background: #fff
+    }
+
+        .pte-side span {
+            display: block;
+            color: var(--pte-muted);
+            font-size: .58rem;
+            font-weight: 800;
+            text-transform: uppercase
+        }
+
+        .pte-side strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--pte-navy);
+            font-size: .82rem;
+            font-weight: 950
+        }
+
+        .pte-side small {
+            display: block;
+            margin-top: 3px;
+            color: var(--pte-muted);
+            font-size: .63rem
+        }
+
+    .pte-link {
+        display: grid;
+        place-items: center;
+        color: var(--pte-blue);
+        font-size: 1.15rem
+    }
+
+    .pte-form {
+        margin-top: 12px;
+        padding: 14px;
+        border: 1px solid var(--pte-line);
+        border-radius: 14px;
+        background: #fbfdff
+    }
+
+    .pte-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 10px
+    }
+
+    .pte-field label {
+        display: block;
+        margin-bottom: 5px;
+        color: #475467;
+        font-size: .62rem;
+        font-weight: 900
+    }
+
+    .pte-field .form-control, .pte-field .form-select {
+        font-size: .76rem;
+        border-radius: 10px;
+        border-color: #ccd8e6
+    }
+
+    .pte-field textarea {
+        resize: vertical;
+        min-height: 74px
+    }
+
+    .pte-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 11px;
+        flex-wrap: wrap
+    }
+
+    .pte-preview {
+        display: none;
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid #bfdbfe;
+        border-radius: 12px;
+        background: #eff6ff
+    }
+
+        .pte-preview.is-visible {
+            display: block
+        }
+
+    .pte-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .pte-preview-item span {
+        display: block;
+        color: #64748b;
+        font-size: .54rem;
+        font-weight: 850;
+        text-transform: uppercase
+    }
+
+    .pte-preview-item strong {
+        display: block;
+        margin-top: 3px;
+        color: #0f3f7c;
+        font-size: .78rem;
+        font-weight: 950
+    }
+
+    .pte-defectos {
+        display: none;
+        margin-top: 10px;
+        padding: 11px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 12px;
+        background: #fff
+    }
+
+        .pte-defectos.is-visible {
+            display: block
+        }
+
+    .pte-defecto-row {
+        display: grid;
+        grid-template-columns: minmax(180px,1fr) 90px minmax(160px,1fr) auto;
+        gap: 7px;
+        margin-top: 7px;
+        align-items: end
+    }
+
+        .pte-defecto-row:first-child {
+            margin-top: 0
+        }
+
+        .pte-defecto-row .form-control, .pte-defecto-row .form-select {
+            font-size: .7rem;
+            border-radius: 9px
+        }
+
+    .pte-remove {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #fecaca;
+        border-radius: 9px;
+        background: #fff5f5;
+        color: #b42318;
+        display: grid;
+        place-items: center;
+        cursor: pointer
+    }
+
+    .pte-history {
+        display: grid;
+        gap: 8px
+    }
+
+    .pte-history-item {
+        border: 1px solid var(--pte-line);
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .pte-history-head {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) auto;
+        gap: 10px;
+        padding: 11px 12px
+    }
+
+        .pte-history-head strong {
+            display: block;
+            color: var(--pte-navy);
+            font-size: .72rem;
+            font-weight: 900
+        }
+
+        .pte-history-head span {
+            display: block;
+            margin-top: 3px;
+            color: var(--pte-muted);
+            font-size: .62rem;
+            font-weight: 650
+        }
+
+    .pte-state {
+        height: 25px;
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #edf2f7;
+        color: #475467;
+        font-size: .57rem;
+        font-weight: 900;
+        white-space: nowrap
+    }
+
+        .pte-state.is-running {
+            background: #eaf2ff;
+            color: #174ea6
+        }
+
+        .pte-state.is-warning {
+            background: var(--pte-orange-soft);
+            color: var(--pte-orange)
+        }
+
+        .pte-state.is-ok {
+            background: var(--pte-green-soft);
+            color: #147a4e
+        }
+
+        .pte-state.is-off {
+            background: #f2f4f7;
+            color: #667085
+        }
+
+    .pte-cuts {
+        padding: 0 12px 12px;
+        display: grid;
+        gap: 6px
+    }
+
+    .pte-cut {
+        display: grid;
+        grid-template-columns: auto minmax(0,1fr) repeat(3,auto);
+        gap: 8px;
+        align-items: center;
+        padding: 8px 9px;
+        border: 1px solid var(--pte-line);
+        border-radius: 10px;
+        background: #f8fafc;
+        font-size: .61rem
+    }
+
+    .pte-empty {
+        padding: 18px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 13px;
+        background: #f8fafc;
+        color: #667085;
+        text-align: center;
+        font-size: .72rem;
+        font-weight: 750
+    }
+
+    .pte-flash {
+        display: none;
+        margin-bottom: 12px;
+        padding: 11px 12px;
+        border-radius: 11px;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .pte-flash.is-visible {
+            display: block
+        }
+
+        .pte-flash.is-success {
+            border: 1px solid #bbf7d0;
+            background: var(--pte-green-soft);
+            color: #166534
+        }
+
+        .pte-flash.is-error {
+            border: 1px solid #fecaca;
+            background: var(--pte-red-soft);
+            color: #991b1b
+        }
+
+    html[data-nsq-theme="dark"] .pte {
+        --pte-text: #e5e7eb;
+        --pte-muted: #9aa6b2;
+        --pte-line: rgba(255,255,255,.1);
+        --pte-soft: #0e1828;
+        --pte-navy: #f8fafc
+    }
+
+    html[data-nsq-theme="dark"] .pte-card, html[data-nsq-theme="dark"] .pte-side, html[data-nsq-theme="dark"] .pte-data, html[data-nsq-theme="dark"] .pte-history-item, html[data-nsq-theme="dark"] .pte-defectos {
+        background: #111c2d
+    }
+
+    html[data-nsq-theme="dark"] .pte-head, html[data-nsq-theme="dark"] .pte-form, html[data-nsq-theme="dark"] .pte-cut {
+        background: #0e1828
+    }
+
+    html[data-nsq-theme="dark"] .pte-field .form-control, html[data-nsq-theme="dark"] .pte-field .form-select, html[data-nsq-theme="dark"] .pte-defecto-row .form-control, html[data-nsq-theme="dark"] .pte-defecto-row .form-select {
+        background: #0b1422;
+        color: #f8fafc;
+        border-color: rgba(255,255,255,.13)
+    }
+
+    @@media(max-width:900px) {
+        .pte-grid, .pte-preview-grid {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .pte-pair {
+            grid-template-columns: 1fr
+        }
+
+        .pte-link {
+            transform: rotate(90deg)
+        }
+
+        .pte-form-grid {
+            grid-template-columns: 1fr
+        }
+
+        .pte-defecto-row {
+            grid-template-columns: 1fr 90px
+        }
+
+            .pte-defecto-row .pte-observacion-defecto {
+                grid-column: 1/-1
+            }
+
+        .pte-cut {
+            grid-template-columns: 1fr 1fr
+        }
+    }
+
+    @@media(max-width:560px) {
+        .pte-head {
+            flex-direction: column
+        }
+
+        .pte-tools {
+            justify-content: flex-start
+        }
+
+        .pte-grid, .pte-preview-grid {
+            grid-template-columns: 1fr
+        }
+
+        .pte-actions {
+            justify-content: stretch
+        }
+
+            .pte-actions .pte-btn {
+                width: 100%
+            }
+
+        .pte-defecto-row {
+            grid-template-columns: 1fr
+        }
+
+        .pte-cut {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="pte"
+     data-tiempo-extra-contenido
+     data-tiempo-extra-auto-refrescar="@(autoRefrescar ? "true" : "false")"
+     data-server-now="@Model.FechaHoraServidor.ToString("O")"
+     data-next-cut="@(Model.ProximoCorte?.ToString("O") ?? string.Empty)">
+
+    <div class="pte-flash" data-pte-flash></div>
+
+    <section class="pte-card">
+        <div class="pte-head">
+            <div class="pte-head-main">
+                <div class="pte-icon"><i class="bi bi-clock-history"></i></div>
+                <div>
+                    <div class="pte-title">Tiempo extra</div>
+                    <div class="pte-sub">OF @Model.OFTexto · Programa interno @Model.ProgramaProduccionID · @Model.MaquinaTexto</div>
+                    <div class="pte-badges mt-2">
+                        <span class="pte-badge is-blue"><i class="bi bi-person-fill"></i>@Model.OperadorTexto</span>
+                        <span class="pte-badge"><i class="bi bi-activity"></i>@Model.EstatusTexto</span>
+                        @if (Model.EsLhRh)
+                        {
+                            <span class="pte-badge is-blue"><i class="bi bi-link-45deg"></i>LH/RH conjunto</span>
+                        }
+                        @if (Model.TieneSesionAbierta)
+                        {
+                            <span class="pte-badge is-orange"><i class="bi bi-stopwatch-fill"></i>Sesión abierta</span>
+                        }
+                        else if (Model.PuedeIniciar)
+                        {
+                            <span class="pte-badge is-green"><i class="bi bi-check-circle-fill"></i>Disponible para iniciar</span>
+                        }
+                        else
+                        {
+                            <span class="pte-badge"><i class="bi bi-hourglass-split"></i>No disponible aún</span>
+                        }
+                        @if (!Model.PuedeGestionar)
+                        {
+                            <span class="pte-badge"><i class="bi bi-eye-fill"></i>Solo consulta</span>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="pte-tools">
+                <button type="button" class="pte-btn" data-tiempo-extra-refrescar><i class="bi bi-arrow-clockwise"></i>Actualizar</button>
+            </div>
+        </div>
+
+        <div class="pte-body">
+            @if (Model.EsLhRh)
+            {
+                <div class="pte-pair">
+                    <div class="pte-side"><span>OF abierta</span><strong>@Model.OFTexto</strong><small>@Model.ParteTexto</small></div>
+                    <div class="pte-link"><i class="bi bi-link-45deg"></i></div>
+                    <div class="pte-side"><span>OF pareja</span><strong>@(Model.OFParejaTexto ?? "Programa pareja")</strong><small>@(Model.ParteParejaTexto ?? "Sin parte")</small></div>
+                </div>
+                @if (!Model.ParejaConsistente)
+                {
+                    <div class="pte-note is-danger mt-2"><i class="bi bi-exclamation-triangle-fill"></i><div><strong>Tiempo extra LH/RH bloqueado.</strong><br />@(Model.MotivoInconsistenciaPareja ?? "La pareja LH/RH dejo de estar sincronizada.")</div></div>
+                }
+                else
+                {
+                    <div class="pte-note mt-2"><i class="bi bi-link-45deg"></i><div>Inicio, cortes y finalización se registran como una sola operación física. El controlador actual valida las dos ejecuciones y utiliza un solo contador físico.</div></div>
+                }
+            }
+
+            @if (sesion != null)
+            {
+                <div class="pte-section-title"><span><i class="bi bi-stopwatch me-1"></i>Sesión actual</span><span class="pte-state @ClaseEstado(sesion.Estado)">@sesion.EstadoNombre</span></div>
+                <div class="pte-grid">
+                    <div class="pte-data"><span>Inicio</span><strong>@sesion.FechaHoraInicio.ToString("dd/MM/yyyy HH:mm")</strong><small>@sesion.OperadorInicioNombre</small></div>
+                    <div class="pte-data"><span>Último corte</span><strong>@sesion.FechaHoraUltimoCorte.ToString("HH:mm")</strong><small>Contador @sesion.ContadorUltimoCorte.ToString("N0")</small></div>
+                    <div class="pte-data"><span>Próximo corte</span><strong data-pte-countdown>@(Model.Corte60Disponible ? "Disponible" : $"En {Model.MinutosParaCorte} min")</strong><small>@sesion.FechaHoraProximoCorte.ToString("HH:mm") · cortes cada 60 min</small></div>
+                    <div class="pte-data"><span>Motivo</span><strong>@sesion.MotivoNombre</strong><small>@(string.IsNullOrWhiteSpace(sesion.Observaciones) ? "Sin observaciones" : sesion.Observaciones)</small></div>
+                </div>
+
+                @if (string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.Pausado, StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="pte-note is-warning mt-2"><i class="bi bi-pause-circle-fill"></i><div>La sesión está en estado Pausado. Desde este bloque no se inventa una reanudación: debe conservarse la regla existente que cambie su estado antes de registrar cortes.</div></div>
+                }
+                else if (!Model.PuedeGestionar)
+                {
+                    <div class="pte-note mt-2"><i class="bi bi-eye-fill"></i><div>Consulta técnica: puedes revisar contador, cortes, objetivos y trazabilidad. La captura del tiempo extra corresponde al operador autorizado.</div></div>
+                }
+                else if (Model.ParejaConsistente)
+                {
+                    <form class="pte-form" data-pte-corte-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="TiempoExtraID" value="@sesion.TiempoExtraID" />
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                        <input type="hidden" name="ConfirmarCapturaLhRh" value="@(Model.EsLhRh ? "true" : "false")" />
+
+                        <div class="pte-form-grid">
+                            <div class="pte-field">
+                                <label>Contador físico actual</label>
+                                <input type="number" min="0" step="1" class="form-control" name="ContadorMaquinaActual" value="@(Model.UltimoContadorMaquina?.ToString() ?? string.Empty)" required data-pte-contador />
+                            </div>
+                            <div class="pte-field">
+                                <label>Scrap / rojas - @Model.OFTexto</label>
+                                <input type="number" min="0" step="1" class="form-control" name="CantidadScrap" value="0" required data-pte-scrap="actual" />
+                            </div>
+                            @if (Model.EsLhRh)
+                            {
+                                <div class="pte-field">
+                                    <label>Scrap / rojas - @(Model.OFParejaTexto ?? "OF pareja")</label>
+                                    <input type="number" min="0" step="1" class="form-control" name="CantidadScrapPareja" value="0" required data-pte-scrap="pareja" />
+                                </div>
+                            }
+                            <div class="pte-field">
+                                <label>Observaciones - @Model.OFTexto</label>
+                                <textarea class="form-control" maxlength="500" name="Observaciones" placeholder="Opcional; obligatorio si el contador no detecta producción."></textarea>
+                            </div>
+                            @if (Model.EsLhRh)
+                            {
+                                <div class="pte-field">
+                                    <label>Observaciones - @(Model.OFParejaTexto ?? "OF pareja")</label>
+                                    <textarea class="form-control" maxlength="500" name="ObservacionesPareja" placeholder="Opcional. Si queda vacío se reutiliza la observación principal."></textarea>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="pte-defectos" data-pte-defectos="actual">
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-2"><strong class="small">Defectos del scrap - @Model.OFTexto</strong><button type="button" class="pte-btn" data-pte-agregar-defecto="actual"><i class="bi bi-plus-lg"></i>Agregar defecto</button></div>
+                            <div data-pte-defectos-list="actual"></div>
+                        </div>
+                        @if (Model.EsLhRh)
+                        {
+                            <div class="pte-defectos" data-pte-defectos="pareja">
+                                <div class="d-flex align-items-center justify-content-between gap-2 mb-2"><strong class="small">Defectos del scrap - @(Model.OFParejaTexto ?? "OF pareja")</strong><button type="button" class="pte-btn" data-pte-agregar-defecto="pareja"><i class="bi bi-plus-lg"></i>Agregar defecto</button></div>
+                                <div data-pte-defectos-list="pareja"></div>
+                            </div>
+                        }
+
+                        <div class="pte-preview" data-pte-preview></div>
+
+                        <div class="pte-actions">
+                            <button type="button" class="pte-btn" data-pte-previsualizar><i class="bi bi-calculator"></i>Previsualizar</button>
+                            <button type="button" class="pte-btn pte-btn-primary" data-pte-guardar-corte @(Model.Corte60Disponible ? null : "disabled")><i class="bi bi-save2"></i>Guardar corte de 60 min</button>
+                            <button type="button" class="pte-btn pte-btn-danger" data-pte-finalizar><i class="bi bi-stop-circle"></i>Finalizar tiempo extra</button>
+                        </div>
+                    </form>
+                }
+            }
+            else
+            {
+                <div class="pte-section-title"><span><i class="bi bi-play-circle me-1"></i>Inicio de tiempo extra</span></div>
+                @if (Model.PuedeIniciar && Model.PuedeGestionar && Model.ParejaConsistente)
+                {
+                    <div class="pte-note is-success"><i class="bi bi-check-circle-fill"></i><div>El tiempo normal planeado ya está completo y el controlador actual permite abrir una sesión de tiempo extra.</div></div>
+                    <form class="pte-form" data-pte-inicio-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+                        <div class="pte-form-grid">
+                            <div class="pte-field">
+                                <label>Motivo</label>
+                                <select class="form-select" name="Motivo" required>
+                                    <option value="@ProduccionTiempoExtraMotivo.CompletarOF">Completar OF</option>
+                                    <option value="@ProduccionTiempoExtraMotivo.RecuperarAtraso">Recuperar atraso</option>
+                                    <option value="@ProduccionTiempoExtraMotivo.ProduccionAdicionalAutorizada">Producción adicional autorizada</option>
+                                    <option value="@ProduccionTiempoExtraMotivo.AjusteProceso">Ajuste de proceso</option>
+                                    <option value="@ProduccionTiempoExtraMotivo.Otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="pte-field">
+                                <label>Observaciones</label>
+                                <textarea class="form-control" maxlength="500" name="Observaciones" placeholder="Obligatorio cuando el motivo sea Otro."></textarea>
+                            </div>
+                        </div>
+                        <div class="pte-actions"><button type="submit" class="pte-btn pte-btn-success"><i class="bi bi-play-fill"></i>Iniciar tiempo extra</button></div>
+                    </form>
+                }
+                else
+                {
+                    <div class="pte-empty"><i class="bi bi-info-circle me-1"></i>@Model.MotivoNoDisponible</div>
+                }
+            }
+        </div>
+    </section>
+
+    <section class="pte-card">
+        <div class="pte-head">
+            <div class="pte-head-main"><div class="pte-icon"><i class="bi bi-clock-history"></i></div><div><div class="pte-title">Historial reciente</div><div class="pte-sub">Sesiones y cortes registrados para la OF. El historial completo sigue disponible en el bloque general de trazabilidad.</div></div></div>
+        </div>
+        <div class="pte-body">
+            @if (!Model.Historial.Any())
+            {
+                <div class="pte-empty">Todavía no hay sesiones de tiempo extra registradas para esta OF.</div>
+            }
+            else
+            {
+                <div class="pte-history">
+                    @foreach (var item in Model.Historial.Take(5))
+                    {
+                        <div class="pte-history-item">
+                            <div class="pte-history-head">
+                                <div><strong>Sesión #@item.TiempoExtraID · @item.MotivoNombre</strong><span>@item.RangoTexto · Inicio: @(item.OperadorInicioNombre ?? "-")</span></div>
+                                <span class="pte-state @ClaseEstado(item.Estado)">@item.EstadoNombre</span>
+                            </div>
+                            @if (item.Cortes.Any())
+                            {
+                                <div class="pte-cuts">
+                                    @foreach (var corte in item.Cortes.OrderByDescending(x => x.NumeroCorte).Take(6))
+                                    {
+                                        <div class="pte-cut">
+                                            <strong>Corte #@corte.NumeroCorte</strong>
+                                            <span>@corte.RangoTexto</span>
+                                            <span>@corte.CantidadOK.ToString("N0") OK</span>
+                                            <span>@corte.CantidadScrap.ToString("N0") scrap</span>
+                                            <span>@(corte.ObjetivoBloque?.ToString("N0") ?? "-") obj.</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (Model.EsLhRh && Model.HistorialPareja.Any())
+            {
+                <div class="pte-section-title"><span><i class="bi bi-link-45deg me-1"></i>Historial de @(Model.OFParejaTexto ?? "OF pareja")</span></div>
+                <div class="pte-history">
+                    @foreach (var item in Model.HistorialPareja.Take(3))
+                    {
+                        <div class="pte-history-item"><div class="pte-history-head"><div><strong>Sesión #@item.TiempoExtraID · @item.MotivoNombre</strong><span>@item.RangoTexto</span></div><span class="pte-state @ClaseEstado(item.Estado)">@item.EstadoNombre</span></div></div>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+
+    <template data-pte-defecto-template>
+        <div class="pte-defecto-row" data-pte-defecto-row>
+            <select class="form-select" data-pte-defecto-catalogo required>
+                <option value="">Selecciona defecto</option>
+                @foreach (var defecto in Model.CatalogoDefectos)
+                {
+                    <option value="@defecto.CatalogoDefectoID">@defecto.Texto</option>
+                }
+            </select>
+            <input type="number" min="1" step="1" class="form-control" value="1" data-pte-defecto-cantidad required />
+            <input type="text" maxlength="500" class="form-control pte-observacion-defecto" placeholder="Observaciones opcionales" data-pte-defecto-observaciones />
+            <button type="button" class="pte-remove" data-pte-quitar-defecto title="Quitar"><i class="bi bi-x-lg"></i></button>
+        </div>
+    </template>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const flash=root.querySelector('[data-pte-flash]');
+        const inicioForm=root.querySelector('[data-pte-inicio-form]');
+        const corteForm=root.querySelector('[data-pte-corte-form]');
+        const template=root.querySelector('[data-pte-defecto-template]');
+        const urlIniciar='@Html.Raw(urlIniciar)';
+        const urlPrevisualizar='@Html.Raw(urlPrevisualizar)';
+        const urlCorte='@Html.Raw(urlCorte)';
+        const urlFinalizar='@Html.Raw(urlFinalizar)';
+        const esLhRh=@(Model.EsLhRh ? "true" : "false");
+        const serverNowIso=root.dataset.serverNow||'';
+        const nextCutIso=root.dataset.nextCut||'';
+        const serverOffset=serverNowIso?(new Date(serverNowIso).getTime()-Date.now()):0;
+
+        function escapar(texto){
+            return String(texto??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+        }
+
+        function mostrarFlash(tipo,mensaje){
+            if(!flash) return;
+            flash.className=`pte-flash is-visible ${tipo==='success'?'is-success':'is-error'}`;
+            flash.textContent=mensaje||'';
+            flash.scrollIntoView({behavior:'smooth',block:'nearest'});
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        async function enviar(url,formData){
+            const response=await fetch(url,{method:'POST',body:formData,credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+            const data=await leerRespuesta(response);
+            if(!response.ok||data?.ok===false) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+            return data;
+        }
+
+        function dispararActualizacion(){
+            root.closest('[data-pte-tiempo-extra]')?.dispatchEvent(new CustomEvent('nsq:tiempo-extra-actualizado',{bubbles:false}));
+        }
+
+        function reindexarDefectos(lado){
+            const lista=root.querySelector(`[data-pte-defectos-list="${lado}"]`);
+            if(!lista) return;
+            const prefijo=lado==='pareja'?'DefectosScrapPareja':'DefectosScrap';
+            [...lista.querySelectorAll('[data-pte-defecto-row]')].forEach((fila,index)=>{
+                fila.querySelector('[data-pte-defecto-catalogo]')?.setAttribute('name',`${prefijo}[${index}].CatalogoDefectoID`);
+                fila.querySelector('[data-pte-defecto-cantidad]')?.setAttribute('name',`${prefijo}[${index}].CantidadScrap`);
+                fila.querySelector('[data-pte-defecto-observaciones]')?.setAttribute('name',`${prefijo}[${index}].Observaciones`);
+            });
+        }
+
+        function agregarDefecto(lado){
+            const lista=root.querySelector(`[data-pte-defectos-list="${lado}"]`);
+            if(!lista||!template) return;
+            lista.appendChild(template.content.cloneNode(true));
+            reindexarDefectos(lado);
+        }
+
+        function sincronizarDefectos(lado){
+            const scrap=root.querySelector(`[data-pte-scrap="${lado}"]`);
+            const panel=root.querySelector(`[data-pte-defectos="${lado}"]`);
+            const lista=root.querySelector(`[data-pte-defectos-list="${lado}"]`);
+            if(!scrap||!panel||!lista) return;
+            const cantidad=Math.max(0,parseInt(scrap.value||'0',10)||0);
+            panel.classList.toggle('is-visible',cantidad>0);
+            if(cantidad>0&&!lista.querySelector('[data-pte-defecto-row]')) agregarDefecto(lado);
+            if(cantidad===0) lista.innerHTML='';
+            reindexarDefectos(lado);
+        }
+
+        function validarDefectos(lado){
+            const scrap=root.querySelector(`[data-pte-scrap="${lado}"]`);
+            const lista=root.querySelector(`[data-pte-defectos-list="${lado}"]`);
+            if(!scrap||!lista) return {ok:true};
+            const esperado=Math.max(0,parseInt(scrap.value||'0',10)||0);
+            if(esperado===0) return {ok:true};
+            const filas=[...lista.querySelectorAll('[data-pte-defecto-row]')];
+            if(!filas.length) return {ok:false,mensaje:'Debes indicar el defecto de las piezas scrap.'};
+            let suma=0;
+            for(const fila of filas){
+                const catalogo=fila.querySelector('[data-pte-defecto-catalogo]')?.value||'';
+                const cantidad=parseInt(fila.querySelector('[data-pte-defecto-cantidad]')?.value||'0',10)||0;
+                if(!catalogo||cantidad<=0) return {ok:false,mensaje:'Completa correctamente cada defecto de scrap.'};
+                suma+=cantidad;
+            }
+            if(suma!==esperado) return {ok:false,mensaje:`La suma de defectos (${suma}) debe coincidir con el scrap reportado (${esperado}).`};
+            return {ok:true};
+        }
+
+        function validarCorte(){
+            if(!corteForm) return {ok:false,mensaje:'No se encontro el formulario.'};
+            const contador=corteForm.querySelector('[name="ContadorMaquinaActual"]');
+            if(!contador?.value||Number(contador.value)<0) return {ok:false,mensaje:'Captura un contador fisico actual valido.'};
+            const actual=validarDefectos('actual');
+            if(!actual.ok) return actual;
+            if(esLhRh){
+                const pareja=validarDefectos('pareja');
+                if(!pareja.ok) return pareja;
+            }
+            return {ok:true};
+        }
+
+        root.addEventListener('click',event=>{
+            const agregar=event.target.closest?.('[data-pte-agregar-defecto]');
+            if(agregar){event.preventDefault();agregarDefecto(agregar.getAttribute('data-pte-agregar-defecto'));return;}
+            const quitar=event.target.closest?.('[data-pte-quitar-defecto]');
+            if(quitar){event.preventDefault();const fila=quitar.closest('[data-pte-defecto-row]');const lista=fila?.parentElement;const lado=lista?.getAttribute('data-pte-defectos-list');fila?.remove();if(lado) reindexarDefectos(lado);return;}
+        });
+
+        root.querySelectorAll('[data-pte-scrap]').forEach(input=>input.addEventListener('input',()=>sincronizarDefectos(input.getAttribute('data-pte-scrap'))));
+
+        if(inicioForm){
+            inicioForm.addEventListener('submit',async event=>{
+                event.preventDefault();
+                const boton=inicioForm.querySelector('button[type="submit"]');
+                if(boton) boton.disabled=true;
+                try{
+                    const data=await enviar(urlIniciar,new FormData(inicioForm));
+                    mostrarFlash('success',data?.mensaje||'Tiempo extra iniciado.');
+                    window.setTimeout(dispararActualizacion,450);
+                }catch(error){mostrarFlash('error',error?.message||'No fue posible iniciar el tiempo extra.');}
+                finally{if(boton) boton.disabled=false;}
+            });
+        }
+
+        const preview=root.querySelector('[data-pte-preview]');
+        async function previsualizar(){
+            const validacion=validarCorte();
+            if(!validacion.ok){mostrarFlash('error',validacion.mensaje);return null;}
+            const formData=new FormData();
+            const token=corteForm.querySelector('input[name="__RequestVerificationToken"]')?.value;
+            if(token) formData.append('__RequestVerificationToken',token);
+            formData.append('tiempoExtraId',corteForm.querySelector('[name="TiempoExtraID"]')?.value||'0');
+            formData.append('contadorMaquinaActual',corteForm.querySelector('[name="ContadorMaquinaActual"]')?.value||'');
+            formData.append('cantidadScrap',corteForm.querySelector('[name="CantidadScrap"]')?.value||'0');
+            formData.append('cantidadScrapPareja',corteForm.querySelector('[name="CantidadScrapPareja"]')?.value||'0');
+            try{
+                const data=await enviar(urlPrevisualizar,formData);
+                if(preview){
+                    let html=`<div class="pte-preview-grid"><div class="pte-preview-item"><span>Corte</span><strong>#${escapar(data.numeroCorte)}</strong></div><div class="pte-preview-item"><span>Piezas fisicas</span><strong>${Number(data.piezasFisicas||0).toLocaleString()}</strong></div><div class="pte-preview-item"><span>OK</span><strong>${Number(data.cantidadOK||0).toLocaleString()}</strong></div><div class="pte-preview-item"><span>Objetivo</span><strong>${Number(data.objetivoBloque||0).toLocaleString()}</strong></div></div>`;
+                    if(data.esLhRh&&data.pareja){
+                        html+=`<div class="pte-note mt-2"><i class="bi bi-link-45deg"></i><div><strong>@(Model.OFParejaTexto ?? "OF pareja"):</strong> ${Number(data.pareja.piezasFisicas||0).toLocaleString()} fisicas · ${Number(data.pareja.cantidadOK||0).toLocaleString()} OK · ${Number(data.pareja.cantidadScrap||0).toLocaleString()} scrap.</div></div>`;
+                    }
+                    preview.innerHTML=html;
+                    preview.classList.add('is-visible');
+                }
+                return data;
+            }catch(error){mostrarFlash('error',error?.message||'No fue posible previsualizar el corte.');return null;}
+        }
+
+        root.querySelector('[data-pte-previsualizar]')?.addEventListener('click',event=>{event.preventDefault();previsualizar();});
+
+        async function guardarCorte(url,boton,mensajeConfirmacion){
+            const validacion=validarCorte();
+            if(!validacion.ok){mostrarFlash('error',validacion.mensaje);return;}
+            if(mensajeConfirmacion&&!window.confirm(mensajeConfirmacion)) return;
+            if(boton) boton.disabled=true;
+            try{
+                const data=await enviar(url,new FormData(corteForm));
+                mostrarFlash('success',data?.mensaje||'Operacion completada.');
+                window.setTimeout(dispararActualizacion,450);
+            }catch(error){mostrarFlash('error',error?.message||'No fue posible guardar el tiempo extra.');}
+            finally{if(boton) boton.disabled=false;}
+        }
+
+        const botonCorte=root.querySelector('[data-pte-guardar-corte]');
+        botonCorte?.addEventListener('click',event=>{event.preventDefault();guardarCorte(urlCorte,botonCorte,null);});
+        const botonFinalizar=root.querySelector('[data-pte-finalizar]');
+        botonFinalizar?.addEventListener('click',event=>{event.preventDefault();guardarCorte(urlFinalizar,botonFinalizar,'Se registrara el corte actual y se finalizara la sesion de tiempo extra. ¿Continuar?');});
+
+        function actualizarCuenta(){
+            if(!nextCutIso) return;
+            const destino=new Date(nextCutIso).getTime();
+            if(!Number.isFinite(destino)) return;
+            const ahora=Date.now()+serverOffset;
+            const restante=destino-ahora;
+            const label=root.querySelector('[data-pte-countdown]');
+            if(restante<=0){
+                if(label) label.textContent='Disponible';
+                if(botonCorte) botonCorte.disabled=false;
+                return;
+            }
+            const totalSeg=Math.ceil(restante/1000);
+            const min=Math.floor(totalSeg/60);
+            const seg=totalSeg%60;
+            if(label) label.textContent=`${min}m ${String(seg).padStart(2,'0')}s`;
+        }
+        actualizarCuenta();
+        const reloj=window.setInterval(()=>{
+            if(!root.isConnected){window.clearInterval(reloj);return;}
+            actualizarCuenta();
+        },1000);
+    })();
+</script>

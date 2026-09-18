@@ -1,0 +1,86 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+@using ERP.NSQuell.Models
+
+@{
+    var accion = ViewData["AccionOperativa"] as ProduccionOperativaAccionVm;
+    var area = accion?.AreaResponsableTexto ?? "Área responsable";
+    var esCalidad = string.Equals(accion?.AreaResponsable, AgendaOperativaArea.Calidad, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(accion?.Clave, AgendaOperativaPasoClave.Calidad, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(accion?.Clave, AgendaOperativaPasoClave.PrimerasPiezas, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(accion?.Clave, AgendaOperativaPasoClave.CalidadFinal, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(accion?.Clave, "RELIBERACION_CALIDAD", StringComparison.OrdinalIgnoreCase);
+    var tituloArea = esCalidad ? "Calidad" : area;
+}
+
+<style>
+    .po-wait-area {
+        border: 1px solid #d9dee7;
+        border-radius: 16px;
+        background: #fff;
+        padding: 22px;
+        text-align: center;
+        color: #344054
+    }
+
+    .po-wait-icon {
+        width: 54px;
+        height: 54px;
+        margin: 0 auto 10px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f2f4f7;
+        color: #667085;
+        font-size: 1.35rem
+    }
+
+    .po-wait-area h3 {
+        margin: 0;
+        color: #102a56;
+        font-size: 1rem;
+        font-weight: 950
+    }
+
+    .po-wait-area p {
+        max-width: 620px;
+        margin: 7px auto 0;
+        color: #667085;
+        font-size: .76rem;
+        line-height: 1.45
+    }
+
+    .po-wait-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 12px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: #fff8e8;
+        border: 1px solid #f0d49e;
+        color: #8a5700;
+        font-size: .7rem;
+        font-weight: 900
+    }
+
+    html[data-nsq-theme="dark"] .po-wait-area {
+        background: #111d2f;
+        border-color: rgba(255,255,255,.1);
+        color: #e8eef6
+    }
+
+        html[data-nsq-theme="dark"] .po-wait-area h3 {
+            color: #f5f7fb
+        }
+</style>
+
+<div class="po-wait-area">
+    <div class="po-wait-icon"><i class="bi bi-hourglass-split"></i></div>
+    <h3>Esperando a @tituloArea</h3>
+    <p>
+        @(accion?.Titulo ?? "Actividad externa") pertenece al módulo de @tituloArea.
+        Desde Vista Operativa de Producción solamente se muestra su estado; no se abre ni se ejecuta el módulo externo desde aquí.
+    </p>
+    <div class="po-wait-state"><i class="bi bi-clock-history"></i>Pendiente de atención por @tituloArea</div>
+</div>

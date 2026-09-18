@@ -1,0 +1,824 @@
+﻿@model ERP.NSQuell.Models.ProduccionHistorialOperativoVm
+@using ERP.NSQuell.Models
+@using System.Linq
+
+@functions {
+    private static string Txt(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+    private static string Fecha(DateTime? value) => value.HasValue ? value.Value.ToString("dd/MM/yyyy HH:mm") : "-";
+    private static string ClasePaso(ProduccionHistorialOperativoPasoVm paso)
+    {
+        if (paso.Completado) return "ok";
+        if (paso.Bloqueado) return "bad";
+        if (paso.EnProceso) return "run";
+        return "wait";
+    }
+    private static string IconoPaso(ProduccionHistorialOperativoPasoVm paso)
+    {
+        if (paso.Completado) return "bi-check-circle-fill";
+        if (paso.Bloqueado) return "bi-exclamation-octagon-fill";
+        if (paso.EnProceso) return "bi-play-circle-fill";
+        return "bi-clock";
+    }
+    private static string EstadoPaso(ProduccionHistorialOperativoPasoVm paso)
+    {
+        if (paso.Completado) return "Completado";
+        if (paso.Bloqueado) return "Bloqueado";
+        if (paso.EnProceso) return "En proceso";
+        return string.IsNullOrWhiteSpace(paso.Estado) ? "Pendiente" : paso.Estado.Replace("_", " ");
+    }
+    private static string ClaseRespuesta(ProduccionHistorialOperativoPreguntaVm p)
+    {
+        var r = (p.Resultado ?? string.Empty).Trim().ToUpperInvariant();
+        if (r is "OK" or "SI" or "SÍ" or "CUMPLE") return "ok";
+        if (r is "NOK" or "NO" or "NO_CUMPLE") return "bad";
+        if (r is "NA" or "N/A" or "NO APLICA") return "na";
+        return p.TieneRespuesta ? "value" : "empty";
+    }
+}
+
+@{
+    var pasos = Model.Pasos.OrderBy(x => x.Orden).ToList();
+    var checklists = Model.Checklists.OrderByDescending(x => x.FechaCreacion).ToList();
+    var capturas = Model.CapturasHora.OrderByDescending(x => x.FechaProduccion).ThenByDescending(x => x.HoraInicio).ThenByDescending(x => x.RegistroHoraID).ToList();
+    var porcentajePasos = Model.PasosAplicables <= 0 ? 0m : Math.Round(Model.PasosCompletos * 100m / Model.PasosAplicables, 0);
+}
+
+<style>
+    .poh {
+        --poh-blue: #004aad;
+        --poh-navy: #102a43;
+        --poh-text: #172b4d;
+        --poh-muted: #667085;
+        --poh-border: #dce5ef;
+        --poh-soft: #f7f9fc;
+        --poh-green: #067647;
+        --poh-red: #b42318;
+        --poh-orange: #b54708;
+        color: var(--poh-text)
+    }
+
+        .poh * {
+            box-sizing: border-box
+        }
+
+    .poh-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+        padding: 2px 0 16px;
+        border-bottom: 1px solid var(--poh-border);
+        margin-bottom: 16px
+    }
+
+    .poh-title {
+        font-size: 1.15rem;
+        font-weight: 950;
+        color: var(--poh-navy);
+        display: flex;
+        align-items: center;
+        gap: 8px
+    }
+
+    .poh-sub {
+        margin-top: 4px;
+        color: var(--poh-muted);
+        font-size: .78rem;
+        font-weight: 650
+    }
+
+    .poh-readonly {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #eef4ff;
+        color: #175cd3;
+        font-size: .72rem;
+        font-weight: 900;
+        white-space: nowrap
+    }
+
+    .poh-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 9px
+    }
+
+    .poh-chip {
+        padding: 6px 9px;
+        border-radius: 9px;
+        background: var(--poh-soft);
+        border: 1px solid var(--poh-border);
+        font-size: .72rem;
+        font-weight: 800;
+        color: #344054
+    }
+
+    .poh-kpis {
+        display: grid;
+        grid-template-columns: repeat(4,minmax(0,1fr));
+        gap: 9px;
+        margin-bottom: 16px
+    }
+
+    .poh-kpi {
+        border: 1px solid var(--poh-border);
+        background: #fff;
+        border-radius: 13px;
+        padding: 12px
+    }
+
+        .poh-kpi small {
+            display: block;
+            color: var(--poh-muted);
+            font-size: .66rem;
+            font-weight: 850;
+            text-transform: uppercase;
+            letter-spacing: .03em
+        }
+
+        .poh-kpi strong {
+            display: block;
+            margin-top: 3px;
+            font-size: 1.25rem;
+            color: var(--poh-navy);
+            font-weight: 950
+        }
+
+        .poh-kpi span {
+            font-size: .68rem;
+            color: var(--poh-muted);
+            font-weight: 700
+        }
+
+    .poh-section {
+        border: 1px solid var(--poh-border);
+        border-radius: 14px;
+        background: #fff;
+        margin-bottom: 12px;
+        overflow: hidden
+    }
+
+        .poh-section > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 13px 14px;
+            background: var(--poh-soft);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-weight: 900;
+            color: var(--poh-navy)
+        }
+
+            .poh-section > summary::-webkit-details-marker {
+                display: none
+            }
+
+            .poh-section > summary .meta {
+                font-size: .7rem;
+                color: var(--poh-muted);
+                font-weight: 800
+            }
+
+    .poh-section-body {
+        padding: 13px
+    }
+
+    .poh-flow {
+        display: grid;
+        gap: 8px
+    }
+
+    .poh-step {
+        display: grid;
+        grid-template-columns: 30px minmax(0,1fr) auto;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 10px;
+        border: 1px solid var(--poh-border);
+        border-radius: 11px;
+        background: #fff
+    }
+
+    .poh-step-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        background: #f2f4f7;
+        color: #667085
+    }
+
+    .poh-step.ok .poh-step-icon {
+        background: #ecfdf3;
+        color: var(--poh-green)
+    }
+
+    .poh-step.bad .poh-step-icon {
+        background: #fef3f2;
+        color: var(--poh-red)
+    }
+
+    .poh-step.run .poh-step-icon {
+        background: #eff8ff;
+        color: #175cd3
+    }
+
+    .poh-step-title {
+        font-weight: 900;
+        font-size: .82rem
+    }
+
+    .poh-step-detail {
+        margin-top: 3px;
+        color: var(--poh-muted);
+        font-size: .72rem;
+        line-height: 1.4
+    }
+
+    .poh-step-meta {
+        margin-top: 5px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: #475467;
+        font-size: .66rem;
+        font-weight: 750
+    }
+
+    .poh-step-state {
+        font-size: .67rem;
+        font-weight: 900;
+        padding: 5px 7px;
+        border-radius: 8px;
+        background: #f2f4f7;
+        color: #475467;
+        white-space: nowrap
+    }
+
+    .poh-step.ok .poh-step-state {
+        background: #ecfdf3;
+        color: var(--poh-green)
+    }
+
+    .poh-step.bad .poh-step-state {
+        background: #fef3f2;
+        color: var(--poh-red)
+    }
+
+    .poh-step.run .poh-step-state {
+        background: #eff8ff;
+        color: #175cd3
+    }
+
+    .poh-check {
+        border: 1px solid var(--poh-border);
+        border-radius: 12px;
+        margin-bottom: 10px;
+        overflow: hidden
+    }
+
+        .poh-check > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 11px 12px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            background: #fbfcfe
+        }
+
+            .poh-check > summary::-webkit-details-marker {
+                display: none
+            }
+
+    .poh-check-code {
+        font-size: .8rem;
+        font-weight: 950;
+        color: var(--poh-navy)
+    }
+
+    .poh-check-meta {
+        font-size: .67rem;
+        color: var(--poh-muted);
+        font-weight: 700;
+        margin-top: 2px
+    }
+
+    .poh-check-status {
+        font-size: .66rem;
+        font-weight: 900;
+        padding: 5px 7px;
+        border-radius: 8px;
+        background: #eef4ff;
+        color: #175cd3;
+        white-space: nowrap
+    }
+
+    .poh-check-body {
+        padding: 12px;
+        border-top: 1px solid var(--poh-border)
+    }
+
+    .poh-notes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 10px
+    }
+
+    .poh-note {
+        padding: 9px;
+        border-radius: 9px;
+        background: var(--poh-soft);
+        font-size: .7rem;
+        color: #475467
+    }
+
+        .poh-note strong {
+            display: block;
+            color: #344054;
+            margin-bottom: 2px
+        }
+
+    .poh-q-section {
+        margin-top: 10px
+    }
+
+    .poh-q-section-title {
+        font-size: .72rem;
+        font-weight: 950;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #475467;
+        margin-bottom: 6px
+    }
+
+    .poh-question {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) minmax(110px,180px);
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid #edf1f5
+    }
+
+        .poh-question:last-child {
+            border-bottom: 0
+        }
+
+    .poh-q-text {
+        font-size: .73rem;
+        font-weight: 750;
+        color: #344054
+    }
+
+    .poh-q-extra {
+        margin-top: 3px;
+        font-size: .64rem;
+        color: var(--poh-muted)
+    }
+
+    .poh-answer {
+        display: flex;
+        justify-content: flex-end;
+        align-items: flex-start;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .poh-answer-badge {
+        display: inline-flex;
+        padding: 5px 7px;
+        border-radius: 7px;
+        font-size: .66rem;
+        font-weight: 950;
+        background: #f2f4f7;
+        color: #667085
+    }
+
+        .poh-answer-badge.ok {
+            background: #ecfdf3;
+            color: var(--poh-green)
+        }
+
+        .poh-answer-badge.bad {
+            background: #fef3f2;
+            color: var(--poh-red)
+        }
+
+        .poh-answer-badge.na {
+            background: #fffaeb;
+            color: var(--poh-orange)
+        }
+
+        .poh-answer-badge.value {
+            background: #eef4ff;
+            color: #175cd3
+        }
+
+        .poh-answer-badge.empty {
+            background: #f2f4f7;
+            color: #98a2b3
+        }
+
+    .poh-answer-note {
+        width: 100%;
+        text-align: right;
+        color: var(--poh-muted);
+        font-size: .63rem
+    }
+
+    .poh-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--poh-border);
+        border-radius: 11px
+    }
+
+    .poh-table {
+        width: 100%;
+        min-width: 980px;
+        border-collapse: collapse
+    }
+
+        .poh-table th {
+            padding: 8px 9px;
+            text-align: left;
+            background: #f8fafc;
+            color: #667085;
+            font-size: .63rem;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            border-bottom: 1px solid var(--poh-border);
+            white-space: nowrap
+        }
+
+        .poh-table td {
+            padding: 9px;
+            border-bottom: 1px solid #edf1f5;
+            font-size: .7rem;
+            vertical-align: top
+        }
+
+        .poh-table tbody tr:last-child td {
+            border-bottom: 0
+        }
+
+    .poh-main {
+        font-weight: 900;
+        color: #344054
+    }
+
+    .poh-muted {
+        color: var(--poh-muted);
+        font-size: .64rem;
+        margin-top: 2px
+    }
+
+    .poh-num {
+        font-weight: 900;
+        white-space: nowrap
+    }
+
+    .poh-good {
+        color: var(--poh-green)
+    }
+
+    .poh-danger {
+        color: var(--poh-red)
+    }
+
+    .poh-objective {
+        display: inline-flex;
+        padding: 4px 6px;
+        border-radius: 7px;
+        font-size: .63rem;
+        font-weight: 900;
+        background: #f2f4f7;
+        color: #475467
+    }
+
+        .poh-objective.ok {
+            background: #ecfdf3;
+            color: var(--poh-green)
+        }
+
+        .poh-objective.bad {
+            background: #fef3f2;
+            color: var(--poh-red)
+        }
+
+    .poh-empty {
+        padding: 24px 12px;
+        text-align: center;
+        color: var(--poh-muted);
+        font-size: .75rem
+    }
+
+        .poh-empty i {
+            display: block;
+            font-size: 1.35rem;
+            margin-bottom: 5px
+        }
+
+    @@media(max-width:900px) {
+        .poh-kpis {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .poh-notes {
+            grid-template-columns: 1fr
+        }
+
+        .poh-head {
+            flex-direction: column
+        }
+
+        .poh-question {
+            grid-template-columns: 1fr
+        }
+
+        .poh-answer {
+            justify-content: flex-start
+        }
+
+        .poh-answer-note {
+            text-align: left
+        }
+    }
+</style>
+
+<div class="poh">
+    <div class="poh-head">
+        <div>
+            <div class="poh-title"><i class="bi bi-clock-history"></i>Trazabilidad y pasos anteriores</div>
+            <div class="poh-sub">Consulta lo que ocurrió en la OF sin modificar capturas, checklists ni estados.</div>
+            <div class="poh-chips">
+                <span class="poh-chip"><i class="bi bi-file-earmark-text me-1"></i>OF @Model.NumeroOF</span>
+                <span class="poh-chip">Programa interno #@Model.ProgramaProduccionID</span>
+                @if (Model.EjecucionProduccionID.HasValue)
+                {
+                    <span class="poh-chip">Ejecución #@Model.EjecucionProduccionID.Value</span>
+                }
+                <span class="poh-chip"><i class="bi bi-gear me-1"></i>@Model.Maquina</span>
+                @if (Model.EsParejaLhRh)
+                {
+                    <span class="poh-chip"><i class="bi bi-link-45deg me-1"></i>LH/RH@(Model.GrupoLhRh.HasValue ? $" · Grupo {Model.GrupoLhRh.Value}" : "")</span>
+                }
+            </div>
+        </div>
+        <span class="poh-readonly"><i class="bi bi-eye-fill"></i>Solo consulta</span>
+    </div>
+
+    <div class="poh-kpis">
+        <div class="poh-kpi"><small>Flujo completado</small><strong>@Model.PasosCompletos / @Model.PasosAplicables</strong><span>@porcentajePasos.ToString("0")% de pasos aplicables</span></div>
+        <div class="poh-kpi"><small>Checklists</small><strong>@checklists.Count</strong><span>formatos relacionados con la OF</span></div>
+        <div class="poh-kpi"><small>Capturas por hora</small><strong>@capturas.Count</strong><span>registradas por operadores</span></div>
+        <div class="poh-kpi"><small>Piezas OK</small><strong>@Model.TotalOK.ToString("N0")</strong><span>Sospechosa @Model.TotalSospechosa.ToString("N0") · Scrap @Model.TotalScrap.ToString("N0")</span></div>
+    </div>
+
+    <details class="poh-section" open>
+        <summary><span><i class="bi bi-diagram-3 me-1"></i>Pasos anteriores y estado del flujo</span><span class="meta">@pasos.Count paso(s)</span></summary>
+        <div class="poh-section-body">
+            @if (!pasos.Any())
+            {
+                <div class="poh-empty"><i class="bi bi-inbox"></i>No hay pasos operativos disponibles.</div>
+            }
+            else
+            {
+                <div class="poh-flow">
+                    @foreach (var paso in pasos)
+                    {
+                        <div class="poh-step @ClasePaso(paso)">
+                            <div class="poh-step-icon"><i class="bi @IconoPaso(paso)"></i></div>
+                            <div>
+                                <div class="poh-step-title">@paso.Nombre</div>
+                                @if (!string.IsNullOrWhiteSpace(paso.Detalle))
+                                {
+                                    <div class="poh-step-detail">@paso.Detalle</div>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(paso.MotivoBloqueo))
+                                {
+                                    <div class="poh-step-detail">@paso.MotivoBloqueo</div>
+                                }
+                                <div class="poh-step-meta">
+                                    <span><i class="bi bi-building me-1"></i>@Txt(paso.AreaResponsable)</span>
+                                    @if (paso.FechaInicioReal.HasValue)
+                                    {
+                                        <span>Inicio @Fecha(paso.FechaInicioReal)</span>
+                                    }
+                                    @if (paso.FechaFinReal.HasValue)
+                                    {
+                                        <span>Fin @Fecha(paso.FechaFinReal)</span>
+                                    }
+                                    @if (!paso.FechaInicioReal.HasValue && !paso.FechaFinReal.HasValue && paso.FechaObjetivo.HasValue)
+                                    {
+                                        <span>Objetivo @Fecha(paso.FechaObjetivo)</span>
+                                    }
+                                </div>
+                            </div>
+                            <span class="poh-step-state">@EstadoPaso(paso)</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </details>
+
+    <details class="poh-section" open>
+        <summary><span><i class="bi bi-ui-checks-grid me-1"></i>Checklists y respuestas capturadas</span><span class="meta">@checklists.Count formato(s)</span></summary>
+        <div class="poh-section-body">
+            @if (!checklists.Any())
+            {
+                <div class="poh-empty"><i class="bi bi-clipboard"></i>No hay checklists relacionados todavía.</div>
+            }
+            else
+            {
+                @foreach (var checklist in checklists)
+                {
+                    <details class="poh-check">
+                        <summary>
+                            <div>
+                                <div class="poh-check-code">@Txt(checklist.CodigoFormato) @if(!string.IsNullOrWhiteSpace(checklist.VersionFormato)){
+                                <span>· @checklist.VersionFormato</span>
+                            }
+    </div>
+                            <div class="poh-check-meta">
+                                @Txt(checklist.TipoChecklist) · @checklist.Respondidas/@checklist.TotalPreguntas respuesta(s) · creado @checklist.FechaCreacion.ToString("dd/MM/yyyy HH:mm")
+                                @if (checklist.EsCompartidoLhRh)
+                                {
+                                    <span> · compartido por @checklist.ProgramasVinculados programas LH/RH</span>
+                                }
+                            </div>
+                        </div>
+                        <span class="poh-check-status">@Txt(checklist.EstadoFlujo)</span>
+                    </summary>
+                    <div class="poh-check-body">
+                        @if (!string.IsNullOrWhiteSpace(checklist.ObservacionesGenerales) || !string.IsNullOrWhiteSpace(checklist.ObservacionesCalidad))
+                        {
+                            <div class="poh-notes">
+                                @if (!string.IsNullOrWhiteSpace(checklist.ObservacionesGenerales))
+                                {
+                                    <div class="poh-note"><strong>Observaciones de Producción</strong>@checklist.ObservacionesGenerales</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(checklist.ObservacionesCalidad))
+                                {
+                                    <div class="poh-note"><strong>Observaciones de Calidad</strong>@checklist.ObservacionesCalidad</div>
+                                }
+                            </div>
+                        }
+                        <div class="poh-chips mb-2">
+                            @if (checklist.FechaCapturaProduccion.HasValue)
+                            {
+                                <span class="poh-chip">Capturado @Fecha(checklist.FechaCapturaProduccion)</span>
+                            }
+                            @if (checklist.FechaValidacionCalidad.HasValue)
+                            {
+                                <span class="poh-chip">Calidad @Fecha(checklist.FechaValidacionCalidad)</span>
+                            }
+                            <span class="poh-chip">Checklist #@checklist.ChecklistArranqueID</span>
+                        </div>
+                        @if (!checklist.Preguntas.Any())
+                        {
+                            <div class="poh-empty"><i class="bi bi-list-check"></i>El formato no tiene preguntas activas para mostrar.</div>
+                        }
+                        else
+                        {
+                            @foreach (var seccion in checklist.Preguntas.GroupBy(x => new { x.OrdenSeccion, x.Seccion }).OrderBy(x => x.Key.OrdenSeccion))
+                            {
+                                <div class="poh-q-section">
+                                    <div class="poh-q-section-title">@seccion.Key.Seccion</div>
+                                    @foreach (var pregunta in seccion.OrderBy(x => x.OrdenPregunta).ThenBy(x => x.PreguntaID))
+                                    {
+                                        <div class="poh-question">
+                                            <div>
+                                                <div class="poh-q-text">@pregunta.OrdenPregunta. @pregunta.TextoPregunta</div>
+                                                <div class="poh-q-extra">
+                                                    @if (!string.IsNullOrWhiteSpace(pregunta.ResponsableSugerido))
+                                                    {
+                                                        <span>@pregunta.ResponsableSugerido</span>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(pregunta.Especificacion))
+                                                    {
+                                                        <span> · Esp. @pregunta.Especificacion</span>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(pregunta.Tolerancia))
+                                                    {
+                                                        <span> · Tol. @pregunta.Tolerancia</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="poh-answer">
+                                                <span class="poh-answer-badge @ClaseRespuesta(pregunta)">@pregunta.RespuestaVisible@if(!string.IsNullOrWhiteSpace(pregunta.Unidad)&&!string.IsNullOrWhiteSpace(pregunta.ValorCapturado)){
+                                                <text> @pregunta.Unidad</text>
+                                            }
+            </span>
+                                            @if (!string.IsNullOrWhiteSpace(pregunta.Observaciones))
+                                            {
+                                                <div class="poh-answer-note"><strong>Obs.:</strong> @pregunta.Observaciones</div>
+                                            }
+                                            @if (pregunta.FechaRespuesta.HasValue || !string.IsNullOrWhiteSpace(pregunta.UsuarioRespuestaNombre))
+                                            {
+                                                <div class="poh-answer-note">@Txt(pregunta.UsuarioRespuestaNombre)@if(pregunta.FechaRespuesta.HasValue){
+                                                <text> · @Fecha(pregunta.FechaRespuesta)</text>
+                                            }
+            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                                        }
+                </div>
+            </details>
+                        }
+                        }
+        </div>
+    </details>
+
+    <details class="poh-section" open>
+        <summary><span><i class="bi bi-clock-history me-1"></i>Capturas por hora realizadas por operadores</span><span class="meta">@capturas.Count registro(s)</span></summary>
+        <div class="poh-section-body">
+            @if (!capturas.Any())
+            {
+                <div class="poh-empty"><i class="bi bi-clock"></i>Aún no existen capturas horarias para esta ejecución.</div>
+            }
+            else
+            {
+                <div class="poh-table-wrap">
+                    <table class="poh-table">
+                        <thead>
+                            <tr>
+                                <th>OF / lado</th>
+                                <th>Fecha / hora</th>
+                                <th>Operador</th>
+                                <th>Físicas</th>
+                                <th>OK</th>
+                                <th>Sospechosa</th>
+                                <th>Scrap</th>
+                                <th>Objetivo</th>
+                                <th>Cumplimiento</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var captura in capturas)
+                            {
+                                var objetivo = captura.ObjetivoBloque ?? captura.ObjetivoHora;
+                                <tr>
+                                    <td><div class="poh-main">@captura.NumeroOF</div><div class="poh-muted">Programa #@captura.ProgramaProduccionID@if(!string.IsNullOrWhiteSpace(captura.LadoLhRh)){
+                                    <text> · @captura.LadoLhRh</text>
+                                }
+    </div></td>
+                                <td><div class="poh-main">@captura.FechaProduccion.ToString("dd/MM/yyyy")</div><div class="poh-muted">@captura.RangoHora @if(captura.EsTiempoExtra){
+                                <span>· Tiempo extra</span>
+                            }
+</div></td>
+                            <td><div class="poh-main">@Txt(captura.OperadorNombre)</div><div class="poh-muted">@(captura.OperadorID.HasValue ? $"Persona #{captura.OperadorID.Value}" : "-")</div></td>
+                            <td class="poh-num">@(captura.PiezasCalculadasContador?.ToString("N0") ?? captura.TotalClasificado.ToString("N0"))</td>
+                            <td class="poh-num poh-good">@captura.CantidadOK.ToString("N0")</td>
+                            <td class="poh-num">@captura.CantidadSospechosa.ToString("N0")</td>
+                            <td class="poh-num poh-danger">@captura.CantidadScrap.ToString("N0")</td>
+                            <td class="poh-num">@(objetivo?.ToString("N0") ?? "-")</td>
+                            <td>
+                                @if (captura.CumplioObjetivo.HasValue)
+                                {
+                                    <span class="poh-objective @(captura.CumplioObjetivo.Value ? "ok" : "bad")">@(captura.PorcentajeCumplimiento?.ToString("0.#") ?? "-")% · @(captura.CumplioObjetivo.Value ? "Cumplió" : "No cumplió")</span>
+                                }
+                                else
+                                {
+
+                                    <span class="poh-objective">No evaluable</span>
+                                }
+                                @if (captura.AjustadoPorCalidad)
+                                {
+                                    <div class="poh-muted">Ajustado por Calidad</div>
+                                }
+                                @if (captura.TieneCambioConfiguracion)
+                                {
+                                    <div class="poh-muted">Cambio de configuración</div>
+                                }
+                                @if (captura.TieneReinicioContador)
+                                {
+                                    <div class="poh-muted">Reinicio de contador</div>
+                                }
+                            </td>
+                            <td><div class="poh-muted">@Txt(captura.Observaciones)</div></td>
+                        </tr>
+                                                }
+                    </tbody>
+                </table>
+            </div>
+                        }
+        </div>
+    </details>
+
+    <div class="small text-muted text-end mt-2">Consulta actualizada @Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm:ss")</div>
+</div>

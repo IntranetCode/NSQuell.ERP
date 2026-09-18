@@ -1,0 +1,616 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+@using System.Linq
+
+@{
+    var accion = ViewData["AccionOperativa"] as ProduccionOperativaAccionVm;
+    var soloLectura = ViewData["SoloLectura"] is bool sr ? sr : Model.Permisos.SoloLectura;
+    var programaId = Model.ProgramaProduccionID;
+    var rootId = $"poInicioPreparacion_{programaId}";
+    var pasoPersonal = Model.Pasos.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.Personal, StringComparison.OrdinalIgnoreCase));
+    var pasoMaterial = Model.Pasos.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.Material, StringComparison.OrdinalIgnoreCase));
+    var pasoSecado = Model.Pasos.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.Secado, StringComparison.OrdinalIgnoreCase));
+    var pasoEmbalaje = Model.Pasos.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.Embalaje, StringComparison.OrdinalIgnoreCase));
+    var pasoMolde = Model.Pasos.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.CambioMolde, StringComparison.OrdinalIgnoreCase));
+    var bloqueosPrevios = Model.Pasos.Where(x => x.Aplica && x.Orden < 70 && x.BloqueaFlujo && !x.Completado).OrderBy(x => x.Orden).ToList();
+    var yaIniciada = Model.EjecucionProduccionID.HasValue;
+    var puedeIniciar = !soloLectura && !yaIniciada && accion?.PuedeEjecutarUsuario == true && bloqueosPrevios.Count == 0;
+}
+
+@functions {
+    public static string ClasePaso(ProduccionOperativaPasoVm? paso)
+    {
+        if (paso == null || !paso.Aplica) return "na";
+        if (paso.Completado) return "ok";
+        if (paso.Bloqueado || paso.BloqueaFlujo) return "bad";
+        if (paso.EnProceso) return "run";
+        return "wait";
+    }
+
+    public static string IconoPaso(ProduccionOperativaPasoVm? paso)
+    {
+        var c = ClasePaso(paso);
+        return c switch
+        {
+            "ok" => "bi-check-circle-fill",
+            "bad" => "bi-exclamation-circle-fill",
+            "run" => "bi-arrow-repeat",
+            "na" => "bi-dash-circle",
+            _ => "bi-clock"
+        };
+    }
+
+    public static string TextoPaso(ProduccionOperativaPasoVm? paso)
+    {
+        if (paso == null || !paso.Aplica) return "No aplica";
+        if (paso.Completado) return "Listo";
+        if (paso.EnProceso) return "En proceso";
+        if (paso.Bloqueado || paso.BloqueaFlujo) return "Pendiente obligatorio";
+        return paso.EstadoTexto;
+    }
+}
+
+<style>
+    .po-start {
+        --ps: #004aad;
+        --ps-text: #182230;
+        --ps-muted: #667085;
+        --ps-border: #e4e7ec;
+        --ps-soft: #f8fafc;
+        color: var(--ps-text)
+    }
+
+        .po-start * {
+            box-sizing: border-box
+        }
+
+    .po-start-card {
+        border: 1px solid var(--ps-border);
+        border-radius: 16px;
+        background: #fff;
+        overflow: hidden
+    }
+
+    .po-start-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 15px;
+        border-bottom: 1px solid var(--ps-border);
+        background: #fbfcfe
+    }
+
+    .po-start-title {
+        color: #102a56;
+        font-size: .92rem;
+        font-weight: 950
+    }
+
+    .po-start-sub {
+        margin-top: 3px;
+        color: var(--ps-muted);
+        font-size: .69rem
+    }
+
+    .po-start-body {
+        padding: 14px
+    }
+
+    .po-start-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 8px
+    }
+
+    .po-start-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 10px;
+        border: 1px solid var(--ps-border);
+        border-radius: 11px;
+        background: var(--ps-soft);
+        font-size: .7rem
+    }
+
+        .po-start-status i {
+            font-size: .92rem
+        }
+
+        .po-start-status strong {
+            display: block;
+            color: #344054;
+            font-size: .72rem
+        }
+
+        .po-start-status span {
+            display: block;
+            color: var(--ps-muted);
+            margin-top: 1px
+        }
+
+        .po-start-status.ok i {
+            color: #128254
+        }
+
+        .po-start-status.bad i {
+            color: #c93636
+        }
+
+        .po-start-status.run i {
+            color: #1769aa
+        }
+
+        .po-start-status.wait i {
+            color: #b66900
+        }
+
+        .po-start-status.na {
+            opacity: .7
+        }
+
+    .po-start-alert {
+        margin-top: 10px;
+        padding: 9px 11px;
+        border-radius: 10px;
+        border: 1px solid #efb8b8;
+        background: #fff1f1;
+        color: #a52b2b;
+        font-size: .7rem;
+        line-height: 1.4
+    }
+
+    .po-start-note {
+        margin-top: 10px;
+        padding: 9px 11px;
+        border: 1px solid #d8e5f4;
+        border-radius: 10px;
+        background: #f5faff;
+        color: #315f85;
+        font-size: .69rem;
+        line-height: 1.4
+    }
+
+    .po-start-lhrh {
+        margin-top: 10px;
+        padding: 9px 11px;
+        border: 1px solid #ddd0f1;
+        border-radius: 10px;
+        background: #faf7ff;
+        color: #604c7d;
+        font-size: .69rem
+    }
+
+    .po-start-product {
+        margin-top: 12px;
+        border: 1px solid var(--ps-border);
+        border-radius: 12px;
+        padding: 11px;
+        background: #fff
+    }
+
+    .po-start-product-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px
+    }
+
+        .po-start-product-head strong {
+            color: #102a56;
+            font-size: .76rem
+        }
+
+    .po-start-badge {
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: #f2f4f7;
+        color: #667085;
+        font-size: .62rem;
+        font-weight: 900
+    }
+
+    .po-start-summary {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 7px;
+        margin-top: 9px
+    }
+
+        .po-start-summary div {
+            padding: 8px;
+            border-radius: 9px;
+            background: var(--ps-soft);
+            border: 1px solid var(--ps-border)
+        }
+
+        .po-start-summary span {
+            display: block;
+            color: var(--ps-muted);
+            font-size: .58rem;
+            font-weight: 850;
+            text-transform: uppercase
+        }
+
+        .po-start-summary strong {
+            display: block;
+            margin-top: 2px;
+            color: #102a56;
+            font-size: .88rem
+        }
+
+    .po-start-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 9px;
+        max-height: 180px;
+        overflow: auto
+    }
+
+    .po-start-item {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 9px;
+        border: 1px solid var(--ps-border);
+        border-radius: 9px;
+        background: #fff;
+        cursor: pointer
+    }
+
+        .po-start-item.is-selected {
+            border-color: #9fc2f5;
+            background: #f5f9ff
+        }
+
+    .po-start-item-name {
+        font-size: .69rem;
+        font-weight: 900;
+        color: #344054
+    }
+
+    .po-start-item-meta {
+        font-size: .59rem;
+        color: var(--ps-muted);
+        margin-top: 2px
+    }
+
+    .po-start-item-qty {
+        text-align: right;
+        font-size: .62rem;
+        color: var(--ps-muted)
+    }
+
+        .po-start-item-qty strong {
+            display: block;
+            color: #102a56;
+            font-size: .72rem
+        }
+
+    .po-start-empty {
+        padding: 10px;
+        border: 1px dashed #d5dbe4;
+        border-radius: 9px;
+        text-align: center;
+        color: var(--ps-muted);
+        font-size: .67rem
+    }
+
+    .po-start-field {
+        margin-top: 11px
+    }
+
+        .po-start-field label {
+            display: block;
+            margin-bottom: 4px;
+            color: #344054;
+            font-size: .67rem;
+            font-weight: 900
+        }
+
+        .po-start-field textarea {
+            min-height: 64px;
+            border-radius: 9px;
+            font-size: .73rem
+        }
+
+    .po-start-feedback {
+        display: none;
+        margin-top: 10px;
+        padding: 9px 11px;
+        border-radius: 10px;
+        font-size: .7rem;
+        font-weight: 750
+    }
+
+        .po-start-feedback.show {
+            display: block
+        }
+
+        .po-start-feedback.ok {
+            background: #edf9f3;
+            color: #176b48;
+            border: 1px solid #bee2cf
+        }
+
+        .po-start-feedback.bad {
+            background: #fff1f1;
+            color: #a52b2b;
+            border: 1px solid #efb8b8
+        }
+
+    .po-start-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px
+    }
+
+    .po-start-btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 14px;
+        background: var(--ps);
+        color: #fff;
+        font-size: .74rem;
+        font-weight: 950
+    }
+
+        .po-start-btn:disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+    html[data-nsq-theme="dark"] .po-start {
+        --ps-text: #eef2f7;
+        --ps-muted: #9aacbf;
+        --ps-border: rgba(255,255,255,.1);
+        --ps-soft: #0e1929
+    }
+
+    html[data-nsq-theme="dark"] .po-start-card, html[data-nsq-theme="dark"] .po-start-head, html[data-nsq-theme="dark"] .po-start-product, html[data-nsq-theme="dark"] .po-start-item {
+        background: #111d2f
+    }
+
+    html[data-nsq-theme="dark"] .po-start-title, html[data-nsq-theme="dark"] .po-start-status strong, html[data-nsq-theme="dark"] .po-start-product-head strong, html[data-nsq-theme="dark"] .po-start-summary strong, html[data-nsq-theme="dark"] .po-start-item-name, html[data-nsq-theme="dark"] .po-start-item-qty strong {
+        color: #f5f7fb
+    }
+
+    @@media(max-width:767.98px) {
+        .po-start-grid, .po-start-summary {
+            grid-template-columns: 1fr
+        }
+
+        .po-start-actions .po-start-btn {
+            width: 100%
+        }
+    }
+</style>
+
+<div id="@rootId" class="po-start" data-po-start data-programa-id="@programaId">
+    <div class="po-start-card">
+        <div class="po-start-head">
+            <div>
+                <div class="po-start-title"><i class="bi bi-play-circle-fill me-1"></i>Iniciar preparación de Producción</div>
+                <div class="po-start-sub">@Model.OFTexto · @Model.MaquinaTexto · @Model.ParteTexto</div>
+            </div>
+            <span class="badge bg-light text-dark border">@Model.CantidadProgramada.ToString("N0") pzas</span>
+        </div>
+        <div class="po-start-body">
+            @if (yaIniciada)
+            {
+                <div class="po-start-note"><i class="bi bi-check-circle-fill me-1"></i>La OF ya tiene una ejecución de Producción activa. Actualiza el Centro Operativo para continuar con el siguiente paso.</div>
+            }
+            else
+            {
+                <div class="po-start-grid">
+                    @foreach (var item in new[] { new { Nombre = "Personal", Paso = pasoPersonal }, new { Nombre = "Materia prima", Paso = pasoMaterial }, new { Nombre = "Secado", Paso = pasoSecado }, new { Nombre = "Embalaje", Paso = pasoEmbalaje }, new { Nombre = "Cambio de molde", Paso = pasoMolde } })
+                    {
+                        if (item.Paso != null && item.Paso.Aplica)
+                        {
+                            <div class="po-start-status @ClasePaso(item.Paso)">
+                                <i class="bi @IconoPaso(item.Paso)"></i>
+                                <div><strong>@item.Nombre</strong><span>@TextoPaso(item.Paso)</span></div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                @if (bloqueosPrevios.Any())
+                {
+                    <div class="po-start-alert">
+                        <strong><i class="bi bi-lock-fill me-1"></i>No se puede iniciar todavía.</strong>
+                        @string.Join(" · ", bloqueosPrevios.Select(x => x.Nombre))
+                    </div>
+                }
+
+                @if (Model.EsParejaLhRh)
+                {
+                    <div class="po-start-lhrh"><i class="bi bi-link-45deg me-1"></i><strong>LH/RH:</strong> el inicio crea ambas ejecuciones dentro de la misma transacción. Pareja: @Model.LhRh.OFParejaTexto.</div>
+                }
+
+                <form data-po-start-form method="post" action="@Url.Action("IniciarOperativa","Produccion")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="programaProduccionId" value="@programaId" />
+
+                    <div class="po-start-product" data-po-producto-incompleto>
+                        <div class="po-start-product-head">
+                            <strong><i class="bi bi-box-seam me-1"></i>Producto incompleto disponible</strong>
+                            <span class="po-start-badge" data-po-etiqueta-estado>Consultando...</span>
+                        </div>
+                        <div class="po-start-summary">
+                            <div><span>Planeación</span><strong data-po-cantidad-programada>@Model.CantidadProgramada.ToString("N0")</strong></div>
+                            <div><span>Etiqueta blanca</span><strong data-po-cantidad-seleccionada>0</strong></div>
+                            <div><span>A fabricar</span><strong data-po-cantidad-neta>@Model.CantidadProgramada.ToString("N0")</strong></div>
+                        </div>
+                        <div class="po-start-list" data-po-etiquetas-lista>
+                            <div class="po-start-empty"><span class="spinner-border spinner-border-sm me-1"></span>Consultando etiquetas blancas...</div>
+                        </div>
+                    </div>
+
+                    <div class="po-start-field">
+                        <label>Observaciones</label>
+                        <textarea name="observaciones" class="form-control" maxlength="500" placeholder="Opcional" disabled="@soloLectura"></textarea>
+                    </div>
+
+                    <div class="po-start-note"><i class="bi bi-info-circle me-1"></i>Se utilizará el personal ya asignado a esta OF. El servidor volverá a validar máquina, operador, Técnico/SMED, cambio de molde, LH/RH y producto incompleto antes de crear la ejecución.</div>
+                    <div class="po-start-feedback" data-po-start-feedback></div>
+
+                    @if (!soloLectura)
+                    {
+                        <div class="po-start-actions">
+                            <button type="submit" class="po-start-btn" data-po-start-submit disabled="@(!puedeIniciar)">
+                                <i class="bi bi-play-fill me-1"></i>Iniciar preparación
+                            </button>
+                        </div>
+                    }
+                </form>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const form=root.querySelector('[data-po-start-form]');
+        const submit=root.querySelector('[data-po-start-submit]');
+        const feedback=root.querySelector('[data-po-start-feedback]');
+        const lista=root.querySelector('[data-po-etiquetas-lista]');
+        const estado=root.querySelector('[data-po-etiqueta-estado]');
+        const programada=root.querySelector('[data-po-cantidad-programada]');
+        const seleccionada=root.querySelector('[data-po-cantidad-seleccionada]');
+        const neta=root.querySelector('[data-po-cantidad-neta]');
+        const urlEtiquetas='@Url.Action("EtiquetasBlancasDisponiblesInicio", "Produccion")';
+
+        let cantidadProgramada=@Model.CantidadProgramada;
+        let consultaEtiquetasLista=false;
+
+        function piezas(v){
+            const n=Number(v||0);
+            return Number.isFinite(n)?Math.max(0,n).toLocaleString('es-MX'):'0';
+        }
+
+        function mensaje(texto,ok=false){
+            if(!feedback) return;
+            feedback.textContent=texto||'';
+            feedback.className='po-start-feedback'+(texto?' show ':' ')+(ok?'ok':'bad');
+        }
+
+        function totalSeleccionado(){
+            if(!lista) return 0;
+            return Array.from(lista.querySelectorAll('input[name="etiquetasBlancasSeleccionadas"]:checked'))
+                .reduce((s,x)=>s+Number(x.dataset.cantidad||0),0);
+        }
+
+        function recalcular(){
+            const total=totalSeleccionado();
+            if(seleccionada) seleccionada.textContent=piezas(total);
+            if(neta) neta.textContent=piezas(Math.max(0,cantidadProgramada-total));
+            lista?.querySelectorAll('.po-start-item').forEach(x=>{
+                const c=x.querySelector('input[type="checkbox"]');
+                x.classList.toggle('is-selected',!!c?.checked);
+            });
+        }
+
+        function crearCaja(caja){
+            const label=document.createElement('label');
+            label.className='po-start-item';
+            const check=document.createElement('input');
+            check.type='checkbox';
+            check.className='form-check-input';
+            check.name='etiquetasBlancasSeleccionadas';
+            check.value=String(caja.cajaProduccionId||0);
+            check.dataset.cantidad=String(caja.cantidadPiezas||0);
+            const body=document.createElement('div');
+            const nombre=document.createElement('div');
+            nombre.className='po-start-item-name';
+            nombre.textContent=caja.etiquetaBlanca||caja.folioCaja||`Caja ${caja.cajaProduccionId}`;
+            const meta=document.createElement('div');
+            meta.className='po-start-item-meta';
+            meta.textContent=[caja.numeroOFOrigen,caja.ubicacion,caja.maquinaOrigen,caja.antiguedad].filter(Boolean).join(' · ');
+            body.append(nombre,meta);
+            const qty=document.createElement('div');
+            qty.className='po-start-item-qty';
+            qty.innerHTML=`<strong>${piezas(caja.cantidadPiezas)}</strong>pzas`;
+            check.addEventListener('change',()=>{
+                const total=totalSeleccionado();
+                if(check.checked&&total>cantidadProgramada){
+                    check.checked=false;
+                    mensaje(`La selección supera las ${piezas(cantidadProgramada)} piezas programadas. No se divide una etiqueta blanca.`);
+                }else mensaje('');
+                recalcular();
+            });
+            label.append(check,body,qty);
+            return label;
+        }
+
+        async function cargarEtiquetas(){
+            if(!lista||!programaId) return;
+            try{
+                const response=await fetch(`${urlEtiquetas}?programaProduccionId=${encodeURIComponent(programaId)}`,{
+                    cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}
+                });
+                const data=await response.json();
+                if(!response.ok||data?.ok!==true) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                cantidadProgramada=Number(data.cantidadProgramada||cantidadProgramada||0);
+                consultaEtiquetasLista=true;
+                if(programada) programada.textContent=piezas(cantidadProgramada);
+                if(neta) neta.textContent=piezas(cantidadProgramada);
+                lista.innerHTML='';
+                const cajas=Array.isArray(data.cajas)?data.cajas:[];
+                if(estado) estado.textContent=cajas.length?`${cajas.length} disponible(s)`:'Sin disponibles';
+                if(!cajas.length){
+                    lista.innerHTML='<div class="po-start-empty"><i class="bi bi-check-circle me-1"></i>No hay etiquetas blancas disponibles. Se conservará la cantidad completa de Planeación.</div>';
+                    return;
+                }
+                cajas.forEach(x=>lista.appendChild(crearCaja(x)));
+                recalcular();
+            }catch(error){
+                consultaEtiquetasLista=false;
+                if(estado) estado.textContent='Error';
+                lista.innerHTML='<div class="po-start-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i>No fue posible validar producto incompleto.</div>';
+                mensaje(error?.message||'No fue posible validar producto incompleto.');
+            }
+        }
+
+        form?.addEventListener('submit',async event=>{
+            event.preventDefault();
+            if(!submit) return;
+            if(!consultaEtiquetasLista){
+                mensaje('Primero debe terminar la validación de producto incompleto.');
+                return;
+            }
+            submit.disabled=true;
+            mensaje('');
+            try{
+                const response=await fetch(form.action,{
+                    method:'POST',
+                    body:new FormData(form),
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest','X-NSQ-Operativa':'1','Accept':'application/json'}
+                });
+                let data=null;
+                try{data=await response.json();}catch{}
+                if(!response.ok||data?.ok!==true) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                mensaje(data.mensaje||'Preparación iniciada correctamente.',true);
+                window.setTimeout(()=>{
+                    const centro=root.closest('[data-nsq-operativa-centro]');
+                    centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
+                },500);
+            }catch(error){
+                mensaje(error?.message||'No fue posible iniciar la preparación.');
+                submit.disabled=false;
+            }
+        });
+
+        cargarEtiquetas();
+    })();
+</script>

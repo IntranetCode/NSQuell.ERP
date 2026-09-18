@@ -1,0 +1,175 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poChecklistArranque_{Model.ProgramaProduccionID}";
+    var ejecucionId = Model.EjecucionProduccionID.GetValueOrDefault();
+    var urlContenido = Url.Action("ChecklistArranqueOperativa", "Produccion") ?? "/Produccion/ChecklistArranqueOperativa";
+}
+
+<style>
+    .po-checklist-loader .poc-loading {
+        min-height: 220px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 9px;
+        color: #667085;
+        font-size: .76rem;
+        font-weight: 800
+    }
+
+    .po-checklist-loader .poc-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #dbe5f1;
+        border-top-color: #004aad;
+        border-radius: 50%;
+        animation: pocSpin .75s linear infinite
+    }
+
+    .po-checklist-loader .poc-feedback {
+        display: none;
+        margin-bottom: 10px;
+        padding: 9px 11px;
+        border-radius: 10px;
+        font-size: .72rem;
+        font-weight: 800
+    }
+
+        .po-checklist-loader .poc-feedback.show {
+            display: block
+        }
+
+        .po-checklist-loader .poc-feedback.ok {
+            background: #edf9f3;
+            border: 1px solid #bee2cf;
+            color: #176b48
+        }
+
+        .po-checklist-loader .poc-feedback.warn {
+            background: #fff8ea;
+            border: 1px solid #efd29d;
+            color: #865600
+        }
+
+        .po-checklist-loader .poc-feedback.bad {
+            background: #fff1f1;
+            border: 1px solid #efb8b8;
+            color: #a52b2b
+        }
+
+    @@keyframes pocSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId" class="po-checklist-loader" data-po-checklist-arranque data-ejecucion-id="@ejecucionId">
+    <div class="poc-feedback" data-poc-feedback></div>
+    <div data-poc-body>
+        @if (ejecucionId <= 0)
+        {
+            <div class="alert alert-warning mb-0"><i class="bi bi-hourglass-split me-1"></i>El checklist se habilita después de iniciar la preparación de Producción.</div>
+        }
+        else
+        {
+            <div class="poc-loading"><div class="poc-spinner"></div><span>Cargando checklist de arranque...</span></div>
+        }
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+        const ejecucionId=Number(root.dataset.ejecucionId||0);
+        const body=root.querySelector('[data-poc-body]');
+        const feedback=root.querySelector('[data-poc-feedback]');
+        const urlContenido='@urlContenido';
+        let cargando=false;
+
+        function mostrar(texto,tipo='ok'){
+            if(!feedback) return;
+            feedback.textContent=texto||'';
+            feedback.className='poc-feedback'+(texto?` show ${tipo}`:'');
+        }
+
+        async function leer(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        async function cargar(mostrarCarga=true){
+            if(cargando||ejecucionId<=0) return;
+            cargando=true;
+            if(mostrarCarga) body.innerHTML='<div class="poc-loading"><div class="poc-spinner"></div><span>Cargando checklist de arranque...</span></div>';
+            try{
+                const response=await fetch(`${urlContenido}?ejecucionProduccionId=${encodeURIComponent(ejecucionId)}`,{cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+                if(!response.ok){const data=await leer(response);throw new Error(data?.mensaje||`HTTP ${response.status}`);}
+                body.innerHTML=await response.text();
+                configurar(body);
+            }catch(error){
+                body.innerHTML=`<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${String(error?.message||'No fue posible cargar el checklist.').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+            }finally{cargando=false;}
+        }
+
+        function configurar(scope){
+            scope.querySelectorAll('form[data-checklist-operativa-form]').forEach(form=>{
+                if(form.dataset.wired==='1') return;
+                form.dataset.wired='1';
+                const enviar=form.querySelector('[name="EnviarACalidad"]');
+                const btnGuardar=form.querySelector('[data-poc-guardar]');
+                const btnEnviar=form.querySelector('[data-poc-enviar]');
+
+                form.querySelectorAll('[data-poc-row]').forEach(row=>{
+                    const radios=[...row.querySelectorAll('input[type="radio"][data-poc-resultado]')];
+                    const obs=row.querySelector('[data-poc-observacion]');
+                    const valor=row.querySelector('[data-poc-valor]');
+                    const requiereNok=row.dataset.requiereNok==='true';
+                    const requiereNa=row.dataset.requiereNa==='true';
+                    const requiereValor=row.dataset.requiereValor==='true';
+                    const validar=()=>{
+                        const seleccionado=radios.find(x=>x.checked)?.value||'';
+                        if(obs) obs.required=(seleccionado==='NOK'&&requiereNok)||(seleccionado==='NA'&&requiereNa);
+                        if(valor) valor.required=requiereValor;
+                    };
+                    radios.forEach(x=>x.addEventListener('change',validar));
+                    validar();
+                });
+
+                async function enviarForm(aCalidad){
+                    if(enviar) enviar.value=aCalidad?'true':'false';
+                    if(!form.reportValidity()) return;
+                    if(aCalidad&&!window.confirm('¿Confirmas enviar el checklist a Calidad? Producción quedará esperando su validación.')) return;
+                    btnGuardar&&(btnGuardar.disabled=true);
+                    btnEnviar&&(btnEnviar.disabled=true);
+                    mostrar('');
+                    try{
+                        const response=await fetch(form.action,{method:'POST',body:new FormData(form),credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest','X-NSQ-Operativa':'1','Accept':'application/json'}});
+                        const data=await leer(response);
+                        if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                        mostrar(data.mensaje||'Checklist guardado correctamente.',data.advertencia?'warn':'ok');
+                        if(data.esperandoCalidad){
+                            window.setTimeout(()=>root.closest('[data-nsq-operativa-centro]')?.querySelector('[data-nsq-operativa-refrescar]')?.click(),500);
+                        }else{
+                            await cargar(false);
+                        }
+                    }catch(error){mostrar(error?.message||'No fue posible guardar el checklist.','bad');}
+                    finally{btnGuardar&&(btnGuardar.disabled=false);btnEnviar&&(btnEnviar.disabled=false);}
+                }
+
+                btnGuardar?.addEventListener('click',e=>{e.preventDefault();enviarForm(false);});
+                btnEnviar?.addEventListener('click',e=>{e.preventDefault();enviarForm(true);});
+                form.addEventListener('submit',e=>{e.preventDefault();enviarForm(false);});
+            });
+        }
+
+        cargar();
+    })();
+</script>

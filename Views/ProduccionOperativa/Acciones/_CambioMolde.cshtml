@@ -1,0 +1,314 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poCambioMolde_{Model.ProgramaProduccionID}";
+    var urlContenido = Url.Action("CambioMoldeOperativa", "ProduccionPreparacion") ?? "/ProduccionPreparacion/CambioMoldeOperativa";
+    var urlChecklist = Url.Action("ChecklistCambioMoldeOperativa", "ProduccionPreparacion") ?? "/ProduccionPreparacion/ChecklistCambioMoldeOperativa";
+}
+
+<style>
+    .po-cambio-loader {
+        min-height: 220px
+    }
+
+        .po-cambio-loader .pcm-loading {
+            min-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 9px;
+            color: #667085;
+            font-size: .76rem;
+            font-weight: 800
+        }
+
+        .po-cambio-loader .pcm-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid #dbe5f1;
+            border-top-color: #004aad;
+            border-radius: 50%;
+            animation: pcmSpin .75s linear infinite
+        }
+
+        .po-cambio-loader .pcm-feedback {
+            display: none;
+            margin-bottom: 10px;
+            padding: 9px 11px;
+            border-radius: 10px;
+            font-size: .72rem;
+            font-weight: 800
+        }
+
+            .po-cambio-loader .pcm-feedback.show {
+                display: block
+            }
+
+            .po-cambio-loader .pcm-feedback.ok {
+                background: #edf9f3;
+                border: 1px solid #bee2cf;
+                color: #176b48
+            }
+
+            .po-cambio-loader .pcm-feedback.warn {
+                background: #fff8ea;
+                border: 1px solid #efd29d;
+                color: #865600
+            }
+
+            .po-cambio-loader .pcm-feedback.bad {
+                background: #fff1f1;
+                border: 1px solid #efb8b8;
+                color: #a52b2b
+            }
+
+        .po-cambio-loader .pcm-checklist-host {
+            display: none
+        }
+
+            .po-cambio-loader .pcm-checklist-host.show {
+                display: block
+            }
+
+    @@keyframes pcmSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="po-cambio-loader"
+     data-po-cambio-molde
+     data-programa-id="@Model.ProgramaProduccionID">
+    <div class="pcm-feedback" data-pcm-feedback></div>
+    <div data-pcm-main>
+        <div class="pcm-loading"><div class="pcm-spinner"></div><span>Cargando cambio de molde...</span></div>
+    </div>
+    <div class="pcm-checklist-host" data-pcm-checklist-host></div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const main=root.querySelector('[data-pcm-main]');
+        const checklistHost=root.querySelector('[data-pcm-checklist-host]');
+        const feedback=root.querySelector('[data-pcm-feedback]');
+        const urlContenido='@urlContenido';
+        const urlChecklist='@urlChecklist';
+        let cargando=false;
+        let timerId=null;
+
+        function mostrarFeedback(texto,tipo='ok'){
+            if(!feedback) return;
+            feedback.textContent=texto||'';
+            feedback.className='pcm-feedback'+(texto?` show ${tipo}`:'');
+        }
+
+        function escapar(texto){
+            return String(texto??'')
+                .replace(/&/g,'&amp;')
+                .replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;')
+                .replace(/'/g,'&#039;');
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        function ejecutarScripts(contenedor){
+            [...contenedor.querySelectorAll('script')].forEach(anterior=>{
+                const nuevo=document.createElement('script');
+                [...anterior.attributes].forEach(a=>nuevo.setAttribute(a.name,a.value));
+                nuevo.text=anterior.textContent||'';
+                anterior.replaceWith(nuevo);
+            });
+        }
+
+        function actualizarCronometros(scope){
+            const ahora=Date.now();
+            scope.querySelectorAll('[data-pcm-inicio-real]').forEach(el=>{
+                const inicioRaw=el.dataset.pcmInicioReal;
+                const limite=Number(el.dataset.pcmLimite||0);
+                if(!inicioRaw||!limite) return;
+                const inicio=new Date(inicioRaw).getTime();
+                if(!Number.isFinite(inicio)) return;
+
+                const trans=Math.max(0,Math.ceil((ahora-inicio)/60000));
+                const exceso=Math.max(0,trans-limite);
+                const restante=Math.max(0,limite-trans);
+                const tiempo=el.querySelector('[data-pcm-tiempo]');
+                const detalle=el.querySelector('[data-pcm-tiempo-detalle]');
+                const barra=el.querySelector('[data-pcm-progreso]');
+                const motivo=scope.querySelector('[data-pcm-motivo-exceso]');
+
+                if(tiempo) tiempo.textContent=`${trans} min`;
+                if(detalle) detalle.textContent=exceso>0?`Exceso: ${exceso} min`:`Restan ${restante} min antes del límite`;
+                if(barra) barra.style.width=`${Math.min(100,Math.round(trans*100/limite))}%`;
+                if(motivo) motivo.required=exceso>0;
+            });
+        }
+
+        function configurarContenido(){
+            main.querySelectorAll('form[data-pcm-form]').forEach(form=>{
+                if(form.dataset.wired==='1') return;
+                form.dataset.wired='1';
+
+                form.addEventListener('submit',async event=>{
+                    event.preventDefault();
+                    if(!form.reportValidity()) return;
+
+                    const confirmacion=form.dataset.confirm;
+                    if(confirmacion&&!window.confirm(confirmacion)) return;
+
+                    const boton=form.querySelector('button[type="submit"]');
+                    if(boton) boton.disabled=true;
+                    mostrarFeedback('');
+
+                    try{
+                        const response=await fetch(form.action,{
+                            method:'POST',
+                            body:new FormData(form),
+                            credentials:'same-origin',
+                            headers:{
+                                'X-Requested-With':'XMLHttpRequest',
+                                'X-NSQ-Operativa':'1',
+                                'Accept':'application/json'
+                            }
+                        });
+
+                        const data=await leerRespuesta(response);
+                        if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+
+                        mostrarFeedback(data.mensaje||'Operación realizada correctamente.',data.advertencia?'warn':'ok');
+                        await cargarCambio(false);
+
+                        if(form.dataset.operacion==='finalizar'){
+                            window.setTimeout(()=>{
+                                const centro=root.closest('[data-nsq-operativa-centro]');
+                                centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
+                            },650);
+                        }
+                    }catch(error){
+                        mostrarFeedback(error?.message||'No fue posible completar la operación.','bad');
+                    }finally{
+                        if(boton) boton.disabled=false;
+                    }
+                });
+            });
+
+            main.querySelectorAll('[data-pcm-abrir-checklist]').forEach(boton=>{
+                if(boton.dataset.wired==='1') return;
+                boton.dataset.wired='1';
+                boton.addEventListener('click',()=>abrirChecklist());
+            });
+
+            actualizarCronometros(main);
+        }
+
+        async function cargarCambio(mostrarCarga=true){
+            if(cargando||!programaId) return;
+            cargando=true;
+
+            if(mostrarCarga){
+                main.innerHTML='<div class="pcm-loading"><div class="pcm-spinner"></div><span>Cargando cambio de molde...</span></div>';
+            }
+
+            try{
+                const qs=new URLSearchParams({programaProduccionId:String(programaId)});
+                const response=await fetch(`${urlContenido}?${qs.toString()}`,{
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest'}
+                });
+
+                if(!response.ok){
+                    const data=await leerRespuesta(response);
+                    throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                }
+
+                main.innerHTML=await response.text();
+                main.style.display='block';
+                checklistHost.classList.remove('show');
+                checklistHost.innerHTML='';
+                configurarContenido();
+            }catch(error){
+                main.innerHTML=`<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible cargar el cambio de molde.')}</div>`;
+            }finally{
+                cargando=false;
+            }
+        }
+
+        async function abrirChecklist(){
+            mostrarFeedback('');
+            main.style.display='none';
+            checklistHost.classList.add('show');
+            checklistHost.innerHTML='<div class="pcm-loading"><div class="pcm-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>';
+
+            try{
+                const qs=new URLSearchParams({programaProduccionId:String(programaId)});
+                const response=await fetch(`${urlChecklist}?${qs.toString()}`,{
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest'}
+                });
+
+                if(!response.ok){
+                    const data=await leerRespuesta(response);
+                    throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                }
+
+                checklistHost.innerHTML=await response.text();
+                ejecutarScripts(checklistHost);
+            }catch(error){
+                checklistHost.innerHTML=`<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible abrir el checklist.')}</div>`;
+            }
+        }
+
+        root.addEventListener('click',event=>{
+            const volver=event.target.closest('[data-pcm-volver-cambio]');
+            if(!volver) return;
+            event.preventDefault();
+            checklistHost.classList.remove('show');
+            checklistHost.innerHTML='';
+            main.style.display='block';
+            cargarCambio(false);
+        });
+
+        const eventoChecklist=event=>{
+            if(Number(event?.detail?.programaProduccionId||0)!==programaId) return;
+            checklistHost.classList.remove('show');
+            checklistHost.innerHTML='';
+            main.style.display='block';
+            mostrarFeedback(event?.detail?.mensaje||'Checklist actualizado correctamente.','ok');
+            cargarCambio(false);
+        };
+
+        document.addEventListener('nsq:checklist-cambio-actualizado',eventoChecklist);
+
+        const observarRemocion=window.setInterval(()=>{
+            if(document.body.contains(root)) return;
+            document.removeEventListener('nsq:checklist-cambio-actualizado',eventoChecklist);
+            if(timerId) window.clearInterval(timerId);
+            window.clearInterval(observarRemocion);
+        },1500);
+
+        timerId=window.setInterval(()=>{
+            if(document.body.contains(root)) actualizarCronometros(main);
+        },30000);
+
+        cargarCambio();
+    })();
+</script>

@@ -1,0 +1,698 @@
+﻿@model ERP.NSQuell.Models.ProduccionConfiguracionTecnicoVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+@using System.Linq
+@using System.Collections.Generic
+
+@functions {
+    public static HashSet<int> CavidadesSeleccionadas(string? csv)
+    {
+        var set = new HashSet<int>();
+        if (string.IsNullOrWhiteSpace(csv)) return set;
+        foreach (var parte in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (int.TryParse(parte, out var n) && n > 0) set.Add(n);
+        return set;
+    }
+
+    public static decimal? ObjetivoReferencia(int? cavidades, decimal? ciclo)
+    {
+        if (!cavidades.HasValue || cavidades.Value <= 0 || !ciclo.HasValue || ciclo.Value <= 0) return null;
+        return (3600m / ciclo.Value) * cavidades.Value;
+    }
+
+    public static string ComparacionObjetivo(int actual, decimal? referencia)
+    {
+        if (actual <= 0 || !referencia.HasValue || referencia.Value <= 0) return "Sin referencia";
+        var refRedondeada = (int)Math.Round(referencia.Value, 0, MidpointRounding.AwayFromZero);
+        var diferencia = actual - refRedondeada;
+        if (diferencia == 0) return "Igual a referencia";
+        return diferencia > 0
+            ? $"{Math.Abs(diferencia):N0} pzas/h por encima"
+            : $"{Math.Abs(diferencia):N0} pzas/h por debajo";
+    }
+}
+
+@{
+    var puedeModificar = ViewData["PuedeModificarConfiguracionOperativa"] is bool pm && pm;
+    var cfg = Model.ConfiguracionActual;
+    var pareja = Model.ParejaLhRh;
+    var tieneRelacionPareja = pareja != null;
+    var tieneEjecucionPareja = pareja?.TieneEjecucionPareja == true;
+    var compatiblePareja = pareja?.EsCompatibleFisicamente != false;
+    var cfgPareja = Model.ConfiguracionActualPareja;
+    var actualVigente = cfg?.EstaVigente == true;
+    var parejaVigente = cfgPareja?.EstaVigente == true;
+    var configuracionInconsistente = tieneEjecucionPareja && (actualVigente != parejaVigente);
+    var bloquearPareja = tieneRelacionPareja && (!tieneEjecucionPareja || !compatiblePareja || configuracionInconsistente);
+    var esCambio = actualVigente && (!tieneEjecucionPareja || parejaVigente);
+
+    var accion = esCambio
+        ? (Url.Action("CambiarConfiguracionCorridaOperativa", "Produccion") ?? "/Produccion/CambiarConfiguracionCorridaOperativa")
+        : (Url.Action("GuardarConfiguracionCorridaOperativa", "Produccion") ?? "/Produccion/GuardarConfiguracionCorridaOperativa");
+
+    var cavidadesDefault = cfg?.CavidadesUsadas ?? Model.CavidadesBD;
+    var cavidadesCsv = cfg?.CavidadesConfiguradas;
+    var seleccionActual = CavidadesSeleccionadas(cavidadesCsv);
+    var cavidadesDisponibles = (Model.CavidadesDisponibles ?? new List<int>()).Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
+
+    var cavidadesDefaultPareja = cfgPareja?.CavidadesUsadas ?? Model.CavidadesBDPareja;
+    var cavidadesCsvPareja = cfgPareja?.CavidadesConfiguradas;
+    var seleccionPareja = CavidadesSeleccionadas(cavidadesCsvPareja);
+    var cavidadesDisponiblesPareja = (Model.CavidadesDisponiblesPareja ?? new List<int>()).Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
+
+    var cicloDefault = cfg?.TiempoCicloSegundos ?? Model.TiempoCicloBD ?? cfgPareja?.TiempoCicloSegundos ?? Model.TiempoCicloBDPareja;
+    var contadorDefault = Model.UltimoContadorMaquina ?? Model.UltimoContadorMaquinaPareja;
+    var objetivoRef = ObjetivoReferencia(Model.CavidadesBD, Model.TiempoCicloBD);
+    var objetivoRefPareja = ObjetivoReferencia(Model.CavidadesBDPareja, Model.TiempoCicloBDPareja);
+}
+
+<style>
+    .pct {
+        --t-blue: #004aad;
+        --t-navy: #102a56;
+        --t-text: #1d2939;
+        --t-muted: #667085;
+        --t-line: #e4e7ec;
+        --t-soft: #f8fafc;
+        --t-green: #128254;
+        --t-orange: #b66900;
+        --t-red: #c93636;
+        color: var(--t-text)
+    }
+
+        .pct * {
+            box-sizing: border-box
+        }
+
+        .pct .pct-top {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-bottom: 10px
+        }
+
+        .pct .pct-stat {
+            padding: 9px 10px;
+            border: 1px solid var(--t-line);
+            border-radius: 10px;
+            background: #fff
+        }
+
+            .pct .pct-stat span {
+                display: block;
+                color: var(--t-muted);
+                font-size: .58rem;
+                text-transform: uppercase;
+                font-weight: 900;
+                letter-spacing: .035em
+            }
+
+            .pct .pct-stat strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--t-navy);
+                font-size: .84rem;
+                font-weight: 950
+            }
+
+            .pct .pct-stat small {
+                display: block;
+                margin-top: 2px;
+                color: var(--t-muted);
+                font-size: .58rem
+            }
+
+        .pct .pct-alert {
+            padding: 9px 10px;
+            border-radius: 10px;
+            border: 1px solid #d8e5f4;
+            background: #f5faff;
+            color: #315f85;
+            font-size: .69rem;
+            margin-bottom: 10px
+        }
+
+            .pct .pct-alert.warn {
+                background: #fff8ea;
+                border-color: #efd29d;
+                color: #865600
+            }
+
+            .pct .pct-alert.bad {
+                background: #fff1f1;
+                border-color: #efb8b8;
+                color: #a52b2b
+            }
+
+            .pct .pct-alert.ok {
+                background: #edf9f3;
+                border-color: #bee2cf;
+                color: #176b48
+            }
+
+        .pct .pct-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 9px
+        }
+
+        .pct .pct-card {
+            border: 1px solid var(--t-line);
+            border-radius: 12px;
+            background: #fff;
+            overflow: hidden
+        }
+
+        .pct .pct-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 9px 11px;
+            border-bottom: 1px solid var(--t-line);
+            background: #fbfcfe
+        }
+
+            .pct .pct-head strong {
+                display: block;
+                color: var(--t-navy);
+                font-size: .73rem
+            }
+
+            .pct .pct-head small {
+                display: block;
+                color: var(--t-muted);
+                font-size: .59rem;
+                margin-top: 2px
+            }
+
+        .pct .pct-body {
+            padding: 10px 11px
+        }
+
+        .pct .pct-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 5px 0;
+            border-top: 1px solid #f0f2f5;
+            font-size: .65rem;
+            color: var(--t-muted)
+        }
+
+            .pct .pct-line:first-child {
+                border-top: 0
+            }
+
+            .pct .pct-line strong {
+                color: #344054;
+                text-align: right
+            }
+
+        .pct .pct-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #edf9f3;
+            color: #176b48;
+            font-size: .58rem;
+            font-weight: 900
+        }
+
+            .pct .pct-badge.pending {
+                background: #fff8ea;
+                color: #865600
+            }
+
+        .pct .pct-form {
+            margin-top: 10px;
+            border: 1px solid var(--t-line);
+            border-radius: 12px;
+            background: #fff;
+            padding: 11px
+        }
+
+        .pct .pct-form-title {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 9px;
+            color: var(--t-navy);
+            font-size: .73rem;
+            font-weight: 950
+        }
+
+        .pct .pct-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 9px
+        }
+
+        .pct label {
+            display: block;
+            margin-bottom: 4px;
+            color: #344054;
+            font-size: .63rem;
+            font-weight: 900
+        }
+
+        .pct .form-control {
+            min-height: 36px;
+            border-radius: 8px;
+            font-size: .7rem
+        }
+
+        .pct textarea.form-control {
+            min-height: 58px
+        }
+
+        .pct .pct-help {
+            margin-top: 3px;
+            color: var(--t-muted);
+            font-size: .58rem;
+            line-height: 1.35
+        }
+
+        .pct .pct-cavity {
+            padding: 9px;
+            border: 1px solid var(--t-line);
+            border-radius: 10px;
+            background: var(--t-soft)
+        }
+
+        .pct .pct-cavity-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 7px
+        }
+
+        .pct .pct-cavity-buttons {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap
+        }
+
+            .pct .pct-cavity-buttons input {
+                position: absolute;
+                opacity: 0;
+                pointer-events: none
+            }
+
+            .pct .pct-cavity-buttons label {
+                margin: 0;
+                min-width: 30px;
+                text-align: center;
+                padding: 5px 7px;
+                border: 1px solid #d0d5dd;
+                border-radius: 7px;
+                background: #fff;
+                color: #475467;
+                cursor: pointer
+            }
+
+            .pct .pct-cavity-buttons input:checked + label {
+                background: #004aad;
+                border-color: #004aad;
+                color: #fff
+            }
+
+        .pct .pct-mini-btn {
+            border: 1px solid var(--t-line);
+            border-radius: 7px;
+            background: #fff;
+            color: #475467;
+            padding: 4px 7px;
+            font-size: .57rem;
+            font-weight: 850
+        }
+
+        .pct .pct-cavity-summary {
+            margin-top: 6px;
+            color: #475467;
+            font-size: .61rem;
+            font-weight: 800
+        }
+
+        .pct .pct-shared {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 9px
+        }
+
+        .pct .pct-objective {
+            padding: 9px;
+            border-radius: 9px;
+            background: #eef4fc;
+            color: #245484
+        }
+
+            .pct .pct-objective span {
+                display: block;
+                font-size: .57rem;
+                text-transform: uppercase;
+                font-weight: 900
+            }
+
+            .pct .pct-objective strong {
+                display: block;
+                margin-top: 2px;
+                font-size: .8rem
+            }
+
+        .pct .pct-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px
+        }
+
+        .pct .pct-btn {
+            border: 0;
+            border-radius: 9px;
+            background: #004aad;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: .68rem;
+            font-weight: 900
+        }
+
+            .pct .pct-btn:disabled {
+                opacity: .55
+            }
+
+        .pct details {
+            margin-top: 9px;
+            border-top: 1px solid var(--t-line);
+            padding-top: 8px
+        }
+
+            .pct details summary {
+                cursor: pointer;
+                color: #475467;
+                font-size: .63rem;
+                font-weight: 900
+            }
+
+        .pct .pct-history {
+            display: grid;
+            gap: 5px;
+            margin-top: 7px
+        }
+
+        .pct .pct-history-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 7px;
+            border: 1px solid var(--t-line);
+            border-radius: 8px;
+            background: #fbfcfe;
+            font-size: .6rem;
+            color: var(--t-muted)
+        }
+
+        .pct .pct-preview {
+            display: none;
+            margin-top: 9px;
+            padding: 9px 10px;
+            border: 1px solid #d8e5f4;
+            border-radius: 9px;
+            background: #f5faff;
+            font-size: .63rem;
+            color: #315f85
+        }
+
+            .pct .pct-preview.show {
+                display: block
+            }
+
+            .pct .pct-preview strong {
+                display: block;
+                margin-bottom: 2px
+            }
+
+    html[data-nsq-theme="dark"] .pct {
+        --t-text: #eef2f7;
+        --t-muted: #9aacbf;
+        --t-line: rgba(255,255,255,.10);
+        --t-soft: #0e1929;
+        --t-navy: #f5f7fb
+    }
+
+        html[data-nsq-theme="dark"] .pct .pct-stat, html[data-nsq-theme="dark"] .pct .pct-card, html[data-nsq-theme="dark"] .pct .pct-form {
+            background: #111d2f
+        }
+
+        html[data-nsq-theme="dark"] .pct .pct-head {
+            background: #0e1929
+        }
+
+        html[data-nsq-theme="dark"] .pct .pct-line strong, html[data-nsq-theme="dark"] .pct label {
+            color: #eef2f7
+        }
+
+    @@media(max-width:800px) {
+        .pct .pct-top {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .pct .pct-grid, .pct .pct-form-grid {
+            grid-template-columns: 1fr
+        }
+
+        .pct .pct-shared {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div class="pct">
+    <div class="pct-top">
+        <div class="pct-stat"><span>Máquina</span><strong>@Model.TextoMaquina</strong></div>
+        <div class="pct-stat"><span>Parte</span><strong>@Model.TextoParte</strong></div>
+        <div class="pct-stat"><span>Cavidades BD</span><strong>@(Model.CavidadesBD?.ToString("N0") ?? "—")</strong></div>
+        <div class="pct-stat"><span>Ciclo BD</span><strong>@(Model.TiempoCicloBD.HasValue ? $"{Model.TiempoCicloBD.Value:0.####} s" : "—")</strong></div>
+    </div>
+
+    @if (tieneRelacionPareja)
+    {
+        <div class="pct-alert @(bloquearPareja ? "bad" : "ok")">
+            <i class="bi bi-link-45deg me-1"></i>
+            <strong>Operación LH/RH · Grupo @pareja!.GrupoLhRh.</strong>
+            @if (!tieneEjecucionPareja)
+            {
+                <span> Falta crear la ejecución de la OF pareja; no se permitirá configurar un solo lado.</span>
+            }
+            else if (!compatiblePareja)
+            {
+                <span> Las dos OF ya no conservan la misma máquina, molde y ventana programada.</span>
+            }
+            else if (configuracionInconsistente)
+            {
+                <span> Se detectó una configuración parcial LH/RH. Debe corregirse antes de continuar.</span>
+            }
+            else
+            {
+                <span> Ciclo y contador son físicos y se guardarán juntos. Las cavidades se mantienen por cada OF.</span>
+            }
+        </div>
+    }
+
+    <div class="pct-grid">
+        <section class="pct-card">
+            <div class="pct-head">
+                <div><strong>@(string.IsNullOrWhiteSpace(Model.LadoLhRh) ? "OF actual" : Model.LadoLhRh) · Programa #@Model.ProgramaProduccionID</strong><small>@Model.TextoParte</small></div>
+                <span class="pct-badge @(actualVigente ? "" : "pending")">@(actualVigente ? "Activa" : "Pendiente")</span>
+            </div>
+            <div class="pct-body">
+                <div class="pct-line"><span>Referencia</span><strong>@(Model.CavidadesBD?.ToString("N0") ?? "—") cav. · @(Model.TiempoCicloBD.HasValue ? $"{Model.TiempoCicloBD.Value:0.####} s" : "—")</strong></div>
+                <div class="pct-line"><span>Objetivo referencia</span><strong>@(objetivoRef.HasValue ? $"{Math.Round(objetivoRef.Value):N0} pzas/h" : "—")</strong></div>
+                @if (cfg != null)
+                {
+                    <div class="pct-line"><span>Cavidades reales</span><strong>@cfg.CavidadesUsadas.ToString("N0")@(string.IsNullOrWhiteSpace(cfg.CavidadesConfiguradas) ? "" : $" · {cfg.CavidadesConfiguradas}")</strong></div>
+                    <div class="pct-line"><span>Ciclo real</span><strong>@cfg.TiempoCicloSegundos.ToString("0.####") s</strong></div>
+                    <div class="pct-line"><span>Objetivo vigente</span><strong>@cfg.ObjetivoHoraOperativo.ToString("N0") pzas/h</strong></div>
+                    <div class="pct-line"><span>Vs referencia</span><strong>@ComparacionObjetivo(cfg.ObjetivoHoraOperativo, objetivoRef)</strong></div>
+                    <div class="pct-line"><span>Contador base</span><strong>@(cfg.ContadorInicioVigencia?.ToString("N0") ?? "—")</strong></div>
+                }
+                <div class="pct-line"><span>Última lectura</span><strong>@(Model.UltimoContadorMaquina?.ToString("N0") ?? "Sin lectura")</strong></div>
+            </div>
+        </section>
+
+        @if (tieneRelacionPareja)
+        {
+            <section class="pct-card">
+                <div class="pct-head">
+                    <div><strong>@(string.IsNullOrWhiteSpace(Model.LadoParejaLhRh) ? "OF pareja" : Model.LadoParejaLhRh) · @Model.TextoOFPareja</strong><small>@Model.TextoPartePareja</small></div>
+                    <span class="pct-badge @(parejaVigente ? "" : "pending")">@(parejaVigente ? "Activa" : "Pendiente")</span>
+                </div>
+                <div class="pct-body">
+                    <div class="pct-line"><span>Referencia</span><strong>@(Model.CavidadesBDPareja?.ToString("N0") ?? "—") cav. · @(Model.TiempoCicloBDPareja.HasValue ? $"{Model.TiempoCicloBDPareja.Value:0.####} s" : "—")</strong></div>
+                    <div class="pct-line"><span>Objetivo referencia</span><strong>@(objetivoRefPareja.HasValue ? $"{Math.Round(objetivoRefPareja.Value):N0} pzas/h" : "—")</strong></div>
+                    @if (cfgPareja != null)
+                    {
+                        <div class="pct-line"><span>Cavidades reales</span><strong>@cfgPareja.CavidadesUsadas.ToString("N0")@(string.IsNullOrWhiteSpace(cfgPareja.CavidadesConfiguradas) ? "" : $" · {cfgPareja.CavidadesConfiguradas}")</strong></div>
+                        <div class="pct-line"><span>Ciclo real</span><strong>@cfgPareja.TiempoCicloSegundos.ToString("0.####") s</strong></div>
+                        <div class="pct-line"><span>Objetivo vigente</span><strong>@cfgPareja.ObjetivoHoraOperativo.ToString("N0") pzas/h</strong></div>
+                        <div class="pct-line"><span>Vs referencia</span><strong>@ComparacionObjetivo(cfgPareja.ObjetivoHoraOperativo, objetivoRefPareja)</strong></div>
+                        <div class="pct-line"><span>Contador base</span><strong>@(cfgPareja.ContadorInicioVigencia?.ToString("N0") ?? "—")</strong></div>
+                    }
+                    <div class="pct-line"><span>Última lectura</span><strong>@(Model.UltimoContadorMaquinaPareja?.ToString("N0") ?? "Sin lectura")</strong></div>
+                </div>
+            </section>
+        }
+    </div>
+
+    @if (!puedeModificar)
+    {
+        <div class="pct-alert mt-2"><i class="bi bi-lock me-1"></i>Solo el Técnico de Producción asignado, el Encargado de Producción o un Administrador pueden modificar esta configuración.</div>
+    }
+    else if (bloquearPareja)
+    {
+        <div class="pct-alert bad mt-2"><i class="bi bi-exclamation-octagon-fill me-1"></i>No se habilita la captura para evitar una configuración parcial LH/RH.</div>
+    }
+    else
+    {
+        <form method="post"
+              action="@accion"
+              class="pct-form"
+              data-config-operativa-form
+              data-requiere-motivo="@(esCambio?"true":"false")"
+              data-es-pareja="@(tieneEjecucionPareja?"true":"false")"
+              data-es-cambio="@(esCambio?"true":"false")">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
+
+            <div class="pct-form-title">
+                <span><i class="bi bi-sliders me-1"></i>@(esCambio ? "Cambiar configuración técnica" : "Confirmar configuración inicial")</span>
+                @if (tieneEjecucionPareja)
+                {
+                    <span class="pct-badge">LH/RH conjunto</span>
+                }
+            </div>
+
+            <div class="pct-form-grid">
+                <div class="pct-cavity"
+                     data-pct-cavidades
+                     data-existing-count="@(cavidadesDefault?.ToString(CultureInfo.InvariantCulture) ?? "")"
+                     data-existing-numbered="@(!string.IsNullOrWhiteSpace(cavidadesCsv) ? "true" : "false")">
+                    <div class="pct-cavity-top">
+                        <div>
+                            <label class="mb-0">Cavidades activas · @(string.IsNullOrWhiteSpace(Model.LadoLhRh) ? "OF actual" : Model.LadoLhRh)</label>
+                            <div class="pct-help">Referencia BD: @(Model.CavidadesBD?.ToString("N0") ?? "—")</div>
+                        </div>
+                        @if (cavidadesDisponibles.Any())
+                        {
+                            <div><button type="button" class="pct-mini-btn" data-pct-todas>Todas</button> <button type="button" class="pct-mini-btn" data-pct-limpiar>Limpiar</button></div>
+                        }
+                    </div>
+                    <input type="number" min="1" step="1" class="form-control mb-2" name="CavidadesUsadas" data-pct-cantidad value="@(cavidadesDefault?.ToString(CultureInfo.InvariantCulture) ?? "")" placeholder="Cantidad de cavidades" required />
+                    <input type="hidden" name="CavidadesConfiguradas" data-pct-csv value="@cavidadesCsv" />
+                    @if (cavidadesDisponibles.Any())
+                    {
+                        <div class="pct-cavity-buttons">
+                            @foreach (var n in cavidadesDisponibles)
+                            {
+                                <input id="pctCav_@Model.EjecucionProduccionID-@n" type="checkbox" value="@n" data-pct-cavidad @(seleccionActual.Contains(n) ? "checked" : null) />
+                                <label for="pctCav_@Model.EjecucionProduccionID-@n">@n</label>
+                            }
+                        </div>
+                    }
+                    <div class="pct-cavity-summary">Activas: <span data-pct-resumen>@(seleccionActual.Any() ? string.Join(", ", seleccionActual.OrderBy(x => x)) : (cavidadesDefault.HasValue ? $"{cavidadesDefault.Value} por cantidad" : "Sin definir"))</span></div>
+                </div>
+
+                @if (tieneEjecucionPareja)
+                {
+                    <div class="pct-cavity"
+                         data-pct-cavidades
+                         data-existing-count="@(cavidadesDefaultPareja?.ToString(CultureInfo.InvariantCulture) ?? "")"
+                         data-existing-numbered="@(!string.IsNullOrWhiteSpace(cavidadesCsvPareja) ? "true" : "false")">
+                        <div class="pct-cavity-top">
+                            <div>
+                                <label class="mb-0">Cavidades activas · @(string.IsNullOrWhiteSpace(Model.LadoParejaLhRh) ? "OF pareja" : Model.LadoParejaLhRh)</label>
+                                <div class="pct-help">@Model.TextoOFPareja · referencia BD: @(Model.CavidadesBDPareja?.ToString("N0") ?? "—")</div>
+                            </div>
+                            @if (cavidadesDisponiblesPareja.Any())
+                            {
+                                <div><button type="button" class="pct-mini-btn" data-pct-todas>Todas</button> <button type="button" class="pct-mini-btn" data-pct-limpiar>Limpiar</button></div>
+                            }
+                        </div>
+                        <input type="number" min="1" step="1" class="form-control mb-2" name="CavidadesUsadasPareja" data-pct-cantidad value="@(cavidadesDefaultPareja?.ToString(CultureInfo.InvariantCulture) ?? "")" placeholder="Cantidad de cavidades" required />
+                        <input type="hidden" name="CavidadesConfiguradasPareja" data-pct-csv value="@cavidadesCsvPareja" />
+                        @if (cavidadesDisponiblesPareja.Any())
+                        {
+                            <div class="pct-cavity-buttons">
+                                @foreach (var n in cavidadesDisponiblesPareja)
+                                {
+                                    <input id="pctCavP_@Model.EjecucionProduccionID-@n" type="checkbox" value="@n" data-pct-cavidad @(seleccionPareja.Contains(n) ? "checked" : null) />
+                                    <label for="pctCavP_@Model.EjecucionProduccionID-@n">@n</label>
+                                }
+                            </div>
+                        }
+                        <div class="pct-cavity-summary">Activas: <span data-pct-resumen>@(seleccionPareja.Any() ? string.Join(", ", seleccionPareja.OrderBy(x => x)) : (cavidadesDefaultPareja.HasValue ? $"{cavidadesDefaultPareja.Value} por cantidad" : "Sin definir"))</span></div>
+                    </div>
+                }
+            </div>
+
+            <div class="pct-shared">
+                <div>
+                    <label>Tiempo de ciclo real (segundos) *</label>
+                    <input type="number" min="0.0001" step="0.0001" class="form-control" name="TiempoCicloSegundos" data-pct-ciclo value="@(cicloDefault?.ToString("0.####", CultureInfo.InvariantCulture) ?? "")" required />
+                    <div class="pct-help">@(tieneEjecucionPareja ? "Compartido por ambas OF." : "Valor real de la corrida.")</div>
+                </div>
+                <div>
+                    <label>Contador físico actual *</label>
+                    <input type="number" min="0" step="1" class="form-control" name="ContadorMaquinaActual" data-pct-contador value="@(contadorDefault?.ToString(CultureInfo.InvariantCulture) ?? "")" required />
+                    <div class="pct-help">Si el contador reinició, captura lo que muestra la máquina.</div>
+                </div>
+                <div class="pct-objective">
+                    <span>Objetivo calculado · OF actual</span>
+                    <strong data-pct-objetivo-actual>—</strong>
+                    @if (tieneEjecucionPareja)
+                    {
+                        <span class="mt-1">Objetivo calculado · pareja</span>
+                        <strong data-pct-objetivo-pareja>—</strong>
+                    }
+                </div>
+            </div>
+
+            <div class="mt-2">
+                <label>@(esCambio ? "Motivo del cambio *" : "Observaciones")</label>
+                <textarea class="form-control" name="MotivoCambio" maxlength="500" rows="2" data-pct-motivo placeholder="@(esCambio ? "Ej. cavidad bloqueada, ajuste de proceso o cambio real de ciclo" : "Opcional")" required="@esCambio"></textarea>
+            </div>
+
+            @if (esCambio && !tieneEjecucionPareja)
+            {
+                <details>
+                    <summary><i class="bi bi-calendar-event me-1"></i>Vista previa del impacto en el calendario</summary>
+                    <div class="pct-preview" data-pct-preview><strong data-pct-preview-title>Calculando...</strong><span data-pct-preview-text></span></div>
+                </details>
+            }
+
+            <div class="pct-actions">
+                <button type="submit" class="pct-btn"><i class="bi @(esCambio ? "bi-arrow-repeat" : "bi-check2-circle") me-1"></i>@(esCambio ? "Aplicar nueva configuración" : "Confirmar configuración técnica")</button>
+            </div>
+        </form>
+    }
+
+    @if ((Model.HistorialConfiguraciones?.Count ?? 0) > 0 || (Model.HistorialConfiguracionesPareja?.Count ?? 0) > 0)
+    {
+        <details>
+            <summary><i class="bi bi-clock-history me-1"></i>Historial de configuraciones</summary>
+            <div class="pct-history">
+                @foreach (var h in (Model.HistorialConfiguraciones ?? new List<ProduccionConfiguracionCorridaVm>()).OrderByDescending(x => x.FechaInicioVigencia).Take(8))
+                {
+                    <div class="pct-history-row"><span>@(string.IsNullOrWhiteSpace(Model.LadoLhRh) ? "OF actual" : Model.LadoLhRh) · @h.FechaInicioVigencia.ToString("dd/MM HH:mm")</span><strong>@h.TextoConfiguracion</strong></div>
+                }
+                @foreach (var h in (Model.HistorialConfiguracionesPareja ?? new List<ProduccionConfiguracionCorridaVm>()).OrderByDescending(x => x.FechaInicioVigencia).Take(8))
+                {
+                    <div class="pct-history-row"><span>@(string.IsNullOrWhiteSpace(Model.LadoParejaLhRh) ? "Pareja" : Model.LadoParejaLhRh) · @h.FechaInicioVigencia.ToString("dd/MM HH:mm")</span><strong>@h.TextoConfiguracion</strong></div>
+                }
+            </div>
+        </details>
+    }
+</div>

@@ -1,0 +1,378 @@
+@using System
+@using System.Linq
+@using ERP.NSQuell.Models
+@model ProduccionCierreOperativoVm
+
+@functions {
+    public static string ClasePaso(bool completo,bool actual=false)
+    {
+        if(completo) return "is-done";
+        return actual?"is-current":"is-pending";
+    }
+
+    public static string IconoPaso(bool completo,string icono)
+    {
+        return completo?"bi-check-lg":icono;
+    }
+
+    public static string Fecha(DateTime? valor)
+    {
+        return valor.HasValue?valor.Value.ToString("dd/MM/yyyy HH:mm"):"-";
+    }
+}
+
+@{
+    var enfoqueLiberacion=string.Equals(Model.Enfoque,ProduccionCierreOperativoEnfoque.Liberacion,StringComparison.OrdinalIgnoreCase);
+    var rootId=$"pcc_{Model.Actual.ProgramaProduccionID}_{(enfoqueLiberacion?"lib":"cie")}";
+    var urlLiberar=Url.Action("LiberarMaquinaOperativa","Produccion")??"/Produccion/LiberarMaquinaOperativa";
+    var urlTerminar=Url.Action("TerminarOperativa","Produccion")??"/Produccion/TerminarOperativa";
+    var urlPreparar=Url.Action("PrepararCierreDocumentalOperativa","Produccion")??"/Produccion/PrepararCierreDocumentalOperativa";
+    var urlCerrar=Url.Action("CerrarDocumentalOperativa","Produccion")??"/Produccion/CerrarDocumentalOperativa";
+
+    var etapaLiberacion=Model.MaquinaLiberadaConjunta;
+    var etapaTerminacion=Model.ProduccionTerminadaConjunta;
+    var etapaAlmacen=Model.ProduccionTerminadaConjunta&&Model.TodasCajasRecibidasConjunto;
+    var etapaCierre=Model.CerradaConjunta;
+    var actualLiberacion=!etapaLiberacion;
+    var actualTerminacion=etapaLiberacion&&!etapaTerminacion;
+    var actualAlmacen=etapaTerminacion&&!etapaAlmacen;
+    var actualCierre=etapaAlmacen&&!etapaCierre;
+    var autoRefrescar=!Model.CerradaConjunta&&(Model.EsperandoAlmacen||Model.TienePendientesCalidad);
+    var bloqueos=Model.Lados.SelectMany(x=>x.BloqueosTerminacion.Select(b=>new{Lado=x,Texto=b})).ToList();
+    var bloqueosCalidad=bloqueos.Where(x=>
+        x.Texto.Contains("Calidad",StringComparison.OrdinalIgnoreCase)||
+        x.Texto.Contains("reliber",StringComparison.OrdinalIgnoreCase)||
+        x.Texto.Contains("monitoreo",StringComparison.OrdinalIgnoreCase)||
+        x.Texto.Contains("disposici",StringComparison.OrdinalIgnoreCase)).ToList();
+    var bloqueosOtros=bloqueos.Except(bloqueosCalidad).ToList();
+}
+
+<style>
+    .pcc{--p:#004aad;--navy:#0f2747;--line:#dbe4ee;--muted:#667085;--soft:#f7f9fc;--ok:#16803b;--warn:#b54708;--danger:#b42318;color:#182230;font-size:.79rem}
+    .pcc *{box-sizing:border-box}
+    .pcc-card{border:1px solid var(--line);border-radius:14px;background:#fff;overflow:hidden}
+    .pcc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line);background:linear-gradient(135deg,#f7faff,#fff)}
+    .pcc-title{display:flex;gap:10px;align-items:flex-start}.pcc-title-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#eaf2ff;color:var(--p);font-size:1rem;flex:none}
+    .pcc-title h3{margin:0;color:var(--navy);font-size:1rem;font-weight:900}.pcc-title p{margin:3px 0 0;color:var(--muted);font-size:.72rem;font-weight:650}
+    .pcc-tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.pcc-tag{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 8px;font-size:.66rem;font-weight:850;color:#344054}.pcc-tag.ok{border-color:#b7e4c7;background:#edfdf3;color:#166534}.pcc-tag.warn{border-color:#fedf89;background:#fffaeb;color:#92400e}.pcc-tag.dark{background:#172b4d;color:#fff;border-color:#172b4d}
+    .pcc-body{padding:14px 16px}.pcc-topgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(240px,.65fr);gap:12px}.pcc-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.pcc-fact{border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--soft);min-width:0}.pcc-fact span{display:block;color:var(--muted);font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em}.pcc-fact strong{display:block;margin-top:3px;color:#1d2939;font-size:.76rem;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pcc-progressbox{border:1px solid var(--line);border-radius:11px;padding:10px 11px;background:#fff}.pcc-progressbox .rowx{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:.68rem}.pcc-progressbox .rowx:last-child{margin-bottom:0}.pcc-progressbox .rowx span{color:var(--muted);font-weight:700}.pcc-progressbox .rowx strong{font-weight:900;color:#1d2939}
+    .pcc-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.pcc-step{position:relative;border:1px solid var(--line);border-radius:11px;padding:10px;background:#fff;min-height:73px}.pcc-step .ico{width:27px;height:27px;display:grid;place-items:center;border-radius:8px;background:#f2f4f7;color:#667085;margin-bottom:7px}.pcc-step strong{display:block;font-size:.69rem;font-weight:900}.pcc-step small{display:block;margin-top:2px;color:var(--muted);font-size:.6rem;line-height:1.28}.pcc-step.is-done{border-color:#b7e4c7;background:#f0fdf4}.pcc-step.is-done .ico{background:#dcfce7;color:#15803d}.pcc-step.is-current{border-color:#99bdf3;background:#f5f9ff;box-shadow:inset 0 0 0 1px #d8e8ff}.pcc-step.is-current .ico{background:#e7f0ff;color:var(--p)}
+    .pcc-notice{display:flex;align-items:flex-start;gap:9px;margin-top:12px;padding:10px 11px;border-radius:10px;border:1px solid #fedf89;background:#fffaeb;color:#7a2e0e;font-size:.7rem;font-weight:700;line-height:1.4}.pcc-notice.danger{border-color:#fecdca;background:#fff3f2;color:#912018}.pcc-notice.info{border-color:#b2ddff;background:#eff8ff;color:#175cd3}.pcc-notice.ok{border-color:#abefc6;background:#ecfdf3;color:#067647}.pcc-notice i{margin-top:1px;flex:none}
+    .pcc-lados{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.pcc-lado{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#fff}.pcc-lado-head{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;border-bottom:1px solid var(--line);background:#f8fafc}.pcc-lado-head strong{font-size:.75rem;font-weight:900;color:var(--navy)}.pcc-lado-body{padding:9px 10px}.pcc-kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.pcc-kv div{min-width:0}.pcc-kv span{display:block;color:var(--muted);font-size:.58rem;font-weight:800}.pcc-kv strong{display:block;font-size:.68rem;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pcc-boxline{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:9px}.pcc-box{padding:6px;border-radius:8px;background:#f7f9fc;text-align:center}.pcc-box strong{display:block;font-size:.76rem;font-weight:950}.pcc-box span{display:block;color:var(--muted);font-size:.52rem;font-weight:750;margin-top:1px}
+    .pcc-section{margin-top:12px;border:1px solid var(--line);border-radius:11px;padding:11px;background:#fff}.pcc-section h4{margin:0 0 8px;color:var(--navy);font-size:.78rem;font-weight:900}.pcc-blockers{display:grid;gap:6px}.pcc-blocker{display:flex;gap:8px;align-items:flex-start;padding:8px 9px;border:1px solid #fecdca;border-radius:9px;background:#fff6f5;color:#912018;font-size:.67rem;font-weight:700}.pcc-blocker.ext{border-color:#b2ddff;background:#eff8ff;color:#175cd3}.pcc-blocker b{font-weight:900}
+    .pcc-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.pcc-action{border:1px solid var(--line);border-radius:11px;padding:11px;background:#fff}.pcc-action h4{margin:0 0 4px;color:var(--navy);font-size:.76rem;font-weight:900}.pcc-action p{margin:0 0 9px;color:var(--muted);font-size:.65rem;line-height:1.4;font-weight:650}.pcc textarea{width:100%;min-height:66px;resize:vertical;border:1px solid #cfd8e3;border-radius:9px;padding:8px 9px;font:inherit;color:#182230;background:#fff}.pcc textarea:focus{outline:2px solid #cfe0ff;border-color:#7aa7e8}.pcc .pcc-check{display:flex;gap:7px;align-items:flex-start;margin:8px 0;color:#475467;font-size:.64rem;font-weight:700}.pcc .pcc-check input{margin-top:2px}.pcc-btnrow{display:flex;gap:7px;flex-wrap:wrap}.pcc-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;border:0;border-radius:9px;padding:7px 11px;font-size:.67rem;font-weight:900;cursor:pointer}.pcc-btn.primary{background:var(--p);color:#fff}.pcc-btn.success{background:#16803b;color:#fff}.pcc-btn.dark{background:#172b4d;color:#fff}.pcc-btn.outline{border:1px solid #b9c7d8;background:#fff;color:#344054}.pcc-btn:disabled{opacity:.45;cursor:not-allowed}.pcc-inline-msg{display:none;margin-top:8px;padding:8px 9px;border-radius:8px;font-size:.65rem;font-weight:800}.pcc-inline-msg.show{display:block}.pcc-inline-msg.ok{background:#ecfdf3;color:#067647;border:1px solid #abefc6}.pcc-inline-msg.err{background:#fff3f2;color:#b42318;border:1px solid #fecdca}.pcc-complete{padding:16px;border:1px solid #abefc6;border-radius:12px;background:#ecfdf3;text-align:center;color:#067647;margin-top:12px}.pcc-complete i{font-size:1.35rem}.pcc-complete strong{display:block;margin-top:4px;font-size:.9rem}.pcc-complete span{display:block;margin-top:3px;font-size:.68rem;font-weight:700}
+    html[data-nsq-theme="dark"] .pcc{--line:rgba(255,255,255,.11);--soft:#0e1828;--muted:#98a2b3;color:#e5e7eb}html[data-nsq-theme="dark"] .pcc .pcc-card,html[data-nsq-theme="dark"] .pcc .pcc-lado,html[data-nsq-theme="dark"] .pcc .pcc-section,html[data-nsq-theme="dark"] .pcc .pcc-action,html[data-nsq-theme="dark"] .pcc .pcc-step,html[data-nsq-theme="dark"] .pcc .pcc-progressbox{background:#111c2d}html[data-nsq-theme="dark"] .pcc-head,html[data-nsq-theme="dark"] .pcc-lado-head{background:#0e1828}html[data-nsq-theme="dark"] .pcc-fact strong,html[data-nsq-theme="dark"] .pcc-progressbox .rowx strong,html[data-nsq-theme="dark"] .pcc-kv strong{color:#f8fafc}html[data-nsq-theme="dark"] .pcc textarea{background:#0b1422;color:#f8fafc;border-color:rgba(255,255,255,.15)}
+    @@media(max-width:900px){.pcc-topgrid,.pcc-actions{grid-template-columns:1fr}.pcc-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.pcc-flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @@media(max-width:620px){.pcc-head{flex-direction:column}.pcc-tags{justify-content:flex-start}.pcc-lados{grid-template-columns:1fr}.pcc-boxline{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+
+<div id="@rootId"
+     class="pcc"
+     data-cierre-contenido
+     data-cierre-auto-refrescar="@(autoRefrescar?"true":"false")">
+    <section class="pcc-card">
+        <header class="pcc-head">
+            <div class="pcc-title">
+                <div class="pcc-title-icon"><i class="bi @(enfoqueLiberacion?"bi-unlock":"bi-flag-fill")"></i></div>
+                <div>
+                    <h3>@(enfoqueLiberacion?"Liberación física de máquina":"Cierre integral de Producción")</h3>
+                    <p>
+                        OF <strong>@Model.Actual.OFTexto</strong> · Programa @Model.Actual.ProgramaProduccionID
+                        @if(Model.EsLhRh){<span> · operación LH/RH grupo @Model.GrupoLhRh</span>}
+                    </p>
+                </div>
+            </div>
+            <div class="pcc-tags">
+                <span class="pcc-tag @(Model.MaquinaLiberadaConjunta?"ok":"warn")"><i class="bi bi-unlock"></i>@(Model.MaquinaLiberadaConjunta?"Máquina liberada":"Máquina ocupada")</span>
+                <span class="pcc-tag @(Model.CerradaConjunta?"dark":"")"><i class="bi bi-record-circle"></i>@(Model.CerradaConjunta?"Estatus 9 · Cerrado":Model.ListaCierreDocumentalConjunta?"Estatus 8 · Cierre documental":"Proceso abierto")</span>
+            </div>
+        </header>
+
+        <div class="pcc-body">
+            <div class="pcc-topgrid">
+                <div class="pcc-facts">
+                    <div class="pcc-fact"><span>Máquina</span><strong title="@Model.Actual.MaquinaTexto">@Model.Actual.MaquinaTexto</strong></div>
+                    <div class="pcc-fact"><span>Parte</span><strong title="@Model.Actual.ParteTexto">@Model.Actual.ParteTexto</strong></div>
+                    <div class="pcc-fact"><span>Molde</span><strong>@(string.IsNullOrWhiteSpace(Model.Actual.MoldeCodigo)?"Sin molde":Model.Actual.MoldeCodigo)</strong></div>
+                    <div class="pcc-fact"><span>Producción OK</span><strong>@Model.Lados.Sum(x=>x.CantidadOK).ToString("N0") pza</strong></div>
+                </div>
+                <div class="pcc-progressbox">
+                    <div class="rowx"><span>Cajas totales</span><strong>@Model.TotalCajasConjunto</strong></div>
+                    <div class="rowx"><span>Recibidas Almacén PT</span><strong>@Model.CajasRecibidasAlmacenConjunto / @Model.TotalCajasConjunto</strong></div>
+                    <div class="rowx"><span>Pendientes Almacén PT</span><strong>@Model.CajasPendientesRecepcionConjunto</strong></div>
+                    <div class="rowx"><span>Consulta</span><strong>@Model.FechaConsulta.ToString("HH:mm:ss")</strong></div>
+                </div>
+            </div>
+
+            <div class="pcc-flow">
+                <div class="pcc-step @ClasePaso(etapaLiberacion,actualLiberacion)">
+                    <div class="ico"><i class="bi @IconoPaso(etapaLiberacion,"bi-unlock")"></i></div>
+                    <strong>1. Liberar máquina</strong>
+                    <small>@(etapaLiberacion?"Operación física liberada.":"Producción todavía ocupa físicamente la máquina.")</small>
+                </div>
+                <div class="pcc-step @ClasePaso(etapaTerminacion,actualTerminacion)">
+                    <div class="ico"><i class="bi @IconoPaso(etapaTerminacion,"bi-stop-circle")"></i></div>
+                    <strong>2. Terminar Producción</strong>
+                    <small>@(etapaTerminacion?"Ejecución terminada.":"Se validan piezas, cajas, paros y Calidad.")</small>
+                </div>
+                <div class="pcc-step @ClasePaso(etapaAlmacen,actualAlmacen)">
+                    <div class="ico"><i class="bi @IconoPaso(etapaAlmacen,"bi-box-arrow-in-down")"></i></div>
+                    <strong>3. Recepción Almacén PT</strong>
+                    <small>@(etapaAlmacen?"Todas las cajas fueron recibidas.":$"Pendientes: {Model.CajasPendientesRecepcionConjunto} caja(s).")</small>
+                </div>
+                <div class="pcc-step @ClasePaso(etapaCierre,actualCierre)">
+                    <div class="ico"><i class="bi @IconoPaso(etapaCierre,"bi-file-earmark-check")"></i></div>
+                    <strong>4. Cierre documental</strong>
+                    <small>@(etapaCierre?"OF cerrada al 100%.":Model.ListaCierreDocumentalConjunta?"Lista en estatus 8 para cierre final.":"Se habilita después de Almacén PT.")</small>
+                </div>
+            </div>
+
+            @if(!Model.ParejaConsistente)
+            {
+                <div class="pcc-notice danger"><i class="bi bi-link-45deg"></i><div><strong>Operación LH/RH bloqueada.</strong> @Model.MotivoInconsistenciaPareja No se permitirá liberar, terminar ni cerrar parcialmente una sola OF.</div></div>
+            }
+            else if(Model.EsLhRh)
+            {
+                <div class="pcc-notice info"><i class="bi bi-link-45deg"></i><div>LH/RH se trata como <strong>una sola operación física</strong>. Liberación, terminación y cierre documental se validan sobre ambas OF y se actualizan juntas.</div></div>
+            }
+
+            @if(Model.TienePendientesCalidad&&!Model.ProduccionTerminadaConjunta)
+            {
+                <div class="pcc-notice info"><i class="bi bi-shield-check"></i><div><strong>Esperando a Calidad.</strong> Producción solo muestra el bloqueo. La liberación, reliberación, monitoreo o disposición correspondiente debe resolverse desde el módulo de Calidad.</div></div>
+            }
+
+            @if(Model.EsperandoAlmacen)
+            {
+                <div class="pcc-notice"><i class="bi bi-box-seam"></i><div><strong>Esperando el flujo final de cajas.</strong> Producción ya terminó. Faltan @Model.CajasPendientesRecepcionConjunto caja(s) por llegar a Almacén PT. Pueden seguir en GP12/retención, zona verde, salida de Producción o traslado; cada área concluye su propio paso y este panel solo da seguimiento.</div></div>
+            }
+
+            @if(Model.CerradaConjunta)
+            {
+                <div class="pcc-complete">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <strong>Producción cerrada al 100%</strong>
+                    <span>Máquina liberada, ejecución terminada, cajas recibidas por Almacén PT y cierre documental en estatus 9.</span>
+                </div>
+            }
+
+            <div class="pcc-lados">
+                @foreach(var lado in Model.Lados)
+                {
+                    <article class="pcc-lado">
+                        <div class="pcc-lado-head">
+                            <strong>@lado.OFTexto @if(!string.IsNullOrWhiteSpace(lado.LadoLhRh)){<span>· @lado.LadoLhRh</span>}</strong>
+                            <span class="pcc-tag @(lado.EstaCerrada?"dark":lado.EstaListaCierreDocumental?"warn":"")">@lado.EstatusEjecucionTexto</span>
+                        </div>
+                        <div class="pcc-lado-body">
+                            <div class="pcc-kv">
+                                <div><span>Programa</span><strong>@lado.ProgramaProduccionID</strong></div>
+                                <div><span>Ejecución</span><strong>@lado.EjecucionProduccionID</strong></div>
+                                <div><span>Fin real</span><strong>@Fecha(lado.FechaFinReal)</strong></div>
+                                <div><span>Liberación máquina</span><strong>@Fecha(lado.FechaLiberacionMaquina)</strong></div>
+                            </div>
+                            <div class="pcc-boxline">
+                                <div class="pcc-box"><strong>@lado.TotalCajas</strong><span>Total</span></div>
+                                <div class="pcc-box"><strong>@lado.CajasRecibidasAlmacen</strong><span>En PT</span></div>
+                                <div class="pcc-box"><strong>@lado.CajasSalidaProduccion</strong><span>En traslado</span></div>
+                                <div class="pcc-box"><strong>@lado.CajasPendientesRecepcionAlmacen</strong><span>Pendientes</span></div>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+
+            @if(!Model.ProduccionTerminadaConjunta&&bloqueos.Count>0)
+            {
+                <section class="pcc-section">
+                    <h4><i class="bi bi-exclamation-diamond me-1"></i>Pendientes que impiden terminar Producción</h4>
+                    <div class="pcc-blockers">
+                        @foreach(var item in bloqueosCalidad)
+                        {
+                            <div class="pcc-blocker ext"><i class="bi bi-shield-check"></i><div><b>@item.Lado.OFTexto:</b> @item.Texto <span>· Resolver desde Calidad.</span></div></div>
+                        }
+                        @foreach(var item in bloqueosOtros)
+                        {
+                            <div class="pcc-blocker"><i class="bi bi-lock-fill"></i><div><b>@item.Lado.OFTexto:</b> @item.Texto</div></div>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if(!Model.CerradaConjunta)
+            {
+                <div class="pcc-actions">
+                    @if(!Model.MaquinaLiberadaConjunta)
+                    {
+                        <section class="pcc-action">
+                            <h4><i class="bi bi-unlock me-1"></i>Liberación física de máquina</h4>
+                            <p>Libera la máquina cuando la corrida física ya concluyó. Esto <strong>no equivale</strong> a una liberación de Calidad.</p>
+                            @if(Model.PuedeLiberarMaquina)
+                            {
+                                <form data-cierre-form action="@urlLiberar" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                                    <textarea name="Observaciones" maxlength="500" placeholder="Observaciones de liberación (opcional)"></textarea>
+                                    <div class="pcc-btnrow mt-2"><button type="submit" class="pcc-btn primary"><i class="bi bi-unlock-fill"></i>Liberar máquina@(Model.EsLhRh?" LH/RH":"")</button></div>
+                                    <div class="pcc-inline-msg" data-cierre-mensaje></div>
+                                </form>
+                            }
+                            else
+                            {
+                                <div class="pcc-notice @(Model.SoloLectura?"info":"")" style="margin-top:0"><i class="bi bi-info-circle"></i><div>@(Model.SoloLectura?"Vista en modo consulta.":Model.Actual.MensajeLiberacion??"La liberación todavía no está disponible.")</div></div>
+                            }
+                        </section>
+                    }
+
+                    @if(Model.MaquinaLiberadaConjunta&&!Model.ProduccionTerminadaConjunta)
+                    {
+                        <section class="pcc-action">
+                            <h4><i class="bi bi-stop-circle me-1"></i>Terminar Producción</h4>
+                            <p>Cierra la ejecución productiva después de validar cantidades, cajas, paros, tiempo extra y pendientes de Calidad.</p>
+                            @if(Model.PuedeTerminarProduccion)
+                            {
+                                <form data-cierre-form data-requiere-confirmacion action="@urlTerminar" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                                    <input type="hidden" name="TerminarParcial" value="false" />
+                                    <textarea name="Observaciones" maxlength="500" placeholder="Observaciones de terminación (opcional)"></textarea>
+                                    <label class="pcc-check"><input type="checkbox" data-confirmacion-cierre /><span>Confirmo que la corrida física terminó y que deseo cerrar la ejecución@(Model.EsLhRh?" de ambas OF LH/RH":"").</span></label>
+                                    <div class="pcc-btnrow"><button type="submit" class="pcc-btn success" disabled data-boton-confirmado><i class="bi bi-check2-circle"></i>Terminar Producción</button></div>
+                                    <div class="pcc-inline-msg" data-cierre-mensaje></div>
+                                </form>
+                            }
+                            else if(Model.PuedeTerminarParcial)
+                            {
+                                <form data-cierre-form data-requiere-confirmacion action="@urlTerminar" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                                    <input type="hidden" name="TerminarParcial" value="true" />
+                                    <div class="pcc-notice" style="margin-top:0"><i class="bi bi-sign-stop"></i><div><strong>Terminación parcial autorizada por Planeación.</strong> @Model.Actual.MotivoTerminacionParcial</div></div>
+                                    <textarea class="mt-2" name="Observaciones" maxlength="500" placeholder="Observaciones de terminación parcial (opcional)"></textarea>
+                                    <label class="pcc-check"><input type="checkbox" data-confirmacion-cierre /><span>Confirmo ejecutar la terminación parcial autorizada por Planeación.</span></label>
+                                    <div class="pcc-btnrow"><button type="submit" class="pcc-btn dark" disabled data-boton-confirmado><i class="bi bi-stop-fill"></i>Ejecutar terminación parcial</button></div>
+                                    <div class="pcc-inline-msg" data-cierre-mensaje></div>
+                                </form>
+                            }
+                            else
+                            {
+                                <div class="pcc-notice info" style="margin-top:0"><i class="bi bi-hourglass-split"></i><div>La terminación aún no está habilitada. Revisa los pendientes mostrados arriba.</div></div>
+                            }
+                        </section>
+                    }
+
+                    @if(Model.ProduccionTerminadaConjunta&&!Model.ListaCierreDocumentalConjunta&&!Model.CerradaConjunta)
+                    {
+                        <section class="pcc-action">
+                            <h4><i class="bi bi-box-arrow-in-down me-1"></i>Recepción completa en Almacén PT</h4>
+                            <p>El ERP no recibe las cajas desde Producción. Almacén PT debe registrar cada recepción física. Cuando todas estén en estado 7 se habilita el estatus 8.</p>
+                            @if(Model.PuedePrepararCierreDocumental)
+                            {
+                                <form data-cierre-form action="@urlPreparar" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                                    <div class="pcc-notice ok" style="margin-top:0"><i class="bi bi-check-circle"></i><div>Todas las cajas fueron recibidas por Almacén PT. Ya puede prepararse el cierre documental.</div></div>
+                                    <div class="pcc-btnrow mt-2"><button type="submit" class="pcc-btn primary"><i class="bi bi-file-earmark-arrow-up"></i>Pasar a estatus 8 · Lista para cierre</button></div>
+                                    <div class="pcc-inline-msg" data-cierre-mensaje></div>
+                                </form>
+                            }
+                            else if(!Model.TodasCajasRecibidasConjunto)
+                            {
+                                <div class="pcc-notice" style="margin-top:0"><i class="bi bi-hourglass-split"></i><div>Faltan <strong>@Model.CajasPendientesRecepcionConjunto</strong> caja(s) por recibir en Almacén PT.</div></div>
+                            }
+                            else
+                            {
+                                <div class="pcc-notice info" style="margin-top:0"><i class="bi bi-person-lock"></i><div>Las cajas ya están completas. Supervisión o Auxiliar de Producción debe pasar la OF a cierre documental.</div></div>
+                            }
+                        </section>
+                    }
+
+                    @if(Model.ListaCierreDocumentalConjunta&&!Model.CerradaConjunta)
+                    {
+                        <section class="pcc-action">
+                            <h4><i class="bi bi-file-earmark-check me-1"></i>Cierre documental final</h4>
+                            <p>Último paso. Cambia ejecución y programa de estatus 8 a estatus 9. En LH/RH cierra ambas OF en la misma transacción.</p>
+                            @if(Model.PuedeCerrarDocumental)
+                            {
+                                <form data-cierre-form data-requiere-confirmacion action="@urlCerrar" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="EjecucionProduccionID" value="@Model.Actual.EjecucionProduccionID" />
+                                    <textarea name="Observaciones" maxlength="500" placeholder="Observaciones finales de cierre documental (opcional)"></textarea>
+                                    <label class="pcc-check"><input type="checkbox" data-confirmacion-cierre /><span>Confirmo que la trazabilidad está completa y deseo cerrar definitivamente la producción en estatus 9.</span></label>
+                                    <div class="pcc-btnrow"><button type="submit" class="pcc-btn dark" disabled data-boton-confirmado><i class="bi bi-lock-fill"></i>Cerrar producción al 100%</button></div>
+                                    <div class="pcc-inline-msg" data-cierre-mensaje></div>
+                                </form>
+                            }
+                            else
+                            {
+                                <div class="pcc-notice info" style="margin-top:0"><i class="bi bi-person-lock"></i><div>La OF está lista para cierre documental. El cierre final corresponde a Supervisión/Auxiliar de Producción.</div></div>
+                            }
+                        </section>
+                    }
+                </div>
+            }
+
+            <div class="pcc-btnrow mt-3"><button type="button" class="pcc-btn outline" data-cierre-refrescar><i class="bi bi-arrow-clockwise"></i>Actualizar estado</button></div>
+        </div>
+    </section>
+</div>
+
+<script>
+(() => {
+    'use strict';
+    const root=document.getElementById('@rootId');
+    if(!root||root.dataset.inicializado==='1') return;
+    root.dataset.inicializado='1';
+
+    function escapar(texto){return String(texto??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+    function mostrar(form,texto,ok){
+        const box=form.querySelector('[data-cierre-mensaje]');
+        if(!box) return;
+        box.className=`pcc-inline-msg show ${ok?'ok':'err'}`;
+        box.innerHTML=`<i class="bi ${ok?'bi-check-circle-fill':'bi-exclamation-triangle-fill'} me-1"></i>${escapar(texto)}`;
+    }
+    async function leerRespuesta(response){
+        const tipo=(response.headers.get('content-type')||'').toLowerCase();
+        if(tipo.includes('application/json')){
+            const data=await response.json();
+            return {ok:response.ok&&(data?.ok!==false),mensaje:data?.mensaje||data?.message||`HTTP ${response.status}`};
+        }
+        const texto=await response.text();
+        return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+    }
+
+    root.querySelectorAll('[data-requiere-confirmacion]').forEach(form=>{
+        const check=form.querySelector('[data-confirmacion-cierre]');
+        const boton=form.querySelector('[data-boton-confirmado]');
+        if(!check||!boton) return;
+        const sincronizar=()=>{boton.disabled=!check.checked;};
+        check.addEventListener('change',sincronizar);
+        sincronizar();
+    });
+
+    root.querySelectorAll('[data-cierre-form]').forEach(form=>{
+        if(form.dataset.bind==='1') return;
+        form.dataset.bind='1';
+        form.addEventListener('submit',async event=>{
+            event.preventDefault();
+            if(form.dataset.enviando==='1') return;
+            const confirmacion=form.querySelector('[data-confirmacion-cierre]');
+            if(confirmacion&&!confirmacion.checked){mostrar(form,'Debes marcar la confirmación antes de continuar.',false);return;}
+            form.dataset.enviando='1';
+            const botones=[...form.querySelectorAll('button[type="submit"]')];
+            botones.forEach(b=>b.disabled=true);
+            try{
+                const response=await fetch(form.action,{method:'POST',body:new FormData(form),credentials:'same-origin',cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest'}});
+                const data=await leerRespuesta(response);
+                if(!data.ok){mostrar(form,data.mensaje||'No fue posible completar la operación.',false);return;}
+                mostrar(form,data.mensaje||'Operación completada.',true);
+                window.setTimeout(()=>root.closest('[data-pcl-cierre-loader]')?.dispatchEvent(new CustomEvent('nsq:cierre-actualizado',{bubbles:false})),350);
+            }catch(error){mostrar(form,error?.message||'No fue posible completar la operación.',false);}
+            finally{
+                form.dataset.enviando='0';
+                botones.forEach(b=>b.disabled=!!confirmacion&&!confirmacion.checked);
+            }
+        });
+    });
+})();
+</script>

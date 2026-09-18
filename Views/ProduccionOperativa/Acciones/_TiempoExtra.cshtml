@@ -1,0 +1,178 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poTiempoExtra_{Model.ProgramaProduccionID}";
+    var soloLectura = ViewData["SoloLectura"] is bool valorSoloLectura && valorSoloLectura;
+    var urlContenido = Url.Action(
+        "TiempoExtraOperativo",
+        "ProduccionOperador",
+        new
+        {
+            ejecucionProduccionId = Model.EjecucionProduccionID,
+            soloLectura
+        }) ?? $"/ProduccionOperador/TiempoExtraOperativo?ejecucionProduccionId={Model.EjecucionProduccionID}&soloLectura={soloLectura.ToString().ToLowerInvariant()}";
+}
+
+<style>
+    .pte-loader {
+        min-height: 260px
+    }
+
+        .pte-loader .pte-loading {
+            min-height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            color: #667085;
+            font-size: .8rem;
+            font-weight: 800
+        }
+
+        .pte-loader .pte-spinner {
+            width: 31px;
+            height: 31px;
+            border: 3px solid #dbe5f1;
+            border-top-color: #004aad;
+            border-radius: 50%;
+            animation: pteSpin .72s linear infinite
+        }
+
+        .pte-loader .pte-error {
+            border: 1px solid #fecaca;
+            background: #fff5f5;
+            color: #991b1b;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: .82rem;
+            font-weight: 750
+        }
+
+    @@keyframes pteSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="pte-loader"
+     data-pte-tiempo-extra
+     data-programa-id="@Model.ProgramaProduccionID"
+     data-ejecucion-id="@(Model.EjecucionProduccionID?.ToString() ?? string.Empty)">
+    <div data-pte-body>
+        <div class="pte-loading">
+            <div class="pte-spinner"></div>
+            <span>Cargando tiempo extra...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const body=root.querySelector('[data-pte-body]');
+        const url='@Html.Raw(urlContenido)';
+        let cargando=false;
+        let timer=null;
+
+        function escapar(texto){
+            return String(texto??'')
+                .replace(/&/g,'&amp;')
+                .replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;')
+                .replace(/'/g,'&#039;');
+        }
+
+        async function leerError(response){
+            try{
+                const tipo=(response.headers.get('content-type')||'').toLowerCase();
+                if(tipo.includes('application/json')){
+                    const data=await response.json();
+                    return data?.mensaje||data?.message||`HTTP ${response.status}`;
+                }
+                const texto=await response.text();
+                if(!texto) return `HTTP ${response.status}`;
+                const doc=new DOMParser().parseFromString(texto,'text/html');
+                return doc.body?.innerText?.trim()?.slice(0,500)||texto.slice(0,500);
+            }catch{
+                return `HTTP ${response.status}`;
+            }
+        }
+
+        function ejecutarScripts(contenedor){
+            [...contenedor.querySelectorAll('script')].forEach(anterior=>{
+                const nuevo=document.createElement('script');
+                [...anterior.attributes].forEach(a=>nuevo.setAttribute(a.name,a.value));
+                nuevo.text=anterior.textContent||'';
+                anterior.replaceWith(nuevo);
+            });
+        }
+
+        function programarAutoRefresco(){
+            if(timer){
+                window.clearTimeout(timer);
+                timer=null;
+            }
+            const contenido=body.querySelector('[data-tiempo-extra-auto-refrescar="true"]');
+            if(!contenido) return;
+            timer=window.setTimeout(()=>{
+                if(root.isConnected&&!document.hidden) cargar(false);
+            },20000);
+        }
+
+        async function cargar(mostrarCarga=false){
+            if(cargando||!root.isConnected) return;
+            cargando=true;
+            if(mostrarCarga){
+                body.innerHTML='<div class="pte-loading"><div class="pte-spinner"></div><span>Cargando tiempo extra...</span></div>';
+            }
+            try{
+                const response=await fetch(url,{
+                    method:'GET',
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{
+                        'X-Requested-With':'XMLHttpRequest',
+                        'Cache-Control':'no-cache'
+                    }
+                });
+                if(!response.ok) throw new Error(await leerError(response));
+                body.innerHTML=await response.text();
+                ejecutarScripts(body);
+                programarAutoRefresco();
+            }catch(error){
+                body.innerHTML=`<div class="pte-error"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible consultar el tiempo extra.')}</div>`;
+            }finally{
+                cargando=false;
+            }
+        }
+
+        root.addEventListener('click',event=>{
+            const refrescar=event.target.closest?.('[data-tiempo-extra-refrescar]');
+            if(!refrescar) return;
+            event.preventDefault();
+            cargar(false);
+        });
+
+        root.addEventListener('nsq:tiempo-extra-actualizado',()=>{
+            cargar(false);
+            const centro=root.closest('[data-nsq-operativa-centro]');
+            const refrescarCentro=centro?.querySelector('[data-nsq-operativa-refrescar]');
+            if(refrescarCentro) refrescarCentro.click();
+        });
+
+        document.addEventListener('visibilitychange',()=>{
+            if(!document.hidden&&root.isConnected&&body.querySelector('[data-tiempo-extra-auto-refrescar="true"]'))
+                cargar(false);
+        });
+
+        cargar(true);
+    })();
+</script>

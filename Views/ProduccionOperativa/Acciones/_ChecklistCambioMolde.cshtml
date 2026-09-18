@@ -1,0 +1,119 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poChecklistCambio_{Model.ProgramaProduccionID}";
+    var urlContenido = Url.Action("ChecklistCambioMoldeOperativa", "ProduccionPreparacion") ?? "/ProduccionPreparacion/ChecklistCambioMoldeOperativa";
+}
+
+<style>
+    .po-checklist-loader {
+        min-height: 220px
+    }
+
+        .po-checklist-loader .pcc-loading {
+            min-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 9px;
+            color: #667085;
+            font-size: .76rem;
+            font-weight: 800
+        }
+
+        .po-checklist-loader .pcc-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid #dbe5f1;
+            border-top-color: #5b3fd4;
+            border-radius: 50%;
+            animation: pccSpin .75s linear infinite
+        }
+
+    @@keyframes pccSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="po-checklist-loader"
+     data-po-checklist-cambio
+     data-programa-id="@Model.ProgramaProduccionID">
+    <div data-pcc-body>
+        <div class="pcc-loading"><div class="pcc-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const body=root.querySelector('[data-pcc-body]');
+        const urlContenido='@urlContenido';
+
+        function escapar(texto){
+            return String(texto??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        async function leerRespuesta(response){
+            const tipo=(response.headers.get('content-type')||'').toLowerCase();
+            if(tipo.includes('application/json')) return await response.json();
+            const texto=await response.text();
+            return {ok:response.ok,mensaje:texto||`HTTP ${response.status}`};
+        }
+
+        function ejecutarScripts(contenedor){
+            [...contenedor.querySelectorAll('script')].forEach(anterior=>{
+                const nuevo=document.createElement('script');
+                [...anterior.attributes].forEach(a=>nuevo.setAttribute(a.name,a.value));
+                nuevo.text=anterior.textContent||'';
+                anterior.replaceWith(nuevo);
+            });
+        }
+
+        async function cargar(){
+            body.innerHTML='<div class="pcc-loading"><div class="pcc-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>';
+            try{
+                const qs=new URLSearchParams({programaProduccionId:String(programaId)});
+                const response=await fetch(`${urlContenido}?${qs.toString()}`,{
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest'}
+                });
+                if(!response.ok){
+                    const data=await leerRespuesta(response);
+                    throw new Error(data?.mensaje||`HTTP ${response.status}`);
+                }
+                body.innerHTML=await response.text();
+                ejecutarScripts(body);
+            }catch(error){
+                body.innerHTML=`<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible abrir el checklist.')}</div>`;
+            }
+        }
+
+        const actualizado=event=>{
+            if(Number(event?.detail?.programaProduccionId||0)!==programaId) return;
+            window.setTimeout(()=>{
+                const centro=root.closest('[data-nsq-operativa-centro]');
+                centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
+            },500);
+        };
+
+        document.addEventListener('nsq:checklist-cambio-actualizado',actualizado);
+
+        const watcher=window.setInterval(()=>{
+            if(document.body.contains(root)) return;
+            document.removeEventListener('nsq:checklist-cambio-actualizado',actualizado);
+            window.clearInterval(watcher);
+        },1500);
+
+        cargar();
+    })();
+</script>

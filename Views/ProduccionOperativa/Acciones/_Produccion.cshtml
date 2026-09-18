@@ -1,0 +1,166 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+
+@{
+    var rootId = $"poSeguimientoProduccion_{Model.ProgramaProduccionID}";
+    var urlSeguimiento = Url.Action(
+        "SeguimientoProduccionOperativa",
+        "ProduccionOperativa",
+        new { programaProduccionId = Model.ProgramaProduccionID })
+        ?? $"/Produccion/Operativa/Produccion/{Model.ProgramaProduccionID}";
+}
+
+<style>
+    .pst-loader {
+        min-height: 260px
+    }
+
+        .pst-loader .pst-loading {
+            min-height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            color: #667085;
+            font-size: .8rem;
+            font-weight: 800
+        }
+
+        .pst-loader .pst-spinner {
+            width: 31px;
+            height: 31px;
+            border: 3px solid #dbe5f1;
+            border-top-color: #004aad;
+            border-radius: 50%;
+            animation: pstSpin .72s linear infinite
+        }
+
+        .pst-loader .pst-error {
+            border: 1px solid #fecaca;
+            background: #fff5f5;
+            color: #991b1b;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: .82rem;
+            font-weight: 750
+        }
+
+    @@keyframes pstSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+</style>
+
+<div id="@rootId"
+     class="pst-loader"
+     data-pst-seguimiento
+     data-programa-id="@Model.ProgramaProduccionID">
+    <div data-pst-body>
+        <div class="pst-loading">
+            <div class="pst-spinner"></div>
+            <span>Cargando seguimiento de Producción...</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+        const root=document.getElementById('@rootId');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const body=root.querySelector('[data-pst-body]');
+        const url='@urlSeguimiento';
+        let cargando=false;
+        let timer=null;
+
+        function escapar(texto){
+            return String(texto??'')
+                .replace(/&/g,'&amp;')
+                .replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;')
+                .replace(/'/g,'&#039;');
+        }
+
+        async function leerError(response){
+            try{
+                const tipo=(response.headers.get('content-type')||'').toLowerCase();
+                if(tipo.includes('application/json')){
+                    const data=await response.json();
+                    return data?.mensaje||data?.message||`HTTP ${response.status}`;
+                }
+                const texto=await response.text();
+                if(!texto) return `HTTP ${response.status}`;
+                const doc=new DOMParser().parseFromString(texto,'text/html');
+                return doc.body?.innerText?.trim()?.slice(0,500)||texto.slice(0,500);
+            }catch{
+                return `HTTP ${response.status}`;
+            }
+        }
+
+        function ejecutaScripts(contenedor){
+            [...contenedor.querySelectorAll('script')].forEach(anterior=>{
+                const nuevo=document.createElement('script');
+                [...anterior.attributes].forEach(a=>nuevo.setAttribute(a.name,a.value));
+                nuevo.text=anterior.textContent||'';
+                anterior.replaceWith(nuevo);
+            });
+        }
+
+        async function cargar(mostrarCarga=false){
+            if(cargando||!root.isConnected) return;
+            cargando=true;
+            if(mostrarCarga){
+                body.innerHTML='<div class="pst-loading"><div class="pst-spinner"></div><span>Cargando seguimiento de Producción...</span></div>';
+            }
+            try{
+                const response=await fetch(url,{
+                    method:'GET',
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{
+                        'X-Requested-With':'XMLHttpRequest',
+                        'Cache-Control':'no-cache'
+                    }
+                });
+                if(!response.ok) throw new Error(await leerError(response));
+                body.innerHTML=await response.text();
+                ejecutaScripts(body);
+            }catch(error){
+                body.innerHTML=`<div class="pst-error"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapar(error?.message||'No fue posible consultar la Producción.')}</div>`;
+            }finally{
+                cargando=false;
+            }
+        }
+
+        root.addEventListener('click',event=>{
+            const refrescar=event.target.closest?.('[data-pst-refrescar]');
+            if(!refrescar) return;
+            event.preventDefault();
+            cargar(false);
+        });
+
+        function iniciarActualizacion(){
+            if(timer) window.clearInterval(timer);
+            timer=window.setInterval(()=>{
+                if(!root.isConnected){
+                    window.clearInterval(timer);
+                    timer=null;
+                    return;
+                }
+                if(document.hidden) return;
+                cargar(false);
+            },20000);
+        }
+
+        document.addEventListener('visibilitychange',()=>{
+            if(!document.hidden&&root.isConnected) cargar(false);
+        });
+
+        cargar(true);
+        iniciarActualizacion();
+    })();
+</script>

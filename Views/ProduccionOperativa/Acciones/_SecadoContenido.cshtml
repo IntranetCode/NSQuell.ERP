@@ -1,0 +1,898 @@
+﻿@model ERP.NSQuell.Models.ProduccionSecadoIndexVm
+@using ERP.NSQuell.Models
+@using System.Globalization
+@using System.Linq
+
+@functions {
+    string Fecha(DateTime? value)
+    {
+        return value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
+    }
+
+    string Cantidad(decimal value)
+    {
+        return $"{value:0.####} KG";
+    }
+
+    string Duracion(int minutos)
+    {
+        if (minutos <= 0) return "—";
+        var h = minutos / 60;
+        var m = minutos % 60;
+        if (h <= 0) return $"{m} min";
+        if (m <= 0) return $"{h} h";
+        return $"{h} h {m} min";
+    }
+}
+
+@{
+    var programaId = ViewData["ProgramaProduccionID"] != null
+        ? Convert.ToInt32(ViewData["ProgramaProduccionID"])
+        : 0;
+
+    var materiales = Model.Materiales ?? new List<ProduccionSecadoMaterialVm>();
+    var tolvas = Model.Tolvas ?? new List<ProduccionSecadoTolvaVm>();
+
+    var cargasActivas = materiales
+        .SelectMany(m => m.Cargas.Select(c => new { Material = m, Carga = c }))
+        .Where(x => x.Carga.EstaEnProceso)
+        .GroupBy(x => x.Carga.SecadoCargaID)
+        .Select(g => g.First())
+        .OrderBy(x => x.Carga.FechaFinEsperada ?? DateTime.MaxValue)
+        .ToList();
+
+    var pendientes = materiales
+        .Where(x => !x.EstaFinalizado && !x.EstaCancelado && !x.TieneCargaEnProceso && x.RequiereNuevaCarga)
+        .GroupBy(x => x.GrupoLhRh.HasValue ? $"G:{x.GrupoLhRh.Value}" : $"M:{x.SecadoMaterialID}")
+        .Select(g => g.OrderBy(x => x.LadoLhRh).ThenBy(x => x.SecadoMaterialID).ToList())
+        .OrderByDescending(g => g.Any(x => x.DebeAlertarEspera))
+        .ThenBy(g => g.Select(x => x.FechaInicioSecadoObjetivo ?? DateTime.MaxValue).Min())
+        .ToList();
+
+    var finalizados = materiales
+        .Where(x => x.EstaFinalizado)
+        .OrderByDescending(x => x.FechaUltimoFinSecado ?? DateTime.MinValue)
+        .ToList();
+}
+
+<style>
+    .ps-op {
+        --ps-blue: #004aad;
+        --ps-navy: #102a56;
+        --ps-text: #1d2939;
+        --ps-muted: #667085;
+        --ps-line: #e4e7ec;
+        --ps-soft: #f8fafc;
+        --ps-green: #128254;
+        --ps-orange: #b66900;
+        --ps-red: #c93636;
+        color: var(--ps-text)
+    }
+
+        .ps-op * {
+            box-sizing: border-box
+        }
+
+        .ps-op .ps-summary {
+            display: grid;
+            grid-template-columns: repeat(4,minmax(0,1fr));
+            gap: 8px;
+            margin-bottom: 11px
+        }
+
+        .ps-op .ps-stat {
+            padding: 10px 11px;
+            border: 1px solid var(--ps-line);
+            border-radius: 11px;
+            background: #fff
+        }
+
+            .ps-op .ps-stat span {
+                display: block;
+                color: var(--ps-muted);
+                font-size: .61rem;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: .04em
+            }
+
+            .ps-op .ps-stat strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--ps-navy);
+                font-size: .95rem;
+                font-weight: 950
+            }
+
+        .ps-op .ps-section {
+            margin-top: 11px
+        }
+
+            .ps-op .ps-section:first-child {
+                margin-top: 0
+            }
+
+        .ps-op .ps-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 7px;
+            color: var(--ps-navy);
+            font-size: .7rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        .ps-op .ps-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 9px
+        }
+
+        .ps-op .ps-card {
+            border: 1px solid var(--ps-line);
+            border-radius: 13px;
+            background: #fff;
+            overflow: hidden
+        }
+
+            .ps-op .ps-card.is-alert {
+                border-color: #efb8b8
+            }
+
+        .ps-op .ps-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 11px 12px;
+            background: #fbfcfe;
+            border-bottom: 1px solid var(--ps-line)
+        }
+
+            .ps-op .ps-card-head strong {
+                display: block;
+                color: var(--ps-navy);
+                font-size: .78rem
+            }
+
+            .ps-op .ps-card-head small {
+                display: block;
+                margin-top: 2px;
+                color: var(--ps-muted);
+                font-size: .64rem
+            }
+
+        .ps-op .ps-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #eef4fc;
+            color: var(--ps-blue);
+            font-size: .59rem;
+            font-weight: 900;
+            white-space: nowrap
+        }
+
+            .ps-op .ps-badge.green {
+                background: #edf9f3;
+                color: #176b48
+            }
+
+            .ps-op .ps-badge.orange {
+                background: #fff8ea;
+                color: #8a5700
+            }
+
+            .ps-op .ps-badge.red {
+                background: #fff1f1;
+                color: #a52b2b
+            }
+
+        .ps-op .ps-body {
+            padding: 11px 12px
+        }
+
+        .ps-op .ps-kpis {
+            display: grid;
+            grid-template-columns: repeat(3,minmax(0,1fr));
+            gap: 6px;
+            margin-bottom: 9px
+        }
+
+        .ps-op .ps-kpi {
+            padding: 7px 8px;
+            border-radius: 9px;
+            background: var(--ps-soft);
+            border: 1px solid #eef1f5
+        }
+
+            .ps-op .ps-kpi span {
+                display: block;
+                color: var(--ps-muted);
+                font-size: .57rem;
+                text-transform: uppercase;
+                font-weight: 850
+            }
+
+            .ps-op .ps-kpi strong {
+                display: block;
+                margin-top: 2px;
+                color: var(--ps-navy);
+                font-size: .72rem;
+                font-weight: 950
+            }
+
+        .ps-op .ps-line {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 5px 0;
+            border-top: 1px solid #f0f2f5;
+            font-size: .66rem;
+            color: var(--ps-muted)
+        }
+
+            .ps-op .ps-line:first-child {
+                border-top: 0
+            }
+
+            .ps-op .ps-line strong {
+                color: #344054;
+                text-align: right
+            }
+
+        .ps-op .ps-form {
+            margin-top: 9px;
+            padding-top: 9px;
+            border-top: 1px solid var(--ps-line)
+        }
+
+        .ps-op .ps-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px
+        }
+
+        .ps-op label {
+            display: block;
+            margin-bottom: 3px;
+            color: #344054;
+            font-size: .62rem;
+            font-weight: 900
+        }
+
+        .ps-op .form-control, .ps-op .form-select {
+            min-height: 36px;
+            border-radius: 8px;
+            font-size: .7rem
+        }
+
+        .ps-op textarea.form-control {
+            min-height: 58px
+        }
+
+        .ps-op .ps-components {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 7px;
+            margin-top: 8px
+        }
+
+        .ps-op .ps-component {
+            padding: 8px;
+            border-radius: 9px;
+            background: #f8fafc;
+            border: 1px solid var(--ps-line)
+        }
+
+        .ps-op .ps-component-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 5px;
+            font-size: .65rem;
+            font-weight: 900;
+            color: var(--ps-navy)
+        }
+
+        .ps-op .ps-side {
+            padding: 2px 5px;
+            border-radius: 6px;
+            background: #eaf2ff;
+            color: var(--ps-blue);
+            font-size: .55rem
+        }
+
+        .ps-op .ps-total {
+            margin-top: 7px;
+            padding: 7px 8px;
+            border-radius: 8px;
+            background: #eef4fc;
+            color: #245484;
+            font-size: .66rem;
+            font-weight: 900
+        }
+
+        .ps-op .ps-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 7px;
+            flex-wrap: wrap;
+            margin-top: 9px
+        }
+
+        .ps-op .ps-btn {
+            border: 0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            background: var(--ps-blue);
+            color: #fff;
+            font-size: .67rem;
+            font-weight: 900
+        }
+
+            .ps-op .ps-btn.warn {
+                background: #b66900
+            }
+
+            .ps-op .ps-btn.danger {
+                background: #b42318
+            }
+
+            .ps-op .ps-btn:disabled {
+                opacity: .55
+            }
+
+        .ps-op details {
+            margin-top: 8px
+        }
+
+            .ps-op details summary {
+                cursor: pointer;
+                color: #475467;
+                font-size: .63rem;
+                font-weight: 900
+            }
+
+        .ps-op .ps-message {
+            padding: 10px 11px;
+            border: 1px dashed #cfd7e3;
+            border-radius: 10px;
+            background: #fbfcfe;
+            color: #667085;
+            font-size: .68rem;
+            line-height: 1.4
+        }
+
+            .ps-op .ps-message strong {
+                color: #344054
+            }
+
+            .ps-op .ps-message.warn {
+                background: #fff8ea;
+                border-color: #efd29d;
+                color: #865600
+            }
+
+            .ps-op .ps-message.danger {
+                background: #fff1f1;
+                border-color: #efb8b8;
+                color: #a52b2b
+            }
+
+        .ps-op .ps-timer {
+            margin-top: 7px;
+            padding: 7px 8px;
+            border-radius: 8px;
+            background: #eef4fc;
+            color: #245484;
+            font-size: .67rem;
+            font-weight: 900
+        }
+
+        .ps-op .ps-history {
+            display: grid;
+            gap: 5px;
+            margin-top: 7px
+        }
+
+        .ps-op .ps-history-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 7px;
+            border: 1px solid var(--ps-line);
+            border-radius: 8px;
+            background: #fbfcfe;
+            font-size: .62rem;
+            color: #667085
+        }
+
+    html[data-nsq-theme="dark"] .ps-op {
+        --ps-text: #eef2f7;
+        --ps-muted: #9aacbf;
+        --ps-line: rgba(255,255,255,.10);
+        --ps-soft: #0e1929;
+        --ps-navy: #f5f7fb
+    }
+
+        html[data-nsq-theme="dark"] .ps-op .ps-stat,
+        html[data-nsq-theme="dark"] .ps-op .ps-card {
+            background: #111d2f
+        }
+
+        html[data-nsq-theme="dark"] .ps-op .ps-card-head {
+            background: #0e1929
+        }
+
+        html[data-nsq-theme="dark"] .ps-op .ps-line strong,
+        html[data-nsq-theme="dark"] .ps-op label {
+            color: #eef2f7
+        }
+
+    @@media(max-width:900px) {
+        .ps-op .ps-grid {
+            grid-template-columns: 1fr
+        }
+    }
+
+    @@media(max-width:650px) {
+        .ps-op .ps-summary {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .ps-op .ps-form-grid, .ps-op .ps-components {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div class="ps-op">
+    <div class="ps-summary">
+        <div class="ps-stat"><span>Pendientes</span><strong>@Model.TotalPendientes</strong></div>
+        <div class="ps-stat"><span>En proceso</span><strong>@Model.TotalEnProceso</strong></div>
+        <div class="ps-stat"><span>Finalizados</span><strong>@Model.TotalFinalizados</strong></div>
+        <div class="ps-stat"><span>Tolvas disponibles</span><strong>@Model.TotalTolvasDisponibles</strong></div>
+    </div>
+
+    @if (Model.PendientesPlaneacion.Any())
+    {
+        <section class="ps-section">
+            <div class="ps-title"><span><i class="bi bi-hourglass-split me-1"></i>Esperando materia prima</span></div>
+            @foreach (var tarea in Model.PendientesPlaneacion)
+            {
+                <div class="ps-message warn mb-2">
+                    <strong>OF @(string.IsNullOrWhiteSpace(tarea.NumeroOF) ? "—" : tarea.NumeroOF)</strong>
+                    · Falta recibir @tarea.CantidadMpPendienteRecepcionKg.ToString("0.####") KG de MP antes de iniciar el secado.
+                </div>
+            }
+        </section>
+    }
+
+    @if (cargasActivas.Any())
+    {
+        <section class="ps-section">
+            <div class="ps-title">
+                <span><i class="bi bi-thermometer-half me-1"></i>Secado en proceso</span>
+                <span>@cargasActivas.Count carga(s)</span>
+            </div>
+
+            <div class="ps-grid">
+                @foreach (var item in cargasActivas)
+                {
+                    var material = item.Material;
+                    var carga = item.Carga;
+                    var tipoProceso = material.TipoProceso;
+                    var tolvasCambio = tolvas
+                    .Where(t => t.DisponibleParaUsar && t.TolvaID != carga.TolvaIDActual)
+                    .Where(t => string.Equals(t.TipoProcesoPermitido, "AMBOS", StringComparison.OrdinalIgnoreCase) || string.Equals(t.TipoProcesoPermitido, tipoProceso, StringComparison.OrdinalIgnoreCase))
+                    .Where(t => t.CapacidadKg + ProduccionSecadoReglas.ToleranciaCantidad >= carga.CantidadKg)
+                    .OrderBy(t => t.MaquinaCodigo)
+                    .ThenBy(t => t.Codigo)
+                    .ToList();
+
+                    <article class="ps-card @(carga.EstaRetrasada ? "is-alert" : "")">
+                        <div class="ps-card-head">
+                            <div>
+                                <strong>Carga #@carga.NumeroCarga · @material.TipoProcesoTexto</strong>
+                                <small>
+                                    @(carga.EsCargaConjunta
+                                                                ? string.Join(" · ", carga.Materiales.Where(x => x.Activo).Select(x => x.TextoOF))
+                                                                : $"OF {material.NumeroOF}")
+                        </small>
+                    </div>
+                    <span class="ps-badge @(carga.EstaRetrasada ? "red" : carga.TiempoRequeridoCumplido ? "green" : carga.EstaProximaAFinalizar ? "orange" : "")">
+                        @carga.EstadoTexto
+                    </span>
+                </div>
+
+                        <div class="ps-body">
+                            <div class="ps-kpis">
+                                <div class="ps-kpi"><span>Cantidad</span><strong>@Cantidad(carga.CantidadKg)</strong></div>
+                                <div class="ps-kpi"><span>Tiempo requerido</span><strong>@Duracion(carga.DuracionRequeridaMinutos)</strong></div>
+                                <div class="ps-kpi"><span>Tolva</span><strong>@carga.TextoTolva</strong></div>
+                            </div>
+
+                            <div class="ps-line"><span>Inicio real</span><strong>@Fecha(carga.FechaInicioReal)</strong></div>
+                            <div class="ps-line"><span>Fin esperado</span><strong>@Fecha(carga.FechaFinEsperada)</strong></div>
+                            <div class="ps-line"><span>Transcurrido</span><strong>@Duracion(carga.MinutosTranscurridos)</strong></div>
+
+                    @if (carga.FechaFinEsperada.HasValue)
+                            {
+                                <div class="ps-timer"
+                                     data-ps-fin-esperada="@carga.FechaFinEsperada.Value.ToString("O")">
+                                    <i class="bi bi-clock me-1"></i>
+                                    <span data-ps-tiempo>
+                                        @(carga.TiempoRequeridoCumplido
+                                                                    ? "Tiempo requerido cumplido"
+                                                                    : $"{carga.MinutosRestantes} min restantes")
+                        </span>
+                    </div>
+                                        }
+
+                            @if (Model.PuedeGestionarSecado)
+                            {
+                                @if (tolvasCambio.Any())
+                                {
+                                    <details>
+                                        <summary><i class="bi bi-arrow-left-right me-1"></i>Cambiar tolva</summary>
+                                        <form asp-controller="ProduccionPreparacion"
+                                              asp-action="CambiarTolvaSecadoOperativa"
+                                              method="post"
+                                              class="ps-form"
+                                              data-secado-form
+                                              data-confirm="¿Confirmas el cambio de tolva? El tiempo de secado continuará sin reiniciarse.">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="SecadoCargaID" value="@carga.SecadoCargaID" />
+
+                                            <div class="ps-form-grid">
+                                                <div>
+                                                    <label>Nueva tolva</label>
+                                                    <select name="TolvaNuevaID" class="form-select" required>
+                                                        <option value="">Selecciona...</option>
+                                                        @foreach (var t in tolvasCambio)
+                                                        {
+                                                            <option value="@t.TolvaID">@t.Texto</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label>Motivo *</label>
+                                                    <input name="MotivoCambio"
+                                                           class="form-control"
+                                                           maxlength="500"
+                                                           required
+                                                           placeholder="Motivo del cambio" />
+                                                </div>
+                                            </div>
+
+                                            <div class="ps-actions">
+                                                <button type="submit" class="ps-btn warn">
+                                                    <i class="bi bi-arrow-left-right me-1"></i>Cambiar tolva
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </details>
+                                }
+
+                                <details>
+                                    <summary>
+                                        <i class="bi @(carga.TiempoRequeridoCumplido ? "bi-check-circle" : "bi-exclamation-triangle") me-1"></i>
+                                        @(carga.TiempoRequeridoCumplido ? "Finalizar carga" : "Finalización anticipada")
+                                    </summary>
+
+                                    <form asp-controller="ProduccionPreparacion"
+                                          asp-action="FinalizarSecadoOperativa"
+                                          method="post"
+                                          class="ps-form"
+                                          data-secado-form
+                                          data-ps-finish-form
+                                          data-anticipada="@(!carga.TiempoRequeridoCumplido?"true":"false")"
+                                          data-confirm="@(carga.TiempoRequeridoCumplido
+                                                                                                  ? "¿Confirmas que la carga terminó físicamente su proceso de secado?"
+                                                                                                  : "¿Confirmas interrumpir el secado antes del tiempo objetivo?")">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="SecadoCargaID" value="@carga.SecadoCargaID" />
+                            <input type="hidden"
+                                   name="ConfirmarFinalizacionAnticipada"
+                                   value="@(!carga.TiempoRequeridoCumplido ? "true" : "false")" />
+
+                            @if (!carga.TiempoRequeridoCumplido)
+                                        {
+                                            <div class="ps-message danger mb-2">
+                                                Aún faltan aproximadamente <strong>@carga.MinutosRestantes minuto(s)</strong>.
+                                                Debes registrar el motivo para interrumpir esta carga.
+                                            </div>
+
+                                            <div>
+                                                <label>Motivo de finalización anticipada *</label>
+                                                <textarea name="MotivoFinalizacionAnticipada"
+                                          class="form-control"
+                                          maxlength="500"
+                                          data-ps-motivo-anticipado
+                                          required></textarea>
+                                            </div>
+                                        }
+
+                                        <div class="mt-2">
+                                            <label>Observaciones</label>
+                                            <textarea name="Observaciones"
+                                          class="form-control"
+                                          maxlength="1000"
+                                          placeholder="Opcional"></textarea>
+                                        </div>
+
+                                        <div class="ps-actions">
+                                            <button type="submit"
+                                                    class="ps-btn @(carga.TiempoRequeridoCumplido ? "" : "danger")">
+                                                <i class="bi @(carga.TiempoRequeridoCumplido ? "bi-check2-circle" : "bi-stop-circle") me-1"></i>
+                                                @(carga.TiempoRequeridoCumplido ? "Finalizar secado" : "Interrumpir secado")
+                                            </button>
+                                        </div>
+                                    </form>
+                                </details>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (pendientes.Any())
+    {
+        <section class="ps-section">
+            <div class="ps-title">
+                <span><i class="bi bi-droplet-half me-1"></i>Material pendiente de secado</span>
+                <span>@pendientes.Count grupo(s)</span>
+            </div>
+
+            <div class="ps-grid">
+                @foreach (var grupoMaterial in pendientes)
+                {
+                    var principal = grupoMaterial.First();
+                    var esPareja = principal.GrupoLhRh.HasValue;
+                    var programasGrupo = grupoMaterial
+                    .Where(x => x.ProgramaProduccionID.HasValue)
+                    .Select(x => x.ProgramaProduccionID!.Value)
+                    .Distinct()
+                    .ToList();
+
+                    var parejaCompleta = !esPareja || programasGrupo.Count >= 2;
+                    var procesos = grupoMaterial
+                    .Select(x => (x.TipoProceso ?? ProduccionSecadoTipoProceso.Secado).Trim().ToUpperInvariant())
+                    .Distinct()
+                    .ToList();
+
+                    var procesoCompatible = procesos.Count == 1;
+                    var tipoProcesoGrupo = principal.TipoProceso;
+                    var duracionGrupo = grupoMaterial.Max(x => x.MinutosSecadoRequeridos);
+                    var cantidadGrupo = grupoMaterial.Sum(x => x.CantidadPendienteAsignarKg);
+
+                    var tolvasCompatibles = procesoCompatible
+                    ? tolvas
+                    .Where(x => x.DisponibleParaUsar)
+                    .Where(x => string.Equals(x.TipoProcesoPermitido, "AMBOS", StringComparison.OrdinalIgnoreCase) || string.Equals(x.TipoProcesoPermitido, tipoProcesoGrupo, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.CapacidadKg + ProduccionSecadoReglas.ToleranciaCantidad >= cantidadGrupo)
+                    .ThenBy(x => x.CapacidadKg)
+                    .ThenBy(x => x.MaquinaCodigo)
+                    .ThenBy(x => x.Codigo)
+                    .ToList()
+                    : new List<ProduccionSecadoTolvaVm>();
+
+                    ProduccionSecadoTolvaVm? predeterminada = null;
+                    var sugeridas = grupoMaterial
+                    .Where(x => x.TolvaSugeridaID.HasValue)
+                    .Select(x => x.TolvaSugeridaID!.Value)
+                    .Distinct()
+                    .ToList();
+
+                    if (sugeridas.Any())
+                    {
+                        predeterminada = tolvasCompatibles
+                        .FirstOrDefault(x => sugeridas.Contains(x.TolvaID) && x.CapacidadKg + ProduccionSecadoReglas.ToleranciaCantidad >= cantidadGrupo);
+                    }
+
+                    predeterminada ??= tolvasCompatibles
+                    .FirstOrDefault(x => x.CapacidadKg + ProduccionSecadoReglas.ToleranciaCantidad >= cantidadGrupo)
+                    ?? tolvasCompatibles.FirstOrDefault();
+
+                    <article class="ps-card @(grupoMaterial.Any(x => x.DebeAlertarEspera) ? "is-alert" : "")">
+                        <div class="ps-card-head">
+                            <div>
+                                <strong>@(esPareja ? "Secado conjunto LH/RH" : principal.TextoMaterial)</strong>
+                                <small>
+                                    @(esPareja
+                                                                ? string.Join(" · ", grupoMaterial.Select(x => $"{x.LadoLhRh} OF {x.NumeroOF}"))
+                                                                : $"OF {principal.NumeroOF}")
+                        </small>
+                    </div>
+                    <span class="ps-badge @(grupoMaterial.Any(x => x.DebeAlertarEspera) ? "red" : "")">
+                        @principal.TipoProcesoTexto
+                    </span>
+                </div>
+
+                        <div class="ps-body">
+                            <div class="ps-kpis">
+                                <div class="ps-kpi"><span>Por asignar</span><strong>@Cantidad(cantidadGrupo)</strong></div>
+                                <div class="ps-kpi"><span>Tiempo</span><strong>@Duracion(duracionGrupo)</strong></div>
+                                <div class="ps-kpi"><span>Inicio objetivo</span><strong>@Fecha(grupoMaterial.Select(x => x.FechaInicioSecadoObjetivo).Where(x => x.HasValue).OrderBy(x => x).FirstOrDefault())</strong></div>
+                            </div>
+
+                    @if (grupoMaterial.Any(x => x.DebeAlertarEspera))
+                            {
+                                <div class="ps-message danger mb-2">
+                                    <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                    El material ya superó el tiempo de espera recomendado antes de iniciar Secado.
+                                </div>
+                            }
+
+                            @if (esPareja && !parejaCompleta)
+                            {
+                                <div class="ps-message warn">
+                                    <strong>Esperando la segunda OF LH/RH.</strong>
+                                    El secado conjunto se habilita cuando Producción tenga MP confirmada de ambos lados.
+                                </div>
+                            }
+                            else if (!procesoCompatible)
+                            {
+                                <div class="ps-message danger">
+                                    Las dos OF tienen parámetros de secado incompatibles. Corrige los datos técnicos antes de iniciar.
+                                </div>
+                            }
+                            else if (!Model.PuedeGestionarSecado)
+                            {
+                                <div class="ps-message">
+                                    Tu usuario puede consultar el estado, pero no iniciar cargas de Secado.
+                                </div>
+                            }
+                            else if (!tolvasCompatibles.Any())
+                            {
+                                <div class="ps-message warn">
+                                    No hay una tolva disponible compatible con el proceso en este momento.
+                                </div>
+                            }
+                            else
+                            {
+                                <form asp-controller="ProduccionPreparacion"
+                                      asp-action="IniciarSecadoOperativa"
+                                      method="post"
+                                      class="ps-form"
+                                      data-secado-form
+                                      data-ps-start-form
+                                      data-confirm="@(esPareja
+                                                                                          ? "¿Confirmas iniciar el secado conjunto LH/RH? Se creará una sola carga física para ambas OF."
+                                                                                          : "¿Confirmas iniciar esta carga de secado?")">
+                        @Html.AntiForgeryToken()
+
+                                    <input type="hidden"
+                                           name="SecadoMaterialID"
+                                           value="@principal.SecadoMaterialID" />
+
+                                    <input type="hidden"
+                                           name="CantidadKg"
+                                           data-ps-total
+                                           value="@cantidadGrupo.ToString("0.####", CultureInfo.InvariantCulture)" />
+
+                                    <div>
+                                        <label>Tolva</label>
+                                        <select name="TolvaID"
+                                                class="form-select"
+                                                data-ps-tolva
+                                                required>
+                                            <option value="">Selecciona...</option>
+                                @foreach (var t in tolvasCompatibles)
+                                            {
+                                                if (predeterminada != null && predeterminada.TolvaID == t.TolvaID)
+                                                {
+                                                    <option value="@t.TolvaID"
+                                                            data-capacity="@t.CapacidadKg.ToString("0.####",CultureInfo.InvariantCulture)"
+                                                            selected>
+                                                        @t.Texto
+                                                    </option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@t.TolvaID"
+                                                            data-capacity="@t.CapacidadKg.ToString("0.####",CultureInfo.InvariantCulture)">
+                                                        @t.Texto
+                                                    </option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div class="ps-components">
+                                        @for (var i = 0; i < grupoMaterial.Count; i++)
+                                        {
+                                            var componente = grupoMaterial[i];
+                                            var lado = string.IsNullOrWhiteSpace(componente.LadoLhRh)
+                                            ? (esPareja ? "OF" : "MP")
+                                            : componente.LadoLhRh!.ToUpperInvariant();
+
+                                            <div class="ps-component">
+                                                <div class="ps-component-head">
+                                                    <span>@(string.IsNullOrWhiteSpace(componente.NumeroOF) ? "OF" : $"OF {componente.NumeroOF}")</span>
+                                                    <span class="ps-side">@lado</span>
+                                                </div>
+
+                                                <input type="hidden"
+                                                       name="Componentes[@i].SecadoMaterialID"
+                                                       value="@componente.SecadoMaterialID" />
+
+                                                <label>Cantidad a cargar</label>
+                                                <input type="number"
+                                                       name="Componentes[@i].CantidadKg"
+                                                       class="form-control"
+                                                       data-ps-componente-cantidad
+                                                       min="0.0001"
+                                                       max="@componente.CantidadPendienteAsignarKg.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                       step="0.0001"
+                                                       value="@componente.CantidadPendienteAsignarKg.ToString("0.####", CultureInfo.InvariantCulture)"
+                                                       required />
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="ps-total" data-ps-total-text>
+                                        Total de la carga: @Cantidad(cantidadGrupo)
+                                    </div>
+
+                                    <div class="mt-2">
+                                        <label>Observaciones</label>
+                                        <textarea name="Observaciones"
+                                      class="form-control"
+                                      maxlength="1000"
+                                      placeholder="Opcional"></textarea>
+                                    </div>
+
+                                    <div class="ps-actions">
+                                        <button type="submit" class="ps-btn">
+                                            <i class="bi bi-play-circle me-1"></i>
+                                            @(esPareja ? "Iniciar secado conjunto" : "Iniciar secado")
+                                        </button>
+                                    </div>
+                                </form>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (finalizados.Any())
+    {
+        <details class="ps-section">
+            <summary class="ps-title">
+                <span><i class="bi bi-check2-circle me-1"></i>Secados finalizados</span>
+                <span>@finalizados.Count</span>
+            </summary>
+
+            <div class="ps-history">
+                @foreach (var material in finalizados)
+                {
+                    <div class="ps-history-item">
+                        <span>OF @material.NumeroOF · @material.TextoMaterial</span>
+                        <strong>@Fecha(material.FechaUltimoFinSecado)</strong>
+                    </div>
+                }
+            </div>
+        </details>
+    }
+
+    @if (!Model.PendientesPlaneacion.Any() && !cargasActivas.Any() && !pendientes.Any() && !finalizados.Any())
+    {
+        <div class="ps-message">
+            <strong>No hay operaciones de Secado para esta OF.</strong>
+            Si la pieza no requiere secado, el flujo continuará automáticamente con la siguiente actividad aplicable.
+        </div>
+    }
+</div>

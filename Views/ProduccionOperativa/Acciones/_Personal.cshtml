@@ -1,0 +1,507 @@
+﻿@model ERP.NSQuell.Models.ProduccionCentroOperativoVm
+@using ERP.NSQuell.Models
+
+@{
+    var soloLectura = ViewData["SoloLectura"] is bool sr ? sr : Model.Permisos.SoloLectura;
+    var programaId = Model.ProgramaProduccionID;
+    var id = $"poPersonal_{programaId}";
+}
+
+<style>
+    .po-personal {
+        --pp: #004aad;
+        --pp-text: #182230;
+        --pp-muted: #667085;
+        --pp-border: #e4e7ec;
+        --pp-soft: #f8fafc;
+        color: var(--pp-text)
+    }
+
+        .po-personal .pp-card {
+            border: 1px solid var(--pp-border);
+            border-radius: 14px;
+            background: #fff;
+            overflow: hidden
+        }
+
+        .po-personal .pp-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 13px 14px;
+            border-bottom: 1px solid var(--pp-border);
+            background: #fbfcfe
+        }
+
+            .po-personal .pp-head strong {
+                display: block;
+                color: #102a56;
+                font-size: .9rem
+            }
+
+            .po-personal .pp-head small {
+                display: block;
+                margin-top: 2px;
+                color: var(--pp-muted);
+                font-size: .68rem
+            }
+
+        .po-personal .pp-body {
+            padding: 14px
+        }
+
+        .po-personal .pp-grid {
+            display: grid;
+            grid-template-columns: repeat(2,minmax(0,1fr));
+            gap: 10px
+        }
+
+            .po-personal .pp-grid.roles {
+                grid-template-columns: repeat(3,minmax(0,1fr));
+                margin-top: 10px
+            }
+
+        .po-personal label {
+            display: block;
+            margin-bottom: 4px;
+            color: #344054;
+            font-size: .67rem;
+            font-weight: 900
+        }
+
+        .po-personal .form-control, .po-personal .form-select {
+            min-height: 38px;
+            border-radius: 9px;
+            font-size: .76rem
+        }
+
+        .po-personal .pp-info {
+            margin-top: 9px;
+            padding: 8px 10px;
+            border: 1px solid #d8e5f4;
+            border-radius: 9px;
+            background: #f5faff;
+            color: #315f85;
+            font-size: .68rem;
+            line-height: 1.35
+        }
+
+        .po-personal .pp-existing {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 9px
+        }
+
+        .po-personal .pp-chip {
+            padding: 6px 8px;
+            border: 1px solid var(--pp-border);
+            border-radius: 9px;
+            background: var(--pp-soft);
+            font-size: .65rem;
+            color: #475467
+        }
+
+            .po-personal .pp-chip strong {
+                color: #1d2939
+            }
+
+        .po-personal .pp-feedback {
+            display: none;
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-radius: 9px;
+            font-size: .7rem;
+            font-weight: 750
+        }
+
+            .po-personal .pp-feedback.show {
+                display: block
+            }
+
+            .po-personal .pp-feedback.ok {
+                background: #edf9f3;
+                color: #176b48;
+                border: 1px solid #bee2cf
+            }
+
+            .po-personal .pp-feedback.bad {
+                background: #fff1f1;
+                color: #a52b2b;
+                border: 1px solid #efb8b8
+            }
+
+        .po-personal .pp-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px
+        }
+
+        .po-personal .pp-btn {
+            border: 0;
+            border-radius: 9px;
+            padding: 9px 13px;
+            background: var(--pp);
+            color: #fff;
+            font-size: .73rem;
+            font-weight: 900
+        }
+
+            .po-personal .pp-btn:disabled {
+                opacity: .55;
+                cursor: not-allowed
+            }
+
+        .po-personal details {
+            margin-top: 9px;
+            border-top: 1px solid var(--pp-border);
+            padding-top: 8px
+        }
+
+            .po-personal details summary {
+                cursor: pointer;
+                color: #475467;
+                font-size: .67rem;
+                font-weight: 850
+            }
+
+    html[data-nsq-theme="dark"] .po-personal {
+        --pp-text: #eef2f7;
+        --pp-muted: #9aacbf;
+        --pp-border: rgba(255,255,255,.10);
+        --pp-soft: #0e1929
+    }
+
+        html[data-nsq-theme="dark"] .po-personal .pp-card, html[data-nsq-theme="dark"] .po-personal .pp-head {
+            background: #111d2f
+        }
+
+            html[data-nsq-theme="dark"] .po-personal .pp-head strong, html[data-nsq-theme="dark"] .po-personal label, html[data-nsq-theme="dark"] .po-personal .pp-chip strong {
+                color: #f5f7fb
+            }
+
+    @@media(max-width:850px) {
+        .po-personal .pp-grid.roles {
+            grid-template-columns: 1fr
+        }
+
+        .po-personal .pp-grid {
+            grid-template-columns: 1fr
+        }
+    }
+</style>
+
+<div id="@id"
+     class="po-personal"
+     data-po-personal
+     data-programa-id="@programaId"
+     data-solo-lectura="@(soloLectura ? "true" : "false")">
+    <div class="pp-card">
+        <div class="pp-head">
+            <div>
+                <strong><i class="bi bi-people-fill me-1"></i>Asignar personal</strong>
+                <small>@Model.OFTexto · @Model.MaquinaTexto · @Model.ParteTexto</small>
+            </div>
+            <span class="badge bg-light text-dark border">Programa #@programaId</span>
+        </div>
+
+        <div class="pp-body">
+            <form data-po-form>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="ProgramaProduccionID" value="@programaId" />
+                <input type="hidden" name="AsignacionPersonalID" data-po-asignacion-id />
+
+                <div class="pp-grid">
+                    <div>
+                        <label>Fecha de trabajo</label>
+                        <input type="date" name="FechaTrabajo" class="form-control" data-po-fecha required @(soloLectura ? "disabled" : null) />
+                    </div>
+                    <div>
+                        <label>Turno</label>
+                        <select name="TurnoID" class="form-select" data-po-turno required @(soloLectura ? "disabled" : null)>
+                            <option value="">Cargando...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pp-info" data-po-ventana>Calculando ventana y personal disponible...</div>
+
+                <div class="pp-grid roles">
+                    <div>
+                        <label>Operador principal *</label>
+                        <select name="OperadorID" class="form-select" data-po-operador required @(soloLectura ? "disabled" : null)>
+                            <option value="">-- Seleccionar --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Auxiliar</label>
+                        <select name="AuxiliarID" class="form-select" data-po-auxiliar @(soloLectura ? "disabled" : null)>
+                            <option value="">-- Sin auxiliar --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Técnico Producción</label>
+                        <select name="TecnicoProduccionID" class="form-select" data-po-tecnico @(soloLectura ? "disabled" : null)>
+                            <option value="">-- Sin técnico --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pp-existing d-none" data-po-existentes></div>
+
+                <details>
+                    <summary>Observaciones opcionales</summary>
+                    <textarea name="Observaciones"
+                              class="form-control mt-2"
+                              rows="2"
+                              maxlength="500"
+                              data-po-observaciones
+                              placeholder="Opcional"
+                              @(soloLectura ? "disabled" : null)></textarea>
+                </details>
+
+                <div class="pp-feedback" data-po-feedback></div>
+
+                @if (!soloLectura)
+                {
+                    <div class="pp-actions">
+                        <button type="submit" class="pp-btn" data-po-guardar>
+                            <i class="bi bi-check2-circle me-1"></i>Guardar personal
+                        </button>
+                    </div>
+                }
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        'use strict';
+
+        const root=document.getElementById('@id');
+        if(!root||root.dataset.inicializado==='1') return;
+        root.dataset.inicializado='1';
+
+        const programaId=Number(root.dataset.programaId||0);
+        const soloLectura=root.dataset.soloLectura==='true';
+        const form=root.querySelector('[data-po-form]');
+        const asignacionId=root.querySelector('[data-po-asignacion-id]');
+        const fecha=root.querySelector('[data-po-fecha]');
+        const turno=root.querySelector('[data-po-turno]');
+        const operador=root.querySelector('[data-po-operador]');
+        const auxiliar=root.querySelector('[data-po-auxiliar]');
+        const tecnico=root.querySelector('[data-po-tecnico]');
+        const observaciones=root.querySelector('[data-po-observaciones]');
+        const ventana=root.querySelector('[data-po-ventana]');
+        const existentes=root.querySelector('[data-po-existentes]');
+        const feedback=root.querySelector('[data-po-feedback]');
+        const guardar=root.querySelector('[data-po-guardar]');
+
+        const urlDatos='@Url.Action("OperativaDatos", "ProduccionPersonal")';
+        const urlCandidatos='@Url.Action("Candidatos", "ProduccionPersonal")';
+        const urlGuardar='@Url.Action("GuardarOperativa", "ProduccionPersonal")';
+
+        let datos=null;
+        let valoresIniciales=null;
+        let cargandoCandidatos=false;
+
+        function mostrarFeedback(texto,ok=false){
+            if(!feedback) return;
+            feedback.textContent=texto||'';
+            feedback.className='pp-feedback'+(texto?' show ':' ')+(ok?'ok':'bad');
+        }
+
+        function limpiarSelect(select,texto){
+            if(!select) return;
+            select.innerHTML='';
+            const op=document.createElement('option');
+            op.value='';
+            op.textContent=texto;
+            select.appendChild(op);
+        }
+
+        function textoPersona(x,mostrarNivel){
+            const partes=[x?.nombre||'Persona'];
+            if(mostrarNivel&&x?.nivel) partes.push(`N${x.nivel}`);
+            if(x?.enEscala) partes.push('Escala');
+            return partes.join(' · ');
+        }
+
+        function llenarPersonas(select,lista,textoVacio,mostrarNivel,seleccion){
+            limpiarSelect(select,textoVacio);
+            (Array.isArray(lista)?lista:[]).forEach(x=>{
+                const op=document.createElement('option');
+                op.value=String(x.personaID||0);
+                op.textContent=textoPersona(x,mostrarNivel);
+                if(Number(seleccion||0)===Number(x.personaID||0)) op.selected=true;
+                select.appendChild(op);
+            });
+        }
+
+        function pintarExistentes(lista){
+            if(!existentes) return;
+            existentes.innerHTML='';
+            const items=Array.isArray(lista)?lista:[];
+            if(!items.length){
+                existentes.classList.add('d-none');
+                return;
+            }
+            items.forEach(x=>{
+                const chip=document.createElement('span');
+                chip.className='pp-chip';
+                const op=x.operador||'Sin operador';
+                const aux=x.auxiliar?` · Aux: ${x.auxiliar}`:'';
+                chip.innerHTML=`<strong>${x.turno||'Turno'}</strong> · ${op}${aux}`;
+                existentes.appendChild(chip);
+            });
+            existentes.classList.remove('d-none');
+        }
+
+        function llenarTurnos(lista,seleccion){
+            limpiarSelect(turno,'-- Seleccionar turno --');
+            (Array.isArray(lista)?lista:[]).forEach(x=>{
+                const op=document.createElement('option');
+                op.value=String(x.turnoID||0);
+                op.textContent=x.etiqueta||x.nombre||`Turno ${x.turnoID}`;
+                if(Number(seleccion||0)===Number(x.turnoID||0)) op.selected=true;
+                turno.appendChild(op);
+            });
+        }
+
+        async function cargarCandidatos(){
+            if(cargandoCandidatos||!fecha?.value||!turno?.value) return;
+            cargandoCandidatos=true;
+            mostrarFeedback('');
+            ventana.textContent='Consultando disponibilidad...';
+            operador.disabled=true;
+            auxiliar.disabled=true;
+            tecnico.disabled=true;
+
+            try{
+                const qs=new URLSearchParams({
+                    programaProduccionId:String(programaId),
+                    fechaTrabajo:fecha.value,
+                    turnoId:turno.value
+                });
+                const response=await fetch(`${urlCandidatos}?${qs.toString()}`,{
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}
+                });
+                const data=await response.json();
+                if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+
+                const pref=valoresIniciales||{};
+                llenarPersonas(operador,data.operadores,'-- Seleccionar operador --',!!data.tieneMatrizPolivalencia,pref.operadorID);
+                llenarPersonas(auxiliar,data.auxiliares,'-- Sin auxiliar --',false,pref.auxiliarID);
+                llenarPersonas(tecnico,data.tecnicos,'-- Sin técnico --',false,pref.tecnicoProduccionID);
+
+                ventana.textContent=data.ventanaTexto
+                    ?`Ventana: ${data.ventanaTexto}`
+                    :'Ventana disponible.';
+
+                valoresIniciales=null;
+            }catch(error){
+                limpiarSelect(operador,'-- No disponible --');
+                limpiarSelect(auxiliar,'-- No disponible --');
+                limpiarSelect(tecnico,'-- No disponible --');
+                ventana.textContent=error.message||'No fue posible consultar personal.';
+                mostrarFeedback(error.message||'No fue posible consultar personal.');
+            }finally{
+                if(!soloLectura){
+                    operador.disabled=false;
+                    auxiliar.disabled=false;
+                    tecnico.disabled=false;
+                }
+                cargandoCandidatos=false;
+            }
+        }
+
+        async function cargarDatos(){
+            try{
+                const response=await fetch(`${urlDatos}?programaProduccionId=${encodeURIComponent(programaId)}`,{
+                    cache:'no-store',
+                    credentials:'same-origin',
+                    headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}
+                });
+                const data=await response.json();
+                if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+
+                datos=data;
+                const inicial=data.asignacionInicial||null;
+                valoresIniciales=inicial;
+
+                if(asignacionId) asignacionId.value=inicial?.asignacionPersonalID||'';
+                if(fecha) fecha.value=inicial?.fechaTrabajo||data.fechaSugerida||'';
+                llenarTurnos(data.turnos,inicial?.turnoID||data.turnoSugeridoID);
+                if(observaciones) observaciones.value=inicial?.observaciones||'';
+                pintarExistentes(data.asignaciones);
+
+                await cargarCandidatos();
+            }catch(error){
+                mostrarFeedback(error.message||'No fue posible cargar la asignación.');
+                ventana.textContent='No disponible.';
+            }
+        }
+
+        fecha?.addEventListener('change',()=>{
+            valoresIniciales=null;
+            if(asignacionId) asignacionId.value='';
+            cargarCandidatos();
+        });
+
+        turno?.addEventListener('change',()=>{
+            valoresIniciales=null;
+            if(asignacionId) asignacionId.value='';
+            cargarCandidatos();
+        });
+
+        form?.addEventListener('submit',async event=>{
+            event.preventDefault();
+            if(soloLectura||!guardar) return;
+
+            if(!operador?.value){
+                mostrarFeedback('Selecciona el operador principal.');
+                operador?.focus();
+                return;
+            }
+
+            guardar.disabled=true;
+            mostrarFeedback('');
+
+            try{
+                const response=await fetch(urlGuardar,{
+                    method:'POST',
+                    body:new FormData(form),
+                    credentials:'same-origin',
+                    headers:{
+                        'X-Requested-With':'XMLHttpRequest',
+                        'X-NSQ-Operativa':'1',
+                        'Accept':'application/json'
+                    }
+                });
+
+                const data=await response.json();
+                if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
+
+                mostrarFeedback(data.mensaje||'Personal asignado correctamente.',true);
+
+                window.setTimeout(()=>{
+                    const centro=root.closest('[data-nsq-operativa-centro]');
+                    const refrescar=centro?.querySelector('[data-nsq-operativa-refrescar]');
+                    if(refrescar) refrescar.click();
+                },450);
+            }catch(error){
+                mostrarFeedback(error.message||'No fue posible guardar el personal.');
+            }finally{
+                guardar.disabled=false;
+            }
+        });
+
+        cargarDatos();
+    })();
+</script>
