@@ -43,6 +43,11 @@
         const condicionInput = document.getElementById('CondicionProduccion');
         const trabajarDomingoInput = document.getElementById('TrabajarDomingo');
 
+        // NSQ_PLANEACION_HORAS_MANUALES_CANONICAS_V1_0
+        // Si la vista regresa por una validacion/conflicto, conservar exactamente
+        // las horas que Planeacion envio en el intento anterior.
+        const horasProgramadasVienenDePostback = @(ViewData.ModelState.Count > 0 ? "true" : "false");
+        let horasProgramadasEditadasPorUsuario = horasProgramadasVienenDePostback;
 
         function toDecimal(value) {
             const n = Number(value || 0);
@@ -438,7 +443,7 @@
             return true;
         }
 
-        function recalcularAumentosRelease() {
+        function recalcularAumentosRelease(sincronizarHorasSugeridas = true) {
             const seleccionados = new Set();
             const seleccionadosPareja = new Set();
             let totalExtra = 0;
@@ -504,7 +509,11 @@
                 }
             }
 
-            recalcularHorasPorCantidad(true);
+            // La formula sigue actualizandose como sugerencia, pero una captura
+            // manual ya no se reemplaza por Cantidad / ObjetivoHora.
+            recalcularHorasPorCantidad(
+                sincronizarHorasSugeridas && !horasProgramadasEditadasPorUsuario
+            );
             recalcularFin();
 
             return todoValido;
@@ -792,13 +801,16 @@
 
         reindexarAumentosRelease();
         filasAumentoRelease().forEach(actualizarInfoFilaAumento);
-        recalcularAumentosRelease();
+        // En GET ya viene la sugerencia del servidor. En POST fallido puede venir
+        // una captura manual; en ambos casos no la sobreescribimos al inicializar.
+        recalcularAumentosRelease(false);
 
         trabajarDomingoInput?.addEventListener('change', recalcularFin);
 
         horasInput?.addEventListener('input', function () {
-            // V10.6: lo capturado por Planeacion es el valor canonico.
-            // No redondear ni sustituir por Cantidad / ObjetivoHora.
+            // NSQ_PLANEACION_HORAS_MANUALES_CANONICAS_V1_0
+            // Desde la primera edicion manual este valor es canonico para el POST.
+            horasProgramadasEditadasPorUsuario = true;
             recalcularFin();
         });
         inicioInput?.addEventListener('change', function () {
@@ -1781,11 +1793,12 @@
                     <div class="formula-box mb-3">
                         <div class="fw-bold">
                             <i class="fa-solid fa-square-root-variable me-1"></i>
-                            Fórmula horas programadas
+                            Sugerencia de horas por fórmula
                         </div>
                         <div class="small">
                             Cantidad programada ÷ Objetivo por hora, redondeado hacia arriba =
-                            <strong id="formulaHoras">@Decimal2(Model.HorasProgramadas)</strong> hrs
+                            <strong id="formulaHoras">@Decimal2(Model.HorasProgramadas)</strong> hrs.
+                            Si Planeación captura otro valor manualmente, se respetará al guardar.
                         </div>
                     </div>
 
@@ -1832,13 +1845,14 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="field-label">Horas programadas (hrs redondeadas)</label>
+                            <label class="field-label">Horas programadas (editable)</label>
                             <input asp-for="HorasProgramadas"
                                    type="number"
                                    step="0.01"
                                    min="0.01"
                                    class="form-control"
                                    id="HorasProgramadas" />
+                            <div class="form-text">La fórmula es una sugerencia. El valor que captures aquí será el que se use para validar ocupación y calcular el fin.</div>
                             <span asp-validation-for="HorasProgramadas" class="text-danger small"></span>
                         </div>
 

@@ -1,10 +1,38 @@
-@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
-<section class="ind-kpis">
-    <article class="ind-kpi ind-kpi--featured"><span>Cumplimiento del plan</span><strong>@Model.Planeacion.CumplimientoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Planeacion.CumplimientoPct,0m,100m)))"></progress><small>Producido contra cantidad programada</small></article>
-    <article class="ind-kpi"><span>Arranques a tiempo</span><strong>@Model.Planeacion.ArranqueATiempoPct.ToString("N1")%</strong><progress max="100" value="@((int)Math.Round(Math.Clamp(Model.Planeacion.ArranqueATiempoPct,0m,100m)))"></progress><small>@Model.Planeacion.ArranquesATiempo de @Model.Planeacion.ArranquesRegistrados arranques registrados</small></article>
-    <article class="ind-kpi"><span>Programado</span><strong>@Model.Planeacion.Programado.ToString("N0")</strong><small>Piezas programadas en @Model.Planeacion.Programas programas</small></article>
-    <article class="ind-kpi"><span>Producido</span><strong>@Model.Planeacion.Producido.ToString("N0")</strong><small>Piezas reportadas como producidas</small></article>
-    <article class="ind-kpi"><span>Pendiente</span><strong>@Model.Planeacion.Pendiente.ToString("N0")</strong><small>@Model.Planeacion.ProgramasConPendiente programas aún con saldo</small></article>
-    <article class="ind-kpi"><span>Reprogramados</span><strong>@Model.Planeacion.Reprogramados.ToString("N0")</strong><small>Programas con movimiento de reprogramación en el periodo</small></article>
+﻿@model ERP.NSQuell.Models.ViewModels.Indicadores.IndicadoresDashboardVm
+@{
+    var p = Model.Planeacion;
+    decimal backlogPct = p.Programado <= 0 ? 0m : Math.Clamp(p.Pendiente * 100m / p.Programado, 0m, 100m);
+    decimal reprogramPct = p.Programas <= 0 ? 0m : Math.Clamp(p.Reprogramados * 100m / p.Programas, 0m, 100m);
+    var arranquesFuera = Math.Max(0, p.ArranquesRegistrados - p.ArranquesATiempo);
+    decimal Hue(decimal value) => Math.Clamp(value,0m,100m) * 1.2m;
+}
+<section class="ind-area-hero">
+    <article class="ind-area-hero__main" style="--kpi-hue:@Hue(p.CumplimientoPct)">
+        <span class="ind-overline">PLANEACIÓN</span><h3>Cumplimiento del plan</h3>
+        <strong class="ind-area-big">@p.CumplimientoPct.ToString("N1")%</strong>
+        <p>@p.Producido.ToString("N0") piezas producidas contra @p.Programado.ToString("N0") programadas en el periodo.</p>
+        <div class="ind-meter"><i style="width:@Math.Clamp(p.CumplimientoPct,0m,100m)%"></i></div>
+    </article>
+    <div class="ind-area-hero__summary">
+        <div><span>Programas</span><strong>@p.Programas</strong><small>@p.ProgramasConPendiente con saldo</small></div>
+        <div><span>Pendiente</span><strong>@p.Pendiente.ToString("N0")</strong><small>@backlogPct.ToString("N1")% de lo programado</small></div>
+        <div><span>Arranques a tiempo</span><strong>@p.ArranqueATiempoPct.ToString("N1")%</strong><small>@arranquesFuera fuera de horario</small></div>
+        <div><span>Reprogramados</span><strong>@p.Reprogramados</strong><small>@reprogramPct.ToString("N1")% de programas</small></div>
+    </div>
 </section>
-<div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>El cumplimiento usa CantidadProgramada y CantidadProducida. La puntualidad de arranque compara FechaInicioReal contra FechaInicioProgramada únicamente cuando existe arranque real.</span></div>
+<section class="ind-area-grid">
+    <article class="ind-panel">
+        <header class="ind-panel__head"><div><span>LECTURA DEL PERIODO</span><h3>Presión sobre el plan</h3></div></header>
+        <div class="ind-analysis-lines">
+            <div><div><strong>Cumplimiento</strong><span>@p.CumplimientoPct.ToString("N1")%</span></div><div class="ind-meter"><i style="width:@Math.Clamp(p.CumplimientoPct,0m,100m)%"></i></div><small>Producido / programado.</small></div>
+            <div><div><strong>Arranque a tiempo</strong><span>@p.ArranqueATiempoPct.ToString("N1")%</span></div><div class="ind-meter"><i style="width:@Math.Clamp(p.ArranqueATiempoPct,0m,100m)%"></i></div><small>@p.ArranquesATiempo de @p.ArranquesRegistrados arranques reales.</small></div>
+            <div><div><strong>Saldo pendiente</strong><span>@backlogPct.ToString("N1")%</span></div><div class="ind-meter ind-meter--loss"><i style="width:@backlogPct%"></i></div><small>@p.ProgramasConPendiente programa(s) todavía abiertos.</small></div>
+            <div><div><strong>Reprogramación</strong><span>@reprogramPct.ToString("N1")%</span></div><div class="ind-meter ind-meter--warn"><i style="width:@reprogramPct%"></i></div><small>@p.Reprogramados programa(s) tuvieron movimiento de fecha.</small></div>
+        </div>
+    </article>
+    <aside class="ind-panel ind-area-source">
+        <header class="ind-panel__head"><div><span>LECTURA DE DATOS</span><h3>Qué está midiendo</h3></div><button type="button" class="ind-panel-modal-btn" data-bs-toggle="modal" data-bs-target="#indPlaneacionInfo"><i class="fa-solid fa-circle-info"></i> Ver detalle</button></header>
+        <div class="ind-source-cards"><div><i class="fa-solid fa-boxes-stacked"></i><strong>Cantidades</strong><small>Programado, producido y saldo por programa.</small></div><div><i class="fa-solid fa-stopwatch"></i><strong>Puntualidad</strong><small>Hora planeada contra hora real de arranque.</small></div><div><i class="fa-solid fa-arrows-rotate"></i><strong>Reprogramación</strong><small>Movimientos registrados durante el periodo.</small></div></div>
+    </aside>
+</section>
+<div class="modal fade" id="indPlaneacionInfo" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content ind-program-modal"><div class="modal-header"><div><span class="ind-overline">PLANEACIÓN</span><h5 class="modal-title">Cómo se construye el análisis</h5></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="ind-origin-grid"><div><span>Programa</span><b>Planeacion_ProgramaProduccion</b><small>CantidadProgramada, CantidadProducida y fechas planeada/real.</small></div><div><span>Puntualidad</span><b>FechaInicioReal vs FechaInicioProgramada</b><small>Solo se evalúa cuando existe arranque real.</small></div><div><span>Reprogramaciones</span><b>Planeacion_ProgramaReprogramacionHistorial</b><small>Cuenta programas con cambios dentro del periodo.</small></div></div></div></div></div></div>

@@ -39,10 +39,18 @@ public sealed class GlobalDepartmentNavigationViewComponent : ViewComponent
 
     public async Task<IViewComponentResult> InvokeAsync()
     {
+        var currentControllerInicial =
+            ViewContext.RouteData.Values["controller"]?.ToString()
+            ?? string.Empty;
+
         var vm = new GlobalDepartmentNavigationVm
         {
             CurrentPath = HttpContext.Request.Path.Value ?? string.Empty,
-            CurrentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty
+            CurrentController = currentControllerInicial,
+            CurrentIndicadoresArea =
+                currentControllerInicial.Equals("Indicadores", StringComparison.OrdinalIgnoreCase)
+                    ? (HttpContext.Request.Query["area"].FirstOrDefault()?.Trim().ToLowerInvariant() ?? "general")
+                    : string.Empty
         };
 
         var usuarioId = HttpContext.Session.GetInt32("UsuarioID");
@@ -657,6 +665,32 @@ ORDER BY
         return path.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
     }
 
+    private static string QueryValue(string? url, string key)
+    {
+        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key))
+            return string.Empty;
+
+        var question = url.IndexOf('?');
+        if (question < 0 || question >= url.Length - 1)
+            return string.Empty;
+
+        var query = url[(question + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var pair in query)
+        {
+            var pieces = pair.Split('=', 2);
+            if (pieces.Length != 2)
+                continue;
+
+            var name = Uri.UnescapeDataString(pieces[0]);
+            if (!name.Equals(key, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            return Uri.UnescapeDataString(pieces[1]).Trim();
+        }
+
+        return string.Empty;
+    }
+
     private static string PathOnly(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return string.Empty;
@@ -709,8 +743,32 @@ ORDER BY
                 foreach (var sub in menu.SubMenus)
                 {
                     var targetPath = PathOnly(sub.Url);
-                    sub.IsActive = !string.IsNullOrWhiteSpace(targetPath) &&
-                                   string.Equals(targetPath, currentPath, StringComparison.OrdinalIgnoreCase);
+                    var esIndicadoresActual =
+                        currentController.Equals("Indicadores", StringComparison.OrdinalIgnoreCase) &&
+                        (currentPath.Equals("/Indicadores", StringComparison.OrdinalIgnoreCase) ||
+                         currentPath.Equals("/Indicadores/Index", StringComparison.OrdinalIgnoreCase));
+
+                    var esDestinoIndicadores =
+                        targetPath.Equals("/Indicadores", StringComparison.OrdinalIgnoreCase) ||
+                        targetPath.Equals("/Indicadores/Index", StringComparison.OrdinalIgnoreCase);
+
+                    if (esIndicadoresActual && esDestinoIndicadores)
+                    {
+                        var areaDestino = QueryValue(sub.Url, "area");
+                        if (string.IsNullOrWhiteSpace(areaDestino))
+                            areaDestino = "general";
+
+                        var areaActual = string.IsNullOrWhiteSpace(vm.CurrentIndicadoresArea)
+                            ? "general"
+                            : vm.CurrentIndicadoresArea;
+
+                        sub.IsActive = areaDestino.Equals(areaActual, StringComparison.OrdinalIgnoreCase);
+                    }
+                    else
+                    {
+                        sub.IsActive = !string.IsNullOrWhiteSpace(targetPath) &&
+                                       string.Equals(targetPath, currentPath, StringComparison.OrdinalIgnoreCase);
+                    }
                 }
             }
 
@@ -1023,6 +1081,7 @@ public sealed class GlobalDepartmentNavigationVm
 {
     public string CurrentPath { get; set; } = string.Empty;
     public string CurrentController { get; set; } = string.Empty;
+    public string CurrentIndicadoresArea { get; set; } = string.Empty;
     public bool LoadFailed { get; set; }
     public List<GlobalDepartmentNavigationGroupVm> Groups { get; set; } = new();
 }

@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models;
+﻿using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
@@ -1586,7 +1586,8 @@ WHERE MoldeID=@MoldeID;";
 
                 vm.FechaFinProgramada = SumarHorasOperativasPlaneacion(
                     fechaArranque,
-                    vm.HorasProgramadas.Value
+                    vm.HorasProgramadas.Value,
+                    trabajarDomingo
                 );
             }
         }

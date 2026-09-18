@@ -79,6 +79,21 @@ public sealed class IndicadoresOperadorKpiVm
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
     public int Registros { get; set; }
+    public int PartesTrabajadas { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int MaquinasTrabajadas { get; set; }
+    public int OfTrabajadas { get; set; }
+    public string MejorParte { get; set; } = string.Empty;
+    public string MejorParteDescripcion { get; set; } = string.Empty;
+    public long MejorParteOK { get; set; }
+    public decimal MejorParteRqtPct { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public long MejorTurnoOK { get; set; }
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorMaquina { get; set; } = string.Empty;
+    public decimal MejorMaquinaRqtPct { get; set; }
+    public string MejorOF { get; set; } = string.Empty;
+    public decimal MejorOFRqtPct { get; set; }
 
     public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal CumplimientoPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
@@ -105,6 +120,21 @@ public sealed class IndicadoresPersonalApoyoKpiVm
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
     public int Registros { get; set; }
+    public int PartesTrabajadas { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int MaquinasTrabajadas { get; set; }
+    public int OfTrabajadas { get; set; }
+    public string MejorParte { get; set; } = string.Empty;
+    public string MejorParteDescripcion { get; set; } = string.Empty;
+    public long MejorParteOK { get; set; }
+    public decimal MejorParteRqtPct { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public long MejorTurnoOK { get; set; }
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorMaquina { get; set; } = string.Empty;
+    public decimal MejorMaquinaRqtPct { get; set; }
+    public string MejorOF { get; set; } = string.Empty;
+    public decimal MejorOFRqtPct { get; set; }
 
     public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal RqtPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
@@ -114,6 +144,7 @@ public sealed class IndicadoresPersonalApoyoKpiVm
     public decimal UePct => Math.Clamp(100m - ParosPct,0m,100m);
     public decimal OeePct => Math.Clamp(RqtPct,0m,100m) / 100m * RqlPct / 100m * UePct / 100m * 100m;
 }
+
 public sealed class IndicadoresMaquinaKpiVm
 {
     public int MaquinaID { get; set; }
@@ -124,6 +155,19 @@ public sealed class IndicadoresMaquinaKpiVm
     public long Objetivo { get; set; }
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
+    public int PartesTrabajadas { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int OperadoresTrabajados { get; set; }
+    public int OfTrabajadas { get; set; }
+    public string MejorParte { get; set; } = string.Empty;
+    public string MejorParteDescripcion { get; set; } = string.Empty;
+    public decimal MejorParteRqtPct { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorOperador { get; set; } = string.Empty;
+    public decimal MejorOperadorRqtPct { get; set; }
+    public string MejorOF { get; set; } = string.Empty;
+    public decimal MejorOFRqtPct { get; set; }
 
     public long Total => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal CumplimientoPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
@@ -176,6 +220,12 @@ public sealed class IndicadoresProgramaProduccionVm
     public long Objetivo { get; set; }
     public decimal MinutosProduccion { get; set; }
     public decimal MinutosParo { get; set; }
+    public int TurnosTrabajados { get; set; }
+    public int OperadoresTrabajados { get; set; }
+    public string MejorTurno { get; set; } = string.Empty;
+    public decimal MejorTurnoRqtPct { get; set; }
+    public string MejorOperador { get; set; } = string.Empty;
+    public decimal MejorOperadorRqtPct { get; set; }
 
     public long TotalProducido => PiezasOK + PiezasSospechosas + PiezasScrap;
     public decimal RqtPct => Objetivo <= 0 ? 0m : PiezasOK * 100m / Objetivo;
