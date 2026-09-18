@@ -2279,6 +2279,7 @@ VALUES
 
                 await MarcarCalidadEnMonitoreoAsync(
                     ejecucionProduccionId,
+                    ahora,
                     usuarioId,
                     cn,
                     tx);
@@ -2308,6 +2309,7 @@ VALUES
 
                     await MarcarCalidadEnMonitoreoAsync(
                         ejecucionPareja.EjecucionProduccionID,
+                        ahora,
                         usuarioId,
                         cn,
                         tx);

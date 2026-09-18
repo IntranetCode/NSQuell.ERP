@@ -295,22 +295,28 @@ CROSS APPLY
              AND pe.FechaInicioReal IS NOT NULL
                 THEN pe.FechaInicioReal
             ELSE NULL
-        END AS FechaInicioRealOperativa,
-        COALESCE
-        (
-            pe.FechaLiberacionMaquina,
-            pp.FechaFinReal,
-            pe.FechaFinReal,
-            CASE
-                WHEN pe.EstatusID IN(@EnPreparacion,@EnProduccion,@Pausado)
-                    THEN CASE
-                        WHEN fechas.FechaFinProgramada>@Ahora
-                            THEN fechas.FechaFinProgramada
-                        ELSE @Ahora
-                    END
-                ELSE fechas.FechaFinProgramada
-            END
-        ) AS FechaFinOperativa
+        END AS FechaInicioRealOperativa
+) inicioReal
+CROSS APPLY
+(
+    SELECT
+        inicioReal.FechaInicioRealOperativa,
+        CASE
+            WHEN inicioReal.FechaInicioRealOperativa IS NOT NULL
+                THEN COALESCE
+                (
+                    pe.FechaLiberacionMaquina,
+                    pp.FechaFinReal,
+                    pe.FechaFinReal,
+                    DATEADD
+                    (
+                        MINUTE,
+                        DATEDIFF(MINUTE,pp.FechaInicioProgramada,fechas.FechaFinProgramada),
+                        inicioReal.FechaInicioRealOperativa
+                    )
+                )
+            ELSE fechas.FechaFinProgramada
+        END AS FechaFinOperativa
 ) operativo
 OUTER APPLY
 (

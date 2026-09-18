@@ -146,13 +146,13 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                solicitudProduccionId.Value <= 0)
             {
                 throw new InvalidOperationException(
-                    "No existe una OF relacionada con esta ejecución. Genera la OF desde Planeación antes de enviarla a Calidad.");
+                    "No existe una OF relacionada con esta ejecuciï¿½n. Genera la OF desde Planeaciï¿½n antes de enviarla a Calidad.");
             }
             if (!solicitudProduccionDetalleId.HasValue ||
                solicitudProduccionDetalleId.Value <= 0)
             {
                 throw new InvalidOperationException(
-                    "La OF relacionada no tiene un detalle válido asociado al programa.");
+                    "La OF relacionada no tiene un detalle vï¿½lido asociado al programa.");
             }
             return new OrigenSolicitudCalidad
             {
@@ -350,6 +350,7 @@ ORDER BY ci.InspeccionID DESC;";
 
         private async Task MarcarCalidadEnMonitoreoAsync(
      int ejecucionProduccionId,
+     DateTime fechaInicioReal,
      int usuarioId,
      SqlConnection cn,
      SqlTransaction tx)
@@ -360,11 +361,11 @@ DECLARE @Estado NVARCHAR(50);
 DECLARE @Liberado BIT;
 DECLARE @RequiereReliberacion BIT;
 DECLARE @ConfiguracionInvalidada BIT;
-DECLARE @FechaInicioProgramada DATETIME2(0);
-DECLARE @FechaFinProgramada DATETIME2(0);
-DECLARE @Ahora DATETIME2(0)=SYSDATETIME();
+DECLARE @HorasProgramadas DECIMAL(18,4);
+DECLARE @Ahora DATETIME2(0)=@FechaInicioReal;
 DECLARE @NumeroHoraInicial INT;
 DECLARE @CantidadHoras INT;
+DECLARE @HorasTotales INT;
 DECLARE @EsReinicio BIT=0;
 
 SELECT TOP (1)
@@ -373,9 +374,11 @@ SELECT TOP (1)
     @Liberado=ISNULL(ci.Liberado,0),
     @RequiereReliberacion=ISNULL(ci.RequiereReliberacion,0),
     @ConfiguracionInvalidada=ISNULL(ci.ConfiguracionInvalidada,0),
-    @FechaInicioProgramada=ci.FechaInicioProgramada,
-    @FechaFinProgramada=ci.FechaFinProgramada
+    @HorasProgramadas=pp.HorasProgramadas
 FROM dbo.Calidad_Inspecciones ci WITH (UPDLOCK,HOLDLOCK)
+LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID=ci.ProgramaProduccionID
+   AND pp.Activo=1
 WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
   AND ci.Estado<>N'CERRADA'
 ORDER BY ci.InspeccionID DESC;
@@ -419,7 +422,7 @@ BEGIN
         1;
 END;
 
--- Si ya está en monitoreo, la acción fue ejecutada previamente.
+-- Si ya estï¿½ en monitoreo, la acciï¿½n fue ejecutada previamente.
 -- No se deben crear nuevamente los mismos periodos.
 IF @Estado=N'MONITOREO_ACTIVO'
 BEGIN
@@ -436,33 +439,33 @@ WHERE m.InspeccionID=@InspeccionID
 IF @NumeroHoraInicial>1
     SET @EsReinicio=1;
 
--- Generar las horas restantes conforme a la programación.
--- Cuando la fecha programada ya venció, se generan nueve periodos
--- para continuar el seguimiento de una producción atrasada.
-SET @CantidadHoras=
-    CASE
-        WHEN @FechaFinProgramada IS NOT NULL
-         AND @FechaFinProgramada>@Ahora
-            THEN CONVERT
-            (
-                INT,
-                CEILING
-                (
-                    DATEDIFF
-                    (
-                        MINUTE,
-                        @Ahora,
-                        @FechaFinProgramada
-                    )/60.0
-                )
-            )
-        ELSE 9
-    END;
+-- Generar las horas restantes conforme a la programaciï¿½n.
+-- Cuando la fecha programada ya venciï¿½, se generan nueve periodos
+-- para continuar el seguimiento de una producciï¿½n atrasada.
+-- NSQ_CALENDARIOS_INICIO_REAL_SOMBRA_V1_0
+-- Calidad usa la misma cantidad canonica de horas normales que ProduccionOperador.
+-- El atraso contra Planeacion desplaza el horario; no reduce horas ni crea 9 horas artificiales.
+SET @HorasTotales=CONVERT
+(
+    INT,
+    CEILING
+    (
+        CASE
+            WHEN ISNULL(@HorasProgramadas,0)>0 THEN @HorasProgramadas
+            ELSE 1
+        END
+    )
+);
 
-IF @CantidadHoras<1
-    SET @CantidadHoras=1;
+IF @HorasTotales<1
+    SET @HorasTotales=1;
 
--- Límite de seguridad para evitar una generación accidental excesiva.
+SET @CantidadHoras=@HorasTotales-(@NumeroHoraInicial-1);
+
+IF @CantidadHoras<0
+    SET @CantidadHoras=0;
+
+-- Lï¿½mite de seguridad para evitar una generaciï¿½n accidental excesiva.
 IF @CantidadHoras>500
     SET @CantidadHoras=500;
 
@@ -522,6 +525,7 @@ VALUES
 ;WITH Numeros AS
 (
     SELECT 0 AS Consecutivo
+    WHERE @CantidadHoras>0
 
     UNION ALL
 
@@ -585,6 +589,11 @@ OPTION (MAXRECURSION 500);";
                 "@EjecucionProduccionID",
                 SqlDbType.Int).Value =
                 ejecucionProduccionId;
+
+            cmd.Parameters.Add(
+                "@FechaInicioReal",
+                SqlDbType.DateTime).Value =
+                fechaInicioReal;
 
             cmd.Parameters.Add(
                 "@UsuarioID",
@@ -666,11 +675,11 @@ VALUES
 
         private async Task VincularRegistroHoraConMonitoreoAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int registroHoraId, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
-            if (ejecucion == null) throw new ArgumentNullException(nameof(ejecucion), "No se recibió la ejecución de producción.");
-            if (vm == null) throw new ArgumentNullException(nameof(vm), "No se recibió la captura horaria.");
-            if (ejecucion.EjecucionProduccionID <= 0) throw new InvalidOperationException("La ejecución de producción no es válida.");
-            if (registroHoraId <= 0) throw new InvalidOperationException("El registro horario no es válido.");
-            if (usuarioId <= 0) throw new InvalidOperationException("No se pudo identificar al usuario que registró la producción.");
+            if (ejecucion == null) throw new ArgumentNullException(nameof(ejecucion), "No se recibiï¿½ la ejecuciï¿½n de producciï¿½n.");
+            if (vm == null) throw new ArgumentNullException(nameof(vm), "No se recibiï¿½ la captura horaria.");
+            if (ejecucion.EjecucionProduccionID <= 0) throw new InvalidOperationException("La ejecuciï¿½n de producciï¿½n no es vï¿½lida.");
+            if (registroHoraId <= 0) throw new InvalidOperationException("El registro horario no es vï¿½lido.");
+            if (usuarioId <= 0) throw new InvalidOperationException("No se pudo identificar al usuario que registrï¿½ la producciï¿½n.");
 
             var fechaHoraInicio = vm.FechaProduccion.Date.Add(horaInicio);
             var fechaHoraFin = vm.FechaProduccion.Date.Add(horaFin);
@@ -699,10 +708,10 @@ WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
 ORDER BY ci.InspeccionID DESC;
 
 IF @InspeccionID IS NULL
-    THROW 51050,'No existe una inspección activa de Calidad para la ejecución.',1;
+    THROW 51050,'No existe una inspecciï¿½n activa de Calidad para la ejecuciï¿½n.',1;
 
 IF @EstadoInspeccion<>N'MONITOREO_ACTIVO'
-    THROW 51051,'La inspección de Calidad no se encuentra en monitoreo activo.',1;
+    THROW 51051,'La inspecciï¿½n de Calidad no se encuentra en monitoreo activo.',1;
 
 SELECT TOP (1)
     @MonitoreoID=m.MonitoreoID,
@@ -729,10 +738,10 @@ BEGIN
 END;
 
 IF @MonitoreoID IS NULL
-    THROW 51052,'No existe un monitoreo horario pendiente para vincular la captura de Producción.',1;
+    THROW 51052,'No existe un monitoreo horario pendiente para vincular la captura de Producciï¿½n.',1;
 
 IF @RegistroHoraVinculado IS NOT NULL AND @RegistroHoraVinculado<>@RegistroHoraID
-    THROW 51053,'El monitoreo seleccionado ya está vinculado con otra captura horaria.',1;
+    THROW 51053,'El monitoreo seleccionado ya estï¿½ vinculado con otra captura horaria.',1;
 
 IF EXISTS
 (
@@ -742,7 +751,7 @@ IF EXISTS
       AND m.MonitoreoID<>@MonitoreoID
       AND m.Activo=1
 )
-    THROW 51054,'La captura horaria ya está vinculada con otro monitoreo de Calidad.',1;
+    THROW 51054,'La captura horaria ya estï¿½ vinculada con otro monitoreo de Calidad.',1;
 
 UPDATE dbo.Calidad_MonitoreosProceso
 SET RegistroHoraID=@RegistroHoraID,
@@ -764,7 +773,7 @@ WHERE MonitoreoID=@MonitoreoID
   AND (RegistroHoraID IS NULL OR RegistroHoraID=@RegistroHoraID);
 
 IF @@ROWCOUNT<>1
-    THROW 51055,'El monitoreo cambió de estado mientras se vinculaba la captura horaria.',1;
+    THROW 51055,'El monitoreo cambiï¿½ de estado mientras se vinculaba la captura horaria.',1;
 
 IF @CantidadPendienteRevision>0
 BEGIN
@@ -777,17 +786,17 @@ BEGIN
     ORDER BY d.DisposicionID DESC;
 
     SET @Comentario=CONCAT(
-        N'Seguimiento automático generado desde Producción. RegistroHoraID: ',
+        N'Seguimiento automï¿½tico generado desde Producciï¿½n. RegistroHoraID: ',
         @RegistroHoraID,
         N'. Periodo: ',
         CONVERT(NVARCHAR(19),@FechaHoraInicio,120),
         N' a ',
         CONVERT(NVARCHAR(19),@FechaHoraFin,120),
-        N'. Producción reportó ',
+        N'. Producciï¿½n reportï¿½ ',
         @CantidadSospechosa,
         N' pieza(s) sospechosa(s) y ',
         @CantidadScrap,
-        N' pieza(s) como scrap operativo. Calidad debe confirmar la disposición final.'
+        N' pieza(s) como scrap operativo. Calidad debe confirmar la disposiciï¿½n final.'
     );
 
     IF @DisposicionID IS NULL
@@ -905,7 +914,7 @@ SELECT
     CASE WHEN @CantidadPendienteRevision>0 THEN N'PENDIENTE_REVISION' ELSE NULL END,
     CASE WHEN @CantidadPendienteRevision>0 THEN N'AMARILLA' ELSE NULL END,
     CONCAT(
-        N'Calidad recibió la captura horaria de Producción. RegistroHoraID: ',
+        N'Calidad recibiï¿½ la captura horaria de Producciï¿½n. RegistroHoraID: ',
         @RegistroHoraID,
         N'. Periodo: ',
         CONVERT(NVARCHAR(19),@FechaHoraInicio,120),

@@ -2224,6 +2224,7 @@ else
 
             <div class="legend">
                 <span><i data-nsq-style-id="nsq-si-93d879e3cf"></i>@(modoProduccion ? "Programado" : "Programado / movible")</span>
+                <span><i class="legend-delay-shadow"></i>Atraso inicio real</span>
                 <span><i data-nsq-style-id="nsq-si-1c4b44484e"></i>Produciendo / en línea</span>
                 <span><i data-nsq-style-id="nsq-si-31a65355ef"></i>Paro</span>
                 <span><i data-nsq-style-id="nsq-si-b64b5184b1"></i>Calidad</span>
@@ -2323,6 +2324,30 @@ else
                                 (visibleFin - visibleInicio).TotalMinutes / totalMinutos * 100);
 
                                 var top = 8 + bloque.Carril * 48;
+
+                                var mostrarSombraAtraso = bloque.TieneAtrasoInicioReal;
+                                var sombraLeft = 0d;
+                                var sombraWidth = 0d;
+                                var textoAtrasoHoras = (bloque.MinutosAtrasoInicioReal / 60d)
+                                    .ToString("0.##", CultureInfo.InvariantCulture) + " h";
+
+                                if (mostrarSombraAtraso)
+                                {
+                                    var sombraInicio = bloque.Inicio < inicioPeriodo ? inicioPeriodo : bloque.Inicio;
+                                    var sombraFinBase = bloque.FechaInicioRealProduccion!.Value;
+                                    var sombraFin = sombraFinBase > finPeriodo ? finPeriodo : sombraFinBase;
+
+                                    if (sombraFin > sombraInicio)
+                                    {
+                                        sombraLeft = (sombraInicio - inicioPeriodo).TotalMinutes / totalMinutos * 100;
+                                        sombraWidth = Math.Max(.20, (sombraFin - sombraInicio).TotalMinutes / totalMinutos * 100);
+                                    }
+                                    else
+                                    {
+                                        mostrarSombraAtraso = false;
+                                    }
+                                }
+
                                 var puedeMover = !modoProduccion && bloque.PuedeMoverCalendario;
 
                                 var tituloBloqueo = modoProduccion
@@ -2396,6 +2421,15 @@ else
                                     claseColorBloque = "bloque-produciendo";
                                 }
 
+                                @if (mostrarSombraAtraso && sombraWidth > 0)
+                                {
+                                    <div class="start-delay-shadow"
+                                         data-nsq-style="left:@Pct(sombraLeft)%;width:@Pct(sombraWidth)%;top:@(top)px"
+                                         title="Planeado: @bloque.Inicio.ToString("dd/MM HH:mm") | Inicio real: @bloque.FechaInicioRealProduccion!.Value.ToString("dd/MM HH:mm") | Atraso: @textoAtrasoHoras">
+                                        <span>+@textoAtrasoHoras</span>
+                                    </div>
+                                }
+
                                 <button type="button"
                                         class="block @claseColorBloque @(puedeMover ? "" : "no-drag") @(mostrarAlertaNoInicio ? "has-start-delay" : "") @(tieneSolicitudReprogramacion ? "has-reprogram-request" : "") @(bloque.TieneProyeccionInterrupcion ? "has-live-projection" : "") @(bloque.EsProgramaRaizInterrupcion ? "projection-root" : bloque.TieneProyeccionInterrupcion ? "projection-shifted" : "")"
                                         draggable="@(puedeMover ? "true" : "false")"
@@ -2405,8 +2439,8 @@ else
                                         data-maquina-id="@bloque.MaquinaID"
                                         data-inicio="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
                                         data-fin="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                        data-inicio-oficial="@bloque.Inicio.ToString("yyyy-MM-ddTHH:mm:ss")"
-                                        data-fin-oficial="@bloque.Fin.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-inicio-oficial="@bloque.InicioVisual.ToString("yyyy-MM-ddTHH:mm:ss")"
+                                        data-fin-oficial="@bloque.FinVisual.ToString("yyyy-MM-ddTHH:mm:ss")"
                                         data-inicio-proyectado="@(bloque.InicioProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
                                         data-fin-proyectado="@(bloque.FinProyectado?.ToString("yyyy-MM-ddTHH:mm:ss") ?? "")"
                                         data-puede-mover="@(puedeMover ? "true" : "false")"

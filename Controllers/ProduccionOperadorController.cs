@@ -6824,6 +6824,7 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
             const string sqlPrograma = @"
 SELECT TOP(1)
     COALESCE(
+        pp.FechaInicioReal,
         (
             SELECT TOP(1)
                 h.FechaMovimiento
@@ -6834,7 +6835,6 @@ SELECT TOP(1)
               AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
             ORDER BY h.FechaMovimiento
         ),
-        pp.FechaInicioReal,
         e.FechaInicioReal
     ) AS FechaInicioReal,
 

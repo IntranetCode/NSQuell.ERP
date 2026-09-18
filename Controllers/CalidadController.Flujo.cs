@@ -2139,9 +2139,13 @@ WHERE InspeccionID=@InspeccionID AND Activo=1 AND NumeroHora>@Horas
                  * modifica la ejecución ni ninguna captura de Producción.
                  */
                 const string sqlInicioReal = @"
-SELECT TOP (1) FechaInicioReal
-FROM dbo.Produccion_Ejecucion
-WHERE EjecucionProduccionID = @EjecucionProduccionID;";
+SELECT TOP (1)
+    COALESCE(pp.FechaInicioReal,e.FechaInicioReal)
+FROM dbo.Produccion_Ejecucion e
+LEFT JOIN dbo.Planeacion_ProgramaProduccion pp
+    ON pp.ProgramaProduccionID=e.ProgramaProduccionID
+   AND pp.Activo=1
+WHERE e.EjecucionProduccionID = @EjecucionProduccionID;";
 
                 await using var cn = new SqlConnection(ConnectionString);
                 await cn.OpenAsync();
