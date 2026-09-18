@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models.ERP;
+﻿using ERP.NSQuell.Models.ERP;
 using ERP.NSQuell.Servicios;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -720,7 +720,7 @@ SELECT
     @Renglon,
     @ParteID,
     COALESCE(NULLIF(p.NumeroParte, N''), NULLIF(@ReferenciaSAP, N'')),
-    COALESCE(NULLIF(@ReferenciaSAP, N''), NULLIF(p.ReferenciaSAP, N''), NULLIF(p.NumeroParte, N'')),
+    COALESCE(NULLIF(NULLIF(UPPER(LTRIM(RTRIM(@ReferenciaSAP))), N'N/A'), N''), NULLIF(NULLIF(UPPER(LTRIM(RTRIM(p.ReferenciaSAP))), N'N/A'), N''), NULLIF(p.NumeroParte, N'')),
     COALESCE(NULLIF(@Descripcion, N''), NULLIF(p.Designacion, N''), NULLIF(p.Descripcion, N'')),
     NULL,
     NULL,
@@ -839,7 +839,7 @@ SELECT
     @Renglon,
     @ParteID,
     COALESCE(NULLIF(p.NumeroParte, N''), NULLIF(@ReferenciaSAP, N'')),
-    COALESCE(NULLIF(@ReferenciaSAP, N''), NULLIF(p.ReferenciaSAP, N''), NULLIF(p.NumeroParte, N'')),
+    COALESCE(NULLIF(NULLIF(UPPER(LTRIM(RTRIM(@ReferenciaSAP))), N'N/A'), N''), NULLIF(NULLIF(UPPER(LTRIM(RTRIM(p.ReferenciaSAP))), N'N/A'), N''), NULLIF(p.NumeroParte, N'')),
     COALESCE(NULLIF(@Descripcion, N''), NULLIF(p.Designacion, N''), NULLIF(p.Descripcion, N'')),
     @FechaCarga,
     @FechaRequerida,

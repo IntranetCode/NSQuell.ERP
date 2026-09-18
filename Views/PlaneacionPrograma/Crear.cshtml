@@ -1139,6 +1139,7 @@
         <input type="hidden" asp-for="ParteID" />
         <input type="hidden" asp-for="NumeroParte" />
         <input type="hidden" asp-for="ReferenciaSAP" />
+        <input type="hidden" asp-for="ReferenciaCliente" />
         <input type="hidden" asp-for="DesignacionDescripcionSAP" />
 
         <input type="hidden" asp-for="CantidadRequerida" />
@@ -1236,6 +1237,33 @@
                             <div class="col-12">
                                 <div class="field-label">Designación / descripción</div>
                                 <div class="field-value">@Valor(Model.DesignacionDescripcionSAP)</div>
+                            </div>
+
+                            @* NSQ_SLIDING_CAM_DATOS_CANONICOS_V1 *@
+                            <div class="col-12">
+                                <div class="row g-2">
+                                    <div class="col-md-3">
+                                        <div class="field-label">Ref. interna</div>
+                                        <div class="field-value">@Valor(Model.NumeroParte)</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="field-label">Ref. SAP</div>
+                                        <div class="field-value">@Valor(Model.ReferenciaSAP)</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="field-label">Ref. cliente</div>
+                                        <div class="field-value">@Valor(Model.ReferenciaCliente)</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="field-label">Secado</div>
+                                        <div class="field-value">
+                                            @Valor(Model.TipoSecado)
+                                            · @(string.IsNullOrWhiteSpace(Model.HorasSecadoTexto)
+                                                ? (Model.HorasSecado.HasValue ? Model.HorasSecado.Value.ToString("0.##") + " h" : "N/A")
+                                                : Model.HorasSecadoTexto)
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

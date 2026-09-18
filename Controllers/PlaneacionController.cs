@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models;
+﻿using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Data.SqlClient;
@@ -2403,7 +2403,9 @@ WHERE p.ParteID = @ParteID
 SELECT
     d.SolicitudProduccionDetalleID,
     d.Renglon,
+    COALESCE(NULLIF(LTRIM(RTRIM(p.NumeroParte)),N''),NULLIF(LTRIM(RTRIM(d.ReferenciaSAP)),N''),N'') AS NumeroParte,
     d.ReferenciaSAP,
+    hcc.NumeroParteFuente AS ReferenciaCliente,
     d.DesignacionDescripcionSAP,
     d.CantidadPiezas,
     d.HorasPlaneadas,
@@ -2415,6 +2417,10 @@ SELECT
     d.Ciclo,
     d.TipoSecado,
     d.HorasSecado,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(t.HorasSecadoTexto)),N''),
+        NULLIF(LTRIM(RTRIM(hcc.TiempoSecadoTexto)),N'')
+    ) AS HorasSecadoTexto,
     d.PesoBrutoPieza,
     d.MaterialCodigo,
     d.MaterialDescripcion,
@@ -2427,9 +2433,27 @@ SELECT
     d.Arranque,
     d.Notas
 FROM dbo.SolicitudesProduccionDetalle d
+LEFT JOIN dbo.ERP_Partes p
+    ON p.ParteID = d.ParteID
 LEFT JOIN dbo.ERP_Moldes m
     ON m.MoldeID = d.MoldeID
-WHERE d.SolicitudProduccionID = @SolicitudProduccionID
+OUTER APPLY
+(
+    SELECT TOP(1) h.NumeroParteFuente
+    FROM dbo.Calidad_HCC_PlantillaPartes hp
+    INNER JOIN dbo.Calidad_HCC_Plantillas h
+        ON h.PlantillaHCCID = hp.PlantillaHCCID
+       AND h.Activo = 1
+    WHERE hp.ParteID = d.ParteID
+      AND hp.Activo = 1
+    ORDER BY h.EsVigente DESC,
+             hp.EsPrincipal DESC,
+             COALESCE(h.FechaModificacionFormato,CONVERT(date,'19000101')) DESC,
+             h.PlantillaHCCID DESC
+) hcc
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+    ON t.ParteID = d.ParteID
+   AND t.Activo = 1WHERE d.SolicitudProduccionID = @SolicitudProduccionID
   AND d.Activo = 1
 ORDER BY d.Renglon;";
 
@@ -2444,7 +2468,9 @@ ORDER BY d.Renglon;";
                 {
                     SolicitudProduccionDetalleID = Convert.ToInt32(rd["SolicitudProduccionDetalleID"]),
                     Renglon = Convert.ToInt32(rd["Renglon"]),
+                    NumeroParte = rd["NumeroParte"] as string ?? "",
                     ReferenciaSAP = rd["ReferenciaSAP"] as string ?? "",
+                    ReferenciaCliente = rd["ReferenciaCliente"] as string,
                     DesignacionDescripcionSAP = rd["DesignacionDescripcionSAP"] as string ?? "",
                     CantidadPiezas = Convert.ToInt32(rd["CantidadPiezas"]),
                     HorasPlaneadas = rd["HorasPlaneadas"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasPlaneadas"]),
@@ -2456,6 +2482,7 @@ ORDER BY d.Renglon;";
                     Ciclo = rd["Ciclo"] as string,
                     TipoSecado = rd["TipoSecado"] as string,
                     HorasSecado = rd["HorasSecado"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasSecado"]),
+                    HorasSecadoTexto = rd["HorasSecadoTexto"] as string,
                     PesoBrutoPieza = rd["PesoBrutoPieza"] == DBNull.Value ? null : Convert.ToDecimal(rd["PesoBrutoPieza"]),
                     MaterialCodigo = rd["MaterialCodigo"] as string,
                     MaterialDescripcion = rd["MaterialDescripcion"] as string,

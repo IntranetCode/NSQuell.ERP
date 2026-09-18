@@ -69,6 +69,7 @@ SELECT
     t.Ciclo,
     t.TipoSecado,
     t.HorasSecado,
+    t.HorasSecadoTexto,
 
     COALESCE(d.PesoBrutoPieza,t.PesoBrutoPieza) AS PesoBrutoPieza,
     t.PesoNetoPieza,
@@ -99,6 +100,7 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
         string? ciclo = null;
         string? tipoSecado = null;
         decimal? horasSecado = null;
+        string? horasSecadoTexto = null;
         decimal? pesoBruto = null;
         decimal? pesoNeto = null;
         string? embalajeCodigo = null;
@@ -138,6 +140,9 @@ WHERE d.ReleaseDetalleID = @ReleaseDetalleID
             ciclo = TextoDt(rd, "Ciclo");
             tipoSecado = TextoDt(rd, "TipoSecado");
             horasSecado = DecimalDt(rd, "HorasSecado");
+            horasSecadoTexto = TextoDt(rd, "HorasSecadoTexto");
+            tipoSecado = ResolverTipoSecadoCanonicoV1(tipoSecado, horasSecadoTexto);
+            horasSecado = ResolverHorasSecadoCanonicasV1(horasSecado, horasSecadoTexto);
             pesoBruto = DecimalDt(rd, "PesoBrutoPieza");
             pesoNeto = DecimalDt(rd, "PesoNetoPieza");
             embalajeCodigo = TextoDt(rd, "EmbalajeCodigo");
@@ -241,6 +246,7 @@ ORDER BY Codigo,Nombre;";
                 ciclo,
                 tipoSecado,
                 horasSecado,
+                horasSecadoTexto,
                 pesoBrutoPieza = pesoBruto,
                 pesoNetoPieza = pesoNeto,
                 embalajeCodigo,

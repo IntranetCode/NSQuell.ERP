@@ -85,6 +85,8 @@ namespace ERP.NSQuell.Models
         public int? ParteID { get; set; }
         public string? NumeroParte { get; set; }
         public string? ReferenciaSAP { get; set; }
+        // NSQ_SLIDING_CAM_DATOS_CANONICOS_V1
+        public string? ReferenciaCliente { get; set; }
         public string? DesignacionDescripcionSAP { get; set; }
 
         public int CantidadRequerida { get; set; }

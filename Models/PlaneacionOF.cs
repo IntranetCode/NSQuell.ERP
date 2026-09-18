@@ -249,7 +249,10 @@ namespace ERP.NSQuell.Models
 
         public int Renglon { get; set; }
 
+        // NSQ_OF_REFERENCIAS_SEPARADAS_V1_1
+        public string NumeroParte { get; set; } = string.Empty;
         public string ReferenciaSAP { get; set; } = string.Empty;
+        public string? ReferenciaCliente { get; set; }
         public string DesignacionDescripcionSAP { get; set; } = string.Empty;
 
         public int CantidadPiezas { get; set; }
@@ -267,6 +270,8 @@ namespace ERP.NSQuell.Models
 
         public string? TipoSecado { get; set; }
         public decimal? HorasSecado { get; set; }
+        // NSQ_OF_SECADO_TEXTO_V1_3
+        public string? HorasSecadoTexto { get; set; }
 
         public decimal? PesoBrutoPieza { get; set; }
 

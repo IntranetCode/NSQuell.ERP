@@ -76,12 +76,14 @@ namespace ERP.NSQuell.Controllers
             await cn.OpenAsync();
 
             var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var esOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
+            if (!esOperador && !puedeSupervisar) return AccesoDenegadoOperador();
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
-            if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
+            if (!puedeSupervisar && (!personaId.HasValue || personaId.Value <= 0)) return AccesoDenegadoOperador();
 
-            if (!await PersonaAsignadaAEjecucionAsync(id, personaId.Value, cn))
+            if (!puedeSupervisar && !(await PersonaAsignadaAEjecucionAsync(id, personaId!.Value, cn)))
             {
                 TempData["Error"] = "Esta ejecución no se encuentra asignada al operador conectado.";
                 return RedirectToAction(nameof(Index));
@@ -90,7 +92,13 @@ namespace ERP.NSQuell.Controllers
             var vm = await ObtenerTabletVmAsync(id, cn);
             if (vm == null) return NotFound();
 
-            await CargarDatosComplementariosTabletAsync(vm, personaId.Value, cn, true);
+            var personaContextoId = puedeSupervisar
+                ? (vm.OperadorID ?? personaId ?? 0)
+                : (personaId ?? 0);
+            if (personaContextoId <= 0) return AccesoDenegadoOperador();
+            ViewBag.ModoSupervisorKiosco = puedeSupervisar;
+
+            await CargarDatosComplementariosTabletAsync(vm, personaContextoId, cn, true);
 
             var pareja = await ObtenerParejaLhRhOperadorAsync(vm.ProgramaProduccionID, cn);
 
@@ -114,7 +122,7 @@ namespace ERP.NSQuell.Controllers
 
                 var ejecucionParejaId = pareja.EjecucionParejaID.Value;
 
-                if (!await PersonaAsignadaAEjecucionAsync(ejecucionParejaId, personaId.Value, cn))
+                if (!puedeSupervisar && !(await PersonaAsignadaAEjecucionAsync(ejecucionParejaId, personaId!.Value, cn)))
                 {
                     TempData["Error"] = $"La producción es una pareja LH/RH, pero el operador conectado no está asignado también a {pareja.OFParejaTexto}.";
                     return RedirectToAction(nameof(Index));
@@ -127,7 +135,11 @@ namespace ERP.NSQuell.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                await CargarDatosComplementariosTabletAsync(vmPareja, personaId.Value, cn, false);
+                var personaContextoParejaId = puedeSupervisar
+                    ? (vmPareja.OperadorID ?? personaContextoId)
+                    : personaContextoId;
+
+                await CargarDatosComplementariosTabletAsync(vmPareja, personaContextoParejaId, cn, false);
                 vmPareja.MotivosParo = vm.MotivosParo;
                 vmPareja.CatalogoDefectos = vm.CatalogoDefectos;
 
@@ -4562,7 +4574,11 @@ WHERE u.UsuarioID=@UsuarioID
                 puesto.Contains("ENCARGAD", StringComparison.OrdinalIgnoreCase) &&
                 puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
 
-            return esAuxiliarProduccion || esEncargadoProduccion;
+            var esTecnicoProduccion =
+                puesto.Contains("TECN", StringComparison.OrdinalIgnoreCase) &&
+                puesto.Contains("PRODUC", StringComparison.OrdinalIgnoreCase);
+
+            return esAuxiliarProduccion || esEncargadoProduccion || esTecnicoProduccion;
         }
         private async Task<bool> UsuarioEsOperadorAsync(
             int usuarioId,
@@ -5054,12 +5070,14 @@ WHERE u.UsuarioID = @UsuarioID
             await cn.OpenAsync();
 
             var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return StatusCode(StatusCodes.Status403Forbidden);
+            var esOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
+            if (!esOperador && !puedeSupervisar) return StatusCode(StatusCodes.Status403Forbidden);
 
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
-            if (!personaId.HasValue || personaId.Value <= 0) return Unauthorized();
+            if (!puedeSupervisar && (!personaId.HasValue || personaId.Value <= 0)) return Unauthorized();
 
-            var resumen = await ConstruirResumenCambioTurnoAsync(ejecucionProduccionId, personaId.Value, cn);
+            var resumen = await ConstruirResumenCambioTurnoAsync(ejecucionProduccionId, personaId ?? 0, cn, omitirValidacionOperadorSaliente: puedeSupervisar);
             if (resumen == null) return NotFound(new { ok = false, mensaje = "No se encontró la ejecución de producción." });
 
             var pareja = await ObtenerParejaLhRhOperadorAsync(resumen.ProgramaProduccionID, cn);
@@ -5078,7 +5096,7 @@ WHERE u.UsuarioID = @UsuarioID
                 return Json(new { ok = true, esLhRh = true, grupoLhRh = pareja.GrupoLhRh, resumen });
             }
 
-            var resumenPareja = await ConstruirResumenCambioTurnoAsync(pareja.EjecucionParejaID!.Value, personaId.Value, cn);
+            var resumenPareja = await ConstruirResumenCambioTurnoAsync(pareja.EjecucionParejaID!.Value, personaId ?? 0, cn, omitirValidacionOperadorSaliente: puedeSupervisar);
 
             if (resumenPareja == null)
             {
@@ -5133,7 +5151,7 @@ WHERE u.UsuarioID = @UsuarioID
             });
         }
 
-        private async Task<ProduccionCambioTurnoResumenVm?> ConstruirResumenCambioTurnoAsync(int ejecucionProduccionId, int personaSalienteId, SqlConnection cn, SqlTransaction? tx = null)
+        private async Task<ProduccionCambioTurnoResumenVm?> ConstruirResumenCambioTurnoAsync(int ejecucionProduccionId, int personaSalienteId, SqlConnection cn, SqlTransaction? tx = null, bool omitirValidacionOperadorSaliente = false)
         {
             const string sql = @"
 SELECT TOP(1)
@@ -5226,7 +5244,7 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
                     vm.TotalCajasPendientes = rd["Pendientes"] == DBNull.Value ? 0 : Convert.ToInt32(rd["Pendientes"]);
                 }
             }
-            var candidatos = await ObtenerCandidatosCambioTurnoAsync(vm.ParteID, vm.MaquinaID, personaSalienteId, DateTime.Now, cn, tx);
+            var candidatos = await ObtenerCandidatosCambioTurnoAsync(vm.ParteID, vm.MaquinaID, vm.OperadorSalienteID, DateTime.Now, cn, tx);
             vm.TieneMatrizPolivalencia = candidatos.TieneMatriz;
             vm.EscalaEncontrada = candidatos.EscalaEncontrada;
             vm.EscalaFolio = candidatos.EscalaFolio;
@@ -5264,7 +5282,7 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
                     vm.SugeridoPorTecnico = false;
                 }
             }
-            if (vm.OperadorSalienteID != personaSalienteId)
+            if (!omitirValidacionOperadorSaliente && vm.OperadorSalienteID != personaSalienteId)
             {
                 vm.PuedeEntregar = false;
                 vm.MotivoBloqueo = "La ejecución ya no está asignada al operador conectado.";
@@ -5320,9 +5338,6 @@ SELECT
                 if (cajasPendientes > 0) return $"No puedes entregar turno. Existen {cajasPendientes:N0} caja(s) que todavía no han sido entregadas a Calidad.";
                 if (Convert.ToBoolean(rd["CambioPendiente"])) return "Ya existe una entrega de turno pendiente de recepción.";
             }
-            var horas = await ObtenerFilasCapturaHoraAsync(ejecucionProduccionId, programaProduccionId, cn, tx);
-            var horasPendientes = horas.Count(x => !x.Capturada && x.Vencida);
-            if (horasPendientes > 0) return $"No puedes entregar turno. Existen {horasPendientes:N0} hora(s) de producción vencida(s) sin capturar.";
             return null;
         }
         private async Task<ResultadoCandidatosCambioTurno> ObtenerCandidatosCambioTurnoAsync(int? parteId, int? maquinaId, int operadorSalienteId, DateTime ahora, SqlConnection cn, SqlTransaction? tx = null)
@@ -5522,16 +5537,18 @@ ORDER BY EnEscala DESC,MinutosParaInicio,Nombre;";
             await cn.OpenAsync();
 
             var usuarioId = ObtenerUsuarioID();
-            if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
+            var esOperador = await UsuarioEsOperadorAsync(usuarioId, cn);
+            var puedeSupervisar = await UsuarioPuedeSupervisarKioscoAsync(usuarioId, cn);
+            if (!esOperador && !puedeSupervisar) return AccesoDenegadoOperador();
 
             var personaSalienteId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
-            if (!personaSalienteId.HasValue || personaSalienteId.Value <= 0) return Unauthorized();
+            if (!puedeSupervisar && (!personaSalienteId.HasValue || personaSalienteId.Value <= 0)) return Unauthorized();
 
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
 
             try
             {
-                var resumen = await ConstruirResumenCambioTurnoAsync(vm.EjecucionProduccionID, personaSalienteId.Value, cn, tx);
+                var resumen = await ConstruirResumenCambioTurnoAsync(vm.EjecucionProduccionID, personaSalienteId ?? 0, cn, tx, omitirValidacionOperadorSaliente: puedeSupervisar);
                 if (resumen == null)
                 {
                     await tx.RollbackAsync();
@@ -5561,7 +5578,7 @@ ORDER BY EnEscala DESC,MinutosParaInicio,Nombre;";
                 {
                     ValidarParejaLhRhOperador(pareja);
 
-                    resumenPareja = await ConstruirResumenCambioTurnoAsync(pareja.EjecucionParejaID!.Value, personaSalienteId.Value, cn, tx);
+                    resumenPareja = await ConstruirResumenCambioTurnoAsync(pareja.EjecucionParejaID!.Value, personaSalienteId ?? 0, cn, tx, omitirValidacionOperadorSaliente: puedeSupervisar);
                     if (resumenPareja == null)
                         throw new InvalidOperationException($"No fue posible cargar {pareja.OFParejaTexto}.");
 

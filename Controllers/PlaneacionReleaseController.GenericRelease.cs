@@ -8,6 +8,16 @@ namespace ERP.NSQuell.Controllers;
 // GENERIC_RELEASE_CONTROLLER_V1_0
 public partial class PlaneacionReleaseController
 {
+    // NSQ_REFERENCIA_CATALOGO_UTIL_V1_1
+    // N/A y equivalentes representan ausencia de dato; nunca deben propagarse
+    // como NumeroParte/ReferenciaSAP a Release -> Programa -> OF.
+    private static bool ReferenciaGenericaValidaV11(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var normal = value.Trim().ToUpperInvariant().Replace(" ", string.Empty).Replace(".", string.Empty);
+        return normal is not "N/A" and not "NA" and not "N/D" and not "ND" and not "-" and not "NOAPLICA" and not "SINDATO";
+    }
+
     private async Task<List<GenericReleaseKnownPart>> CargarCatalogoPartesGenericoAsync(
         SqlConnection cn,
         SqlTransaction tx)
@@ -103,7 +113,7 @@ ORDER BY p.ClienteID, p.ParteID;";
                 // La identidad de la parte sale del maestro ERP,
                 // no de como la escribio el cliente en el documento.
                 NumeroParte = sourceRow.Part.NumeroParte,
-                ReferenciaSAP = !string.IsNullOrWhiteSpace(sourceRow.Part.ReferenciaSAP)
+                ReferenciaSAP = ReferenciaGenericaValidaV11(sourceRow.Part.ReferenciaSAP)
                     ? sourceRow.Part.ReferenciaSAP
                     : sourceRow.Part.NumeroParte,
                 DesignacionDescripcionSAP = masterDescription,
@@ -165,7 +175,12 @@ ORDER BY p.ClienteID, p.ParteID;";
 SELECT
     ParteID,
     NumeroParte,
-    COALESCE(NULLIF(ReferenciaSAP, ''), NumeroParte) AS ReferenciaSAP,
+    CASE
+        WHEN ReferenciaSAP IS NULL OR LTRIM(RTRIM(ReferenciaSAP)) = N''
+          OR UPPER(REPLACE(REPLACE(LTRIM(RTRIM(ReferenciaSAP)),N' ',N''),N'.',N'')) IN (N'N/A',N'NA',N'N/D',N'ND',N'-',N'NOAPLICA',N'SINDATO')
+            THEN NumeroParte
+        ELSE ReferenciaSAP
+    END AS ReferenciaSAP,
     COALESCE(NULLIF(Designacion, ''), NULLIF(Descripcion, ''), NumeroParte) AS Descripcion
 FROM dbo.ERP_Partes
 WHERE ParteID = @ParteID

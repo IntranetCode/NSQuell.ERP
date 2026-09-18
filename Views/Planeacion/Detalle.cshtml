@@ -975,7 +975,12 @@
                 !string.Equals(d.TipoSecado.Trim(), "N/A", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(d.TipoSecado.Trim(), "NA", StringComparison.OrdinalIgnoreCase);
                 var textoTipoSecado = requiereSecado ? d.TipoSecado : "N/A";
-                var textoHorasSecado = requiereSecado ? Decimal2(d.HorasSecado) : "N/A";
+                // NSQ_OF_SECADO_TEXTO_V1_3
+                var textoHorasSecado = requiereSecado
+                ? (!string.IsNullOrWhiteSpace(d.HorasSecadoTexto)
+                    ? d.HorasSecadoTexto.Trim()
+                    : (d.HorasSecado.HasValue ? $"{d.HorasSecado.Value:0.##} HORAS" : "N/A"))
+                : "N/A";
                 var fechaInicio = asignacion != null && asignacion.FechaProgramadaTentativa.HasValue
                 ? Fecha(asignacion.FechaProgramadaTentativa)
                 : Fecha(Model.FechaInicioPlaneada);
@@ -990,7 +995,10 @@
                 <div class="of-page">
                     <table class="of-table">
                         <tr>
-                            <td rowspan="2" data-nsq-style-id="nsq-si-543bb0ca95" class="of-logo-box">ERP QUELL</td>
+                            @* NSQ_OF_LOGO_QUELL_V1_3 *@
+                            <td rowspan="2" data-nsq-style-id="nsq-si-543bb0ca95" class="of-logo-box">
+                                <img src="@Url.Content("~/Imagenes/logo-quell.png")" alt="NS Quell" class="of-logo-image" />
+                            </td>
                             <td data-nsq-style-id="nsq-si-2edd77ecdb" class="of-title">Orden de Fabricación</td>
                             <td data-nsq-style-id="nsq-si-37f83849bd" class="of-label-white">Ver. 07</td>
                         </tr>
@@ -1061,9 +1069,10 @@
                             <th class="of-label" colspan="2">Peso Bruto/Pieza</th>
                         </tr>
                         <tr>
+                            @* NSQ_OF_REFERENCIAS_SEPARADAS_V1_1 *@
+                            <td class="of-value">@Valor(d.NumeroParte)</td>
                             <td class="of-value">@Valor(d.ReferenciaSAP)</td>
-                            <td class="of-value">@Valor(d.ReferenciaSAP)</td>
-                            <td class="of-value">@Valor(d.ReferenciaSAP)</td>
+                            <td class="of-value">@Valor(d.ReferenciaCliente)</td>
                             <td class="of-value">@Valor(d.Ciclo)</td>
                             <td class="of-value">@Valor(textoTipoSecado)</td>
                             <td class="of-value">@textoHorasSecado</td>

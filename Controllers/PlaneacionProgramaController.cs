@@ -892,6 +892,8 @@ VALUES
             if (releaseDetalleId <= 0) return BadRequest();
             var vm = await ObtenerNecesidadParaProgramaAsync(releaseDetalleId);
             if (vm == null) { TempData["Error"] = "No se encontró la necesidad seleccionada."; return RedirectToAction(nameof(Index)); }
+            // NSQ_SLIDING_CAM_DATOS_CANONICOS_V1
+            await AplicarDatosCanonicosProgramaAsync(vm);
             if (vm.PiezasAProducir <= 0) { TempData["Error"] = "La necesidad seleccionada ya no tiene piezas pendientes por producir."; return RedirectToAction(nameof(Index)); }
             vm.CantidadBasePrograma = vm.PiezasAProducir;
             vm.CantidadProgramada = vm.PiezasAProducir;
@@ -1776,6 +1778,8 @@ N'La OF manual fue vinculada al Programa de Producción ID '+CONVERT(NVARCHAR(20
 
         private async Task<int> InsertarProgramaAsync(PlaneacionProgramaCrearDesdeNecesidadVm vm, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
+            // NSQ_SLIDING_CAM_DATOS_CANONICOS_V1
+            await AplicarDatosCanonicosProgramaAsync(vm, cn, tx);
             var secuencia = await ObtenerSiguienteSecuenciaMaquinaAsync(vm.MaquinaID, cn, tx);
             const string sql = @"
 DECLARE @NuevoPrograma TABLE(ProgramaProduccionID INT NOT NULL);
@@ -4157,6 +4161,7 @@ SELECT
     t.PiezasPorCaja,
     t.TipoSecado,
     t.HorasSecado,
+    t.HorasSecadoTexto,
 
     COALESCE(pp.MaterialID, t.MaterialID) AS MaterialID,
     COALESCE(pp.MaterialCodigo, t.MaterialCodigo) AS MaterialCodigo,
@@ -4251,11 +4256,13 @@ WHERE pp.ProgramaProduccionID = @ProgramaProduccionID
                     ? null
                     : Convert.ToInt32(rd["PiezasPorCaja"]),
 
-                TipoSecado = rd["TipoSecado"] as string,
+                TipoSecado = ResolverTipoSecadoCanonicoV1(
+                    rd["TipoSecado"] as string,
+                    rd["HorasSecadoTexto"] as string),
 
-                HorasSecado = rd["HorasSecado"] == DBNull.Value
-                    ? null
-                    : Convert.ToDecimal(rd["HorasSecado"])
+                HorasSecado = ResolverHorasSecadoCanonicasV1(
+                    rd["HorasSecado"] == DBNull.Value ? null : Convert.ToDecimal(rd["HorasSecado"]),
+                    rd["HorasSecadoTexto"] as string)
             };
         }
 
@@ -4508,7 +4515,11 @@ FROM @Ids;";
             cmd.Parameters.Add("@MoldeID", SqlDbType.Int).Value = (object?)p.MoldeID ?? DBNull.Value;
             cmd.Parameters.Add("@MaquinaSugeridaID", SqlDbType.Int).Value = (object?)p.MaquinaID ?? DBNull.Value;
             cmd.Parameters.Add("@DesignacionDescripcionSAP", SqlDbType.NVarChar, 300).Value = (object?)p.DesignacionDescripcionSAP ?? DBNull.Value;
-            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value = !string.IsNullOrWhiteSpace(p.ReferenciaSAP) ? (object)p.ReferenciaSAP : !string.IsNullOrWhiteSpace(p.NumeroParte) ? (object)p.NumeroParte : DBNull.Value;
+            cmd.Parameters.Add("@ReferenciaSAP", SqlDbType.NVarChar, 150).Value = ReferenciaValidaV1(p.ReferenciaSAP)
+                ? (object)p.ReferenciaSAP!
+                : ReferenciaValidaV1(p.NumeroParte)
+                    ? (object)p.NumeroParte!
+                    : DBNull.Value;
             cmd.Parameters.Add("@CantidadPiezas", SqlDbType.Int).Value = p.CantidadProgramada;
             AddDecimal(cmd, "@HorasPlaneadas", p.HorasProgramadas, 18, 2);
             cmd.Parameters.Add("@NumeroMoldeTexto", SqlDbType.NVarChar, 100).Value = (object?)p.MoldeCodigo ?? DBNull.Value;

@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+﻿using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Globalization;
 using System.Text;
@@ -203,9 +203,9 @@ ORDER BY ParteID;";
             ParteID = mejor.ParteID,
             Activa = true,
             NumeroParte = mejor.NumeroParte,
-            ReferenciaSAP = string.IsNullOrWhiteSpace(mejor.ReferenciaSAP)
-                ? mejor.NumeroParte
-                : mejor.ReferenciaSAP
+            ReferenciaSAP = ReferenciaGenericaValidaV11(mejor.ReferenciaSAP)
+                ? mejor.ReferenciaSAP
+                : mejor.NumeroParte
         };
     }
 
