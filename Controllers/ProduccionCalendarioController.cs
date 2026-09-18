@@ -198,6 +198,12 @@ SELECT
     pp.MoldeCodigo,
     pp.ReleaseDetalleID,
     pp.SolicitudProduccionID,
+    COALESCE
+    (
+        NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
+        NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N''),
+        N''
+    ) AS NumeroOF,
     pp.SolicitudProduccionDetalleID,
     pp.FechaInicioProgramada,
     fechas.FechaFinProgramada,
@@ -234,6 +240,9 @@ SELECT
     ISNULL(ci.ConfiguracionInvalidada,0) AS ConfiguracionCalidadInvalidada,
     ISNULL(ci.RequiereReliberacion,0) AS RequiereReliberacion
 FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=pp.SolicitudProduccionID
+   AND s.Activo=1
 CROSS APPLY
 (
     SELECT ISNULL
@@ -453,6 +462,7 @@ ORDER BY
                     {
                         ProgramaProduccionID = programaProduccionId,
                         SolicitudProduccionID = NullableEntero(rd, "SolicitudProduccionID"),
+                        NumeroOF = Texto(rd, "NumeroOF") ?? string.Empty,
                         MaquinaID = NullableEntero(rd, "MaquinaID") ?? 0,
                         MaquinaCodigo = Texto(rd, "MaquinaCodigo") ?? string.Empty,
                         ClienteNombre = Texto(rd, "ClienteNombre") ?? string.Empty,

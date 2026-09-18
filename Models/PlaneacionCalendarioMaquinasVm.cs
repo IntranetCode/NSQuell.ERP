@@ -184,6 +184,7 @@ namespace ERP.NSQuell.Models
 
         public int ProgramaProduccionID { get; set; }
         public int? SolicitudProduccionID { get; set; }
+        public string NumeroOF { get; set; } = string.Empty;
         public bool TrabajarDomingo { get; set; }
         public int MaquinaID { get; set; }
         public string MaquinaCodigo { get; set; }
@@ -380,9 +381,11 @@ namespace ERP.NSQuell.Models
         }
 
         public string OFTexto =>
-            SolicitudProduccionID.HasValue
-                ? $"OF {SolicitudProduccionID.Value}"
-                : $"Programa {ProgramaProduccionID}";
+            !string.IsNullOrWhiteSpace(NumeroOF)
+                ? NumeroOF.Trim()
+                : SolicitudProduccionID.HasValue
+                    ? $"OF vinculada · ID {SolicitudProduccionID.Value}"
+                    : $"Programa {ProgramaProduccionID} · Sin OF";
 
         public string ParteTexto
         {
