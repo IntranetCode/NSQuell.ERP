@@ -998,7 +998,7 @@
 
                                     <div class="of-grid">
                                         <div class="of-table-head" aria-hidden="true">
-                                            <div>Orden / origen</div>
+                                            <div>Parte / origen</div>
                                             <div>Cliente</div>
                                             <div>Tipo</div>
                                             <div>Entrega</div>
@@ -1026,6 +1026,8 @@
                                                         item.Cliente,
                                                         item.FolioSolicitud,
                                                         item.NumeroOFRecibida,
+                                                        item.NumeroParteResumen,
+                                                        item.DesignacionResumen,
                                                         item.Prioridad,
                                                         item.TipoOF,
                                                         TextoTipoOF(item.TipoOF),
@@ -1041,7 +1043,7 @@
                                                      data-search="@textoBusqueda">
 
                                                 <div class="of-cell">
-                                                    <span class="row-label-mobile">Orden / origen</span>
+                                                    <span class="row-label-mobile">Parte / origen</span>
                                                     <div class="row-badges">
                                                         @if (esPendientePrograma)
                                                         {
@@ -1057,15 +1059,28 @@
                                                         }
                                                     </div>
 
-                                                    <div class="row-title">@Texto(item.FolioSolicitud)</div>
-                                                    <div class="row-subtitle">
+                                                    @* NSQ_PLANEACION_BANDEJA_TITULO_PARTE_V1_2 *@
+                                                    <div class="row-title row-part-title"
+                                                         title="@Texto(item.NumeroParteResumen)">
+                                                        @Texto(item.NumeroParteResumen)
+                                                    </div>
+                                                    <div class="row-subtitle row-designation"
+                                                         title="@Texto(item.DesignacionResumen)">
+                                                        @Texto(item.DesignacionResumen)
+                                                    </div>
+                                                    <div class="row-origin-meta">
                                                         @if (esPendientePrograma)
                                                         {
-                                                            <span>Programa #@programaProduccionId</span>
+                                                            <span>@Texto(item.FolioSolicitud)</span>
+                                                            <span class="row-origin-separator">·</span>
+                                                            <span>Pendiente generar OF</span>
                                                         }
                                                         else
                                                         {
-                                                            <span>@Texto(item.NumeroOFRecibida)</span>
+                                                            var folioVisual = !string.IsNullOrWhiteSpace(item.NumeroOFRecibida)
+                                                                ? item.NumeroOFRecibida
+                                                                : item.FolioSolicitud;
+                                                            <span>@Texto(folioVisual)</span>
                                                         }
                                                     </div>
                                                 </div>

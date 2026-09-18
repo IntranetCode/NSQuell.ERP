@@ -610,6 +610,7 @@ ORDER BY
     private async Task<int?> ProgramarParejaLhRhAsync(
         int programaPrincipalId,
         PlaneacionProgramaCrearDesdeNecesidadVm principal,
+        int totalAumentoAplicado,
         int usuarioId,
         SqlConnection cn,
         SqlTransaction tx)
@@ -787,36 +788,25 @@ ORDER BY
             }
         }
 
-        var cantidadObjetivoPareja =
-            RedondearCantidadPorEmbalaje(
-                pareja.CantidadOriginalAProducir > 0
-                    ? pareja.CantidadOriginalAProducir
-                    : pareja.PiezasAProducir +
-                      pareja.ProductoIncompletoApartado,
-                pareja.PiezasPorEmbalaje);
+        // NSQ_LHRH_CANTIDAD_CANONICA_V1_0
+        // Cuando Planeacion solicita LH + RH juntas, ambos programas deben usar
+        // exactamente la misma Base + el mismo aumento. Reutilizamos el mismo
+        // recalculo canonico del programa principal para validar saldo, cajas,
+        // MP y embalaje de la contraparte sin duplicar formulas.
+        await RecalcularCantidadesProgramaAsync(
+            pareja,
+            principal.CantidadBasePrograma,
+            totalAumentoAplicado,
+            cn,
+            tx);
 
-        pareja.CantidadProgramada =
-            Math.Max(
-                0,
-                cantidadObjetivoPareja -
-                pareja.ProductoIncompletoApartado);
-
-        if (pareja.PiezasPorEmbalaje.HasValue &&
-            pareja.PiezasPorEmbalaje.Value > 0)
+        if (pareja.CantidadProgramada != principal.CantidadProgramada)
         {
-            pareja.CantidadEmbalajes = Math.Ceiling(
-                (pareja.CantidadProgramada +
-                 pareja.ProductoIncompletoApartado) /
-                pareja.PiezasPorEmbalaje.Value);
-        }
-
-        if (pareja.PesoBrutoPieza.HasValue &&
-            pareja.PesoBrutoPieza.Value > 0)
-        {
-            pareja.CantidadMpKg = Math.Round(
-                pareja.CantidadProgramada *
-                pareja.PesoBrutoPieza.Value,
-                4);
+            throw new InvalidOperationException(
+                $"La programacion LH/RH conjunta debe guardar la misma cantidad por lado. " +
+                $"Principal: {principal.CantidadProgramada:N0} pzas; " +
+                $"contraparte: {pareja.CantidadProgramada:N0} pzas. " +
+                "Revisa el saldo de la contraparte o programa los lados por separado.");
         }
 
         await CompletarDatosProgramaAsync(pareja, cn, tx);

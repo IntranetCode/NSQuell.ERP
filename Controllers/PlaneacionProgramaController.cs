@@ -1259,7 +1259,7 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                 if (vm.ProgramarParejaLhRh)
                 {
                     etapaSql = "Programar contraparte LH/RH";
-                    programaParejaLhRhId = await ProgramarParejaLhRhAsync(programaId, vm, usuarioId, cn, sqlTx);
+                    programaParejaLhRhId = await ProgramarParejaLhRhAsync(programaId, vm, totalAumentoAplicado, usuarioId, cn, sqlTx);
                     if (!programaParejaLhRhId.HasValue) throw new InvalidOperationException("Se solicito programar la contraparte LH/RH, pero ya no existe una necesidad pendiente compatible dentro del mismo Release.");
                     await ActualizarTrabajarDomingoProgramaAsync(programaParejaLhRhId.Value, trabajarDomingo, cn, sqlTx);
                     foreach (var transferenciaAumentoParejaId in transferenciasAumentoParejaIds)

@@ -394,9 +394,15 @@
         function actualizarTotalProgramaPareja(totalExtra) {
             if (!parejaLhRhTotalPrograma) return;
 
+            const base = cantidadBaseActual();
             const total =
-                parejaLhRhCantidadBase +
+                base +
                 Math.max(0, Math.trunc(Number(totalExtra || 0)));
+
+            const basePareja = document.getElementById('parejaLhRhBasePrograma');
+            if (basePareja) {
+                basePareja.textContent = `${textoNumero(base)} pzas`;
+            }
 
             parejaLhRhTotalPrograma.textContent =
                 `${textoNumero(total)} pzas`;
@@ -416,6 +422,17 @@
             if (base > cantidadBaseRelease) {
                 cantidadInput.setCustomValidity(
                     `Solo quedan ${textoNumero(cantidadBaseRelease)} piezas pendientes en esta entrega.`
+                );
+                return false;
+            }
+
+            // NSQ_LHRH_CANTIDAD_CANONICA_V1_0
+            // El mismo valor Base se usa por lado. Si la contraparte tiene menos
+            // saldo base, no guardamos una pareja con cantidades distintas.
+            if (programarParejaLhRhInput?.checked && base > parejaLhRhCantidadBase) {
+                cantidadInput.setCustomValidity(
+                    `La contraparte LH/RH solo tiene ${textoNumero(parejaLhRhCantidadBase)} piezas base pendientes. ` +
+                    `Para programarlas juntas, la Base debe caber en ambos lados.`
                 );
                 return false;
             }
@@ -1367,10 +1384,10 @@
                                         &middot; ReleaseDetalle #@Model.ParejaLhRhReleaseDetalleID
                                     </div>
                                     <div class="small mt-2">
-                                        Base pendiente contraparte:
-                                        <strong>@Model.ParejaLhRhCantidadBasePrograma.ToString("N0") pzas</strong>
-                                        &middot; Total con aumentos:
-                                        <strong id="parejaLhRhTotalPrograma">@Model.ParejaLhRhCantidadBasePrograma.ToString("N0") pzas</strong>
+                                        Base conjunta por lado:
+                                        <strong id="parejaLhRhBasePrograma">@cantidadBaseCapturada.ToString("N0") pzas</strong>
+                                        &middot; Total conjunto por lado:
+                                        <strong id="parejaLhRhTotalPrograma">@totalVisualInicial.ToString("N0") pzas</strong>
                                     </div>
                                 </div>
 

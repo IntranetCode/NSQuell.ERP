@@ -714,6 +714,35 @@
             overflow-wrap: anywhere;
         }
 
+        /* NSQ_PLANEACION_BANDEJA_TITULO_PARTE_V1_2 */
+        .row-part-title {
+            font-size: .92rem;
+            color: #0f2f55;
+        }
+
+        .row-designation {
+            margin-top: 1px;
+            color: #415873;
+            font-size: .67rem;
+            font-weight: 800;
+        }
+
+        .row-origin-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 3px;
+            color: #708198;
+            font-size: .61rem;
+            font-weight: 800;
+            line-height: 1.15;
+        }
+
+        .row-origin-separator {
+            color: #a5b2c2;
+        }
+
         .row-primary {
             color: #263b56;
             font-size: .79rem;

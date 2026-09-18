@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System.Globalization;
 using System.Reflection;
+using System.Diagnostics;
 
 namespace ERP.NSQuell.Filtros;
 
@@ -73,7 +74,14 @@ public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
         var esCreacionOf = EsCreacionOf(controller, action);
         var datosAccion = ExtraerDatosAccion(context.ActionArguments);
 
+        var __nsqPerfController = Stopwatch.StartNew();
         var executed = await next();
+        __nsqPerfController.Stop();
+        _logger.LogWarning(
+            "[NSQ-PERF] {Controller}/{Action} CONTROLLER {ElapsedMs} ms",
+            controller,
+            action,
+            __nsqPerfController.ElapsedMilliseconds);
 
         if (!ResultadoFueExitoso(executed))
             return;
@@ -141,6 +149,7 @@ public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
              * Los flujos conocidos consultan la BD DESPUES del COMMIT para
              * construir titulo, detalle e URL desde el registro real creado.
              */
+            var __nsqPerfDetallada = Stopwatch.StartNew();
             var manejada =
                 await _resolver.NotificarOperacionDetalladaAsync(
                     area,
@@ -149,12 +158,19 @@ public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
                     actorId,
                     actor,
                     datosAccion);
+            __nsqPerfDetallada.Stop();
+            _logger.LogWarning(
+                "[NSQ-PERF] {Controller}/{Action} NOTIFICACION_DETALLADA {ElapsedMs} ms",
+                controller,
+                action,
+                __nsqPerfDetallada.ElapsedMilliseconds);
 
             if (manejada)
                 return;
 
             // Fallback: conserva cobertura departamental, pero nunca inventa
             // una ruta general de modulo como si fuera un acceso directo.
+            var __nsqPerfFallback = Stopwatch.StartNew();
             await _resolver.NotificarAsync(
                 area,
                 controller,
@@ -164,6 +180,12 @@ public sealed class NotificacionDepartamentoActionFilter : IAsyncActionFilter
                 solicitudProduccionId: null,
                 urlDestino: urlExacta,
                 datos: datosAccion);
+            __nsqPerfFallback.Stop();
+            _logger.LogWarning(
+                "[NSQ-PERF] {Controller}/{Action} NOTIFICACION_FALLBACK {ElapsedMs} ms",
+                controller,
+                action,
+                __nsqPerfFallback.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
