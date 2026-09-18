@@ -67,7 +67,9 @@ SELECT
     END AS MaquinaNombre,
 
     COUNT(DISTINCT d.SolicitudProduccionDetalleID) AS TotalRenglones,
-    ISNULL(SUM(d.CantidadPiezas), 0) AS TotalPiezas
+    ISNULL(SUM(d.CantidadPiezas), 0) AS TotalPiezas,
+    MAX(ISNULL(parteResumen.NumeroParteResumen,N'')) AS NumeroParteResumen,
+    MAX(ISNULL(parteResumen.DesignacionResumen,N'')) AS DesignacionResumen
 FROM dbo.SolicitudesProduccion s
 LEFT JOIN dbo.ERP_Clientes c
     ON c.ClienteID = s.ClienteID
@@ -89,6 +91,27 @@ OUTER APPLY
 ) maquinaResumen
 LEFT JOIN dbo.ERP_Maquinas m
     ON m.MaquinaID = maquinaResumen.MaquinaID
+OUTER APPLY
+(
+    SELECT TOP (1)
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(pParte.NumeroParte)),N''),
+            NULLIF(LTRIM(RTRIM(dParte.ReferenciaSAP)),N''),
+            N'Sin numero de parte'
+        ) AS NumeroParteResumen,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(dParte.DesignacionDescripcionSAP)),N''),
+            NULLIF(LTRIM(RTRIM(pParte.Designacion)),N''),
+            NULLIF(LTRIM(RTRIM(pParte.Descripcion)),N''),
+            N'Sin designacion'
+        ) AS DesignacionResumen
+    FROM dbo.SolicitudesProduccionDetalle dParte
+    LEFT JOIN dbo.ERP_Partes pParte
+        ON pParte.ParteID = dParte.ParteID
+    WHERE dParte.SolicitudProduccionID = s.SolicitudProduccionID
+      AND dParte.Activo = 1
+    ORDER BY dParte.Renglon, dParte.SolicitudProduccionDetalleID
+) parteResumen
 WHERE s.Activo = 1
   AND ISNULL(s.EstatusID,1) <> 99
   -- NSQ_CANCELACION_HISTORIAL_ALMACEN_OF_V2_1
@@ -148,6 +171,8 @@ ORDER BY s.FechaCreacion DESC;";
                         SolicitudProduccionID = Convert.ToInt32(rd["SolicitudProduccionID"]),
                         FolioSolicitud = rd["FolioSolicitud"] as string,
                         NumeroOFRecibida = rd["NumeroOFRecibida"] as string,
+                        NumeroParteResumen = rd["NumeroParteResumen"] as string,
+                        DesignacionResumen = rd["DesignacionResumen"] as string,
                         FechaSolicitud = Convert.ToDateTime(rd["FechaSolicitud"]),
                         FechaRequerida = rd["FechaRequerida"] == DBNull.Value
                             ? null
@@ -229,6 +254,8 @@ ORDER BY
 
                         FolioSolicitud = folioPendiente,
                         NumeroOFRecibida = "Pendiente generar OF",
+                        NumeroParteResumen = rd["NumeroParte"] as string,
+                        DesignacionResumen = rd["DesignacionDescripcionSAP"] as string,
 
                         FechaSolicitud = rd["FechaCreacion"] == DBNull.Value
                             ? DateTime.Today

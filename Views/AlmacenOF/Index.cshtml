@@ -1,4 +1,4 @@
-@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
+﻿@model ERP.NSQuell.Models.ViewModels.Almacen.AlmacenOFIndexVm
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Material OF Solicitados";
@@ -530,23 +530,29 @@ else
                 var numeroOf = !string.IsNullOrWhiteSpace(x.NumeroOFRecibida)
                     ? x.NumeroOFRecibida
                     : x.FolioSolicitud;
+                var numeroParteTitulo = string.IsNullOrWhiteSpace(x.NumeroParteResumen)
+                    ? "Sin número de parte"
+                    : x.NumeroParteResumen.Trim();
+                var designacionTitulo = string.IsNullOrWhiteSpace(x.DesignacionResumen)
+                    ? "Sin designación"
+                    : x.DesignacionResumen.Trim();
+                var ofSecundaria = !string.IsNullOrWhiteSpace(numeroOf)
+                    ? numeroOf
+                    : x.NumeroOFClave;
 
                 <article class="of4-row @(completed ? "is-complete" : string.Empty)">
                     <header class="of4-row-head">
                         <div class="of4-identity">
                             <span class="of4-icon"><i class="fa-solid fa-file-lines"></i></span>
                             <div>
-                                <a class="of4-of-link" asp-controller="AlmacenOF" asp-action="Detalle"
-                                   asp-route-id="@x.SolicitudProduccionID">@x.NumeroOFClave</a>
-                                <small>
-                                    @(string.IsNullOrWhiteSpace(x.FolioSolicitud) ? "Folio no asignado" : x.FolioSolicitud)
+                                @* NSQ_ALMACEN_OF_PARTE_TITULO_V1_0 *@
+                                <a class="of4-part-link" asp-controller="AlmacenOF" asp-action="Detalle"
+                                   asp-route-id="@x.SolicitudProduccionID" title="@numeroParteTitulo">@numeroParteTitulo</a>
+                                <div class="of4-designation-main" title="@designacionTitulo">@designacionTitulo</div>
+                                <small class="of4-of-meta">
+                                    <span class="of4-of-badge">@ofSecundaria</span>
                                     · @x.TotalRenglones renglón(es)
                                     · Máquina: @NombreMaquina(x.Maquina)
-                                </small>
-                                @* NSQ_ALMACEN_OF_PARTE_DESIGNACION_V1_1 *@
-                                <small title="Parte: @x.NumeroParteResumen · Designación: @x.DesignacionResumen">
-                                    Parte: @(string.IsNullOrWhiteSpace(x.NumeroParteResumen) ? "Sin número de parte" : x.NumeroParteResumen)
-                                    · Designación: @(string.IsNullOrWhiteSpace(x.DesignacionResumen) ? "Sin designación" : x.DesignacionResumen)
                                 </small>
                             </div>
                         </div>

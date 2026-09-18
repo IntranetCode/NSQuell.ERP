@@ -11,6 +11,12 @@ namespace ERP.NSQuell.Models
         public string? FolioSolicitud { get; set; }
         public string? NumeroOFRecibida { get; set; }
 
+        // NSQ_PLANEACION_BANDEJA_TITULO_PARTE_V1_2
+        // Resumen visual de la primera parte/renglon de la OF para evitar
+        // usar el folio duplicado como titulo principal en la bandeja.
+        public string? NumeroParteResumen { get; set; }
+        public string? DesignacionResumen { get; set; }
+
         public DateTime FechaSolicitud { get; set; }
         public DateTime? FechaRequerida { get; set; }
 
