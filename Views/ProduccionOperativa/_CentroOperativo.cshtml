@@ -117,6 +117,33 @@
         var area = (accion.AreaResponsable ?? string.Empty).Trim().ToUpperInvariant();
         return area == AgendaOperativaArea.Calidad ? "Esperando a Calidad" : "Esperando área responsable";
     }
+
+    public static bool PuedeModificarDesdeFlujo(ProduccionOperativaPasoVm paso, ProduccionOperativaAccionVm? accion, bool soloLecturaGlobal)
+    {
+        if (accion == null || soloLecturaGlobal || EsAccionExterna(accion)) return false;
+        if (accion.SoloLectura || accion.Bloqueada || !accion.EsEjecutable || !accion.PuedeEjecutarUsuario) return false;
+        if (paso.Completado) return true;
+        return accion.DisponibleParaUsuario;
+    }
+
+    public static string TextoAccionFlujo(ProduccionOperativaPasoVm paso, ProduccionOperativaAccionVm? accion, bool puedeModificar)
+    {
+        if (accion == null) return string.Empty;
+        if (EsAccionExterna(accion)) return paso.Completado ? "Ver resultado" : "Ver estado";
+        if (paso.Completado) return puedeModificar ? "Editar" : "Ver";
+        if (paso.EnProceso) return puedeModificar ? "Continuar" : "Ver";
+        if (puedeModificar) return string.IsNullOrWhiteSpace(accion.TextoBoton) ? "Atender" : accion.TextoBoton;
+        return "Ver";
+    }
+
+    public static string IconoAccionFlujo(ProduccionOperativaPasoVm paso, ProduccionOperativaAccionVm? accion, bool puedeModificar)
+    {
+        if (accion == null) return "bi-eye";
+        if (EsAccionExterna(accion)) return "bi-eye";
+        if (paso.Completado) return puedeModificar ? "bi-pencil-square" : "bi-eye";
+        if (paso.EnProceso) return puedeModificar ? "bi-play-circle" : "bi-eye";
+        return puedeModificar ? "bi-arrow-right-circle" : "bi-eye";
+    }
 }
 
 @{
@@ -811,21 +838,24 @@
     }
 
     .nsq-op-alerts {
-        display: grid;
-        gap: 8px;
-        margin-bottom: 12px
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px
     }
 
     .nsq-op-alert {
-        display: flex;
-        align-items: flex-start;
-        gap: 9px;
-        padding: 10px 12px;
-        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        max-width: 100%;
+        padding: 5px 9px;
+        border-radius: 999px;
         border: 1px solid #dbe6f2;
         background: #f5faff;
         color: #24557f;
-        font-size: .76rem;
+        font-size: .69rem;
     }
 
         .nsq-op-alert.is-warning {
@@ -847,18 +877,28 @@
         }
 
         .nsq-op-alert i {
-            margin-top: 1px
+            flex: 0 0 auto
+        }
+
+        .nsq-op-alert > div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            min-width: 0
         }
 
         .nsq-op-alert strong {
-            display: block;
-            font-size: .76rem
+            flex: 0 0 auto;
+            font-size: .69rem
         }
 
         .nsq-op-alert span {
-            display: block;
-            margin-top: 2px;
-            line-height: 1.35
+            min-width: 0;
+            max-width: 620px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1.2
         }
 
     .nsq-op-kpi-grid {
@@ -1043,7 +1083,7 @@
 
     .nsq-op-flow-item {
         display: grid;
-        grid-template-columns: 27px minmax(0,1fr) auto;
+        grid-template-columns: 27px minmax(0,1fr) auto auto;
         align-items: center;
         gap: 9px;
         padding: 8px 9px;
@@ -1100,6 +1140,60 @@
         color: var(--op-muted);
         font-weight: 850;
         white-space: nowrap
+    }
+
+    .nsq-op-flow-action {
+        min-width: 82px;
+        min-height: 32px;
+        padding: 6px 9px;
+        border: 1px solid #cfdff5;
+        border-radius: 9px;
+        background: #eef4fc;
+        color: var(--op-primary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        text-decoration: none;
+        font-size: .64rem;
+        font-weight: 900;
+        white-space: nowrap;
+        transition: .16s ease;
+    }
+
+        .nsq-op-flow-action:hover {
+            color: #003f93;
+            background: #e3eefc;
+            border-color: #b7d0f1;
+            transform: translateY(-1px)
+        }
+
+        .nsq-op-flow-action.is-edit,
+        .nsq-op-flow-action.is-attend {
+            background: var(--op-primary);
+            border-color: var(--op-primary);
+            color: #fff;
+        }
+
+            .nsq-op-flow-action.is-edit:hover,
+            .nsq-op-flow-action.is-attend:hover {
+                background: #003f93;
+                border-color: #003f93;
+                color: #fff
+            }
+
+        .nsq-op-flow-action.is-external {
+            background: #f7f8fa;
+            border-color: #e1e5eb;
+            color: #667085;
+        }
+
+    .nsq-op-flow-noaction {
+        min-width: 82px;
+        text-align: center;
+        color: #98a2b3;
+        font-size: .62rem;
+        font-weight: 800;
     }
 
     .nsq-op-tools {
@@ -1180,6 +1274,25 @@
         font-size: .72rem;
         font-weight: 850;
     }
+
+    .nsq-op-readonly-banner {
+        display: none;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 9px 11px;
+        border: 1px solid #d7e3f3;
+        border-radius: 11px;
+        background: #f5f9ff;
+        color: #345b83;
+        font-size: .69rem;
+        font-weight: 800;
+        line-height: 1.35;
+    }
+
+        .nsq-op-readonly-banner.is-visible {
+            display: flex
+        }
 
     .nsq-op-loading {
         min-height: 220px;
@@ -1306,13 +1419,30 @@
             grid-template-columns: 1fr 1fr
         }
 
+        .nsq-op-flow-item {
+            grid-template-columns: 27px minmax(0,1fr) auto;
+            align-items: start
+        }
+
+        .nsq-op-flow-state {
+            align-self: center
+        }
+
+        .nsq-op-flow-action,
+        .nsq-op-flow-noaction {
+            grid-column: 2/-1;
+            justify-self: stretch;
+            width: 100%
+        }
+
         .nsq-op-footer {
             padding: 10px 12px
         }
     }
 </style>
 
-<div class="nsq-op-center"
+<div id="nsqOpCentro_@Model.ProgramaProduccionID"
+     class="nsq-op-center"
      data-nsq-operativa-centro
      data-programa-id="@Model.ProgramaProduccionID"
      data-ejecucion-id="@(Model.EjecucionProduccionID?.ToString() ?? "")"
@@ -1423,22 +1553,35 @@
                 </div>
             </div>
 
-            @if (Model.Alertas.Any() || Model.Bloqueos.Any(x => x.Activo))
+            @{
+                var bloqueosVisibles = Model.Bloqueos
+                .Where(x => x.Activo && x.BloqueaFlujo)
+                .Take(2)
+                .ToList();
+                var alertasVisibles = Model.Alertas
+                .Where(x => x.RequiereAtencion)
+                .Take(2)
+                .ToList();
+            }
+            @if (bloqueosVisibles.Count > 0 || alertasVisibles.Count > 0)
             {
                 <div class="nsq-op-alerts">
-                    @foreach (var bloqueo in Model.Bloqueos.Where(x => x.Activo && x.BloqueaFlujo))
+                    @foreach (var bloqueo in bloqueosVisibles)
                     {
-                        <div class="nsq-op-alert is-danger">
+                        <div class="nsq-op-alert is-danger" title="@(bloqueo.Descripcion ?? bloqueo.Titulo)">
                             <i class="bi bi-lock-fill"></i>
                             <div>
                                 <strong>@bloqueo.Titulo</strong>
-                                <span>@(string.IsNullOrWhiteSpace(bloqueo.Descripcion) ? "El flujo está bloqueado hasta resolver esta condición." : bloqueo.Descripcion)</span>
+                                @if (!string.IsNullOrWhiteSpace(bloqueo.Descripcion))
+                                {
+                                    <span>@bloqueo.Descripcion</span>
+                                }
                             </div>
                         </div>
                     }
-                    @foreach (var alerta in Model.Alertas.Where(x => x.RequiereAtencion).Take(3))
+                    @foreach (var alerta in alertasVisibles)
                     {
-                        <div class="nsq-op-alert @ClaseSeveridad(alerta.Severidad)">
+                        <div class="nsq-op-alert @ClaseSeveridad(alerta.Severidad)" title="@(alerta.Mensaje ?? alerta.Titulo)">
                             <i class="bi @alerta.Icono"></i>
                             <div>
                                 <strong>@alerta.Titulo</strong>
@@ -1716,6 +1859,28 @@
                                     <div class="nsq-op-flow">
                                         @foreach (var paso in pasosFase)
                                         {
+                                            var accionPaso = Model.AccionesDisponibles.FirstOrDefault(x => string.Equals(x.Clave, paso.AccionClave ?? paso.Clave, StringComparison.OrdinalIgnoreCase))
+                                            ?? accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, paso.Clave, StringComparison.OrdinalIgnoreCase));
+                                            var esExternaPaso = EsAccionExterna(accionPaso);
+                                            var puedeModificarPaso = PuedeModificarDesdeFlujo(paso, accionPaso, Model.Permisos.SoloLectura);
+                                            var soloLecturaPaso = !puedeModificarPaso;
+                                            var textoAccionPaso = TextoAccionFlujo(paso, accionPaso, puedeModificarPaso);
+                                            var iconoAccionPaso = IconoAccionFlujo(paso, accionPaso, puedeModificarPaso);
+                                            var claseBotonPaso = esExternaPaso
+                                            ? "is-external"
+                                            : puedeModificarPaso
+                                            ? (paso.Completado ? "is-edit" : "is-attend")
+                                            : "";
+                                            var urlPaso = accionPaso == null
+                                            ? null
+                                            : Url.Action("Contenido", "ProduccionOperativa", new
+                                            {
+                                                programaProduccionId = Model.ProgramaProduccionID,
+                                                accionClave = accionPaso.Clave,
+                                                origen = Model.Origen,
+                                                soloLectura = soloLecturaPaso
+                                            }) ?? $"/Produccion/Operativa/Contenido/{Model.ProgramaProduccionID}/{Uri.EscapeDataString(accionPaso.Clave)}";
+
                                             <div class="nsq-op-flow-item @ClasePaso(paso)">
                                                 <div class="nsq-op-flow-icon"><i class="bi @IconoPaso(paso)"></i></div>
                                                 <div>
@@ -1730,6 +1895,26 @@
                                                     }
                                                 </div>
                                                 <div class="nsq-op-flow-state">@paso.EstadoTexto</div>
+
+                                                @if (accionPaso != null && !string.IsNullOrWhiteSpace(urlPaso))
+                                                {
+                                                    <a href="@urlPaso"
+                                                       class="nsq-op-flow-action @claseBotonPaso"
+                                                       data-nsq-operativa-accion
+                                                       data-accion-clave="@accionPaso.Clave"
+                                                       data-solo-lectura="@(soloLecturaPaso ? "true" : "false")"
+                                                       title="@(esExternaPaso
+                                                                                                                  ? "Consulta el estado desde Producción. La acción se ejecuta únicamente en el módulo responsable."
+                                                                                                                  : puedeModificarPaso
+                                                                                                                      ? "Abrir esta actividad para continuar o modificar lo permitido por su controlador."
+                                                                                                                      : "Abrir esta actividad en modo consulta.")">
+                                            <i class="bi @iconoAccionPaso"></i>@textoAccionPaso
+                                        </a>
+                                                                                }
+                                                else
+                                                {
+                                                    <span class="nsq-op-flow-noaction">Sin acción</span>
+                                                }
                                             </div>
                                         }
                                     </div>
@@ -1896,6 +2081,10 @@
                 <div class="small text-muted fw-bold" data-nsq-operativa-accion-titulo></div>
             </div>
             <div data-nsq-operativa-contenido-body>
+                <div class="nsq-op-readonly-banner" data-nsq-operativa-readonly-banner>
+                    <i class="bi bi-eye-fill mt-1"></i>
+                    <span>Modo consulta: puedes revisar la información de esta actividad, pero sus capturas y cierres no se pueden modificar desde aquí.</span>
+                </div>
                 <div class="nsq-op-loading">
                     <div class="nsq-op-spinner"></div>
                     <span>Cargando actividad...</span>
@@ -1920,3 +2109,85 @@
         </div>
     </div>
 </div>
+
+<script>
+    (() => {
+        'use strict';
+
+        const root=document.getElementById('nsqOpCentro_@Model.ProgramaProduccionID');
+        if(!root||root.dataset.readonlyWired==='1') return;
+        root.dataset.readonlyWired='1';
+
+        const actionView=root.querySelector('[data-nsq-operativa-vista-accion]');
+        const actionBody=root.querySelector('[data-nsq-operativa-contenido-body]');
+        if(!actionView||!actionBody) return;
+
+        let soloLecturaActiva=false;
+
+        function aplicarSoloLectura(){
+            let banner=actionBody.querySelector('[data-nsq-operativa-readonly-banner]');
+
+            if(soloLecturaActiva&&!banner){
+                banner=document.createElement('div');
+                banner.className='nsq-op-readonly-banner';
+                banner.setAttribute('data-nsq-operativa-readonly-banner','');
+                banner.innerHTML='<i class="bi bi-eye-fill mt-1"></i><span>Modo consulta: puedes revisar la información de esta actividad, pero sus capturas y cierres no se pueden modificar desde aquí.</span>';
+                actionBody.prepend(banner);
+            }
+
+            if(banner){
+                banner.classList.toggle('is-visible',soloLecturaActiva);
+            }
+
+            if(!soloLecturaActiva) return;
+
+            actionBody.querySelectorAll('form').forEach(form=>{
+                form.dataset.nsqSoloLectura='1';
+            });
+
+            actionBody.querySelectorAll('form input:not([type="hidden"]), form select, form textarea, form button[type="submit"], form input[type="submit"]').forEach(control=>{
+                control.disabled=true;
+                control.setAttribute('aria-disabled','true');
+            });
+        }
+
+        root.addEventListener('click',event=>{
+            const link=event.target.closest('[data-nsq-operativa-accion]');
+            if(link&&root.contains(link)){
+                soloLecturaActiva=String(link.getAttribute('data-solo-lectura')||'false').toLowerCase()==='true';
+                root.dataset.nsqSoloLecturaActiva=soloLecturaActiva?'true':'false';
+                window.setTimeout(aplicarSoloLectura,0);
+                return;
+            }
+
+            const volver=event.target.closest('[data-nsq-operativa-volver]');
+            if(volver&&root.contains(volver)){
+                soloLecturaActiva=false;
+                root.dataset.nsqSoloLecturaActiva='false';
+            }
+        },true);
+
+        root.addEventListener('submit',event=>{
+            if(!soloLecturaActiva) return;
+            const form=event.target;
+            if(!(form instanceof HTMLFormElement)||!actionBody.contains(form)) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            if(typeof event.stopImmediatePropagation==='function') event.stopImmediatePropagation();
+            aplicarSoloLectura();
+        },true);
+
+        const observer=new MutationObserver(()=>{
+            if(!document.body.contains(root)){
+                observer.disconnect();
+                return;
+            }
+            aplicarSoloLectura();
+        });
+
+        observer.observe(actionBody,{childList:true,subtree:true});
+
+        root.addEventListener('nsq:operativa-accion-cargada',aplicarSoloLectura);
+    })();
+</script>

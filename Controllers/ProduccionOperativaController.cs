@@ -257,6 +257,7 @@ public sealed partial class ProduccionOperativaController : Controller
         await AgregarAccionesComplementariasAsync(vm, usuarioInterno, cn, cancellationToken);
         AplicarOrdenFlujoOperativo(vm);
         NormalizarAccionActualYSiguiente(vm);
+        NormalizarBloqueoActual(vm);
         vm.EtapaActual = ResolverEtapaActual(vm);
         if (vm.AccionActual != null) vm.EtapaActual = vm.AccionActual.Etapa;
         vm.Resumen = ConstruirResumenProceso(vm);
@@ -653,15 +654,14 @@ public sealed partial class ProduccionOperativaController : Controller
         };
     }
 
-    private static ProduccionOperativaAccionVm MapearAccionPaso(
-        AgendaOperativaPasoVm p,
-        AgendaOperativaItemVm item,
-        ProduccionOperativaPermisosVm permisos,
-        UsuarioOperativoDto usuario,
-        bool soloLectura)
+    private static ProduccionOperativaAccionVm MapearAccionPaso(AgendaOperativaPasoVm p, AgendaOperativaItemVm item, ProduccionOperativaPermisosVm permisos, UsuarioOperativoDto usuario, bool soloLectura)
     {
         var esExterna = EsAccionExternaAlCentroOperativo(p.Clave, p.AreaResponsable);
-        var esEjecutable = !esExterna && (!string.Equals(p.Estado, AgendaOperativaEstadoPaso.Esperando, StringComparison.OrdinalIgnoreCase) || !string.IsNullOrWhiteSpace(p.Controlador));
+        var esEjecutableBase = !esExterna && (!string.Equals(p.Estado, AgendaOperativaEstadoPaso.Esperando, StringComparison.OrdinalIgnoreCase) || !string.IsNullOrWhiteSpace(p.Controlador));
+        var textoNormal = esExterna ? TextoEsperaAreaExterna(p.AreaResponsable) : TextoBotonAccion(p.Clave);
+        var politica = ResolverPoliticaReaperturaPaso(p.Clave, p.Completado, item.EjecucionProduccionID, soloLectura, esExterna, textoNormal);
+        var puedeEjecutar = !politica.SoloLectura && !esExterna && PuedeEjecutarAccion(p.Clave, p.AreaResponsable, permisos, usuario);
+
         return new ProduccionOperativaAccionVm
         {
             Orden = p.Orden,
@@ -673,14 +673,14 @@ public sealed partial class ProduccionOperativaController : Controller
             Estado = p.Estado,
             Prioridad = p.Bloqueado ? AgendaOperativaPrioridad.Critica : p.EstaVencido ? AgendaOperativaPrioridad.Alta : AgendaOperativaPrioridad.Normal,
             Aplica = p.Aplica,
-            Visible = p.Aplica && !p.Completado,
+            Visible = p.Aplica && politica.Visible,
             Completada = p.Completado,
             EnProceso = p.EnProceso,
             Bloqueada = p.Bloqueado,
             BloqueaFlujo = p.BloqueaFlujo,
-            EsEjecutable = esEjecutable,
-            PuedeEjecutarUsuario = !esExterna && !soloLectura && PuedeEjecutarAccion(p.Clave, p.AreaResponsable, permisos, usuario),
-            SoloLectura = soloLectura || esExterna,
+            EsEjecutable = esEjecutableBase && !politica.SoloLectura,
+            PuedeEjecutarUsuario = puedeEjecutar,
+            SoloLectura = politica.SoloLectura,
             MotivoBloqueo = p.MotivoBloqueo,
             FechaObjetivo = p.FechaObjetivo,
             FechaInicioReal = p.FechaInicioReal,
@@ -688,23 +688,22 @@ public sealed partial class ProduccionOperativaController : Controller
             EstaVencida = p.EstaVencido,
             MinutosDesfase = p.MinutosDesfase,
             Icono = IconoAccion(p.Clave),
-            TextoBoton = esExterna ? TextoEsperaAreaExterna(p.AreaResponsable) : TextoBotonAccion(p.Clave),
+            TextoBoton = politica.TextoBoton,
             TipoContenido = ResolverTipoContenido(p.Clave),
             ModoApertura = esExterna ? ProduccionOperativaModoApertura.SoloLectura : ProduccionOperativaModoApertura.PartialAjax,
             VistaParcial = esExterna ? null : ResolverVistaParcialFutura(p.Clave),
             Destino = esExterna ? new ProduccionOperativaDestinoVm() : ResolverDestinoPaso(p, item)
         };
     }
-
-    private static ProduccionOperativaAccionVm MapearAccionAgenda(
-        AgendaOperativaAccionVm a,
-        AgendaOperativaItemVm item,
-        ProduccionOperativaPermisosVm permisos,
-        UsuarioOperativoDto usuario,
-        bool soloLectura)
+    private static ProduccionOperativaAccionVm MapearAccionAgenda(AgendaOperativaAccionVm a, AgendaOperativaItemVm item, ProduccionOperativaPermisosVm permisos, UsuarioOperativoDto usuario, bool soloLectura)
     {
         var paso = item.Pasos.FirstOrDefault(x => string.Equals(x.Clave, a.Clave, StringComparison.OrdinalIgnoreCase));
         var esExterna = EsAccionExternaAlCentroOperativo(a.Clave, a.AreaResponsable);
+        var completada = paso?.Completado == true;
+        var textoNormal = esExterna ? TextoEsperaAreaExterna(a.AreaResponsable) : (string.IsNullOrWhiteSpace(a.TextoBoton) ? TextoBotonAccion(a.Clave) : a.TextoBoton);
+        var politica = ResolverPoliticaReaperturaPaso(a.Clave, completada, item.EjecucionProduccionID, soloLectura, esExterna, textoNormal);
+        var puedeEjecutar = !politica.SoloLectura && !esExterna && PuedeEjecutarAccion(a.Clave, a.AreaResponsable, permisos, usuario);
+
         return new ProduccionOperativaAccionVm
         {
             Orden = paso?.Orden ?? 500,
@@ -718,30 +717,29 @@ public sealed partial class ProduccionOperativaController : Controller
             Estado = paso?.Estado ?? AgendaOperativaEstadoPaso.Pendiente,
             Prioridad = a.Prioridad,
             Aplica = true,
-            Visible = true,
-            Completada = false,
+            Visible = politica.Visible,
+            Completada = completada,
             EnProceso = paso?.EnProceso == true,
             Bloqueada = paso?.Bloqueado == true,
             BloqueaFlujo = a.BloqueaFlujo,
-            EsEjecutable = !esExterna && a.EsEjecutable,
-            PuedeEjecutarUsuario = !esExterna && !soloLectura && PuedeEjecutarAccion(a.Clave, a.AreaResponsable, permisos, usuario),
-            SoloLectura = soloLectura || esExterna,
+            EsEjecutable = !politica.SoloLectura && !esExterna && a.EsEjecutable,
+            PuedeEjecutarUsuario = puedeEjecutar,
+            SoloLectura = politica.SoloLectura,
             MotivoBloqueo = paso?.MotivoBloqueo,
             FechaObjetivo = a.FechaObjetivo,
             FechaDisponibleDesde = a.FechaDisponibleDesde,
             EstaVencida = a.EstaVencida,
             MinutosDesfase = a.MinutosDesfase,
-            RequiereConfirmacion = !esExterna && a.RequiereConfirmacion,
-            TextoConfirmacion = esExterna ? null : a.TextoConfirmacion,
+            RequiereConfirmacion = !politica.SoloLectura && !esExterna && a.RequiereConfirmacion,
+            TextoConfirmacion = !politica.SoloLectura && !esExterna ? a.TextoConfirmacion : null,
             Icono = string.IsNullOrWhiteSpace(a.Icono) ? IconoAccion(a.Clave) : a.Icono,
-            TextoBoton = esExterna ? TextoEsperaAreaExterna(a.AreaResponsable) : (string.IsNullOrWhiteSpace(a.TextoBoton) ? TextoBotonAccion(a.Clave) : a.TextoBoton),
+            TextoBoton = politica.TextoBoton,
             TipoContenido = ResolverTipoContenido(a.Clave),
             ModoApertura = esExterna ? ProduccionOperativaModoApertura.SoloLectura : ProduccionOperativaModoApertura.PartialAjax,
             VistaParcial = esExterna ? null : ResolverVistaParcialFutura(a.Clave),
             Destino = esExterna ? new ProduccionOperativaDestinoVm() : ResolverDestinoAgenda(a, item)
         };
     }
-
     private static ProduccionOperativaDestinoVm ResolverDestinoPaso(AgendaOperativaPasoVm p, AgendaOperativaItemVm item)
     {
         var destino = new ProduccionOperativaDestinoVm
@@ -927,8 +925,16 @@ public sealed partial class ProduccionOperativaController : Controller
 
     private static List<ProduccionOperativaBloqueoVm> ConstruirBloqueos(ProduccionCentroOperativoVm vm)
     {
-        var bloqueos = vm.Pasos
-            .Where(x => x.Aplica && !x.Completado && (x.Bloqueado || x.BloqueaFlujo))
+        var bloqueos = new List<ProduccionOperativaBloqueoVm>();
+
+        // Un pendiente normal de una etapa futura NO es un bloqueo visible.
+        // Solo mostramos estados realmente bloqueados de la etapa actual o de una etapa anterior.
+        var ordenActual = vm.AccionActual?.Orden ?? int.MaxValue;
+        var bloqueosDeFlujoActual = vm.Pasos
+            .Where(x => x.Aplica && !x.Completado && x.Bloqueado && x.Orden <= ordenActual)
+            .OrderBy(x => x.Orden)
+            .ThenBy(x => x.Nombre)
+            .Take(2)
             .Select(x => new ProduccionOperativaBloqueoVm
             {
                 Clave = "PASO_" + x.Clave,
@@ -936,11 +942,14 @@ public sealed partial class ProduccionOperativaController : Controller
                 Descripcion = x.MotivoBloqueo ?? x.Detalle,
                 AccionClave = x.AccionClave ?? x.Clave,
                 AreaResponsable = x.AreaResponsable,
-                Severidad = x.Bloqueado ? ProduccionOperativaSeveridad.Peligro : ProduccionOperativaSeveridad.Advertencia,
+                Severidad = ProduccionOperativaSeveridad.Peligro,
                 Activo = true,
-                BloqueaFlujo = x.BloqueaFlujo || x.Bloqueado,
+                BloqueaFlujo = true,
                 FechaDeteccion = DateTime.Now
-            }).ToList();
+            });
+
+        bloqueos.AddRange(bloqueosDeFlujoActual);
+
         if (vm.EsParejaLhRh && !vm.LhRh.ParejaConsistente)
         {
             bloqueos.Insert(0, new ProduccionOperativaBloqueoVm
@@ -955,7 +964,12 @@ public sealed partial class ProduccionOperativaController : Controller
                 FechaDeteccion = DateTime.Now
             });
         }
-        return bloqueos;
+
+        return bloqueos
+            .GroupBy(x => x.Clave, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .Take(2)
+            .ToList();
     }
 
     private static List<ProduccionOperativaAlertaVm> ConstruirAlertas(ProduccionCentroOperativoVm vm)
@@ -972,10 +986,6 @@ public sealed partial class ProduccionOperativaController : Controller
         else if (vm.TieneParoAbierto)
         {
             alertas.Add(new ProduccionOperativaAlertaVm { Clave = "PARO_ABIERTO", Titulo = "Paro abierto", Mensaje = vm.Agenda?.Interrupcion?.Motivo, Severidad = ProduccionOperativaSeveridad.Advertencia, Icono = "bi-pause-circle", Fecha = vm.Agenda?.Interrupcion?.FechaInicio ?? DateTime.Now, RequiereAtencion = true });
-        }
-        if (vm.AccionActual?.EstaVencida == true)
-        {
-            alertas.Add(new ProduccionOperativaAlertaVm { Clave = "ACCION_VENCIDA", Titulo = "Actividad fuera de tiempo", Mensaje = vm.AccionActual.Titulo, Severidad = ProduccionOperativaSeveridad.Peligro, Icono = "bi-clock", AccionClave = vm.AccionActual.Clave, Fecha = DateTime.Now, RequiereAtencion = true });
         }
         if (vm.EsParejaLhRh && !vm.LhRh.ParejaConsistente)
         {
@@ -1086,6 +1096,25 @@ public sealed partial class ProduccionOperativaController : Controller
             .FirstOrDefault();
 
         vm.EtapaActual = actual.Etapa;
+    }
+
+    private static void NormalizarBloqueoActual(ProduccionCentroOperativoVm vm)
+    {
+        if (vm.EsParejaLhRh && !vm.LhRh.ParejaConsistente)
+        {
+            vm.EstaBloqueada = true;
+            vm.MotivoBloqueoGeneral = vm.LhRh.MotivoInconsistencia;
+            return;
+        }
+
+        var actual = vm.AccionActual;
+        var bloqueadaActual = actual != null &&
+            (actual.Bloqueada || string.Equals(actual.Estado, AgendaOperativaEstadoPaso.Bloqueado, StringComparison.OrdinalIgnoreCase));
+
+        vm.EstaBloqueada = bloqueadaActual;
+        vm.MotivoBloqueoGeneral = bloqueadaActual
+            ? (actual!.MotivoBloqueo ?? actual.Descripcion)
+            : null;
     }
 
     private static string ResolverEstadoCentro(ProduccionCentroOperativoVm vm)
@@ -1623,6 +1652,44 @@ ORDER BY PreparacionAnticipadaID DESC;";
         return valor == null || valor == DBNull.Value ? null : Convert.ToInt32(valor);
     }
 
+    private static (bool Visible, bool SoloLectura, string TextoBoton) ResolverPoliticaReaperturaPaso(string? clave, bool completado, int? ejecucionProduccionId, bool soloLecturaGlobal, bool esExterna, string textoNormal)
+    {
+        var k = (clave ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (!completado)
+            return (true, soloLecturaGlobal || esExterna, textoNormal);
+
+        if (esExterna)
+            return (true, true, "Ver resultado");
+
+        if (k == AgendaOperativaPasoClave.Personal)
+        {
+            var puedeEditar = !soloLecturaGlobal && !ejecucionProduccionId.HasValue;
+            return (true, !puedeEditar, puedeEditar ? "Editar personal" : "Ver personal");
+        }
+
+        return k switch
+        {
+            AgendaOperativaPasoClave.Material => (true, true, "Ver material"),
+            AgendaOperativaPasoClave.Secado => (true, true, "Ver secado"),
+            AgendaOperativaPasoClave.Embalaje => (true, true, "Ver embalaje"),
+            AgendaOperativaPasoClave.CambioMolde => (true, true, "Ver cambio de molde"),
+            ProduccionOperativaAccionClave.ChecklistCambioMolde => (true, true, "Ver checklist"),
+            "INICIAR_PREPARACION" => (true, true, "Ver inicio"),
+            AgendaOperativaPasoClave.ChecklistArranque => (true, true, "Ver checklist"),
+            AgendaOperativaPasoClave.ConfiguracionCorrida => (true, true, "Ver configuración"),
+            AgendaOperativaPasoClave.PrimerasPiezas => (true, true, "Ver primeras piezas"),
+            AgendaOperativaPasoClave.Calidad => (true, true, "Ver Calidad"),
+            AgendaOperativaPasoClave.InicioSerie => (true, true, "Ver inicio de serie"),
+            AgendaOperativaPasoClave.Produccion => (true, true, "Ver Producción"),
+            AgendaOperativaPasoClave.Capturas => (true, true, "Ver capturas"),
+            AgendaOperativaPasoClave.Cajas => (true, true, "Ver cajas"),
+            AgendaOperativaPasoClave.CalidadFinal => (true, true, "Ver Calidad"),
+            AgendaOperativaPasoClave.LiberacionMaquina => (true, true, "Ver liberación"),
+            AgendaOperativaPasoClave.Cierre => (true, true, "Ver cierre"),
+            _ => (false, true, "Ver")
+        };
+    }
     private static async Task<(bool Existe, bool Completo, bool EnProceso, int? ChecklistID)> ObtenerEstadoChecklistCambioMoldeOperativoAsync(
         int preparacionAnticipadaId,
         SqlConnection cn,
@@ -1673,9 +1740,7 @@ ORDER BY c.ChecklistArranqueID DESC;";
         await using var rd = await cmd.ExecuteReaderAsync(cancellationToken);
         if (!await rd.ReadAsync(cancellationToken)) return (false, false, false, null);
 
-        int? checklistId = rd["ChecklistArranqueID"] == DBNull.Value
-    ? (int?)null
-    : Convert.ToInt32(rd["ChecklistArranqueID"]);
+        int? checklistId = rd["ChecklistArranqueID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["ChecklistArranqueID"]);
         var estatusId = rd["EstatusID"] == DBNull.Value ? 0 : Convert.ToInt32(rd["EstatusID"]);
         var estadoFlujo = rd["EstadoFlujo"] == DBNull.Value ? string.Empty : rd["EstadoFlujo"].ToString()?.Trim() ?? string.Empty;
         var completo = string.Equals(estadoFlujo, ProduccionChecklistEstadoFlujo.Completo, StringComparison.OrdinalIgnoreCase)

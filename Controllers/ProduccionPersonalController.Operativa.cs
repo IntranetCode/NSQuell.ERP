@@ -129,7 +129,33 @@ public sealed partial class ProduccionPersonalController
             if (turno == null) throw new InvalidOperationException("El turno ya no está disponible.");
 
             var ventana = ConstruirVentana(programa, turno, vm.FechaTrabajo.Date);
-            if (ventana == null) throw new InvalidOperationException("El turno seleccionado no cruza con el horario programado de la OF.");
+            if (!ventana.HasValue) throw new InvalidOperationException("El turno seleccionado no cruza con el horario programado de la OF.");
+
+            var pareja = await ObtenerParejaPersonalOperativaAsync(vm.ProgramaProduccionID, cn, tx);
+            ProduccionPersonalProgramaVm? programaPareja = null;
+            (DateTime Inicio, DateTime Fin)? ventanaPareja = null;
+            ProduccionPersonalGuardarVm? vmPareja = null;
+
+            if (pareja != null && pareja.EsCompatibleFisicamente)
+            {
+                programaPareja = await CargarProgramaBaseAsync(pareja.ProgramaParejaID, cn, tx, true);
+                if (programaPareja == null) throw new InvalidOperationException("La OF pareja LH/RH ya no está disponible.");
+
+                ventanaPareja = ConstruirVentana(programaPareja, turno, vm.FechaTrabajo.Date);
+                if (!ventanaPareja.HasValue) throw new InvalidOperationException("El turno seleccionado no es válido para la OF pareja LH/RH.");
+
+                vmPareja = new ProduccionPersonalGuardarVm
+                {
+                    AsignacionPersonalID = null,
+                    ProgramaProduccionID = pareja.ProgramaParejaID,
+                    FechaTrabajo = vm.FechaTrabajo,
+                    TurnoID = vm.TurnoID,
+                    OperadorID = vm.OperadorID,
+                    AuxiliarID = vm.AuxiliarID,
+                    TecnicoProduccionID = vm.TecnicoProduccionID,
+                    Observaciones = vm.Observaciones
+                };
+            }
 
             var operadorNombre = await ValidarPersonaRolAsync(vm.OperadorID.Value, "OPERADOR", programa.ParteID, cn, tx);
             if (string.IsNullOrWhiteSpace(operadorNombre))
@@ -151,26 +177,241 @@ public sealed partial class ProduccionPersonalController
                     throw new InvalidOperationException("El técnico seleccionado no pertenece al catálogo activo de Técnicos de Producción.");
             }
 
-            foreach (var personaId in ids)
+            if (programaPareja != null)
             {
-                var conflicto = await BuscarConflictoPersonaAsync(personaId, ventana.Value.Inicio, ventana.Value.Fin, vm.AsignacionPersonalID, cn, tx);
-                if (conflicto != null)
+                var operadorPareja = await ValidarPersonaRolAsync(vm.OperadorID.Value, "OPERADOR", programaPareja.ParteID, cn, tx);
+                if (string.IsNullOrWhiteSpace(operadorPareja))
+                    throw new InvalidOperationException("El operador seleccionado no cumple los requisitos para la parte de la OF pareja LH/RH.");
+
+                if (vm.AuxiliarID.HasValue && vm.AuxiliarID.Value > 0)
                 {
-                    throw new InvalidOperationException(
-                        "La persona " + conflicto.PersonaNombre +
-                        " ya está asignada al Programa " + conflicto.ProgramaProduccionID +
-                        " de " + conflicto.Inicio.ToString("dd/MM HH:mm") +
-                        " a " + conflicto.Fin.ToString("dd/MM HH:mm") + ".");
+                    var auxiliarPareja = await ValidarPersonaRolAsync(vm.AuxiliarID.Value, "AUXILIAR", programaPareja.ParteID, cn, tx);
+                    if (string.IsNullOrWhiteSpace(auxiliarPareja))
+                        throw new InvalidOperationException("El auxiliar seleccionado no es válido para la OF pareja LH/RH.");
+                }
+
+                if (vm.TecnicoProduccionID.HasValue && vm.TecnicoProduccionID.Value > 0)
+                {
+                    var tecnicoPareja = await ValidarPersonaRolAsync(vm.TecnicoProduccionID.Value, "TECNICO", programaPareja.ParteID, cn, tx);
+                    if (string.IsNullOrWhiteSpace(tecnicoPareja))
+                        throw new InvalidOperationException("El técnico seleccionado no es válido para la OF pareja LH/RH.");
                 }
             }
 
-            var existente = await ResolverAsignacionExistenteAsync(vm, cn, tx);
-            var usuarioId = UsuarioID();
-            int asignacionPersonalId;
+            var existenteActual = await ResolverAsignacionExistenteAsync(vm, cn, tx);
+            int? existentePareja = null;
+            if (vmPareja != null) existentePareja = await ResolverAsignacionExistenteAsync(vmPareja, cn, tx);
 
-            if (existente.HasValue)
+            var inicioConflicto = ventana.Value.Inicio;
+            var finConflicto = ventana.Value.Fin;
+
+            if (ventanaPareja.HasValue)
             {
-                const string actualizar = @"
+                if (ventanaPareja.Value.Inicio < inicioConflicto) inicioConflicto = ventanaPareja.Value.Inicio;
+                if (ventanaPareja.Value.Fin > finConflicto) finConflicto = ventanaPareja.Value.Fin;
+            }
+
+            foreach (var personaId in ids)
+            {
+                var conflicto = await BuscarConflictoPersonaOperativaParejaAsync(personaId, inicioConflicto, finConflicto, existenteActual, existentePareja, cn, tx);
+                if (conflicto != null)
+                    throw new InvalidOperationException("La persona " + conflicto.PersonaNombre + " ya está asignada al Programa " + conflicto.ProgramaProduccionID + " de " + conflicto.Inicio.ToString("dd/MM HH:mm") + " a " + conflicto.Fin.ToString("dd/MM HH:mm") + ".");
+            }
+
+            var usuarioId = UsuarioID();
+            var asignacionPersonalId = await GuardarAsignacionProgramaOperativaAsync(vm, turno, ventana.Value, existenteActual, usuarioId, cn, tx);
+
+            int? asignacionParejaId = null;
+            if (vmPareja != null && ventanaPareja.HasValue)
+                asignacionParejaId = await GuardarAsignacionProgramaOperativaAsync(vmPareja, turno, ventanaPareja.Value, existentePareja, usuarioId, cn, tx);
+
+            await tx.CommitAsync();
+
+            var replicado = vmPareja != null;
+            var mensaje = replicado
+                ? "Personal asignado correctamente y replicado a las dos OF LH/RH."
+                : "Personal asignado correctamente.";
+
+            if (pareja != null && !pareja.EsCompatibleFisicamente)
+                mensaje += " Se detectó una relación LH/RH, pero no se replicó porque máquina, molde o ventana programada ya no coinciden.";
+
+            return Json(new
+            {
+                ok = true,
+                programaProduccionId = vm.ProgramaProduccionID,
+                programaParejaId = replicado ? pareja?.ProgramaParejaID : null,
+                asignacionPersonalID = asignacionPersonalId,
+                asignacionParejaID = asignacionParejaId,
+                replicadoLhRh = replicado,
+                operador = operadorNombre,
+                auxiliar = auxiliarNombre,
+                tecnico = tecnicoNombre,
+                ventanaInicio = ventana.Value.Inicio,
+                ventanaFin = ventana.Value.Fin,
+                mensaje
+            });
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(); } catch { }
+            return BadRequest(new { ok = false, mensaje = "No fue posible guardar el personal: " + ex.Message });
+        }
+    }
+
+    private sealed class ParejaPersonalOperativa
+    {
+        public int ProgramaParejaID { get; set; }
+        public string? NumeroOFPareja { get; set; }
+        public bool EsCompatibleFisicamente { get; set; }
+    }
+
+    private static async Task<ParejaPersonalOperativa?> ObtenerParejaPersonalOperativaAsync(int programaProduccionId, SqlConnection cn, SqlTransaction tx)
+    {
+        const string sql = @"
+;WITH Programas AS
+(
+    SELECT
+        pp.ProgramaProduccionID,
+        pp.SolicitudProduccionID,
+        pp.MaquinaID,
+        pp.MoldeID,
+        pp.MoldeCodigo,
+        pp.FechaInicioProgramada,
+        pp.FechaFinProgramada,
+        TRY_CONVERT
+        (
+            INT,
+            LEFT
+            (
+                SUBSTRING
+                (
+                    ISNULL(pp.Observaciones,N''),
+                    CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N''))+LEN(N'NSQ_LHRH_PAIR:'),
+                    50
+                ),
+                CHARINDEX
+                (
+                    N';',
+                    SUBSTRING
+                    (
+                        ISNULL(pp.Observaciones,N''),
+                        CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N''))+LEN(N'NSQ_LHRH_PAIR:'),
+                        50
+                    )+N';'
+                )-1
+            )
+        ) AS GrupoLhRh
+    FROM dbo.Planeacion_ProgramaProduccion pp
+    WHERE pp.Activo=1
+      AND CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N''))>0
+),
+Origen AS
+(
+    SELECT *
+    FROM Programas
+    WHERE ProgramaProduccionID=@ProgramaProduccionID
+)
+SELECT TOP(1)
+    p.ProgramaProduccionID AS ProgramaParejaID,
+    COALESCE(NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')) AS NumeroOFPareja,
+    CONVERT(bit,
+        CASE WHEN
+            ISNULL(o.MaquinaID,0)=ISNULL(p.MaquinaID,0)
+            AND
+            (
+                (o.MoldeID IS NOT NULL AND p.MoldeID=o.MoldeID)
+                OR
+                (
+                    o.MoldeID IS NULL
+                    AND p.MoldeID IS NULL
+                    AND ISNULL(LTRIM(RTRIM(o.MoldeCodigo)),N'')=ISNULL(LTRIM(RTRIM(p.MoldeCodigo)),N'')
+                )
+            )
+            AND
+            (
+                (o.FechaInicioProgramada IS NULL AND p.FechaInicioProgramada IS NULL)
+                OR DATEDIFF(SECOND,o.FechaInicioProgramada,p.FechaInicioProgramada)=0
+            )
+            AND
+            (
+                (o.FechaFinProgramada IS NULL AND p.FechaFinProgramada IS NULL)
+                OR DATEDIFF(SECOND,o.FechaFinProgramada,p.FechaFinProgramada)=0
+            )
+        THEN 1 ELSE 0 END
+    ) AS EsCompatibleFisicamente
+FROM Origen o
+INNER JOIN Programas p
+    ON p.GrupoLhRh=o.GrupoLhRh
+   AND p.ProgramaProduccionID<>o.ProgramaProduccionID
+LEFT JOIN dbo.SolicitudesProduccion s
+    ON s.SolicitudProduccionID=p.SolicitudProduccionID
+   AND s.Activo=1
+WHERE o.GrupoLhRh IS NOT NULL
+ORDER BY p.ProgramaProduccionID;";
+
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+        await using var rd = await cmd.ExecuteReaderAsync();
+
+        if (!await rd.ReadAsync()) return null;
+
+        return new ParejaPersonalOperativa
+        {
+            ProgramaParejaID = Convert.ToInt32(rd["ProgramaParejaID"]),
+            NumeroOFPareja = rd["NumeroOFPareja"] == DBNull.Value ? null : rd["NumeroOFPareja"]?.ToString()?.Trim(),
+            EsCompatibleFisicamente = Convert.ToBoolean(rd["EsCompatibleFisicamente"])
+        };
+    }
+
+    private static async Task<ConflictoPersona?> BuscarConflictoPersonaOperativaParejaAsync(int personaId, DateTime inicio, DateTime fin, int? asignacionExcluirActualId, int? asignacionExcluirParejaId, SqlConnection cn, SqlTransaction tx)
+    {
+        const string sql = @"
+SELECT TOP(1)
+    a.ProgramaProduccionID,
+    a.Inicio,
+    a.Fin,
+    LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS PersonaNombre
+FROM dbo.Produccion_ProgramaPersonalAsignaciones a WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Persona p ON p.PersonaID=@PersonaID
+WHERE a.Activo=1
+  AND (@AsignacionExcluirActualID IS NULL OR a.AsignacionPersonalID<>@AsignacionExcluirActualID)
+  AND (@AsignacionExcluirParejaID IS NULL OR a.AsignacionPersonalID<>@AsignacionExcluirParejaID)
+  AND @Inicio<a.Fin
+  AND @Fin>a.Inicio
+  AND
+  (
+      a.OperadorID=@PersonaID
+      OR a.AuxiliarID=@PersonaID
+      OR a.TecnicoProduccionID=@PersonaID
+  )
+ORDER BY a.Inicio;";
+
+        await using var cmd = new SqlCommand(sql, cn, tx);
+        cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
+        cmd.Parameters.Add("@AsignacionExcluirActualID", SqlDbType.Int).Value = asignacionExcluirActualId.HasValue ? asignacionExcluirActualId.Value : DBNull.Value;
+        cmd.Parameters.Add("@AsignacionExcluirParejaID", SqlDbType.Int).Value = asignacionExcluirParejaId.HasValue ? asignacionExcluirParejaId.Value : DBNull.Value;
+        cmd.Parameters.Add("@Inicio", SqlDbType.DateTime2).Value = inicio;
+        cmd.Parameters.Add("@Fin", SqlDbType.DateTime2).Value = fin;
+
+        await using var rd = await cmd.ExecuteReaderAsync();
+        if (!await rd.ReadAsync()) return null;
+
+        return new ConflictoPersona
+        {
+            ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+            PersonaNombre = rd["PersonaNombre"]?.ToString()?.Trim() ?? "La persona",
+            Inicio = Convert.ToDateTime(rd["Inicio"]),
+            Fin = Convert.ToDateTime(rd["Fin"])
+        };
+    }
+
+    private static async Task<int> GuardarAsignacionProgramaOperativaAsync(ProduccionPersonalGuardarVm vm, ProduccionPersonalTurnoVm turno, (DateTime Inicio, DateTime Fin) ventana, int? asignacionExistenteId, int usuarioId, SqlConnection cn, SqlTransaction tx)
+    {
+        int asignacionPersonalId;
+
+        if (asignacionExistenteId.HasValue)
+        {
+            const string actualizar = @"
 UPDATE dbo.Produccion_ProgramaPersonalAsignaciones
 SET FechaTrabajo=@FechaTrabajo,
     TurnoID=@TurnoID,
@@ -185,14 +426,15 @@ SET FechaTrabajo=@FechaTrabajo,
     FechaModificacion=SYSDATETIME(),
     Activo=1
 WHERE AsignacionPersonalID=@AsignacionPersonalID;";
-                await using var cmd = new SqlCommand(actualizar, cn, tx);
-                AgregarParametrosGuardar(cmd, existente.Value, vm, turno, ventana.Value, usuarioId);
-                await cmd.ExecuteNonQueryAsync();
-                asignacionPersonalId = existente.Value;
-            }
-            else
-            {
-                const string insertar = @"
+
+            await using var cmd = new SqlCommand(actualizar, cn, tx);
+            AgregarParametrosGuardar(cmd, asignacionExistenteId.Value, vm, turno, ventana, usuarioId);
+            await cmd.ExecuteNonQueryAsync();
+            asignacionPersonalId = asignacionExistenteId.Value;
+        }
+        else
+        {
+            const string insertar = @"
 INSERT INTO dbo.Produccion_ProgramaPersonalAsignaciones
 (
     ProgramaProduccionID,
@@ -226,55 +468,16 @@ VALUES
     SYSDATETIME(),
     1
 );";
-                await using var cmd = new SqlCommand(insertar, cn, tx);
-                AgregarParametrosGuardar(cmd, null, vm, turno, ventana.Value, usuarioId);
-                asignacionPersonalId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-            }
 
-            /*
-             * Agenda Operativa y otras vistas pre-arranque todavía consultan
-             * Planeacion_ProgramaOperadores para PRINCIPAL/AUXILIAR.
-             * Sincronizamos dentro de la misma transacción para que al guardar
-             * desaparezca inmediatamente el bloqueo "Personal asignado".
-             */
-            await SincronizarOperadorProgramaOperativoAsync(
-                vm.ProgramaProduccionID,
-                vm.OperadorID,
-                "PRINCIPAL",
-                usuarioId,
-                cn,
-                tx);
-
-            await SincronizarOperadorProgramaOperativoAsync(
-                vm.ProgramaProduccionID,
-                vm.AuxiliarID,
-                "AUXILIAR",
-                usuarioId,
-                cn,
-                tx);
-
-            await tx.CommitAsync();
-
-            return Json(new
-            {
-                ok = true,
-                programaProduccionId = vm.ProgramaProduccionID,
-                asignacionPersonalID = asignacionPersonalId,
-                operador = operadorNombre,
-                auxiliar = auxiliarNombre,
-                tecnico = tecnicoNombre,
-                ventanaInicio = ventana.Value.Inicio,
-                ventanaFin = ventana.Value.Fin,
-                mensaje = "Personal asignado correctamente."
-            });
+            await using var cmd = new SqlCommand(insertar, cn, tx);
+            AgregarParametrosGuardar(cmd, null, vm, turno, ventana, usuarioId);
+            asignacionPersonalId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
-        catch (Exception ex)
-        {
-            try { await tx.RollbackAsync(); } catch { }
-            return BadRequest(new { ok = false, mensaje = "No fue posible guardar el personal: " + ex.Message });
-        }
+
+        await SincronizarOperadorProgramaOperativoAsync(vm.ProgramaProduccionID, vm.OperadorID, "PRINCIPAL", usuarioId, cn, tx);
+        await SincronizarOperadorProgramaOperativoAsync(vm.ProgramaProduccionID, vm.AuxiliarID, "AUXILIAR", usuarioId, cn, tx);
+        return asignacionPersonalId;
     }
-
     private static int? ResolverTurnoSugeridoOperativo(
         ProduccionPersonalProgramaVm programa,
         List<ProduccionPersonalTurnoVm> turnos,
