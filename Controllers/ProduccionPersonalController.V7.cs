@@ -171,6 +171,16 @@ public sealed partial class ProduccionPersonalController
             }
         }
 
+        // NSQ_PRODUCCION_PERSONAL_DISTRIBUCION_SYNC_V14_3
+        // La distribucion principal por maquina/turno manda en la vista de detalle
+        // siempre que el segmento no este produciendo realmente.
+        await AplicarDistribucionPrincipalV143Async(
+            vm.Segmentos,
+            p.Inicio,
+            p.Fin,
+            cn,
+            null);
+
         await CompletarNivelesV7Async(vm.Segmentos, cn, null);
         MarcarConflictosV7(vm.Segmentos);
 
@@ -188,10 +198,10 @@ public sealed partial class ProduccionPersonalController
         var semana = vm.SemanaInicio;
         var turnos = await CargarTurnosV2Async(cn, null);
         var guardadas = await CargarCoberturasV2Async(semana, cn, null);
-        vm.Tecnicos = await CargarPersonasApoyoV2Async("TECNICO", cn, null);
-        var smed = await CargarPersonasApoyoV2Async("SMED", cn, null);
-        vm.SmedYTecnicos = UnirPersonasV2(smed, vm.Tecnicos, "SMED / TECNICO");
-        vm.Auxiliares = await CargarPersonasApoyoV2Async("AUXILIAR", cn, null);
+        vm.Tecnicos = await CargarPersonasApoyoCuentaCargoV12Async("TECNICO", cn, null);
+        var smed = await CargarPersonasApoyoCuentaCargoV12Async("SMED", cn, null);
+        vm.SmedYTecnicos = smed.OrderBy(x => x.Nombre).ToList();
+        vm.Auxiliares = await CargarPersonasApoyoCuentaCargoV12Async("AUXILIAR", cn, null);
 
         foreach (var t in turnos)
         {
@@ -200,9 +210,9 @@ public sealed partial class ProduccionPersonalController
             var fuente = g?.Fuente ?? "SIN_CONFIGURAR";
             if (g == null && escalaId.HasValue)
             {
-                tec = await SugerirApoyoEscalaV2Async(escalaId.Value, t.TurnoID, "TECNICO", cn, null);
-                smedId = await SugerirApoyoEscalaV2Async(escalaId.Value, t.TurnoID, "SMED", cn, null);
-                aux = await SugerirApoyoEscalaV2Async(escalaId.Value, t.TurnoID, "AUXILIAR", cn, null);
+                tec = await SugerirApoyoCuentaCargoV12Async(escalaId.Value, t.TurnoID, "TECNICO", cn, null);
+                smedId = await SugerirApoyoCuentaCargoV12Async(escalaId.Value, t.TurnoID, "SMED", cn, null);
+                aux = await SugerirApoyoCuentaCargoV12Async(escalaId.Value, t.TurnoID, "AUXILIAR", cn, null);
                 if (tec.HasValue || smedId.HasValue || aux.HasValue) fuente = "ESCALA_RRHH";
             }
             vm.TurnosApoyo.Add(new ProduccionPersonalTurnoApoyoVm
@@ -441,6 +451,15 @@ WHERE a.Activo=1
             }
         }
 
+        // NSQ_PRODUCCION_PERSONAL_DISTRIBUCION_SYNC_V14_3
+        // Carga semanal y advertencias usan el mismo operador visible del planner.
+        await AplicarDistribucionPrincipalV143Async(
+            segmentos,
+            semana,
+            hasta,
+            cn,
+            tx);
+
         var resultado=new Dictionary<int,(decimal Horas,bool Conflicto)>();
         foreach(var grupo in segmentos.Where(x=>x.OperadorEfectivoID.HasValue).GroupBy(x=>x.OperadorEfectivoID!.Value))
         {
@@ -516,6 +535,24 @@ WHERE a.Activo=1
                 const string hist=@"INSERT dbo.Produccion_PersonalAsignacionHistorial(AsignacionPersonalID,ProgramaProduccionID,FechaTrabajo,TurnoID,TurnoNombre,Inicio,Fin,Rol,PersonaAnteriorID,PersonaNuevaID,Motivo,Justificacion,Origen,ProduccionActiva,UsuarioID,FechaMovimiento) VALUES(@Asign,@Programa,@Fecha,@TurnoID,@Turno,@Inicio,@Fin,N'OPERADOR',@Anterior,@Nuevo,@Motivo,@Justificacion,N'PRODUCCION_PERSONAL_V7',@Produccion,@Usuario,SYSDATETIME());";
                 await using var cmd=new SqlCommand(hist,cn,tx);cmd.Parameters.Add("@Asign",SqlDbType.Int).Value=(object?)asignId??DBNull.Value;cmd.Parameters.Add("@Programa",SqlDbType.Int).Value=p.ProgramaID;cmd.Parameters.Add("@Fecha",SqlDbType.Date).Value=vm.FechaTrabajo.Date;cmd.Parameters.Add("@TurnoID",SqlDbType.Int).Value=t.TurnoID;cmd.Parameters.Add("@Turno",SqlDbType.NVarChar,100).Value=t.Nombre;cmd.Parameters.Add("@Inicio",SqlDbType.DateTime2).Value=ini;cmd.Parameters.Add("@Fin",SqlDbType.DateTime2).Value=fin;cmd.Parameters.Add("@Anterior",SqlDbType.Int).Value=(object?)anterior??DBNull.Value;cmd.Parameters.Add("@Nuevo",SqlDbType.Int).Value=(object?)nuevo??DBNull.Value;cmd.Parameters.Add("@Motivo",SqlDbType.NVarChar,150).Value=string.IsNullOrWhiteSpace(motivo)?(tieneCruceAdvertido?"PROGRAMACION_CON_CRUCE":"PROGRAMACION"):motivo[..Math.Min(150,motivo.Length)];cmd.Parameters.Add("@Justificacion",SqlDbType.NVarChar,500).Value=string.IsNullOrWhiteSpace(just)?DBNull.Value:just[..Math.Min(500,just.Length)];cmd.Parameters.Add("@Produccion",SqlDbType.Bit).Value=produciendo;cmd.Parameters.Add("@Usuario",SqlDbType.Int).Value=uid;await cmd.ExecuteNonQueryAsync();
             }
+            // NSQ_PRODUCCION_PERSONAL_DISTRIBUCION_SYNC_V14_3
+            // Si se cambia el operador desde "Ver detalle por OF", se replica
+            // al registro canonico de maquina + turno para que ambos listados coincidan.
+            await SincronizarDistribucionDesdeDetalleOfV143Async(
+                vm.FechaTrabajo,
+                t.TurnoID,
+                p.MaquinaID,
+                p.ProgramaID,
+                p.ParteID,
+                nuevo,
+                ti,
+                tf,
+                motivo,
+                just,
+                uid,
+                cn,
+                tx);
+
             if(produciendo && DateTime.Now>=ini && DateTime.Now<fin && nuevo.HasValue)
             {
                 const string ex=@"UPDATE e SET OperadorID=@Operador,OperadorNombre=LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))),UsuarioModificacionID=@Usuario,FechaModificacion=SYSDATETIME() FROM dbo.Produccion_Ejecucion e INNER JOIN dbo.Persona p ON p.PersonaID=@Operador WHERE e.ProgramaProduccionID=@Programa AND e.Activo=1 AND e.EstatusID IN(3,4);";
@@ -737,7 +774,7 @@ WHERE a.Activo=1
     {
         if(!UsuarioEnSesion())return RedirectToAction("Login","Login"); var semana=InicioSemanaV2(vm.SemanaInicio);
         await using var cn=new SqlConnection(ConnectionString);await cn.OpenAsync();await using var tx=(SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-        try{var turnos=await CargarTurnosV2Async(cn,tx);foreach(var c in vm.Coberturas??new()){if(!turnos.Any(x=>x.TurnoID==c.TurnoID))continue;if(!c.TecnicoProduccionID.HasValue&&!c.SmedID.HasValue)throw new InvalidOperationException($"Turno {turnos.First(x=>x.TurnoID==c.TurnoID).Nombre}: debe existir al menos un Técnico o un SMED.");await ValidarPersonaApoyoV2Async(c.TecnicoProduccionID,"TECNICO",cn,tx);await ValidarPersonaApoyoV2Async(c.SmedID,"SMED_O_TECNICO",cn,tx);await ValidarPersonaApoyoV2Async(c.AuxiliarID,"AUXILIAR",cn,tx);await UpsertCoberturaV2Async(semana,c,UsuarioID(),cn,tx);}await tx.CommitAsync();TempData["Success"]="Cobertura semanal guardada. Se validó Técnico/SMED por turno.";}catch(Exception ex){try{await tx.RollbackAsync();}catch{}TempData["Error"]="No fue posible guardar cobertura: "+ex.Message;}
+        try{var turnos=await CargarTurnosV2Async(cn,tx);foreach(var c in vm.Coberturas??new()){if(!turnos.Any(x=>x.TurnoID==c.TurnoID))continue;if(!c.TecnicoProduccionID.HasValue&&!c.SmedID.HasValue)throw new InvalidOperationException($"Turno {turnos.First(x=>x.TurnoID==c.TurnoID).Nombre}: debe existir al menos un Técnico o un SMED.");await ValidarPersonaApoyoCuentaCargoV12Async(c.TecnicoProduccionID,"TECNICO",cn,tx);await ValidarPersonaApoyoCuentaCargoV12Async(c.SmedID,"SMED",cn,tx);await ValidarPersonaApoyoCuentaCargoV12Async(c.AuxiliarID,"AUXILIAR",cn,tx);await UpsertCoberturaV2Async(semana,c,UsuarioID(),cn,tx);}await tx.CommitAsync();TempData["Success"]="Cobertura semanal guardada. Se validó Técnico/SMED por turno.";}catch(Exception ex){try{await tx.RollbackAsync();}catch{}TempData["Error"]="No fue posible guardar cobertura: "+ex.Message;}
         var panelCobertura=Request.Form["Panel"].ToString();
         return RedirectToAction(nameof(Index),new{vista=vm.Vista,fechaDesde=(vm.FechaDesde??semana).ToString("yyyy-MM-dd"),fechaHasta=vm.FechaHasta?.ToString("yyyy-MM-dd"),panel=string.IsNullOrWhiteSpace(panelCobertura)?"support":panelCobertura});
     }

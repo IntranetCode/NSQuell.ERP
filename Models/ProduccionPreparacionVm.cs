@@ -963,6 +963,25 @@ namespace ERP.NSQuell.Models
         public string? ResolucionAclaracion { get; set; }
         public DateTime? FechaResolucion { get; set; }
 
+        // NSQ_PRODUCCION_RECEPCIONES_PENDIENTES_AGRUPADAS_V1_2
+        // Proyeccion operativa; no sustituye las recepciones fisicas.
+        public List<ProduccionRecepcionMaterialEntregaAgrupadaVm> EntregasAgrupadas { get; set; } = new();
+
+        public bool EsRecepcionAgrupada =>
+            EntregasAgrupadas.Count > 1;
+
+        public int CantidadEntregasAgrupadas =>
+            EntregasAgrupadas.Count > 0
+                ? EntregasAgrupadas.Count
+                : 1;
+
+        public string RecepcionMaterialIDsCsv =>
+            EntregasAgrupadas.Count > 0
+                ? string.Join(",", EntregasAgrupadas.Select(x => x.RecepcionMaterialID))
+                : RecepcionMaterialID.ToString();
+
+        public DateTime? FechaUltimaEntregaAlmacen { get; set; }
+
         public bool EsMateriaPrima =>
             string.Equals(
                 TipoOrigen,
@@ -1130,6 +1149,15 @@ namespace ERP.NSQuell.Models
                 return EstadoRecepcion;
             }
         }
+    }
+
+    public sealed class ProduccionRecepcionMaterialEntregaAgrupadaVm
+    {
+        public long RecepcionMaterialID { get; set; }
+        public decimal CantidadEntregadaAlmacen { get; set; }
+        public DateTime FechaEntregaAlmacen { get; set; }
+        public string? UsuarioEntregaAlmacenNombre { get; set; }
+        public string? ReferenciaOperacion { get; set; }
     }
 
     public sealed class ProduccionConfirmarRecepcionMaterialVm

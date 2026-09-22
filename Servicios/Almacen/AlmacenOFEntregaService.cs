@@ -316,6 +316,7 @@ SELECT CASE WHEN EXISTS
             : Convert.ToDecimal(reader.GetValue(ordinal));
     }
 
+    // NSQ_ALMACEN_OF_PARCIAL_ACEPTADO_REENTREGA_V1_1
     private const string SqlMateriaPrima = @"
 WITH Requerido AS
 (
@@ -340,6 +341,36 @@ WITH Requerido AS
     WHERE d.SolicitudProduccionID = @SolicitudID
       AND d.Activo = 1
     GROUP BY d.SolicitudProduccionID
+),
+RecepcionCanonica AS
+(
+    SELECT
+        COUNT_BIG(1) AS Registros,
+        CONVERT
+        (
+            DECIMAL(18,4),
+            ISNULL
+            (
+                SUM
+                (
+                    CASE
+                        WHEN r.EstadoRecepcion = N'PENDIENTE'
+                            THEN ISNULL(r.CantidadEntregadaAlmacen,0)
+                        WHEN r.EstadoRecepcion IN
+                             (N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL')
+                            THEN ISNULL(r.CantidadRecibidaProduccion,0)
+                        ELSE 0
+                    END
+                ),
+                0
+            )
+        ) AS Comprometido
+    FROM dbo.Produccion_RecepcionMateriales r
+        WITH (UPDLOCK,HOLDLOCK)
+    WHERE r.Activo=1
+      AND r.SolicitudProduccionID=@SolicitudID
+      AND r.TipoOrigen=N'MP'
+      AND r.MaterialSolicitadoID=@CatalogoID
 )
 SELECT
     s.SolicitudProduccionID,
@@ -359,62 +390,67 @@ SELECT
     CONVERT
     (
         DECIMAL(18,4),
-        ISNULL
-        (
-            (
-                SELECT SUM
+        CASE
+            WHEN recepcion.Registros > 0
+                THEN recepcion.Comprometido
+            ELSE
+                ISNULL
                 (
-                    CASE
-                        WHEN movimiento.TipoMovimiento IN
-                             (N'Salida', N'Consumo')
-                            THEN movimiento.Cantidad
-                        WHEN movimiento.TipoMovimiento = N'Retorno'
-                            THEN -movimiento.Cantidad
-                        ELSE 0
-                    END
-                )
-                FROM dbo.AlmacenMP_Movimientos movimiento
-                    WITH (UPDLOCK, HOLDLOCK)
-                WHERE movimiento.Activo = 1
-                  AND COALESCE
-                      (
-                          movimiento.MaterialSolicitadoID,
-                          movimiento.MaterialID
-                      ) = catalogo.MaterialID
-                  AND
-                  (
-                      movimiento.SolicitudProduccionID =
-                          s.SolicitudProduccionID
-                      OR
-                      (
-                          movimiento.SolicitudProduccionID IS NULL
+                    (
+                        SELECT SUM
+                        (
+                            CASE
+                                WHEN movimiento.TipoMovimiento IN
+                                     (N'Salida', N'Consumo')
+                                    THEN movimiento.Cantidad
+                                WHEN movimiento.TipoMovimiento = N'Retorno'
+                                    THEN -movimiento.Cantidad
+                                ELSE 0
+                            END
+                        )
+                        FROM dbo.AlmacenMP_Movimientos movimiento
+                            WITH (UPDLOCK, HOLDLOCK)
+                        WHERE movimiento.Activo = 1
+                          AND COALESCE
+                              (
+                                  movimiento.MaterialSolicitadoID,
+                                  movimiento.MaterialID
+                              ) = catalogo.MaterialID
                           AND
                           (
-                              (
-                                  NULLIF
-                                  (
-                                      LTRIM(RTRIM(s.FolioSolicitud)),
-                                      ''
-                                  ) IS NOT NULL
-                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                                      LTRIM(RTRIM(s.FolioSolicitud))
-                              )
+                              movimiento.SolicitudProduccionID =
+                                  s.SolicitudProduccionID
                               OR
                               (
-                                  NULLIF
+                                  movimiento.SolicitudProduccionID IS NULL
+                                  AND
                                   (
-                                      LTRIM(RTRIM(s.NumeroOFRecibida)),
-                                      ''
-                                  ) IS NOT NULL
-                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                                      LTRIM(RTRIM(s.NumeroOFRecibida))
+                                      (
+                                          NULLIF
+                                          (
+                                              LTRIM(RTRIM(s.FolioSolicitud)),
+                                              ''
+                                          ) IS NOT NULL
+                                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                              LTRIM(RTRIM(s.FolioSolicitud))
+                                      )
+                                      OR
+                                      (
+                                          NULLIF
+                                          (
+                                              LTRIM(RTRIM(s.NumeroOFRecibida)),
+                                              ''
+                                          ) IS NOT NULL
+                                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                              LTRIM(RTRIM(s.NumeroOFRecibida))
+                                      )
+                                  )
                               )
                           )
-                      )
-                  )
-            ),
-            0
-        )
+                    ),
+                    0
+                )
+        END
     ) AS Entregado
 FROM dbo.SolicitudesProduccion s
     WITH (UPDLOCK, HOLDLOCK)
@@ -425,6 +461,7 @@ INNER JOIN dbo.ERP_Materiales catalogo
     WITH (UPDLOCK, HOLDLOCK)
     ON catalogo.MaterialID = @CatalogoID
    AND catalogo.Activo = 1
+CROSS JOIN RecepcionCanonica recepcion
 WHERE s.SolicitudProduccionID = @SolicitudID
   AND s.Activo = 1
   AND ISNULL(s.EstatusID,1) <> 99
@@ -434,7 +471,7 @@ WHERE s.SolicitudProduccionID = @SolicitudID
           NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
           NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
       ) LIKE N'OF-%/%';";
-
+    // NSQ_ALMACEN_OF_PARCIAL_ACEPTADO_REENTREGA_V1_1
     private const string SqlEmbalaje = @"
 WITH Requerido AS
 (
@@ -459,6 +496,36 @@ WITH Requerido AS
     WHERE d.SolicitudProduccionID = @SolicitudID
       AND d.Activo = 1
     GROUP BY d.SolicitudProduccionID
+),
+RecepcionCanonica AS
+(
+    SELECT
+        COUNT_BIG(1) AS Registros,
+        CONVERT
+        (
+            DECIMAL(18,4),
+            ISNULL
+            (
+                SUM
+                (
+                    CASE
+                        WHEN r.EstadoRecepcion = N'PENDIENTE'
+                            THEN ISNULL(r.CantidadEntregadaAlmacen,0)
+                        WHEN r.EstadoRecepcion IN
+                             (N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL')
+                            THEN ISNULL(r.CantidadRecibidaProduccion,0)
+                        ELSE 0
+                    END
+                ),
+                0
+            )
+        ) AS Comprometido
+    FROM dbo.Produccion_RecepcionMateriales r
+        WITH (UPDLOCK,HOLDLOCK)
+    WHERE r.Activo=1
+      AND r.SolicitudProduccionID=@SolicitudID
+      AND r.TipoOrigen=N'EMBALAJE'
+      AND r.EmbalajeSolicitadoID=@CatalogoID
 )
 SELECT
     s.SolicitudProduccionID,
@@ -478,62 +545,67 @@ SELECT
     CONVERT
     (
         DECIMAL(18,4),
-        ISNULL
-        (
-            (
-                SELECT SUM
+        CASE
+            WHEN recepcion.Registros > 0
+                THEN recepcion.Comprometido
+            ELSE
+                ISNULL
                 (
-                    CASE
-                        WHEN movimiento.TipoMovimiento IN
-                             (N'Salida', N'Consumo')
-                            THEN movimiento.Cantidad
-                        WHEN movimiento.TipoMovimiento = N'Retorno'
-                            THEN -movimiento.Cantidad
-                        ELSE 0
-                    END
-                )
-                FROM dbo.AlmacenEmbalajes_Movimientos movimiento
-                    WITH (UPDLOCK, HOLDLOCK)
-                WHERE movimiento.Activo = 1
-                  AND COALESCE
-                      (
-                          movimiento.EmbalajeSolicitadoID,
-                          movimiento.EmbalajeID
-                      ) = catalogo.EmbalajeID
-                  AND
-                  (
-                      movimiento.SolicitudProduccionID =
-                          s.SolicitudProduccionID
-                      OR
-                      (
-                          movimiento.SolicitudProduccionID IS NULL
+                    (
+                        SELECT SUM
+                        (
+                            CASE
+                                WHEN movimiento.TipoMovimiento IN
+                                     (N'Salida', N'Consumo')
+                                    THEN movimiento.Cantidad
+                                WHEN movimiento.TipoMovimiento = N'Retorno'
+                                    THEN -movimiento.Cantidad
+                                ELSE 0
+                            END
+                        )
+                        FROM dbo.AlmacenEmbalajes_Movimientos movimiento
+                            WITH (UPDLOCK, HOLDLOCK)
+                        WHERE movimiento.Activo = 1
+                          AND COALESCE
+                              (
+                                  movimiento.EmbalajeSolicitadoID,
+                                  movimiento.EmbalajeID
+                              ) = catalogo.EmbalajeID
                           AND
                           (
-                              (
-                                  NULLIF
-                                  (
-                                      LTRIM(RTRIM(s.FolioSolicitud)),
-                                      ''
-                                  ) IS NOT NULL
-                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                                      LTRIM(RTRIM(s.FolioSolicitud))
-                              )
+                              movimiento.SolicitudProduccionID =
+                                  s.SolicitudProduccionID
                               OR
                               (
-                                  NULLIF
+                                  movimiento.SolicitudProduccionID IS NULL
+                                  AND
                                   (
-                                      LTRIM(RTRIM(s.NumeroOFRecibida)),
-                                      ''
-                                  ) IS NOT NULL
-                                  AND LTRIM(RTRIM(movimiento.NumeroOF)) =
-                                      LTRIM(RTRIM(s.NumeroOFRecibida))
+                                      (
+                                          NULLIF
+                                          (
+                                              LTRIM(RTRIM(s.FolioSolicitud)),
+                                              ''
+                                          ) IS NOT NULL
+                                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                              LTRIM(RTRIM(s.FolioSolicitud))
+                                      )
+                                      OR
+                                      (
+                                          NULLIF
+                                          (
+                                              LTRIM(RTRIM(s.NumeroOFRecibida)),
+                                              ''
+                                          ) IS NOT NULL
+                                          AND LTRIM(RTRIM(movimiento.NumeroOF)) =
+                                              LTRIM(RTRIM(s.NumeroOFRecibida))
+                                      )
+                                  )
                               )
                           )
-                      )
-                  )
-            ),
-            0
-        )
+                    ),
+                    0
+                )
+        END
     ) AS Entregado
 FROM dbo.SolicitudesProduccion s
     WITH (UPDLOCK, HOLDLOCK)
@@ -544,6 +616,7 @@ INNER JOIN dbo.ERP_Embalajes catalogo
     WITH (UPDLOCK, HOLDLOCK)
     ON catalogo.EmbalajeID = @CatalogoID
    AND catalogo.Activo = 1
+CROSS JOIN RecepcionCanonica recepcion
 WHERE s.SolicitudProduccionID = @SolicitudID
   AND s.Activo = 1
   AND ISNULL(s.EstatusID,1) <> 99
@@ -553,7 +626,6 @@ WHERE s.SolicitudProduccionID = @SolicitudID
           NULLIF(LTRIM(RTRIM(s.NumeroOFRecibida)),N''),
           NULLIF(LTRIM(RTRIM(s.FolioSolicitud)),N'')
       ) LIKE N'OF-%/%';";
-
     private const string SqlProductoTerminado = @"
 WITH Requerido AS
 (

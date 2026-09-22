@@ -189,6 +189,12 @@ public sealed class AlmacenOFEntregableVm
     public decimal EntregadoFisico { get; set; }
     public decimal EnValidacionProduccion { get; set; }
 
+    // NSQ_ALMACEN_OF_PARCIAL_ACEPTADO_REENTREGA_V1_1
+    // Indica que ya existe el flujo canonico Almacen -> Produccion
+    // para este articulo de la OF. Si no existe, se conserva el
+    // comportamiento legacy basado en movimientos fisicos.
+    public bool TieneRecepcionCanonica { get; set; }
+
     public long? DevolucionMaterialID { get; set; }
     public decimal? CantidadDevuelta { get; set; }
     public string? MotivoDevolucion { get; set; }
@@ -207,6 +213,26 @@ public sealed class AlmacenOFEntregableVm
     public bool RequiereInventarioDisponible { get; set; }
 
     public decimal Pendiente => Math.Max(0m, Requerido - Entregado);
+
+    // NSQ_ALMACEN_OF_ENTREGA_PARCIAL_VALIDACION_V1_0
+    // NSQ_ALMACEN_OF_PARCIAL_ACEPTADO_REENTREGA_V1_1
+    //
+    // Para el flujo canonico, una OF queda comprometida por:
+    //   - lo ya aceptado por Produccion; mas
+    //   - lo que sigue pendiente de validacion.
+    //
+    // Una diferencia de una recepcion RECIBIDO_PARCIAL ya no cuenta
+    // como comprometida y puede reponerse con una nueva entrega.
+    //
+    // Para registros legacy sin Produccion_RecepcionMateriales,
+    // se conserva el neto fisico de movimientos como fallback.
+    public decimal ComprometidoEntregaAlmacen =>
+        TieneRecepcionCanonica
+            ? Math.Max(0m, Entregado) + Math.Max(0m, EnValidacionProduccion)
+            : Math.Max(0m, EntregadoFisico);
+
+    public decimal PendienteEntregaAlmacen =>
+        Math.Max(0m, Requerido - ComprometidoEntregaAlmacen);
 
 
     public int Porcentaje
@@ -255,7 +281,6 @@ public sealed class AlmacenOFEntregableVm
 
     public bool PuedeEntregar =>
         CatalogoID > 0
-        && Pendiente > 0
-        && EnValidacionProduccion <= 0.0005m
+        && PendienteEntregaAlmacen > 0.0005m
         && (!RequiereInventarioDisponible || DisponibleInventario > 0);
 }
