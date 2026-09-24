@@ -90,6 +90,7 @@
     <link rel="stylesheet" href="~/css/ProduccionPersonal/semanal.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ProduccionPersonal/v7.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/ProduccionPersonal/operator-focus-v12.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ProduccionPersonal/distribucion-v13.css" asp-append-version="true" />
 }
 
 <div class="ppv3-page" id="ppv3Root">
@@ -725,7 +726,7 @@
 
                 <span class="ppv3-rule-note">
                     <i class="fa-solid fa-circle-info"></i>
-                    SMED acepta personal SMED o Técnico.
+                    SMED muestra únicamente personal con cargo SMED.
                 </span>
             </div>
         </div>
@@ -787,7 +788,7 @@
             </div>
             <div class="ppv3-savebar ppv7-support-savebar">
                 <div><strong>Semana @Model.NumeroSemana · @Model.SemanaInicio.ToString("dd/MM") — @Model.SemanaInicio.AddDays(6).ToString("dd/MM/yyyy")</strong><span>Técnico, SMED y Auxiliar cubren semanalmente el turno seleccionado.</span></div>
-                <button class="btn btn-primary fw-bold"><i class="fa-solid fa-floppy-disk"></i> Guardar cobertura semanal</button>
+                <div class="ppv13-autosave-badge"><i class="fa-solid fa-cloud-arrow-up"></i><span>Guardado automático</span></div>
             </div>
         </form>
         }
@@ -1023,11 +1024,10 @@
                                 </span>
                             </div>
 
-                            <button class="btn btn-primary fw-bold"
-                                    disabled="@(!Model.CoberturaDiaV10Configurada ? "disabled" : null)">
-                                <i class="fa-solid fa-floppy-disk"></i>
-                                Guardar cobertura del día
-                            </button>
+                            <div class="ppv13-autosave-badge">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                                <span>Guardado automático</span>
+                            </div>
                         </div>
                     </form>
 
@@ -1044,9 +1044,9 @@
                                    value="@periodoDiaV10.FechaClave.ToString("yyyy-MM-dd")" />
 
                             <button type="submit"
-                                    class="btn btn-sm btn-outline-secondary fw-bold">
+                                    class="btn ppv13-reset-week-btn fw-bold">
                                 <i class="fa-solid fa-rotate-left"></i>
-                                Usar nuevamente la cobertura semanal
+                                Restablecer cobertura semanal
                             </button>
                         </form>
                     }
@@ -1299,10 +1299,10 @@
                                         </span>
                                     </div>
 
-                                    <button class="btn btn-primary fw-bold">
-                                        <i class="fa-solid fa-floppy-disk"></i>
-                                        Guardar semana @periodoV10.NumeroSemana
-                                    </button>
+                                    <div class="ppv13-autosave-badge">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                                        <span>Guardado automático</span>
+                                    </div>
                                 </div>
                             </form>
                         </details>
@@ -1915,6 +1915,8 @@
 </div>
 
 @section Scripts {
+<script src="~/js/ProduccionPersonal/support-v12.js" asp-append-version="true"></script>
+<script src="~/js/ProduccionPersonal/distribucion-v13.js" asp-append-version="true"></script>
 <script>
 (() => {
     const root = document.getElementById('ppv3Root');

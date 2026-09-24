@@ -291,13 +291,29 @@ ORDER BY po.ProgramaOperadorID DESC;";
         // operativa justificada desde Calendario.
         if (!string.Equals(fuente,"EXCEPCION",StringComparison.OrdinalIgnoreCase))
         {
-            var especificoV7 = await ObtenerOperadorProgramadoTurnoV7Async(
-                programaId, objetivo, cn, tx);
-            if (especificoV7.HasValue)
+            // NSQ_PRODUCCION_DISTRIBUCION_OPERADOR_V13
+            // La distribucion maquina/turno es la fuente principal de Programacion
+            // de Personal. Las excepciones operativas justificadas conservan prioridad.
+            var distribuidoV13 = await ObtenerOperadorDistribucionV13Async(
+                programaId, objetivo, alterno, cn, tx);
+
+            if (distribuidoV13.HasValue)
             {
-                operadorId = especificoV7.Value.Id;
-                operadorNombre = especificoV7.Value.Nombre;
-                fuente = "PROGRAMA_TURNO_V7";
+                operadorId = distribuidoV13.Value.Id;
+                operadorNombre = distribuidoV13.Value.Nombre;
+                fuente = "DISTRIBUCION_MAQUINA_V13";
+            }
+            else
+            {
+                var especificoV7 = await ObtenerOperadorProgramadoTurnoV7Async(
+                    programaId, objetivo, cn, tx);
+
+                if (especificoV7.HasValue)
+                {
+                    operadorId = especificoV7.Value.Id;
+                    operadorNombre = especificoV7.Value.Nombre;
+                    fuente = "PROGRAMA_TURNO_V7";
+                }
             }
         }
 

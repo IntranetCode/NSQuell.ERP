@@ -672,6 +672,8 @@
 </div>
 
 @section Scripts {
+<script src="~/js/ProduccionPersonal/support-v12.js"
+        asp-append-version="true"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const programs = @Html.Raw(JsonSerializer.Serialize(plannerData));

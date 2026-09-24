@@ -180,7 +180,7 @@ SELECT CONVERT(bit,
                 escala != null)
             {
                 tecnico =
-                    await SugerirApoyoEscalaV2Async(
+                    await SugerirApoyoCuentaCargoV12Async(
                         escala.EscalaID,
                         t.TurnoID,
                         "TECNICO",
@@ -188,7 +188,7 @@ SELECT CONVERT(bit,
                         null);
 
                 smed =
-                    await SugerirApoyoEscalaV2Async(
+                    await SugerirApoyoCuentaCargoV12Async(
                         escala.EscalaID,
                         t.TurnoID,
                         "SMED",
@@ -196,7 +196,7 @@ SELECT CONVERT(bit,
                         null);
 
                 auxiliar =
-                    await SugerirApoyoEscalaV2Async(
+                    await SugerirApoyoCuentaCargoV12Async(
                         escala.EscalaID,
                         t.TurnoID,
                         "AUXILIAR",
@@ -333,7 +333,7 @@ SELECT CONVERT(bit,
                 escala != null)
             {
                 tecnico =
-                    await SugerirApoyoEscalaV2Async(
+                    await SugerirApoyoCuentaCargoV12Async(
                         escala.EscalaID,
                         t.TurnoID,
                         "TECNICO",
@@ -341,7 +341,7 @@ SELECT CONVERT(bit,
                         null);
 
                 smed =
-                    await SugerirApoyoEscalaV2Async(
+                    await SugerirApoyoCuentaCargoV12Async(
                         escala.EscalaID,
                         t.TurnoID,
                         "SMED",
@@ -349,7 +349,7 @@ SELECT CONVERT(bit,
                         null);
 
                 auxiliar =
-                    await SugerirApoyoEscalaV2Async(
+                    await SugerirApoyoCuentaCargoV12Async(
                         escala.EscalaID,
                         t.TurnoID,
                         "AUXILIAR",
@@ -742,19 +742,19 @@ END;";
                         $"Turno {turno.Nombre}: debe existir al menos un Técnico o un SMED.");
                 }
 
-                await ValidarPersonaApoyoV2Async(
+                await ValidarPersonaApoyoCuentaCargoV12Async(
                     c.TecnicoProduccionID,
                     "TECNICO",
                     cn,
                     tx);
 
-                await ValidarPersonaApoyoV2Async(
+                await ValidarPersonaApoyoCuentaCargoV12Async(
                     c.SmedID,
-                    "SMED_O_TECNICO",
+                    "SMED",
                     cn,
                     tx);
 
-                await ValidarPersonaApoyoV2Async(
+                await ValidarPersonaApoyoCuentaCargoV12Async(
                     c.AuxiliarID,
                     "AUXILIAR",
                     cn,

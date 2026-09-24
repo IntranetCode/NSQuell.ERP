@@ -858,12 +858,15 @@ WHERE rn=1;";
 
                 if (aceptacion.TryGetValue(key, out var a))
                 {
+                    // NSQ_ALMACEN_OF_PARCIAL_ACEPTADO_REENTREGA_V1_1
+                    item.TieneRecepcionCanonica = true;
                     item.Entregado = Math.Max(0m, a.Aceptado);
                     item.EnValidacionProduccion =
                         Math.Max(0m, a.EnValidacion);
                 }
                 else
                 {
+                    item.TieneRecepcionCanonica = false;
                     item.Entregado = 0m;
                     item.EnValidacionProduccion = 0m;
                 }
@@ -892,12 +895,15 @@ WHERE rn=1;";
 
                 if (aceptacion.TryGetValue(key, out var a))
                 {
+                    // NSQ_ALMACEN_OF_PARCIAL_ACEPTADO_REENTREGA_V1_1
+                    item.TieneRecepcionCanonica = true;
                     item.Entregado = Math.Max(0m, a.Aceptado);
                     item.EnValidacionProduccion =
                         Math.Max(0m, a.EnValidacion);
                 }
                 else
                 {
+                    item.TieneRecepcionCanonica = false;
                     item.Entregado = 0m;
                     item.EnValidacionProduccion = 0m;
                 }
@@ -1256,7 +1262,11 @@ ORDER BY
                 Descripcion = Texto(reader, "Descripcion"),
                 Unidad = Texto(reader, "Unidad"),
                 Requerido = DecimalValor(reader, "Requerido"),
-                Entregado = DecimalValor(reader, "Entregado")
+                Entregado = DecimalValor(reader, "Entregado"),
+                // NSQ_ALMACEN_OF_ENTREGA_PARCIAL_VALIDACION_V1_0
+                // Se conserva siempre el neto fisico de Almacen. Para MP/Embalaje,
+                // posteriormente "Entregado" se sustituye por lo aceptado por Produccion.
+                EntregadoFisico = DecimalValor(reader, "Entregado")
             };
 
             if (tipo == "MP")

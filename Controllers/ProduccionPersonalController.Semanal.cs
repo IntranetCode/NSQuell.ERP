@@ -112,10 +112,10 @@ public sealed partial class ProduccionPersonalController
             ? await CargarCoberturasV2Async(semana, cn, null)
             : new List<CoberturaV2>();
 
-        vm.Tecnicos = await CargarPersonasApoyoV2Async("TECNICO", cn, null);
-        var smed = await CargarPersonasApoyoV2Async("SMED", cn, null);
-        vm.SmedYTecnicos = UnirPersonasV2(smed, vm.Tecnicos, "SMED / TECNICO");
-        vm.Auxiliares = await CargarPersonasApoyoV2Async("AUXILIAR", cn, null);
+        vm.Tecnicos = await CargarPersonasApoyoCuentaCargoV12Async("TECNICO", cn, null);
+        var smed = await CargarPersonasApoyoCuentaCargoV12Async("SMED", cn, null);
+        vm.SmedYTecnicos = smed.OrderBy(x => x.Nombre).ToList();
+        vm.Auxiliares = await CargarPersonasApoyoCuentaCargoV12Async("AUXILIAR", cn, null);
 
         foreach (var turno in turnos)
         {
@@ -128,11 +128,11 @@ public sealed partial class ProduccionPersonalController
 
             if (guardada == null && escala != null)
             {
-                tecnico = await SugerirApoyoEscalaV2Async(
+                tecnico = await SugerirApoyoCuentaCargoV12Async(
                     escala.EscalaID, turno.TurnoID, "TECNICO", cn, null);
-                smedId = await SugerirApoyoEscalaV2Async(
+                smedId = await SugerirApoyoCuentaCargoV12Async(
                     escala.EscalaID, turno.TurnoID, "SMED", cn, null);
-                auxiliar = await SugerirApoyoEscalaV2Async(
+                auxiliar = await SugerirApoyoCuentaCargoV12Async(
                     escala.EscalaID, turno.TurnoID, "AUXILIAR", cn, null);
 
                 if (tecnico.HasValue || smedId.HasValue || auxiliar.HasValue)
@@ -322,11 +322,11 @@ public sealed partial class ProduccionPersonalController
                 if (!turnos.Any(x => x.TurnoID == cobertura.TurnoID))
                     continue;
 
-                await ValidarPersonaApoyoV2Async(
+                await ValidarPersonaApoyoCuentaCargoV12Async(
                     cobertura.TecnicoProduccionID, "TECNICO", cn, tx);
-                await ValidarPersonaApoyoV2Async(
-                    cobertura.SmedID, "SMED_O_TECNICO", cn, tx);
-                await ValidarPersonaApoyoV2Async(
+                await ValidarPersonaApoyoCuentaCargoV12Async(
+                    cobertura.SmedID, "SMED", cn, tx);
+                await ValidarPersonaApoyoCuentaCargoV12Async(
                     cobertura.AuxiliarID, "AUXILIAR", cn, tx);
 
                 await UpsertCoberturaV2Async(

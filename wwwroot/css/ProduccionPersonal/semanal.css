@@ -194,3 +194,34 @@ html[data-nsq-theme="dark"] .ppv3-support-cell.unassigned > span{
 html[data-nsq-theme="dark"] .ppv3-support-cell > small.ppv3-support-status{
     color:#a8b3c4;
 }
+
+/* NSQ_PRODUCCION_PERSONAL_SUPPORT_V12_0_START */
+
+.ppv12-support-inline{
+    width:100%;
+    min-width:210px;
+    min-height:42px;
+    border:1px solid #c9d9ee;
+    border-radius:10px;
+    background:#fff;
+    color:#14233b;
+    font-weight:700;
+}
+
+.ppv12-support-inline:focus{
+    border-color:#1f6fd6;
+    box-shadow:0 0 0 .18rem rgba(31,111,214,.14);
+}
+
+.ppv12-support-inline.ppv12-saving,
+#ppv3SupportApply.ppv12-saving{
+    opacity:.62;
+    cursor:wait;
+}
+
+.ppv12-justification-group textarea{
+    min-height:86px;
+    resize:vertical;
+}
+
+/* NSQ_PRODUCCION_PERSONAL_SUPPORT_V12_0_END */

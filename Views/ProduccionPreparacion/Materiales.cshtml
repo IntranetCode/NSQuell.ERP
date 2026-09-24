@@ -1379,9 +1379,9 @@
                                             @if (Model.PuedeGestionarMateriales)
                                             {
                                                 <div class="actions">
-                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionMaterial" method="post" class="js-submit-form">
+                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionesMaterial" method="post" class="js-submit-form">
                                                         @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="RecepcionMaterialID" value="@item.RecepcionMaterialID" />
+                                                        <input type="hidden" name="RecepcionMaterialIDs" value="@item.RecepcionMaterialIDsCsv" />
                                                         <input type="hidden" name="Decision" value="@ProduccionRecepcionMaterialDecision.Completo" />
                                                         <button class="btnx btnx-success" type="submit">
                                                             <i class="bi bi-check2-circle"></i> Sí, recibí completo
@@ -1393,22 +1393,77 @@
                                                     <button class="btnx btnx-danger js-toggle-panel" type="button" data-target="@panelNoRecibido">
                                                         <i class="bi bi-x-circle"></i> No recibí
                                                     </button>
-                                                    <button class="btnx btnx-return js-return-open"
-                                                            type="button"
-                                                            data-recepcion-id="@item.RecepcionMaterialID"
-                                                            data-label="@item.TextoEntregado"
-                                                            data-max="@item.CantidadEntregadaAlmacen.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                                            data-unit="@item.Unidad"
-                                                            data-step="0.001"
-                                                            data-tipo="@(item.EsMateriaPrima ? "MP" : "EMBALAJE")">
-                                                        <i class="bi bi-arrow-return-left"></i> Devolver
-                                                    </button>
+                                                    @* NSQ_PRODUCCION_RECEPCIONES_AGRUPADAS_DEVOLVER_TODO_V1_3 *@
+                                                    @if (item.EsRecepcionAgrupada)
+                                                    {
+                                                        <button class="btnx btnx-return js-return-open"
+                                                                type="button"
+                                                                data-recepcion-ids="@item.RecepcionMaterialIDsCsv"
+                                                                data-label="@item.TextoEntregado"
+                                                                data-max="@item.CantidadEntregadaAlmacen.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                                data-unit="@item.Unidad"
+                                                                data-step="0.001"
+                                                                data-tipo="@(item.EsMateriaPrima ? "MP" : "EMBALAJE")"
+                                                                data-return-all="true">
+                                                            <i class="bi bi-arrow-return-left"></i> Devolver todo
+                                                        </button>
+                                                    }
+
+                                                    @if (!item.EsRecepcionAgrupada)
+                                                    {
+                                                        <button class="btnx btnx-return js-return-open"
+                                                                type="button"
+                                                                data-recepcion-id="@item.RecepcionMaterialID"
+                                                                data-label="@item.TextoEntregado"
+                                                                data-max="@item.CantidadEntregadaAlmacen.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                                data-unit="@item.Unidad"
+                                                                data-step="0.001"
+                                                                data-tipo="@(item.EsMateriaPrima ? "MP" : "EMBALAJE")">
+                                                            <i class="bi bi-arrow-return-left"></i> Devolver
+                                                        </button>
+                                                    }
                                                 </div>
 
+                                                @if (item.EsRecepcionAgrupada)
+                                                {
+                                                    <details style="margin-top:10px;border:1px solid var(--mat-line);border-radius:10px;padding:8px 10px;">
+                                                        <summary style="cursor:pointer;font-weight:700;color:var(--mat-muted);">
+                                                            <i class="bi bi-layers me-1"></i>
+                                                            @item.CantidadEntregasAgrupadas entregas fisicas acumuladas
+                                                        </summary>
+
+                                                        <div style="display:grid;gap:8px;margin-top:10px;">
+                                                            @foreach (var entrega in item.EntregasAgrupadas.OrderBy(x => x.FechaEntregaAlmacen))
+                                                            {
+                                                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--mat-line);border-radius:9px;">
+                                                                    <div>
+                                                                        <strong>@Cantidad(entrega.CantidadEntregadaAlmacen) @item.Unidad</strong>
+                                                                        <div class="warehouse-meta">
+                                                                            <span>@(string.IsNullOrWhiteSpace(entrega.UsuarioEntregaAlmacenNombre) ? "Almacen" : entrega.UsuarioEntregaAlmacenNombre)</span>
+                                                                            <span>@Fecha(entrega.FechaEntregaAlmacen)</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <button class="btnx btnx-return js-return-open"
+                                                                            type="button"
+                                                                            data-recepcion-id="@entrega.RecepcionMaterialID"
+                                                                            data-label="@item.TextoEntregado"
+                                                                            data-max="@entrega.CantidadEntregadaAlmacen.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                                            data-unit="@item.Unidad"
+                                                                            data-step="0.001"
+                                                                            data-tipo="@(item.EsMateriaPrima ? "MP" : "EMBALAJE")">
+                                                                        <i class="bi bi-arrow-return-left"></i> Devolver esta entrega
+                                                                    </button>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </details>
+                                                }
+
                                                 <div class="decision-panel" id="@panelParcial">
-                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionMaterial" method="post" class="decision-grid js-submit-form">
+                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionesMaterial" method="post" class="decision-grid js-submit-form">
                                                         @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="RecepcionMaterialID" value="@item.RecepcionMaterialID" />
+                                                        <input type="hidden" name="RecepcionMaterialIDs" value="@item.RecepcionMaterialIDsCsv" />
                                                         <input type="hidden" name="Decision" value="@ProduccionRecepcionMaterialDecision.Parcial" />
                                                         <div class="field">
                                                             <label>Cantidad recibida</label>
@@ -1423,9 +1478,9 @@
                                                 </div>
 
                                                 <div class="decision-panel" id="@panelNoRecibido">
-                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionMaterial" method="post" class="decision-grid no-quantity js-submit-form">
+                                                    <form asp-controller="ProduccionPreparacion" asp-action="ConfirmarRecepcionesMaterial" method="post" class="decision-grid no-quantity js-submit-form">
                                                         @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="RecepcionMaterialID" value="@item.RecepcionMaterialID" />
+                                                        <input type="hidden" name="RecepcionMaterialIDs" value="@item.RecepcionMaterialIDsCsv" />
                                                         <input type="hidden" name="Decision" value="@ProduccionRecepcionMaterialDecision.NoRecibido" />
                                                         <div class="field">
                                                             <label>Motivo</label>
@@ -1718,12 +1773,18 @@
               method="post"
               enctype="multipart/form-data"
               class="return-modal-body js-submit-form"
-              id="materialReturnForm">
+              id="materialReturnForm"
+              data-single-action="@Url.Action("DevolverMaterial", "ProduccionPreparacion")"
+              data-group-action="@Url.Action("DevolverRecepcionesMaterial", "ProduccionPreparacion")">
             @Html.AntiForgeryToken()
 
             <input type="hidden"
                    id="returnRecepcionId"
                    name="RecepcionMaterialID" />
+
+            <input type="hidden"
+                   id="returnRecepcionIds"
+                   name="RecepcionMaterialIDs" />
 
             <div class="return-context" id="returnContext">
                 Entrega seleccionada
@@ -1846,6 +1907,7 @@
         const returnModal = document.getElementById('materialReturnModal');
         const returnForm = document.getElementById('materialReturnForm');
         const returnId = document.getElementById('returnRecepcionId');
+        const returnIds = document.getElementById('returnRecepcionIds');
         const returnQty = document.getElementById('returnCantidad');
         const returnContext = document.getElementById('returnContext');
         const returnMotivo = document.getElementById('returnMotivo');
@@ -1924,20 +1986,38 @@
                 if (!returnModal || !returnId || !returnQty || !returnContext) return;
 
                 const id = button.dataset.recepcionId || '';
+                const ids = button.dataset.recepcionIds || '';
                 const label = button.dataset.label || 'Material';
                 const max = button.dataset.max || '';
                 const unit = button.dataset.unit || '';
                 const step = button.dataset.step || '0.001';
                 const tipo = button.dataset.tipo || '';
+                const returnAll = button.dataset.returnAll === 'true' && ids !== '';
 
-                returnId.value = id;
+                returnId.value = returnAll ? '' : id;
+
+                if (returnIds) {
+                    returnIds.value = returnAll ? ids : '';
+                }
+
+                if (returnForm) {
+                    const action = returnAll
+                        ? returnForm.dataset.groupAction
+                        : returnForm.dataset.singleAction;
+
+                    if (action) returnForm.action = action;
+                }
+
                 returnQty.value = max;
                 returnQty.max = max;
                 returnQty.step = step;
                 returnQty.min = step;
+                returnQty.readOnly = returnAll;
 
                 returnContext.textContent =
-                    label + ' · máximo a devolver: ' + max + ' ' + unit;
+                    returnAll
+                        ? label + ' · devolver TODO el grupo: ' + max + ' ' + unit
+                        : label + ' · máximo a devolver: ' + max + ' ' + unit;
 
                 loadReturnReasons(tipo);
 

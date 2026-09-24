@@ -947,6 +947,23 @@ WHERE ParteID = @ParteID
             return true;
         }
 
+        // NSQ_LHRH_PSDB4_579744488_489_V1_1
+        // Spring Locator PSDB4 y Bearing Fix PSDB4 son una pareja fisica
+        // equivalente a LH/RH aunque sus designaciones no lo indiquen.
+        if (numeroNormalizado == "579744488")
+        {
+            baseKey = "PSDB4579744488579744489";
+            lado = "LH";
+            return true;
+        }
+
+        if (numeroNormalizado == "579744489")
+        {
+            baseKey = "PSDB4579744488579744489";
+            lado = "RH";
+            return true;
+        }
+
         return TrySepararLhRh(
             value,
             out baseKey,

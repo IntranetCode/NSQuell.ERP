@@ -30,6 +30,11 @@ namespace ERP.NSQuell.Controllers
             var relacionesLhRh = await CargarRelacionesMaterialesLhRhAsync(cn);
             AplicarRelacionesLhRhMaterialesEsperados(materialesEsperados, relacionesLhRh);
             AplicarRelacionesLhRhRecepciones(recepciones, relacionesLhRh);
+
+            // NSQ_PRODUCCION_RECEPCIONES_PENDIENTES_AGRUPADAS_V1_2
+            // Solo agrupa para operacion/UI las recepciones que aun siguen PENDIENTE.
+            // Los registros fisicos originales permanecen separados en BD.
+            recepciones = AgruparRecepcionesPendientesParaVista(recepciones);
             var vm = new ProduccionPreparacionMaterialesVm
             {
                 FechaConsulta = ahora,
@@ -2611,6 +2616,15 @@ IF @@ROWCOUNT<>1
                     return "LH";
 
                 if (claveEspecial.Contains("75473448900", StringComparison.Ordinal))
+                    return "RH";
+
+                // NSQ_LHRH_PSDB4_579744488_489_V1_1
+                // La pareja PSDB4 tampoco contiene LH/RH en su designacion.
+                // Se aceptan tambien referencias SAP con sufijo de revision.
+                if (claveEspecial.Contains("579744488", StringComparison.Ordinal))
+                    return "LH";
+
+                if (claveEspecial.Contains("579744489", StringComparison.Ordinal))
                     return "RH";
 
                 if (texto.Contains("LH/RH", StringComparison.Ordinal) || texto.Contains("RH/LH", StringComparison.Ordinal)) continue;
