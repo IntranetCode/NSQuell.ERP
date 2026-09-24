@@ -99,14 +99,12 @@ public sealed partial class ProduccionController
     private async Task<PersonalInicioOperativo> ObtenerPersonalInicioOperativoAsync(int programaProduccionId)
     {
         var resultado = new PersonalInicioOperativo();
+
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
 
         const string sqlExiste = @"
-SELECT CONVERT(bit,CASE
-    WHEN OBJECT_ID(N'dbo.Produccion_ProgramaPersonalAsignaciones',N'U') IS NULL THEN 0
-    ELSE 1
-END);";
+SELECT CONVERT(bit,CASE WHEN OBJECT_ID(N'dbo.Produccion_ProgramaPersonalAsignaciones',N'U') IS NULL THEN 0 ELSE 1 END);";
 
         bool existeTabla;
         await using (var cmd = new SqlCommand(sqlExiste, cn))
@@ -119,7 +117,8 @@ SELECT TOP(1)
     a.AsignacionPersonalID,
     a.OperadorID,
     a.AuxiliarID,
-    a.TecnicoProduccionID
+    a.TecnicoProduccionID,
+    a.SmedID
 FROM dbo.Produccion_ProgramaPersonalAsignaciones a
 WHERE a.Activo=1
   AND a.ProgramaProduccionID=@ProgramaProduccionID
@@ -135,26 +134,17 @@ ORDER BY a.AsignacionPersonalID DESC;";
                 resultado.OperadorID = rd["OperadorID"] == DBNull.Value ? null : Convert.ToInt32(rd["OperadorID"]);
                 resultado.AuxiliarID = rd["AuxiliarID"] == DBNull.Value ? null : Convert.ToInt32(rd["AuxiliarID"]);
                 resultado.TecnicoProduccionID = rd["TecnicoProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["TecnicoProduccionID"]);
+                resultado.SmedID = rd["SmedID"] == DBNull.Value ? null : Convert.ToInt32(rd["SmedID"]);
             }
         }
 
-        var personalGeneral = await ObtenerPersonalProgramadoProduccionAsync(
-            programaProduccionId,
-            DateTime.Now,
-            null,
-            cn,
-            null);
+        var personalGeneral = await ObtenerPersonalProgramadoProduccionAsync(programaProduccionId, DateTime.Now, null, cn, null);
 
-        if (!resultado.OperadorID.HasValue)
-            resultado.OperadorID = personalGeneral?.OperadorID;
+        if (!resultado.OperadorID.HasValue) resultado.OperadorID = personalGeneral?.OperadorID;
+        if (!resultado.AuxiliarID.HasValue) resultado.AuxiliarID = personalGeneral?.AuxiliarID;
+        if (!resultado.TecnicoProduccionID.HasValue) resultado.TecnicoProduccionID = personalGeneral?.TecnicoID;
+        if (!resultado.SmedID.HasValue) resultado.SmedID = personalGeneral?.SmedID;
 
-        if (!resultado.AuxiliarID.HasValue)
-            resultado.AuxiliarID = personalGeneral?.AuxiliarID;
-
-        if (!resultado.TecnicoProduccionID.HasValue)
-            resultado.TecnicoProduccionID = personalGeneral?.TecnicoID;
-
-        resultado.SmedID = personalGeneral?.SmedID;
         return resultado;
     }
 }

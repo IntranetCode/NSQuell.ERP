@@ -300,11 +300,11 @@
 <div class="poc">
     <div class="poc-top">
         <div class="poc-stat"><span>Formato</span><strong>@Model.TextoFormato</strong></div>
-        <div class="poc-stat"><span>Avance Producción</span><strong>@respondidas / @preguntas.Count</strong></div>
-        <div class="poc-stat"><span>NOK</span><strong>@nok</strong></div>
+        <div class="poc-stat"><span>Avance Producción</span><strong data-poc-avance>@respondidas / @preguntas.Count</strong></div>
+        <div class="poc-stat"><span>NOK</span><strong data-poc-nok>@nok</strong></div>
         <div class="poc-stat"><span>Estatus</span><strong>@Model.EstatusNombre</strong></div>
     </div>
-    <div class="poc-progress"><span style="width:@porcentaje.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
+    <div class="poc-progress"><span data-poc-progress style="width:@porcentaje.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></div>
 
     @if (rechazado && !string.IsNullOrWhiteSpace(Model.CalidadMotivoDevolucion))
     {
@@ -338,10 +338,10 @@
             @foreach (var bloque in secciones)
             {
                 var respuestasSeccion = bloque.Preguntas.Count(x => x.Confirmado);
-                <section class="poc-section">
+                <section class="poc-section" data-poc-section>
                     <div class="poc-section-head">
                         <strong><i class="bi bi-list-check me-1"></i>@bloque.Seccion.Seccion</strong>
-                        <span>@respuestasSeccion / @bloque.Preguntas.Count</span>
+                        <span data-poc-section-count>@respuestasSeccion / @bloque.Preguntas.Count</span>
                     </div>
                     @foreach (var p in bloque.Preguntas)
                     {

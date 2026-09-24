@@ -9476,6 +9476,63 @@ WHERE u.UsuarioID=@UsuarioID
             return permisos;
         }
 
+        private static async Task<(bool RequiereMateriaPrima, decimal CantidadRequerida, decimal CantidadConfirmada)> ObtenerDisponibilidadMateriaPrimaInicioAsync(int programaProduccionId, SqlConnection cn, SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT
+    CONVERT(DECIMAL(18,4),ISNULL(d.CantidadMpKg,0)) AS CantidadRequerida,
+    CONVERT(DECIMAL(18,4),ISNULL(mp.CantidadConfirmada,0)) AS CantidadConfirmada
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.SolicitudesProduccionDetalle d
+    ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+   AND d.Activo=1
+OUTER APPLY
+(
+    SELECT SUM(ISNULL(r.CantidadRecibidaProduccion,0)) AS CantidadConfirmada
+    FROM dbo.Produccion_RecepcionMateriales r
+    WHERE r.Activo=1
+      AND r.TipoOrigen=N'MP'
+      AND r.EstadoRecepcion IN(N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL')
+      AND r.SolicitudProduccionID=pp.SolicitudProduccionID
+      AND
+      (
+          r.ProgramaProduccionID=pp.ProgramaProduccionID
+          OR
+          (
+              r.ProgramaProduccionID IS NULL
+              AND r.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
+          )
+          OR
+          (
+              r.ProgramaProduccionID IS NULL
+              AND r.SolicitudProduccionDetalleID IS NULL
+              AND
+              (
+                  r.MaterialSolicitadoID=d.MaterialID
+                  OR
+                  (
+                      d.MaterialID IS NULL
+                      AND UPPER(LTRIM(RTRIM(ISNULL(r.CodigoSolicitadoSnapshot,N''))))=
+                          UPPER(LTRIM(RTRIM(ISNULL(d.MaterialCodigo,N''))))
+                  )
+              )
+          )
+      )
+) mp
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", System.Data.SqlDbType.Int).Value = programaProduccionId;
+
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return (false, 0m, 0m);
+
+            var requerida = rd["CantidadRequerida"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadRequerida"]);
+            var confirmada = rd["CantidadConfirmimada"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadConfirmada"]);
+            return (requerida > 0.0005m, requerida, confirmada);
+        }
         private async Task<bool> UsuarioPuedeGestionarCajasAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)
         {
             var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn, tx);

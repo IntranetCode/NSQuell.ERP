@@ -63,10 +63,10 @@ public sealed class ProduccionPersonalAsignacionVm
     public string TecnicoProduccionNombre { get; set; } = string.Empty;
     public string Observaciones { get; set; } = string.Empty;
 
-    public bool EstaCompleta =>
-        OperadorID.HasValue &&
-        AuxiliarID.HasValue &&
-        TecnicoProduccionID.HasValue;
+    public int? SmedID { get; set; }
+    public string SmedNombre { get; set; } = string.Empty;
+    public bool EstaCompleta => OperadorID.HasValue && (TecnicoProduccionID.HasValue || SmedID.HasValue);
+
 }
 
 public sealed class ProduccionPersonalTurnoVm
@@ -158,4 +158,6 @@ public sealed class ProduccionPersonalGuardarVm
     public int? AuxiliarID { get; set; }
     public int? TecnicoProduccionID { get; set; }
     public string? Observaciones { get; set; }
+
+    public int? SmedID { get; set; }
 }

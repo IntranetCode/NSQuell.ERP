@@ -22,8 +22,7 @@ namespace ERP.NSQuell.Controllers
                 return BadRequest(new { ok = false, mensaje = "Programa de Producción no válido." });
 
             var tipoCanonico = (tipo ?? string.Empty).Trim().ToUpperInvariant();
-            if (tipoCanonico != ProduccionRecepcionMaterialTipo.MP &&
-                tipoCanonico != ProduccionRecepcionMaterialTipo.Embalaje)
+            if (tipoCanonico != ProduccionRecepcionMaterialTipo.MP && tipoCanonico != ProduccionRecepcionMaterialTipo.Embalaje)
                 return BadRequest(new { ok = false, mensaje = "Tipo de insumo no válido." });
 
             var usuarioId = ObtenerUsuarioID();
@@ -43,14 +42,12 @@ namespace ERP.NSQuell.Controllers
             AplicarRelacionesLhRhRecepciones(recepciones, relacionesLhRh);
 
             var esperadosPrograma = materialesEsperados
-                .Where(x => x.ProgramaProduccionID == programaProduccionId &&
-                            string.Equals(x.TipoOrigen, tipoCanonico, StringComparison.OrdinalIgnoreCase))
+                .Where(x => x.ProgramaProduccionID == programaProduccionId && string.Equals(x.TipoOrigen, tipoCanonico, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(x => x.Codigo)
                 .ToList();
 
             var recepcionesPrograma = recepciones
-                .Where(x => x.ProgramaProduccionID == programaProduccionId &&
-                            string.Equals(x.TipoOrigen, tipoCanonico, StringComparison.OrdinalIgnoreCase))
+                .Where(x => x.ProgramaProduccionID == programaProduccionId && string.Equals(x.TipoOrigen, tipoCanonico, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(x => x.EstaPendiente)
                 .ThenByDescending(x => x.FechaEntregaAlmacen)
                 .ThenByDescending(x => x.RecepcionMaterialID)
@@ -87,11 +84,27 @@ namespace ERP.NSQuell.Controllers
                 cantidadConfirmada = esperadosPrograma.Sum(x => x.CantidadConfirmadaProduccion);
             }
 
+            const decimal tolerancia = 0.0005m;
             var pendientesConfirmacion = recepcionesPrograma.Count(x => x.EstaPendiente);
             var conDiferencia = recepcionesPrograma.Count(x => x.TieneDiferencia);
             var pendienteAlmacen = Math.Max(0m, cantidadRequerida - cantidadEntregada);
             var pendienteConfirmar = Math.Max(0m, cantidadEntregada - cantidadConfirmada);
-            var completo = cantidadRequerida > 0.0005m && cantidadConfirmada + 0.0005m >= cantidadRequerida;
+            var requiereInsumo = cantidadRequerida > tolerancia;
+            var hayCantidadConfirmada = cantidadConfirmada > tolerancia;
+            var completo = requiereInsumo && cantidadConfirmada + tolerancia >= cantidadRequerida;
+            var parcial = requiereInsumo && hayCantidadConfirmada && !completo;
+            var disponibleParaProduccion = !requiereInsumo || hayCantidadConfirmada;
+            var puedeContinuarPreparacion = tipoCanonico != ProduccionRecepcionMaterialTipo.MP || disponibleParaProduccion;
+
+            var estadoFlujo = completo
+                ? "COMPLETO"
+                : parcial
+                    ? "PARCIAL_DISPONIBLE"
+                    : pendientesConfirmacion > 0
+                        ? "PENDIENTE_CONFIRMACION"
+                        : requiereInsumo
+                            ? "ESPERANDO_ALMACEN"
+                            : "NO_APLICA";
 
             return Json(new
             {
@@ -100,6 +113,7 @@ namespace ERP.NSQuell.Controllers
                 tipo = tipoCanonico,
                 tipoTexto = tipoCanonico == ProduccionRecepcionMaterialTipo.MP ? "Materia prima" : "Embalaje",
                 puedeGestionar = permisos.PuedeGestionarEmbalaje,
+                puedeDevolver = permisos.PuedeGestionarEmbalaje,
                 resumen = new
                 {
                     cantidadRequerida,
@@ -109,7 +123,13 @@ namespace ERP.NSQuell.Controllers
                     pendienteConfirmar,
                     pendientesConfirmacion,
                     conDiferencia,
-                    completo
+                    requiereInsumo,
+                    hayCantidadConfirmada,
+                    disponibleParaProduccion,
+                    puedeContinuarPreparacion,
+                    parcial,
+                    completo,
+                    estadoFlujo
                 },
                 esperados = esperadosPrograma.Select(x => new
                 {
@@ -176,11 +196,11 @@ namespace ERP.NSQuell.Controllers
                     x.GrupoLhRh,
                     x.LadoLhRh,
                     x.ProgramaParejaID,
-                    x.NumeroOFPareja
+                    x.NumeroOFPareja,
+                    puedeDevolver = permisos.PuedeGestionarEmbalaje && x.EstaPendiente && x.CantidadEntregadaAlmacen > tolerancia
                 })
             });
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmarRecepcionMaterialOperativa(ProduccionConfirmarRecepcionMaterialVm vm)
@@ -223,5 +243,67 @@ namespace ERP.NSQuell.Controllers
                         : "Recepción actualizada correctamente."
             });
         }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [RequestSizeLimit(12000000)]
+        public async Task<IActionResult> DevolverMaterialOperativa(long RecepcionMaterialID, decimal CantidadDevuelta, string? MotivoDevolucion, string? ComentarioDevolucion, IFormFile? EvidenciaDevolucion)
+        {
+            if (!UsuarioEnSesion())
+                return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
+
+            TempData.Remove("Success");
+            TempData.Remove("Warning");
+            TempData.Remove("Error");
+
+            IActionResult resultado;
+            try
+            {
+                resultado = await DevolverMaterial(RecepcionMaterialID, CantidadDevuelta, MotivoDevolucion, ComentarioDevolucion, EvidenciaDevolucion);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { ok = false, mensaje = "No fue posible registrar la devolución: " + ex.Message });
+            }
+
+            if (resultado is StatusCodeResult statusCode)
+            {
+                TempData.Remove("Success");
+                TempData.Remove("Warning");
+                TempData.Remove("Error");
+                return StatusCode(statusCode.StatusCode, new
+                {
+                    ok = false,
+                    mensaje = statusCode.StatusCode == StatusCodes.Status403Forbidden
+                        ? "No tienes permiso para devolver material."
+                        : "No fue posible registrar la devolución."
+                });
+            }
+
+            var error = TempData["Error"]?.ToString();
+            var warning = TempData["Warning"]?.ToString();
+            var success = TempData["Success"]?.ToString();
+
+            TempData.Remove("Error");
+            TempData.Remove("Warning");
+            TempData.Remove("Success");
+
+            if (!string.IsNullOrWhiteSpace(error))
+                return BadRequest(new { ok = false, mensaje = error });
+
+            return Json(new
+            {
+                ok = true,
+                advertencia = !string.IsNullOrWhiteSpace(warning),
+                mensaje = !string.IsNullOrWhiteSpace(success)
+                    ? success
+                    : !string.IsNullOrWhiteSpace(warning)
+                        ? warning
+                        : "Devolución registrada correctamente.",
+                refrescarCentro = true,
+                refrescarCalendario = true
+            });
+        }
+
     }
 }

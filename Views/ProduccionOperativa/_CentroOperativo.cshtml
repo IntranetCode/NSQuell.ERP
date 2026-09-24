@@ -274,6 +274,12 @@
         --op-warning: #b86b00;
         --op-danger: #c93636;
         --op-info: #1769aa;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        max-height: 100%;
+        display: flex;
+        flex-direction: column;
         color: var(--op-text);
         background: #fff;
         border-radius: 20px;
@@ -286,6 +292,7 @@
 
     .nsq-op-header {
         position: relative;
+        flex: 0 0 auto;
         padding: 20px 22px 18px;
         color: #fff;
         background: radial-gradient(circle at 88% 0%,rgba(255,255,255,.16),transparent 28%), linear-gradient(135deg,#0f2747 0%,#004aad 58%,#0f6bdf 100%);
@@ -419,8 +426,14 @@
         }
 
     .nsq-op-body {
+        flex: 1 1 auto;
+        min-height: 0;
         padding: 18px 20px 20px;
-        background: var(--op-soft)
+        background: var(--op-soft);
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
     }
 
     .nsq-op-stagebar {
@@ -1223,6 +1236,7 @@
         }
 
     .nsq-op-footer {
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -1247,12 +1261,21 @@
         }
 
     .nsq-op-action-view {
-        display: none
+        display: none;
+        width: 100%;
+        min-height: 0;
     }
 
         .nsq-op-action-view.is-active {
-            display: block
+            display: block;
+            min-height: 0;
         }
+
+    [data-nsq-operativa-contenido-body] {
+        width: 100%;
+        min-height: 0;
+        overflow: visible;
+    }
 
     .nsq-op-action-view-head {
         display: flex;
@@ -1904,10 +1927,10 @@
                                                        data-accion-clave="@accionPaso.Clave"
                                                        data-solo-lectura="@(soloLecturaPaso ? "true" : "false")"
                                                        title="@(esExternaPaso
-                                                                                                                  ? "Consulta el estado desde Producción. La acción se ejecuta únicamente en el módulo responsable."
-                                                                                                                  : puedeModificarPaso
-                                                                                                                      ? "Abrir esta actividad para continuar o modificar lo permitido por su controlador."
-                                                                                                                      : "Abrir esta actividad en modo consulta.")">
+                                                                                                                                                                         ? "Consulta el estado desde Producción. La acción se ejecuta únicamente en el módulo responsable."
+                                                                                                                                                                         : puedeModificarPaso
+                                                                                                                                                                             ? "Abrir esta actividad para continuar o modificar lo permitido por su controlador."
+                                                                                                                                                                             : "Abrir esta actividad en modo consulta.")">
                                             <i class="bi @iconoAccionPaso"></i>@textoAccionPaso
                                         </a>
                                                                                 }
@@ -2120,9 +2143,17 @@
 
         const actionView=root.querySelector('[data-nsq-operativa-vista-accion]');
         const actionBody=root.querySelector('[data-nsq-operativa-contenido-body]');
+        const scrollBody=root.querySelector('.nsq-op-body');
         if(!actionView||!actionBody) return;
 
         let soloLecturaActiva=false;
+
+        function llevarContenidoArriba(){
+            if(!scrollBody) return;
+            window.requestAnimationFrame(()=>{
+                scrollBody.scrollTop=0;
+            });
+        }
 
         function aplicarSoloLectura(){
             let banner=actionBody.querySelector('[data-nsq-operativa-readonly-banner]');
@@ -2156,6 +2187,7 @@
             if(link&&root.contains(link)){
                 soloLecturaActiva=String(link.getAttribute('data-solo-lectura')||'false').toLowerCase()==='true';
                 root.dataset.nsqSoloLecturaActiva=soloLecturaActiva?'true':'false';
+                llevarContenidoArriba();
                 window.setTimeout(aplicarSoloLectura,0);
                 return;
             }
@@ -2164,6 +2196,7 @@
             if(volver&&root.contains(volver)){
                 soloLecturaActiva=false;
                 root.dataset.nsqSoloLecturaActiva='false';
+                llevarContenidoArriba();
             }
         },true);
 

@@ -717,9 +717,9 @@
 
 
         /* =========================================================
-                                                   MODAL OPERATIVO COMPACTO
-                                                   Aprovecha el ancho para evitar scroll vertical en escritorio.
-                                                   ========================================================= */
+                                                           MODAL OPERATIVO COMPACTO
+                                                           Aprovecha el ancho para evitar scroll vertical en escritorio.
+                                                           ========================================================= */
         .modal-operativa .modal-dialog {
             width: calc(100vw - 28px);
             max-width: 1480px;
@@ -1120,9 +1120,9 @@
         }
 
         /* =========================================================
-                                           TIMELINE OPERATIVO V3
-                                           Conserva la geometría del calendario de Planeación.
-                                           ========================================================= */
+                                                   TIMELINE OPERATIVO V3
+                                                   Conserva la geometría del calendario de Planeación.
+                                                   ========================================================= */
         .production-calendar-readonly .timeline-scroll {
             overflow-x: auto;
             overflow-y: visible;
@@ -1212,10 +1212,10 @@
         }
 
         /* =========================================================
-                           VISTA DIA SIN SCROLL HORIZONTAL
-                           Las 24 horas se reparten dentro del ancho disponible.
-                           El ancho de cada OF sigue siendo proporcional a su horario.
-                           ========================================================= */
+                                   VISTA DIA SIN SCROLL HORIZONTAL
+                                   Las 24 horas se reparten dentro del ancho disponible.
+                                   El ancho de cada OF sigue siendo proporcional a su horario.
+                                   ========================================================= */
         .production-calendar-readonly.vista-dia .timeline-scroll {
             width: 100%;
             max-width: 100%;
@@ -1294,18 +1294,20 @@
         }
 
         /* =========================================================
-                   CENTRO OPERATIVO UNICO
-                   Mantiene el calendario, sus sombras planeado/real y los
-                   modales heredados como respaldo durante la migracion.
-                   ========================================================= */
+                           CENTRO OPERATIVO UNICO
+                           Mantiene el calendario, sus sombras planeado/real y los
+                           modales heredados como respaldo durante la migracion.
+                           ========================================================= */
         .modal-centro-operativo .modal-dialog {
             width: calc(100vw - 28px);
             max-width: 1480px;
+            height: calc(100vh - 28px);
             margin: 14px auto;
         }
 
         .modal-centro-operativo .modal-content {
-            max-height: calc(100vh - 28px);
+            height: 100%;
+            max-height: 100%;
             overflow: hidden;
             border: 0;
             border-radius: 20px;
@@ -1314,9 +1316,13 @@
         }
 
         .modal-centro-operativo .nsq-op-center {
-            max-height: calc(100vh - 28px);
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            max-height: 100%;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
         .modal-centro-operativo .nsq-op-header,
@@ -1325,9 +1331,26 @@
         }
 
         .modal-centro-operativo .nsq-op-body {
+            flex: 1 1 auto;
             min-height: 0;
             overflow-y: auto;
+            overflow-x: hidden;
             overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+        }
+
+        .modal-centro-operativo .nsq-op-action-view {
+            min-height: 0;
+        }
+
+            .modal-centro-operativo .nsq-op-action-view.is-active {
+                display: block;
+                min-height: 0;
+            }
+
+        .modal-centro-operativo [data-nsq-operativa-contenido-body] {
+            width: 100%;
+            min-height: 0;
         }
 
         .centro-operativo-loading,
@@ -1453,12 +1476,18 @@
         @@media (max-width: 767.98px) {
             .modal-centro-operativo .modal-dialog {
                 width: calc(100vw - 12px);
+                height: calc(100vh - 12px);
                 margin: 6px auto;
             }
 
-            .modal-centro-operativo .modal-content,
+            .modal-centro-operativo .modal-content {
+                height: 100%;
+                max-height: 100%;
+            }
+
             .modal-centro-operativo .nsq-op-center {
-                max-height: calc(100vh - 12px);
+                height: 100%;
+                max-height: 100%;
             }
 
             .nsq-op-timing-compare-grid {
@@ -2000,7 +2029,9 @@
 <div class="modal fade modal-centro-operativo"
      id="modalCentroOperativo"
      tabindex="-1"
-     aria-hidden="true">
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content"
              id="modalCentroOperativoContenido">
@@ -2580,11 +2611,21 @@
             const centroModalEl = document.getElementById('modalCentroOperativo');
             const centroContenido = document.getElementById('modalCentroOperativoContenido');
             const centroModal = centroModalEl
-                ? bootstrap.Modal.getOrCreateInstance(centroModalEl)
+                ? bootstrap.Modal.getOrCreateInstance(centroModalEl, {
+                    backdrop: 'static',
+                    keyboard: false,
+                    focus: true
+                })
                 : null;
 
             let centroProgramaActual = 0;
             let centroBloqueActual = null;
+
+            function centroOperativoEstaAbierto() {
+                return centroModalEl?.classList.contains('show') === true
+                    || centroModalEl?.getAttribute('aria-modal') === 'true'
+                    || (document.body.classList.contains('modal-open') && centroModalEl?.style.display === 'block');
+            }
 
             if (calendarPage) {
                 calendarPage.style.setProperty('--dias-periodo', '@totalDias');
@@ -3278,6 +3319,7 @@
             async function refrescarDatosOperativos(forzar = false) {
                 const ahoraMs = Date.now();
 
+                if (centroOperativoEstaAbierto()) return;
                 if (actualizandoDatosOperativos) return;
                 if (!forzar && ahoraMs - ultimoRefrescoDatos < intervaloRefrescoDatosMs - 500) return;
                 if (document.hidden && !forzar) return;
@@ -3319,6 +3361,9 @@
                     }
 
                     const html = await respuesta.text();
+
+                    if (centroOperativoEstaAbierto()) return;
+
                     const documento = new DOMParser().parseFromString(html, 'text/html');
                     const timelineNuevo = documento.querySelector('#calendarKiosk .timeline');
 
@@ -4069,7 +4114,7 @@
                     opProcesando = false;
                 }
             });
-         
+
 
             aplicarEstilosDinamicosCalendario(document);
             configurarReglaHorariaComoPlaneacion();

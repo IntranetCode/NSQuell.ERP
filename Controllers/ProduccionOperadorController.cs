@@ -252,6 +252,19 @@ namespace ERP.NSQuell.Controllers
             return View(vm);
         }
 
+        private async Task<ProduccionTiempoExtraVm?> ResolverSesionTiempoExtraAsync(int tiempoExtraId, int ejecucionProduccionId, SqlConnection cn, SqlTransaction? tx = null, bool bloquear = false)
+        {
+            if (tiempoExtraId > 0)
+            {
+                var sesionPorId = await ObtenerTiempoExtraPorIdAsync(tiempoExtraId, cn, tx, bloquear);
+                if (sesionPorId != null && ejecucionProduccionId > 0 && sesionPorId.EjecucionProduccionID != ejecucionProduccionId)
+                    throw new InvalidOperationException("La sesión de tiempo extra no corresponde a esta ejecución de Producción.");
+                return sesionPorId;
+            }
+            if (ejecucionProduccionId <= 0) return null;
+            return await ObtenerTiempoExtraActivoAsync(ejecucionProduccionId, cn, tx, bloquear);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> IniciarTiempoExtra(ProduccionTiempoExtraIniciarPostVm vm)
@@ -10856,69 +10869,57 @@ WHERE TiempoExtraID=@TiempoExtraID
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PrevisualizarCorteTiempoExtra(int tiempoExtraId, long? contadorMaquinaActual, int cantidadScrap = 0, int cantidadScrapPareja = 0)
+        public async Task<IActionResult> PrevisualizarCorteTiempoExtra(int tiempoExtraId, long? contadorMaquinaActual, int cantidadScrap = 0, int cantidadScrapPareja = 0, int ejecucionProduccionId = 0)
         {
             if (!UsuarioEnSesion()) return Unauthorized(new { ok = false, mensaje = "La sesión ha expirado." });
-            if (tiempoExtraId <= 0) return Json(new { ok = false, mensaje = "La sesión de tiempo extra no es válida." });
+            if (tiempoExtraId <= 0 && ejecucionProduccionId <= 0) return Json(new { ok = false, mensaje = "No fue posible identificar la sesión de tiempo extra." });
             if (!contadorMaquinaActual.HasValue) return Json(new { ok = false, mensaje = "Captura el contador actual de la máquina." });
             if (contadorMaquinaActual.Value < 0) return Json(new { ok = false, mensaje = "El contador no puede ser negativo." });
             if (cantidadScrap < 0 || cantidadScrapPareja < 0) return Json(new { ok = false, mensaje = "La cantidad de piezas rojas no puede ser negativa." });
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return Unauthorized(new { ok = false, mensaje = "El usuario no tiene permisos de operador." });
-
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al operador." });
-
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
-
             try
             {
-                var sesion = await ObtenerTiempoExtraPorIdAsync(tiempoExtraId, cn, tx, true);
+                var sesion = await ResolverSesionTiempoExtraAsync(tiempoExtraId, ejecucionProduccionId, cn, tx, true);
                 if (sesion == null)
                 {
                     await tx.RollbackAsync();
-                    return Json(new { ok = false, mensaje = "No se encontró la sesión de tiempo extra." });
+                    return Json(new { ok = false, mensaje = "No se encontró una sesión de tiempo extra activa para esta ejecución." });
                 }
-
+                tiempoExtraId = sesion.TiempoExtraID;
+                ejecucionProduccionId = sesion.EjecucionProduccionID;
                 if (sesion.FechaHoraFin.HasValue || !string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.EnCurso, StringComparison.OrdinalIgnoreCase))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La sesión de tiempo extra ya no se encuentra en curso." });
                 }
-
                 if (!await PersonaAsignadaAEjecucionAsync(sesion.EjecucionProduccionID, personaId.Value, cn, tx))
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "La ejecución ya no está asignada al operador conectado." });
                 }
-
                 var ejecucion = await ObtenerEjecucionOperadorAsync(sesion.EjecucionProduccionID, cn, tx);
                 if (ejecucion == null)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
                 }
-
                 var fechaInicio = sesion.FechaHoraUltimoCorte;
                 var fechaFin = DateTime.Now;
-
                 var calculo = await CalcularProduccionContadorHoraAsync(ejecucion.EjecucionProduccionID, fechaInicio, fechaFin, contadorMaquinaActual.Value, cn, tx);
-
                 if ((long)cantidadScrap > calculo.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = $"Capturaste {cantidadScrap:N0} piezas rojas, pero el contador indica {calculo.PiezasCalculadas:N0} piezas físicas." });
                 }
-
                 var cantidadOK = calculo.PiezasCalculadas - cantidadScrap;
                 var siguienteCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesion.TiempoExtraID, cn, tx);
-
                 var pareja = await ObtenerParejaLhRhOperadorAsync(ejecucion.ProgramaProduccionID, cn, tx);
-
                 if (pareja == null)
                 {
                     await tx.RollbackAsync();
@@ -10927,6 +10928,7 @@ WHERE TiempoExtraID=@TiempoExtraID
                         ok = true,
                         esLhRh = false,
                         tiempoExtraId = sesion.TiempoExtraID,
+                        ejecucionProduccionId = sesion.EjecucionProduccionID,
                         numeroCorte = siguienteCorte,
                         contadorInicial = calculo.ContadorInicialReferencia,
                         contadorFinal = contadorMaquinaActual.Value,
@@ -10937,49 +10939,30 @@ WHERE TiempoExtraID=@TiempoExtraID
                         minutosProductivos = calculo.MinutosProductivos
                     });
                 }
-
                 ValidarParejaLhRhOperador(pareja);
-
                 var sesionPareja = await ObtenerTiempoExtraActivoAsync(pareja.EjecucionParejaID!.Value, cn, tx, true);
                 if (sesionPareja == null)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = $"{pareja.OFParejaTexto} no tiene una sesión de tiempo extra sincronizada." });
                 }
-
                 ValidarSincronizacionTiempoExtraLhRh(sesion, sesionPareja);
-
                 var ejecucionPareja = await ObtenerEjecucionOperadorAsync(pareja.EjecucionParejaID.Value, cn, tx);
-                if (ejecucionPareja == null)
-                    throw new InvalidOperationException($"No fue posible recuperar {pareja.OFParejaTexto}.");
-
+                if (ejecucionPareja == null) throw new InvalidOperationException($"No fue posible recuperar {pareja.OFParejaTexto}.");
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionPareja.EjecucionProduccionID, personaId.Value, cn, tx))
                     throw new InvalidOperationException($"El operador conectado no está asignado también a {pareja.OFParejaTexto}.");
-
-                var calculoPareja = await CalcularProduccionContadorHoraAsync(
-                    ejecucionPareja.EjecucionProduccionID,
-                    fechaInicio,
-                    fechaFin,
-                    contadorMaquinaActual.Value,
-                    cn,
-                    tx);
-
+                var calculoPareja = await CalcularProduccionContadorHoraAsync(ejecucionPareja.EjecucionProduccionID, fechaInicio, fechaFin, contadorMaquinaActual.Value, cn, tx);
                 ValidarSincronizacionCalculosLhRh(calculo, calculoPareja);
-
                 if ((long)cantidadScrapPareja > calculoPareja.PiezasCalculadas)
                 {
                     await tx.RollbackAsync();
                     return Json(new { ok = false, mensaje = $"{pareja.OFParejaTexto} solamente produjo {calculoPareja.PiezasCalculadas:N0} piezas físicas." });
                 }
-
                 var okPareja = calculoPareja.PiezasCalculadas - cantidadScrapPareja;
                 var siguienteCortePareja = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesionPareja.TiempoExtraID, cn, tx);
-
                 if (siguienteCorte != siguienteCortePareja)
                     throw new InvalidOperationException($"Los números de corte LH/RH están desincronizados ({siguienteCorte} y {siguienteCortePareja}).");
-
                 await tx.RollbackAsync();
-
                 return Json(new
                 {
                     ok = true,
@@ -10987,6 +10970,7 @@ WHERE TiempoExtraID=@TiempoExtraID
                     grupoLhRh = pareja.GrupoLhRh,
                     tiempoExtraId = sesion.TiempoExtraID,
                     tiempoExtraParejaId = sesionPareja.TiempoExtraID,
+                    ejecucionProduccionId = sesion.EjecucionProduccionID,
                     numeroCorte = siguienteCorte,
                     contadorInicial = calculo.ContadorInicialReferencia,
                     contadorFinal = contadorMaquinaActual.Value,
@@ -11013,7 +10997,6 @@ WHERE TiempoExtraID=@TiempoExtraID
                 return Json(new { ok = false, mensaje = "No fue posible calcular el corte de tiempo extra: " + ex.Message });
             }
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public Task<IActionResult> CapturarCorteTiempoExtra(ProduccionTiempoExtraCortePostVm vm)
@@ -11050,268 +11033,145 @@ WHERE TiempoExtraID=@TiempoExtraID
         private async Task<IActionResult> ProcesarCorteTiempoExtraAsync(ProduccionTiempoExtraCortePostVm vm, bool finalizar, bool exigirSesentaMinutos)
         {
             if (!UsuarioEnSesion()) return RedirectToAction("Login", "Login");
-
-            if (vm.TiempoExtraID <= 0)
+            if (vm.TiempoExtraID <= 0 && vm.EjecucionProduccionID <= 0)
             {
-                TempData["Error"] = "No se recibió una sesión de tiempo extra válida.";
+                TempData["Error"] = "No fue posible identificar la sesión de tiempo extra.";
                 return RedirectToAction(nameof(Index));
             }
-
             if (!vm.ContadorMaquinaActual.HasValue || vm.ContadorMaquinaActual.Value < 0)
             {
                 TempData["Error"] = "Captura un contador actual válido.";
-                return RedirectToAction(nameof(Index));
+                return vm.EjecucionProduccionID > 0 ? RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID }) : RedirectToAction(nameof(Index));
             }
-
             if (vm.CantidadScrap < 0 || vm.CantidadScrapPareja < 0)
             {
                 TempData["Error"] = "La cantidad de piezas rojas no puede ser negativa.";
-                return RedirectToAction(nameof(Index));
+                return vm.EjecucionProduccionID > 0 ? RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID }) : RedirectToAction(nameof(Index));
             }
-
             vm.Observaciones = vm.Observaciones?.Trim();
             vm.ObservacionesPareja = vm.ObservacionesPareja?.Trim();
-
             if (!string.IsNullOrWhiteSpace(vm.Observaciones) && vm.Observaciones.Length > 500)
             {
                 TempData["Error"] = "Las observaciones no pueden superar 500 caracteres.";
-                return RedirectToAction(nameof(Index));
+                return vm.EjecucionProduccionID > 0 ? RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID }) : RedirectToAction(nameof(Index));
             }
-
             if (!string.IsNullOrWhiteSpace(vm.ObservacionesPareja) && vm.ObservacionesPareja.Length > 500)
             {
                 TempData["Error"] = "Las observaciones de la OF pareja no pueden superar 500 caracteres.";
-                return RedirectToAction(nameof(Index));
+                return vm.EjecucionProduccionID > 0 ? RedirectToAction(nameof(Captura), new { id = vm.EjecucionProduccionID }) : RedirectToAction(nameof(Index));
             }
-
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var usuarioId = ObtenerUsuarioID();
             if (!await UsuarioEsOperadorAsync(usuarioId, cn)) return AccesoDenegadoOperador();
-
             var personaId = await ObtenerPersonaIDUsuarioAsync(usuarioId, cn);
             if (!personaId.HasValue || personaId.Value <= 0) return AccesoDenegadoOperador();
-
             await using var tx = (SqlTransaction)await cn.BeginTransactionAsync(IsolationLevel.Serializable);
             var ejecucionProduccionId = vm.EjecucionProduccionID;
-
             try
             {
-                var sesion = await ObtenerTiempoExtraPorIdAsync(vm.TiempoExtraID, cn, tx, true);
-                if (sesion == null)
-                    throw new InvalidOperationException("No se encontró la sesión de tiempo extra.");
-
+                var sesion = await ResolverSesionTiempoExtraAsync(vm.TiempoExtraID, vm.EjecucionProduccionID, cn, tx, true);
+                if (sesion == null) throw new InvalidOperationException("No se encontró una sesión de tiempo extra activa para esta ejecución.");
+                vm.TiempoExtraID = sesion.TiempoExtraID;
+                vm.EjecucionProduccionID = sesion.EjecucionProduccionID;
                 ejecucionProduccionId = sesion.EjecucionProduccionID;
-
                 if (sesion.FechaHoraFin.HasValue || !string.Equals(sesion.Estado, ProduccionTiempoExtraEstado.EnCurso, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("La sesión de tiempo extra ya no se encuentra en curso.");
-
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionProduccionId, personaId.Value, cn, tx))
                     throw new InvalidOperationException("La ejecución ya no está asignada al operador conectado.");
-
                 var ejecucion = await ObtenerEjecucionOperadorAsync(ejecucionProduccionId, cn, tx);
                 if (ejecucion == null) throw new InvalidOperationException("No se encontró la ejecución.");
-
                 if (ejecucion.EstatusID != ProduccionEstatus.EnProduccion)
                     throw new InvalidOperationException("La corrida debe encontrarse en Producción.");
-
                 if (ejecucion.FechaLiberacionMaquina.HasValue)
                     throw new InvalidOperationException("La máquina ya fue liberada.");
-
                 if (await TieneParoAbiertoAsync(ejecucionProduccionId, cn, tx))
                     throw new InvalidOperationException("Existe un paro abierto.");
-
                 var fechaInicioCorte = sesion.FechaHoraUltimoCorte;
                 var fechaFinCorte = DateTime.Now;
-
                 if (fechaFinCorte <= fechaInicioCorte)
                     throw new InvalidOperationException("Todavía no existe tiempo transcurrido para registrar el corte.");
-
                 if (exigirSesentaMinutos && fechaFinCorte < fechaInicioCorte.AddMinutes(60))
                 {
                     var faltan = fechaInicioCorte.AddMinutes(60) - fechaFinCorte;
                     throw new InvalidOperationException($"El corte todavía no cumple 60 minutos. Faltan aproximadamente {Math.Max(1, (int)Math.Ceiling(faltan.TotalMinutes))} minuto(s).");
                 }
-
                 var pareja = await ObtenerParejaLhRhOperadorAsync(ejecucion.ProgramaProduccionID, cn, tx);
-
                 if (pareja != null && !vm.ConfirmarCapturaLhRh)
                     throw new InvalidOperationException("Esta sesión pertenece a una pareja LH/RH y el corte debe incluir ambas OF.");
-
-                var calculo = await CalcularProduccionContadorHoraAsync(
-                    ejecucionProduccionId,
-                    fechaInicioCorte,
-                    fechaFinCorte,
-                    vm.ContadorMaquinaActual.Value,
-                    cn,
-                    tx);
-
+                var calculo = await CalcularProduccionContadorHoraAsync(ejecucionProduccionId, fechaInicioCorte, fechaFinCorte, vm.ContadorMaquinaActual.Value, cn, tx);
                 if ((long)vm.CantidadScrap > calculo.PiezasCalculadas)
                     throw new InvalidOperationException($"El contador indica {calculo.PiezasCalculadas:N0} piezas físicas, pero capturaste {vm.CantidadScrap:N0} piezas rojas.");
-
                 var validacionDefectos = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrap, vm.DefectosScrap, cn, tx);
-                if (!validacionDefectos.Valido)
-                    throw new InvalidOperationException(validacionDefectos.Mensaje);
-
+                if (!validacionDefectos.Valido) throw new InvalidOperationException(validacionDefectos.Mensaje);
                 vm.DefectosScrap = validacionDefectos.Defectos;
-
                 if (pareja == null)
                 {
                     if (calculo.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones))
                         throw new InvalidOperationException("No se detectó producción durante este periodo. Indica en observaciones qué ocurrió.");
-
                     var numeroCorte = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesion.TiempoExtraID, cn, tx);
-
-                    var resultado = await GuardarCorteTiempoExtraLadoAsync(
-                        ejecucion,
-                        sesion,
-                        vm.ContadorMaquinaActual.Value,
-                        vm.CantidadScrap,
-                        vm.Observaciones,
-                        vm.DefectosScrap,
-                        numeroCorte,
-                        finalizar,
-                        fechaInicioCorte,
-                        fechaFinCorte,
-                        personaId.Value,
-                        usuarioId,
-                        calculo,
-                        cn,
-                        tx);
-
+                    var resultado = await GuardarCorteTiempoExtraLadoAsync(ejecucion, sesion, vm.ContadorMaquinaActual.Value, vm.CantidadScrap, vm.Observaciones, vm.DefectosScrap, numeroCorte, finalizar, fechaInicioCorte, fechaFinCorte, personaId.Value, usuarioId, calculo, cn, tx);
                     await RecalcularTotalesEjecucionAsync(ejecucionProduccionId, usuarioId, cn, tx);
                     await tx.CommitAsync();
-
                     TempData["Success"] = finalizar
                         ? $"Tiempo extra finalizado correctamente. Corte #{numeroCorte}: {resultado.CantidadOK:N0} verdes/OK y {vm.CantidadScrap:N0} rojas/Scrap."
                         : $"Corte #{numeroCorte} guardado. El siguiente bloque de tiempo extra comenzó automáticamente.";
-
                     return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
                 }
-
                 ValidarParejaLhRhOperador(pareja);
-
                 var ejecucionPareja = await ObtenerEjecucionOperadorAsync(pareja.EjecucionParejaID!.Value, cn, tx);
                 if (ejecucionPareja == null)
                     throw new InvalidOperationException($"No fue posible recuperar {pareja.OFParejaTexto}.");
-
                 if (!await PersonaAsignadaAEjecucionAsync(ejecucionPareja.EjecucionProduccionID, personaId.Value, cn, tx))
                     throw new InvalidOperationException($"El operador conectado no está asignado también a {pareja.OFParejaTexto}.");
-
                 if (ejecucionPareja.EstatusID != ProduccionEstatus.EnProduccion)
                     throw new InvalidOperationException($"{pareja.OFParejaTexto} no está en Producción.");
-
                 if (ejecucionPareja.FechaLiberacionMaquina.HasValue)
                     throw new InvalidOperationException($"{pareja.OFParejaTexto} ya liberó la máquina.");
-
                 if (await TieneParoAbiertoAsync(ejecucionPareja.EjecucionProduccionID, cn, tx))
                     throw new InvalidOperationException($"{pareja.OFParejaTexto} tiene un paro abierto.");
-
                 var sesionPareja = await ObtenerTiempoExtraActivoAsync(ejecucionPareja.EjecucionProduccionID, cn, tx, true);
                 if (sesionPareja == null)
                     throw new InvalidOperationException($"{pareja.OFParejaTexto} no tiene una sesión de tiempo extra activa.");
-
                 ValidarSincronizacionTiempoExtraLhRh(sesion, sesionPareja);
-
-                var calculoPareja = await CalcularProduccionContadorHoraAsync(
-                    ejecucionPareja.EjecucionProduccionID,
-                    fechaInicioCorte,
-                    fechaFinCorte,
-                    vm.ContadorMaquinaActual.Value,
-                    cn,
-                    tx);
-
+                var calculoPareja = await CalcularProduccionContadorHoraAsync(ejecucionPareja.EjecucionProduccionID, fechaInicioCorte, fechaFinCorte, vm.ContadorMaquinaActual.Value, cn, tx);
                 ValidarSincronizacionCalculosLhRh(calculo, calculoPareja);
-
                 if ((long)vm.CantidadScrapPareja > calculoPareja.PiezasCalculadas)
                     throw new InvalidOperationException($"{pareja.OFParejaTexto} solamente produjo {calculoPareja.PiezasCalculadas:N0} piezas físicas.");
-
                 var validacionPareja = await ValidarYNormalizarDefectosScrapAsync(vm.CantidadScrapPareja, vm.DefectosScrapPareja, cn, tx);
                 if (!validacionPareja.Valido)
                     throw new InvalidOperationException($"{pareja.OFParejaTexto}: {validacionPareja.Mensaje}");
-
                 vm.DefectosScrapPareja = validacionPareja.Defectos;
-
-                if (calculo.PiezasCalculadas == 0 &&
-                    calculoPareja.PiezasCalculadas == 0 &&
-                    string.IsNullOrWhiteSpace(vm.Observaciones) &&
-                    string.IsNullOrWhiteSpace(vm.ObservacionesPareja))
+                if (calculo.PiezasCalculadas == 0 && calculoPareja.PiezasCalculadas == 0 && string.IsNullOrWhiteSpace(vm.Observaciones) && string.IsNullOrWhiteSpace(vm.ObservacionesPareja))
                     throw new InvalidOperationException("No se detectó producción en ninguna OF. Indica qué ocurrió.");
-
                 var numeroCorteActual = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesion.TiempoExtraID, cn, tx);
                 var numeroCortePareja = await ObtenerSiguienteNumeroCorteTiempoExtraAsync(sesionPareja.TiempoExtraID, cn, tx);
-
                 if (numeroCorteActual != numeroCortePareja)
                     throw new InvalidOperationException($"Los cortes LH/RH están desincronizados ({numeroCorteActual} y {numeroCortePareja}).");
-
-                var resultadoActual = await GuardarCorteTiempoExtraLadoAsync(
-                    ejecucion,
-                    sesion,
-                    vm.ContadorMaquinaActual.Value,
-                    vm.CantidadScrap,
-                    vm.Observaciones,
-                    vm.DefectosScrap,
-                    numeroCorteActual,
-                    finalizar,
-                    fechaInicioCorte,
-                    fechaFinCorte,
-                    personaId.Value,
-                    usuarioId,
-                    calculo,
-                    cn,
-                    tx);
-
-                var observacionPareja = string.IsNullOrWhiteSpace(vm.ObservacionesPareja)
-                    ? vm.Observaciones
-                    : vm.ObservacionesPareja;
-
-                var resultadoPareja = await GuardarCorteTiempoExtraLadoAsync(
-                    ejecucionPareja,
-                    sesionPareja,
-                    vm.ContadorMaquinaActual.Value,
-                    vm.CantidadScrapPareja,
-                    observacionPareja,
-                    vm.DefectosScrapPareja,
-                    numeroCortePareja,
-                    finalizar,
-                    fechaInicioCorte,
-                    fechaFinCorte,
-                    personaId.Value,
-                    usuarioId,
-                    calculoPareja,
-                    cn,
-                    tx);
-
+                var resultadoActual = await GuardarCorteTiempoExtraLadoAsync(ejecucion, sesion, vm.ContadorMaquinaActual.Value, vm.CantidadScrap, vm.Observaciones, vm.DefectosScrap, numeroCorteActual, finalizar, fechaInicioCorte, fechaFinCorte, personaId.Value, usuarioId, calculo, cn, tx);
+                var observacionPareja = string.IsNullOrWhiteSpace(vm.ObservacionesPareja) ? vm.Observaciones : vm.ObservacionesPareja;
+                var resultadoPareja = await GuardarCorteTiempoExtraLadoAsync(ejecucionPareja, sesionPareja, vm.ContadorMaquinaActual.Value, vm.CantidadScrapPareja, observacionPareja, vm.DefectosScrapPareja, numeroCortePareja, finalizar, fechaInicioCorte, fechaFinCorte, personaId.Value, usuarioId, calculoPareja, cn, tx);
                 await RecalcularTotalesEjecucionAsync(ejecucion.EjecucionProduccionID, usuarioId, cn, tx);
                 await RecalcularTotalesEjecucionAsync(ejecucionPareja.EjecucionProduccionID, usuarioId, cn, tx);
-
                 await tx.CommitAsync();
-
                 TempData["Success"] = finalizar
                     ? $"Tiempo extra LH/RH finalizado. Corte #{numeroCorteActual}: {resultadoActual.CantidadOK:N0} OK en {vm.EjecucionProduccionID} y {resultadoPareja.CantidadOK:N0} OK en {pareja.OFParejaTexto}."
                     : $"Corte #{numeroCorteActual} LH/RH guardado con un solo contador físico. El siguiente bloque comenzó automáticamente.";
-
                 return RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId });
             }
             catch (SqlException ex) when (ex.Number is 2601 or 2627)
             {
                 try { await tx.RollbackAsync(); } catch { }
                 TempData["Error"] = "Este corte de tiempo extra ya fue registrado. Actualiza la pantalla.";
-                return ejecucionProduccionId > 0
-                    ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
-                    : RedirectToAction(nameof(Index));
+                return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
             {
                 try { await tx.RollbackAsync(); } catch { }
                 TempData["Error"] = "No fue posible guardar el corte de tiempo extra: " + ex.Message;
-                return ejecucionProduccionId > 0
-                    ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId })
-                    : RedirectToAction(nameof(Index));
+                return ejecucionProduccionId > 0 ? RedirectToAction(nameof(Captura), new { id = ejecucionProduccionId }) : RedirectToAction(nameof(Index));
             }
         }
-        // NSQ_KIOSCO_SUPERVISOR_ASIGNACION_V1
         private static async Task<bool> PersonaAsignadaAEjecucionAsync(
     int ejecucionProduccionId,
     int personaId,

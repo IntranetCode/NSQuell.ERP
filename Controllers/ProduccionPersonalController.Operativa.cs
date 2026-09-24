@@ -30,12 +30,7 @@ public sealed partial class ProduccionPersonalController
 
         var turnos = await CargarTurnosAsync(cn);
         var asignaciones = await CargarAsignacionesOperativasAsync(programaProduccionId, cn);
-
-        var asignacionInicial = asignaciones
-            .OrderBy(x => Math.Abs((x.Inicio - programa.Inicio).TotalMinutes))
-            .ThenBy(x => x.Inicio)
-            .FirstOrDefault();
-
+        var asignacionInicial = asignaciones.OrderBy(x => Math.Abs((x.Inicio - programa.Inicio).TotalMinutes)).ThenBy(x => x.Inicio).FirstOrDefault();
         var fechaSugerida = asignacionInicial?.FechaTrabajo ?? programa.Inicio.Date;
         var turnoSugeridoId = asignacionInicial?.TurnoID ?? ResolverTurnoSugeridoOperativo(programa, turnos, fechaSugerida);
 
@@ -72,6 +67,8 @@ public sealed partial class ProduccionPersonalController
                 auxiliarNombre = asignacionInicial.AuxiliarNombre,
                 tecnicoProduccionID = asignacionInicial.TecnicoProduccionID,
                 tecnicoProduccionNombre = asignacionInicial.TecnicoProduccionNombre,
+                smedID = asignacionInicial.SmedID,
+                smedNombre = asignacionInicial.SmedNombre,
                 observaciones = asignacionInicial.Observaciones,
                 inicio = asignacionInicial.Inicio,
                 fin = asignacionInicial.Fin
@@ -89,7 +86,9 @@ public sealed partial class ProduccionPersonalController
                 auxiliarID = x.AuxiliarID,
                 auxiliar = x.AuxiliarNombre,
                 tecnicoProduccionID = x.TecnicoProduccionID,
-                tecnico = x.TecnicoProduccionNombre
+                tecnico = x.TecnicoProduccionNombre,
+                smedID = x.SmedID,
+                smed = x.SmedNombre
             })
         });
     }
@@ -102,16 +101,16 @@ public sealed partial class ProduccionPersonalController
         if (vm.ProgramaProduccionID <= 0 || vm.TurnoID <= 0) return BadRequest(new { ok = false, mensaje = "Programa o turno no válido." });
         if (!vm.OperadorID.HasValue || vm.OperadorID.Value <= 0) return BadRequest(new { ok = false, mensaje = "Selecciona el operador principal para continuar." });
 
+        var tieneTecnico = vm.TecnicoProduccionID.HasValue && vm.TecnicoProduccionID.Value > 0;
+        var tieneSmed = vm.SmedID.HasValue && vm.SmedID.Value > 0;
+        if (!tieneTecnico && !tieneSmed) return BadRequest(new { ok = false, mensaje = "Selecciona al menos un Técnico de Producción o un SMED." });
+
         vm.Observaciones = string.IsNullOrWhiteSpace(vm.Observaciones) ? null : vm.Observaciones.Trim();
         if (vm.Observaciones?.Length > 500) return BadRequest(new { ok = false, mensaje = "Las observaciones no pueden superar 500 caracteres." });
 
-        var ids = new[] { vm.OperadorID, vm.AuxiliarID, vm.TecnicoProduccionID }
-            .Where(x => x.HasValue && x.Value > 0)
-            .Select(x => x!.Value)
-            .ToList();
-
-        if (ids.Count != ids.Distinct().Count())
-            return BadRequest(new { ok = false, mensaje = "Operador, auxiliar y técnico deben ser personas diferentes." });
+        var idsRoles = new[] { vm.OperadorID, vm.AuxiliarID, vm.TecnicoProduccionID, vm.SmedID }.Where(x => x.HasValue && x.Value > 0).Select(x => x!.Value).ToList();
+        if (idsRoles.Count != idsRoles.Distinct().Count())
+            return BadRequest(new { ok = false, mensaje = "Operador, auxiliar, técnico y SMED deben ser personas diferentes dentro de la misma OF." });
 
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
@@ -153,6 +152,7 @@ public sealed partial class ProduccionPersonalController
                     OperadorID = vm.OperadorID,
                     AuxiliarID = vm.AuxiliarID,
                     TecnicoProduccionID = vm.TecnicoProduccionID,
+                    SmedID = vm.SmedID,
                     Observaciones = vm.Observaciones
                 };
             }
@@ -177,6 +177,14 @@ public sealed partial class ProduccionPersonalController
                     throw new InvalidOperationException("El técnico seleccionado no pertenece al catálogo activo de Técnicos de Producción.");
             }
 
+            string? smedNombre = null;
+            if (vm.SmedID.HasValue && vm.SmedID.Value > 0)
+            {
+                smedNombre = await ValidarPersonaRolAsync(vm.SmedID.Value, "SMED", programa.ParteID, cn, tx);
+                if (string.IsNullOrWhiteSpace(smedNombre))
+                    throw new InvalidOperationException("El SMED seleccionado no pertenece al catálogo activo de SMED.");
+            }
+
             if (programaPareja != null)
             {
                 var operadorPareja = await ValidarPersonaRolAsync(vm.OperadorID.Value, "OPERADOR", programaPareja.ParteID, cn, tx);
@@ -196,6 +204,13 @@ public sealed partial class ProduccionPersonalController
                     if (string.IsNullOrWhiteSpace(tecnicoPareja))
                         throw new InvalidOperationException("El técnico seleccionado no es válido para la OF pareja LH/RH.");
                 }
+
+                if (vm.SmedID.HasValue && vm.SmedID.Value > 0)
+                {
+                    var smedPareja = await ValidarPersonaRolAsync(vm.SmedID.Value, "SMED", programaPareja.ParteID, cn, tx);
+                    if (string.IsNullOrWhiteSpace(smedPareja))
+                        throw new InvalidOperationException("El SMED seleccionado no es válido para la OF pareja LH/RH.");
+                }
             }
 
             var existenteActual = await ResolverAsignacionExistenteAsync(vm, cn, tx);
@@ -204,19 +219,15 @@ public sealed partial class ProduccionPersonalController
 
             var inicioConflicto = ventana.Value.Inicio;
             var finConflicto = ventana.Value.Fin;
-
             if (ventanaPareja.HasValue)
             {
                 if (ventanaPareja.Value.Inicio < inicioConflicto) inicioConflicto = ventanaPareja.Value.Inicio;
                 if (ventanaPareja.Value.Fin > finConflicto) finConflicto = ventanaPareja.Value.Fin;
             }
 
-            foreach (var personaId in ids)
-            {
-                var conflicto = await BuscarConflictoPersonaOperativaParejaAsync(personaId, inicioConflicto, finConflicto, existenteActual, existentePareja, cn, tx);
-                if (conflicto != null)
-                    throw new InvalidOperationException("La persona " + conflicto.PersonaNombre + " ya está asignada al Programa " + conflicto.ProgramaProduccionID + " de " + conflicto.Inicio.ToString("dd/MM HH:mm") + " a " + conflicto.Fin.ToString("dd/MM HH:mm") + ".");
-            }
+            var conflictoOperador = await BuscarConflictoPersonaOperativaParejaAsync(vm.OperadorID.Value, inicioConflicto, finConflicto, existenteActual, existentePareja, cn, tx);
+            if (conflictoOperador != null)
+                throw new InvalidOperationException("El operador " + conflictoOperador.PersonaNombre + " ya está asignado al Programa " + conflictoOperador.ProgramaProduccionID + " de " + conflictoOperador.Inicio.ToString("dd/MM HH:mm") + " a " + conflictoOperador.Fin.ToString("dd/MM HH:mm") + ".");
 
             var usuarioId = UsuarioID();
             var asignacionPersonalId = await GuardarAsignacionProgramaOperativaAsync(vm, turno, ventana.Value, existenteActual, usuarioId, cn, tx);
@@ -228,10 +239,7 @@ public sealed partial class ProduccionPersonalController
             await tx.CommitAsync();
 
             var replicado = vmPareja != null;
-            var mensaje = replicado
-                ? "Personal asignado correctamente y replicado a las dos OF LH/RH."
-                : "Personal asignado correctamente.";
-
+            var mensaje = replicado ? "Personal asignado correctamente y replicado a las dos OF LH/RH." : "Personal asignado correctamente.";
             if (pareja != null && !pareja.EsCompatibleFisicamente)
                 mensaje += " Se detectó una relación LH/RH, pero no se replicó porque máquina, molde o ventana programada ya no coinciden.";
 
@@ -246,6 +254,7 @@ public sealed partial class ProduccionPersonalController
                 operador = operadorNombre,
                 auxiliar = auxiliarNombre,
                 tecnico = tecnicoNombre,
+                smed = smedNombre,
                 ventanaInicio = ventana.Value.Inicio,
                 ventanaFin = ventana.Value.Fin,
                 mensaje
@@ -257,7 +266,6 @@ public sealed partial class ProduccionPersonalController
             return BadRequest(new { ok = false, mensaje = "No fue posible guardar el personal: " + ex.Message });
         }
     }
-
     private sealed class ParejaPersonalOperativa
     {
         public int ProgramaParejaID { get; set; }
@@ -378,12 +386,7 @@ WHERE a.Activo=1
   AND (@AsignacionExcluirParejaID IS NULL OR a.AsignacionPersonalID<>@AsignacionExcluirParejaID)
   AND @Inicio<a.Fin
   AND @Fin>a.Inicio
-  AND
-  (
-      a.OperadorID=@PersonaID
-      OR a.AuxiliarID=@PersonaID
-      OR a.TecnicoProduccionID=@PersonaID
-  )
+  AND a.OperadorID=@PersonaID
 ORDER BY a.Inicio;";
 
         await using var cmd = new SqlCommand(sql, cn, tx);
@@ -399,7 +402,7 @@ ORDER BY a.Inicio;";
         return new ConflictoPersona
         {
             ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
-            PersonaNombre = rd["PersonaNombre"]?.ToString()?.Trim() ?? "La persona",
+            PersonaNombre = rd["PersonaNombre"]?.ToString()?.Trim() ?? "El operador",
             Inicio = Convert.ToDateTime(rd["Inicio"]),
             Fin = Convert.ToDateTime(rd["Fin"])
         };
@@ -498,9 +501,7 @@ VALUES
             ?.TurnoID;
     }
 
-    private static async Task<List<ProduccionPersonalAsignacionVm>> CargarAsignacionesOperativasAsync(
-        int programaProduccionId,
-        SqlConnection cn)
+    private static async Task<List<ProduccionPersonalAsignacionVm>> CargarAsignacionesOperativasAsync(int programaProduccionId, SqlConnection cn)
     {
         const string sql = @"
 SELECT
@@ -517,11 +518,14 @@ SELECT
     LTRIM(RTRIM(CONCAT(ISNULL(aux.Nombre,N''),N' ',ISNULL(aux.ApellidoPaterno,N''),N' ',ISNULL(aux.ApellidoMaterno,N'')))) AS AuxiliarNombre,
     a.TecnicoProduccionID,
     LTRIM(RTRIM(CONCAT(ISNULL(tec.Nombre,N''),N' ',ISNULL(tec.ApellidoPaterno,N''),N' ',ISNULL(tec.ApellidoMaterno,N'')))) AS TecnicoProduccionNombre,
+    a.SmedID,
+    LTRIM(RTRIM(CONCAT(ISNULL(smed.Nombre,N''),N' ',ISNULL(smed.ApellidoPaterno,N''),N' ',ISNULL(smed.ApellidoMaterno,N'')))) AS SmedNombre,
     ISNULL(a.Observaciones,N'') AS Observaciones
 FROM dbo.Produccion_ProgramaPersonalAsignaciones a
 LEFT JOIN dbo.Persona op ON op.PersonaID=a.OperadorID
 LEFT JOIN dbo.Persona aux ON aux.PersonaID=a.AuxiliarID
 LEFT JOIN dbo.Persona tec ON tec.PersonaID=a.TecnicoProduccionID
+LEFT JOIN dbo.Persona smed ON smed.PersonaID=a.SmedID
 WHERE a.Activo=1
   AND a.ProgramaProduccionID=@ProgramaProduccionID
 ORDER BY a.Inicio,a.AsignacionPersonalID;";
@@ -548,13 +552,14 @@ ORDER BY a.Inicio,a.AsignacionPersonalID;";
                 AuxiliarNombre = rd["AuxiliarNombre"]?.ToString()?.Trim() ?? string.Empty,
                 TecnicoProduccionID = rd["TecnicoProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["TecnicoProduccionID"]),
                 TecnicoProduccionNombre = rd["TecnicoProduccionNombre"]?.ToString()?.Trim() ?? string.Empty,
+                SmedID = rd["SmedID"] == DBNull.Value ? null : Convert.ToInt32(rd["SmedID"]),
+                SmedNombre = rd["SmedNombre"]?.ToString()?.Trim() ?? string.Empty,
                 Observaciones = rd["Observaciones"]?.ToString()?.Trim() ?? string.Empty
             });
         }
 
         return lista;
     }
-
     private static async Task SincronizarOperadorProgramaOperativoAsync(
         int programaProduccionId,
         int? personaId,

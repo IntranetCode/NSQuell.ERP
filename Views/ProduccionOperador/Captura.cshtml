@@ -4457,12 +4457,16 @@ else
                 extraPreviewValida=false;
                 actualizarBotonConfirmarExtra();
                 document.getElementById('extraResumenPreview')?.classList.add('preview-loading');
-                const token=formCorteTiempoExtra.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
-                const tiempoExtraId=formCorteTiempoExtra.querySelector('input[name="TiempoExtraID"]')?.value||'0';
-                const datos=new FormData();
-                datos.append('__RequestVerificationToken',token);
-                datos.append('tiempoExtraId',tiempoExtraId);
-                datos.append('contadorMaquinaActual',raw);
+               const token=formCorteTiempoExtra.querySelector('input[name="__RequestVerificationToken"]')?.value||'';
+const tiempoExtraId=formCorteTiempoExtra.querySelector('input[name="TiempoExtraID"]')?.value||'0';
+const ejecucionProduccionId=formCorteTiempoExtra.querySelector('input[name="EjecucionProduccionID"]')?.value||'0';
+const datos=new FormData();
+datos.append('__RequestVerificationToken',token);
+datos.append('tiempoExtraId',tiempoExtraId);
+datos.append('ejecucionProduccionId',ejecucionProduccionId);
+datos.append('contadorMaquinaActual',raw);
+datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('extraScrap'))));
+if(esLhRh)datos.append('cantidadScrapPareja',String(numeroSeguro(document.getElementById('extraScrapPareja'))));
                 datos.append('cantidadScrap',String(numeroSeguro(document.getElementById('extraScrap'))));
                 if(esLhRh)datos.append('cantidadScrapPareja',String(numeroSeguro(document.getElementById('extraScrapPareja'))));
                 try{

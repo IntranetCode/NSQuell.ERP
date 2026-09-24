@@ -37,66 +37,34 @@ public sealed partial class ProduccionPersonalController : Controller
     }
 
     [HttpGet("Candidatos")]
-    public async Task<IActionResult> Candidatos(
-        int programaProduccionId,
-        DateTime fechaTrabajo,
-        int turnoId)
+    public async Task<IActionResult> Candidatos(int programaProduccionId, DateTime fechaTrabajo, int turnoId)
     {
-        if (!UsuarioEnSesion())
-            return Unauthorized();
+        if (!UsuarioEnSesion()) return Unauthorized();
 
         if (programaProduccionId <= 0 || turnoId <= 0)
-        {
-            return Json(new
-            {
-                ok = false,
-                mensaje = "Programa o turno no válido."
-            });
-        }
+            return Json(new { ok = false, mensaje = "Programa o turno no válido." });
 
         await using var cn = new SqlConnection(ConnectionString);
         await cn.OpenAsync();
 
-        var programa =
-            await CargarProgramaBaseAsync(
-                programaProduccionId,
-                cn,
-                null,
-                false);
-
-        if (programa == null)
-            return Json(new { ok = false, mensaje = "No se encontró el programa de Producción." });
+        var programa = await CargarProgramaBaseAsync(programaProduccionId, cn, null, false);
+        if (programa == null) return Json(new { ok = false, mensaje = "No se encontró el programa de Producción." });
 
         var turno = await CargarTurnoAsync(turnoId, cn, null);
-        if (turno == null)
-            return Json(new { ok = false, mensaje = "No se encontró el turno." });
+        if (turno == null) return Json(new { ok = false, mensaje = "No se encontró el turno." });
 
         var ventana = ConstruirVentana(programa, turno, fechaTrabajo.Date);
-        if (ventana == null)
-        {
-            return Json(new
-            {
-                ok = false,
-                mensaje = "Ese turno no cruza con el horario programado de la OF. Selecciona otro turno o fecha."
-            });
-        }
+        if (!ventana.HasValue)
+            return Json(new { ok = false, mensaje = "Ese turno no cruza con el horario programado de la OF. Selecciona otro turno o fecha." });
 
-        var candidatos =
-            await CargarCandidatosAsync(
-                programa,
-                turno,
-                fechaTrabajo.Date,
-                cn);
+        var candidatos = await CargarCandidatosAsync(programa, turno, fechaTrabajo.Date, cn);
 
         return Json(new
         {
             ok = true,
             ventanaInicio = ventana.Value.Inicio,
             ventanaFin = ventana.Value.Fin,
-            ventanaTexto =
-                ventana.Value.Inicio.ToString("dd/MM/yyyy HH:mm") +
-                " → " +
-                ventana.Value.Fin.ToString("dd/MM/yyyy HH:mm"),
+            ventanaTexto = ventana.Value.Inicio.ToString("dd/MM/yyyy HH:mm") + " → " + ventana.Value.Fin.ToString("dd/MM/yyyy HH:mm"),
             turno = new
             {
                 turnoID = turno.TurnoID,
@@ -115,7 +83,8 @@ public sealed partial class ProduccionPersonalController : Controller
             escalaPublicadaEncontrada = candidatos.EscalaPublicadaEncontrada,
             operadores = candidatos.Operadores,
             auxiliares = candidatos.Auxiliares,
-            tecnicos = candidatos.Tecnicos
+            tecnicos = candidatos.Tecnicos,
+            smeds = candidatos.Smeds
         });
     }
 
@@ -685,36 +654,25 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
         public List<object> Operadores { get; set; } = new();
         public List<object> Auxiliares { get; set; } = new();
         public List<object> Tecnicos { get; set; } = new();
+        public List<object> Smeds { get; set; } = new();
     }
 
-    private static async Task<CandidatosResultado> CargarCandidatosAsync(
-        ProduccionPersonalProgramaVm programa,
-        ProduccionPersonalTurnoVm turno,
-        DateTime fechaTrabajo,
-        SqlConnection cn)
+    private static async Task<CandidatosResultado> CargarCandidatosAsync(ProduccionPersonalProgramaVm programa, ProduccionPersonalTurnoVm turno, DateTime fechaTrabajo, SqlConnection cn)
     {
         var result = new CandidatosResultado();
 
-        result.TieneMatriz =
-            programa.ParteID.HasValue &&
-            await ParteTieneMatrizAsync(programa.ParteID.Value, cn, null);
+        result.TieneMatriz = programa.ParteID.HasValue && await ParteTieneMatrizAsync(programa.ParteID.Value, cn, null);
 
         const string escalaSql = @"
 SELECT CONVERT(bit,CASE WHEN EXISTS
 (
     SELECT 1
     FROM dbo.RRHH_EscalasPersonal e
-    INNER JOIN dbo.RRHH_EscalaTurnos et
-        ON et.EscalaID=e.EscalaID
-       AND et.Activo=1
+    INNER JOIN dbo.RRHH_EscalaTurnos et ON et.EscalaID=e.EscalaID AND et.Activo=1
     WHERE e.Activo=1
       AND e.Estado=N'Publicada'
       AND @Fecha BETWEEN e.FechaInicio AND e.FechaFin
-      AND
-      (
-          et.TurnoOrigenID=@TurnoID
-          OR UPPER(LTRIM(RTRIM(et.Nombre)))=UPPER(LTRIM(RTRIM(@TurnoNombre)))
-      )
+      AND (et.TurnoOrigenID=@TurnoID OR UPPER(LTRIM(RTRIM(et.Nombre)))=UPPER(LTRIM(RTRIM(@TurnoNombre))))
 ) THEN 1 ELSE 0 END);";
 
         await using (var cmd = new SqlCommand(escalaSql, cn))
@@ -744,28 +702,15 @@ OUTER APPLY
         ISNULL(f.Nombre,N'') AS FuncionNombre,
         ISNULL(et.Nombre,N'') AS TurnoNombre
     FROM dbo.RRHH_EscalaAsignaciones a
-    INNER JOIN dbo.RRHH_EscalasPersonal e
-        ON e.EscalaID=a.EscalaID
-       AND e.Activo=1
-       AND e.Estado=N'Publicada'
-    INNER JOIN dbo.RRHH_EscalaTurnos et
-        ON et.EscalaID=a.EscalaID
-       AND et.EscalaTurnoID=a.EscalaTurnoID
-       AND et.Activo=1
-    LEFT JOIN dbo.RRHH_FuncionesPersonal f
-        ON f.FuncionID=a.FuncionID
-       AND f.Activo=1
-    LEFT JOIN dbo.ERP_Maquinas m
-        ON m.MaquinaID=a.MaquinaID
+    INNER JOIN dbo.RRHH_EscalasPersonal e ON e.EscalaID=a.EscalaID AND e.Activo=1 AND e.Estado=N'Publicada'
+    INNER JOIN dbo.RRHH_EscalaTurnos et ON et.EscalaID=a.EscalaID AND et.EscalaTurnoID=a.EscalaTurnoID AND et.Activo=1
+    LEFT JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+    LEFT JOIN dbo.ERP_Maquinas m ON m.MaquinaID=a.MaquinaID
     WHERE a.Activo=1
       AND a.PersonalID=p.PersonaID
       AND @Fecha BETWEEN CONVERT(date,a.FechaInicio) AND CONVERT(date,a.FechaFin)
       AND (@MaquinaID IS NULL OR a.MaquinaID=@MaquinaID)
-      AND
-      (
-          et.TurnoOrigenID=@TurnoID
-          OR UPPER(LTRIM(RTRIM(et.Nombre)))=UPPER(LTRIM(RTRIM(@TurnoNombre)))
-      )
+      AND (et.TurnoOrigenID=@TurnoID OR UPPER(LTRIM(RTRIM(et.Nombre)))=UPPER(LTRIM(RTRIM(@TurnoNombre))))
     ORDER BY a.AsignacionID DESC
 ) escala
 OUTER APPLY
@@ -785,85 +730,69 @@ ORDER BY
     CASE WHEN pol.Nivel IS NULL THEN 99 ELSE 4-pol.Nivel END,
     Nombre;";
 
-        result.Operadores =
-            await EjecutarCandidatosAsync(
-                roleBase
-                    .Replace("{ROLE_FILTER}", @"(
-                        UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
-                        OR EXISTS
-                        (
-                            SELECT 1
-                            FROM dbo.RRHH_EscalaAsignaciones ax
-                            INNER JOIN dbo.RRHH_FuncionesPersonal fx
-                                ON fx.FuncionID=ax.FuncionID
-                               AND fx.Activo=1
-                            WHERE ax.Activo=1
-                              AND ax.PersonalID=p.PersonaID
-                              AND UPPER(LTRIM(RTRIM(fx.Nombre)))=N'OPERADOR'
-                        )
-                    )")
-                    .Replace(
-                        "{POL_FILTER}",
-                        result.TieneMatriz
-                            ? "pol.Nivel BETWEEN 1 AND 4"
-                            : "1=1"),
-                programa.ParteID,
-                turno,
-                fechaTrabajo,
-                programa.MaquinaID,
-                cn);
+        result.Operadores = await EjecutarCandidatosAsync(
+            roleBase.Replace("{ROLE_FILTER}", @"(
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
+            OR EXISTS
+            (
+                SELECT 1
+                FROM dbo.RRHH_EscalaAsignaciones ax
+                INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
+                WHERE ax.Activo=1
+                  AND ax.PersonalID=p.PersonaID
+                  AND UPPER(LTRIM(RTRIM(fx.Nombre)))=N'OPERADOR'
+            )
+        )").Replace("{POL_FILTER}", result.TieneMatriz ? "pol.Nivel BETWEEN 1 AND 4" : "1=1"),
+            programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
 
-        result.Auxiliares =
-            await EjecutarCandidatosAsync(
-                roleBase
-                    .Replace("{ROLE_FILTER}", @"(
-                        UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
-                        OR EXISTS
-                        (
-                            SELECT 1
-                            FROM dbo.RRHH_EscalaAsignaciones ax
-                            INNER JOIN dbo.RRHH_FuncionesPersonal fx
-                                ON fx.FuncionID=ax.FuncionID
-                               AND fx.Activo=1
-                            WHERE ax.Activo=1
-                              AND ax.PersonalID=p.PersonaID
-                              AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%AUXILIAR%'
-                        )
-                    )")
-                    .Replace("{POL_FILTER}", "1=1"),
-                programa.ParteID,
-                turno,
-                fechaTrabajo,
-                programa.MaquinaID,
-                cn);
+        result.Auxiliares = await EjecutarCandidatosAsync(
+            roleBase.Replace("{ROLE_FILTER}", @"(
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
+            OR EXISTS
+            (
+                SELECT 1
+                FROM dbo.RRHH_EscalaAsignaciones ax
+                INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
+                WHERE ax.Activo=1
+                  AND ax.PersonalID=p.PersonaID
+                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%AUXILIAR%'
+            )
+        )").Replace("{POL_FILTER}", "1=1"),
+            programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
 
-        result.Tecnicos =
-            await EjecutarCandidatosAsync(
-                roleBase
-                    .Replace("{ROLE_FILTER}", @"(
-                        (
-                            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
-                            AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
-                        )
-                        OR EXISTS
-                        (
-                            SELECT 1
-                            FROM dbo.RRHH_EscalaAsignaciones ax
-                            INNER JOIN dbo.RRHH_FuncionesPersonal fx
-                                ON fx.FuncionID=ax.FuncionID
-                               AND fx.Activo=1
-                            WHERE ax.Activo=1
-                              AND ax.PersonalID=p.PersonaID
-                              AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%TECNIC%'
-                              AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%PRODU%'
-                        )
-                    )")
-                    .Replace("{POL_FILTER}", "1=1"),
-                programa.ParteID,
-                turno,
-                fechaTrabajo,
-                programa.MaquinaID,
-                cn);
+        result.Tecnicos = await EjecutarCandidatosAsync(
+            roleBase.Replace("{ROLE_FILTER}", @"(
+            (
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
+                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
+            )
+            OR EXISTS
+            (
+                SELECT 1
+                FROM dbo.RRHH_EscalaAsignaciones ax
+                INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
+                WHERE ax.Activo=1
+                  AND ax.PersonalID=p.PersonaID
+                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%TECNIC%'
+                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%PRODU%'
+            )
+        )").Replace("{POL_FILTER}", "1=1"),
+            programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
+
+        result.Smeds = await EjecutarCandidatosAsync(
+            roleBase.Replace("{ROLE_FILTER}", @"(
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%SMED%'
+            OR EXISTS
+            (
+                SELECT 1
+                FROM dbo.RRHH_EscalaAsignaciones ax
+                INNER JOIN dbo.RRHH_FuncionesPersonal fx ON fx.FuncionID=ax.FuncionID AND fx.Activo=1
+                WHERE ax.Activo=1
+                  AND ax.PersonalID=p.PersonaID
+                  AND UPPER(LTRIM(RTRIM(fx.Nombre))) LIKE N'%SMED%'
+            )
+        )").Replace("{POL_FILTER}", "1=1"),
+            programa.ParteID, turno, fechaTrabajo, programa.MaquinaID, cn);
 
         return result;
     }
@@ -925,69 +854,57 @@ THEN 1 ELSE 0 END);";
         return Convert.ToBoolean(await cmd.ExecuteScalarAsync() ?? false);
     }
 
-    private static async Task<string?> ValidarPersonaRolAsync(
-        int personaId,
-        string rol,
-        int? parteId,
-        SqlConnection cn,
-        SqlTransaction tx)
+    private static async Task<string?> ValidarPersonaRolAsync(int personaId, string rol, int? parteId, SqlConnection cn, SqlTransaction tx)
     {
-        if (personaId <= 0)
-            return null;
+        if (personaId <= 0) return null;
 
-        var tieneMatriz =
-            rol == "OPERADOR" &&
-            parteId.HasValue &&
-            await ParteTieneMatrizAsync(parteId.Value, cn, tx);
+        rol = (rol ?? string.Empty).Trim().ToUpperInvariant();
+        var tieneMatriz = rol == "OPERADOR" && parteId.HasValue && await ParteTieneMatrizAsync(parteId.Value, cn, tx);
 
         var condicionRol = rol switch
         {
             "OPERADOR" => @"(
-                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
-                OR EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.RRHH_EscalaAsignaciones a
-                    INNER JOIN dbo.RRHH_FuncionesPersonal f
-                        ON f.FuncionID=a.FuncionID
-                       AND f.Activo=1
-                    WHERE a.Activo=1
-                      AND a.PersonalID=p.PersonaID
-                      AND UPPER(LTRIM(RTRIM(f.Nombre)))=N'OPERADOR'
-                )
-            )",
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N''))))=N'OPERADOR'
+            OR EXISTS
+            (
+                SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
+                INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+                WHERE a.Activo=1 AND a.PersonalID=p.PersonaID AND UPPER(LTRIM(RTRIM(f.Nombre)))=N'OPERADOR'
+            )
+        )",
             "AUXILIAR" => @"(
-                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
-                OR EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.RRHH_EscalaAsignaciones a
-                    INNER JOIN dbo.RRHH_FuncionesPersonal f
-                        ON f.FuncionID=a.FuncionID
-                       AND f.Activo=1
-                    WHERE a.Activo=1
-                      AND a.PersonalID=p.PersonaID
-                      AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%AUXILIAR%'
-                )
-            )",
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%AUXILIAR%'
+            OR EXISTS
+            (
+                SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
+                INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+                WHERE a.Activo=1 AND a.PersonalID=p.PersonaID AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%AUXILIAR%'
+            )
+        )",
             "TECNICO" => @"(
-                (
-                    UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
-                    AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
-                )
-                OR EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.RRHH_EscalaAsignaciones a
-                    INNER JOIN dbo.RRHH_FuncionesPersonal f
-                        ON f.FuncionID=a.FuncionID
-                       AND f.Activo=1
-                    WHERE a.Activo=1
-                      AND a.PersonalID=p.PersonaID
-                      AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%TECNIC%'
-                      AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%PRODU%'
-                )
-            )",
+            (
+                UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%TECNIC%'
+                AND UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%PRODU%'
+            )
+            OR EXISTS
+            (
+                SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
+                INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+                WHERE a.Activo=1
+                  AND a.PersonalID=p.PersonaID
+                  AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%TECNIC%'
+                  AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%PRODU%'
+            )
+        )",
+            "SMED" => @"(
+            UPPER(LTRIM(RTRIM(ISNULL(p.Puesto,N'')))) LIKE N'%SMED%'
+            OR EXISTS
+            (
+                SELECT 1 FROM dbo.RRHH_EscalaAsignaciones a
+                INNER JOIN dbo.RRHH_FuncionesPersonal f ON f.FuncionID=a.FuncionID AND f.Activo=1
+                WHERE a.Activo=1 AND a.PersonalID=p.PersonaID AND UPPER(LTRIM(RTRIM(f.Nombre))) LIKE N'%SMED%'
+            )
+        )",
             _ => "1=0"
         };
 
@@ -1002,13 +919,13 @@ WHERE p.PersonaID=@PersonaID
   (
       @RequierePolivalencia=0
       OR EXISTS
-         (
-             SELECT 1
-             FROM dbo.vw_RRHH_PolivalenciaOperadoresParte v
-             WHERE v.PersonalID=p.PersonaID
-               AND v.ParteID=@ParteID
-               AND CONVERT(INT,v.Nivel) BETWEEN 1 AND 4
-         )
+      (
+          SELECT 1
+          FROM dbo.vw_RRHH_PolivalenciaOperadoresParte v
+          WHERE v.PersonalID=p.PersonaID
+            AND v.ParteID=@ParteID
+            AND CONVERT(INT,v.Nivel) BETWEEN 1 AND 4
+      )
   );";
 
         await using var cmd = new SqlCommand(sql, cn, tx);
@@ -1018,7 +935,6 @@ WHERE p.PersonaID=@PersonaID
         var value = await cmd.ExecuteScalarAsync();
         return value == null || value == DBNull.Value ? null : value.ToString()?.Trim();
     }
-
     private sealed class ConflictoPersona
     {
         public int ProgramaProduccionID { get; set; }
@@ -1027,13 +943,7 @@ WHERE p.PersonaID=@PersonaID
         public DateTime Fin { get; set; }
     }
 
-    private static async Task<ConflictoPersona?> BuscarConflictoPersonaAsync(
-        int personaId,
-        DateTime inicio,
-        DateTime fin,
-        int? asignacionExcluirId,
-        SqlConnection cn,
-        SqlTransaction tx)
+    private static async Task<ConflictoPersona?> BuscarConflictoPersonaAsync(int personaId, DateTime inicio, DateTime fin, int? asignacionExcluirId, SqlConnection cn, SqlTransaction tx)
     {
         const string sql = @"
 SELECT TOP (1)
@@ -1041,39 +951,32 @@ SELECT TOP (1)
     a.Inicio,
     a.Fin,
     LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS PersonaNombre
-FROM dbo.Produccion_ProgramaPersonalAsignaciones a WITH (UPDLOCK,HOLDLOCK)
+FROM dbo.Produccion_ProgramaPersonalAsignaciones a WITH(UPDLOCK,HOLDLOCK)
 INNER JOIN dbo.Persona p ON p.PersonaID=@PersonaID
 WHERE a.Activo=1
   AND (@AsignacionExcluirID IS NULL OR a.AsignacionPersonalID<>@AsignacionExcluirID)
   AND @Inicio<a.Fin
   AND @Fin>a.Inicio
-  AND
-  (
-      a.OperadorID=@PersonaID
-      OR a.AuxiliarID=@PersonaID
-      OR a.TecnicoProduccionID=@PersonaID
-  )
+  AND a.OperadorID=@PersonaID
 ORDER BY a.Inicio;";
 
         await using var cmd = new SqlCommand(sql, cn, tx);
         cmd.Parameters.Add("@PersonaID", SqlDbType.Int).Value = personaId;
-        cmd.Parameters.Add("@AsignacionExcluirID", SqlDbType.Int).Value =
-            asignacionExcluirId.HasValue ? asignacionExcluirId.Value : DBNull.Value;
+        cmd.Parameters.Add("@AsignacionExcluirID", SqlDbType.Int).Value = asignacionExcluirId.HasValue ? asignacionExcluirId.Value : DBNull.Value;
         cmd.Parameters.Add("@Inicio", SqlDbType.DateTime2).Value = inicio;
         cmd.Parameters.Add("@Fin", SqlDbType.DateTime2).Value = fin;
+
         await using var rd = await cmd.ExecuteReaderAsync();
-        if (!await rd.ReadAsync())
-            return null;
+        if (!await rd.ReadAsync()) return null;
 
         return new ConflictoPersona
         {
             ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
-            PersonaNombre = rd["PersonaNombre"]?.ToString()?.Trim() ?? "La persona",
+            PersonaNombre = rd["PersonaNombre"]?.ToString()?.Trim() ?? "El operador",
             Inicio = Convert.ToDateTime(rd["Inicio"]),
             Fin = Convert.ToDateTime(rd["Fin"])
         };
     }
-
     private static async Task<int?> ResolverAsignacionExistenteAsync(
         ProduccionPersonalGuardarVm vm,
         SqlConnection cn,
@@ -1099,13 +1002,7 @@ ORDER BY AsignacionPersonalID DESC;";
         return value == null || value == DBNull.Value ? null : Convert.ToInt32(value);
     }
 
-    private static void AgregarParametrosGuardar(
-        SqlCommand cmd,
-        int? asignacionPersonalId,
-        ProduccionPersonalGuardarVm vm,
-        ProduccionPersonalTurnoVm turno,
-        (DateTime Inicio, DateTime Fin) ventana,
-        int usuarioId)
+    private static void AgregarParametrosGuardar(SqlCommand cmd, int? asignacionPersonalId, ProduccionPersonalGuardarVm vm, ProduccionPersonalTurnoVm turno, (DateTime Inicio, DateTime Fin) ventana, int usuarioId)
     {
         if (asignacionPersonalId.HasValue)
             cmd.Parameters.Add("@AsignacionPersonalID", SqlDbType.Int).Value = asignacionPersonalId.Value;
@@ -1119,14 +1016,12 @@ ORDER BY AsignacionPersonalID DESC;";
         cmd.Parameters.Add("@OperadorID", SqlDbType.Int).Value = vm.OperadorID.HasValue ? vm.OperadorID.Value : DBNull.Value;
         cmd.Parameters.Add("@AuxiliarID", SqlDbType.Int).Value = vm.AuxiliarID.HasValue ? vm.AuxiliarID.Value : DBNull.Value;
         cmd.Parameters.Add("@TecnicoProduccionID", SqlDbType.Int).Value = vm.TecnicoProduccionID.HasValue ? vm.TecnicoProduccionID.Value : DBNull.Value;
+        cmd.Parameters.Add("@SmedID", SqlDbType.Int).Value = vm.SmedID.HasValue ? vm.SmedID.Value : DBNull.Value;
         cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.Observaciones) ? DBNull.Value : vm.Observaciones.Trim();
         cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
     }
 
-    private static async Task<List<ProduccionPersonalAsignacionVm>> CargarAsignacionesAsync(
-        DateTime desde,
-        DateTime hasta,
-        SqlConnection cn)
+    private static async Task<List<ProduccionPersonalAsignacionVm>> CargarAsignacionesAsync(DateTime desde, DateTime hasta, SqlConnection cn)
     {
         const string sql = @"
 SELECT
@@ -1143,11 +1038,14 @@ SELECT
     LTRIM(RTRIM(CONCAT(ISNULL(aux.Nombre,N''),N' ',ISNULL(aux.ApellidoPaterno,N''),N' ',ISNULL(aux.ApellidoMaterno,N'')))) AS AuxiliarNombre,
     a.TecnicoProduccionID,
     LTRIM(RTRIM(CONCAT(ISNULL(tec.Nombre,N''),N' ',ISNULL(tec.ApellidoPaterno,N''),N' ',ISNULL(tec.ApellidoMaterno,N'')))) AS TecnicoProduccionNombre,
+    a.SmedID,
+    LTRIM(RTRIM(CONCAT(ISNULL(smed.Nombre,N''),N' ',ISNULL(smed.ApellidoPaterno,N''),N' ',ISNULL(smed.ApellidoMaterno,N'')))) AS SmedNombre,
     ISNULL(a.Observaciones,N'') AS Observaciones
 FROM dbo.Produccion_ProgramaPersonalAsignaciones a
 LEFT JOIN dbo.Persona op ON op.PersonaID=a.OperadorID
 LEFT JOIN dbo.Persona aux ON aux.PersonaID=a.AuxiliarID
 LEFT JOIN dbo.Persona tec ON tec.PersonaID=a.TecnicoProduccionID
+LEFT JOIN dbo.Persona smed ON smed.PersonaID=a.SmedID
 WHERE a.Activo=1
   AND a.Inicio<@Hasta
   AND a.Fin>@Desde
@@ -1158,6 +1056,7 @@ ORDER BY a.Inicio,a.AsignacionPersonalID;";
         cmd.Parameters.Add("@Desde", SqlDbType.DateTime2).Value = desde;
         cmd.Parameters.Add("@Hasta", SqlDbType.DateTime2).Value = hasta;
         await using var rd = await cmd.ExecuteReaderAsync();
+
         while (await rd.ReadAsync())
         {
             result.Add(new ProduccionPersonalAsignacionVm
@@ -1175,12 +1074,14 @@ ORDER BY a.Inicio,a.AsignacionPersonalID;";
                 AuxiliarNombre = rd["AuxiliarNombre"]?.ToString()?.Trim() ?? string.Empty,
                 TecnicoProduccionID = rd["TecnicoProduccionID"] == DBNull.Value ? null : Convert.ToInt32(rd["TecnicoProduccionID"]),
                 TecnicoProduccionNombre = rd["TecnicoProduccionNombre"]?.ToString()?.Trim() ?? string.Empty,
+                SmedID = rd["SmedID"] == DBNull.Value ? null : Convert.ToInt32(rd["SmedID"]),
+                SmedNombre = rd["SmedNombre"]?.ToString()?.Trim() ?? string.Empty,
                 Observaciones = rd["Observaciones"]?.ToString()?.Trim() ?? string.Empty
             });
         }
+
         return result;
     }
-
     private static bool Es1200T(string? codigo, string? nombre)
     {
         static string N(string? value) =>

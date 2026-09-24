@@ -1050,6 +1050,7 @@
             const token=corteForm.querySelector('input[name="__RequestVerificationToken"]')?.value;
             if(token) formData.append('__RequestVerificationToken',token);
             formData.append('tiempoExtraId',corteForm.querySelector('[name="TiempoExtraID"]')?.value||'0');
+            formData.append('ejecucionProduccionId',corteForm.querySelector('[name="EjecucionProduccionID"]')?.value||'0');
             formData.append('contadorMaquinaActual',corteForm.querySelector('[name="ContadorMaquinaActual"]')?.value||'');
             formData.append('cantidadScrap',corteForm.querySelector('[name="CantidadScrap"]')?.value||'0');
             formData.append('cantidadScrapPareja',corteForm.querySelector('[name="CantidadScrapPareja"]')?.value||'0');

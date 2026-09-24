@@ -63,19 +63,11 @@ namespace ERP.NSQuell.Servicios.Produccion
             vm.Areas = ConstruirOpcionesAreas(filtros.Area);
             return vm;
         }
-        private static async Task<List<ProgramaBaseDto>> CargarProgramasBaseAsync(
-    AgendaOperativaFiltroVm filtros,
-    DateTime ahora,
-    SqlConnection cn,
-    DateTime? desdeForzado = null,
-    DateTime? hastaForzado = null)
+        private static async Task<List<ProgramaBaseDto>> CargarProgramasBaseAsync(AgendaOperativaFiltroVm filtros, DateTime ahora, SqlConnection cn, DateTime? desdePersonalizado = null, DateTime? hastaPersonalizado = null)
         {
-            var desde = desdeForzado ?? ahora.AddHours(-24);
-            var hasta = hastaForzado ?? ahora.AddHours(filtros.VentanaHoras);
-
-            if (hasta <= desde)
-                hasta = desde.AddDays(1);
-
+            var desde = desdePersonalizado ?? ahora.AddHours(-24);
+            var hasta = hastaPersonalizado ?? ahora.AddHours(filtros.VentanaHoras);
+            if (hasta <= desde) hasta = desde.AddHours(Math.Max(1, filtros.VentanaHoras));
             const string sql = @"
 SELECT TOP(500)
     pp.ProgramaProduccionID,pp.SolicitudProduccionID,pp.SolicitudProduccionDetalleID,pp.ReleaseDetalleID,
@@ -87,7 +79,7 @@ SELECT TOP(500)
     CONVERT(INT,ISNULL(e.CantidadOKTotal,ISNULL(pp.CantidadProducida,0))) AS CantidadProducida,
     pp.FechaInicioProgramada,ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CONVERT(INT,CEILING(ISNULL(pp.HorasProgramadas,1)*60)),pp.FechaInicioProgramada)) AS FechaFinProgramada,
     ISNULL(pp.EstatusID,1) AS EstatusProgramaID,pp.Observaciones,
-    grupo.GrupoLhRh,CONVERT(bit,CASE WHEN anterior.ProgramaProduccionID IS NULL THEN 0 WHEN anterior.MoldeID IS NOT NULL AND pp.MoldeID IS NOT NULL THEN CASE WHEN anterior.MoldeID<>pp.MoldeID THEN 1 ELSE 0 END WHEN NULLIF(LTRIM(RTRIM(ISNULL(anterior.MoldeCodigo,N''))),N'') IS NULL OR NULLIF(LTRIM(RTRIM(ISNULL(pp.MoldeCodigo,N''))),N'') IS NULL THEN 0 WHEN UPPER(LTRIM(RTRIM(anterior.MoldeCodigo)))<>UPPER(LTRIM(RTRIM(pp.MoldeCodigo))) THEN 1 ELSE 0 END) AS RequiereCambioMolde,
+    grupo.GrupoLhRh,CONVERT(bit,ISNULL(pp.RequiereCambioMolde,0)) AS RequiereCambioMolde,
     COALESCE(pp.MaterialID,d.MaterialID) AS MaterialID,COALESCE(NULLIF(pp.MaterialCodigo,N''),d.MaterialCodigo) AS MaterialCodigo,
     COALESCE(NULLIF(pp.MaterialDescripcion,N''),d.MaterialDescripcion) AS MaterialDescripcion,d.CantidadMpKg,d.TipoSecado,d.HorasSecado,d.EmbalajeCodigo,d.EmbalajeDescripcion,d.CantidadEmbalajes,
     e.EjecucionProduccionID,e.EstatusID AS EstatusEjecucionID,e.FechaInicioReal,e.FechaFinReal,e.FechaLiberacionMaquina,
@@ -101,14 +93,6 @@ LEFT JOIN dbo.SolicitudesProduccionDetalle d ON d.SolicitudProduccionDetalleID=p
 LEFT JOIN dbo.ERP_Maquinas m ON m.MaquinaID=pp.MaquinaID
 OUTER APPLY(SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N'')) AS PosGrupo) pos
 OUTER APPLY(SELECT CASE WHEN pos.PosGrupo>0 THEN TRY_CONVERT(INT,LEFT(SUBSTRING(pp.Observaciones,pos.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),CHARINDEX(N';',SUBSTRING(pp.Observaciones,pos.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1)) ELSE NULL END AS GrupoLhRh) grupo
-OUTER APPLY
-(
-    SELECT TOP(1) ant.ProgramaProduccionID,ant.MoldeID,ant.MoldeCodigo
-    FROM dbo.Planeacion_ProgramaProduccion ant
-    WHERE ant.Activo=1 AND ant.ProgramaProduccionID<>pp.ProgramaProduccionID AND ant.MaquinaID=pp.MaquinaID AND ant.FechaInicioProgramada<pp.FechaInicioProgramada AND ISNULL(ant.EstatusID,1)<>99
-      AND (grupo.GrupoLhRh IS NULL OR ISNULL(ant.Observaciones,N'') NOT LIKE N'%NSQ_LHRH_PAIR:'+CONVERT(NVARCHAR(20),grupo.GrupoLhRh)+N';%')
-    ORDER BY ant.FechaInicioProgramada DESC,ant.ProgramaProduccionID DESC
-) anterior
 OUTER APPLY
 (
     SELECT TOP(1) ex.EjecucionProduccionID,ex.EstatusID,ex.FechaInicioReal,ex.FechaFinReal,ex.FechaLiberacionMaquina,ex.CantidadOKTotal,
@@ -153,56 +137,61 @@ ORDER BY CASE WHEN e.EjecucionProduccionID IS NOT NULL THEN 0 ELSE 1 END,pp.Fech
             cmd.Parameters.Add("@Ahora", SqlDbType.DateTime2).Value = ahora;
             cmd.Parameters.Add("@MaquinaID", SqlDbType.Int).Value = (object?)filtros.MaquinaID ?? DBNull.Value;
             cmd.Parameters.Add("@Busqueda", SqlDbType.NVarChar, 200).Value = (object?)filtros.Busqueda ?? DBNull.Value;
-            await using var rd = await cmd.ExecuteReaderAsync();
-            while (await rd.ReadAsync())
+            await using (var rd = await cmd.ExecuteReaderAsync())
             {
-                lista.Add(new ProgramaBaseDto
+                while (await rd.ReadAsync())
                 {
-                    ProgramaProduccionID = Int(rd, "ProgramaProduccionID"),
-                    SolicitudProduccionID = NInt(rd, "SolicitudProduccionID"),
-                    SolicitudProduccionDetalleID = NInt(rd, "SolicitudProduccionDetalleID"),
-                    ReleaseDetalleID = NInt(rd, "ReleaseDetalleID"),
-                    NumeroOF = Txt(rd, "NumeroOF"),
-                    ParteID = NInt(rd, "ParteID"),
-                    NumeroParte = Txt(rd, "NumeroParte"),
-                    ReferenciaSAP = Txt(rd, "ReferenciaSAP"),
-                    DescripcionParte = Txt(rd, "DescripcionParte"),
-                    MaquinaID = NInt(rd, "MaquinaID"),
-                    MaquinaCodigo = Txt(rd, "MaquinaCodigo"),
-                    MaquinaNombre = Txt(rd, "MaquinaNombre"),
-                    MoldeID = NInt(rd, "MoldeID"),
-                    MoldeCodigo = Txt(rd, "MoldeCodigo"),
-                    CantidadProgramada = Int(rd, "CantidadProgramada"),
-                    CantidadProducida = Int(rd, "CantidadProducida"),
-                    FechaInicioProgramada = NDate(rd, "FechaInicioProgramada"),
-                    FechaFinProgramada = NDate(rd, "FechaFinProgramada"),
-                    EstatusProgramaID = Int(rd, "EstatusProgramaID"),
-                    Observaciones = Txt(rd, "Observaciones"),
-                    GrupoLhRh = NInt(rd, "GrupoLhRh"),
-                    RequiereCambioMolde = Bool(rd, "RequiereCambioMolde"),
-                    MaterialID = NInt(rd, "MaterialID"),
-                    MaterialCodigo = Txt(rd, "MaterialCodigo"),
-                    MaterialDescripcion = Txt(rd, "MaterialDescripcion"),
-                    CantidadMpKg = NDec(rd, "CantidadMpKg"),
-                    TipoSecado = Txt(rd, "TipoSecado"),
-                    HorasSecado = NDec(rd, "HorasSecado"),
-                    EmbalajeCodigo = Txt(rd, "EmbalajeCodigo"),
-                    EmbalajeDescripcion = Txt(rd, "EmbalajeDescripcion"),
-                    CantidadEmbalajes = NDec(rd, "CantidadEmbalajes"),
-                    EjecucionProduccionID = NInt(rd, "EjecucionProduccionID"),
-                    EstatusEjecucionID = NInt(rd, "EstatusEjecucionID"),
-                    FechaInicioReal = NDate(rd, "FechaInicioReal"),
-                    FechaFinReal = NDate(rd, "FechaFinReal"),
-                    FechaLiberacionMaquina = NDate(rd, "FechaLiberacionMaquina"),
-                    OperadorPrincipalID = NInt(rd, "OperadorPrincipalID"),
-                    OperadorPrincipalNombre = Txt(rd, "OperadorPrincipalNombre"),
-                    OperadorAuxiliarID = NInt(rd, "OperadorAuxiliarID"),
-                    OperadorAuxiliarNombre = Txt(rd, "OperadorAuxiliarNombre"),
-                    TecnicoProduccionID = NInt(rd, "TecnicoProduccionID"),
-                    TecnicoProduccionNombre = Txt(rd, "TecnicoProduccionNombre"),
-                    EsUrgente = Bool(rd, "EsUrgente")
-                });
+                    lista.Add(new ProgramaBaseDto
+                    {
+                        ProgramaProduccionID = Int(rd, "ProgramaProduccionID"),
+                        SolicitudProduccionID = NInt(rd, "SolicitudProduccionID"),
+                        SolicitudProduccionDetalleID = NInt(rd, "SolicitudProduccionDetalleID"),
+                        ReleaseDetalleID = NInt(rd, "ReleaseDetalleID"),
+                        NumeroOF = Txt(rd, "NumeroOF"),
+                        ParteID = NInt(rd, "ParteID"),
+                        NumeroParte = Txt(rd, "NumeroParte"),
+                        ReferenciaSAP = Txt(rd, "ReferenciaSAP"),
+                        DescripcionParte = Txt(rd, "DescripcionParte"),
+                        MaquinaID = NInt(rd, "MaquinaID"),
+                        MaquinaCodigo = Txt(rd, "MaquinaCodigo"),
+                        MaquinaNombre = Txt(rd, "MaquinaNombre"),
+                        MoldeID = NInt(rd, "MoldeID"),
+                        MoldeCodigo = Txt(rd, "MoldeCodigo"),
+                        CantidadProgramada = Int(rd, "CantidadProgramada"),
+                        CantidadProducida = Int(rd, "CantidadProducida"),
+                        FechaInicioProgramada = NDate(rd, "FechaInicioProgramada"),
+                        FechaFinProgramada = NDate(rd, "FechaFinProgramada"),
+                        EstatusProgramaID = Int(rd, "EstatusProgramaID"),
+                        Observaciones = Txt(rd, "Observaciones"),
+                        GrupoLhRh = NInt(rd, "GrupoLhRh"),
+                        RequiereCambioMolde = Bool(rd, "RequiereCambioMolde"),
+                        MaterialID = NInt(rd, "MaterialID"),
+                        MaterialCodigo = Txt(rd, "MaterialCodigo"),
+                        MaterialDescripcion = Txt(rd, "MaterialDescripcion"),
+                        CantidadMpKg = NDec(rd, "CantidadMpKg"),
+                        TipoSecado = Txt(rd, "TipoSecado"),
+                        HorasSecado = NDec(rd, "HorasSecado"),
+                        EmbalajeCodigo = Txt(rd, "EmbalajeCodigo"),
+                        EmbalajeDescripcion = Txt(rd, "EmbalajeDescripcion"),
+                        CantidadEmbalajes = NDec(rd, "CantidadEmbalajes"),
+                        EjecucionProduccionID = NInt(rd, "EjecucionProduccionID"),
+                        EstatusEjecucionID = NInt(rd, "EstatusEjecucionID"),
+                        FechaInicioReal = NDate(rd, "FechaInicioReal"),
+                        FechaFinReal = NDate(rd, "FechaFinReal"),
+                        FechaLiberacionMaquina = NDate(rd, "FechaLiberacionMaquina"),
+                        OperadorPrincipalID = NInt(rd, "OperadorPrincipalID"),
+                        OperadorPrincipalNombre = Txt(rd, "OperadorPrincipalNombre"),
+                        OperadorAuxiliarID = NInt(rd, "OperadorAuxiliarID"),
+                        OperadorAuxiliarNombre = Txt(rd, "OperadorAuxiliarNombre"),
+                        TecnicoProduccionID = NInt(rd, "TecnicoProduccionID"),
+                        TecnicoProduccionNombre = Txt(rd, "TecnicoProduccionNombre"),
+                        EsUrgente = Bool(rd, "EsUrgente")
+                    });
+                }
             }
+            var evaluaciones = await CambioMoldeService.EvaluarProgramasAsync(lista.Select(x => x.ProgramaProduccionID), cn, null, actualizarSnapshot: true);
+            foreach (var programa in lista)
+                if (evaluaciones.TryGetValue(programa.ProgramaProduccionID, out var evaluacion)) programa.RequiereCambioMolde = evaluacion.RequiereCambioMolde;
             return lista;
         }
         private static async Task CrearTablaTemporalProgramasAsync(List<ProgramaBaseDto> programas, SqlConnection cn)
@@ -586,11 +575,58 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         private static AgendaOperativaPasoVm EvaluarMaterial(ProgramaBaseDto p, InsumoDto? i)
         {
             var requerido = i?.CantidadMpRequerida ?? p.CantidadMpKg.GetValueOrDefault();
-            if (requerido <= ToleranciaCantidad) return PasoNoAplica(30, AgendaOperativaPasoClave.Material, "Materia prima", AgendaOperativaArea.Materiales, "La OF no tiene cantidad de MP requerida configurada.");
+
+            if (requerido <= ToleranciaCantidad)
+                return PasoNoAplica(30, AgendaOperativaPasoClave.Material, "Materia prima", AgendaOperativaArea.Materiales, "La OF no tiene cantidad de MP requerida configurada.");
+
             var recibido = i?.CantidadMpRecibida ?? 0m;
+            var hayMaterialDisponible = recibido > ToleranciaCantidad;
             var completo = recibido + ToleranciaCantidad >= requerido;
-            var estado = completo ? AgendaOperativaEstadoPaso.Completado : recibido > ToleranciaCantidad ? AgendaOperativaEstadoPaso.EnProceso : AgendaOperativaEstadoPaso.Pendiente;
-            return Paso(30, AgendaOperativaPasoClave.Material, "Materia prima", AgendaOperativaArea.Materiales, estado, true, completo, recibido > ToleranciaCantidad && !completo, false, $"Recibido en Producción: {recibido:0.####} de {requerido:0.####} kg. Actualmente es informativo y no se convierte en bloqueo automático de arranque.", p.FechaInicioProgramada?.AddHours(-Math.Max(1, (double)p.HorasSecado.GetValueOrDefault())), "ProduccionPreparacion", "Materiales", p.ProgramaProduccionID);
+            var parcial = hayMaterialDisponible && !completo;
+
+            string estado;
+            string detalle;
+            bool enProceso;
+            bool bloqueaFlujo;
+
+            if (completo)
+            {
+                estado = AgendaOperativaEstadoPaso.Completado;
+                detalle = $"Materia prima completa. Producción confirmó {recibido:0.####} de {requerido:0.####} kg requeridos.";
+                enProceso = false;
+                bloqueaFlujo = false;
+            }
+            else if (parcial)
+            {
+                var pendiente = Math.Max(0m, requerido - recibido);
+                estado = AgendaOperativaEstadoPaso.EnProceso;
+                detalle = $"Recepción parcial disponible. Producción tiene {recibido:0.####} de {requerido:0.####} kg confirmados y puede continuar con la preparación. Almacén aún debe completar aproximadamente {pendiente:0.####} kg.";
+                enProceso = true;
+                bloqueaFlujo = false;
+            }
+            else
+            {
+                estado = AgendaOperativaEstadoPaso.Pendiente;
+                detalle = $"La OF requiere {requerido:0.####} kg de materia prima y Producción todavía no tiene cantidad confirmada. Debe existir al menos una recepción positiva antes de iniciar la preparación.";
+                enProceso = false;
+                bloqueaFlujo = true;
+            }
+
+            return Paso(
+                30,
+                AgendaOperativaPasoClave.Material,
+                "Materia prima",
+                AgendaOperativaArea.Materiales,
+                estado,
+                true,
+                completo,
+                enProceso,
+                bloqueaFlujo,
+                detalle,
+                p.FechaInicioProgramada?.AddHours(-Math.Max(1, (double)p.HorasSecado.GetValueOrDefault())),
+                "ProduccionPreparacion",
+                "Materiales",
+                p.ProgramaProduccionID);
         }
         private static AgendaOperativaPasoVm EvaluarSecado(ProgramaBaseDto p, SecadoDto? s)
         {
@@ -659,16 +695,97 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         }
         private static AgendaOperativaPasoVm EvaluarCalidad(CalidadDto? c, AgendaOperativaItemVm item)
         {
-            if (!item.EjecucionProduccionID.HasValue) return PasoEsperando(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, "Se habilita después del checklist y las primeras piezas.");
-            if (c == null) return Paso(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, AgendaOperativaEstadoPaso.Esperando, true, false, false, true, "No existe una inspección activa de Calidad.", item.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
-            if (c.ConfiguracionInvalidada) return Paso(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, AgendaOperativaEstadoPaso.Bloqueado, true, false, false, true, "Calidad invalidó la configuración autorizada. Producción debe corregirla antes de continuar.", item.FechaInicioProgramada, "Calidad", "Detalle", c.InspeccionID);
+            if (!item.EjecucionProduccionID.HasValue)
+                return PasoEsperando(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, "Se habilita después del checklist y las primeras piezas.");
+
+            if (c == null)
+                return Paso(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, AgendaOperativaEstadoPaso.Esperando, true, false, false, true, "No existe una inspección activa de Calidad.", item.FechaInicioProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
+
+            if (c.ConfiguracionInvalidada)
+                return Paso(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, AgendaOperativaEstadoPaso.Bloqueado, true, false, false, true, "Calidad invalidó la configuración autorizada. Producción debe corregirla antes de continuar.", item.FechaInicioProgramada, "Calidad", "Detalle", c.InspeccionID);
+
             if (c.RequiereReliberacion)
             {
                 var autorizada = string.Equals(c.ResultadoReliberacion, "AUTORIZADA", StringComparison.OrdinalIgnoreCase);
                 var rechazada = string.Equals(c.ResultadoReliberacion, "RECHAZADA", StringComparison.OrdinalIgnoreCase);
-                return Paso(110, AgendaOperativaPasoClave.Calidad, "Reliberación de Calidad", AgendaOperativaArea.Calidad, autorizada ? AgendaOperativaEstadoPaso.Completado : rechazada ? AgendaOperativaEstadoPaso.Bloqueado : AgendaOperativaEstadoPaso.Esperando, true, autorizada, false, !autorizada, autorizada ? "Calidad autorizó la reliberación." : rechazada ? "La reliberación fue rechazada; Producción debe corregir y presentar nuevamente las piezas." : "La reliberación de Calidad continúa pendiente.", item.FechaInicioProgramada, "Calidad", "Detalle", c.InspeccionID);
+
+                return Paso(
+                    110,
+                    AgendaOperativaPasoClave.Calidad,
+                    "Reliberación de Calidad",
+                    AgendaOperativaArea.Calidad,
+                    autorizada ? AgendaOperativaEstadoPaso.Completado : rechazada ? AgendaOperativaEstadoPaso.Bloqueado : AgendaOperativaEstadoPaso.Esperando,
+                    true,
+                    autorizada,
+                    false,
+                    !autorizada,
+                    autorizada
+                        ? "Calidad autorizó la reliberación."
+                        : rechazada
+                            ? "La reliberación fue rechazada; Producción debe corregir y presentar nuevamente las piezas."
+                            : "La reliberación de Calidad continúa pendiente.",
+                    item.FechaInicioProgramada,
+                    "Calidad",
+                    "Detalle",
+                    c.InspeccionID);
             }
-            return Paso(110, AgendaOperativaPasoClave.Calidad, "Liberación de Calidad", AgendaOperativaArea.Calidad, c.EstaLiberada ? AgendaOperativaEstadoPaso.Completado : AgendaOperativaEstadoPaso.Esperando, true, c.EstaLiberada, false, !c.EstaLiberada, c.EstaLiberada ? "Calidad liberó la producción con resultado y etiqueta verde." : !string.IsNullOrWhiteSpace(c.MotivoDevolucion) ? c.MotivoDevolucion : "Calidad todavía no ha liberado la producción.", item.FechaInicioProgramada, "Calidad", "Detalle", c.InspeccionID);
+
+            var serieYaIniciada =
+                item.EstatusEjecucionID == ProduccionEstatus.EnProduccion ||
+                item.EstatusEjecucionID == ProduccionEstatus.Pausado ||
+                item.EstatusEjecucionID == ProduccionEstatus.TerminadoParcial ||
+                item.EstatusEjecucionID == ProduccionEstatus.Terminado;
+
+            var liberacionVigente =
+                c.EstaLiberada ||
+                (serieYaIniciada &&
+                 c.Liberado &&
+                 !c.ConfiguracionInvalidada &&
+                 !c.RequiereReliberacion &&
+                 string.Equals(c.ResultadoCalidad, "VERDE", StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(c.Etiqueta, "VERDE", StringComparison.OrdinalIgnoreCase));
+
+            if (liberacionVigente)
+            {
+                var monitoreoActivo = string.Equals(c.Estado, "MONITOREO_ACTIVO", StringComparison.OrdinalIgnoreCase);
+                var detalle = monitoreoActivo
+                    ? "Calidad liberó el arranque. La producción está en serie y el monitoreo horario de Calidad se encuentra activo."
+                    : "Calidad liberó la producción con resultado y etiqueta verde.";
+
+                return Paso(
+                    110,
+                    AgendaOperativaPasoClave.Calidad,
+                    "Liberación de Calidad",
+                    AgendaOperativaArea.Calidad,
+                    AgendaOperativaEstadoPaso.Completado,
+                    true,
+                    true,
+                    false,
+                    false,
+                    detalle,
+                    item.FechaInicioProgramada,
+                    "Calidad",
+                    "Detalle",
+                    c.InspeccionID);
+            }
+
+            return Paso(
+                110,
+                AgendaOperativaPasoClave.Calidad,
+                "Liberación de Calidad",
+                AgendaOperativaArea.Calidad,
+                AgendaOperativaEstadoPaso.Esperando,
+                true,
+                false,
+                false,
+                true,
+                !string.IsNullOrWhiteSpace(c.MotivoDevolucion)
+                    ? c.MotivoDevolucion
+                    : "Calidad todavía no ha liberado la producción.",
+                item.FechaInicioProgramada,
+                "Calidad",
+                "Detalle",
+                c.InspeccionID);
         }
         private static AgendaOperativaPasoVm EvaluarInicioSerie(ProgramaBaseDto p, CalidadDto? c, ConfiguracionDto? config, AgendaOperativaItemVm item)
         {
@@ -1030,7 +1147,24 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
             public int? ReliberacionID { get; set; }
             public string? ResultadoReliberacion { get; set; }
             public DateTime? FechaValidacionReliberacion { get; set; }
-            public bool EstaLiberada => Liberado && !ConfiguracionInvalidada && !RequiereReliberacion && string.Equals(Estado, "PRODUCCION_LIBERADA", StringComparison.OrdinalIgnoreCase) && string.Equals(ResultadoCalidad, "VERDE", StringComparison.OrdinalIgnoreCase) && string.Equals(Etiqueta, "VERDE", StringComparison.OrdinalIgnoreCase);
+
+            public bool EstaLiberada
+            {
+                get
+                {
+                    var estado = (Estado ?? string.Empty).Trim();
+                    var estadoLiberado =
+                        string.Equals(estado, "PRODUCCION_LIBERADA", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(estado, "MONITOREO_ACTIVO", StringComparison.OrdinalIgnoreCase);
+
+                    return Liberado &&
+                           !ConfiguracionInvalidada &&
+                           !RequiereReliberacion &&
+                           estadoLiberado &&
+                           string.Equals(ResultadoCalidad, "VERDE", StringComparison.OrdinalIgnoreCase) &&
+                           string.Equals(Etiqueta, "VERDE", StringComparison.OrdinalIgnoreCase);
+                }
+            }
         }
         private sealed class ParoDto { public int ParoID { get; set; } public int EjecucionProduccionID { get; set; } public DateTime FechaInicio { get; set; } public DateTime? FechaFin { get; set; } public string? Motivo { get; set; } public bool EsMayorA15 { get; set; } public bool EsInterrupcionUrgente { get; set; } public int? ProgramaUrgenteID { get; set; } public string? OFUrgente { get; set; } public bool EsParoLhRh { get; set; } public Guid? GrupoParoLhRh { get; set; } }
         private sealed class CierreDto { public int EjecucionProduccionID { get; set; } public int CantidadOK { get; set; } public int CantidadSospechosa { get; set; } public int CantidadScrap { get; set; } public int OkEnCajas { get; set; } public int SospechosoEnCajas { get; set; } public int RetencionEnCajas { get; set; } public int ScrapEnCajas { get; set; } public int CajasFormadasPendientes { get; set; } public int CajasPendientesCalidad { get; set; } public int RegistrosNormales { get; set; } public decimal MinutosNormalesCapturados { get; set; } public decimal? ObjetivoHora { get; set; } public bool TieneTiempoExtraActivo { get; set; } public int MonitoreosPendientes { get; set; } public int DisposicionesPendientes { get; set; } public int ReliberacionesPendientes { get; set; } }

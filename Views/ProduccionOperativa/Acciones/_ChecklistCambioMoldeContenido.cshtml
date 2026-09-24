@@ -630,6 +630,7 @@
                 @foreach (var pregunta in preguntas)
                 {
                     var resultado = ResultadoNormalizado(pregunta.Resultado);
+                    if (string.IsNullOrWhiteSpace(resultado)) resultado = "OK";
                     <div class="pcc-question"
                          data-pcc-question
                          data-question-id="@pregunta.PreguntaID"
@@ -677,10 +678,11 @@
                             </div>
                             @if (pregunta.FechaRespuesta.HasValue)
                             {
-                                <div class="pcc-saved"><i class="bi bi-clock-history me-1"></i>@pregunta.FechaRespuesta.Value.ToString("dd/MM/yyyy HH:mm") @if(!string.IsNullOrWhiteSpace(pregunta.UsuarioRespuestaNombre)){
-                                <span>· @pregunta.UsuarioRespuestaNombre</span>
-                            }
-        </div>
+                                <div class="pcc-saved">
+                                    <i class="bi bi-clock-history me-1"></i>@pregunta.FechaRespuesta.Value.ToString("dd/MM/yyyy HH:mm") @if(!string.IsNullOrWhiteSpace(pregunta.UsuarioRespuestaNombre)){
+                                    <span>· @pregunta.UsuarioRespuestaNombre</span>
+                                }
+                            </div>
                         }
                     </div>
                 </div>
@@ -749,7 +751,7 @@
 
         function requiereObservacion(row){
             const r=resultado(row);
-            return (r==='NOK'&&row.dataset.requiereNok==='true')||(r==='NA'&&row.dataset.requiereNa==='true');
+            return r==='NOK'&&row.dataset.requiereNok==='true';
         }
 
         function respuestaValida(row){

@@ -1,4 +1,5 @@
 ﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Servicios.Produccion;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -163,6 +164,23 @@ namespace ERP.NSQuell.Controllers
                     TempData["Error"] = esPareja ? "Las dos tareas LH/RH deben estar pendientes o en proceso. Se detectó un estado inconsistente y no se realizará un inicio parcial." : "La tarea de cambio de molde ya fue atendida o ya no está pendiente.";
                     return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
                 }
+
+                var evaluacionCambio = await CambioMoldeService.EvaluarProgramaAsync(origen.ProgramaProduccionID, cn, tx, actualizarSnapshot: true);
+                if (!evaluacionCambio.TieneDatosValidos)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = evaluacionCambio.Motivo;
+                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
+                }
+                if (!evaluacionCambio.RequiereCambioMolde)
+                {
+                    foreach (var tarea in tareas)
+                        await CancelarTareaPreparacionNoAplicableAsync(tarea.ProgramaProduccionID, ProduccionPreparacionTipo.CambioMolde, usuarioId, cn, tx);
+                    await tx.CommitAsync();
+                    TempData["Warning"] = "La fuente física indica que la máquina ya tiene montado el molde requerido. La tarea pendiente fue cancelada porque el cambio ya no aplica.";
+                    return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
+                }
+
                 await ObtenerOCrearChecklistCambioMoldeAsync(vm.PreparacionAnticipadaID, usuarioId, cn, tx);
                 if (tareas.All(x => string.Equals(x.Estado, ProduccionPreparacionEstado.EnProceso, StringComparison.OrdinalIgnoreCase)))
                 {
@@ -239,6 +257,8 @@ AND Estado IN(@EstadoPendiente,@EstadoEnProceso);";
                     var filas = await cmd.ExecuteNonQueryAsync();
                     if (filas != tareas.Count) throw new InvalidOperationException("Una de las tareas cambió de estado mientras intentabas iniciar el cambio de molde.");
                 }
+
+                await CambioMoldeService.MarcarInicioCambioAsync(origen.ProgramaProduccionID, null, usuarioId, cn, tx);
                 await tx.CommitAsync();
                 TempData["Success"] = esPareja ? $"Cambio de molde LH/RH iniciado como una sola operación física. Las dos OF quedaron sincronizadas. Límite operativo: {limiteMinutos} minutos." : $"Cambio de molde iniciado. Esta máquina tiene un límite operativo de {limiteMinutos} minutos.";
                 return RedirectToAction(nameof(CambioMolde), new { maquinaId });
@@ -384,15 +404,13 @@ AND Estado=@EstadoEnProceso;";
                     var filas = await cmd.ExecuteNonQueryAsync();
                     if (filas != tareas.Count) throw new InvalidOperationException("Una de las tareas cambió de estado mientras intentabas finalizar el cambio de molde.");
                 }
+
+                await CambioMoldeService.ConfirmarCambioAsync(origen.ProgramaProduccionID, null, usuarioId, cn, tx);
                 await tx.CommitAsync();
                 if (esPareja)
-                {
                     TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite ? $"Cambio de molde LH/RH finalizado para ambas OF en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido." : $"Cambio de molde LH/RH finalizado correctamente para ambas OF en {duracionMinutos} minutos.";
-                }
                 else
-                {
                     TempData[excedioLimite ? "Warning" : "Success"] = excedioLimite ? $"Cambio de molde finalizado en {duracionMinutos} minutos. Excedió {duracionMinutos - limiteMinutos} minuto(s) el límite permitido." : $"Cambio de molde finalizado correctamente en {duracionMinutos} minutos. Límite de la máquina: {limiteMinutos} minutos.";
-                }
                 return RedirectToAction(nameof(CambioMolde), new { maquinaId = origen.MaquinaID });
             }
             catch (Exception ex)
@@ -1258,14 +1276,9 @@ ORDER BY pp.ProgramaProduccionID,pa.PreparacionAnticipadaID DESC;";
             }
         }
 
-        private async Task<List<ProgramaPreparacionInterno>> CargarProgramasParaPreparacionAsync(
-            DateTime desde,
-            DateTime hasta,
-            SqlConnection cn,
-            SqlTransaction tx)
+        private async Task<List<ProgramaPreparacionInterno>> CargarProgramasParaPreparacionAsync(DateTime desde, DateTime hasta, SqlConnection cn, SqlTransaction tx)
         {
             var lista = new List<ProgramaPreparacionInterno>();
-
             const string sql = @"
 SELECT
     pp.ProgramaProduccionID,
@@ -1281,7 +1294,7 @@ SELECT
     pp.ReferenciaSAP,
     pp.DesignacionDescripcionSAP AS DescripcionParte,
     pp.MoldeID,
-    pp.MoldeCodigo,
+    COALESCE(NULLIF(LTRIM(RTRIM(pp.MoldeCodigo)),N''),mol.CodigoMolde) AS MoldeCodigo,
     CONVERT(INT,ISNULL(pp.CantidadProgramada,0)) AS CantidadProgramada,
     pp.FechaInicioProgramada,
     pp.FechaFinProgramada,
@@ -1294,106 +1307,73 @@ SELECT
     d.EmbalajeCodigo,
     d.EmbalajeDescripcion,
     d.PiezasPorEmbalaje,
-    d.CantidadEmbalajes,
-    anterior.ProgramaProduccionID AS ProgramaAnteriorID,
-    anterior.MoldeID AS MoldeAnteriorID,
-    anterior.MoldeCodigo AS MoldeAnteriorCodigo
+    d.CantidadEmbalajes
 FROM dbo.Planeacion_ProgramaProduccion pp
-LEFT JOIN dbo.SolicitudesProduccion s
-    ON s.SolicitudProduccionID=pp.SolicitudProduccionID
-LEFT JOIN dbo.SolicitudesProduccionDetalle d
-    ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID
-   AND d.Activo=1
-LEFT JOIN dbo.ERP_Maquinas maq
-    ON maq.MaquinaID=pp.MaquinaID
-OUTER APPLY
-(
-    SELECT TOP(1)
-        ant.ProgramaProduccionID,
-        ant.MoldeID,
-        ant.MoldeCodigo
-    FROM dbo.Planeacion_ProgramaProduccion ant
-    WHERE ant.Activo=1
-      AND ant.ProgramaProduccionID<>pp.ProgramaProduccionID
-      AND ant.MaquinaID=pp.MaquinaID
-      AND ant.FechaInicioProgramada<pp.FechaInicioProgramada
-      AND ISNULL(ant.EstatusID,1)<>99
-    ORDER BY ant.FechaInicioProgramada DESC,ant.ProgramaProduccionID DESC
-) anterior
+LEFT JOIN dbo.SolicitudesProduccion s ON s.SolicitudProduccionID=pp.SolicitudProduccionID
+LEFT JOIN dbo.SolicitudesProduccionDetalle d ON d.SolicitudProduccionDetalleID=pp.SolicitudProduccionDetalleID AND d.Activo=1
+LEFT JOIN dbo.ERP_Maquinas maq ON maq.MaquinaID=pp.MaquinaID
+LEFT JOIN dbo.ERP_Moldes mol ON mol.MoldeID=pp.MoldeID
 WHERE pp.Activo=1
   AND pp.MaquinaID IS NOT NULL
   AND pp.FechaInicioProgramada IS NOT NULL
   AND pp.FechaInicioProgramada>=@Desde
   AND pp.FechaInicioProgramada<@Hasta
   AND ISNULL(pp.EstatusID,1) NOT IN(5,6,9,99)
-ORDER BY
-    pp.FechaInicioProgramada,
-    ISNULL(pp.SecuenciaMaquina,999999),
-    pp.ProgramaProduccionID;";
+ORDER BY pp.FechaInicioProgramada,ISNULL(pp.SecuenciaMaquina,999999),pp.ProgramaProduccionID;";
 
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@Desde", SqlDbType.DateTime).Value = desde;
             cmd.Parameters.Add("@Hasta", SqlDbType.DateTime).Value = hasta;
-
-            await using var rd = await cmd.ExecuteReaderAsync();
-
-            while (await rd.ReadAsync())
+            await using (var rd = await cmd.ExecuteReaderAsync())
             {
-                var inicio = Convert.ToDateTime(rd["FechaInicioProgramada"]);
-                var cambio = PreparacionNullableTimeSpan(rd, "Cambio");
-                var arranque = PreparacionNullableTimeSpan(rd, "Arranque");
-
-                var fechaCambio = ConstruirFechaPreparacion(inicio, cambio);
-                var fechaArranque = ConstruirFechaPreparacion(inicio, arranque);
-
-                var moldeActualId = PreparacionNullableInt(rd, "MoldeID");
-                var moldeAnteriorId = PreparacionNullableInt(rd, "MoldeAnteriorID");
-                var moldeActualCodigo = PreparacionTexto(rd, "MoldeCodigo");
-                var moldeAnteriorCodigo = PreparacionTexto(rd, "MoldeAnteriorCodigo");
-
-                var requiereCambioMolde = DeterminarCambioMoldePreparacion(
-                    moldeAnteriorId,
-                    moldeAnteriorCodigo,
-                    moldeActualId,
-                    moldeActualCodigo);
-
-                lista.Add(new ProgramaPreparacionInterno
+                while (await rd.ReadAsync())
                 {
-                    ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
-                    SolicitudProduccionID = PreparacionNullableInt(rd, "SolicitudProduccionID"),
-                    SolicitudProduccionDetalleID = PreparacionNullableInt(rd, "SolicitudProduccionDetalleID"),
-                    NumeroOF = PreparacionTexto(rd, "NumeroOFRecibida"),
-                    MaquinaID = PreparacionNullableInt(rd, "MaquinaID"),
-                    MaquinaCodigo = PreparacionTexto(rd, "MaquinaCodigo"),
-                    MaquinaNombre = PreparacionTexto(rd, "MaquinaNombre"),
-                    MinutosMaxCambioMolde = rd["MinutosMaxCambioMolde"] == DBNull.Value ? 60 : Convert.ToInt32(rd["MinutosMaxCambioMolde"]),
-                    ParteID = PreparacionNullableInt(rd, "ParteID"),
-                    NumeroParte = PreparacionTexto(rd, "NumeroParte"),
-                    ReferenciaSAP = PreparacionTexto(rd, "ReferenciaSAP"),
-                    DescripcionParte = PreparacionTexto(rd, "DescripcionParte"),
-                    MoldeID = moldeActualId,
-                    MoldeCodigo = moldeActualCodigo,
-                    MoldeAnteriorID = moldeAnteriorId,
-                    MoldeAnteriorCodigo = moldeAnteriorCodigo,
-                    CantidadProgramada = rd["CantidadProgramada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadProgramada"]),
-                    FechaInicioProgramada = inicio,
-                    FechaFinProgramada = PreparacionNullableDateTime(rd, "FechaFinProgramada"),
-                    Cambio = cambio,
-                    Arranque = arranque,
-                    FechaCambioMolde = fechaCambio,
-                    FechaArranque = fechaArranque,
-                    TipoSecado = PreparacionTexto(rd, "TipoSecado"),
-                    HorasSecado = PreparacionNullableDecimal(rd, "HorasSecado"),
-                    MaterialCodigo = PreparacionTexto(rd, "MaterialCodigo"),
-                    MaterialDescripcion = PreparacionTexto(rd, "MaterialDescripcion"),
-                    EmbalajeCodigo = PreparacionTexto(rd, "EmbalajeCodigo"),
-                    EmbalajeDescripcion = PreparacionTexto(rd, "EmbalajeDescripcion"),
-                    PiezasPorEmbalaje = PreparacionNullableDecimal(rd, "PiezasPorEmbalaje"),
-                    CantidadEmbalajes = PreparacionNullableDecimal(rd, "CantidadEmbalajes"),
-                    RequiereCambioMolde = requiereCambioMolde
-                });
+                    var inicio = Convert.ToDateTime(rd["FechaInicioProgramada"]);
+                    var cambio = PreparacionNullableTimeSpan(rd, "Cambio");
+                    var arranque = PreparacionNullableTimeSpan(rd, "Arranque");
+                    lista.Add(new ProgramaPreparacionInterno
+                    {
+                        ProgramaProduccionID = Convert.ToInt32(rd["ProgramaProduccionID"]),
+                        SolicitudProduccionID = PreparacionNullableInt(rd, "SolicitudProduccionID"),
+                        SolicitudProduccionDetalleID = PreparacionNullableInt(rd, "SolicitudProduccionDetalleID"),
+                        NumeroOF = PreparacionTexto(rd, "NumeroOFRecibida"),
+                        MaquinaID = PreparacionNullableInt(rd, "MaquinaID"),
+                        MaquinaCodigo = PreparacionTexto(rd, "MaquinaCodigo"),
+                        MaquinaNombre = PreparacionTexto(rd, "MaquinaNombre"),
+                        MinutosMaxCambioMolde = rd["MinutosMaxCambioMolde"] == DBNull.Value ? 60 : Convert.ToInt32(rd["MinutosMaxCambioMolde"]),
+                        ParteID = PreparacionNullableInt(rd, "ParteID"),
+                        NumeroParte = PreparacionTexto(rd, "NumeroParte"),
+                        ReferenciaSAP = PreparacionTexto(rd, "ReferenciaSAP"),
+                        DescripcionParte = PreparacionTexto(rd, "DescripcionParte"),
+                        MoldeID = PreparacionNullableInt(rd, "MoldeID"),
+                        MoldeCodigo = PreparacionTexto(rd, "MoldeCodigo"),
+                        CantidadProgramada = rd["CantidadProgramada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadProgramada"]),
+                        FechaInicioProgramada = inicio,
+                        FechaFinProgramada = PreparacionNullableDateTime(rd, "FechaFinProgramada"),
+                        Cambio = cambio,
+                        Arranque = arranque,
+                        FechaCambioMolde = ConstruirFechaPreparacion(inicio, cambio),
+                        FechaArranque = ConstruirFechaPreparacion(inicio, arranque),
+                        TipoSecado = PreparacionTexto(rd, "TipoSecado"),
+                        HorasSecado = PreparacionNullableDecimal(rd, "HorasSecado"),
+                        MaterialCodigo = PreparacionTexto(rd, "MaterialCodigo"),
+                        MaterialDescripcion = PreparacionTexto(rd, "MaterialDescripcion"),
+                        EmbalajeCodigo = PreparacionTexto(rd, "EmbalajeCodigo"),
+                        EmbalajeDescripcion = PreparacionTexto(rd, "EmbalajeDescripcion"),
+                        PiezasPorEmbalaje = PreparacionNullableDecimal(rd, "PiezasPorEmbalaje"),
+                        CantidadEmbalajes = PreparacionNullableDecimal(rd, "CantidadEmbalajes")
+                    });
+                }
             }
 
+            var evaluaciones = await CambioMoldeService.EvaluarProgramasAsync(lista.Select(x => x.ProgramaProduccionID), cn, tx, actualizarSnapshot: true);
+            foreach (var programa in lista)
+            {
+                if (!evaluaciones.TryGetValue(programa.ProgramaProduccionID, out var evaluacion)) continue;
+                programa.MoldeAnteriorID = evaluacion.MoldeReferenciaID;
+                programa.MoldeAnteriorCodigo = evaluacion.MoldeReferenciaCodigo;
+                programa.RequiereCambioMolde = evaluacion.RequiereCambioMolde;
+            }
             return lista;
         }
         private static async Task SincronizarTareaPreparacionAsync(int programaProduccionId, string tipoTarea, DateTime fechaObjetivo, DateTime fechaAviso, int usuarioId, SqlConnection cn, SqlTransaction tx)

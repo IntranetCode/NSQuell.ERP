@@ -162,13 +162,9 @@ public sealed partial class ProduccionOperadorController
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public Task<IActionResult> PrevisualizarCorteTiempoExtraOperativo(
-        int tiempoExtraId,
-        long? contadorMaquinaActual,
-        int cantidadScrap = 0,
-        int cantidadScrapPareja = 0)
+    public Task<IActionResult> PrevisualizarCorteTiempoExtraOperativo(int tiempoExtraId, long? contadorMaquinaActual, int cantidadScrap = 0, int cantidadScrapPareja = 0, int ejecucionProduccionId = 0)
     {
-        return PrevisualizarCorteTiempoExtra(tiempoExtraId, contadorMaquinaActual, cantidadScrap, cantidadScrapPareja);
+        return PrevisualizarCorteTiempoExtra(tiempoExtraId, contadorMaquinaActual, cantidadScrap, cantidadScrapPareja, ejecucionProduccionId);
     }
 
     [HttpPost]
@@ -177,12 +173,10 @@ public sealed partial class ProduccionOperadorController
     {
         if (!UsuarioEnSesion())
             return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesion termino. Vuelve a iniciar sesion." });
-        if (vm.TiempoExtraID <= 0)
-            return BadRequest(new { ok = false, mensaje = "No se recibio una sesion de tiempo extra valida." });
-
-        var referencias = await ObtenerReferenciasParejaTiempoExtraAsync(vm.EjecucionProduccionID, vm.TiempoExtraID);
+        if (vm.TiempoExtraID <= 0 && vm.EjecucionProduccionID <= 0)
+            return BadRequest(new { ok = false, mensaje = "No se pudo identificar la sesion de tiempo extra ni la ejecucion de Produccion." });
+        var referencias = await ObtenerReferenciasParejaTiempoExtraAsync(vm.EjecucionProduccionID, vm.TiempoExtraID > 0 ? vm.TiempoExtraID : null);
         LimpiarMensajesTiempoExtraOperativo();
-
         IActionResult resultado;
         try
         {
@@ -193,12 +187,7 @@ public sealed partial class ProduccionOperadorController
             var mensaje = SanitizarTextoParejaTiempoExtra(ex.Message, referencias.ReferenciaOriginal, referencias.ReferenciaSegura);
             return BadRequest(new { ok = false, mensaje = "No fue posible guardar el corte de tiempo extra: " + mensaje });
         }
-
-        return ConvertirResultadoTiempoExtraOperativo(
-            resultado,
-            "Corte de tiempo extra guardado correctamente.",
-            referencias.ReferenciaOriginal,
-            referencias.ReferenciaSegura);
+        return ConvertirResultadoTiempoExtraOperativo(resultado, "Corte de tiempo extra guardado correctamente.", referencias.ReferenciaOriginal, referencias.ReferenciaSegura);
     }
 
     [HttpPost]
@@ -207,12 +196,10 @@ public sealed partial class ProduccionOperadorController
     {
         if (!UsuarioEnSesion())
             return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesion termino. Vuelve a iniciar sesion." });
-        if (vm.TiempoExtraID <= 0)
-            return BadRequest(new { ok = false, mensaje = "No se recibio una sesion de tiempo extra valida." });
-
-        var referencias = await ObtenerReferenciasParejaTiempoExtraAsync(vm.EjecucionProduccionID, vm.TiempoExtraID);
+        if (vm.TiempoExtraID <= 0 && vm.EjecucionProduccionID <= 0)
+            return BadRequest(new { ok = false, mensaje = "No se pudo identificar la sesion de tiempo extra ni la ejecucion de Produccion." });
+        var referencias = await ObtenerReferenciasParejaTiempoExtraAsync(vm.EjecucionProduccionID, vm.TiempoExtraID > 0 ? vm.TiempoExtraID : null);
         LimpiarMensajesTiempoExtraOperativo();
-
         IActionResult resultado;
         try
         {
@@ -223,14 +210,8 @@ public sealed partial class ProduccionOperadorController
             var mensaje = SanitizarTextoParejaTiempoExtra(ex.Message, referencias.ReferenciaOriginal, referencias.ReferenciaSegura);
             return BadRequest(new { ok = false, mensaje = "No fue posible finalizar el tiempo extra: " + mensaje });
         }
-
-        return ConvertirResultadoTiempoExtraOperativo(
-            resultado,
-            "Tiempo extra finalizado correctamente.",
-            referencias.ReferenciaOriginal,
-            referencias.ReferenciaSegura);
+        return ConvertirResultadoTiempoExtraOperativo(resultado, "Tiempo extra finalizado correctamente.", referencias.ReferenciaOriginal, referencias.ReferenciaSegura);
     }
-
     private async Task<(string? ReferenciaOriginal, string? ReferenciaSegura)> ObtenerReferenciasParejaTiempoExtraAsync(
         int ejecucionProduccionId,
         int? tiempoExtraId)
