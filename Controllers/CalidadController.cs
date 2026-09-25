@@ -433,8 +433,22 @@ SELECT TOP(1) o.GrupoLhRh,
 FROM Origen o
 JOIN Programas p ON p.GrupoLhRh=o.GrupoLhRh AND p.ProgramaProduccionID<>o.ProgramaProduccionID
  AND ISNULL(p.MaquinaID,-1)=ISNULL(o.MaquinaID,-1) AND ISNULL(p.MoldeID,-1)=ISNULL(o.MoldeID,-1)
-OUTER APPLY(SELECT TOP(1) ci.InspeccionID$1 ORDER BY ci.InspeccionID DESC) cia
-OUTER APPLY(SELECT TOP(1) ci.InspeccionID$1 ORDER BY ci.InspeccionID DESC) cip
+OUTER APPLY
+(
+    SELECT TOP(1)
+        ci.InspeccionID
+    FROM dbo.Calidad_Inspecciones ci
+    WHERE ci.ProgramaProduccionID=o.ProgramaProduccionID
+    ORDER BY ci.InspeccionID DESC
+) cia
+OUTER APPLY
+(
+    SELECT TOP(1)
+        ci.InspeccionID
+    FROM dbo.Calidad_Inspecciones ci
+    WHERE ci.ProgramaProduccionID=p.ProgramaProduccionID
+    ORDER BY ci.InspeccionID DESC
+) cip
 WHERE o.GrupoLhRh IS NOT NULL
 ORDER BY p.ProgramaProduccionID;";
 
