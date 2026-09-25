@@ -106,6 +106,11 @@ public sealed class ProduccionSeguimientoTecnicoLadoVm
     public int CantidadScrap { get; set; }
     public int CapturasRegistradas { get; set; }
     public int ObjetivoAcumulado { get; set; }
+
+    // NSQ_SERIE_OBJETIVO_TEORICO_BD_V1
+    public int? ObjetivoHoraTeorico { get; set; }
+    public string? ObjetivoHoraTeoricoFuente { get; set; }
+
     public DateTime? FechaUltimaCaptura { get; set; }
     public ProduccionSeguimientoTecnicoConfiguracionVm? Configuracion { get; set; }
     public ProduccionSeguimientoTecnicoLecturaVm? UltimaLecturaContador { get; set; }

@@ -137,6 +137,18 @@ SELECT TOP(1)
     ISNULL(e.CantidadSospechosaTotal,0) AS CantidadSospechosaTotal,
     ISNULL(e.CantidadScrapTotal,0) AS CantidadScrapTotal,
     pp.FechaInicioProgramada,pp.FechaFinProgramada,
+
+    // NSQ_SERIE_OBJETIVO_TEORICO_BD_V1
+    COALESCE(
+        NULLIF(tecnica.ObjetivoHoraMaestro,0),
+        NULLIF(pp.ObjetivoHora,0)
+    ) AS ObjetivoHoraTeorico,
+    CASE
+        WHEN ISNULL(tecnica.ObjetivoHoraMaestro,0)>0 THEN N'Maestro tecnico'
+        WHEN ISNULL(pp.ObjetivoHora,0)>0 THEN N'Programa'
+        ELSE NULL
+    END AS ObjetivoHoraTeoricoFuente,
+
     ISNULL(reg.CapturasRegistradas,0) AS CapturasRegistradas,
     ISNULL(reg.ObjetivoAcumulado,0) AS ObjetivoAcumulado,
     reg.FechaUltimaCaptura,
@@ -187,6 +199,18 @@ SELECT TOP(1)
     paro.ProgramaUrgenteID AS ParoAbiertoProgramaUrgenteID
 FROM dbo.Produccion_Ejecucion e
 LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=e.ProgramaProduccionID
+
+OUTER APPLY
+(
+    SELECT TOP(1)
+        TRY_CONVERT(INT,t.ObjetivoHora) AS ObjetivoHoraMaestro
+    FROM dbo.ERP_ParteDatosTecnicos t
+    WHERE t.ParteID=e.ParteID
+      AND t.Activo=1
+      AND ISNULL(TRY_CONVERT(INT,t.ObjetivoHora),0)>0
+    ORDER BY t.ParteDatoTecnicoID DESC
+) tecnica
+
 OUTER APPLY
 (
     SELECT
@@ -308,6 +332,8 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                 CantidadScrap = Convert.ToInt32(rd["CantidadScrapTotal"]),
                 CapturasRegistradas = Convert.ToInt32(rd["CapturasRegistradas"]),
                 ObjetivoAcumulado = rd["ObjetivoAcumulado"] == DBNull.Value ? 0 : Convert.ToInt32(Math.Round(Convert.ToDecimal(rd["ObjetivoAcumulado"]), 0, MidpointRounding.AwayFromZero)),
+                ObjetivoHoraTeorico = SeguimientoNullableInt(rd, "ObjetivoHoraTeorico"),
+                ObjetivoHoraTeoricoFuente = SeguimientoTexto(rd, "ObjetivoHoraTeoricoFuente"),
                 FechaUltimaCaptura = SeguimientoNullableDate(rd, "FechaUltimaCaptura")
             };
 

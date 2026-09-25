@@ -1875,7 +1875,6 @@ INNER JOIN dbo.Planeacion_ProgramaProduccion pp2
    AND ISNULL(pp2.MoldeID,-1)=ISNULL(pp.MoldeID,-1)
 INNER JOIN dbo.Calidad_Inspecciones ci2
     ON ci2.ProgramaProduccionID=pp2.ProgramaProduccionID
-   AND ci2.Activo=1
 WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
   AND pp.Activo=1
 ORDER BY ci2.InspeccionID DESC;";
