@@ -911,6 +911,27 @@
         <div class="pst-kpi"><div class="pst-kpi-label">Planeado</div><div class="pst-kpi-value">@Numero(Model.CantidadPlaneadaTotal)</div><div class="pst-kpi-note">pieza(s) de la operación</div></div>
         <div class="pst-kpi"><div class="pst-kpi-label">OK acumulado</div><div class="pst-kpi-value">@Numero(Model.CantidadOKTotal)</div><div class="pst-kpi-note">@Model.PorcentajeAvance.ToString("0.#")% del plan</div></div>
         <div class="pst-kpi"><div class="pst-kpi-label">Capturas operador</div><div class="pst-kpi-value">@Numero(Model.CapturasRegistradasTotal)</div><div class="pst-kpi-note">bloques horarios registrados</div></div>
+
+        @* NSQ_SERIE_OBJETIVO_TEORICO_BD_V1 *@
+        @foreach (var ladoObjetivo in Model.Lados
+            .Where(x => x.ObjetivoHoraTeorico.HasValue && x.ObjetivoHoraTeorico.Value > 0)
+            .OrderBy(x => x.ProgramaProduccionID))
+        {
+            <div class="pst-kpi">
+                <div class="pst-kpi-label">
+                    @(Model.EsParejaLhRh
+                        ? $"Objetivo teórico / h · {(string.IsNullOrWhiteSpace(ladoObjetivo.LadoLhRh) ? ladoObjetivo.NumeroOF : ladoObjetivo.LadoLhRh)}"
+                        : "Objetivo teórico / h")
+                </div>
+                <div class="pst-kpi-value">@ladoObjetivo.ObjetivoHoraTeorico.Value.ToString("N0")</div>
+                <div class="pst-kpi-note">
+                    pzas/h · @(string.IsNullOrWhiteSpace(ladoObjetivo.ObjetivoHoraTeoricoFuente)
+                        ? "referencia BD"
+                        : ladoObjetivo.ObjetivoHoraTeoricoFuente)
+                </div>
+            </div>
+        }
+
         <div class="pst-kpi"><div class="pst-kpi-label">Cumplimiento horario</div><div class="pst-kpi-value">@(Model.ObjetivoAcumuladoTotal > 0 ? $"{Model.PorcentajeCumplimientoHoras:0.#}%" : "-")</div><div class="pst-kpi-note">OK vs objetivo acumulado</div></div>
         <div class="pst-kpi"><div class="pst-kpi-label">Sospechoso</div><div class="pst-kpi-value">@Numero(Model.CantidadSospechosaTotal)</div><div class="pst-kpi-note">clasificación reportada</div></div>
         <div class="pst-kpi"><div class="pst-kpi-label">Scrap / rojo</div><div class="pst-kpi-value">@Numero(Model.CantidadScrapTotal)</div><div class="pst-kpi-note">clasificación reportada</div></div>
@@ -998,7 +1019,8 @@
                                 <div class="pst-config-item"><small>Cavidades usadas</small><strong>@lado.Configuracion.CavidadesUsadas.ToString("N0")</strong></div>
                                 <div class="pst-config-item"><small>Cavidades activas</small><strong>@lado.Configuracion.CavidadesTexto</strong></div>
                                 <div class="pst-config-item"><small>Ciclo</small><strong>@lado.Configuracion.TiempoCicloSegundos.ToString("0.####") s</strong></div>
-                                <div class="pst-config-item"><small>Objetivo/h</small><strong>@lado.Configuracion.ObjetivoHoraOperativo.ToString("N0") pza</strong></div>
+                                <div class="pst-config-item"><small>Objetivo teórico BD</small><strong>@(lado.ObjetivoHoraTeorico.HasValue ? $"{lado.ObjetivoHoraTeorico.Value:N0} pza/h" : "-")</strong></div>
+                                <div class="pst-config-item"><small>Objetivo vigente real</small><strong>@lado.Configuracion.ObjetivoHoraOperativo.ToString("N0") pza/h</strong></div>
                                 <div class="pst-config-item"><small>Contador base</small><strong>@(lado.Configuracion.ContadorInicioVigencia.HasValue? lado.Configuracion.ContadorInicioVigencia.Value.ToString("N0"):"-")</strong></div>
                                 <div class="pst-config-item"><small>Vigente desde</small><strong>@lado.Configuracion.FechaInicioVigencia.ToString("dd/MM/yyyy HH:mm")</strong></div>
                             </div>
