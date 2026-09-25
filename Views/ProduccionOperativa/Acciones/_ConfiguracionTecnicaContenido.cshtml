@@ -50,15 +50,22 @@
         ? (Url.Action("CambiarConfiguracionCorridaOperativa", "Produccion") ?? "/Produccion/CambiarConfiguracionCorridaOperativa")
         : (Url.Action("GuardarConfiguracionCorridaOperativa", "Produccion") ?? "/Produccion/GuardarConfiguracionCorridaOperativa");
 
+    const int maximoCavidadesVista = 64;
     var cavidadesDefault = cfg?.CavidadesUsadas ?? Model.CavidadesBD;
     var cavidadesCsv = cfg?.CavidadesConfiguradas;
     var seleccionActual = CavidadesSeleccionadas(cavidadesCsv);
-    var cavidadesDisponibles = (Model.CavidadesDisponibles ?? new List<int>()).Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
+    var cavidadesDisponiblesBase = (Model.CavidadesDisponibles ?? new List<int>()).Where(x => x > 0 && x <= maximoCavidadesVista).Distinct().OrderBy(x => x).ToList();
+    var limiteActual = new[] { cavidadesDefault ?? 0, Model.CavidadesBD ?? 0, seleccionActual.DefaultIfEmpty(0).Max(), cavidadesDisponiblesBase.DefaultIfEmpty(0).Max() }.Max();
+    limiteActual = Math.Min(maximoCavidadesVista, limiteActual);
+    var cavidadesDisponibles = cavidadesDisponiblesBase.Concat(limiteActual > 0 ? Enumerable.Range(1, limiteActual) : Enumerable.Empty<int>()).Where(x => x > 0 && x <= maximoCavidadesVista).Distinct().OrderBy(x => x).ToList();
 
     var cavidadesDefaultPareja = cfgPareja?.CavidadesUsadas ?? Model.CavidadesBDPareja;
     var cavidadesCsvPareja = cfgPareja?.CavidadesConfiguradas;
     var seleccionPareja = CavidadesSeleccionadas(cavidadesCsvPareja);
-    var cavidadesDisponiblesPareja = (Model.CavidadesDisponiblesPareja ?? new List<int>()).Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
+    var cavidadesDisponiblesParejaBase = (Model.CavidadesDisponiblesPareja ?? new List<int>()).Where(x => x > 0 && x <= maximoCavidadesVista).Distinct().OrderBy(x => x).ToList();
+    var limitePareja = new[] { cavidadesDefaultPareja ?? 0, Model.CavidadesBDPareja ?? 0, seleccionPareja.DefaultIfEmpty(0).Max(), cavidadesDisponiblesParejaBase.DefaultIfEmpty(0).Max() }.Max();
+    limitePareja = Math.Min(maximoCavidadesVista, limitePareja);
+    var cavidadesDisponiblesPareja = cavidadesDisponiblesParejaBase.Concat(limitePareja > 0 ? Enumerable.Range(1, limitePareja) : Enumerable.Empty<int>()).Where(x => x > 0 && x <= maximoCavidadesVista).Distinct().OrderBy(x => x).ToList();
 
     var cicloDefault = cfg?.TiempoCicloSegundos ?? Model.TiempoCicloBD ?? cfgPareja?.TiempoCicloSegundos ?? Model.TiempoCicloBDPareja;
     var contadorDefault = Model.UltimoContadorMaquina ?? Model.UltimoContadorMaquinaPareja;
@@ -579,29 +586,25 @@
                 <div class="pct-cavity"
                      data-pct-cavidades
                      data-existing-count="@(cavidadesDefault?.ToString(CultureInfo.InvariantCulture) ?? "")"
-                     data-existing-numbered="@(!string.IsNullOrWhiteSpace(cavidadesCsv) ? "true" : "false")">
+                     data-existing-numbered="@(!string.IsNullOrWhiteSpace(cavidadesCsv) ? "true" : "false")"
+                     data-pct-max="@maximoCavidadesVista"
+                     data-pct-prefix="pctCav_@Model.EjecucionProduccionID">
                     <div class="pct-cavity-top">
                         <div>
                             <label class="mb-0">Cavidades activas · @(string.IsNullOrWhiteSpace(Model.LadoLhRh) ? "OF actual" : Model.LadoLhRh)</label>
                             <div class="pct-help">Referencia BD: @(Model.CavidadesBD?.ToString("N0") ?? "—")</div>
                         </div>
-                        @if (cavidadesDisponibles.Any())
+                        <div><button type="button" class="pct-mini-btn" data-pct-todas>Todas</button> <button type="button" class="pct-mini-btn" data-pct-limpiar>Limpiar</button></div>
+                    </div>
+                    <input type="number" min="1" max="@maximoCavidadesVista" step="1" class="form-control mb-2" name="CavidadesUsadas" data-pct-cantidad value="@(cavidadesDefault?.ToString(CultureInfo.InvariantCulture) ?? "")" placeholder="Cantidad de cavidades" required />
+                    <input type="hidden" name="CavidadesConfiguradas" data-pct-csv value="@cavidadesCsv" />
+                    <div class="pct-cavity-buttons" data-pct-cavity-buttons>
+                        @foreach (var n in cavidadesDisponibles)
                         {
-                            <div><button type="button" class="pct-mini-btn" data-pct-todas>Todas</button> <button type="button" class="pct-mini-btn" data-pct-limpiar>Limpiar</button></div>
+                            <input id="pctCav_@Model.EjecucionProduccionID-@n" type="checkbox" value="@n" data-pct-cavidad @(seleccionActual.Contains(n) ? "checked" : null) />
+                            <label for="pctCav_@Model.EjecucionProduccionID-@n">@n</label>
                         }
                     </div>
-                    <input type="number" min="1" step="1" class="form-control mb-2" name="CavidadesUsadas" data-pct-cantidad value="@(cavidadesDefault?.ToString(CultureInfo.InvariantCulture) ?? "")" placeholder="Cantidad de cavidades" required />
-                    <input type="hidden" name="CavidadesConfiguradas" data-pct-csv value="@cavidadesCsv" />
-                    @if (cavidadesDisponibles.Any())
-                    {
-                        <div class="pct-cavity-buttons">
-                            @foreach (var n in cavidadesDisponibles)
-                            {
-                                <input id="pctCav_@Model.EjecucionProduccionID-@n" type="checkbox" value="@n" data-pct-cavidad @(seleccionActual.Contains(n) ? "checked" : null) />
-                                <label for="pctCav_@Model.EjecucionProduccionID-@n">@n</label>
-                            }
-                        </div>
-                    }
                     <div class="pct-cavity-summary">Activas: <span data-pct-resumen>@(seleccionActual.Any() ? string.Join(", ", seleccionActual.OrderBy(x => x)) : (cavidadesDefault.HasValue ? $"{cavidadesDefault.Value} por cantidad" : "Sin definir"))</span></div>
                 </div>
 
@@ -610,29 +613,25 @@
                     <div class="pct-cavity"
                          data-pct-cavidades
                          data-existing-count="@(cavidadesDefaultPareja?.ToString(CultureInfo.InvariantCulture) ?? "")"
-                         data-existing-numbered="@(!string.IsNullOrWhiteSpace(cavidadesCsvPareja) ? "true" : "false")">
+                         data-existing-numbered="@(!string.IsNullOrWhiteSpace(cavidadesCsvPareja) ? "true" : "false")"
+                         data-pct-max="@maximoCavidadesVista"
+                         data-pct-prefix="pctCavP_@Model.EjecucionProduccionID">
                         <div class="pct-cavity-top">
                             <div>
                                 <label class="mb-0">Cavidades activas · @(string.IsNullOrWhiteSpace(Model.LadoParejaLhRh) ? "OF pareja" : Model.LadoParejaLhRh)</label>
                                 <div class="pct-help">@Model.TextoOFPareja · referencia BD: @(Model.CavidadesBDPareja?.ToString("N0") ?? "—")</div>
                             </div>
-                            @if (cavidadesDisponiblesPareja.Any())
+                            <div><button type="button" class="pct-mini-btn" data-pct-todas>Todas</button> <button type="button" class="pct-mini-btn" data-pct-limpiar>Limpiar</button></div>
+                        </div>
+                        <input type="number" min="1" max="@maximoCavidadesVista" step="1" class="form-control mb-2" name="CavidadesUsadasPareja" data-pct-cantidad value="@(cavidadesDefaultPareja?.ToString(CultureInfo.InvariantCulture) ?? "")" placeholder="Cantidad de cavidades" required />
+                        <input type="hidden" name="CavidadesConfiguradasPareja" data-pct-csv value="@cavidadesCsvPareja" />
+                        <div class="pct-cavity-buttons" data-pct-cavity-buttons>
+                            @foreach (var n in cavidadesDisponiblesPareja)
                             {
-                                <div><button type="button" class="pct-mini-btn" data-pct-todas>Todas</button> <button type="button" class="pct-mini-btn" data-pct-limpiar>Limpiar</button></div>
+                                <input id="pctCavP_@Model.EjecucionProduccionID-@n" type="checkbox" value="@n" data-pct-cavidad @(seleccionPareja.Contains(n) ? "checked" : null) />
+                                <label for="pctCavP_@Model.EjecucionProduccionID-@n">@n</label>
                             }
                         </div>
-                        <input type="number" min="1" step="1" class="form-control mb-2" name="CavidadesUsadasPareja" data-pct-cantidad value="@(cavidadesDefaultPareja?.ToString(CultureInfo.InvariantCulture) ?? "")" placeholder="Cantidad de cavidades" required />
-                        <input type="hidden" name="CavidadesConfiguradasPareja" data-pct-csv value="@cavidadesCsvPareja" />
-                        @if (cavidadesDisponiblesPareja.Any())
-                        {
-                            <div class="pct-cavity-buttons">
-                                @foreach (var n in cavidadesDisponiblesPareja)
-                                {
-                                    <input id="pctCavP_@Model.EjecucionProduccionID-@n" type="checkbox" value="@n" data-pct-cavidad @(seleccionPareja.Contains(n) ? "checked" : null) />
-                                    <label for="pctCavP_@Model.EjecucionProduccionID-@n">@n</label>
-                                }
-                            </div>
-                        }
                         <div class="pct-cavity-summary">Activas: <span data-pct-resumen>@(seleccionPareja.Any() ? string.Join(", ", seleccionPareja.OrderBy(x => x)) : (cavidadesDefaultPareja.HasValue ? $"{cavidadesDefaultPareja.Value} por cantidad" : "Sin definir"))</span></div>
                     </div>
                 }

@@ -745,6 +745,11 @@
             toast.className='pcc-toast'+(mensaje?` show ${tipo}`:'');
         }
 
+        function marcarCentroPendiente(){
+            const centro=root.closest('[data-nsq-operativa-centro]');
+            if(centro) centro.dataset.nsqOperativaDirty='1';
+        }
+
         function resultado(row){
             return row.querySelector('input[type="radio"]:checked')?.value||'';
         }
@@ -849,6 +854,7 @@
                 const data=await response.json();
                 if(!response.ok||!data?.ok) throw new Error(data?.mensaje||'No fue posible guardar la sección.');
                 mostrar(data.mensaje||'Sección guardada correctamente.','success');
+                marcarCentroPendiente();
                 actualizarResumen();
                 return true;
             }catch(error){
@@ -899,6 +905,7 @@
                 if(!response.ok||!data?.ok) throw new Error(data?.mensaje||'No fue posible finalizar el checklist.');
 
                 mostrar(data.mensaje||'Checklist finalizado correctamente.','success');
+                marcarCentroPendiente();
                 document.dispatchEvent(new CustomEvent('nsq:checklist-cambio-actualizado',{detail:{programaProduccionId:programaId,preparacionAnticipadaId:preparacionId,mensaje:data.mensaje||'Checklist finalizado correctamente.'}}));
             }catch(error){
                 mostrar(error?.message||'No fue posible finalizar el checklist.','error');

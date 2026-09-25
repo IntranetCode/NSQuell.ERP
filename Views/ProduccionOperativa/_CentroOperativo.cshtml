@@ -250,7 +250,7 @@
     var pasoChecklistMolde = pasos.FirstOrDefault(x => string.Equals(x.Clave, ProduccionOperativaAccionClave.ChecklistCambioMolde, StringComparison.OrdinalIgnoreCase));
     var accionCambioMolde = accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.CambioMolde, StringComparison.OrdinalIgnoreCase));
     var accionChecklistMolde = accionesVisibles.FirstOrDefault(x => string.Equals(x.Clave, ProduccionOperativaAccionClave.ChecklistCambioMolde, StringComparison.OrdinalIgnoreCase));
-    var mostrarTrabajoParaleloMolde = pasoCambioMolde?.Aplica == true && !(pasoCambioMolde.Completado && pasoChecklistMolde?.Completado == true);
+    var mostrarTrabajoParaleloMolde = pasoCambioMolde?.Aplica == true && (pasoCambioMolde != null || pasoChecklistMolde != null || accionCambioMolde != null || accionChecklistMolde != null);
 
     var urlCentro = Url.Action("Centro", "ProduccionOperativa", new { programaProduccionId = Model.ProgramaProduccionID, origen = Model.Origen, soloLectura = Model.Permisos.SoloLectura }) ?? $"/Produccion/Operativa/Centro/{Model.ProgramaProduccionID}";
     var urlDetalle = Model.EjecucionProduccionID.HasValue
@@ -1471,7 +1471,8 @@
      data-ejecucion-id="@(Model.EjecucionProduccionID?.ToString() ?? "")"
      data-of="@Model.OFTexto"
      data-origen="@Model.Origen"
-     data-solo-lectura="@(Model.Permisos.SoloLectura ? "true" : "false")">
+     data-solo-lectura="@(Model.Permisos.SoloLectura ? "true" : "false")"
+     data-nsq-operativa-dirty="0">
 
     <div class="nsq-op-header">
         <div class="nsq-op-header-top">
@@ -1927,10 +1928,10 @@
                                                        data-accion-clave="@accionPaso.Clave"
                                                        data-solo-lectura="@(soloLecturaPaso ? "true" : "false")"
                                                        title="@(esExternaPaso
-                                                                                                                                                                         ? "Consulta el estado desde Producción. La acción se ejecuta únicamente en el módulo responsable."
-                                                                                                                                                                         : puedeModificarPaso
-                                                                                                                                                                             ? "Abrir esta actividad para continuar o modificar lo permitido por su controlador."
-                                                                                                                                                                             : "Abrir esta actividad en modo consulta.")">
+                                                                                                                                                                                                                                ? "Consulta el estado desde Producción. La acción se ejecuta únicamente en el módulo responsable."
+                                                                                                                                                                                                                                : puedeModificarPaso
+                                                                                                                                                                                                                                    ? "Abrir esta actividad para continuar o modificar lo permitido por su controlador."
+                                                                                                                                                                                                                                    : "Abrir esta actividad en modo consulta.")">
                                             <i class="bi @iconoAccionPaso"></i>@textoAccionPaso
                                         </a>
                                                                                 }

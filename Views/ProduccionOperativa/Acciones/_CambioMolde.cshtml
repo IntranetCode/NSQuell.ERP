@@ -112,6 +112,11 @@
             feedback.className='pcm-feedback'+(texto?` show ${tipo}`:'');
         }
 
+        function marcarCentroPendiente(){
+            const centro=root.closest('[data-nsq-operativa-centro]');
+            if(centro) centro.dataset.nsqOperativaDirty='1';
+        }
+
         function escapar(texto){
             return String(texto??'')
                 .replace(/&/g,'&amp;')
@@ -193,14 +198,8 @@
                         if(!response.ok||!data?.ok) throw new Error(data?.mensaje||`HTTP ${response.status}`);
 
                         mostrarFeedback(data.mensaje||'Operación realizada correctamente.',data.advertencia?'warn':'ok');
+                        marcarCentroPendiente();
                         await cargarCambio(false);
-
-                        if(form.dataset.operacion==='finalizar'){
-                            window.setTimeout(()=>{
-                                const centro=root.closest('[data-nsq-operativa-centro]');
-                                centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
-                            },650);
-                        }
                     }catch(error){
                         mostrarFeedback(error?.message||'No fue posible completar la operación.','bad');
                     }finally{
@@ -251,11 +250,11 @@
             }
         }
 
-        async function abrirChecklist(){
+        async function abrirChecklist(mostrarCarga=true){
             mostrarFeedback('');
             main.style.display='none';
             checklistHost.classList.add('show');
-            checklistHost.innerHTML='<div class="pcm-loading"><div class="pcm-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>';
+            if(mostrarCarga) checklistHost.innerHTML='<div class="pcm-loading"><div class="pcm-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>';
 
             try{
                 const qs=new URLSearchParams({programaProduccionId:String(programaId)});
@@ -289,11 +288,9 @@
 
         const eventoChecklist=event=>{
             if(Number(event?.detail?.programaProduccionId||0)!==programaId) return;
-            checklistHost.classList.remove('show');
-            checklistHost.innerHTML='';
-            main.style.display='block';
+            marcarCentroPendiente();
             mostrarFeedback(event?.detail?.mensaje||'Checklist actualizado correctamente.','ok');
-            cargarCambio(false);
+            abrirChecklist(false);
         };
 
         document.addEventListener('nsq:checklist-cambio-actualizado',eventoChecklist);

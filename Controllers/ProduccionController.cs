@@ -9989,9 +9989,14 @@ SELECT TOP(1)
     e.MaquinaID,
     e.FechaLiberacionMaquina,
     ISNULL(e.CantidadPlaneada,0) AS CantidadPlaneada,
+    ISNULL(reg.CantidadOKRegistrada,ISNULL(e.CantidadOKTotal,0)) AS CantidadOKActual,
     TRY_CONVERT(DECIMAL(18,4),dt.ObjetivoHora) AS ObjetivoHora,
+    ISNULL(reg.RegistrosTotales,0) AS RegistrosTotales,
     ISNULL(reg.RegistrosNormales,0) AS RegistrosNormales,
+    ISNULL(reg.RegistrosTiempoExtra,0) AS RegistrosTiempoExtra,
     ISNULL(reg.MinutosNormalesCapturados,0) AS MinutosNormalesCapturados,
+    ISNULL(reg.MinutosTiempoExtraCapturados,0) AS MinutosTiempoExtraCapturados,
+    ISNULL(reg.MinutosProductivosCapturados,0) AS MinutosProductivosCapturados,
     CASE WHEN EXISTS
     (
         SELECT 1
@@ -10021,25 +10026,29 @@ OUTER APPLY
 OUTER APPLY
 (
     SELECT
-        COUNT(1) AS RegistrosNormales,
-        ISNULL
-        (
-            SUM
-            (
-                CASE
-                    WHEN r.MinutosProductivos IS NOT NULL AND r.MinutosProductivos>0
-                        THEN r.MinutosProductivos
-                    WHEN r.HoraFin>=r.HoraInicio
-                        THEN CONVERT(DECIMAL(18,2),DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
-                    ELSE CONVERT(DECIMAL(18,2),1440+DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
-                END
-            ),
-            0
-        ) AS MinutosNormalesCapturados
-    FROM dbo.Produccion_RegistroHora r WITH(UPDLOCK,HOLDLOCK)
-    WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
-      AND r.Activo=1
-      AND ISNULL(r.EsTiempoExtra,0)=0
+        COUNT(1) AS RegistrosTotales,
+        SUM(CASE WHEN x.EsTiempoExtra=0 THEN 1 ELSE 0 END) AS RegistrosNormales,
+        SUM(CASE WHEN x.EsTiempoExtra=1 THEN 1 ELSE 0 END) AS RegistrosTiempoExtra,
+        ISNULL(SUM(CASE WHEN x.EsTiempoExtra=0 THEN x.MinutosProductivos ELSE 0 END),0) AS MinutosNormalesCapturados,
+        ISNULL(SUM(CASE WHEN x.EsTiempoExtra=1 THEN x.MinutosProductivos ELSE 0 END),0) AS MinutosTiempoExtraCapturados,
+        ISNULL(SUM(x.MinutosProductivos),0) AS MinutosProductivosCapturados,
+        SUM(x.CantidadOK) AS CantidadOKRegistrada
+    FROM
+    (
+        SELECT
+            CONVERT(INT,ISNULL(r.EsTiempoExtra,0)) AS EsTiempoExtra,
+            ISNULL(r.CantidadOK,0) AS CantidadOK,
+            CASE
+                WHEN r.MinutosProductivos IS NOT NULL AND r.MinutosProductivos>0
+                    THEN CONVERT(DECIMAL(18,2),r.MinutosProductivos)
+                WHEN r.HoraFin>=r.HoraInicio
+                    THEN CONVERT(DECIMAL(18,2),DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
+                ELSE CONVERT(DECIMAL(18,2),1440+DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
+            END AS MinutosProductivos
+        FROM dbo.Produccion_RegistroHora r WITH(UPDLOCK,HOLDLOCK)
+        WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
+          AND r.Activo=1
+    ) x
 ) reg
 WHERE e.EjecucionProduccionID=@EjecucionProduccionID
   AND e.Activo=1;";
@@ -10051,74 +10060,73 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                 resultado.Mensaje = "No se encontró la ejecución de Producción.";
                 return resultado;
             }
-
             var estatusId = Convert.ToInt32(rd["EstatusID"]);
             var maquinaId = rd["MaquinaID"] == DBNull.Value ? (int?)null : Convert.ToInt32(rd["MaquinaID"]);
             var fechaLiberacion = rd["FechaLiberacionMaquina"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["FechaLiberacionMaquina"]);
             var cantidadPlaneada = rd["CantidadPlaneada"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadPlaneada"]);
+            var cantidadOkActual = rd["CantidadOKActual"] == DBNull.Value ? 0 : Convert.ToInt32(rd["CantidadOKActual"]);
             var objetivoHora = rd["ObjetivoHora"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(rd["ObjetivoHora"]);
+            var registrosTotales = rd["RegistrosTotales"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RegistrosTotales"]);
             var registrosNormales = rd["RegistrosNormales"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RegistrosNormales"]);
+            var registrosTiempoExtra = rd["RegistrosTiempoExtra"] == DBNull.Value ? 0 : Convert.ToInt32(rd["RegistrosTiempoExtra"]);
             var minutosNormalesCapturados = rd["MinutosNormalesCapturados"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MinutosNormalesCapturados"]);
+            var minutosTiempoExtraCapturados = rd["MinutosTiempoExtraCapturados"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MinutosTiempoExtraCapturados"]);
+            var minutosProductivosCapturados = rd["MinutosProductivosCapturados"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MinutosProductivosCapturados"]);
             var tieneParoAbierto = rd["TieneParoAbierto"] != DBNull.Value && Convert.ToBoolean(rd["TieneParoAbierto"]);
             var tieneTiempoExtraActivo = rd["TieneTiempoExtraActivo"] != DBNull.Value && Convert.ToBoolean(rd["TieneTiempoExtraActivo"]);
-
             if (fechaLiberacion.HasValue)
             {
                 resultado.Mensaje = $"La máquina ya fue liberada el {fechaLiberacion.Value:dd/MM/yyyy HH:mm}.";
                 return resultado;
             }
-
             if (estatusId != ProduccionEstatus.EnProduccion)
             {
                 resultado.Mensaje = "La máquina únicamente puede liberarse cuando la ejecución se encuentra en producción.";
                 return resultado;
             }
-
             if (!maquinaId.HasValue || maquinaId.Value <= 0)
             {
                 resultado.Mensaje = "La ejecución no tiene una máquina válida relacionada.";
                 return resultado;
             }
-
             if (tieneParoAbierto)
             {
                 resultado.Mensaje = "No puedes liberar la máquina mientras exista un paro abierto.";
                 return resultado;
             }
-
             if (tieneTiempoExtraActivo)
             {
                 resultado.Mensaje = "No puedes liberar la máquina mientras exista una sesión de tiempo extra abierta. Finaliza el tiempo extra y registra su último corte.";
                 return resultado;
             }
-
-            if (registrosNormales <= 0)
+            if (registrosTotales <= 0)
             {
-                resultado.Mensaje = "No puedes liberar la máquina porque todavía no existe ninguna captura normal de producción.";
+                resultado.Mensaje = "No puedes liberar la máquina porque todavía no existe ninguna captura de producción.";
                 return resultado;
             }
-
-            if (cantidadPlaneada > 0)
+            var produccionCompleta = cantidadPlaneada > 0 && cantidadOkActual >= cantidadPlaneada;
+            if (cantidadPlaneada > 0 && !produccionCompleta)
             {
                 if (!objetivoHora.HasValue || objetivoHora.Value <= 0)
                 {
-                    resultado.Mensaje = "No se puede validar la liberación porque la pieza no tiene un objetivo por hora válido.";
+                    resultado.Mensaje = $"No se puede validar la liberación porque la pieza no tiene un objetivo por hora válido. Producción registrada: {cantidadOkActual:N0} de {cantidadPlaneada:N0} pieza(s) OK.";
                     return resultado;
                 }
-
-                var minutosNormalesRequeridos = Math.Ceiling((decimal)cantidadPlaneada * 60m / objetivoHora.Value);
-                if (minutosNormalesCapturados + 0.01m < minutosNormalesRequeridos)
+                var minutosRequeridos = Math.Ceiling((decimal)cantidadPlaneada * 60m / objetivoHora.Value);
+                if (minutosProductivosCapturados + 0.01m < minutosRequeridos)
                 {
-                    var minutosPendientes = Math.Max(0m, minutosNormalesRequeridos - minutosNormalesCapturados);
-                    resultado.Mensaje = $"No puedes liberar la máquina. Se han capturado {minutosNormalesCapturados:0.##} de {minutosNormalesRequeridos:0.##} minuto(s) productivos normales requeridos. Faltan aproximadamente {minutosPendientes:0.##} minuto(s).";
+                    var minutosPendientes = Math.Max(0m, minutosRequeridos - minutosProductivosCapturados);
+                    resultado.Mensaje = $"No puedes liberar la máquina. Producción OK: {cantidadOkActual:N0} de {cantidadPlaneada:N0}. Tiempo productivo: {minutosProductivosCapturados:0.##} de {minutosRequeridos:0.##} minuto(s) requeridos; normales {minutosNormalesCapturados:0.##}, tiempo extra {minutosTiempoExtraCapturados:0.##}. Faltan aproximadamente {minutosPendientes:0.##} minuto(s).";
                     return resultado;
                 }
             }
-
             resultado.Permitido = true;
-            resultado.Mensaje = "La máquina puede liberarse.";
+            resultado.Mensaje = produccionCompleta
+                ? $"La máquina puede liberarse. La producción OK alcanzó {cantidadOkActual:N0} de {cantidadPlaneada:N0} pieza(s). Capturas normales: {registrosNormales}; tiempo extra: {registrosTiempoExtra}."
+                : $"La máquina puede liberarse. Tiempo productivo acumulado: {minutosProductivosCapturados:0.##} minuto(s), incluyendo {minutosTiempoExtraCapturados:0.##} minuto(s) de tiempo extra.";
             return resultado;
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LiberarMaquina(ProduccionLiberarMaquinaPostVm vm)

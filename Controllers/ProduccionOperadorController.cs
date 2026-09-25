@@ -4013,25 +4013,22 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
 
         private async Task<int> InsertarRegistroHoraAsync(ProduccionEjecucionVm ejecucion, ProduccionRegistroHoraPostVm vm, TimeSpan horaInicio, TimeSpan horaFin, int operadorPersonaId, int usuarioId, CalculoProduccionContadorHora calculo, SqlConnection cn, SqlTransaction tx)
         {
-            if (vm.EsTiempoExtra && (!vm.TiempoExtraID.HasValue || vm.TiempoExtraID.Value <= 0 || !vm.NumeroCorteTiempoExtra.HasValue || vm.NumeroCorteTiempoExtra.Value <= 0))
+            if (vm.EsTiempoExtra && (!vm.TiempoExtraID.HasValue || vm.TiempoExtraID.Value < 0 || !vm.NumeroCorteTiempoExtra.HasValue || vm.NumeroCorteTiempoExtra.Value <= 0))
                 throw new InvalidOperationException("El registro de tiempo extra no contiene una sesión y número de corte válidos.");
             if (!vm.EsTiempoExtra)
             {
                 vm.TiempoExtraID = null;
                 vm.NumeroCorteTiempoExtra = null;
             }
-
             bool? cumplioObjetivo = null;
             int? diferenciaObjetivo = null;
             decimal? porcentajeCumplimiento = null;
-
             if (calculo.ObjetivoBloque > 0)
             {
                 diferenciaObjetivo = vm.CantidadOK - calculo.ObjetivoBloque;
                 cumplioObjetivo = vm.CantidadOK >= calculo.ObjetivoBloque;
                 porcentajeCumplimiento = Math.Round((decimal)vm.CantidadOK * 100m / calculo.ObjetivoBloque, 2);
             }
-
             const string sql = @"
 INSERT INTO dbo.Produccion_RegistroHora
 (
@@ -4104,7 +4101,6 @@ VALUES
     SYSDATETIME(),
     1
 );";
-
             await using var cmd = new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = ejecucion.EjecucionProduccionID;
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = ejecucion.ProgramaProduccionID;
@@ -4121,19 +4117,15 @@ VALUES
             cmd.Parameters.Add("@ObjetivoBloque", SqlDbType.Int).Value = calculo.ObjetivoBloque;
             cmd.Parameters.Add("@CumplioObjetivo", SqlDbType.Bit).Value = (object?)cumplioObjetivo ?? DBNull.Value;
             cmd.Parameters.Add("@DiferenciaObjetivo", SqlDbType.Int).Value = (object?)diferenciaObjetivo ?? DBNull.Value;
-
             var pPorcentaje = cmd.Parameters.Add("@PorcentajeCumplimiento", SqlDbType.Decimal);
             pPorcentaje.Precision = 8;
             pPorcentaje.Scale = 2;
             pPorcentaje.Value = (object?)porcentajeCumplimiento ?? DBNull.Value;
-
             cmd.Parameters.Add("@PiezasCalculadasContador", SqlDbType.Int).Value = calculo.PiezasCalculadas;
-
             var pMinutos = cmd.Parameters.Add("@MinutosProductivos", SqlDbType.Decimal);
             pMinutos.Precision = 10;
             pMinutos.Scale = 2;
             pMinutos.Value = calculo.MinutosProductivos;
-
             cmd.Parameters.Add("@EsTiempoExtra", SqlDbType.Bit).Value = vm.EsTiempoExtra;
             cmd.Parameters.Add("@TipoBloque", SqlDbType.NVarChar, 30).Value = vm.EsTiempoExtra ? "TIEMPO_EXTRA" : "NORMAL";
             cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = (object?)vm.TiempoExtraID ?? DBNull.Value;
@@ -4142,11 +4134,9 @@ VALUES
             cmd.Parameters.Add("@TieneReinicioContador", SqlDbType.Bit).Value = calculo.TieneReinicioContador;
             cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = string.IsNullOrWhiteSpace(vm.Observaciones) ? DBNull.Value : vm.Observaciones.Trim();
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
-
             var resultado = await cmd.ExecuteScalarAsync();
             if (resultado == null || resultado == DBNull.Value)
                 throw new InvalidOperationException("No fue posible obtener el identificador del registro horario.");
-
             return Convert.ToInt32(resultado);
         }
         private static string ConstruirMensajeCumplimientoHora(int numeroHora, int cantidadOK, int cantidadScrap, long contadorActual, CalculoProduccionContadorHora calculo)
@@ -6836,21 +6826,18 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
             vm.HoraInicioSugerida = inicio;
             vm.HoraFinSugerida = fin;
         }
-
         private async Task<List<ProduccionCapturaHoraFilaVm>> ObtenerFilasCapturaHoraAsync(
-       int ejecucionProduccionId,
-       int programaProduccionId,
-       SqlConnection cn,
-       SqlTransaction? tx = null)
+               int ejecucionProduccionId,
+               int programaProduccionId,
+               SqlConnection cn,
+               SqlTransaction? tx = null)
         {
             var filas = new List<ProduccionCapturaHoraFilaVm>();
-
             DateTime? inicioReal = null;
             DateTime? finReal = null;
             int? objetivoHora = null;
             int cantidadPlaneada = 0;
             decimal? horasProgramadasCanonicas = null;
-
             const string sqlPrograma = @"
 SELECT TOP(1)
     COALESCE(
@@ -6867,26 +6854,20 @@ SELECT TOP(1)
         ),
         e.FechaInicioReal
     ) AS FechaInicioReal,
-
     COALESCE(
         pp.FechaFinReal,
         e.FechaFinReal
     ) AS FechaFinReal,
-
     ISNULL(
         e.CantidadPlaneada,
         0
     ) AS CantidadPlaneada,
-
     pp.HorasProgramadas AS HorasProgramadasCanonicas,
     dt.ObjetivoHora
-
 FROM dbo.Produccion_Ejecucion e
-
 INNER JOIN dbo.Planeacion_ProgramaProduccion pp
     ON pp.ProgramaProduccionID=e.ProgramaProduccionID
    AND pp.Activo=1
-
 OUTER APPLY
 (
     SELECT TOP(1)
@@ -6896,11 +6877,9 @@ OUTER APPLY
       AND dt0.Activo=1
     ORDER BY dt0.ParteDatoTecnicoID DESC
 ) dt
-
 WHERE e.EjecucionProduccionID=@EjecucionProduccionID
   AND e.ProgramaProduccionID=@ProgramaProduccionID
   AND e.Activo=1;";
-
             await using (var cmd =
                 tx == null
                     ? new SqlCommand(sqlPrograma, cn)
@@ -6910,15 +6889,12 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                     "@EjecucionProduccionID",
                     SqlDbType.Int).Value =
                     ejecucionProduccionId;
-
                 cmd.Parameters.Add(
                     "@ProgramaProduccionID",
                     SqlDbType.Int).Value =
                     programaProduccionId;
-
                 await using var rd =
                     await cmd.ExecuteReaderAsync();
-
                 if (await rd.ReadAsync())
                 {
                     inicioReal =
@@ -6926,35 +6902,29 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                             ? null
                             : Convert.ToDateTime(
                                 rd["FechaInicioReal"]);
-
                     finReal =
                         rd["FechaFinReal"] == DBNull.Value
                             ? null
                             : Convert.ToDateTime(
                                 rd["FechaFinReal"]);
-
                     cantidadPlaneada =
                         rd["CantidadPlaneada"] == DBNull.Value
                             ? 0
                             : Convert.ToInt32(
                                 rd["CantidadPlaneada"]);
-
                     objetivoHora =
                         rd["ObjetivoHora"] == DBNull.Value
                             ? null
                             : Convert.ToInt32(
                                 rd["ObjetivoHora"]);
-
                     horasProgramadasCanonicas =
                         rd["HorasProgramadasCanonicas"] == DBNull.Value
                             ? null
                             : Convert.ToDecimal(rd["HorasProgramadasCanonicas"]);
                 }
             }
-
             if (!inicioReal.HasValue)
                 return filas;
-
             DateTime AlMinuto(DateTime value)
             {
                 return new DateTime(
@@ -6966,19 +6936,13 @@ WHERE e.EjecucionProduccionID=@EjecucionProduccionID
                     0,
                     value.Kind);
             }
-
             var inicio =
                 AlMinuto(
                     inicioReal.Value);
-
             var ahora =
                 DateTime.Now;
-
-          
-
             var registros =
                 new List<ProduccionRegistroHoraVm>();
-
             const string sqlRegistros = @"
 SELECT
     RegistroHoraID,
@@ -7011,7 +6975,6 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
 ORDER BY
     FechaProduccion,
     HoraInicio;";
-
             await using (var cmd =
                 tx == null
                     ? new SqlCommand(sqlRegistros, cn)
@@ -7021,10 +6984,8 @@ ORDER BY
                     "@EjecucionProduccionID",
                     SqlDbType.Int).Value =
                     ejecucionProduccionId;
-
                 await using var rd =
                     await cmd.ExecuteReaderAsync();
-
                 while (await rd.ReadAsync())
                 {
                     registros.Add(
@@ -7033,125 +6994,103 @@ ORDER BY
                             RegistroHoraID =
                                 Convert.ToInt32(
                                     rd["RegistroHoraID"]),
-
                             EjecucionProduccionID =
                                 Convert.ToInt32(
                                     rd["EjecucionProduccionID"]),
-
                             ProgramaProduccionID =
                                 Convert.ToInt32(
                                     rd["ProgramaProduccionID"]),
-
                             SolicitudProduccionID =
                                 rd["SolicitudProduccionID"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["SolicitudProduccionID"]),
-
                             MaquinaID =
                                 rd["MaquinaID"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["MaquinaID"]),
-
                             OperadorID =
                                 rd["OperadorID"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["OperadorID"]),
-
                             FechaProduccion =
                                 Convert.ToDateTime(
                                     rd["FechaProduccion"]),
-
                             HoraInicio =
                                 (TimeSpan)rd["HoraInicio"],
-
                             HoraFin =
                                 (TimeSpan)rd["HoraFin"],
-
                             CantidadOK =
                                 Convert.ToInt32(
                                     rd["CantidadOK"]),
-
                             CantidadSospechosa =
                                 Convert.ToInt32(
                                     rd["CantidadSospechosa"]),
-
                             CantidadScrap =
                                 Convert.ToInt32(
                                     rd["CantidadScrap"]),
-
                             ObjetivoHora =
                                 rd["ObjetivoHora"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["ObjetivoHora"]),
-
                             ObjetivoBloque =
                                 rd["ObjetivoBloque"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["ObjetivoBloque"]),
-
                             CumplioObjetivo =
                                 rd["CumplioObjetivo"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToBoolean(
                                         rd["CumplioObjetivo"]),
-
                             DiferenciaObjetivo =
                                 rd["DiferenciaObjetivo"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["DiferenciaObjetivo"]),
-
                             PorcentajeCumplimiento =
                                 rd["PorcentajeCumplimiento"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToDecimal(
                                         rd["PorcentajeCumplimiento"]),
-
                             Observaciones =
                                 rd["Observaciones"] ==
                                 DBNull.Value
                                     ? null
                                     : rd["Observaciones"]
                                         .ToString(),
-
                             UsuarioCreacionID =
                                 rd["UsuarioCreacionID"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["UsuarioCreacionID"]),
-
                             FechaCreacion =
                                 Convert.ToDateTime(
                                     rd["FechaCreacion"]),
-
                             UsuarioModificacionID =
                                 rd["UsuarioModificacionID"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToInt32(
                                         rd["UsuarioModificacionID"]),
-
                             FechaModificacion =
                                 rd["FechaModificacion"] ==
                                 DBNull.Value
                                     ? null
                                     : Convert.ToDateTime(
                                         rd["FechaModificacion"]),
-
                             Activo =
                                 rd["Activo"] !=
                                 DBNull.Value &&
@@ -7160,13 +7099,10 @@ ORDER BY
                         });
                 }
             }
-
             // ============================================================
             // HORAS TEÓRICAS
             // ============================================================
-
             var horasRequeridas = 0;
-
             // V9: la cantidad de bloques normales nace de Planeacion.HorasProgramadas.
             if (horasProgramadasCanonicas.HasValue && horasProgramadasCanonicas.Value > 0)
             {
@@ -7177,16 +7113,12 @@ ORDER BY
                 // Fallback solo para programas legacy sin HorasProgramadas.
                 horasRequeridas = (int)Math.Ceiling((decimal)cantidadPlaneada / objetivoHora.Value);
             }
-
             if (horasRequeridas <= 0) horasRequeridas = 1;
-
             // ============================================================
             // NOMBRES DE OPERADORES DE REGISTROS EXISTENTES
             // ============================================================
-
             var nombresOperadores =
                 new Dictionary<int, string>();
-
             var operadoresRegistro =
                 registros
                     .Where(x =>
@@ -7196,12 +7128,10 @@ ORDER BY
                         x.OperadorID!.Value)
                     .Distinct()
                     .ToList();
-
             if (operadoresRegistro.Count > 0)
             {
                 var parametros =
                     new List<string>();
-
                 await using var cmd =
                     tx == null
                         ? new SqlCommand()
@@ -7209,19 +7139,15 @@ ORDER BY
                             string.Empty,
                             cn,
                             tx);
-
                 cmd.Connection = cn;
-
                 for (var i = 0;
                      i < operadoresRegistro.Count;
                      i++)
                 {
                     var nombreParametro =
                         "@Operador" + i;
-
                     parametros.Add(
                         nombreParametro);
-
                     cmd.Parameters
                         .Add(
                             nombreParametro,
@@ -7229,7 +7155,6 @@ ORDER BY
                         .Value =
                         operadoresRegistro[i];
                 }
-
                 cmd.CommandText = $@"
 SELECT
     PersonaID,
@@ -7248,21 +7173,17 @@ FROM dbo.Persona
 WHERE PersonaID IN(
     {string.Join(",", parametros)}
 );";
-
                 await using var rd =
                     await cmd.ExecuteReaderAsync();
-
                 while (await rd.ReadAsync())
                 {
                     var personaId =
                         Convert.ToInt32(
                             rd["PersonaID"]);
-
                     var nombre =
                         rd["NombreCompleto"]
                             ?.ToString()
                             ?.Trim();
-
                     nombresOperadores[personaId] =
                         string.IsNullOrWhiteSpace(
                             nombre)
@@ -7270,18 +7191,15 @@ WHERE PersonaID IN(
                             : nombre;
                 }
             }
-
             // ============================================================
             // PAROS
             // ============================================================
-
             var paros =
                 new List<(
                     int ParoID,
                     DateTime Inicio,
                     DateTime? Fin,
                     bool MayorA15)>();
-
             const string sqlParos = @"
 SELECT
     ParoID,
@@ -7290,7 +7208,6 @@ SELECT
     CASE
         WHEN ISNULL(EsMayorA15Minutos,0)=1
             THEN CAST(1 AS BIT)
-
         WHEN FechaFinParo IS NOT NULL
          AND DATEDIFF(
                 SECOND,
@@ -7298,7 +7215,6 @@ SELECT
                 FechaFinParo
              ) > 900
             THEN CAST(1 AS BIT)
-
         ELSE CAST(0 AS BIT)
     END AS EsMayorA15Minutos
 FROM dbo.Produccion_Paros
@@ -7307,7 +7223,6 @@ WHERE EjecucionProduccionID=@EjecucionProduccionID
 ORDER BY
     FechaInicioParo,
     ParoID;";
-
             await using (var cmd =
                 tx == null
                     ? new SqlCommand(sqlParos, cn)
@@ -7317,26 +7232,21 @@ ORDER BY
                     "@EjecucionProduccionID",
                     SqlDbType.Int).Value =
                     ejecucionProduccionId;
-
                 await using var rd =
                     await cmd.ExecuteReaderAsync();
-
                 while (await rd.ReadAsync())
                 {
                     paros.Add(
                         (
                             Convert.ToInt32(
                                 rd["ParoID"]),
-
                             Convert.ToDateTime(
                                 rd["FechaInicioParo"]),
-
                             rd["FechaFinParo"] ==
                             DBNull.Value
                                 ? null
                                 : Convert.ToDateTime(
                                     rd["FechaFinParo"]),
-
                             rd["EsMayorA15Minutos"] !=
                             DBNull.Value &&
                             Convert.ToBoolean(
@@ -7344,14 +7254,11 @@ ORDER BY
                         ));
                 }
             }
-
             // ============================================================
             // CONFIRMACIONES DE INICIO / REINICIO DE SERIE
             // ============================================================
-
             var confirmacionesSerie =
                 new List<DateTime>();
-
             const string sqlConfirmaciones = @"
 SELECT
     h.FechaMovimiento
@@ -7362,7 +7269,6 @@ WHERE ci.EjecucionProduccionID=@EjecucionProduccionID
   AND h.Movimiento=N'CONFIRMACION_INICIO_SERIE_PRODUCCION'
 ORDER BY
     h.FechaMovimiento;";
-
             await using (var cmd =
                 tx == null
                     ? new SqlCommand(
@@ -7377,10 +7283,8 @@ ORDER BY
                     "@EjecucionProduccionID",
                     SqlDbType.Int).Value =
                     ejecucionProduccionId;
-
                 await using var rd =
                     await cmd.ExecuteReaderAsync();
-
                 while (await rd.ReadAsync())
                 {
                     confirmacionesSerie.Add(
@@ -7388,7 +7292,6 @@ ORDER BY
                             rd["FechaMovimiento"]));
                 }
             }
-
             // ============================================================
             // CONSTRUIR INTERVALOS NO PRODUCTIVOS
             //
@@ -7401,31 +7304,26 @@ ORDER BY
             // PARO ABIERTO / SIN RELIBERACIÓN:
             // Inicio paro -> indefinido
             // ============================================================
-
             var interrupciones =
                 new List<(
                     DateTime Inicio,
                     DateTime? Fin)>();
-
             foreach (var paro in paros)
             {
                 var inicioParo =
                     AlMinuto(
                         paro.Inicio);
-
                 if (paro.Fin.HasValue)
                 {
                     var finParo =
                         AlMinuto(
                             paro.Fin.Value);
-
                     if (finParo <
                         inicioParo)
                     {
                         finParo =
                             inicioParo;
                     }
-
                     if (!paro.MayorA15)
                     {
                         // Paro corto:
@@ -7435,10 +7333,8 @@ ORDER BY
                                 inicioParo,
                                 finParo
                             ));
-
                         continue;
                     }
-
                     // Paro > 15:
                     // Producción no vuelve a ser productiva
                     // hasta que exista nueva confirmación de serie.
@@ -7450,7 +7346,6 @@ ORDER BY
                             .OrderBy(x => x)
                             .Select(AlMinuto)
                             .FirstOrDefault();
-
                     if (confirmacion ==
                         DateTime.MinValue)
                     {
@@ -7468,10 +7363,8 @@ ORDER BY
                                 confirmacion
                             ));
                     }
-
                     continue;
                 }
-
                 // Paro todavía abierto.
                 interrupciones.Add(
                     (
@@ -7479,14 +7372,12 @@ ORDER BY
                         null
                     ));
             }
-
             // ============================================================
             // NORMALIZAR Y FUSIONAR PAROS TRASLAPADOS
             //
             // Con esto evitamos que datos duplicados/solapados generen
             // falsos huecos productivos entre dos registros de paro.
             // ============================================================
-
             var interrupcionesNormalizadas =
                 interrupciones
                     .Where(x =>
@@ -7499,19 +7390,16 @@ ORDER BY
                                 x.Inicio < inicio
                                     ? inicio
                                     : x.Inicio,
-
                             Fin:
                                 x.Fin
                         ))
                     .OrderBy(x =>
                         x.Inicio)
                     .ToList();
-
             var interrupcionesFusionadas =
                 new List<(
                     DateTime Inicio,
                     DateTime? Fin)>();
-
             foreach (var actual in
                      interrupcionesNormalizadas)
             {
@@ -7519,24 +7407,19 @@ ORDER BY
                 {
                     interrupcionesFusionadas.Add(
                         actual);
-
                     continue;
                 }
-
                 var ultimo =
                     interrupcionesFusionadas[
                         interrupcionesFusionadas.Count - 1
                     ];
-
                 // Si el anterior es abierto, ya cubre todo lo posterior.
                 if (!ultimo.Fin.HasValue)
                     continue;
-
                 if (actual.Inicio <=
                     ultimo.Fin.Value)
                 {
                     DateTime? nuevoFin;
-
                     if (!actual.Fin.HasValue)
                     {
                         nuevoFin = null;
@@ -7549,7 +7432,6 @@ ORDER BY
                                 ? actual.Fin.Value
                                 : ultimo.Fin.Value;
                     }
-
                     interrupcionesFusionadas[
                         interrupcionesFusionadas.Count - 1
                     ] =
@@ -7557,51 +7439,26 @@ ORDER BY
                             ultimo.Inicio,
                             nuevoFin
                         );
-
                     continue;
                 }
-
                 interrupcionesFusionadas.Add(
                     actual);
             }
-
             // ============================================================
-            // LÍMITE DE GENERACIÓN
+            // OBJETIVO PRODUCTIVO NORMAL
+            //
+            // El paro NO consume minutos de producción.
+            // Se conserva la misma regla existente de HorasProgramadas:
+            // cada hora normal equivale a 60 minutos productivos.
             // ============================================================
-
-            var limiteSeguridad =
-                inicio.AddHours(500);
-
-            var minutosInterrupcionesCerradas =
-                interrupcionesFusionadas.Where(x => x.Fin.HasValue)
-                    .Sum(x => Math.Max(0,(x.Fin!.Value-x.Inicio).TotalMinutes));
-
-            // V9: nunca extender bloques normales por la fecha actual.
-            // HorasProgramadas define el total de tiempo normal; lo posterior es Tiempo Extra.
-            var limiteTeorico = inicio.AddHours(horasRequeridas).AddMinutes(minutosInterrupcionesCerradas);
-            DateTime limite = limiteTeorico;
-            if (finReal.HasValue && AlMinuto(finReal.Value) < limite)
-                limite = AlMinuto(finReal.Value);
-            if (limite >
-                limiteSeguridad)
-            {
-                limite =
-                    limiteSeguridad;
-            }
-
-            if (limite <= inicio)
-            {
-                limite =
-                    inicio.AddHours(1);
-            }
-
+            var minutosProductivosObjetivo = horasRequeridas * 60d;
+            var limiteSeguridad = inicio.AddHours(500);
+            var finRealNormalizado = finReal.HasValue ? AlMinuto(finReal.Value) : (DateTime?)null;
             // ============================================================
             // BUSCAR UN REGISTRO EXISTENTE PARA UNA FILA GENERADA
             // ============================================================
-
             var registrosDisponibles =
                 registros.ToList();
-
             ProduccionRegistroHoraVm?
                 BuscarRegistroBloque(
                     DateTime bloqueInicio,
@@ -7614,27 +7471,22 @@ ORDER BY
                         item.FechaProduccion.Date
                             .Add(
                                 item.HoraInicio);
-
                     var registroFin =
                         item.FechaProduccion.Date
                             .Add(
                                 item.HoraFin);
-
                     if (registroFin <=
                         registroInicio)
                     {
                         registroFin =
                             registroFin.AddDays(1);
                     }
-
                     registroInicio =
                         AlMinuto(
                             registroInicio);
-
                     registroFin =
                         AlMinuto(
                             registroFin);
-
                     if (registroInicio ==
                             bloqueInicio &&
                         registroFin ==
@@ -7642,17 +7494,13 @@ ORDER BY
                     {
                         registrosDisponibles.Remove(
                             item);
-
                         return item;
                     }
                 }
-
                 ProduccionRegistroHoraVm?
                     mejorRegistro = null;
-
                 var mejorTraslapeMinutos =
                     0d;
-
                 foreach (var item in
                          registrosDisponibles)
                 {
@@ -7660,31 +7508,26 @@ ORDER BY
                         item.FechaProduccion.Date
                             .Add(
                                 item.HoraInicio);
-
                     var registroFin =
                         item.FechaProduccion.Date
                             .Add(
                                 item.HoraFin);
-
                     if (registroFin <=
                         registroInicio)
                     {
                         registroFin =
                             registroFin.AddDays(1);
                     }
-
                     var inicioTraslape =
                         registroInicio >
                         bloqueInicio
                             ? registroInicio
                             : bloqueInicio;
-
                     var finTraslape =
                         registroFin <
                         bloqueFin
                             ? registroFin
                             : bloqueFin;
-
                     var minutosTraslape =
                         Math.Max(
                             0,
@@ -7692,18 +7535,15 @@ ORDER BY
                                 finTraslape -
                                 inicioTraslape
                             ).TotalMinutes);
-
                     if (minutosTraslape >
                         mejorTraslapeMinutos)
                     {
                         mejorTraslapeMinutos =
                             minutosTraslape;
-
                         mejorRegistro =
                             item;
                     }
                 }
-
                 var duracionBloqueMinutos =
                     Math.Max(
                         1,
@@ -7711,26 +7551,21 @@ ORDER BY
                             bloqueFin -
                             bloqueInicio
                         ).TotalMinutes);
-
                 var traslapeMinimo =
                     Math.Min(
                         30,
                         duracionBloqueMinutos /
                         2d);
-
                 if (mejorRegistro == null ||
                     mejorTraslapeMinutos <
                     traslapeMinimo)
                 {
                     return null;
                 }
-
                 registrosDisponibles.Remove(
                     mejorRegistro);
-
                 return mejorRegistro;
             }
-
             // ============================================================
             // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
             //
@@ -7744,10 +7579,8 @@ ORDER BY
             // en ese caso este SELECT no devuelve filas y Captura sigue
             // funcionando con su comportamiento anterior.
             // ============================================================
-
             var cortesRelevoV91 =
                 new List<DateTime>();
-
             const string sqlCortesRelevoV91 = @"
 IF OBJECT_ID(N'dbo.Produccion_OperadorTramos',N'U') IS NOT NULL
 BEGIN
@@ -7757,7 +7590,6 @@ BEGIN
       AND Activo=1
     ORDER BY FechaHoraInicio;
 END;";
-
             await using (
                 var cmdCortesRelevoV91 =
                     tx == null
@@ -7773,10 +7605,8 @@ END;";
                     "@EjecucionProduccionID",
                     SqlDbType.Int).Value =
                     ejecucionProduccionId;
-
                 await using var rdCortesRelevoV91 =
                     await cmdCortesRelevoV91.ExecuteReaderAsync();
-
                 while (await rdCortesRelevoV91.ReadAsync())
                 {
                     cortesRelevoV91.Add(
@@ -7784,358 +7614,125 @@ END;";
                             rdCortesRelevoV91["FechaHoraInicio"]));
                 }
             }
-
             cortesRelevoV91 =
                 cortesRelevoV91
                     .Distinct()
                     .OrderBy(x => x)
                     .ToList();
-
             // ============================================================
-            // GENERAR FILAS ÚNICAMENTE DE TIEMPO PRODUCTIVO
+            // GENERAR BLOQUES PRODUCTIVOS
+            //
+            // REGLA:
+            // 13:00 - 13:30 producción -> bloque parcial de 30 min.
+            // 13:30 - 13:44 paro       -> NO se genera producción.
+            // 13:44 - 14:44 producción -> siguiente bloque de 60 min.
+            //
+            // El paro corta el bloque actual y, al reiniciar, comienza
+            // un nuevo reloj de 60 minutos. Los minutos detenidos nunca
+            // consumen el objetivo productivo normal.
             // ============================================================
-
-            var numeroHora =
-                1;
-
-            void AgregarSegmentoProductivo(
-                DateTime segmentoInicio,
-                DateTime segmentoFin)
+            var numeroHora = 1;
+            var minutosProductivosGenerados = 0d;
+            var cursor = inicio;
+            ProduccionCapturaHoraFilaVm CrearFilaProductiva(DateTime bloqueInicio, DateTime bloqueFin)
             {
-                segmentoInicio =
-                    AlMinuto(
-                        segmentoInicio);
-
-                segmentoFin =
-                    AlMinuto(
-                        segmentoFin);
-
-                if (segmentoFin <=
-                    segmentoInicio)
+                bloqueInicio = AlMinuto(bloqueInicio);
+                bloqueFin = AlMinuto(bloqueFin);
+                var registro = BuscarRegistroBloque(bloqueInicio, bloqueFin);
+                var capturada = registro != null;
+                var bloqueTerminado = ahora >= bloqueFin;
+                var minutosBloque = Math.Max(0d, (bloqueFin - bloqueInicio).TotalMinutes);
+                int? objetivoBloqueCalculado = null;
+                if (objetivoHora.HasValue && objetivoHora.Value > 0 && minutosBloque > 0)
+                    objetivoBloqueCalculado = (int)Math.Round(objetivoHora.Value * minutosBloque / 60d, MidpointRounding.AwayFromZero);
+                var objetivoHoraFila = capturada ? registro!.ObjetivoHora ?? objetivoHora : objetivoHora;
+                var objetivoBloqueFila = capturada ? registro!.ObjetivoBloque ?? objetivoBloqueCalculado : objetivoBloqueCalculado;
+                var operadorRegistroId = registro?.OperadorID;
+                string? operadorRegistroNombre = null;
+                if (operadorRegistroId.HasValue && nombresOperadores.TryGetValue(operadorRegistroId.Value, out var nombreEncontrado))
+                    operadorRegistroNombre = nombreEncontrado;
+                return new ProduccionCapturaHoraFilaVm
                 {
-                    return;
+                    NumeroHora = numeroHora,
+                    FechaProduccion = bloqueInicio.Date,
+                    HoraInicio = bloqueInicio.TimeOfDay,
+                    HoraFin = bloqueFin.TimeOfDay,
+                    RegistroHoraID = registro?.RegistroHoraID,
+                    OperadorID = operadorRegistroId,
+                    OperadorNombre = operadorRegistroNombre,
+                    CantidadOK = registro?.CantidadOK ?? 0,
+                    CantidadSospechosa = registro?.CantidadSospechosa ?? 0,
+                    CantidadScrap = registro?.CantidadScrap ?? 0,
+                    ObjetivoHora = objetivoHoraFila,
+                    ObjetivoBloque = objetivoBloqueFila,
+                    Observaciones = registro?.Observaciones,
+                    Capturada = capturada,
+                    Disponible = !capturada && bloqueTerminado,
+                    Vencida = !capturada && bloqueTerminado
+                };
+            }
+            while (minutosProductivosGenerados < minutosProductivosObjetivo - 0.0001d && cursor < limiteSeguridad)
+            {
+                if (finRealNormalizado.HasValue && cursor >= finRealNormalizado.Value) break;
+                var interrupcionActual = interrupcionesFusionadas
+                    .FirstOrDefault(x => x.Inicio <= cursor && (!x.Fin.HasValue || x.Fin.Value > cursor));
+                if (interrupcionActual.Inicio != default)
+                {
+                    if (!interrupcionActual.Fin.HasValue) break;
+                    cursor = AlMinuto(interrupcionActual.Fin.Value);
+                    continue;
                 }
-
-                var inicioBloque =
-                    segmentoInicio;
-
-                // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
-                // Cuando un relevo parte una hora, el segundo bloque debe
-                // terminar en el extremo ORIGINAL de esa hora.
-                DateTime? finBloquePendienteRelevoV91 =
-                    null;
-
-                while (inicioBloque <
-                       segmentoFin)
+                var siguienteInterrupcion = interrupcionesFusionadas
+                    .Where(x => x.Inicio > cursor)
+                    .OrderBy(x => x.Inicio)
+                    .FirstOrDefault();
+                var minutosRestantes = minutosProductivosObjetivo - minutosProductivosGenerados;
+                var finBloqueOriginal = cursor.AddMinutes(Math.Min(60d, minutosRestantes));
+                if (siguienteInterrupcion.Inicio != default && siguienteInterrupcion.Inicio < finBloqueOriginal)
+                    finBloqueOriginal = AlMinuto(siguienteInterrupcion.Inicio);
+                if (finRealNormalizado.HasValue && finBloqueOriginal > finRealNormalizado.Value)
+                    finBloqueOriginal = finRealNormalizado.Value;
+                if (finBloqueOriginal > limiteSeguridad)
+                    finBloqueOriginal = limiteSeguridad;
+                if (finBloqueOriginal <= cursor)
                 {
-                    var finBloque =
-                        finBloquePendienteRelevoV91 ??
-                        inicioBloque.AddHours(1);
-
-                    finBloquePendienteRelevoV91 =
-                        null;
-
-                    /*
-                     * Si el segmento productivo termina por un paro,
-                     * se conserva el bloque parcial.
-                     *
-                     * Ejemplo:
-                     * Producción 12:00 - 12:03
-                     * Paro inicia 12:03
-                     *
-                     * Resultado:
-                     * fila de 3 minutos productivos.
-                     */
-                    if (finBloque >
-                        segmentoFin)
+                    if (siguienteInterrupcion.Inicio != default && siguienteInterrupcion.Inicio <= cursor)
                     {
-                        finBloque =
-                            segmentoFin;
+                        if (!siguienteInterrupcion.Fin.HasValue) break;
+                        cursor = AlMinuto(siguienteInterrupcion.Fin.Value);
+                        continue;
                     }
-
-                    if (finBloque >
-                        limite)
-                    {
-                        finBloque =
-                            limite;
-                    }
-
-                    if (finReal.HasValue &&
-                        finBloque >
-                        AlMinuto(
-                            finReal.Value))
-                    {
-                        finBloque =
-                            AlMinuto(
-                                finReal.Value);
-                    }
-
-                    // NSQ_PRODUCCION_RELEVO_OPERADOR_V9_1_TRAMOS
-                    // Aplicar el corte DESPUES de limitar el bloque por OF,
-                    // turno, fin real y demás segmentos operativos.
-                    var corteRelevoDentroBloqueV91 =
-                        cortesRelevoV91
-                            .FirstOrDefault(x =>
-                                x > inicioBloque &&
-                                x < finBloque);
-
-                    if (corteRelevoDentroBloqueV91 !=
-                        DateTime.MinValue)
-                    {
-                        finBloquePendienteRelevoV91 =
-                            finBloque;
-
-                        finBloque =
-                            corteRelevoDentroBloqueV91;
-                    }
-
-                    if (finBloque <=
-                        inicioBloque)
-                    {
-                        break;
-                    }
-
-                    /*
-                     * PROTECCIÓN EXTRA:
-                     * una fila productiva jamás puede traslaparse
-                     * con un paro.
-                     */
-                    var traslapaParo =
-                        interrupcionesFusionadas
-                            .Any(x =>
-                            {
-                                var finInterrupcion =
-                                    x.Fin ??
-                                    limiteSeguridad;
-
-                                return
-                                    x.Inicio <
-                                        finBloque &&
-                                    finInterrupcion >
-                                        inicioBloque;
-                            });
-
-                    if (traslapaParo)
-                    {
-                        throw new InvalidOperationException(
-                            $"Se intentó generar un bloque productivo " +
-                            $"{inicioBloque:dd/MM HH:mm} - " +
-                            $"{finBloque:dd/MM HH:mm} " +
-                            "que se traslapa con un paro. " +
-                            "La captura fue bloqueada para evitar contabilizar tiempo detenido.");
-                    }
-
-                    var registro =
-                        BuscarRegistroBloque(
-                            inicioBloque,
-                            finBloque);
-
-                    var capturada =
-                        registro != null;
-
-                    var bloqueTerminado =
-                        ahora >=
-                        finBloque;
-
-                    var minutosBloque =
-                        (
-                            finBloque -
-                            inicioBloque
-                        ).TotalMinutes;
-
-                    int?
-                        objetivoBloqueCalculado =
-                            null;
-
-                    if (objetivoHora.HasValue &&
-                        objetivoHora.Value > 0 &&
-                        minutosBloque > 0)
-                    {
-                        objetivoBloqueCalculado =
-                            (int)Math.Round(
-                                objetivoHora.Value *
-                                minutosBloque /
-                                60d,
-                                MidpointRounding
-                                    .AwayFromZero);
-                    }
-
-                    var objetivoHoraFila =
-                        capturada
-                            ? registro!.ObjetivoHora ??
-                              objetivoHora
-                            : objetivoHora;
-
-                    var objetivoBloqueFila =
-                        capturada
-                            ? registro!.ObjetivoBloque ??
-                              objetivoBloqueCalculado
-                            : objetivoBloqueCalculado;
-
-                    var operadorRegistroId =
-                        registro?.OperadorID;
-
-                    string?
-                        operadorRegistroNombre =
-                            null;
-
-                    if (operadorRegistroId
-                            .HasValue &&
-                        nombresOperadores
-                            .TryGetValue(
-                                operadorRegistroId.Value,
-                                out var nombreEncontrado))
-                    {
-                        operadorRegistroNombre =
-                            nombreEncontrado;
-                    }
-
-                    filas.Add(
-                        new ProduccionCapturaHoraFilaVm
-                        {
-                            NumeroHora =
-                                numeroHora,
-
-                            FechaProduccion =
-                                inicioBloque.Date,
-
-                            HoraInicio =
-                                inicioBloque.TimeOfDay,
-
-                            HoraFin =
-                                finBloque.TimeOfDay,
-
-                            RegistroHoraID =
-                                registro?.RegistroHoraID,
-
-                            OperadorID =
-                                operadorRegistroId,
-
-                            OperadorNombre =
-                                operadorRegistroNombre,
-
-                            CantidadOK =
-                                registro?.CantidadOK ??
-                                0,
-
-                            CantidadSospechosa =
-                                registro
-                                    ?.CantidadSospechosa ??
-                                0,
-
-                            CantidadScrap =
-                                registro?.CantidadScrap ??
-                                0,
-
-                            ObjetivoHora =
-                                objetivoHoraFila,
-
-                            ObjetivoBloque =
-                                objetivoBloqueFila,
-
-                            Observaciones =
-                                registro?.Observaciones,
-
-                            Capturada =
-                                capturada,
-
-                            Disponible =
-                                !capturada &&
-                                bloqueTerminado,
-
-                            Vencida =
-                                !capturada &&
-                                bloqueTerminado
-                        });
-
-                    inicioBloque =
-                        finBloque;
-
+                    break;
+                }
+                var finPendientePorRelevo = finBloqueOriginal;
+                var inicioSubBloque = cursor;
+                while (inicioSubBloque < finPendientePorRelevo)
+                {
+                    var finSubBloque = finPendientePorRelevo;
+                    var corteRelevo = cortesRelevoV91
+                        .Where(x => x > inicioSubBloque && x < finSubBloque)
+                        .OrderBy(x => x)
+                        .FirstOrDefault();
+                    if (corteRelevo != DateTime.MinValue)
+                        finSubBloque = corteRelevo;
+                    if (finSubBloque <= inicioSubBloque) break;
+                    var fila = CrearFilaProductiva(inicioSubBloque, finSubBloque);
+                    filas.Add(fila);
+                    var minutosFila = Math.Max(0d, (finSubBloque - inicioSubBloque).TotalMinutes);
+                    minutosProductivosGenerados += minutosFila;
                     numeroHora++;
+                    inicioSubBloque = finSubBloque;
+                }
+                cursor = finBloqueOriginal;
+                if (siguienteInterrupcion.Inicio != default && cursor >= AlMinuto(siguienteInterrupcion.Inicio))
+                {
+                    if (!siguienteInterrupcion.Fin.HasValue) break;
+                    cursor = AlMinuto(siguienteInterrupcion.Fin.Value);
                 }
             }
-
-            // ============================================================
-            // GENERAR EL COMPLEMENTO PRODUCTIVO DE LOS PAROS
-            // ============================================================
-
-            var cursorProductivo =
-                inicio;
-
-            foreach (var interrupcion in
-                     interrupcionesFusionadas)
-            {
-                var inicioInterrupcion =
-                    interrupcion.Inicio;
-
-                if (inicioInterrupcion >=
-                    limite)
-                {
-                    break;
-                }
-
-                /*
-                 * Todo lo que exista ANTES del paro sí es producción.
-                 */
-                if (inicioInterrupcion >
-                    cursorProductivo)
-                {
-                    var finProductivo =
-                        inicioInterrupcion >
-                        limite
-                            ? limite
-                            : inicioInterrupcion;
-
-                    AgregarSegmentoProductivo(
-                        cursorProductivo,
-                        finProductivo);
-                }
-
-                /*
-                 * PARO ABIERTO:
-                 * no existe producción después de él todavía.
-                 */
-                if (!interrupcion.Fin.HasValue)
-                {
-                    cursorProductivo =
-                        limite;
-
-                    break;
-                }
-
-                /*
-                 * Saltamos COMPLETAMENTE el periodo detenido.
-                 *
-                 * Ejemplo:
-                 *
-                 * paro 12:29 - 12:32
-                 *
-                 * cursor pasa directamente a 12:32.
-                 * JAMÁS se genera 12:29 - 12:32.
-                 */
-                if (interrupcion.Fin.Value >
-                    cursorProductivo)
-                {
-                    cursorProductivo =
-                        interrupcion.Fin.Value;
-                }
-            }
-
-            /*
-             * Después del último paro, continúa la producción.
-             */
-            if (cursorProductivo <
-                limite)
-            {
-                AgregarSegmentoProductivo(
-                    cursorProductivo,
-                    limite);
-            }
-
             // ============================================================
             // SOLAMENTE LA PRIMERA HORA PENDIENTE TERMINADA SE HABILITA
             // ============================================================
-
             var primeraPendiente =
                 filas
                     .Where(x =>
@@ -8144,7 +7741,6 @@ END;";
                     .OrderBy(x =>
                         x.NumeroHora)
                     .FirstOrDefault();
-
             foreach (var fila in
                      filas.Where(x =>
                          !x.Capturada))
@@ -8153,35 +7749,29 @@ END;";
                     primeraPendiente != null &&
                     fila.NumeroHora ==
                     primeraPendiente.NumeroHora;
-
                 if (!fila.Disponible)
                 {
                     var fechaInicioFila =
                         fila.FechaProduccion.Date
                             .Add(
                                 fila.HoraInicio);
-
                     var fechaFinFila =
                         fila.FechaProduccion.Date
                             .Add(
                                 fila.HoraFin);
-
                     if (fechaFinFila <=
                         fechaInicioFila)
                     {
                         fechaFinFila =
                             fechaFinFila.AddDays(1);
                     }
-
                     fila.Vencida =
                         ahora >=
                         fechaFinFila;
                 }
             }
-
             return filas;
         }
-
         private bool UsuarioEnSesion()
         {
             return HttpContext.Session.GetInt32("UsuarioID").HasValue;
@@ -8678,8 +8268,7 @@ ORDER BY te.TiempoExtraID DESC;";
         private async Task<List<ProduccionTiempoExtraCorteVm>> ObtenerCortesTiempoExtraAsync(int tiempoExtraId, SqlConnection cn, SqlTransaction? tx = null)
         {
             var lista = new List<ProduccionTiempoExtraCorteVm>();
-            if (tiempoExtraId <= 0) return lista;
-
+            if (tiempoExtraId < 0) return lista;
             const string sql = @"
 SELECT
     rh.RegistroHoraID,
@@ -8734,12 +8323,9 @@ WHERE rh.TiempoExtraID=@TiempoExtraID
   AND rh.Activo=1
   AND ISNULL(rh.EsTiempoExtra,0)=1
 ORDER BY rh.NumeroCorteTiempoExtra,rh.RegistroHoraID;";
-
             await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
             cmd.Parameters.Add("@TiempoExtraID", SqlDbType.Int).Value = tiempoExtraId;
-
             await using var rd = await cmd.ExecuteReaderAsync();
-
             while (await rd.ReadAsync())
             {
                 var fecha = Convert.ToDateTime(rd["FechaProduccion"]).Date;
@@ -8748,7 +8334,6 @@ ORDER BY rh.NumeroCorteTiempoExtra,rh.RegistroHoraID;";
                 var fechaInicio = fecha.Add(horaInicio);
                 var fechaFin = fecha.Add(horaFin);
                 if (fechaFin <= fechaInicio) fechaFin = fechaFin.AddDays(1);
-
                 lista.Add(new ProduccionTiempoExtraCorteVm
                 {
                     RegistroHoraID = Convert.ToInt32(rd["RegistroHoraID"]),
@@ -8770,7 +8355,6 @@ ORDER BY rh.NumeroCorteTiempoExtra,rh.RegistroHoraID;";
                     Observaciones = rd["Observaciones"] == DBNull.Value ? null : rd["Observaciones"]?.ToString()?.Trim()
                 });
             }
-
             return lista;
         }
 

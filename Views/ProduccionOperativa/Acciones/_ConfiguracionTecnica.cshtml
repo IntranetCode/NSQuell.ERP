@@ -114,48 +114,92 @@
             const csv=group.querySelector('[data-pct-csv]');
             const cantidad=group.querySelector('[data-pct-cantidad]');
             const resumen=group.querySelector('[data-pct-resumen]');
-            const checks=[...group.querySelectorAll('[data-pct-cavidad]')];
-            const cantidadExistente=Number(group.dataset.existingCount||0);
+            const contenedor=group.querySelector('[data-pct-cavity-buttons]');
+            const botonTodas=group.querySelector('[data-pct-todas]');
+            const botonLimpiar=group.querySelector('[data-pct-limpiar]');
+            const cantidadExistente=Number.parseInt(group.dataset.existingCount||'0',10)||0;
             const tieneNumeracionExistente=group.dataset.existingNumbered==='true';
+            const maximo=Math.max(1,Math.min(64,Number.parseInt(group.dataset.pctMax||'64',10)||64));
+            const prefijo=group.dataset.pctPrefix||`pctCav_${ejecucionId}`;
+            const iniciales=[...group.querySelectorAll('[data-pct-cavidad]')];
+            const seleccionadas=new Set(iniciales.filter(x=>x.checked).map(x=>Number.parseInt(x.value||'0',10)).filter(x=>x>0&&x<=maximo));
+            const maxServidor=iniciales.map(x=>Number.parseInt(x.value||'0',10)).filter(x=>x>0&&x<=maximo).reduce((a,b)=>Math.max(a,b),0);
+            let limiteDinamico=Math.max(maxServidor,cantidadExistente,Number.parseInt(cantidad?.value||'0',10)||0,[...seleccionadas].reduce((a,b)=>Math.max(a,b),0));
+            limiteDinamico=Math.min(maximo,limiteDinamico);
             let huboInteraccion=false;
 
-            function seleccion(){
-                return checks.filter(x=>x.checked).map(x=>Number(x.value)).filter(x=>x>0).sort((a,b)=>a-b);
-            }
-
-            function actualizar(interaccion=false){
-                if(interaccion) huboInteraccion=true;
-                const lista=seleccion();
-                if(csv) csv.value=lista.join(',');
-
-                if(cantidad){
-                    if(lista.length>0) cantidad.value=String(lista.length);
-                    else if(!huboInteraccion&&!tieneNumeracionExistente&&cantidadExistente>0) cantidad.value=String(cantidadExistente);
-                    else if(huboInteraccion&&checks.length>0) cantidad.value='';
+            function listaSeleccionada(){return [...seleccionadas].filter(x=>x>0&&x<=maximo).sort((a,b)=>a-b);}
+            function emitirRecalculo(){if(csv)csv.dispatchEvent(new Event('change',{bubbles:true}));scope.querySelector('[data-pct-ciclo]')?.dispatchEvent(new Event('input',{bubbles:true}));}
+            function renderizar(){
+                if(!contenedor)return;
+                contenedor.innerHTML='';
+                for(let numero=1;numero<=limiteDinamico;numero++){
+                    const id=`${prefijo}-${numero}`;
+                    const input=document.createElement('input');
+                    input.type='checkbox';
+                    input.id=id;
+                    input.value=String(numero);
+                    input.setAttribute('data-pct-cavidad','');
+                    input.checked=seleccionadas.has(numero);
+                    const label=document.createElement('label');
+                    label.htmlFor=id;
+                    label.textContent=String(numero);
+                    contenedor.append(input,label);
                 }
-
+            }
+            function sincronizarChecks(){contenedor?.querySelectorAll('[data-pct-cavidad]').forEach(input=>{const numero=Number.parseInt(input.value||'0',10);input.checked=seleccionadas.has(numero);});}
+            function actualizarDesdeSeleccion(interaccion=false){
+                if(interaccion)huboInteraccion=true;
+                const lista=listaSeleccionada();
+                if(csv)csv.value=lista.join(',');
+                if(cantidad){
+                    if(lista.length>0)cantidad.value=String(lista.length);
+                    else if(!huboInteraccion&&!tieneNumeracionExistente&&cantidadExistente>0)cantidad.value=String(cantidadExistente);
+                    else if(huboInteraccion)cantidad.value='';
+                }
                 if(resumen){
-                    if(lista.length>0) resumen.textContent=`${lista.length} · ${lista.join(', ')}`;
-                    else if(!huboInteraccion&&cantidadExistente>0) resumen.textContent=`${cantidadExistente} por cantidad`;
+                    if(lista.length>0)resumen.textContent=`${lista.length} · ${lista.join(', ')}`;
+                    else if(!huboInteraccion&&cantidadExistente>0)resumen.textContent=`${cantidadExistente} por cantidad`;
                     else resumen.textContent='Sin definir';
                 }
-
-                scope.querySelector('[data-pct-ciclo]')?.dispatchEvent(new Event('input',{bubbles:true}));
+                sincronizarChecks();
+                emitirRecalculo();
             }
 
-            checks.forEach(x=>x.addEventListener('change',()=>actualizar(true)));
-            group.querySelector('[data-pct-todas]')?.addEventListener('click',()=>{checks.forEach(x=>x.checked=true);actualizar(true);});
-            group.querySelector('[data-pct-limpiar]')?.addEventListener('click',()=>{checks.forEach(x=>x.checked=false);actualizar(true);});
-            cantidad?.addEventListener('input',()=>{
-                if(document.activeElement===cantidad&&checks.some(x=>x.checked)){
-                    checks.forEach(x=>x.checked=false);
-                    if(csv) csv.value='';
-                    huboInteraccion=true;
-                    if(resumen) resumen.textContent=cantidad.value?`${cantidad.value} por cantidad`:'Sin definir';
-                }
-                scope.querySelector('[data-pct-ciclo]')?.dispatchEvent(new Event('input',{bubbles:true}));
+            contenedor?.addEventListener('change',event=>{
+                const input=event.target?.closest?.('[data-pct-cavidad]');
+                if(!input)return;
+                const numero=Number.parseInt(input.value||'0',10);
+                if(numero<=0||numero>maximo)return;
+                if(input.checked)seleccionadas.add(numero);else seleccionadas.delete(numero);
+                actualizarDesdeSeleccion(true);
             });
-            actualizar(false);
+            botonTodas?.addEventListener('click',()=>{
+                huboInteraccion=true;
+                seleccionadas.clear();
+                for(let numero=1;numero<=limiteDinamico;numero++)seleccionadas.add(numero);
+                actualizarDesdeSeleccion(true);
+            });
+            botonLimpiar?.addEventListener('click',()=>{seleccionadas.clear();actualizarDesdeSeleccion(true);});
+            cantidad?.addEventListener('input',()=>{
+                if(document.activeElement!==cantidad)return;
+                const solicitada=Number.parseInt(cantidad.value||'0',10)||0;
+                cantidad.setCustomValidity(solicitada>maximo?`El máximo permitido es ${maximo} cavidades.`:'');
+                if(solicitada<=0){seleccionadas.clear();if(csv)csv.value='';if(resumen)resumen.textContent='Sin definir';emitirRecalculo();return;}
+                if(solicitada>maximo)return;
+                huboInteraccion=true;
+                limiteDinamico=Math.max(maxServidor,solicitada);
+                limiteDinamico=Math.min(maximo,limiteDinamico);
+                seleccionadas.clear();
+                for(let numero=1;numero<=solicitada;numero++)seleccionadas.add(numero);
+                if(csv)csv.value=listaSeleccionada().join(',');
+                if(resumen)resumen.textContent=`${solicitada} · ${listaSeleccionada().join(', ')}`;
+                renderizar();
+                emitirRecalculo();
+            });
+
+            renderizar();
+            actualizarDesdeSeleccion(false);
         }
 
         function configurar(scope){

@@ -210,90 +210,70 @@ public sealed partial class ProduccionController
             Response.StatusCode = 401;
             return Json(new { ok = false, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
         }
-
         if (ejecucionProduccionId <= 0)
             return BadRequest(new { ok = false, mensaje = "La ejecución de Producción no es válida." });
-
         var nuevasCavidades = ParsearCavidadesConfiguracion(cavidadesConfiguradas);
         if (!string.IsNullOrWhiteSpace(cavidadesConfiguradas))
         {
             if (nuevasCavidades.Count == 0)
                 return BadRequest(new { ok = false, mensaje = "La selección de cavidades no es válida." });
-
             cavidadesUsadas = nuevasCavidades.Count;
             cavidadesConfiguradas = NormalizarCavidadesConfiguracion(nuevasCavidades);
         }
-
         if (cavidadesUsadas <= 0)
             return BadRequest(new { ok = false, mensaje = "Las cavidades utilizadas deben ser mayores a cero." });
-
         var cicloNuevo = ConvertirDecimalFlexibleConfiguracion(tiempoCicloSegundos);
         if (!cicloNuevo.HasValue || cicloNuevo.Value <= 0)
             return BadRequest(new { ok = false, mensaje = "El tiempo de ciclo debe ser mayor a cero." });
-
         try
         {
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
-
             var contexto = await ObtenerContextoConfiguracionCorridaAsync(ejecucionProduccionId, cn);
             if (contexto == null)
                 return NotFound(new { ok = false, mensaje = "No se encontró la ejecución de Producción." });
-
             var usuarioId = ObtenerUsuarioID();
             var permisos = await ObtenerPermisosProduccionUsuarioAsync(usuarioId, cn);
-
             if (!PuedeModificarConfiguracionCorrida(permisos, contexto))
             {
                 Response.StatusCode = 403;
                 return Json(new { ok = false, mensaje = "No tienes permiso para modificar la configuración real de esta ejecución." });
             }
-
             if (!EjecucionPermiteConfiguracionCorrida(contexto))
                 return BadRequest(new { ok = false, mensaje = "La configuración ya no puede modificarse porque la ejecución no está activa." });
-
             var configuracionActual = await ObtenerConfiguracionActualAsync(ejecucionProduccionId, cn);
             if (configuracionActual == null)
                 return BadRequest(new { ok = false, mensaje = "La ejecución todavía no tiene una configuración inicial activa." });
-
             var cavidadesActuales = ParsearCavidadesConfiguracion(configuracionActual.CavidadesConfiguradas);
-
             if (nuevasCavidades.Count == 0 && cavidadesActuales.Count > 0)
             {
                 if (cavidadesUsadas != configuracionActual.CavidadesUsadas)
                     return BadRequest(new { ok = false, mensaje = "Para cambiar la cantidad de cavidades debes indicar específicamente cuáles cavidades quedarán activas." });
-
                 nuevasCavidades = cavidadesActuales;
                 cavidadesConfiguradas = configuracionActual.CavidadesConfiguradas;
             }
-
             if (nuevasCavidades.Count > 0)
             {
-                var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, configuracionActual.CavidadesConfiguradas, cn);
+                var cantidadMinimaDisponible = Math.Max(configuracionActual.CavidadesUsadas, nuevasCavidades.Max());
+                var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, configuracionActual.CavidadesConfiguradas, cn, null, cantidadMinimaDisponible);
                 var errorCavidades = ValidarCavidadesContraDisponibles(nuevasCavidades, disponibles);
                 if (!string.IsNullOrWhiteSpace(errorCavidades))
                     return BadRequest(new { ok = false, mensaje = errorCavidades });
-
                 cavidadesUsadas = nuevasCavidades.Count;
                 cavidadesConfiguradas = NormalizarCavidadesConfiguracion(nuevasCavidades);
             }
-
             var comparaDetalleCavidades = cavidadesActuales.Count > 0 || nuevasCavidades.Count > 0;
             var mismasCavidades = comparaDetalleCavidades
                 ? string.Equals(NormalizarCavidadesConfiguracion(cavidadesActuales), NormalizarCavidadesConfiguracion(nuevasCavidades), StringComparison.Ordinal)
                 : configuracionActual.CavidadesUsadas == cavidadesUsadas;
-
             var mismoCiclo = Math.Abs(configuracionActual.TiempoCicloSegundos - cicloNuevo.Value) < 0.0001m;
             var hayCambioConfiguracion = !mismasCavidades || !mismoCiclo;
-
             var planeacion = await ObtenerContextoRecalculoConfiguracionLecturaAsync(contexto.ProgramaProduccionID, ejecucionProduccionId, cn);
             if (planeacion == null)
                 return NotFound(new { ok = false, mensaje = "No fue posible recuperar la programación relacionada con esta ejecución." });
-
             var objetivoAnterior = configuracionActual.ObjetivoHoraOperativo;
             var objetivoNuevo = CalcularObjetivoHoraConfiguracion(cicloNuevo.Value, cavidadesUsadas);
             var cantidadPendiente = Math.Max(0, planeacion.CantidadProgramada - planeacion.CantidadProducida);
-
             if (cantidadPendiente <= 0)
             {
                 return Json(new
@@ -330,13 +310,10 @@ public sealed partial class ProduccionController
                     mensaje = "La OF ya no tiene piezas pendientes. El cambio técnico no modificará el calendario."
                 });
             }
-
             if (objetivoAnterior <= 0)
                 return BadRequest(new { ok = false, mensaje = "La configuración actual no tiene un objetivo por hora válido." });
-
             if (objetivoNuevo <= 0)
                 return BadRequest(new { ok = false, mensaje = "La nueva configuración no genera un objetivo por hora válido." });
-
             var horasRestantesActuales = cantidadPendiente / (decimal)objetivoAnterior;
             var horasRestantesNuevas = cantidadPendiente / (decimal)objetivoNuevo;
             var deltaHoras = horasRestantesNuevas - horasRestantesActuales;
@@ -346,11 +323,9 @@ public sealed partial class ProduccionController
             var fechaFinProyectada = Math.Abs(deltaHoras) < 0.0001m
                 ? planeacion.FechaFinProgramada
                 : _planeacionSecuenciaService.AjustarFechaFinOperativa(planeacion.FechaFinProgramada, deltaHoras, false);
-
             var extiendeProgramacion = deltaHoras > 0.0001m;
             var reduceProgramacion = deltaHoras < -0.0001m;
             var modificaCalendario = Math.Abs(deltaHoras) >= 0.0001m;
-
             string mensaje;
             if (!modificaCalendario)
                 mensaje = hayCambioConfiguracion
@@ -360,7 +335,6 @@ public sealed partial class ProduccionController
                 mensaje = $"La nueva configuración agregará aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) a la OF. Al confirmar el cambio, la programación posterior podrá recorrerse automáticamente.";
             else
                 mensaje = $"La nueva configuración reduce aproximadamente {Math.Abs(deltaMinutos):N0} minuto(s) de la OF. Las órdenes posteriores no se adelantarán automáticamente; el espacio quedará disponible para Planeación.";
-
             return Json(new
             {
                 ok = true,
@@ -639,7 +613,7 @@ public sealed partial class ProduccionController
             TiempoCicloBD = contexto.TiempoCicloBD
         };
         vm.ConfiguracionActual = await ObtenerConfiguracionActualAsync(contexto.EjecucionProduccionID, cn, tx);
-        vm.CavidadesDisponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, vm.ConfiguracionActual?.CavidadesConfiguradas, cn, tx);
+        vm.CavidadesDisponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(contexto.ParteID, contexto.CavidadesBD, vm.ConfiguracionActual?.CavidadesConfiguradas, cn, tx, vm.ConfiguracionActual?.CavidadesUsadas);
         vm.HistorialConfiguraciones = await ObtenerHistorialConfiguracionesAsync(contexto.EjecucionProduccionID, cn, tx);
         var ultimaLectura = await ObtenerUltimaLecturaContadorAsync(contexto.EjecucionProduccionID, cn, tx);
         vm.UltimoContadorMaquina = ultimaLectura?.ValorContador;
@@ -660,13 +634,12 @@ public sealed partial class ProduccionController
         vm.CavidadesBDPareja = contextoPareja.CavidadesBD;
         vm.TiempoCicloBDPareja = contextoPareja.TiempoCicloBD;
         vm.ConfiguracionActualPareja = await ObtenerConfiguracionActualAsync(contextoPareja.EjecucionProduccionID, cn, tx);
-        vm.CavidadesDisponiblesPareja = await ObtenerCavidadesDisponiblesConfiguracionAsync(contextoPareja.ParteID, contextoPareja.CavidadesBD, vm.ConfiguracionActualPareja?.CavidadesConfiguradas, cn, tx);
+        vm.CavidadesDisponiblesPareja = await ObtenerCavidadesDisponiblesConfiguracionAsync(contextoPareja.ParteID, contextoPareja.CavidadesBD, vm.ConfiguracionActualPareja?.CavidadesConfiguradas, cn, tx, vm.ConfiguracionActualPareja?.CavidadesUsadas);
         vm.HistorialConfiguracionesPareja = await ObtenerHistorialConfiguracionesAsync(contextoPareja.EjecucionProduccionID, cn, tx);
         var ultimaLecturaPareja = await ObtenerUltimaLecturaContadorAsync(contextoPareja.EjecucionProduccionID, cn, tx);
         vm.UltimoContadorMaquinaPareja = ultimaLecturaPareja?.ValorContador;
         return vm;
     }
-
 
     private static async Task<ProduccionConfiguracionCorridaContexto?>
         ObtenerContextoConfiguracionCorridaAsync(
@@ -1562,7 +1535,8 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
         }
         if (seleccionadas.Count > 0)
         {
-            var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(parteId, cavidadesBD, configuracionActual?.CavidadesConfiguradas, cn, tx);
+            var cantidadMinimaDisponible = Math.Max(Math.Max(cavidadesUsadas, configuracionActual?.CavidadesUsadas ?? 0), seleccionadas.Max());
+            var disponibles = await ObtenerCavidadesDisponiblesConfiguracionAsync(parteId, cavidadesBD, configuracionActual?.CavidadesConfiguradas, cn, tx, cantidadMinimaDisponible);
             var error = ValidarCavidadesContraDisponibles(seleccionadas, disponibles);
             if (!string.IsNullOrWhiteSpace(error)) throw new InvalidOperationException($"{etiqueta}: {error}");
             return (seleccionadas.Count, NormalizarCavidadesConfiguracion(seleccionadas));
@@ -1732,16 +1706,9 @@ IF @@ROWCOUNT<>1 THROW 51671,'No fue posible sincronizar la duración programada
         return null;
     }
 
-    private static async Task<List<int>>
-        ObtenerCavidadesDisponiblesConfiguracionAsync(
-            int? parteId,
-            int? cavidadesBD,
-            string? cavidadesConfiguradasActuales,
-            SqlConnection cn,
-            SqlTransaction? tx = null)
+    private static async Task<List<int>> ObtenerCavidadesDisponiblesConfiguracionAsync(int? parteId, int? cavidadesBD, string? cavidadesConfiguradasActuales, SqlConnection cn, SqlTransaction? tx = null, int? cantidadMinima = null)
     {
         var resultado = new SortedSet<int>();
-
         static void AgregarRango(
             SortedSet<int> destino,
             int? cantidad)
@@ -1751,12 +1718,10 @@ IF @@ROWCOUNT<>1 THROW 51671,'No fue posible sincronizar la duración programada
             {
                 return;
             }
-
             var limite =
                 Math.Min(
                     cantidad.Value,
                     MaximoCavidadesConfigurablesProduccion);
-
             for (var numero = 1;
                  numero <= limite;
                  numero++)
@@ -1764,27 +1729,19 @@ IF @@ROWCOUNT<>1 THROW 51671,'No fue posible sincronizar la duración programada
                 destino.Add(numero);
             }
         }
-
-       
-        AgregarRango(
-            resultado,
-            cavidadesBD);
-
-        
+        AgregarRango(resultado, cavidadesBD);
+        AgregarRango(resultado, cantidadMinima);
         foreach (var cavidad in
             ParsearCavidadesConfiguracion(
                 cavidadesConfiguradasActuales))
         {
             resultado.Add(cavidad);
         }
-
         if (!parteId.HasValue ||
             parteId.Value <= 0)
         {
             return resultado.ToList();
         }
-
-       
         const string sqlPlantilla = @"
 SELECT TOP(1)
     h.PlantillaHCCID,
@@ -1800,10 +1757,8 @@ ORDER BY
     pp.EsPrincipal DESC,
     h.FechaModificacionFormato DESC,
     h.PlantillaHCCID DESC;";
-
         int? plantillaId = null;
         int? cavidadesDeclaradas = null;
-
         await using (var cmd =
             tx == null
                 ? new SqlCommand(
@@ -1818,16 +1773,13 @@ ORDER BY
                 "@ParteID",
                 SqlDbType.Int).Value =
                 parteId.Value;
-
             await using var rd =
                 await cmd.ExecuteReaderAsync();
-
             if (await rd.ReadAsync())
             {
                 plantillaId =
                     Convert.ToInt32(
                         rd["PlantillaHCCID"]);
-
                 cavidadesDeclaradas =
                     rd["CavidadesDeclaradas"] == DBNull.Value
                         ? null
@@ -1835,14 +1787,11 @@ ORDER BY
                             rd["CavidadesDeclaradas"]);
             }
         }
-
         AgregarRango(
             resultado,
             cavidadesDeclaradas);
-
         if (!plantillaId.HasValue)
             return resultado.ToList();
-
         const string sqlCavidades = @"
 SELECT DISTINCT
     cc.NumeroCavidad
@@ -1855,7 +1804,6 @@ WHERE c.PlantillaHCCID=@PlantillaHCCID
   AND cc.NumeroCavidad>0
 ORDER BY
     cc.NumeroCavidad;";
-
         await using (var cmd =
             tx == null
                 ? new SqlCommand(
@@ -1870,16 +1818,13 @@ ORDER BY
                 "@PlantillaHCCID",
                 SqlDbType.Int).Value =
                 plantillaId.Value;
-
             await using var rd =
                 await cmd.ExecuteReaderAsync();
-
             while (await rd.ReadAsync())
             {
                 var numero =
                     Convert.ToInt32(
                         rd["NumeroCavidad"]);
-
                 if (numero > 0 &&
                     numero <=
                     MaximoCavidadesConfigurablesProduccion)
@@ -1888,7 +1833,6 @@ ORDER BY
                 }
             }
         }
-
         return resultado.ToList();
     }
 

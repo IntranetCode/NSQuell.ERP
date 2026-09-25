@@ -1049,20 +1049,18 @@ public sealed partial class ProduccionOperativaController : Controller
 
     private static void NormalizarAccionActualYSiguiente(ProduccionCentroOperativoVm vm)
     {
-        bool EsMaterialParcialNoBloqueante(ProduccionOperativaAccionVm x)
+        bool EsParcialNoBloqueante(ProduccionOperativaAccionVm x)
         {
-            return string.Equals(x.Clave, AgendaOperativaPasoClave.Material, StringComparison.OrdinalIgnoreCase)
-                && x.EnProceso
-                && !x.Completada
-                && !x.Bloqueada
-                && !x.BloqueaFlujo;
+            var materialParcial = string.Equals(x.Clave, AgendaOperativaPasoClave.Material, StringComparison.OrdinalIgnoreCase) && x.EnProceso && !x.Completada && !x.Bloqueada && !x.BloqueaFlujo;
+            var secadoParcial = string.Equals(x.Clave, AgendaOperativaPasoClave.Secado, StringComparison.OrdinalIgnoreCase) && x.EnProceso && !x.Completada && !x.Bloqueada && !x.BloqueaFlujo;
+            return materialParcial || secadoParcial;
         }
 
         var accionesPrincipales = vm.AccionesDisponibles
             .Where(x => x.Aplica && x.Visible && !x.Completada && x.Orden < 900)
             .Where(x => !EsAccionComplementariaFueraSecuencia(x.Clave))
             .Where(x => vm.TieneParoAbierto || !string.Equals(x.Clave, AgendaOperativaPasoClave.Paro, StringComparison.OrdinalIgnoreCase))
-            .Where(x => !EsMaterialParcialNoBloqueante(x))
+            .Where(x => !EsParcialNoBloqueante(x))
             .OrderBy(x => x.Orden)
             .ThenBy(x => x.Titulo)
             .ToList();
@@ -1071,28 +1069,18 @@ public sealed partial class ProduccionOperativaController : Controller
 
         if (vm.EsParejaLhRh && !vm.LhRh.ParejaConsistente)
         {
-            actual = vm.AccionesDisponibles.FirstOrDefault(x =>
-                string.Equals(x.Clave, "LHRH_INCONSISTENTE", StringComparison.OrdinalIgnoreCase));
+            actual = vm.AccionesDisponibles.FirstOrDefault(x => string.Equals(x.Clave, "LHRH_INCONSISTENTE", StringComparison.OrdinalIgnoreCase));
         }
 
         if (actual == null && vm.TieneParoAbierto)
         {
-            actual = accionesPrincipales.FirstOrDefault(x =>
-                string.Equals(x.Clave, AgendaOperativaPasoClave.Paro, StringComparison.OrdinalIgnoreCase));
+            actual = accionesPrincipales.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.Paro, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (actual == null &&
-            vm.EstatusEjecucionID == ProduccionEstatus.EnProduccion &&
-            !vm.MaquinaLiberada)
+        if (actual == null && vm.EstatusEjecucionID == ProduccionEstatus.EnProduccion && !vm.MaquinaLiberada)
         {
-            var liberacion = accionesPrincipales.FirstOrDefault(x =>
-                string.Equals(x.Clave, AgendaOperativaPasoClave.LiberacionMaquina, StringComparison.OrdinalIgnoreCase));
-
-            if (liberacion != null &&
-                string.Equals(liberacion.Estado, AgendaOperativaEstadoPaso.Listo, StringComparison.OrdinalIgnoreCase))
-            {
-                actual = liberacion;
-            }
+            var liberacion = accionesPrincipales.FirstOrDefault(x => string.Equals(x.Clave, AgendaOperativaPasoClave.LiberacionMaquina, StringComparison.OrdinalIgnoreCase));
+            if (liberacion != null && string.Equals(liberacion.Estado, AgendaOperativaEstadoPaso.Listo, StringComparison.OrdinalIgnoreCase)) actual = liberacion;
         }
 
         actual ??= accionesPrincipales.FirstOrDefault();
@@ -1105,14 +1093,8 @@ public sealed partial class ProduccionOperativaController : Controller
         }
 
         var actualFueraDeSecuencia =
-            string.Equals(
-                actual.Clave,
-                AgendaOperativaPasoClave.LiberacionMaquina,
-                StringComparison.OrdinalIgnoreCase)
-            &&
-            accionesPrincipales.Any(x =>
-                x.Orden < actual.Orden &&
-                !string.Equals(x.Clave, actual.Clave, StringComparison.OrdinalIgnoreCase));
+            string.Equals(actual.Clave, AgendaOperativaPasoClave.LiberacionMaquina, StringComparison.OrdinalIgnoreCase) &&
+            accionesPrincipales.Any(x => x.Orden < actual.Orden && !string.Equals(x.Clave, actual.Clave, StringComparison.OrdinalIgnoreCase));
 
         vm.SiguienteAccion = accionesPrincipales
             .Where(x => !string.Equals(x.Clave, actual.Clave, StringComparison.OrdinalIgnoreCase))
@@ -1123,7 +1105,6 @@ public sealed partial class ProduccionOperativaController : Controller
 
         vm.EtapaActual = actual.Etapa;
     }
-
     private static void NormalizarBloqueoActual(ProduccionCentroOperativoVm vm)
     {
         if (vm.EsParejaLhRh && !vm.LhRh.ParejaConsistente)

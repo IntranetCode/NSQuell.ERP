@@ -717,9 +717,9 @@
 
 
         /* =========================================================
-                                                           MODAL OPERATIVO COMPACTO
-                                                           Aprovecha el ancho para evitar scroll vertical en escritorio.
-                                                           ========================================================= */
+                                                                   MODAL OPERATIVO COMPACTO
+                                                                   Aprovecha el ancho para evitar scroll vertical en escritorio.
+                                                                   ========================================================= */
         .modal-operativa .modal-dialog {
             width: calc(100vw - 28px);
             max-width: 1480px;
@@ -1120,9 +1120,9 @@
         }
 
         /* =========================================================
-                                                   TIMELINE OPERATIVO V3
-                                                   Conserva la geometría del calendario de Planeación.
-                                                   ========================================================= */
+                                                           TIMELINE OPERATIVO V3
+                                                           Conserva la geometría del calendario de Planeación.
+                                                           ========================================================= */
         .production-calendar-readonly .timeline-scroll {
             overflow-x: auto;
             overflow-y: visible;
@@ -1212,10 +1212,10 @@
         }
 
         /* =========================================================
-                                   VISTA DIA SIN SCROLL HORIZONTAL
-                                   Las 24 horas se reparten dentro del ancho disponible.
-                                   El ancho de cada OF sigue siendo proporcional a su horario.
-                                   ========================================================= */
+                                           VISTA DIA SIN SCROLL HORIZONTAL
+                                           Las 24 horas se reparten dentro del ancho disponible.
+                                           El ancho de cada OF sigue siendo proporcional a su horario.
+                                           ========================================================= */
         .production-calendar-readonly.vista-dia .timeline-scroll {
             width: 100%;
             max-width: 100%;
@@ -1294,10 +1294,10 @@
         }
 
         /* =========================================================
-                           CENTRO OPERATIVO UNICO
-                           Mantiene el calendario, sus sombras planeado/real y los
-                           modales heredados como respaldo durante la migracion.
-                           ========================================================= */
+                                   CENTRO OPERATIVO UNICO
+                                   Mantiene el calendario, sus sombras planeado/real y los
+                                   modales heredados como respaldo durante la migracion.
+                                   ========================================================= */
         .modal-centro-operativo .modal-dialog {
             width: calc(100vw - 28px);
             max-width: 1480px;
@@ -3118,7 +3118,16 @@
                 const volver = event.target?.closest?.('[data-nsq-operativa-volver]');
                 if (volver) {
                     event.preventDefault();
-                    centroMostrarResumen();
+
+                    const centroActual = centroContenido?.querySelector('[data-nsq-operativa-centro]');
+                    const requiereRefresco = centroActual?.dataset.nsqOperativaDirty === '1';
+
+                    if (requiereRefresco && centroProgramaActual) {
+                        centroCargar(centroProgramaActual, centroBloqueActual, false);
+                    }
+                    else {
+                        centroMostrarResumen();
+                    }
                     return;
                 }
 

@@ -76,7 +76,7 @@ SELECT TOP(500)
     pp.MaquinaID,COALESCE(NULLIF(LTRIM(RTRIM(pp.MaquinaCodigo)),N''),m.Codigo) AS MaquinaCodigo,
     COALESCE(NULLIF(LTRIM(RTRIM(pp.MaquinaNombre)),N''),m.Nombre) AS MaquinaNombre,
     pp.MoldeID,pp.MoldeCodigo,CONVERT(INT,ISNULL(pp.CantidadProgramada,0)) AS CantidadProgramada,
-    CONVERT(INT,ISNULL(e.CantidadOKTotal,ISNULL(pp.CantidadProducida,0))) AS CantidadProducida,
+    CONVERT(INT,ISNULL(produccionReal.CantidadOKRegistrada,ISNULL(e.CantidadOKTotal,ISNULL(pp.CantidadProducida,0)))) AS CantidadProducida,
     pp.FechaInicioProgramada,ISNULL(pp.FechaFinProgramada,DATEADD(MINUTE,CONVERT(INT,CEILING(ISNULL(pp.HorasProgramadas,1)*60)),pp.FechaInicioProgramada)) AS FechaFinProgramada,
     ISNULL(pp.EstatusID,1) AS EstatusProgramaID,pp.Observaciones,
     grupo.GrupoLhRh,CONVERT(bit,ISNULL(pp.RequiereCambioMolde,0)) AS RequiereCambioMolde,
@@ -103,19 +103,31 @@ OUTER APPLY
 ) e
 OUTER APPLY
 (
+    SELECT SUM(ISNULL(r.CantidadOK,0)) AS CantidadOKRegistrada
+    FROM dbo.Produccion_RegistroHora r
+    WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
+      AND r.Activo=1
+) produccionReal
+OUTER APPLY
+(
     SELECT TOP(1) po.PersonaID,LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto
-    FROM dbo.Planeacion_ProgramaOperadores po LEFT JOIN dbo.Persona p ON p.PersonaID=po.PersonaID
+    FROM dbo.Planeacion_ProgramaOperadores po
+    LEFT JOIN dbo.Persona p ON p.PersonaID=po.PersonaID
     WHERE po.ProgramaProduccionID=pp.ProgramaProduccionID AND po.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))=N'PRINCIPAL'
     ORDER BY po.ProgramaOperadorID DESC
 ) opPrincipal
 OUTER APPLY
 (
     SELECT TOP(1) po.PersonaID,LTRIM(RTRIM(CONCAT(ISNULL(p.Nombre,N''),N' ',ISNULL(p.ApellidoPaterno,N''),N' ',ISNULL(p.ApellidoMaterno,N'')))) AS NombreCompleto
-    FROM dbo.Planeacion_ProgramaOperadores po LEFT JOIN dbo.Persona p ON p.PersonaID=po.PersonaID
+    FROM dbo.Planeacion_ProgramaOperadores po
+    LEFT JOIN dbo.Persona p ON p.PersonaID=po.PersonaID
     WHERE po.ProgramaProduccionID=pp.ProgramaProduccionID AND po.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(po.RolOperador,N''))))=N'AUXILIAR'
     ORDER BY po.ProgramaOperadorID DESC
 ) opAuxiliar
-WHERE pp.Activo=1 AND pp.MaquinaID IS NOT NULL AND pp.FechaInicioProgramada IS NOT NULL AND ISNULL(pp.EstatusID,1) NOT IN(6,9,99)
+WHERE pp.Activo=1
+  AND pp.MaquinaID IS NOT NULL
+  AND pp.FechaInicioProgramada IS NOT NULL
+  AND ISNULL(pp.EstatusID,1) NOT IN(6,9,99)
   AND (@MaquinaID IS NULL OR pp.MaquinaID=@MaquinaID)
   AND
   (
@@ -191,7 +203,8 @@ ORDER BY CASE WHEN e.EjecucionProduccionID IS NOT NULL THEN 0 ELSE 1 END,pp.Fech
             }
             var evaluaciones = await CambioMoldeService.EvaluarProgramasAsync(lista.Select(x => x.ProgramaProduccionID), cn, null, actualizarSnapshot: true);
             foreach (var programa in lista)
-                if (evaluaciones.TryGetValue(programa.ProgramaProduccionID, out var evaluacion)) programa.RequiereCambioMolde = evaluacion.RequiereCambioMolde;
+                if (evaluaciones.TryGetValue(programa.ProgramaProduccionID, out var evaluacion))
+                    programa.RequiereCambioMolde = evaluacion.RequiereCambioMolde;
             return lista;
         }
         private static async Task CrearTablaTemporalProgramasAsync(List<ProgramaBaseDto> programas, SqlConnection cn)
@@ -299,22 +312,46 @@ OUTER APPLY
         private static async Task<Dictionary<int, SecadoDto>> CargarSecadosAsync(SqlConnection cn)
         {
             const string sql = @"
-SELECT a.ProgramaProduccionID,COUNT(1) AS TotalRegistros,
-       SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N'PENDIENTE'))))=N'FINALIZADO' THEN 1 ELSE 0 END) AS Finalizados,
-       SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N'PENDIENTE')))) IN(N'EN_PROCESO',N'PARCIAL') THEN 1 ELSE 0 END) AS EnProceso,
-       SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N'PENDIENTE'))))=N'PENDIENTE' THEN 1 ELSE 0 END) AS Pendientes,
-       MIN(sm.FechaInicioSecadoObjetivo) AS FechaInicioObjetivo,MAX(sm.FechaObjetivoFinSecado) AS FechaFinObjetivo,
-       MIN(sm.FechaPrimerInicioSecado) AS FechaPrimerInicio,MAX(sm.FechaUltimoFinSecado) AS FechaUltimoFin
+SELECT
+    a.ProgramaProduccionID,
+    COUNT(1) AS TotalRegistros,
+    SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N'PENDIENTE'))))=N'FINALIZADO' THEN 1 ELSE 0 END) AS Finalizados,
+    SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N'PENDIENTE')))) IN(N'EN_PROCESO',N'PARCIAL') THEN 1 ELSE 0 END) AS EnProceso,
+    SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N'PENDIENTE'))))=N'PENDIENTE' THEN 1 ELSE 0 END) AS Pendientes,
+    CONVERT(DECIMAL(18,4),ISNULL(SUM(sm.CantidadRecibidaKg),0)) AS CantidadRecibidaKg,
+    CONVERT(DECIMAL(18,4),ISNULL(SUM(sm.CantidadAsignadaKg),0)) AS CantidadAsignadaKg,
+    CONVERT(DECIMAL(18,4),ISNULL(SUM(sm.CantidadFinalizadaKg),0)) AS CantidadFinalizadaKg,
+    MIN(sm.FechaInicioSecadoObjetivo) AS FechaInicioObjetivo,
+    MAX(sm.FechaObjetivoFinSecado) AS FechaFinObjetivo,
+    MIN(sm.FechaPrimerInicioSecado) AS FechaPrimerInicio,
+    MAX(sm.FechaUltimoFinSecado) AS FechaUltimoFin
 FROM #AgendaProgramas a
 INNER JOIN dbo.Produccion_SecadoMaterial sm
     ON sm.ProgramaProduccionID=a.ProgramaProduccionID
     OR (sm.ProgramaProduccionID IS NULL AND a.EjecucionProduccionID IS NOT NULL AND sm.EjecucionProduccionID=a.EjecucionProduccionID)
-WHERE sm.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N''))))<>N'CANCELADO'
+WHERE sm.Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(sm.Estado,N''))))<>N'CANCELADO'
 GROUP BY a.ProgramaProduccionID;";
             var result = new Dictionary<int, SecadoDto>();
             await using var cmd = new SqlCommand(sql, cn);
             await using var rd = await cmd.ExecuteReaderAsync();
-            while (await rd.ReadAsync()) result[Int(rd, "ProgramaProduccionID")] = new SecadoDto { Total = Int(rd, "TotalRegistros"), Finalizados = Int(rd, "Finalizados"), EnProceso = Int(rd, "EnProceso"), Pendientes = Int(rd, "Pendientes"), FechaInicioObjetivo = NDate(rd, "FechaInicioObjetivo"), FechaFinObjetivo = NDate(rd, "FechaFinObjetivo"), FechaPrimerInicio = NDate(rd, "FechaPrimerInicio"), FechaUltimoFin = NDate(rd, "FechaUltimoFin") };
+            while (await rd.ReadAsync())
+            {
+                result[Int(rd, "ProgramaProduccionID")] = new SecadoDto
+                {
+                    Total = Int(rd, "TotalRegistros"),
+                    Finalizados = Int(rd, "Finalizados"),
+                    EnProceso = Int(rd, "EnProceso"),
+                    Pendientes = Int(rd, "Pendientes"),
+                    CantidadRecibidaKg = Dec(rd, "CantidadRecibidaKg"),
+                    CantidadAsignadaKg = Dec(rd, "CantidadAsignadaKg"),
+                    CantidadFinalizadaKg = Dec(rd, "CantidadFinalizadaKg"),
+                    FechaInicioObjetivo = NDate(rd, "FechaInicioObjetivo"),
+                    FechaFinObjetivo = NDate(rd, "FechaFinObjetivo"),
+                    FechaPrimerInicio = NDate(rd, "FechaPrimerInicio"),
+                    FechaUltimoFin = NDate(rd, "FechaUltimoFin")
+                };
+            }
             return result;
         }
         private static async Task<Dictionary<int, ChecklistDto>> CargarChecklistsAsync(SqlConnection cn)
@@ -412,50 +449,140 @@ WHERE x.rn=1;";
         {
             const string sql = @"
 SELECT a.ProgramaProduccionID,e.EjecucionProduccionID,
-       ISNULL(e.CantidadOKTotal,0) AS CantidadOK,ISNULL(e.CantidadSospechosaTotal,0) AS CantidadSospechosa,ISNULL(e.CantidadScrapTotal,0) AS CantidadScrap,
-       ISNULL(cajas.OkEnCajas,0)+ISNULL(detalle.OkDetalle,0) AS OkEnCajas,ISNULL(cajas.SospechosoEnCajas,0) AS SospechosoEnCajas,ISNULL(cajas.RetencionEnCajas,0) AS RetencionEnCajas,ISNULL(cajas.ScrapEnCajas,0) AS ScrapEnCajas,
-       ISNULL(cajas.CajasFormadasPendientes,0) AS CajasFormadasPendientes,ISNULL(cajas.CajasPendientesCalidad,0) AS CajasPendientesCalidad,
-       ISNULL(reg.RegistrosNormales,0) AS RegistrosNormales,ISNULL(reg.MinutosNormalesCapturados,0) AS MinutosNormalesCapturados,TRY_CONVERT(DECIMAL(18,4),dt.ObjetivoHora) AS ObjetivoHora,
+       ISNULL(reg.CantidadOKRegistrada,ISNULL(e.CantidadOKTotal,0)) AS CantidadOK,
+       ISNULL(reg.CantidadSospechosaRegistrada,ISNULL(e.CantidadSospechosaTotal,0)) AS CantidadSospechosa,
+       ISNULL(reg.CantidadScrapRegistrada,ISNULL(e.CantidadScrapTotal,0)) AS CantidadScrap,
+       ISNULL(cajas.OkEnCajas,0)+ISNULL(detalle.OkDetalle,0) AS OkEnCajas,
+       ISNULL(cajas.SospechosoEnCajas,0) AS SospechosoEnCajas,
+       ISNULL(cajas.RetencionEnCajas,0) AS RetencionEnCajas,
+       ISNULL(cajas.ScrapEnCajas,0) AS ScrapEnCajas,
+       ISNULL(cajas.CajasFormadasPendientes,0) AS CajasFormadasPendientes,
+       ISNULL(cajas.CajasPendientesCalidad,0) AS CajasPendientesCalidad,
+       ISNULL(reg.RegistrosTotales,0) AS RegistrosTotales,
+       ISNULL(reg.RegistrosNormales,0) AS RegistrosNormales,
+       ISNULL(reg.RegistrosTiempoExtra,0) AS RegistrosTiempoExtra,
+       ISNULL(reg.MinutosNormalesCapturados,0) AS MinutosNormalesCapturados,
+       ISNULL(reg.MinutosTiempoExtraCapturados,0) AS MinutosTiempoExtraCapturados,
+       ISNULL(reg.MinutosProductivosCapturados,0) AS MinutosProductivosCapturados,
+       TRY_CONVERT(DECIMAL(18,4),dt.ObjetivoHora) AS ObjetivoHora,
        CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.Produccion_TiempoExtra te WHERE te.EjecucionProduccionID=e.EjecucionProduccionID AND te.Activo=1 AND te.FechaHoraFin IS NULL AND UPPER(LTRIM(RTRIM(ISNULL(te.Estado,N'')))) IN(N'EN_CURSO',N'PAUSADO')) THEN 1 ELSE 0 END) AS TieneTiempoExtraActivo,
-       ISNULL(cal.MonitoreosPendientes,0) AS MonitoreosPendientes,ISNULL(cal.DisposicionesPendientes,0) AS DisposicionesPendientes,ISNULL(cal.ReliberacionesPendientes,0) AS ReliberacionesPendientes
-FROM #AgendaProgramas a INNER JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=a.EjecucionProduccionID AND e.Activo=1
+       ISNULL(cal.MonitoreosPendientes,0) AS MonitoreosPendientes,
+       ISNULL(cal.DisposicionesPendientes,0) AS DisposicionesPendientes,
+       ISNULL(cal.ReliberacionesPendientes,0) AS ReliberacionesPendientes
+FROM #AgendaProgramas a
+INNER JOIN dbo.Produccion_Ejecucion e ON e.EjecucionProduccionID=a.EjecucionProduccionID AND e.Activo=1
 OUTER APPLY
 (
     SELECT
-      SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK' AND odx.CajaProduccionID IS NULL THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS OkEnCajas,
-      SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SOSPECHOSO' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS SospechosoEnCajas,
-      SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'RETENCION' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS RetencionEnCajas,
-      SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SCRAP' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS ScrapEnCajas,
-      SUM(CASE WHEN c.EstadoCajaID=@CajaFormada THEN 1 ELSE 0 END) AS CajasFormadasPendientes,
-      SUM(CASE WHEN c.EstadoCajaID=@CajaPendienteCalidad THEN 1 ELSE 0 END) AS CajasPendientesCalidad
+        SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N'OK'))))=N'OK' AND odx.CajaProduccionID IS NULL THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS OkEnCajas,
+        SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SOSPECHOSO' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS SospechosoEnCajas,
+        SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'RETENCION' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS RetencionEnCajas,
+        SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(c.TipoCaja,N''))))=N'SCRAP' THEN ISNULL(c.CantidadPiezas,ISNULL(c.Cantidad,0)) ELSE 0 END) AS ScrapEnCajas,
+        SUM(CASE WHEN c.EstadoCajaID=@CajaFormada THEN 1 ELSE 0 END) AS CajasFormadasPendientes,
+        SUM(CASE WHEN c.EstadoCajaID=@CajaPendienteCalidad THEN 1 ELSE 0 END) AS CajasPendientesCalidad
     FROM dbo.Produccion_Cajas c
-    LEFT JOIN (SELECT od0.CajaProduccionID FROM dbo.Produccion_CajaOrigenDetalle od0 WHERE od0.Activo=1 GROUP BY od0.CajaProduccionID) odx ON odx.CajaProduccionID=c.CajaProduccionID
-    WHERE c.EjecucionProduccionID=e.EjecucionProduccionID AND c.Activo=1
+    LEFT JOIN
+    (
+        SELECT od0.CajaProduccionID
+        FROM dbo.Produccion_CajaOrigenDetalle od0
+        WHERE od0.Activo=1
+        GROUP BY od0.CajaProduccionID
+    ) odx ON odx.CajaProduccionID=c.CajaProduccionID
+    WHERE c.EjecucionProduccionID=e.EjecucionProduccionID
+      AND c.Activo=1
 ) cajas
-OUTER APPLY(SELECT SUM(od.CantidadPiezas) AS OkDetalle FROM dbo.Produccion_CajaOrigenDetalle od WHERE od.EjecucionProduccionID=e.EjecucionProduccionID AND od.Activo=1) detalle
 OUTER APPLY
 (
-    SELECT COUNT(1) AS RegistrosNormales,ISNULL(SUM(CASE WHEN r.MinutosProductivos IS NOT NULL AND r.MinutosProductivos>0 THEN r.MinutosProductivos WHEN r.HoraFin>=r.HoraInicio THEN CONVERT(DECIMAL(18,2),DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin)) ELSE CONVERT(DECIMAL(18,2),1440+DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin)) END),0) AS MinutosNormalesCapturados
-    FROM dbo.Produccion_RegistroHora r WHERE r.EjecucionProduccionID=e.EjecucionProduccionID AND r.Activo=1 AND ISNULL(r.EsTiempoExtra,0)=0
+    SELECT SUM(od.CantidadPiezas) AS OkDetalle
+    FROM dbo.Produccion_CajaOrigenDetalle od
+    WHERE od.EjecucionProduccionID=e.EjecucionProduccionID
+      AND od.Activo=1
+) detalle
+OUTER APPLY
+(
+    SELECT
+        COUNT(1) AS RegistrosTotales,
+        SUM(CASE WHEN x.EsTiempoExtra=0 THEN 1 ELSE 0 END) AS RegistrosNormales,
+        SUM(CASE WHEN x.EsTiempoExtra=1 THEN 1 ELSE 0 END) AS RegistrosTiempoExtra,
+        ISNULL(SUM(CASE WHEN x.EsTiempoExtra=0 THEN x.MinutosProductivos ELSE 0 END),0) AS MinutosNormalesCapturados,
+        ISNULL(SUM(CASE WHEN x.EsTiempoExtra=1 THEN x.MinutosProductivos ELSE 0 END),0) AS MinutosTiempoExtraCapturados,
+        ISNULL(SUM(x.MinutosProductivos),0) AS MinutosProductivosCapturados,
+        SUM(x.CantidadOK) AS CantidadOKRegistrada,
+        SUM(x.CantidadSospechosa) AS CantidadSospechosaRegistrada,
+        SUM(x.CantidadScrap) AS CantidadScrapRegistrada
+    FROM
+    (
+        SELECT
+            CONVERT(INT,ISNULL(r.EsTiempoExtra,0)) AS EsTiempoExtra,
+            ISNULL(r.CantidadOK,0) AS CantidadOK,
+            ISNULL(r.CantidadSospechosa,0) AS CantidadSospechosa,
+            ISNULL(r.CantidadScrap,0) AS CantidadScrap,
+            CASE
+                WHEN r.MinutosProductivos IS NOT NULL AND r.MinutosProductivos>0
+                    THEN CONVERT(DECIMAL(18,2),r.MinutosProductivos)
+                WHEN r.HoraFin>=r.HoraInicio
+                    THEN CONVERT(DECIMAL(18,2),DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
+                ELSE CONVERT(DECIMAL(18,2),1440+DATEDIFF(MINUTE,r.HoraInicio,r.HoraFin))
+            END AS MinutosProductivos
+        FROM dbo.Produccion_RegistroHora r
+        WHERE r.EjecucionProduccionID=e.EjecucionProduccionID
+          AND r.Activo=1
+    ) x
 ) reg
-OUTER APPLY(SELECT TOP(1) d.ObjetivoHora FROM dbo.ERP_ParteDatosTecnicos d WHERE d.ParteID=e.ParteID AND d.Activo=1 ORDER BY d.ParteDatoTecnicoID DESC) dt
 OUTER APPLY
 (
-    SELECT TOP(1) ci.InspeccionID FROM dbo.Calidad_Inspecciones ci WHERE ci.EjecucionProduccionID=e.EjecucionProduccionID ORDER BY ci.InspeccionID DESC
+    SELECT TOP(1) d.ObjetivoHora
+    FROM dbo.ERP_ParteDatosTecnicos d
+    WHERE d.ParteID=e.ParteID
+      AND d.Activo=1
+    ORDER BY d.ParteDatoTecnicoID DESC
+) dt
+OUTER APPLY
+(
+    SELECT TOP(1) ci.InspeccionID
+    FROM dbo.Calidad_Inspecciones ci
+    WHERE ci.EjecucionProduccionID=e.EjecucionProduccionID
+    ORDER BY ci.InspeccionID DESC
 ) ciActual
 OUTER APPLY
 (
     SELECT
-      (SELECT COUNT(1) FROM dbo.Calidad_MonitoreosProceso m WHERE m.InspeccionID=ciActual.InspeccionID AND m.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N'PENDIENTE'))))=N'PENDIENTE') AS MonitoreosPendientes,
-      (SELECT COUNT(1) FROM dbo.Calidad_DisposicionesMaterial d WHERE d.InspeccionID=ciActual.InspeccionID AND d.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N'PENDIENTE'))))=N'PENDIENTE') AS DisposicionesPendientes,
-      (SELECT COUNT(1) FROM dbo.Calidad_Reliberaciones r WHERE r.InspeccionID=ciActual.InspeccionID AND r.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N'PENDIENTE'))))<>N'AUTORIZADA') AS ReliberacionesPendientes
+        (SELECT COUNT(1) FROM dbo.Calidad_MonitoreosProceso m WHERE m.InspeccionID=ciActual.InspeccionID AND m.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(m.Resultado,N'PENDIENTE'))))=N'PENDIENTE') AS MonitoreosPendientes,
+        (SELECT COUNT(1) FROM dbo.Calidad_DisposicionesMaterial d WHERE d.InspeccionID=ciActual.InspeccionID AND d.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(d.ResultadoFinal,N'PENDIENTE'))))=N'PENDIENTE') AS DisposicionesPendientes,
+        (SELECT COUNT(1) FROM dbo.Calidad_Reliberaciones r WHERE r.InspeccionID=ciActual.InspeccionID AND r.Activo=1 AND UPPER(LTRIM(RTRIM(ISNULL(r.Resultado,N'PENDIENTE'))))<>N'AUTORIZADA') AS ReliberacionesPendientes
 ) cal;";
             var result = new Dictionary<int, CierreDto>();
             await using var cmd = new SqlCommand(sql, cn);
             cmd.Parameters.Add("@CajaFormada", SqlDbType.Int).Value = ProduccionCajaEstatus.FormadaProduccion;
             cmd.Parameters.Add("@CajaPendienteCalidad", SqlDbType.Int).Value = ProduccionCajaEstatus.PendienteCalidad;
             await using var rd = await cmd.ExecuteReaderAsync();
-            while (await rd.ReadAsync()) result[Int(rd, "ProgramaProduccionID")] = new CierreDto { EjecucionProduccionID = Int(rd, "EjecucionProduccionID"), CantidadOK = Int(rd, "CantidadOK"), CantidadSospechosa = Int(rd, "CantidadSospechosa"), CantidadScrap = Int(rd, "CantidadScrap"), OkEnCajas = Int(rd, "OkEnCajas"), SospechosoEnCajas = Int(rd, "SospechosoEnCajas"), RetencionEnCajas = Int(rd, "RetencionEnCajas"), ScrapEnCajas = Int(rd, "ScrapEnCajas"), CajasFormadasPendientes = Int(rd, "CajasFormadasPendientes"), CajasPendientesCalidad = Int(rd, "CajasPendientesCalidad"), RegistrosNormales = Int(rd, "RegistrosNormales"), MinutosNormalesCapturados = Dec(rd, "MinutosNormalesCapturados"), ObjetivoHora = NDec(rd, "ObjetivoHora"), TieneTiempoExtraActivo = Bool(rd, "TieneTiempoExtraActivo"), MonitoreosPendientes = Int(rd, "MonitoreosPendientes"), DisposicionesPendientes = Int(rd, "DisposicionesPendientes"), ReliberacionesPendientes = Int(rd, "ReliberacionesPendientes") };
+            while (await rd.ReadAsync())
+            {
+                result[Int(rd, "ProgramaProduccionID")] = new CierreDto
+                {
+                    EjecucionProduccionID = Int(rd, "EjecucionProduccionID"),
+                    CantidadOK = Int(rd, "CantidadOK"),
+                    CantidadSospechosa = Int(rd, "CantidadSospechosa"),
+                    CantidadScrap = Int(rd, "CantidadScrap"),
+                    OkEnCajas = Int(rd, "OkEnCajas"),
+                    SospechosoEnCajas = Int(rd, "SospechosoEnCajas"),
+                    RetencionEnCajas = Int(rd, "RetencionEnCajas"),
+                    ScrapEnCajas = Int(rd, "ScrapEnCajas"),
+                    CajasFormadasPendientes = Int(rd, "CajasFormadasPendientes"),
+                    CajasPendientesCalidad = Int(rd, "CajasPendientesCalidad"),
+                    RegistrosTotales = Int(rd, "RegistrosTotales"),
+                    RegistrosNormales = Int(rd, "RegistrosNormales"),
+                    RegistrosTiempoExtra = Int(rd, "RegistrosTiempoExtra"),
+                    MinutosNormalesCapturados = Dec(rd, "MinutosNormalesCapturados"),
+                    MinutosTiempoExtraCapturados = Dec(rd, "MinutosTiempoExtraCapturados"),
+                    MinutosProductivosCapturados = Dec(rd, "MinutosProductivosCapturados"),
+                    ObjetivoHora = NDec(rd, "ObjetivoHora"),
+                    TieneTiempoExtraActivo = Bool(rd, "TieneTiempoExtraActivo"),
+                    MonitoreosPendientes = Int(rd, "MonitoreosPendientes"),
+                    DisposicionesPendientes = Int(rd, "DisposicionesPendientes"),
+                    ReliberacionesPendientes = Int(rd, "ReliberacionesPendientes")
+                };
+            }
             return result;
         }
         private static async Task<Dictionary<int, ParejaDto>> CargarParejasLhRhAsync(SqlConnection cn)
@@ -464,7 +591,8 @@ OUTER APPLY
 SELECT a.ProgramaProduccionID,grupo.GrupoLhRh,pareja.ProgramaProduccionID AS ProgramaParejaID,pareja.SolicitudProduccionID AS SolicitudParejaID,
        COALESCE(NULLIF(sp.NumeroOFRecibida,N''),NULLIF(sp.FolioSolicitud,N'')) AS OFPareja,pareja.NumeroParte AS NumeroPartePareja,pareja.ReferenciaSAP AS ReferenciaSAPPareja,
        ISNULL(pareja.EstatusID,1) AS EstatusProgramaParejaID,ep.EjecucionProduccionID AS EjecucionParejaID,ep.EstatusID AS EstatusEjecucionParejaID,
-       CONVERT(INT,ISNULL(pareja.CantidadProgramada,0)) AS CantidadProgramadaPareja,CONVERT(INT,ISNULL(ep.CantidadOKTotal,ISNULL(pareja.CantidadProducida,0))) AS CantidadProducidaPareja,
+       CONVERT(INT,ISNULL(pareja.CantidadProgramada,0)) AS CantidadProgramadaPareja,
+       CONVERT(INT,ISNULL(regPareja.CantidadOKRegistrada,ISNULL(ep.CantidadOKTotal,ISNULL(pareja.CantidadProducida,0)))) AS CantidadProducidaPareja,
        CONVERT(bit,CASE WHEN origen.MaquinaID=pareja.MaquinaID THEN 1 ELSE 0 END) AS MismaMaquina,
        CONVERT(bit,CASE WHEN origen.MoldeID IS NOT NULL AND pareja.MoldeID IS NOT NULL THEN CASE WHEN origen.MoldeID=pareja.MoldeID THEN 1 ELSE 0 END WHEN UPPER(LTRIM(RTRIM(ISNULL(origen.MoldeCodigo,N''))))=UPPER(LTRIM(RTRIM(ISNULL(pareja.MoldeCodigo,N'')))) THEN 1 ELSE 0 END) AS MismoMolde,
        CONVERT(bit,CASE WHEN origen.FechaInicioProgramada=pareja.FechaInicioProgramada AND ISNULL(origen.FechaFinProgramada,'19000101')=ISNULL(pareja.FechaFinProgramada,'19000101') THEN 1 ELSE 0 END) AS MismaVentana
@@ -474,7 +602,21 @@ OUTER APPLY(SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(origen.Observaciones,N''))
 OUTER APPLY(SELECT CASE WHEN pos.PosGrupo>0 THEN TRY_CONVERT(INT,LEFT(SUBSTRING(origen.Observaciones,pos.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),CHARINDEX(N';',SUBSTRING(origen.Observaciones,pos.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1)) ELSE NULL END AS GrupoLhRh) grupo
 INNER JOIN dbo.Planeacion_ProgramaProduccion pareja ON pareja.Activo=1 AND pareja.ProgramaProduccionID<>origen.ProgramaProduccionID AND grupo.GrupoLhRh IS NOT NULL AND pareja.Observaciones LIKE N'%NSQ_LHRH_PAIR:'+CONVERT(NVARCHAR(20),grupo.GrupoLhRh)+N';%'
 LEFT JOIN dbo.SolicitudesProduccion sp ON sp.SolicitudProduccionID=pareja.SolicitudProduccionID AND sp.Activo=1
-OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal FROM dbo.Produccion_Ejecucion e WHERE e.ProgramaProduccionID=pareja.ProgramaProduccionID AND e.Activo=1 ORDER BY e.EjecucionProduccionID DESC) ep;";
+OUTER APPLY
+(
+    SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal
+    FROM dbo.Produccion_Ejecucion e
+    WHERE e.ProgramaProduccionID=pareja.ProgramaProduccionID
+      AND e.Activo=1
+    ORDER BY e.EjecucionProduccionID DESC
+) ep
+OUTER APPLY
+(
+    SELECT SUM(ISNULL(r.CantidadOK,0)) AS CantidadOKRegistrada
+    FROM dbo.Produccion_RegistroHora r
+    WHERE r.EjecucionProduccionID=ep.EjecucionProduccionID
+      AND r.Activo=1
+) regPareja;";
             var result = new Dictionary<int, ParejaDto>();
             await using var cmd = new SqlCommand(sql, cn);
             await using var rd = await cmd.ExecuteReaderAsync();
@@ -482,7 +624,23 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
             {
                 var id = Int(rd, "ProgramaProduccionID");
                 if (result.ContainsKey(id)) continue;
-                result[id] = new ParejaDto { GrupoLhRh = NInt(rd, "GrupoLhRh"), ProgramaParejaID = Int(rd, "ProgramaParejaID"), SolicitudParejaID = NInt(rd, "SolicitudParejaID"), OFPareja = Txt(rd, "OFPareja"), NumeroPartePareja = Txt(rd, "NumeroPartePareja"), ReferenciaSAPPareja = Txt(rd, "ReferenciaSAPPareja"), EstatusProgramaParejaID = Int(rd, "EstatusProgramaParejaID"), EjecucionParejaID = NInt(rd, "EjecucionParejaID"), EstatusEjecucionParejaID = NInt(rd, "EstatusEjecucionParejaID"), CantidadProgramadaPareja = Int(rd, "CantidadProgramadaPareja"), CantidadProducidaPareja = Int(rd, "CantidadProducidaPareja"), MismaMaquina = Bool(rd, "MismaMaquina"), MismoMolde = Bool(rd, "MismoMolde"), MismaVentana = Bool(rd, "MismaVentana") };
+                result[id] = new ParejaDto
+                {
+                    GrupoLhRh = NInt(rd, "GrupoLhRh"),
+                    ProgramaParejaID = Int(rd, "ProgramaParejaID"),
+                    SolicitudParejaID = NInt(rd, "SolicitudParejaID"),
+                    OFPareja = Txt(rd, "OFPareja"),
+                    NumeroPartePareja = Txt(rd, "NumeroPartePareja"),
+                    ReferenciaSAPPareja = Txt(rd, "ReferenciaSAPPareja"),
+                    EstatusProgramaParejaID = Int(rd, "EstatusProgramaParejaID"),
+                    EjecucionParejaID = NInt(rd, "EjecucionParejaID"),
+                    EstatusEjecucionParejaID = NInt(rd, "EstatusEjecucionParejaID"),
+                    CantidadProgramadaPareja = Int(rd, "CantidadProgramadaPareja"),
+                    CantidadProducidaPareja = Int(rd, "CantidadProducidaPareja"),
+                    MismaMaquina = Bool(rd, "MismaMaquina"),
+                    MismoMolde = Bool(rd, "MismoMolde"),
+                    MismaVentana = Bool(rd, "MismaVentana")
+                };
             }
             return result;
         }
@@ -632,11 +790,57 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         {
             var aplica = !string.IsNullOrWhiteSpace(p.TipoSecado) && p.HorasSecado.GetValueOrDefault() > 0m;
             if (!aplica) return PasoNoAplica(40, AgendaOperativaPasoClave.Secado, "Secado de material", AgendaOperativaArea.Secado, "La OF no tiene secado configurado.");
-            if (s == null || s.Total <= 0) return Paso(40, AgendaOperativaPasoClave.Secado, "Secado de material", AgendaOperativaArea.Secado, AgendaOperativaEstadoPaso.Pendiente, true, false, false, false, $"Secado requerido: {p.HorasSecado.GetValueOrDefault():0.##} h. Aún no existe carga de secado registrada. Actualmente es informativo y no bloquea el arranque por sí solo.", p.FechaInicioProgramada?.AddHours(-(double)p.HorasSecado.GetValueOrDefault()), "ProduccionPreparacion", "Secado", p.ProgramaProduccionID);
-            var completo = s.Finalizados == s.Total;
-            var enProceso = s.EnProceso > 0;
+
+            var requerido = Math.Max(0m, p.CantidadMpKg.GetValueOrDefault());
+
+            if (s == null || s.Total <= 0)
+            {
+                var detalleSinRegistro = requerido > ToleranciaCantidad
+                    ? $"La OF requiere secado y todavía no existe material registrado en Secado. Cantidad requerida: {requerido:0.####} kg."
+                    : $"Secado requerido: {p.HorasSecado.GetValueOrDefault():0.##} h. Aún no existe carga de secado registrada.";
+                return Paso(40, AgendaOperativaPasoClave.Secado, "Secado de material", AgendaOperativaArea.Secado, AgendaOperativaEstadoPaso.Pendiente, true, false, false, false, detalleSinRegistro, p.FechaInicioProgramada?.AddHours(-(double)p.HorasSecado.GetValueOrDefault()), "ProduccionPreparacion", "Secado", p.ProgramaProduccionID);
+            }
+
+            var recibido = Math.Max(0m, s.CantidadRecibidaKg);
+            var asignado = Math.Max(0m, s.CantidadAsignadaKg);
+            var finalizado = Math.Max(0m, s.CantidadFinalizadaKg);
+            var objetivo = requerido > ToleranciaCantidad ? requerido : Math.Max(recibido, finalizado);
+            var completo = objetivo > ToleranciaCantidad && finalizado + ToleranciaCantidad >= objetivo;
+            var secadoIniciado = asignado > ToleranciaCantidad || finalizado > ToleranciaCantidad || s.FechaPrimerInicio.HasValue || s.EnProceso > 0;
+            var enProceso = !completo && secadoIniciado;
             var estado = completo ? AgendaOperativaEstadoPaso.Completado : enProceso ? AgendaOperativaEstadoPaso.EnProceso : AgendaOperativaEstadoPaso.Pendiente;
-            return Paso(40, AgendaOperativaPasoClave.Secado, "Secado de material", AgendaOperativaArea.Secado, estado, true, completo, enProceso, false, completo ? "Todas las cargas de secado relacionadas con la OF están finalizadas." : $"Secado: {s.Finalizados}/{s.Total} registro(s) finalizado(s). Actualmente es informativo y no bloquea el arranque por sí solo.", s.FechaFinObjetivo ?? p.FechaInicioProgramada, "ProduccionPreparacion", "Secado", p.ProgramaProduccionID);
+
+            var pendienteAlmacen = objetivo > ToleranciaCantidad ? Math.Max(0m, objetivo - recibido) : 0m;
+            var recibidoPendienteSecar = Math.Max(0m, recibido - finalizado);
+            string detalle;
+
+            if (completo)
+            {
+                detalle = objetivo > ToleranciaCantidad
+                    ? $"Secado completo. Hay {finalizado:0.####} de {objetivo:0.####} kg requeridos con secado finalizado."
+                    : $"Todas las cargas de Secado relacionadas con la OF están finalizadas. Total secado: {finalizado:0.####} kg.";
+            }
+            else if (finalizado > ToleranciaCantidad)
+            {
+                detalle = $"Secado parcial disponible. Ya finalizaron {finalizado:0.####} de {objetivo:0.####} kg requeridos. Producción puede continuar con las actividades siguientes mientras se completan las cargas restantes.";
+                if (recibidoPendienteSecar > ToleranciaCantidad) detalle += $" Hay {recibidoPendienteSecar:0.####} kg recibidos todavía pendientes de completar Secado.";
+                if (pendienteAlmacen > ToleranciaCantidad) detalle += $" Almacén aún debe completar aproximadamente {pendienteAlmacen:0.####} kg.";
+            }
+            else if (secadoIniciado)
+            {
+                detalle = $"Secado en proceso. Hay {asignado:0.####} kg asignados a Secado de {objetivo:0.####} kg requeridos. La actividad puede continuar en paralelo con la preparación de la OF y no bloquea por sí sola la siguiente etapa.";
+                if (pendienteAlmacen > ToleranciaCantidad) detalle += $" Almacén aún debe completar aproximadamente {pendienteAlmacen:0.####} kg.";
+            }
+            else if (recibido > ToleranciaCantidad)
+            {
+                detalle = $"Producción tiene {recibido:0.####} kg recibidos pendientes de iniciar Secado. Cantidad requerida para la OF: {objetivo:0.####} kg.";
+            }
+            else
+            {
+                detalle = $"La OF requiere {objetivo:0.####} kg de materia prima con Secado y todavía no existe cantidad disponible para iniciar una carga.";
+            }
+
+            return Paso(40, AgendaOperativaPasoClave.Secado, "Secado de material", AgendaOperativaArea.Secado, estado, true, completo, enProceso, false, detalle, s.FechaFinObjetivo ?? p.FechaInicioProgramada, "ProduccionPreparacion", "Secado", p.ProgramaProduccionID);
         }
         private static AgendaOperativaPasoVm EvaluarEmbalaje(ProgramaBaseDto p, Dictionary<string, PreparacionDto>? preparaciones, InsumoDto? i)
         {
@@ -810,9 +1014,19 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         }
         private static AgendaOperativaPasoVm EvaluarCapturas(CierreDto? c, AgendaOperativaItemVm item)
         {
-            if (!item.EjecucionProduccionID.HasValue) return PasoEsperando(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, "Se habilitan cuando la serie está activa.");
-            if (item.MaquinaLiberada) return Paso(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, AgendaOperativaEstadoPaso.Completado, true, true, false, false, $"Se registraron {c?.RegistrosNormales ?? 0} captura(s) normal(es).", item.FechaFinReal, "Produccion", "Detalle", item.EjecucionProduccionID);
-            if (item.EstatusEjecucionID == ProduccionEstatus.EnProduccion) return Paso(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, c?.RegistrosNormales > 0 ? AgendaOperativaEstadoPaso.EnProceso : AgendaOperativaEstadoPaso.Pendiente, true, false, c?.RegistrosNormales > 0, false, $"Capturas normales registradas: {c?.RegistrosNormales ?? 0}. Minutos productivos acumulados: {(c?.MinutosNormalesCapturados ?? 0m):0.##}.", DateTime.Now, "Produccion", "Detalle", item.EjecucionProduccionID);
+            if (!item.EjecucionProduccionID.HasValue)
+                return PasoEsperando(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, "Se habilitan cuando la serie está activa.");
+            var registrosTotales = c?.RegistrosTotales ?? 0;
+            var registrosNormales = c?.RegistrosNormales ?? 0;
+            var registrosTiempoExtra = c?.RegistrosTiempoExtra ?? 0;
+            var minutosNormales = c?.MinutosNormalesCapturados ?? 0m;
+            var minutosTiempoExtra = c?.MinutosTiempoExtraCapturados ?? 0m;
+            var minutosTotales = c?.MinutosProductivosCapturados ?? 0m;
+            var detalle = $"Capturas registradas: {registrosTotales} ({registrosNormales} normal(es), {registrosTiempoExtra} de tiempo extra). Minutos productivos: {minutosTotales:0.##} ({minutosNormales:0.##} normales + {minutosTiempoExtra:0.##} extra). Producción OK acumulada: {item.CantidadProducida:N0} de {item.CantidadProgramada:N0}.";
+            if (item.MaquinaLiberada)
+                return Paso(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, AgendaOperativaEstadoPaso.Completado, true, true, false, false, detalle, item.FechaFinReal, "Produccion", "Detalle", item.EjecucionProduccionID);
+            if (item.EstatusEjecucionID == ProduccionEstatus.EnProduccion)
+                return Paso(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, registrosTotales > 0 ? AgendaOperativaEstadoPaso.EnProceso : AgendaOperativaEstadoPaso.Pendiente, true, false, registrosTotales > 0, false, detalle, DateTime.Now, "Produccion", "Detalle", item.EjecucionProduccionID);
             return PasoEsperando(150, AgendaOperativaPasoClave.Capturas, "Capturas de producción", AgendaOperativaArea.Operador, "La producción en serie todavía no está activa.");
         }
         private static AgendaOperativaPasoVm EvaluarCajas(CierreDto? c, AgendaOperativaItemVm item)
@@ -838,13 +1052,37 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         }
         private static AgendaOperativaPasoVm EvaluarLiberacion(ProgramaBaseDto p, ParoDto? paro, CierreDto? c, AgendaOperativaItemVm item)
         {
-            if (item.MaquinaLiberada) return Paso(180, AgendaOperativaPasoClave.LiberacionMaquina, "Liberación de máquina", AgendaOperativaArea.Produccion, AgendaOperativaEstadoPaso.Completado, true, true, false, false, "La máquina ya fue liberada para esta ejecución.", p.FechaLiberacionMaquina, "Produccion", "Detalle", item.EjecucionProduccionID);
-            if (p.EstatusEjecucionID != ProduccionEstatus.EnProduccion) return PasoEsperando(180, AgendaOperativaPasoClave.LiberacionMaquina, "Liberación de máquina", AgendaOperativaArea.Produccion, "Solo se habilita cuando la ejecución está en producción.");
+            if (item.MaquinaLiberada)
+                return Paso(180, AgendaOperativaPasoClave.LiberacionMaquina, "Liberación de máquina", AgendaOperativaArea.Produccion, AgendaOperativaEstadoPaso.Completado, true, true, false, false, "La máquina ya fue liberada para esta ejecución.", p.FechaLiberacionMaquina, "Produccion", "Detalle", item.EjecucionProduccionID);
+            if (p.EstatusEjecucionID != ProduccionEstatus.EnProduccion)
+                return PasoEsperando(180, AgendaOperativaPasoClave.LiberacionMaquina, "Liberación de máquina", AgendaOperativaArea.Produccion, "Solo se habilita cuando la ejecución está en producción.");
             var tieneParo = paro != null && !paro.FechaFin.HasValue;
-            var minutosRequeridos = p.CantidadProgramada > 0 && c?.ObjetivoHora > 0 ? Math.Ceiling(p.CantidadProgramada * 60m / c.ObjetivoHora.Value) : 0m;
-            var cumpleTiempo = c != null && c.RegistrosNormales > 0 && (p.CantidadProgramada <= 0 || (c.ObjetivoHora > 0 && c.MinutosNormalesCapturados + 0.01m >= minutosRequeridos));
-            var puede = !tieneParo && c?.TieneTiempoExtraActivo != true && cumpleTiempo;
-            var detalle = puede ? "La ejecución cumple las condiciones de captura para liberar físicamente la máquina." : tieneParo ? "No puede liberarse mientras exista un paro abierto." : c?.TieneTiempoExtraActivo == true ? "Existe una sesión de tiempo extra abierta." : c?.RegistrosNormales <= 0 ? "Todavía no existe ninguna captura normal de producción." : c?.ObjetivoHora <= 0 ? "No existe un objetivo por hora válido para calcular la liberación." : $"Minutos normales capturados: {(c?.MinutosNormalesCapturados ?? 0m):0.##} de {minutosRequeridos:0.##} requeridos.";
+            var tieneTiempoExtraActivo = c?.TieneTiempoExtraActivo == true;
+            var registrosTotales = c?.RegistrosTotales ?? 0;
+            var cantidadOk = c?.CantidadOK ?? item.CantidadProducida;
+            var produccionCompleta = p.CantidadProgramada > 0 && cantidadOk >= p.CantidadProgramada;
+            var minutosProductivos = c?.MinutosProductivosCapturados ?? 0m;
+            var minutosNormales = c?.MinutosNormalesCapturados ?? 0m;
+            var minutosTiempoExtra = c?.MinutosTiempoExtraCapturados ?? 0m;
+            var minutosRequeridos = p.CantidadProgramada > 0 && c?.ObjetivoHora is > 0 ? Math.Ceiling(p.CantidadProgramada * 60m / c.ObjetivoHora.Value) : 0m;
+            var cumpleTiempo = p.CantidadProgramada <= 0 || produccionCompleta || (c?.ObjetivoHora is > 0 && minutosProductivos + 0.01m >= minutosRequeridos);
+            var cumpleCapturas = registrosTotales > 0 && cumpleTiempo;
+            var puede = !tieneParo && !tieneTiempoExtraActivo && cumpleCapturas;
+            string detalle;
+            if (puede && produccionCompleta)
+                detalle = $"La producción alcanzó {cantidadOk:N0} de {p.CantidadProgramada:N0} pieza(s) OK. La máquina puede liberarse.";
+            else if (puede)
+                detalle = $"La ejecución cumple el tiempo productivo requerido. Total {minutosProductivos:0.##} minuto(s): {minutosNormales:0.##} normales + {minutosTiempoExtra:0.##} de tiempo extra.";
+            else if (tieneParo)
+                detalle = "No puede liberarse mientras exista un paro abierto.";
+            else if (tieneTiempoExtraActivo)
+                detalle = "Existe una sesión de tiempo extra abierta. Debe finalizarse y registrar su último corte.";
+            else if (registrosTotales <= 0)
+                detalle = "Todavía no existe ninguna captura de producción.";
+            else if (p.CantidadProgramada > 0 && !produccionCompleta && !(c?.ObjetivoHora is > 0))
+                detalle = $"Producción registrada: {cantidadOk:N0} de {p.CantidadProgramada:N0}. No existe un objetivo por hora válido para calcular la liberación.";
+            else
+                detalle = $"Producción OK: {cantidadOk:N0} de {p.CantidadProgramada:N0}. Tiempo productivo: {minutosProductivos:0.##} de {minutosRequeridos:0.##} minuto(s); normales {minutosNormales:0.##}, tiempo extra {minutosTiempoExtra:0.##}.";
             return Paso(180, AgendaOperativaPasoClave.LiberacionMaquina, "Liberación de máquina", AgendaOperativaArea.Produccion, puede ? AgendaOperativaEstadoPaso.Listo : AgendaOperativaEstadoPaso.Esperando, true, false, false, false, detalle, p.FechaFinProgramada, "Produccion", "Detalle", item.EjecucionProduccionID);
         }
         private static AgendaOperativaPasoVm EvaluarCierre(ProgramaBaseDto p, CierreDto? c, AgendaOperativaItemVm item)
@@ -911,6 +1149,13 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         }
         private static void DeterminarEstadoYAcciones(AgendaOperativaItemVm item, ProgramaBaseDto p, CalidadDto? calidad, ParoDto? paro, CierreDto? cierre, DateTime ahora)
         {
+            bool EsPasoParcialNoBloqueante(AgendaOperativaPasoVm x)
+            {
+                var materialParcial = string.Equals(x.Clave, AgendaOperativaPasoClave.Material, StringComparison.OrdinalIgnoreCase) && x.EnProceso && !x.Completado && !x.Bloqueado && !x.BloqueaFlujo;
+                var secadoParcial = string.Equals(x.Clave, AgendaOperativaPasoClave.Secado, StringComparison.OrdinalIgnoreCase) && x.EnProceso && !x.Completado && !x.Bloqueado && !x.BloqueaFlujo;
+                return materialParcial || secadoParcial;
+            }
+
             if (item.ProduccionLhRh?.ParejaConsistente == false)
             {
                 item.EstadoGeneral = AgendaOperativaEstadoGeneral.Bloqueada;
@@ -975,10 +1220,33 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
                 item.EstadoGeneral = AgendaOperativaEstadoGeneral.Programada;
                 item.EstadoGeneralDetalle = "La OF está programada y todavía no inicia ejecución.";
             }
+
+            var candidatosPrincipales = item.Pasos
+                .Where(x => x.Aplica && !x.Completado && !string.Equals(x.Estado, AgendaOperativaEstadoPaso.NoAplica, StringComparison.OrdinalIgnoreCase) && x.Clave != AgendaOperativaPasoClave.Paro)
+                .Where(x => !EsPasoParcialNoBloqueante(x))
+                .OrderBy(x => x.BloqueaFlujo ? 0 : 1)
+                .ThenBy(x => x.Orden)
+                .ToList();
+
             AgendaOperativaPasoVm? actual = null;
+
             if (item.ProduccionLhRh?.ParejaConsistente == false)
             {
-                actual = new AgendaOperativaPasoVm { Orden = 0, Clave = "LHRH_INCONSISTENTE", Nombre = "Corregir pareja LH/RH", AreaResponsable = AgendaOperativaArea.Planeacion, Estado = AgendaOperativaEstadoPaso.Bloqueado, Aplica = true, Bloqueado = true, BloqueaFlujo = true, MotivoBloqueo = item.ProduccionLhRh.MotivoInconsistencia, Detalle = item.ProduccionLhRh.MotivoInconsistencia, FechaObjetivo = ahora, EstaVencido = true };
+                actual = new AgendaOperativaPasoVm
+                {
+                    Orden = 0,
+                    Clave = "LHRH_INCONSISTENTE",
+                    Nombre = "Corregir pareja LH/RH",
+                    AreaResponsable = AgendaOperativaArea.Planeacion,
+                    Estado = AgendaOperativaEstadoPaso.Bloqueado,
+                    Aplica = true,
+                    Bloqueado = true,
+                    BloqueaFlujo = true,
+                    MotivoBloqueo = item.ProduccionLhRh.MotivoInconsistencia,
+                    Detalle = item.ProduccionLhRh.MotivoInconsistencia,
+                    FechaObjetivo = ahora,
+                    EstaVencido = true
+                };
             }
             else if (paro != null && !paro.FechaFin.HasValue)
             {
@@ -989,8 +1257,13 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
                 var liberacion = item.Pasos.FirstOrDefault(x => x.Clave == AgendaOperativaPasoClave.LiberacionMaquina);
                 if (liberacion?.Estado == AgendaOperativaEstadoPaso.Listo) actual = liberacion;
             }
-            actual ??= item.Pasos.Where(x => x.Aplica && !x.Completado && !string.Equals(x.Estado, AgendaOperativaEstadoPaso.NoAplica, StringComparison.OrdinalIgnoreCase) && x.Clave != AgendaOperativaPasoClave.Paro).OrderBy(x => x.BloqueaFlujo ? 0 : 1).ThenBy(x => x.Orden).FirstOrDefault();
-            var pendientesOrdenados = item.Pasos.Where(x => x.Aplica && !x.Completado && !string.Equals(x.Estado, AgendaOperativaEstadoPaso.NoAplica, StringComparison.OrdinalIgnoreCase) && x != actual).OrderBy(x => x.BloqueaFlujo ? 0 : 1).ThenBy(x => x.Orden).ToList();
+
+            actual ??= candidatosPrincipales.FirstOrDefault();
+
+            var pendientesOrdenados = candidatosPrincipales
+                .Where(x => x != actual)
+                .ToList();
+
             item.AccionActual = actual == null ? null : ConstruirAccion(item, actual, ahora);
             item.SiguienteAccion = pendientesOrdenados.FirstOrDefault() is { } siguiente ? ConstruirAccion(item, siguiente, ahora) : null;
             item.EstaBloqueada = item.EstaBloqueada || actual?.Bloqueado == true || actual?.Estado == AgendaOperativaEstadoPaso.Bloqueado;
@@ -1127,7 +1400,20 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
         }
         private sealed class PreparacionDto { public int PreparacionAnticipadaID { get; set; } public string TipoTarea { get; set; } = string.Empty; public string Estado { get; set; } = "PENDIENTE"; public DateTime? FechaObjetivo { get; set; } public DateTime? FechaAviso { get; set; } public DateTime? FechaInicioReal { get; set; } public DateTime? FechaFinReal { get; set; } public DateTime? FechaConfirmacion { get; set; } public string? Observaciones { get; set; } }
         private sealed class InsumoDto { public decimal CantidadMpRequerida { get; set; } public decimal CantidadMpRecibida { get; set; } public decimal CantidadEmbalajeRequerida { get; set; } public decimal CantidadEmbalajeRecibida { get; set; } }
-        private sealed class SecadoDto { public int Total { get; set; } public int Finalizados { get; set; } public int EnProceso { get; set; } public int Pendientes { get; set; } public DateTime? FechaInicioObjetivo { get; set; } public DateTime? FechaFinObjetivo { get; set; } public DateTime? FechaPrimerInicio { get; set; } public DateTime? FechaUltimoFin { get; set; } }
+        private sealed class SecadoDto
+        {
+            public int Total { get; set; }
+            public int Finalizados { get; set; }
+            public int EnProceso { get; set; }
+            public int Pendientes { get; set; }
+            public decimal CantidadRecibidaKg { get; set; }
+            public decimal CantidadAsignadaKg { get; set; }
+            public decimal CantidadFinalizadaKg { get; set; }
+            public DateTime? FechaInicioObjetivo { get; set; }
+            public DateTime? FechaFinObjetivo { get; set; }
+            public DateTime? FechaPrimerInicio { get; set; }
+            public DateTime? FechaUltimoFin { get; set; }
+        }
         private sealed class ChecklistDto { public int ChecklistArranqueID { get; set; } public int EjecucionProduccionID { get; set; } public int EstatusID { get; set; } public DateTime? FechaChecklist { get; set; } public DateTime? FechaCapturaProduccion { get; set; } public DateTime? FechaValidacionCalidad { get; set; } public string? ObservacionesCalidad { get; set; } }
         private sealed class ConfiguracionDto { public int ConfiguracionCorridaID { get; set; } public int EjecucionProduccionID { get; set; } public int CavidadesUsadas { get; set; } public decimal TiempoCicloSegundos { get; set; } public decimal? ObjetivoHoraCalculado { get; set; } public long? ContadorInicioVigencia { get; set; } public DateTime? FechaInicioVigencia { get; set; } public int? TecnicoProduccionID { get; set; } public string? TecnicoNombre { get; set; } }
         private sealed class CalidadDto
@@ -1167,7 +1453,31 @@ OUTER APPLY(SELECT TOP(1) e.EjecucionProduccionID,e.EstatusID,e.CantidadOKTotal 
             }
         }
         private sealed class ParoDto { public int ParoID { get; set; } public int EjecucionProduccionID { get; set; } public DateTime FechaInicio { get; set; } public DateTime? FechaFin { get; set; } public string? Motivo { get; set; } public bool EsMayorA15 { get; set; } public bool EsInterrupcionUrgente { get; set; } public int? ProgramaUrgenteID { get; set; } public string? OFUrgente { get; set; } public bool EsParoLhRh { get; set; } public Guid? GrupoParoLhRh { get; set; } }
-        private sealed class CierreDto { public int EjecucionProduccionID { get; set; } public int CantidadOK { get; set; } public int CantidadSospechosa { get; set; } public int CantidadScrap { get; set; } public int OkEnCajas { get; set; } public int SospechosoEnCajas { get; set; } public int RetencionEnCajas { get; set; } public int ScrapEnCajas { get; set; } public int CajasFormadasPendientes { get; set; } public int CajasPendientesCalidad { get; set; } public int RegistrosNormales { get; set; } public decimal MinutosNormalesCapturados { get; set; } public decimal? ObjetivoHora { get; set; } public bool TieneTiempoExtraActivo { get; set; } public int MonitoreosPendientes { get; set; } public int DisposicionesPendientes { get; set; } public int ReliberacionesPendientes { get; set; } }
+
+        private sealed class CierreDto
+        {
+            public int EjecucionProduccionID { get; set; }
+            public int CantidadOK { get; set; }
+            public int CantidadSospechosa { get; set; }
+            public int CantidadScrap { get; set; }
+            public int OkEnCajas { get; set; }
+            public int SospechosoEnCajas { get; set; }
+            public int RetencionEnCajas { get; set; }
+            public int ScrapEnCajas { get; set; }
+            public int CajasFormadasPendientes { get; set; }
+            public int CajasPendientesCalidad { get; set; }
+            public int RegistrosTotales { get; set; }
+            public int RegistrosNormales { get; set; }
+            public int RegistrosTiempoExtra { get; set; }
+            public decimal MinutosNormalesCapturados { get; set; }
+            public decimal MinutosTiempoExtraCapturados { get; set; }
+            public decimal MinutosProductivosCapturados { get; set; }
+            public decimal? ObjetivoHora { get; set; }
+            public bool TieneTiempoExtraActivo { get; set; }
+            public int MonitoreosPendientes { get; set; }
+            public int DisposicionesPendientes { get; set; }
+            public int ReliberacionesPendientes { get; set; }
+        }
         private sealed class ParejaDto { public int? GrupoLhRh { get; set; } public int ProgramaParejaID { get; set; } public int? SolicitudParejaID { get; set; } public string? OFPareja { get; set; } public string? NumeroPartePareja { get; set; } public string? ReferenciaSAPPareja { get; set; } public int EstatusProgramaParejaID { get; set; } public int? EjecucionParejaID { get; set; } public int? EstatusEjecucionParejaID { get; set; } public int CantidadProgramadaPareja { get; set; } public int CantidadProducidaPareja { get; set; } public bool MismaMaquina { get; set; } public bool MismoMolde { get; set; } public bool MismaVentana { get; set; } }
     }
 }

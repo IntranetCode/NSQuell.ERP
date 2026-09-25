@@ -78,8 +78,13 @@
             });
         }
 
-        async function cargar(){
-            body.innerHTML='<div class="pcc-loading"><div class="pcc-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>';
+        function marcarCentroPendiente(){
+            const centro=root.closest('[data-nsq-operativa-centro]');
+            if(centro) centro.dataset.nsqOperativaDirty='1';
+        }
+
+        async function cargar(mostrarCarga=true){
+            if(mostrarCarga) body.innerHTML='<div class="pcc-loading"><div class="pcc-spinner"></div><span>Cargando checklist GQ-F-PR01-03...</span></div>';
             try{
                 const qs=new URLSearchParams({programaProduccionId:String(programaId)});
                 const response=await fetch(`${urlContenido}?${qs.toString()}`,{
@@ -100,10 +105,11 @@
 
         const actualizado=event=>{
             if(Number(event?.detail?.programaProduccionId||0)!==programaId) return;
+            marcarCentroPendiente();
             window.setTimeout(()=>{
-                const centro=root.closest('[data-nsq-operativa-centro]');
-                centro?.querySelector('[data-nsq-operativa-refrescar]')?.click();
-            },500);
+                if(!root.isConnected) return;
+                cargar(false);
+            },100);
         };
 
         document.addEventListener('nsq:checklist-cambio-actualizado',actualizado);

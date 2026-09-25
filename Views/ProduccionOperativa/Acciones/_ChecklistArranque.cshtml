@@ -121,6 +121,11 @@
             return { ok: response.ok, mensaje: texto || `HTTP ${response.status}` };
         }
 
+        function marcarCentroPendiente() {
+            const centro = root.closest('[data-nsq-operativa-centro]');
+            if (centro) centro.dataset.nsqOperativaDirty = '1';
+        }
+
         function actualizarResumenLocal(form) {
             if (!form) return;
 
@@ -233,14 +238,10 @@
                         if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
 
                         mostrar(data.mensaje || 'Checklist guardado correctamente.', data.advertencia ? 'warn' : 'ok');
+                        marcarCentroPendiente();
 
                         if (data.esperandoCalidad) {
-                            window.setTimeout(() => {
-                                if (!root.isConnected) return;
-                                root.closest('[data-nsq-operativa-centro]')
-                                    ?.querySelector('[data-nsq-operativa-refrescar]')
-                                    ?.click();
-                            }, 500);
+                            await cargar(false);
                         }
                         else {
                             actualizarResumenLocal(form);
