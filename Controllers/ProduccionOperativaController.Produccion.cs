@@ -138,7 +138,7 @@ SELECT TOP(1)
     ISNULL(e.CantidadScrapTotal,0) AS CantidadScrapTotal,
     pp.FechaInicioProgramada,pp.FechaFinProgramada,
 
-    // NSQ_SERIE_OBJETIVO_TEORICO_BD_V1
+    -- NSQ_SERIE_OBJETIVO_TEORICO_BD_V1
     COALESCE(
         NULLIF(tecnica.ObjetivoHoraMaestro,0),
         NULLIF(pp.ObjetivoHora,0)
