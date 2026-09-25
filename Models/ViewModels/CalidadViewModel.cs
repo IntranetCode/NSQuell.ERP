@@ -344,6 +344,26 @@ namespace ERP.NSQuell.Models.ViewModels
         public int? UsuarioCierreID => MovimientoCierre?.UsuarioID;
 
         public List<CalidadScrapEntregaItemViewModel> ScrapEntregas { get; set; } = new();
+
+        // NSQ_LAURA_CALIDAD_LHRH_VISTA_V1
+        public CalidadParejaLhRhDetalleViewModel? ParejaLhRh { get; set; }
+    }
+
+    public sealed class CalidadParejaLhRhDetalleViewModel
+    {
+        public int GrupoLhRh { get; set; }
+        public int InspeccionIzquierdaID { get; set; }
+        public int ProgramaIzquierdaID { get; set; }
+        public string LadoIzquierda { get; set; } = "LADO A";
+        public string NumeroParteIzquierda { get; set; } = string.Empty;
+        public string ReferenciaIzquierda { get; set; } = string.Empty;
+        public int InspeccionDerechaID { get; set; }
+        public int ProgramaDerechaID { get; set; }
+        public string LadoDerecha { get; set; } = "LADO B";
+        public string NumeroParteDerecha { get; set; } = string.Empty;
+        public string ReferenciaDerecha { get; set; } = string.Empty;
+        public string Maquina { get; set; } = string.Empty;
+        public string Molde { get; set; } = string.Empty;
     }
 
     public class CalidadScrapEntregaItemViewModel

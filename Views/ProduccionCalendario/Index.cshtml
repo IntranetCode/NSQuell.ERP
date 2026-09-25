@@ -2523,7 +2523,18 @@
                     <select id="opIuCandidato" class="form-select">
                         <option value="">-- Seleccionar OF urgente --</option>
                     </select>
-                    <div id="opIuCandidatoInfo" class="form-text"></div>
+                    <div id="opIuCandidatoInfo" class="form-text">
+                        Selecciona una OF existente o captura el número de parte si todavía no existe programación.
+                    </div>
+                    <div class="mt-3">
+                        <label for="opIuParteUrgenteManual" class="form-label fw-bold mb-1">
+                            Número de parte urgente (referencia manual)
+                        </label>
+                        <input id="opIuParteUrgenteManual"
+                               class="form-control"
+                               maxlength="120"
+                               placeholder="Ej. P09_1381_158" />
+                    </div>
                 </div>
 
                 <div class="row g-3">
@@ -3637,6 +3648,7 @@
             const opIuCandidatoWrap = document.getElementById('opIuCandidatoWrap');
             const opIuCandidato = document.getElementById('opIuCandidato');
             const opIuCandidatoInfo = document.getElementById('opIuCandidatoInfo');
+            const opIuParteUrgenteManual = document.getElementById('opIuParteUrgenteManual');
             const opIuMaquina = document.getElementById('opIuMaquina');
             const opIuMotivo = document.getElementById('opIuMotivo');
             const opIuDestino = document.getElementById('opIuDestino');
@@ -3661,6 +3673,22 @@
             let opProcesando = false;
             let opModoActual = 'urgente';
 
+            async function opLeerJsonSeguro(response) {
+                const texto = await response.text();
+                if (!texto) return {};
+                try {
+                    return JSON.parse(texto);
+                } catch {
+                    const limpio = texto
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    throw new Error(
+                        limpio.substring(0, 350) ||
+                        `El servidor respondió un formato inválido. HTTP ${response.status}`
+                    );
+                }
+            }
             function opFmtFecha(value) {
                 if (!value) return '-';
                 const d = new Date(value);
@@ -3699,7 +3727,7 @@
                         { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
                     );
 
-                    const data = await response.json();
+                    const data = await opLeerJsonSeguro(response);
                     if (!response.ok || !data?.ok)
                         throw new Error(data?.mensaje || `HTTP ${response.status}`);
 
@@ -3751,7 +3779,7 @@
                         { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
                     );
 
-                    const data = await response.json();
+                    const data = await opLeerJsonSeguro(response);
                     if (!response.ok || !data?.ok)
                         throw new Error(data?.mensaje || `HTTP ${response.status}`);
 
@@ -3771,7 +3799,7 @@
 
                     if (!opCandidatos.length) {
                         opFeedback(
-                            'No hay una OF pendiente compatible para sustituir temporalmente esta produccion.',
+                            'No hay OF futura compatible. Captura el número de parte urgente para dejar registro sin crear una programación ficticia.',
                             'alert-warning'
                         );
                     }
@@ -3803,6 +3831,7 @@
                     modo === 'activa' ? '' : String(programaId);
 
                 opIuMotivo.value = '';
+                if (opIuParteUrgenteManual) opIuParteUrgenteManual.value = '';
                 opIuDestino.value = 'PAUSA_RETORNO';
                 opIuMotivoParcial.value = '';
                 opIuHora.textContent = 'Se calculara con el servidor';
@@ -3874,6 +3903,14 @@
                 opInvalidar();
             });
 
+            opIuParteUrgenteManual?.addEventListener('input', () => {
+                if ((opIuParteUrgenteManual.value || '').trim().length > 0 &&
+                    !Number(opIuCandidato?.value || 0)) {
+                    opIuPrograma.value = '';
+                }
+                opInvalidar();
+            });
+
             opIuMaquina?.addEventListener('change', opInvalidar);
             opIuDestino?.addEventListener('change', opActualizarParcial);
 
@@ -3905,13 +3942,19 @@
 
                 const programaUrgenteId =
                     Number(opIuPrograma.value || 0);
+                const numeroParteUrgente =
+                    (opIuParteUrgenteManual?.value || '').trim();
                 const maquinaId =
                     Number(opIuMaquina.value || 0);
                 const parcial =
                     opIuDestino.value === 'TERMINACION_PARCIAL';
 
-                if (!programaUrgenteId) {
-                    opFeedback('Selecciona la OF urgente.', 'alert-warning');
+                if (!programaUrgenteId && numeroParteUrgente.length < 2) {
+                    opFeedback(
+                        'Selecciona una OF urgente o captura el número de parte que entrará.',
+                        'alert-warning'
+                    );
+                    opIuParteUrgenteManual?.focus();
                     return;
                 }
 
@@ -3927,6 +3970,7 @@
                 try {
                     const qs = new URLSearchParams({
                         programaUrgenteId: String(programaUrgenteId),
+                        numeroParteUrgente: numeroParteUrgente,
                         maquinaId: String(maquinaId),
                         trabajarDomingo: 'false',
                         autorizaTerminacionParcial: String(parcial)
@@ -3937,12 +3981,13 @@
                         { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
                     );
 
-                    const data = await response.json();
+                    const data = await opLeerJsonSeguro(response);
                     if (!response.ok || !data?.ok)
                         throw new Error(data?.mensaje || `HTTP ${response.status}`);
 
                     opSimulacion = {
                         programaUrgenteId,
+                        numeroParteUrgente,
                         maquinaId,
                         parcial
                     };
@@ -4028,13 +4073,13 @@
                     return;
                 }
 
-                const programaUrgenteId =
-                    Number(opIuPrograma.value || 0);
-                const maquinaId =
-                    Number(opIuMaquina.value || 0);
+                const programaUrgenteId = Number(opIuPrograma.value || 0);
+                const numeroParteUrgente = (opIuParteUrgenteManual?.value || '').trim();
+                const maquinaId = Number(opIuMaquina.value || 0);
 
                 if (
                     programaUrgenteId !== opSimulacion.programaUrgenteId ||
+                    numeroParteUrgente !== opSimulacion.numeroParteUrgente ||
                     maquinaId !== opSimulacion.maquinaId ||
                     parcial !== opSimulacion.parcial
                 ) {
@@ -4053,6 +4098,7 @@
                 try {
                     const payload = {
                         ProgramaUrgenteID: programaUrgenteId,
+                        NumeroParteUrgente: numeroParteUrgente,
                         MaquinaID: maquinaId,
                         Motivo: motivo,
                         TrabajarDomingo: false,
@@ -4074,7 +4120,7 @@
                         }
                     );
 
-                    const data = await response.json();
+                    const data = await opLeerJsonSeguro(response);
                     if (!response.ok || !data?.ok)
                         throw new Error(data?.mensaje || `HTTP ${response.status}`);
 

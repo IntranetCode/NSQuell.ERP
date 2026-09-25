@@ -1141,11 +1141,10 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
 
             if (!model.AyudaVisualColocada ||
                 !model.HIPColocada ||
-                !model.HCCColocada ||
-                !model.MatrizPolivalenciaValidada)
+                !model.HCCColocada)
             {
                 TempData["Error"] =
-                    "Confirma ayuda visual, HIP, HCC y matriz de polivalencia antes de autorizar.";
+                    "Confirma ayuda visual, HIP y HCC antes de autorizar.";
 
                 return RedirectToAction(
                     nameof(Detalle),
@@ -1312,8 +1311,7 @@ WHERE ChecklistArranqueID = @ChecklistArranqueID
                 inspeccion.HCCColocada =
                     model.HCCColocada;
 
-                inspeccion.MatrizPolivalenciaValidada =
-                    model.MatrizPolivalenciaValidada;
+                inspeccion.MatrizPolivalenciaValidada = true; // legado: la pregunta ya no forma parte del flujo
 
                 inspeccion.ChecklistValidado =
                     true;
@@ -1841,6 +1839,65 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                 new { id = model.InspeccionID });
         }
 
+        // NSQ_LAURA_CALIDAD_LHRH_LIBERACION_UNICA_V1
+        private async Task<int?> ObtenerInspeccionParejaLhRhParaLiberacionAsync(int programaProduccionId)
+        {
+            const string sql = @"
+SELECT TOP(1)
+    ci2.InspeccionID AS [Value]
+FROM dbo.Planeacion_ProgramaProduccion pp
+OUTER APPLY
+(
+    SELECT CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N'')) AS PosGrupo
+) pos
+OUTER APPLY
+(
+    SELECT CASE
+        WHEN pos.PosGrupo>0
+        THEN TRY_CONVERT
+        (
+            int,
+            LEFT
+            (
+                SUBSTRING(pp.Observaciones,pos.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50),
+                CHARINDEX(N';',SUBSTRING(pp.Observaciones,pos.PosGrupo+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1
+            )
+        )
+        ELSE NULL
+    END AS GrupoLhRh
+) grupo
+INNER JOIN dbo.Planeacion_ProgramaProduccion pp2
+    ON pp2.Activo=1
+   AND pp2.ProgramaProduccionID<>pp.ProgramaProduccionID
+   AND grupo.GrupoLhRh IS NOT NULL
+   AND pp2.Observaciones LIKE N'%NSQ_LHRH_PAIR:'+CONVERT(NVARCHAR(20),grupo.GrupoLhRh)+N';%'
+   AND pp2.MaquinaID=pp.MaquinaID
+   AND ISNULL(pp2.MoldeID,-1)=ISNULL(pp.MoldeID,-1)
+INNER JOIN dbo.Calidad_Inspecciones ci2
+    ON ci2.ProgramaProduccionID=pp2.ProgramaProduccionID
+   AND ci2.Activo=1
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1
+ORDER BY ci2.InspeccionID DESC;";
+
+            var ids = await _context.Database
+                .SqlQueryRaw<int>(
+                    sql,
+                    new SqlParameter("@ProgramaProduccionID", programaProduccionId))
+                .ToListAsync();
+
+            return ids.Count == 0 ? null : ids[0];
+        }
+
+        private static bool IntentoPermiteLiberacionLhRh(CalidadPrimeraPiezaIntento intento)
+        {
+            return intento.CincoDisparosSegregados &&
+                   intento.CantidadDisparosPresentados >= 3 &&
+                   intento.ValidacionDimensional == true &&
+                   intento.ValidacionApariencia == true &&
+                   intento.ValidacionGauge != false &&
+                   intento.ValidacionConductividad != false;
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> LiberarProduccionFlujo(int id)
@@ -1900,6 +1957,74 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                     await tx.RollbackAsync();
                     TempData["Error"] = "El último intento no cumple los requisitos para liberar la producción.";
                     return RedirectToAction(nameof(Detalle), new { id });
+                }
+
+                // NSQ_LAURA_CALIDAD_LHRH_LIBERACION_UNICA_V1
+                // Las validaciones de cada pieza siguen siendo independientes.
+                // La accion final de liberacion de maquina se aplica a las dos inspecciones juntas.
+                CalidadInspeccion? inspeccionPareja = null;
+                CalidadPrimeraPiezaIntento? intentoPareja = null;
+
+                if (!inspeccion.RequiereReliberacion &&
+                    !CalidadTipoProceso.EsReliberacion(inspeccion.Proceso) &&
+                    inspeccion.ProgramaProduccionID.HasValue &&
+                    inspeccion.ProgramaProduccionID.Value > 0)
+                {
+                    var inspeccionParejaId = await ObtenerInspeccionParejaLhRhParaLiberacionAsync(
+                        inspeccion.ProgramaProduccionID.Value);
+
+                    if (inspeccionParejaId.HasValue &&
+                        inspeccionParejaId.Value > 0 &&
+                        inspeccionParejaId.Value != inspeccion.InspeccionID)
+                    {
+                        inspeccionPareja = await _context.CalidadInspecciones
+                            .FirstOrDefaultAsync(x => x.InspeccionID == inspeccionParejaId.Value);
+
+                        if (inspeccionPareja == null)
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] = "No se encontro la inspeccion de la contraparte LH/RH.";
+                            return RedirectToAction(nameof(Detalle), new { id });
+                        }
+
+                        if (inspeccionPareja.ConfiguracionInvalidada ||
+                            inspeccionPareja.RequiereReliberacion ||
+                            CalidadTipoProceso.EsReliberacion(inspeccionPareja.Proceso))
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] =
+                                "La contraparte LH/RH tiene una configuracion o reliberacion pendiente. " +
+                                "Debe resolverse antes de liberar la maquina.";
+                            return RedirectToAction(nameof(Detalle), new { id });
+                        }
+
+                        var validacionConfiguracionPareja =
+                            await ValidarConfiguracionActualAsync(inspeccionPareja);
+
+                        if (!validacionConfiguracionPareja.Valida)
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] =
+                                "La contraparte LH/RH no puede liberarse: " +
+                                validacionConfiguracionPareja.Motivo;
+                            return RedirectToAction(nameof(Detalle), new { id });
+                        }
+
+                        intentoPareja = await _context.CalidadPrimerasPiezasIntentos
+                            .Where(x => x.InspeccionID == inspeccionPareja.InspeccionID && x.Activo)
+                            .OrderByDescending(x => x.NumeroIntento)
+                            .FirstOrDefaultAsync();
+
+                        if (intentoPareja == null ||
+                            !IntentoPermiteLiberacionLhRh(intentoPareja))
+                        {
+                            await tx.RollbackAsync();
+                            TempData["Error"] =
+                                "La contraparte LH/RH aun no tiene sus primeras piezas conformes. " +
+                                "Completa las validaciones propias de ambas piezas; despues una sola liberacion dejara disponible la maquina.";
+                            return RedirectToAction(nameof(Detalle), new { id });
+                        }
+                    }
                 }
 
                 var eraReliberacion = inspeccion.RequiereReliberacion ||
@@ -1986,6 +2111,61 @@ WHERE ChecklistArranqueID = {inspeccion.ChecklistArranqueID.Value}
                         ? $"Reliberación {reliberacionPendiente?.NumeroReliberacion} autorizada con etiqueta verde. Producción puede reiniciar la serie."
                         : $"Intento {intento.NumeroIntento} conforme. Calidad asignó etiqueta verde. Producción debe confirmar el inicio de serie.",
                     usuarioId.Value);
+
+                if (inspeccionPareja != null && intentoPareja != null)
+                {
+                    var estadoAnteriorPareja = inspeccionPareja.Estado;
+
+                    intentoPareja.Resultado = CalidadResultadoIntento.Ok;
+                    intentoPareja.AjusteSolicitado = false;
+                    intentoPareja.FechaFin = ahora;
+                    intentoPareja.UsuarioModificacionID = usuarioId.Value;
+                    intentoPareja.FechaModificacion = ahora;
+
+                    inspeccionPareja.CincoDisparosSegregados = intentoPareja.CincoDisparosSegregados;
+                    inspeccionPareja.CantidadDisparosConformes = intentoPareja.CantidadDisparosPresentados;
+                    inspeccionPareja.ValidacionDimensional = intentoPareja.ValidacionDimensional;
+                    inspeccionPareja.ValidacionApariencia = intentoPareja.ValidacionApariencia;
+                    inspeccionPareja.ValidacionGauge = intentoPareja.ValidacionGauge;
+                    inspeccionPareja.ValidacionConductividad = intentoPareja.ValidacionConductividad;
+                    inspeccionPareja.ResultadoCalidad = "VERDE";
+                    inspeccionPareja.Etiqueta = "VERDE";
+                    inspeccionPareja.Liberado = true;
+                    inspeccionPareja.RequiereGP12 = false;
+                    inspeccionPareja.EnContencion = false;
+                    inspeccionPareja.EsScrap = false;
+                    inspeccionPareja.RequiereReliberacion = false;
+                    inspeccionPareja.Estado = CalidadEstados.ProduccionLiberada;
+                    inspeccionPareja.FechaLiberacionProduccion = ahora;
+                    inspeccionPareja.UsuarioLiberacionProduccionID = usuarioId.Value;
+                    inspeccionPareja.FechaValidacionPrimerasPiezas = ahora;
+                    inspeccionPareja.UsuarioValidacionPrimerasPiezasID = usuarioId.Value;
+
+                    if (inspeccionPareja.FechaNotificacionCalidad.HasValue)
+                    {
+                        var minutosPareja = (int)Math.Max(
+                            0,
+                            Math.Round(
+                                (ahora - inspeccionPareja.FechaNotificacionCalidad.Value)
+                                .TotalMinutes));
+
+                        inspeccionPareja.MinutosLiberacionInicial = minutosPareja;
+                        inspeccionPareja.CumplioTiempoObjetivoInicial =
+                            minutosPareja >= 10 && minutosPareja <= 20;
+                    }
+
+                    MarcarModificacion(inspeccionPareja, usuarioId.Value);
+
+                    AgregarHistorial(
+                        inspeccionPareja,
+                        CalidadMovimientos.ProduccionLiberada,
+                        estadoAnteriorPareja,
+                        inspeccionPareja.Estado,
+                        inspeccionPareja.ResultadoCalidad,
+                        inspeccionPareja.Etiqueta,
+                        "Liberacion conjunta LH/RH: ambas piezas cuentan con primeras piezas conformes y la maquina fue liberada una sola vez desde Calidad.",
+                        usuarioId.Value);
+                }
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();

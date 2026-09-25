@@ -102,7 +102,8 @@ namespace ERP.NSQuell.Controllers
                     if (!string.IsNullOrWhiteSpace(resultado) && resultado != ProduccionChecklistResultado.Ok && resultado != ProduccionChecklistResultado.Nok && resultado != ProduccionChecklistResultado.Na) throw new InvalidOperationException($"La respuesta de la pregunta {pregunta.OrdenPregunta} no es válida.");
                     if (resultado == ProduccionChecklistResultado.Na && !pregunta.PermiteNA) throw new InvalidOperationException($"La pregunta {pregunta.OrdenPregunta} no permite N/A.");
                     if (resultado == ProduccionChecklistResultado.Nok && pregunta.RequiereObservacionSiNOK && string.IsNullOrWhiteSpace(observaciones)) throw new InvalidOperationException($"Debes registrar una observación en la pregunta {pregunta.OrdenPregunta} porque la respuesta es NO/NOK.");
-                    if (resultado == ProduccionChecklistResultado.Na && pregunta.RequiereObservacionSiNA && string.IsNullOrWhiteSpace(observaciones)) throw new InvalidOperationException($"Debes registrar una observación en la pregunta {pregunta.OrdenPregunta} porque la respuesta es N/A.");
+                    // NSQ_LAURA_NA_SIN_OBSERVACION_V1_1
+                    // N/A es valido sin observacion. El campo permanece disponible de forma opcional.
                     var tieneRespuesta = !string.IsNullOrWhiteSpace(resultado) || !string.IsNullOrWhiteSpace(valorCapturado);
                     if (tieneRespuesta && string.Equals(pregunta.TipoRespuesta, "ESTADO", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(resultado)) throw new InvalidOperationException($"Debes seleccionar SI, NO o N/A en la pregunta {pregunta.OrdenPregunta}.");
                     const string sql = @"

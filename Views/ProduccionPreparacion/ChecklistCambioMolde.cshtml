@@ -1031,7 +1031,7 @@
                             var esNok = resultado == "NOK";
                             var esNa = resultado == "NA";
 
-                            <div class="cm-question" data-question="@pregunta.PreguntaID" data-required="@(pregunta.EsObligatoria.ToString().ToLowerInvariant())" data-permite-na="@(pregunta.PermiteNA.ToString().ToLowerInvariant())" data-requiere-nok="@(pregunta.RequiereObservacionSiNOK.ToString().ToLowerInvariant())" data-requiere-na="@(pregunta.RequiereObservacionSiNA.ToString().ToLowerInvariant())">
+                            <div class="cm-question" data-question="@pregunta.PreguntaID" data-required="@(pregunta.EsObligatoria.ToString().ToLowerInvariant())" data-permite-na="@(pregunta.PermiteNA.ToString().ToLowerInvariant())" data-requiere-nok="@(pregunta.RequiereObservacionSiNOK.ToString().ToLowerInvariant())" data-requiere-na="false">
                                 <div>
                                     <div class="cm-number">@pregunta.OrdenPregunta</div>
                                 </div>
@@ -1184,7 +1184,7 @@
 
             function requiereObservacion(row){
                 const resultado=resultadoPregunta(row);
-                return (resultado==='NOK'&&row.dataset.requiereNok==='true')||(resultado==='NA'&&row.dataset.requiereNa==='true');
+                return resultado==='NOK'&&row.dataset.requiereNok==='true';
             }
 
             function actualizarPregunta(row){

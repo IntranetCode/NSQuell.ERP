@@ -39,6 +39,12 @@
 
     bool EsRiesgo(ProduccionPreparacionTareaVm t)
     {
+        // NSQ_LAURA_SECADO_EN_PROCESO_NO_RIESGO_V1_1
+        // Si el secado ya inicio y sigue corriendo, no debe quedar rojo
+        // solo porque la fecha de aviso ya paso.
+        if (t.EsSecadoMaterial &&
+            (t.EstaEnProceso || SecadoEnProceso(t)))
+            return false;
         if (t.EsCambioMolde && t.EstaEnProceso)
         {
             var nivel = (t.NivelAlertaCambioMolde ?? "").Trim().ToUpperInvariant();

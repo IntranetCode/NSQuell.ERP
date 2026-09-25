@@ -151,6 +151,9 @@ namespace ERP.NSQuell.Models
 
         public bool AutorizaTerminacionParcial { get; set; }
         public string? MotivoTerminacionParcial { get; set; }
+
+        // NSQ_PRECOMMIT_URGENTE_REFERENCIA_MANUAL_V2
+        public string? NumeroParteUrgente { get; set; }
     }
     public sealed class PlaneacionCalendarioBloqueVm
     {

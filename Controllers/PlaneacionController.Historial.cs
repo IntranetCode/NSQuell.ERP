@@ -213,6 +213,12 @@ WHERE (s.Activo = 1 OR ISNULL(s.EstatusID,0) = 99)
       ISNULL(s.EstatusID,0) = 99
       OR
       (
+          NULLIF(LTRIM(RTRIM(ISNULL(s.NumeroOFRecibida,N''))),N'') IS NOT NULL
+          AND s.FechaRequerida IS NOT NULL
+          AND CONVERT(date,s.FechaRequerida) < CONVERT(date,GETDATE())
+      )
+      OR
+      (
           (SELECT ISNULL(SUM(CONVERT(decimal(18,3), ISNULL(edHist.CantidadDespachada,0))),0)
            FROM dbo.Logistica_EmbarqueDetalle edHist
            INNER JOIN dbo.Logistica_Embarques eHist

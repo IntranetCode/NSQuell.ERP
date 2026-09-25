@@ -182,6 +182,12 @@
                 window.setTimeout(restorePrintArea, 0);
             }
         }
+
+        // NSQ_LAURA_HISTORIAL_ACCIONES_V1
+        document.addEventListener('DOMContentLoaded', () => {
+            const q = new URLSearchParams(window.location.search);
+            if (q.get('autoPrint') === '1') window.setTimeout(() => imprimirOF(), 250);
+        });
     </script>
 }
 

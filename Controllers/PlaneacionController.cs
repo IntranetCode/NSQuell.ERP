@@ -114,6 +114,14 @@ OUTER APPLY
 ) parteResumen
 WHERE s.Activo = 1
   AND ISNULL(s.EstatusID,1) <> 99
+  -- NSQ_LAURA_OF_VENCIDA_A_HISTORIAL_V1
+  -- Una OF ya generada cuya fecha requerida vencio deja la bandeja operativa.
+  AND NOT
+  (
+      NULLIF(LTRIM(RTRIM(ISNULL(s.NumeroOFRecibida,N''))),N'') IS NOT NULL
+      AND s.FechaRequerida IS NOT NULL
+      AND CONVERT(date,s.FechaRequerida) < CONVERT(date,GETDATE())
+  )
   -- NSQ_CANCELACION_HISTORIAL_ALMACEN_OF_V2_1
   -- Las OF canceladas salen inmediatamente de la bandeja principal.
   -- NSQ_PLANEACION_EXTENSION_OF_V2: una OF permanece en Planeacion hasta despacho completo real.
@@ -3442,12 +3450,13 @@ WHERE SolicitudProduccionID = @SolicitudProduccionID
                 origen == "RELEASE" ||
                 origen == "PROGRAMA";
 
+            // NSQ_PRECOMMIT_EDITAR_OF_RELEASE_V2
+            // Se permite editar una OF nacida de Release/Programa siempre que
+            // siga cumpliendo los candados operativos posteriores:
+            // no cancelada, no En Produccion+, y sin movimientos de Almacen.
             if (vieneDeReleaseOPrograma)
             {
-                return (
-                    false,
-                    "Esta OF nació desde un Release/Programa. Para modificarla, edita el Release y recalcula la planeación."
-                );
+                // Intencionalmente continua con las validaciones de seguridad.
             }
 
             /*

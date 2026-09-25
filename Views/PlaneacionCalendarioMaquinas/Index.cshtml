@@ -165,6 +165,7 @@
     var hayInterrupcionesActivas = ViewBag.HayInterrupcionesActivas is bool hay && hay;
     var totalInterrupcionesActivas = ViewBag.TotalInterrupcionesActivas is int totalInterrupciones ? totalInterrupciones : 0;
     var fechaCalculoProyeccion = ViewBag.FechaCalculoProyeccion is DateTime fechaCalculo ? fechaCalculo : Model.Ahora;
+    var habilitarProyeccionInterrupciones = Model.EsVistaDia && Model.InicioPeriodo.Date == Model.Ahora.Date;
 
 
 }
@@ -1451,6 +1452,11 @@
                     }
 
                     async function actualizar() {
+                        if (!@(habilitarProyeccionInterrupciones ? "true" : "false")) {
+                            document.getElementById('proyeccionInterrupcionesPanel')?.classList.add('d-none');
+                            return;
+                        }
+
                         if (consultando)
                             return;
 
@@ -2940,7 +2946,19 @@ else
                                 <option value="">-- Seleccionar OF urgente --</option>
                             </select>
                             <div id="iuProgramaUrgenteInfo" class="form-text">
-                                Solo aparecen programas pendientes que pueden moverse y son compatibles con la maquina seleccionada.
+                                Puedes seleccionar una OF existente o registrar solamente el número de parte si todavía no existe programación.
+                            </div>
+                            <div class="mt-3">
+                                <label for="iuParteUrgenteManual" class="form-label fw-bold mb-1">
+                                    Número de parte urgente (referencia manual)
+                                </label>
+                                <input id="iuParteUrgenteManual"
+                                       class="form-control"
+                                       maxlength="120"
+                                       placeholder="Ej. P09_1381_158" />
+                                <div class="form-text">
+                                    No crea una OF ni inventa horas; sólo deja trazabilidad de la pieza que entrará.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3669,6 +3687,7 @@ else
         const seleccionUrgenteWrap = document.getElementById('iuSeleccionUrgenteWrap');
         const programaUrgenteSelect = document.getElementById('iuProgramaUrgenteSelect');
         const programaUrgenteInfo = document.getElementById('iuProgramaUrgenteInfo');
+        const parteUrgenteManual = document.getElementById('iuParteUrgenteManual');
         const horaInterrupcionDestacada = document.getElementById('iuHoraInterrupcionDestacada');
         const programaTexto = document.getElementById('iuProgramaTexto');
         const parteTexto = document.getElementById('iuParteTexto');
@@ -3791,13 +3810,29 @@ else
             return `${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
         }
 
+        async function leerJsonInterrupcionSeguro(response) {
+            const texto = await response.text();
+            if (!texto) return {};
+            try {
+                return JSON.parse(texto);
+            } catch {
+                const limpio = texto
+                    .replace(/<[^>]+>/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                throw new Error(
+                    limpio.substring(0, 350) ||
+                    `El servidor respondió un formato inválido. HTTP ${response.status}`
+                );
+            }
+        }
         async function cargarMaquinas(programaId) {
             maquinaSelect.disabled = true;
             maquinaSelect.innerHTML = '<option value="">Cargando máquinas compatibles...</option>';
             try {
                 const url = `${endpointMaquinas}?programaProduccionId=${encodeURIComponent(programaId)}`;
                 const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-                const data = await response.json();
+                const data = await leerJsonInterrupcionSeguro(response);
                 if (!response.ok || !data?.ok) throw new Error(data?.mensaje || `HTTP ${response.status}`);
 
                 maquinaSelect.innerHTML = '<option value="">-- Seleccionar máquina compatible --</option>';
@@ -3859,7 +3894,7 @@ else
                     cache: 'no-store'
                 });
 
-                const data = await response.json();
+                const data = await leerJsonInterrupcionSeguro(response);
                 if (!response.ok || !data?.ok)
                     throw new Error(data?.mensaje || `HTTP ${response.status}`);
 
@@ -3879,8 +3914,8 @@ else
 
                 feedbackSet(
                     candidatosProduccionActiva.length
-                        ? 'Selecciona la OF urgente que entrara en lugar de la produccion amarilla.'
-                        : 'No hay una OF pendiente compatible que pueda entrar como urgente.',
+                        ? 'Selecciona una OF existente o captura solamente el número de parte urgente.'
+                        : 'No hay OF futura compatible. Captura el número de parte urgente para dejar registro sin crear una programación ficticia.',
                     candidatosProduccionActiva.length ? 'alert-info' : 'alert-warning'
                 );
             }
@@ -3914,6 +3949,14 @@ else
             limpiarPreview();
         });
 
+        parteUrgenteManual?.addEventListener('input', function () {
+            if ((parteUrgenteManual.value || '').trim().length > 0 &&
+                !Number(programaUrgenteSelect?.value || 0)) {
+                programaInput.value = '';
+            }
+            limpiarPreview();
+        });
+
         function abrirInterrupcionUrgente(btn) {
             const programaSeleccionadoId = Number(btn.dataset.programaId || 0);
             const modoEntrada =
@@ -3940,6 +3983,7 @@ else
             moldeTexto.textContent = btn.dataset.molde || 'Sin molde';
 
             motivoInput.value = '';
+            if (parteUrgenteManual) parteUrgenteManual.value = '';
             if (destinoInterrupcion) destinoInterrupcion.value = 'PAUSA_RETORNO';
             if (motivoTerminacionParcialInput) motivoTerminacionParcialInput.value = '';
 
@@ -4097,6 +4141,10 @@ else
             simulacionValida=true;
             programaSimuladoID=Number(programaInput.value||0);
             maquinaSimuladaID=Number(maquinaSelect.value||0);
+            if (parteUrgenteManual) {
+                parteUrgenteManual.dataset.valorSimulado =
+                    (parteUrgenteManual.value || '').trim();
+            }
 
             preview.classList.remove('d-none');
             actualizarEstadoConfirmacion();
@@ -4108,14 +4156,16 @@ else
                 return;
 
             const programaUrgenteId=Number(programaInput.value||0);
+            const numeroParteUrgente=(parteUrgenteManual?.value||'').trim();
             const maquinaId=Number(maquinaSelect.value||0);
             const autorizaTerminacionParcial=esTerminacionParcialSeleccionada();
 
             limpiarPreview();
 
-            if(!programaUrgenteId)
+            if(!programaUrgenteId && numeroParteUrgente.length<2)
             {
-                feedbackSet('No se pudo identificar la OF urgente.','alert-warning');
+                feedbackSet('Selecciona una OF urgente o captura el número de parte que entrará.','alert-warning');
+                parteUrgenteManual?.focus();
                 return;
             }
 
@@ -4141,6 +4191,7 @@ else
             {
                 const parametros=new URLSearchParams({
                     programaUrgenteId:programaUrgenteId.toString(),
+                    numeroParteUrgente:numeroParteUrgente,
                     maquinaId:maquinaId.toString(),
                     trabajarDomingo:(!!document.getElementById('trabajarDomingoCalendario')?.checked).toString(),
                     autorizaTerminacionParcial:autorizaTerminacionParcial.toString()
@@ -4154,7 +4205,7 @@ else
                         cache:'no-store'
                     });
 
-                const data=await response.json();
+                const data=await leerJsonInterrupcionSeguro(response);
 
                 if(!response.ok||!data?.ok)
                 {
@@ -4193,6 +4244,7 @@ else
                 return;
 
             const programaUrgenteId=Number(programaInput.value||0);
+            const numeroParteUrgente=(parteUrgenteManual?.value||'').trim();
             const maquinaId=Number(maquinaSelect.value||0);
             const motivo=(motivoInput.value||'').trim();
             const autorizaTerminacionParcial=esTerminacionParcialSeleccionada();
@@ -4205,8 +4257,9 @@ else
             }
 
             if(
-                !programaUrgenteId
+                (programaUrgenteId<=0 && numeroParteUrgente.length<2)
                 ||programaUrgenteId!==programaSimuladoID
+                ||numeroParteUrgente!==(parteUrgenteManual?.dataset?.valorSimulado||'')
                 ||!maquinaId
                 ||maquinaId!==maquinaSimuladaID
                 ||autorizaTerminacionParcial!==terminacionParcialSimulada)
@@ -4267,6 +4320,7 @@ else
             {
                 const payload={
                     ProgramaUrgenteID:programaUrgenteId,
+                    NumeroParteUrgente:numeroParteUrgente,
                     MaquinaID:maquinaId,
                     Motivo:motivo,
                     TrabajarDomingo:!!document.getElementById('trabajarDomingoCalendario')?.checked,
@@ -4321,7 +4375,7 @@ else
 
                 if (data?.fechaInterrupcion && horaInterrupcionDestacada) {
                     horaInterrupcionDestacada.textContent =
-                        Registrada: ;
+                        `Registrada: ${formatearFecha(data.fechaInterrupcion)}`;
                 }
 
                 btnConfirmar.innerHTML='<i class="fa-solid fa-circle-check me-1"></i> Interrupción registrada';

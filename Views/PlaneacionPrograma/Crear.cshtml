@@ -13,6 +13,21 @@
     var totalVisualInicial = cantidadBaseCapturada + aumentoCapturado;
 }
 
+
+<style id="nsq-laura-hora-24-v1">
+    /* Chrome/Edge: fuerza presentacion sin selector AM/PM en controles nativos. */
+    input[type="time"]::-webkit-datetime-edit-ampm-field,
+    input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
+        display: none !important;
+    }
+</style>
+<script id="nsq-laura-hora-24-script-v1">
+    document.addEventListener('DOMContentLoaded', () => {
+        document
+            .querySelectorAll('input[type="time"], input[type="datetime-local"]')
+            .forEach(input => input.setAttribute('lang', 'en-GB'));
+    });
+</script>
 @section Scripts {
     <script>
         const objetivoHora = Number('@(Model.ObjetivoHora ?? 0)');
@@ -581,13 +596,13 @@
 
             const cantidad = cantidadTotalPrograma();
             const horasSugeridas = cantidad > 0
-                ? Math.ceil(cantidad / objetivoHora)
+                ? cantidad / objetivoHora
                 : 0;
 
             if (formulaHoras) {
                 formulaHoras.textContent = horasSugeridas > 0
-                    ? horasSugeridas.toFixed(0)
-                    : '0';
+                    ? horasSugeridas.toFixed(2)
+                    : '0.00';
             }
 
             // NSQ_PLANEACION_RECALCULO_HORAS_EXTRA_V1
@@ -595,7 +610,7 @@
             // inmediatamente el nuevo total redondeado.
             if (sincronizarHorasInput && horasInput) {
                 horasInput.value = horasSugeridas > 0
-                    ? horasSugeridas.toFixed(0)
+                    ? horasSugeridas.toFixed(2)
                     : '';
             }
         }
@@ -760,7 +775,12 @@
 
         cantidadInput?.addEventListener('input', function () {
             actualizarBaseDesdeTotalVisible();
-            recalcularAumentosRelease();
+
+            // NSQ_PRECOMMIT_HORAS_DESDE_CANTIDAD_V2
+            // Cada cambio de cantidad genera una nueva sugerencia canonica.
+            // El usuario puede editar HorasProgramadas despues de ese recalculo.
+            horasProgramadasEditadasPorUsuario = false;
+            recalcularAumentosRelease(true);
         });
 
         aumentosReleaseFilas?.addEventListener('change', function (event) {
@@ -1870,22 +1890,30 @@
                         <div class="col-md-6">
                             <label class="field-label">Hora cambio</label>
                             <input asp-for="Cambio"
-                                   type="time"
+                                   type="text"
                                    value="@TimeValue(Model.Cambio)"
                                    class="form-control"
                                    id="Cambio"
-                                   step="60" lang="en-GB" />
+                                   inputmode="numeric"
+                                   maxlength="5"
+                                   pattern="(?:[01]\d|2[0-3]):[0-5]\d"
+                                   placeholder="HH:mm"
+                                   autocomplete="off" />
                             <span asp-validation-for="Cambio" class="text-danger small"></span>
                         </div>
 
                         <div class="col-md-6">
                             <label class="field-label">Hora arranque</label>
                             <input asp-for="Arranque"
-                                   type="time"
+                                   type="text"
                                    value="@TimeValue(Model.Arranque)"
                                    class="form-control"
                                    id="Arranque"
-                                   step="60" lang="en-GB" />
+                                   inputmode="numeric"
+                                   maxlength="5"
+                                   pattern="(?:[01]\d|2[0-3]):[0-5]\d"
+                                   placeholder="HH:mm"
+                                   autocomplete="off" />
                             <span asp-validation-for="Arranque" class="text-danger small"></span>
                         </div>
 

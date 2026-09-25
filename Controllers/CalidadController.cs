@@ -398,9 +398,73 @@ namespace ERP.NSQuell.Controllers
 
             await CargarChecklistArranqueParaDetalleAsync(model);
 
+            // NSQ_LAURA_CALIDAD_LHRH_VISTA_V1
+            await CargarParejaLhRhDetalleAsync(model);
+
             return View(model);
         }
 
+        // NSQ_LAURA_CALIDAD_LHRH_VISTA_V1
+        private async Task CargarParejaLhRhDetalleAsync(CalidadDetalleViewModel model)
+        {
+            model.ParejaLhRh = null;
+            if (!model.ProgramaProduccionID.HasValue || model.ProgramaProduccionID.Value <= 0) return;
+
+            const string sql = @"
+;WITH Programas AS
+(
+    SELECT pp.ProgramaProduccionID,pp.MaquinaID,pp.MaquinaCodigo,pp.MoldeID,pp.MoldeCodigo,
+           pp.NumeroParte,pp.ReferenciaSAP,pp.DesignacionDescripcionSAP,
+           TRY_CONVERT(int,CASE WHEN CHARINDEX(N'NSQ_LHRH_PAIR:',ISNULL(pp.Observaciones,N''))>0 THEN
+             LEFT(SUBSTRING(pp.Observaciones,CHARINDEX(N'NSQ_LHRH_PAIR:',pp.Observaciones)+LEN(N'NSQ_LHRH_PAIR:'),50),
+             CHARINDEX(N';',SUBSTRING(pp.Observaciones,CHARINDEX(N'NSQ_LHRH_PAIR:',pp.Observaciones)+LEN(N'NSQ_LHRH_PAIR:'),50)+N';')-1)
+           END) AS GrupoLhRh
+    FROM dbo.Planeacion_ProgramaProduccion pp WHERE pp.Activo=1
+), Origen AS
+(
+    SELECT * FROM Programas WHERE ProgramaProduccionID=@ProgramaProduccionID
+)
+SELECT TOP(1) o.GrupoLhRh,
+       o.ProgramaProduccionID ProgramaActualID,o.NumeroParte NumeroParteActual,o.ReferenciaSAP ReferenciaActual,o.DesignacionDescripcionSAP DescripcionActual,
+       p.ProgramaProduccionID ProgramaParejaID,p.NumeroParte NumeroPartePareja,p.ReferenciaSAP ReferenciaPareja,p.DesignacionDescripcionSAP DescripcionPareja,
+       cia.InspeccionID InspeccionActualID,cip.InspeccionID InspeccionParejaID,
+       COALESCE(NULLIF(LTRIM(RTRIM(o.MaquinaCodigo)),N''),N'Maquina') Maquina,
+       COALESCE(NULLIF(LTRIM(RTRIM(o.MoldeCodigo)),N''),N'Sin molde') Molde
+FROM Origen o
+JOIN Programas p ON p.GrupoLhRh=o.GrupoLhRh AND p.ProgramaProduccionID<>o.ProgramaProduccionID
+ AND ISNULL(p.MaquinaID,-1)=ISNULL(o.MaquinaID,-1) AND ISNULL(p.MoldeID,-1)=ISNULL(o.MoldeID,-1)
+OUTER APPLY(SELECT TOP(1) ci.InspeccionID$1 ORDER BY ci.InspeccionID DESC) cia
+OUTER APPLY(SELECT TOP(1) ci.InspeccionID$1 ORDER BY ci.InspeccionID DESC) cip
+WHERE o.GrupoLhRh IS NOT NULL
+ORDER BY p.ProgramaProduccionID;";
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            await using var cmd = new SqlCommand(sql,cn);
+            cmd.Parameters.Add("@ProgramaProduccionID",SqlDbType.Int).Value=model.ProgramaProduccionID.Value;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if(!await rd.ReadAsync() || rd["InspeccionActualID"]==DBNull.Value || rd["InspeccionParejaID"]==DBNull.Value) return;
+
+            var pa=Convert.ToInt32(rd["ProgramaActualID"]); var pp=Convert.ToInt32(rd["ProgramaParejaID"]);
+            var ia=Convert.ToInt32(rd["InspeccionActualID"]); var ip=Convert.ToInt32(rd["InspeccionParejaID"]);
+            string S(string n)=>rd[n]==DBNull.Value?string.Empty:rd[n]?.ToString()?.Trim()??string.Empty;
+            var na=S("NumeroParteActual"); var ra=S("ReferenciaActual"); var da=S("DescripcionActual");
+            var np=S("NumeroPartePareja"); var rp=S("ReferenciaPareja"); var dp=S("DescripcionPareja");
+            var la=DetectarLadoLhRhCalidad(na,ra,da); var lp=DetectarLadoLhRhCalidad(np,rp,dp);
+            bool actualIzq = la=="LH" ? true : la=="RH" ? false : lp=="LH" ? false : lp=="RH" ? true : pa<pp;
+
+            model.ParejaLhRh = actualIzq
+              ? new CalidadParejaLhRhDetalleViewModel{GrupoLhRh=Convert.ToInt32(rd["GrupoLhRh"]),InspeccionIzquierdaID=ia,ProgramaIzquierdaID=pa,LadoIzquierda=la??(lp=="RH"?"LH":"LADO A"),NumeroParteIzquierda=na,ReferenciaIzquierda=ra,InspeccionDerechaID=ip,ProgramaDerechaID=pp,LadoDerecha=lp??(la=="LH"?"RH":"LADO B"),NumeroParteDerecha=np,ReferenciaDerecha=rp,Maquina=S("Maquina"),Molde=S("Molde")}
+              : new CalidadParejaLhRhDetalleViewModel{GrupoLhRh=Convert.ToInt32(rd["GrupoLhRh"]),InspeccionIzquierdaID=ip,ProgramaIzquierdaID=pp,LadoIzquierda=lp??(la=="RH"?"LH":"LADO A"),NumeroParteIzquierda=np,ReferenciaIzquierda=rp,InspeccionDerechaID=ia,ProgramaDerechaID=pa,LadoDerecha=la??(lp=="LH"?"RH":"LADO B"),NumeroParteDerecha=na,ReferenciaDerecha=ra,Maquina=S("Maquina"),Molde=S("Molde")};
+        }
+
+        private static string? DetectarLadoLhRhCalidad(params string?[] valores)
+        {
+            var t=" "+string.Join(" ",valores.Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>x!.Trim().ToUpperInvariant())).Replace("_"," ").Replace("-"," ").Replace("/"," ")+" ";
+            if(t.Contains(" LH ")||t.Contains(" LEFT ")) return "LH";
+            if(t.Contains(" RH ")||t.Contains(" RIGHT ")) return "RH";
+            return null;
+        }
         // =========================================================
         // CHECKLIST DE PREARRANQUE: INTEGRACIÓN PRODUCCIÓN -> CALIDAD
         // =========================================================

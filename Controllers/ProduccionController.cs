@@ -2152,6 +2152,85 @@ VALUES
 
                 var ahora = NormalizarFechaMinuto(DateTime.Now);
                 var programasRecorridos = 0;
+
+                // NSQ_LAURA_INICIO_REAL_REACOMODA_COLA_V1_1
+                // En el primer arranque tardio, el tiempo perdido ocupa realmente
+                // la maquina. Se extiende la OF raiz y se reacomoda la cola posterior.
+                // Para LH/RH se calcula una sola vez sobre la raiz y luego se
+                // sincroniza la contraparte para no duplicar el impacto.
+                if (!algunoTieneReinicio)
+                {
+                    if (ejecucionPareja == null)
+                    {
+                        var inicioProgramado =
+                            await ObtenerInicioProgramadoParaAtrasoAsync(
+                                ejecucion.ProgramaProduccionID,
+                                cn,
+                                tx);
+
+                        if (inicioProgramado.HasValue &&
+                            ahora > NormalizarFechaMinuto(inicioProgramado.Value))
+                        {
+                            programasRecorridos =
+                                await _planeacionSecuenciaService
+                                    .ReacomodarPorInterrupcionAsync(
+                                        ejecucion.ProgramaProduccionID,
+                                        ejecucionProduccionId,
+                                        NormalizarFechaMinuto(inicioProgramado.Value),
+                                        ahora,
+                                        usuarioId,
+                                        cn,
+                                        tx,
+                                        trabajarDomingo: false);
+                        }
+                    }
+                    else
+                    {
+                        var ejecucionRaizAtraso =
+                            ejecucion.ProgramaProduccionID <=
+                            ejecucionPareja.ProgramaProduccionID
+                                ? ejecucion
+                                : ejecucionPareja;
+
+                        var ejecucionSecundariaAtraso =
+                            ejecucionRaizAtraso.EjecucionProduccionID ==
+                            ejecucion.EjecucionProduccionID
+                                ? ejecucionPareja
+                                : ejecucion;
+
+                        var inicioProgramadoRaiz =
+                            await ObtenerInicioProgramadoParaAtrasoAsync(
+                                ejecucionRaizAtraso.ProgramaProduccionID,
+                                cn,
+                                tx);
+
+                        if (inicioProgramadoRaiz.HasValue &&
+                            ahora >
+                            NormalizarFechaMinuto(inicioProgramadoRaiz.Value))
+                        {
+                            programasRecorridos =
+                                await _planeacionSecuenciaService
+                                    .ReacomodarPorInterrupcionAsync(
+                                        ejecucionRaizAtraso.ProgramaProduccionID,
+                                        ejecucionRaizAtraso.EjecucionProduccionID,
+                                        NormalizarFechaMinuto(
+                                            inicioProgramadoRaiz.Value),
+                                        ahora,
+                                        usuarioId,
+                                        cn,
+                                        tx,
+                                        trabajarDomingo: false);
+
+                            await SincronizarFinParejaLhRhDesdeProgramaAsync(
+                                ejecucionRaizAtraso.ProgramaProduccionID,
+                                ejecucionSecundariaAtraso.ProgramaProduccionID,
+                                usuarioId,
+                                cn,
+                                tx);
+                        }
+                    }
+                }
+
                 var esReinicio = contextoReinicio != null;
                 var esReinicioLhRh = false;
                 ContextoReinicioLhRhInterno? contextoFisicoLhRh = null;
@@ -7257,11 +7336,7 @@ WHERE d.ChecklistArranqueID = @ChecklistArranqueID
           UPPER(LTRIM(RTRIM(ISNULL(d.Resultado,N'')))) = N'NOK'
           AND ISNULL(p.RequiereObservacionSiNOK,0) = 1
       )
-      OR
-      (
-          UPPER(LTRIM(RTRIM(ISNULL(d.Resultado,N'')))) IN (N'NA',N'N/A')
-          AND ISNULL(p.RequiereObservacionSiNA,0) = 1
-      )
+
   )
   AND NULLIF(
       LTRIM(RTRIM(ISNULL(d.Observaciones,N''))),
@@ -8449,6 +8524,28 @@ WHERE e.EjecucionProduccionID = @EjecucionProduccionID
             await cmd.ExecuteNonQueryAsync();
         }
 
+        // NSQ_LAURA_INICIO_REAL_REACOMODA_COLA_V1_1
+        private static async Task<DateTime?> ObtenerInicioProgramadoParaAtrasoAsync(
+            int programaProduccionId,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+SELECT FechaInicioProgramada
+FROM dbo.Planeacion_ProgramaProduccion WITH(UPDLOCK,HOLDLOCK)
+WHERE ProgramaProduccionID=@ProgramaProduccionID
+  AND Activo=1;";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value =
+                programaProduccionId;
+
+            var value = await cmd.ExecuteScalarAsync();
+
+            return value == null || value == DBNull.Value
+                ? null
+                : Convert.ToDateTime(value);
+        }
         private async Task MarcarProgramaEnProduccionAsync(
             int programaProduccionId,
             DateTime fechaInicioReal,

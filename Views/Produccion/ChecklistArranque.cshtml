@@ -680,7 +680,7 @@
                     <input type="hidden" name="EjecucionProduccionID" value="@Model.EjecucionProduccionID" />
                     <input type="hidden" id="EnviarACalidad" name="EnviarACalidad" value="false" />
 
-                    <div class="note"><i class="bi bi-info-circle me-1"></i>Cada verificación inicia en OK. Apaga el switch para registrar NOK o marca N/A. En ambos casos deberás capturar una observación.</div>
+                    <div class="note"><i class="bi bi-info-circle me-1"></i>Cada verificación inicia en OK. Apaga el switch para registrar NOK o marca N/A. En N/A la observación permanece disponible, pero es opcional.</div>
 
                     @{
                         var index = 0;
@@ -704,7 +704,7 @@
                             var prefix = $"Respuestas[{index}]";
                             var resultado = ResultadoActual(pregunta.Resultado);
                             if (string.IsNullOrWhiteSpace(resultado)) { resultado = "OK"; }
-                            <div class="question pregunta-row" data-row data-requiere-nok="@(pregunta.RequiereObservacionSiNOK.ToString().ToLowerInvariant())" data-requiere-na="@(pregunta.RequiereObservacionSiNA.ToString().ToLowerInvariant())" data-requiere-valor="@(pregunta.RequiereCapturarValor.ToString().ToLowerInvariant())">
+                            <div class="question pregunta-row" data-row data-requiere-nok="@(pregunta.RequiereObservacionSiNOK.ToString().ToLowerInvariant())" data-requiere-na="false" data-requiere-valor="@(pregunta.RequiereCapturarValor.ToString().ToLowerInvariant())">
                                 <div><div class="num">@pregunta.OrdenPregunta</div></div>
                                 <div>
                                     <div class="question-text">@pregunta.TextoPregunta</div>
@@ -749,7 +749,7 @@
                                             <div class="small text-muted mt-1">Especificación: @Txt(pregunta.Especificacion) · Tolerancia: @Txt(pregunta.Tolerancia)</div>
                                         }
                                     }
-                                    <div class="obs-wrap"><label class="form-label fw-bold small">Observación obligatoria</label><textarea class="form-control observacion" name="@(prefix + ".Observaciones")" maxlength="500" rows="2" placeholder="Indica por qué no cumple o por qué no aplica">@pregunta.Observaciones</textarea></div>
+                                    <div class="obs-wrap"><label class="form-label fw-bold small">Observación obligatoria</label><textarea class="form-control observacion" name="@(prefix + ".Observaciones")" maxlength="500" rows="2" placeholder="Observación opcional para N/A; en NOK captura el motivo cuando aplique">@pregunta.Observaciones</textarea></div>
                                 }
                                                                 else
                                 {
@@ -846,7 +846,7 @@
                 if (hidden) hidden.value = valor;
                 if (texto) texto.textContent = valor === 'NA' ? 'N/A' : valor;
 
-                const requiereObservacion = valor === 'NOK' || valor === 'NA';
+                const requiereObservacion = valor === 'NOK' && row.dataset.requiereNok === 'true';
                 obsWrap?.classList.toggle('visible', requiereObservacion);
                 if (obs) {
                     obs.required = requiereObservacion;
@@ -905,12 +905,12 @@
                     const valorCapturado = row.querySelector('.valor-capturado');
                     const requiereObsNok = row.dataset.requiereNok === 'true';
                     const requiereObsNa = row.dataset.requiereNa === 'true';
-                    const observacionObligatoria = (valorActual === 'NOK' && requiereObsNok) || (valorActual === 'NA' && requiereObsNa);
+                    const observacionObligatoria = valorActual === 'NOK' && requiereObsNok;
 
                     if (observacionObligatoria && obs && !obs.value.trim()) {
                         obs.disabled = false;
                         obs.classList.add('is-invalid');
-                        errores.push('Las respuestas NOK o N/A indicadas requieren observación.');
+                        errores.push('Las respuestas NOK indicadas requieren observación.');
                     }
 
                     if (row.dataset.requiereValor === 'true' && valorCapturado && !valorCapturado.value.trim()) {

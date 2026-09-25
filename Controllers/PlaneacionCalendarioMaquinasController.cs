@@ -96,7 +96,13 @@ namespace ERP.NSQuell.Controllers
                     trabajarDomingo: false,
                     cn);
 
-            AplicarProyeccionInterrupcionesCalendario(maquinas, proyeccion);
+            // NSQ_PRECOMMIT_PROYECCION_SOLO_DIA_ACTUAL_V2
+            var mostrarProyeccionInterrupciones =
+                periodo.Inicio.Date == ahora.Date &&
+                periodo.Fin <= periodo.Inicio.AddDays(1);
+
+            if (mostrarProyeccionInterrupciones)
+                AplicarProyeccionInterrupcionesCalendario(maquinas, proyeccion);
 
             var solicitudesReprogramacion = modoProduccion
                 ? new List<SolicitudReprogramacionCalendarioVm>()
@@ -116,8 +122,13 @@ namespace ERP.NSQuell.Controllers
 
             ViewBag.SolicitudesReprogramacion = solicitudesReprogramacion;
             ViewBag.TotalSolicitudesReprogramacion = solicitudesReprogramacion.Count;
-            ViewBag.HayInterrupcionesActivas = proyeccion.HayInterrupcionesActivas;
-            ViewBag.TotalInterrupcionesActivas = proyeccion.TotalInterrupcionesActivas;
+            ViewBag.HayInterrupcionesActivas =
+                mostrarProyeccionInterrupciones &&
+                proyeccion.HayInterrupcionesActivas;
+            ViewBag.TotalInterrupcionesActivas =
+                mostrarProyeccionInterrupciones
+                    ? proyeccion.TotalInterrupcionesActivas
+                    : 0;
             ViewBag.FechaCalculoProyeccion = proyeccion.FechaCalculo;
 
             return View(vm);
@@ -233,13 +244,27 @@ namespace ERP.NSQuell.Controllers
         }
 
         [HttpGet("PrevisualizarInterrupcionUrgente")]
-        public async Task<IActionResult> PrevisualizarInterrupcionUrgente(int programaUrgenteId, int maquinaId, bool trabajarDomingo = false, bool autorizaTerminacionParcial = false)
+        public async Task<IActionResult> PrevisualizarInterrupcionUrgente(int programaUrgenteId, int maquinaId, bool trabajarDomingo = false, bool autorizaTerminacionParcial = false, string? numeroParteUrgente = null)
         {
             if (!UsuarioEnSesion())
                 return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
 
-            if (programaUrgenteId <= 0 || maquinaId <= 0)
-                return BadRequest(new { ok = false, mensaje = "El programa urgente y la máquina son obligatorios." });
+            numeroParteUrgente = (numeroParteUrgente ?? string.Empty).Trim();
+
+            if (maquinaId <= 0)
+                return BadRequest(new { ok = false, mensaje = "La máquina es obligatoria." });
+
+            if (programaUrgenteId <= 0 && numeroParteUrgente.Length < 2)
+                return BadRequest(new { ok = false, mensaje = "Selecciona una OF urgente o captura el número de parte que entrará." });
+
+            if (programaUrgenteId <= 0)
+            {
+                return await PrevisualizarInterrupcionUrgenteReferenciaAsync(
+                    numeroParteUrgente,
+                    maquinaId,
+                    trabajarDomingo,
+                    autorizaTerminacionParcial);
+            }
 
             try
             {
@@ -250,7 +275,7 @@ namespace ERP.NSQuell.Controllers
                 if (programaUrgente == null)
                     return NotFound(new { ok = false, mensaje = "No se encontró el programa que se desea declarar urgente." });
 
-                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(programaUrgenteId, cn, null, bloquear: false);
+                var motivoBloqueo = await ObtenerMotivoBloqueoInterrupcionUrgenteAsync(programaUrgenteId, maquinaId, cn, null, bloquear: false);
                 if (!string.IsNullOrWhiteSpace(motivoBloqueo))
                     return BadRequest(new { ok = false, mensaje = "La OF seleccionada no puede utilizarse como interrupción urgente. " + motivoBloqueo });
 
@@ -464,11 +489,15 @@ namespace ERP.NSQuell.Controllers
             if (!UsuarioEnSesion())
                 return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó. Vuelve a iniciar sesión." });
 
-            if (request == null || request.ProgramaUrgenteID <= 0 || request.MaquinaID <= 0)
-                return BadRequest(new { ok = false, mensaje = "La OF urgente y la máquina son obligatorias." });
+            if (request == null || request.MaquinaID <= 0)
+                return BadRequest(new { ok = false, mensaje = "La máquina es obligatoria." });
 
             request.Motivo = (request.Motivo ?? string.Empty).Trim();
             request.MotivoTerminacionParcial = (request.MotivoTerminacionParcial ?? string.Empty).Trim();
+            request.NumeroParteUrgente = (request.NumeroParteUrgente ?? string.Empty).Trim();
+
+            if (request.ProgramaUrgenteID <= 0 && request.NumeroParteUrgente.Length < 2)
+                return BadRequest(new { ok = false, mensaje = "Selecciona una OF urgente o captura el número de parte que entrará." });
 
             if (request.Motivo.Length < 5)
                 return BadRequest(new { ok = false, mensaje = "Escribe un motivo claro para justificar la interrupción urgente." });
@@ -494,6 +523,13 @@ namespace ERP.NSQuell.Controllers
             if (usuarioId <= 0)
                 return Unauthorized(new { ok = false, mensaje = "No fue posible identificar al usuario." });
 
+            if (request.ProgramaUrgenteID <= 0)
+            {
+                return await ConfirmarInterrupcionUrgenteReferenciaAsync(
+                    request,
+                    usuarioId);
+            }
+
             await using var cn = new SqlConnection(ConnectionString);
             await cn.OpenAsync();
 
@@ -509,8 +545,9 @@ namespace ERP.NSQuell.Controllers
                 if (programaUrgente == null)
                     throw new InvalidOperationException("No se encontró la OF urgente.");
 
-                var motivoBloqueo = await ObtenerMotivoBloqueoMovimientoAsync(
+                var motivoBloqueo = await ObtenerMotivoBloqueoInterrupcionUrgenteAsync(
                     programaUrgente.ProgramaProduccionID,
+                    request.MaquinaID,
                     cn,
                     tx,
                     bloquear: true);
@@ -619,8 +656,9 @@ namespace ERP.NSQuell.Controllers
                     if (programaUrgentePareja == null)
                         throw new InvalidOperationException($"La OF urgente pertenece a una pareja LH/RH, pero no se encontró el Programa {parejaUrgenteId.Value}.");
 
-                    var bloqueoPareja = await ObtenerMotivoBloqueoMovimientoAsync(
+                    var bloqueoPareja = await ObtenerMotivoBloqueoInterrupcionUrgenteAsync(
                         programaUrgentePareja.ProgramaProduccionID,
+                        request.MaquinaID,
                         cn,
                         tx,
                         bloquear: true);
@@ -1480,8 +1518,19 @@ ORDER BY OrdenAlerta,h.FechaCambio DESC,h.ReprogramacionHistorialID DESC;";
                 // REACTIVAR_CANDADO_CRUCES:
                 // await ValidarProgramaSinCrucesAsync(cn, tx);
 
-                await DesactivarReacomodoPlaneacionAsync(cn, tx);
+                await ResolverSolicitudesReprogramacionCalendarioAsync(
+                    programa.ProgramaProduccionID,
+                    programaParejaMovidoId,
+                    usuarioId,
+                    "Reprogramacion atendida desde Calendario de Maquinas. Nuevo horario: " +
+                    fechaArranque.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) +
+                    " - " +
+                    fechaFin.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) +
+                    ".",
+                    cn,
+                    tx);
 
+                await DesactivarReacomodoPlaneacionAsync(cn, tx);
                 await tx.CommitAsync();
 
                 return Json(new
@@ -2198,7 +2247,7 @@ ORDER BY ISNULL
 
         private static async Task<int> CrearParoInterrupcionUrgenteAsync(
     ProgramaActivoInterrupcionUrgente programaActual,
-    int programaUrgenteId,
+    int? programaUrgenteId,
     DateTime fechaInicio,
     string motivo,
     bool esParoLhRh,
@@ -2271,7 +2320,7 @@ VALUES
             cmd.Parameters.Add("@Descripcion", SqlDbType.NVarChar, 500).Value = motivo;
             cmd.Parameters.Add("@EsParoLhRh", SqlDbType.Bit).Value = esParoLhRh;
             cmd.Parameters.Add("@GrupoParoLhRh", SqlDbType.UniqueIdentifier).Value = (object?)grupoParoLhRh ?? DBNull.Value;
-            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = programaUrgenteId;
+            cmd.Parameters.Add("@ProgramaUrgenteID", SqlDbType.Int).Value = (object?)programaUrgenteId ?? DBNull.Value;
             cmd.Parameters.Add("@AutorizaTerminacionParcial", SqlDbType.Bit).Value = autorizaTerminacionParcial;
             cmd.Parameters.Add("@MotivoTerminacionParcial", SqlDbType.NVarChar, 500).Value =
                 autorizaTerminacionParcial && !string.IsNullOrWhiteSpace(motivoTerminacionParcial)
@@ -4663,6 +4712,44 @@ VALUES
             }
         }
 
+        // NSQ_LAURA_REPROGRAMACION_RESUELTA_V1
+        private static async Task ResolverSolicitudesReprogramacionCalendarioAsync(
+            int programaProduccionId,
+            int? programaParejaId,
+            int usuarioId,
+            string observacion,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            const string sql = @"
+UPDATE sr
+SET
+    Estatus=N'ATENDIDA',
+    UsuarioResolucionID=@UsuarioID,
+    FechaResolucion=SYSDATETIME(),
+    ObservacionesResolucion=LEFT(@Observacion,500),
+    UsuarioModificacionID=@UsuarioID,
+    FechaModificacion=SYSDATETIME()
+FROM dbo.Planeacion_SolicitudesReprogramacion sr
+WHERE sr.Activo=1
+  AND UPPER(LTRIM(RTRIM(ISNULL(sr.Estatus,N''))))=N'PENDIENTE'
+  AND
+  (
+      sr.ProgramaProduccionID=@ProgramaProduccionID
+      OR
+      (
+          @ProgramaParejaID IS NOT NULL
+          AND sr.ProgramaProduccionID=@ProgramaParejaID
+      )
+  );";
+
+            await using var cmd = new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            cmd.Parameters.Add("@ProgramaParejaID", SqlDbType.Int).Value = (object?)programaParejaId ?? DBNull.Value;
+            cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
+            cmd.Parameters.Add("@Observacion", SqlDbType.NVarChar, 500).Value = observacion;
+            await cmd.ExecuteNonQueryAsync();
+        }
         private async Task<List<SolicitudReprogramacionCalendarioVm>> ObtenerSolicitudesReprogramacionPendientesAsync(SqlConnection cn)
         {
             var lista = new List<SolicitudReprogramacionCalendarioVm>();
