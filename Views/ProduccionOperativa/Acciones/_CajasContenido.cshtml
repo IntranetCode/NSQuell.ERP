@@ -20,7 +20,7 @@
 }
 
 <style>
-    # @rootId {
+    .pcj-cajas-scope {
         --pcj-blue: #004aad;
         --pcj-blue2: #2563eb;
         --pcj-green: #168052;
@@ -37,11 +37,11 @@
         font-size: .78rem
     }
 
-        # @rootId * {
+        .pcj-cajas-scope * {
             box-sizing: border-box
         }
 
-        # @rootId .pcj-head {
+        .pcj-cajas-scope .pcj-head {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -52,14 +52,14 @@
             background: linear-gradient(135deg,#f8fbff,#fff)
         }
 
-            # @rootId .pcj-head h3 {
+            .pcj-cajas-scope .pcj-head h3 {
                 margin: 0;
                 font-size: 1rem;
                 font-weight: 950;
                 color: #17345f
             }
 
-            # @rootId .pcj-head p {
+            .pcj-cajas-scope .pcj-head p {
                 margin: 4px 0 0;
                 color: var(--pcj-muted);
                 font-size: .72rem;
@@ -67,7 +67,7 @@
                 max-width: 760px
             }
 
-        # @rootId .pcj-head-actions {
+        .pcj-cajas-scope .pcj-head-actions {
             display: flex;
             gap: 7px;
             align-items: center;
@@ -75,7 +75,7 @@
             justify-content: flex-end
         }
 
-        # @rootId .pcj-chip {
+        .pcj-cajas-scope .pcj-chip {
             display: inline-flex;
             align-items: center;
             gap: 5px;
@@ -88,28 +88,28 @@
             white-space: nowrap
         }
 
-            # @rootId .pcj-chip.warn {
+            .pcj-cajas-scope .pcj-chip.warn {
                 background: #fff7e6;
                 color: #9a5b00
             }
 
-            # @rootId .pcj-chip.green {
+            .pcj-cajas-scope .pcj-chip.green {
                 background: #eaf7f1;
                 color: #116b44
             }
 
-            # @rootId .pcj-chip.red {
+            .pcj-cajas-scope .pcj-chip.red {
                 background: #fff0ef;
                 color: #a62b25
             }
 
-        # @rootId .pcj-summary {
+        .pcj-cajas-scope .pcj-summary {
             display: grid;
             grid-template-columns: repeat(6,minmax(0,1fr));
             gap: 8px
         }
 
-        # @rootId .pcj-stat {
+        .pcj-cajas-scope .pcj-stat {
             border: 1px solid var(--pcj-line);
             border-radius: 13px;
             background: #fff;
@@ -117,7 +117,7 @@
             min-width: 0
         }
 
-            # @rootId .pcj-stat span {
+            .pcj-cajas-scope .pcj-stat span {
                 display: block;
                 color: var(--pcj-muted);
                 font-size: .61rem;
@@ -126,7 +126,7 @@
                 letter-spacing: .02em
             }
 
-            # @rootId .pcj-stat strong {
+            .pcj-cajas-scope .pcj-stat strong {
                 display: block;
                 margin-top: 4px;
                 font-size: 1.05rem;
@@ -134,7 +134,7 @@
                 color: #203150
             }
 
-        # @rootId .pcj-alert {
+        .pcj-cajas-scope .pcj-alert {
             border-radius: 12px;
             padding: 10px 12px;
             border: 1px solid #fed7aa;
@@ -144,26 +144,26 @@
             font-weight: 700
         }
 
-            # @rootId .pcj-alert.info {
+            .pcj-cajas-scope .pcj-alert.info {
                 border-color: #bfdbfe;
                 background: #eff6ff;
                 color: #1e4b8f
             }
 
-            # @rootId .pcj-alert.read {
+            .pcj-cajas-scope .pcj-alert.read {
                 border-color: #d8dee8;
                 background: #f8fafc;
                 color: #475467
             }
 
-        # @rootId .pcj-side {
+        .pcj-cajas-scope .pcj-side {
             border: 1px solid var(--pcj-line);
             border-radius: 16px;
             background: #fff;
             overflow: hidden
         }
 
-        # @rootId .pcj-side-head {
+        .pcj-cajas-scope .pcj-side-head {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -173,14 +173,14 @@
             border-bottom: 1px solid var(--pcj-line)
         }
 
-        # @rootId .pcj-side-title {
+        .pcj-cajas-scope .pcj-side-title {
             display: flex;
             gap: 10px;
             align-items: center;
             min-width: 0
         }
 
-        # @rootId .pcj-side-icon {
+        .pcj-cajas-scope .pcj-side-icon {
             width: 34px;
             height: 34px;
             border-radius: 10px;
@@ -191,14 +191,14 @@
             flex: none
         }
 
-        # @rootId .pcj-side-title strong {
+        .pcj-cajas-scope .pcj-side-title strong {
             display: block;
             font-size: .86rem;
             font-weight: 950;
             color: #17345f
         }
 
-        # @rootId .pcj-side-title small {
+        .pcj-cajas-scope .pcj-side-title small {
             display: block;
             margin-top: 2px;
             color: var(--pcj-muted);
@@ -206,39 +206,39 @@
             font-weight: 650
         }
 
-        # @rootId .pcj-side-badges {
+        .pcj-cajas-scope .pcj-side-badges {
             display: flex;
             gap: 6px;
             flex-wrap: wrap;
             justify-content: flex-end
         }
 
-        # @rootId .pcj-body {
+        .pcj-cajas-scope .pcj-body {
             padding: 12px 14px;
             display: grid;
             gap: 12px
         }
 
-        # @rootId .pcj-kpis {
+        .pcj-cajas-scope .pcj-kpis {
             display: grid;
             grid-template-columns: repeat(5,minmax(0,1fr));
             gap: 7px
         }
 
-        # @rootId .pcj-kpi {
+        .pcj-cajas-scope .pcj-kpi {
             padding: 8px 9px;
             border: 1px solid #e5eaf1;
             border-radius: 10px;
             background: #fbfcfe
         }
 
-            # @rootId .pcj-kpi b {
+            .pcj-cajas-scope .pcj-kpi b {
                 display: block;
                 font-size: .84rem;
                 font-weight: 950
             }
 
-            # @rootId .pcj-kpi span {
+            .pcj-cajas-scope .pcj-kpi span {
                 display: block;
                 margin-top: 2px;
                 color: var(--pcj-muted);
@@ -246,20 +246,20 @@
                 font-weight: 750
             }
 
-        # @rootId .pcj-actions {
+        .pcj-cajas-scope .pcj-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 9px
         }
 
-        # @rootId .pcj-panel {
+        .pcj-cajas-scope .pcj-panel {
             border: 1px solid #e2e8f0;
             border-radius: 13px;
             background: #fff;
             padding: 11px
         }
 
-            # @rootId .pcj-panel h4 {
+            .pcj-cajas-scope .pcj-panel h4 {
                 margin: 0 0 8px;
                 font-size: .75rem;
                 font-weight: 950;
@@ -269,20 +269,20 @@
                 gap: 6px
             }
 
-        # @rootId .pcj-form-row {
+        .pcj-cajas-scope .pcj-form-row {
             display: grid;
             grid-template-columns: minmax(0,1fr) auto;
             gap: 7px;
             align-items: end
         }
 
-        # @rootId .pcj-form-grid {
+        .pcj-cajas-scope .pcj-form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 7px
         }
 
-        # @rootId label {
+        .pcj-cajas-scope label {
             display: block;
             margin-bottom: 3px;
             color: var(--pcj-muted);
@@ -291,19 +291,19 @@
             text-transform: uppercase
         }
 
-        # @rootId .form-control, # @rootId .form-select {
+        .pcj-cajas-scope .form-control, .pcj-cajas-scope .form-select {
             min-height: 35px;
             border-radius: 8px;
             border-color: #ccd7e5;
             font-size: .72rem
         }
 
-        # @rootId textarea.form-control {
+        .pcj-cajas-scope textarea.form-control {
             min-height: 58px;
             resize: vertical
         }
 
-        # @rootId .pcj-btn {
+        .pcj-cajas-scope .pcj-btn {
             border: 0;
             border-radius: 8px;
             min-height: 35px;
@@ -318,38 +318,38 @@
             white-space: nowrap
         }
 
-            # @rootId .pcj-btn.primary {
+            .pcj-cajas-scope .pcj-btn.primary {
                 background: var(--pcj-blue);
                 color: #fff
             }
 
-            # @rootId .pcj-btn.green {
+            .pcj-cajas-scope .pcj-btn.green {
                 background: var(--pcj-green);
                 color: #fff
             }
 
-            # @rootId .pcj-btn.orange {
+            .pcj-cajas-scope .pcj-btn.orange {
                 background: var(--pcj-orange);
                 color: #fff
             }
 
-            # @rootId .pcj-btn.purple {
+            .pcj-cajas-scope .pcj-btn.purple {
                 background: var(--pcj-purple);
                 color: #fff
             }
 
-            # @rootId .pcj-btn.outline {
+            .pcj-cajas-scope .pcj-btn.outline {
                 background: #fff;
                 color: #344054;
                 border: 1px solid #cdd8e5
             }
 
-            # @rootId .pcj-btn:disabled {
+            .pcj-cajas-scope .pcj-btn:disabled {
                 opacity: .55;
                 cursor: not-allowed
             }
 
-        # @rootId .pcj-section-title {
+        .pcj-cajas-scope .pcj-section-title {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -357,19 +357,19 @@
             margin: 2px 0 0
         }
 
-            # @rootId .pcj-section-title h4 {
+            .pcj-cajas-scope .pcj-section-title h4 {
                 margin: 0;
                 font-size: .76rem;
                 font-weight: 950;
                 color: #263a58
             }
 
-        # @rootId .pcj-boxes {
+        .pcj-cajas-scope .pcj-boxes {
             display: grid;
             gap: 7px
         }
 
-        # @rootId .pcj-box {
+        .pcj-cajas-scope .pcj-box {
             border: 1px solid #e2e8f0;
             border-radius: 12px;
             background: #fff;
@@ -380,14 +380,14 @@
             align-items: center
         }
 
-        # @rootId .pcj-box-main strong {
+        .pcj-cajas-scope .pcj-box-main strong {
             display: block;
             font-size: .75rem;
             font-weight: 950;
             color: #203150
         }
 
-        # @rootId .pcj-box-main span, # @rootId .pcj-box-info span {
+        .pcj-cajas-scope .pcj-box-main span, .pcj-cajas-scope .pcj-box-info span {
             display: block;
             margin-top: 2px;
             color: var(--pcj-muted);
@@ -395,7 +395,7 @@
             font-weight: 650
         }
 
-        # @rootId .pcj-state {
+        .pcj-cajas-scope .pcj-state {
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -409,27 +409,27 @@
             max-width: 100%
         }
 
-            # @rootId .pcj-state.quality {
+            .pcj-cajas-scope .pcj-state.quality {
                 background: #fff7e6;
                 color: #9a5b00
             }
 
-            # @rootId .pcj-state.good {
+            .pcj-cajas-scope .pcj-state.good {
                 background: #eaf7f1;
                 color: #116b44
             }
 
-            # @rootId .pcj-state.bad {
+            .pcj-cajas-scope .pcj-state.bad {
                 background: #fff0ef;
                 color: #a62b25
             }
 
-            # @rootId .pcj-state.blue {
+            .pcj-cajas-scope .pcj-state.blue {
                 background: #edf4ff;
                 color: #174ea6
             }
 
-        # @rootId .pcj-box-actions {
+        .pcj-cajas-scope .pcj-box-actions {
             display: flex;
             gap: 5px;
             flex-wrap: wrap;
@@ -437,7 +437,7 @@
             max-width: 300px
         }
 
-        # @rootId .pcj-inline-form {
+        .pcj-cajas-scope .pcj-inline-form {
             display: flex;
             gap: 5px;
             align-items: end;
@@ -445,11 +445,11 @@
             justify-content: flex-end
         }
 
-            # @rootId .pcj-inline-form .form-control {
+            .pcj-cajas-scope .pcj-inline-form .form-control {
                 min-width: 150px
             }
 
-        # @rootId .pcj-incomplete {
+        .pcj-cajas-scope .pcj-incomplete {
             border: 1px dashed #c7b8f7;
             border-radius: 13px;
             background: #faf8ff;
@@ -458,7 +458,7 @@
             gap: 8px
         }
 
-        # @rootId .pcj-incomplete-card {
+        .pcj-cajas-scope .pcj-incomplete-card {
             border: 1px solid #ddd4f7;
             border-radius: 10px;
             background: #fff;
@@ -469,7 +469,7 @@
             align-items: center
         }
 
-        # @rootId .pcj-progress {
+        .pcj-cajas-scope .pcj-progress {
             height: 6px;
             border-radius: 999px;
             background: #eceff4;
@@ -477,13 +477,13 @@
             margin-top: 5px
         }
 
-            # @rootId .pcj-progress > span {
+            .pcj-cajas-scope .pcj-progress > span {
                 display: block;
                 height: 100%;
                 background: var(--pcj-purple)
             }
 
-        # @rootId .pcj-empty {
+        .pcj-cajas-scope .pcj-empty {
             border: 1px dashed #d7dee8;
             border-radius: 11px;
             padding: 12px;
@@ -494,7 +494,7 @@
             background: #fafbfc
         }
 
-        # @rootId .pcj-message {
+        .pcj-cajas-scope .pcj-message {
             display: none;
             border-radius: 10px;
             padding: 9px 11px;
@@ -502,99 +502,445 @@
             font-weight: 800
         }
 
-            # @rootId .pcj-message.show {
+            .pcj-cajas-scope .pcj-message.show {
                 display: block
             }
 
-            # @rootId .pcj-message.ok {
+            .pcj-cajas-scope .pcj-message.ok {
                 background: #eaf7f1;
                 color: #116b44;
                 border: 1px solid #b7e1ce
             }
 
-            # @rootId .pcj-message.error {
+            .pcj-cajas-scope .pcj-message.error {
                 background: #fff0ef;
                 color: #a62b25;
                 border: 1px solid #f0b8b4
             }
 
-    html[data-nsq-theme="dark"] # @rootId {
+    html[data-nsq-theme="dark"] .pcj-cajas-scope {
         --pcj-text: #e5e7eb;
         --pcj-muted: #94a3b8;
         --pcj-line: rgba(255,255,255,.1)
     }
 
-        html[data-nsq-theme="dark"] # @rootId .pcj-head, html[data-nsq-theme="dark"] # @rootId .pcj-side, html[data-nsq-theme="dark"] # @rootId .pcj-stat, html[data-nsq-theme="dark"] # @rootId .pcj-panel, html[data-nsq-theme="dark"] # @rootId .pcj-box, html[data-nsq-theme="dark"] # @rootId .pcj-incomplete-card {
+        html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-head, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-side, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-stat, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-panel, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-box, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-incomplete-card {
             background: #111c2d
         }
 
-        html[data-nsq-theme="dark"] # @rootId .pcj-side-head, html[data-nsq-theme="dark"] # @rootId .pcj-kpi, html[data-nsq-theme="dark"] # @rootId .pcj-incomplete {
+        html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-side-head, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-kpi, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-incomplete {
             background: #0e1828
         }
 
-        html[data-nsq-theme="dark"] # @rootId .pcj-head h3, html[data-nsq-theme="dark"] # @rootId .pcj-side-title strong, html[data-nsq-theme="dark"] # @rootId .pcj-stat strong, html[data-nsq-theme="dark"] # @rootId .pcj-panel h4, html[data-nsq-theme="dark"] # @rootId .pcj-box-main strong, html[data-nsq-theme="dark"] # @rootId .pcj-section-title h4 {
+        html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-head h3, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-side-title strong, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-stat strong, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-panel h4, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-box-main strong, html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-section-title h4 {
             color: #f8fafc
         }
 
-        html[data-nsq-theme="dark"] # @rootId .form-control, html[data-nsq-theme="dark"] # @rootId .form-select {
+        html[data-nsq-theme="dark"] .pcj-cajas-scope .form-control, html[data-nsq-theme="dark"] .pcj-cajas-scope .form-select {
             background: #0b1422;
             color: #f8fafc;
             border-color: rgba(255,255,255,.13)
         }
 
     @@media(max-width:1100px) {
-        # @rootId .pcj-summary {
+        .pcj-cajas-scope .pcj-summary {
             grid-template-columns: repeat(3,1fr)
         }
 
-        # @rootId .pcj-kpis {
+        .pcj-cajas-scope .pcj-kpis {
             grid-template-columns: repeat(3,1fr)
         }
 
-        # @rootId .pcj-box {
+        .pcj-cajas-scope .pcj-box {
             grid-template-columns: 1fr 1fr
         }
 
-        # @rootId .pcj-box-actions {
+        .pcj-cajas-scope .pcj-box-actions {
             max-width: none;
             justify-content: flex-start
         }
     }
 
     @@media(max-width:760px) {
-        # @rootId .pcj-head, # @rootId .pcj-side-head {
+        .pcj-cajas-scope .pcj-head, .pcj-cajas-scope .pcj-side-head {
             flex-direction: column
         }
 
-        # @rootId .pcj-head-actions, # @rootId .pcj-side-badges {
+        .pcj-cajas-scope .pcj-head-actions, .pcj-cajas-scope .pcj-side-badges {
             justify-content: flex-start
         }
 
-        # @rootId .pcj-summary, # @rootId .pcj-kpis, # @rootId .pcj-actions {
+        .pcj-cajas-scope .pcj-summary, .pcj-cajas-scope .pcj-kpis, .pcj-cajas-scope .pcj-actions {
             grid-template-columns: 1fr 1fr
         }
 
-        # @rootId .pcj-box, # @rootId .pcj-incomplete-card {
+        .pcj-cajas-scope .pcj-box, .pcj-cajas-scope .pcj-incomplete-card {
             grid-template-columns: 1fr
         }
 
-        # @rootId .pcj-box-actions, # @rootId .pcj-inline-form {
+        .pcj-cajas-scope .pcj-box-actions, .pcj-cajas-scope .pcj-inline-form {
             justify-content: flex-start
         }
     }
 
     @@media(max-width:480px) {
-        # @rootId .pcj-summary, # @rootId .pcj-kpis, # @rootId .pcj-actions, # @rootId .pcj-form-grid {
+        .pcj-cajas-scope .pcj-summary, .pcj-cajas-scope .pcj-kpis, .pcj-cajas-scope .pcj-actions, .pcj-cajas-scope .pcj-form-grid {
             grid-template-columns: 1fr
         }
 
-        # @rootId .pcj-form-row {
+        .pcj-cajas-scope .pcj-form-row {
             grid-template-columns: 1fr
         }
+    }
+
+
+    /* ===== Ajuste visual Centro Operativo: misma linea visual que Gestion de Cajas ===== */
+    .pcj-cajas-scope {
+        gap: 14px;
+        padding: 2px 2px 8px;
+        font-size: .8rem
+    }
+
+        .pcj-cajas-scope .pcj-head {
+            position: relative;
+            overflow: hidden;
+            padding: 18px 20px;
+            border: 0;
+            border-radius: 18px;
+            background: linear-gradient(135deg,#00347a 0%,#004aad 52%,#1769cf 100%);
+            box-shadow: 0 16px 34px rgba(0,74,173,.18)
+        }
+
+            .pcj-cajas-scope .pcj-head::after {
+                content: "";
+                position: absolute;
+                width: 220px;
+                height: 220px;
+                border-radius: 50%;
+                right: -80px;
+                top: -115px;
+                background: rgba(255,255,255,.08);
+                pointer-events: none
+            }
+
+            .pcj-cajas-scope .pcj-head h3 {
+                color: #fff;
+                font-size: 1.12rem;
+                letter-spacing: -.01em;
+                position: relative;
+                z-index: 1
+            }
+
+            .pcj-cajas-scope .pcj-head p {
+                color: rgba(255,255,255,.88);
+                font-size: .73rem;
+                line-height: 1.45;
+                position: relative;
+                z-index: 1
+            }
+
+        .pcj-cajas-scope .pcj-head-actions {
+            position: relative;
+            z-index: 1
+        }
+
+        .pcj-cajas-scope .pcj-head .pcj-chip {
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.28);
+            color: #fff;
+            backdrop-filter: blur(4px)
+        }
+
+            .pcj-cajas-scope .pcj-head .pcj-chip.warn {
+                background: rgba(255,247,230,.95);
+                border-color: #fedf89;
+                color: #92400e
+            }
+
+            .pcj-cajas-scope .pcj-head .pcj-chip.green {
+                background: rgba(236,253,243,.96);
+                border-color: #abefc6;
+                color: #067647
+            }
+
+            .pcj-cajas-scope .pcj-head .pcj-chip.red {
+                background: rgba(254,243,242,.96);
+                border-color: #fecdca;
+                color: #b42318
+            }
+
+        .pcj-cajas-scope .pcj-head .pcj-btn.outline {
+            background: rgba(255,255,255,.12);
+            border: 1px solid rgba(255,255,255,.42);
+            color: #fff
+        }
+
+            .pcj-cajas-scope .pcj-head .pcj-btn.outline:hover {
+                background: #fff;
+                color: #004aad
+            }
+
+        .pcj-cajas-scope .pcj-summary {
+            gap: 10px
+        }
+
+        .pcj-cajas-scope .pcj-stat {
+            position: relative;
+            overflow: hidden;
+            min-height: 88px;
+            padding: 12px 13px;
+            border-radius: 15px;
+            box-shadow: 0 8px 22px rgba(15,23,42,.06)
+        }
+
+            .pcj-cajas-scope .pcj-stat::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 4px;
+                background: #98a2b3
+            }
+
+            .pcj-cajas-scope .pcj-stat:nth-child(1)::before {
+                background: #f79009
+            }
+
+            .pcj-cajas-scope .pcj-stat:nth-child(2)::before {
+                background: #7f56d9
+            }
+
+            .pcj-cajas-scope .pcj-stat:nth-child(3)::before {
+                background: #d92d20
+            }
+
+            .pcj-cajas-scope .pcj-stat:nth-child(4)::before {
+                background: #12b76a
+            }
+
+            .pcj-cajas-scope .pcj-stat:nth-child(5)::before {
+                background: #2e90fa
+            }
+
+            .pcj-cajas-scope .pcj-stat:nth-child(6)::before {
+                background: #6941c6
+            }
+
+            .pcj-cajas-scope .pcj-stat span {
+                font-size: .6rem;
+                letter-spacing: .035em
+            }
+
+            .pcj-cajas-scope .pcj-stat strong {
+                margin-top: 7px;
+                font-size: 1.35rem;
+                line-height: 1
+            }
+
+        .pcj-cajas-scope .pcj-side {
+            border-radius: 18px;
+            box-shadow: 0 10px 26px rgba(15,23,42,.055)
+        }
+
+        .pcj-cajas-scope .pcj-side-head {
+            padding: 13px 15px;
+            background: linear-gradient(180deg,#fff,#f6f9fd)
+        }
+
+        .pcj-cajas-scope .pcj-side-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: #e8f1ff;
+            font-size: 1rem
+        }
+
+        .pcj-cajas-scope .pcj-side-title strong {
+            font-size: .9rem
+        }
+
+        .pcj-cajas-scope .pcj-side-title small {
+            font-size: .65rem;
+            line-height: 1.35
+        }
+
+        .pcj-cajas-scope .pcj-body {
+            padding: 14px 15px;
+            gap: 14px
+        }
+
+        .pcj-cajas-scope .pcj-kpis {
+            gap: 9px
+        }
+
+        .pcj-cajas-scope .pcj-kpi {
+            min-height: 70px;
+            padding: 10px 11px;
+            border-radius: 12px;
+            background: linear-gradient(180deg,#fff,#f9fbfe)
+        }
+
+            .pcj-cajas-scope .pcj-kpi b {
+                font-size: 1.02rem;
+                color: #172033
+            }
+
+            .pcj-cajas-scope .pcj-kpi span {
+                font-size: .59rem
+            }
+
+        .pcj-cajas-scope .pcj-actions {
+            gap: 11px
+        }
+
+        .pcj-cajas-scope .pcj-panel {
+            padding: 13px;
+            border-radius: 15px;
+            box-shadow: 0 6px 18px rgba(15,23,42,.045)
+        }
+
+        .pcj-cajas-scope .pcj-actions > .pcj-panel:first-child {
+            border: 2px solid #86efac;
+            background: linear-gradient(135deg,#ecfdf3 0%,#fff 74%)
+        }
+
+            .pcj-cajas-scope .pcj-actions > .pcj-panel:first-child h4 {
+                color: #05603a;
+                font-size: .82rem
+            }
+
+        .pcj-cajas-scope .pcj-actions > .pcj-panel:nth-child(2) {
+            border-color: #bfdbfe;
+            background: linear-gradient(135deg,#eff8ff 0%,#fff 76%)
+        }
+
+            .pcj-cajas-scope .pcj-actions > .pcj-panel:nth-child(2) h4 {
+                color: #174ea6;
+                font-size: .82rem
+            }
+
+        .pcj-cajas-scope label {
+            font-size: .59rem;
+            letter-spacing: .025em
+        }
+
+        .pcj-cajas-scope .form-control, .pcj-cajas-scope .form-select {
+            min-height: 40px;
+            border-radius: 10px;
+            background: #fff
+        }
+
+            .pcj-cajas-scope .form-control:focus, .pcj-cajas-scope .form-select:focus {
+                border-color: #7aa7e8;
+                box-shadow: 0 0 0 .18rem rgba(0,74,173,.11)
+            }
+
+        .pcj-cajas-scope .pcj-actions > .pcj-panel:first-child .form-control:focus {
+            border-color: #22c55e;
+            box-shadow: 0 0 0 .18rem rgba(34,197,94,.12)
+        }
+
+        .pcj-cajas-scope .pcj-btn {
+            min-height: 38px;
+            border-radius: 10px;
+            padding: 8px 12px;
+            transition: transform .12s ease,box-shadow .12s ease,filter .12s ease
+        }
+
+            .pcj-cajas-scope .pcj-btn:not(:disabled):hover {
+                transform: translateY(-1px);
+                filter: brightness(.98);
+                box-shadow: 0 5px 12px rgba(15,23,42,.11)
+            }
+
+        .pcj-cajas-scope .pcj-section-title {
+            padding-top: 2px
+        }
+
+            .pcj-cajas-scope .pcj-section-title h4 {
+                font-size: .82rem;
+                color: #17345f
+            }
+
+        .pcj-cajas-scope .pcj-boxes {
+            gap: 9px
+        }
+
+        .pcj-cajas-scope .pcj-box {
+            padding: 11px 12px;
+            border-radius: 13px;
+            box-shadow: 0 4px 13px rgba(15,23,42,.035)
+        }
+
+        .pcj-cajas-scope .pcj-box-main strong {
+            font-size: .78rem
+        }
+
+        .pcj-cajas-scope .pcj-state {
+            padding: 5px 8px
+        }
+
+        .pcj-cajas-scope .pcj-incomplete {
+            padding: 13px;
+            border-radius: 15px;
+            background: linear-gradient(135deg,#faf8ff,#fff);
+            box-shadow: 0 5px 16px rgba(105,65,198,.045)
+        }
+
+        .pcj-cajas-scope .pcj-incomplete-card {
+            padding: 10px 11px;
+            border-radius: 11px
+        }
+
+        .pcj-cajas-scope .pcj-alert {
+            padding: 11px 13px;
+            border-radius: 12px;
+            line-height: 1.45
+        }
+
+        .pcj-cajas-scope .pcj-message {
+            position: sticky;
+            top: 4px;
+            z-index: 5;
+            box-shadow: 0 8px 20px rgba(15,23,42,.08)
+        }
+
+    html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-head {
+        background: linear-gradient(135deg,#0b3267,#0b4ea2)
+    }
+
+    html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-kpi b {
+        color: #f8fafc
+    }
+
+    html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-actions > .pcj-panel:first-child {
+        background: linear-gradient(135deg,rgba(6,95,70,.22),#111c2d 70%);
+        border-color: rgba(34,197,94,.38)
+    }
+
+    html[data-nsq-theme="dark"] .pcj-cajas-scope .pcj-actions > .pcj-panel:nth-child(2) {
+        background: linear-gradient(135deg,rgba(23,78,166,.25),#111c2d 70%);
+        border-color: rgba(96,165,250,.36)
+    }
+
+    @@media(max-width:760px) {
+        .pcj-cajas-scope .pcj-head {
+            padding: 15px
+        }
+
+        .pcj-cajas-scope .pcj-stat {
+            min-height: 78px
+        }
+
+            .pcj-cajas-scope .pcj-stat strong {
+                font-size: 1.15rem
+            }
     }
 </style>
 
 <div id="@rootId"
+     class="pcj-cajas-scope"
      data-cajas-contenido
      data-cajas-auto-refrescar="@(Model.RequiereAutoRefresco ? "true" : "false")">
     <div class="pcj-head">
