@@ -3051,6 +3051,12 @@ SELECT
           )
     ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS TieneCargaActiva
 FROM dbo.Produccion_SecadoMaterial sm WITH(UPDLOCK,HOLDLOCK)
+INNER JOIN dbo.Produccion_RecepcionMateriales r WITH(UPDLOCK,HOLDLOCK)
+  ON r.RecepcionMaterialID=sm.RecepcionMaterialID
+ AND r.Activo=1
+ AND r.TipoOrigen=N'MP'
+ AND r.EstadoRecepcion IN(N'RECIBIDO_COMPLETO',N'RECIBIDO_PARCIAL')
+ AND ISNULL(r.CantidadRecibidaProduccion,0)>0
 LEFT JOIN dbo.Planeacion_ProgramaProduccion pp ON pp.ProgramaProduccionID=sm.ProgramaProduccionID
 OUTER APPLY
 (

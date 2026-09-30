@@ -25,6 +25,7 @@ public sealed class IndicadoresDashboardVm
     public List<IndicadoresProgramaProduccionVm> ProgramasProduccion { get; set; } = new();
     public List<IndicadoresParoMotivoVm> ParosMotivos { get; set; } = new();
     public List<IndicadoresParoMaquinaVm> ParosMaquinas { get; set; } = new();
+    public List<IndicadoresTiempoDepartamentoVm> TiemposDepartamentos { get; set; } = new();
     public List<IndicadoresAlertaVm> Alertas { get; set; } = new();
 
     public int DiasPeriodo => Math.Max(1, (Hasta.Date - Desde.Date).Days + 1);
@@ -356,6 +357,19 @@ public sealed class IndicadoresComprasKpiVm
     public int RecepcionesATiempo { get; set; }
 
     public decimal RecepcionATiempoPct => Recepciones <= 0 ? 0m : RecepcionesATiempo * 100m / Recepciones;
+}
+
+public sealed class IndicadoresTiempoDepartamentoVm
+{
+    public string Departamento { get; set; } = string.Empty;
+    public int Eventos { get; set; }
+    public decimal PromedioMinutos { get; set; }
+    public decimal MaximoMinutos { get; set; }
+    public string PeorReferencia { get; set; } = string.Empty;
+    public string PeorDetalle { get; set; } = string.Empty;
+    public decimal PeorMinutos { get; set; }
+    public decimal PromedioHoras => PromedioMinutos / 60m;
+    public decimal MaximoHoras => MaximoMinutos / 60m;
 }
 
 public sealed class IndicadoresAlertaVm

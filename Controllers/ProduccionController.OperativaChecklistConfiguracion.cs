@@ -105,16 +105,12 @@ public sealed partial class ProduccionController
             return StatusCode(StatusCodes.Status409Conflict, new { ok = false, mensaje = "Primero debes completar el checklist de arranque GQ-F-PR01-06." });
 
         await CargarEstadoCalidadChecklistAsync(checklist, cn);
-        if (checklist.EstatusID != ProduccionChecklistEstatus.ValidadoPorCalidad)
-        {
-            var esperandoCalidad = checklist.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad;
-            var mensaje = esperandoCalidad
-                ? "Producción ya terminó el checklist. Debes esperar la validación de Calidad antes de confirmar la configuración técnica."
-                : checklist.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste
-                    ? "Calidad devolvió el checklist. Corrige el GQ-F-PR01-06 antes de continuar con la configuración técnica."
-                    : "Completa y envía el checklist GQ-F-PR01-06 a Calidad antes de continuar con la configuración técnica.";
-            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad, mensaje });
-        }
+        if (checklist.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste)
+            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad = false, mensaje = "Calidad devolvió el checklist. Corrige el GQ-F-PR01-06 antes de continuar con la configuración técnica." });
+
+        if (checklist.EstatusID != ProduccionChecklistEstatus.PendienteValidacionCalidad &&
+            checklist.EstatusID != ProduccionChecklistEstatus.ValidadoPorCalidad)
+            return StatusCode(StatusCodes.Status409Conflict, new { ok = false, esperandoCalidad = false, mensaje = "Completa el checklist de Producción antes de confirmar la configuración técnica." });
 
         var vm = await ConstruirConfiguracionTecnicoAsync(contexto, cn);
         var permisos = await ObtenerPermisosProduccionUsuarioAsync(ObtenerUsuarioID(), cn);
@@ -206,8 +202,10 @@ public sealed partial class ProduccionController
         if (checklist.EstatusID == ProduccionChecklistEstatus.ValidadoPorCalidad)
             return (true, false, string.Empty);
 
+        // NSQ_ORDEN_CONFIG_CALIDAD_V1_0: la configuración técnica se captura antes
+        // de la decisión de Calidad. El checklist ya enviado a Calidad es suficiente.
         if (checklist.EstatusID == ProduccionChecklistEstatus.PendienteValidacionCalidad)
-            return (false, true, "Producción ya terminó el checklist. Debes esperar la validación de Calidad antes de confirmar la configuración técnica.");
+            return (true, true, string.Empty);
 
         if (checklist.EstatusID == ProduccionChecklistEstatus.RechazadoRequiereAjuste)
             return (false, false, "Calidad devolvió el checklist. Corrige el GQ-F-PR01-06 antes de continuar con la configuración técnica.");

@@ -75,7 +75,10 @@ public sealed class IndicadoresController : Controller
             await CargarDepartamentosAsync(connection, vm, cancellationToken);
 
         if (seccion == "general")
+        {
+            await CargarTiemposFlujoDepartamentosAsync(connection, vm, cancellationToken);
             ConstruirAlertas(vm);
+        }
 
         return View(vm);
     }
@@ -1702,6 +1705,62 @@ WHERE r.Activo=1
             "compras" => "compras",
             _ => "general"
         };
+    }
+
+    // NSQ_INDICADORES_TIEMPOS_FLUJO_V1_0
+    private static async Task CargarTiemposFlujoDepartamentosAsync(
+        SqlConnection connection,
+        IndicadoresDashboardVm vm,
+        CancellationToken cancellationToken)
+    {
+        const string existeSql = "SELECT CASE WHEN OBJECT_ID(N'dbo.vw_Indicadores_TiemposFlujoDepartamento',N'V') IS NULL THEN 0 ELSE 1 END;";
+        await using (var existe = new SqlCommand(existeSql, connection))
+        {
+            if (Convert.ToInt32(await existe.ExecuteScalarAsync(cancellationToken)) == 0)
+                return;
+        }
+
+        const string sql = @"
+WITH B AS
+(
+    SELECT Departamento,Minutos,Referencia,Detalle,
+           ROW_NUMBER() OVER(PARTITION BY Departamento ORDER BY Minutos DESC,FechaEntrada DESC) AS rn
+    FROM dbo.vw_Indicadores_TiemposFlujoDepartamento
+    WHERE FechaEntrada>=@Desde
+      AND FechaEntrada<@HastaExclusiva
+      AND Minutos>=0
+), A AS
+(
+    SELECT Departamento,COUNT(*) Eventos,
+           AVG(CONVERT(decimal(18,2),Minutos)) PromedioMinutos,
+           MAX(CONVERT(decimal(18,2),Minutos)) MaximoMinutos
+    FROM B
+    GROUP BY Departamento
+)
+SELECT a.Departamento,a.Eventos,a.PromedioMinutos,a.MaximoMinutos,
+       ISNULL(w.Referencia,N'') PeorReferencia,
+       ISNULL(w.Detalle,N'') PeorDetalle,
+       CONVERT(decimal(18,2),ISNULL(w.Minutos,0)) PeorMinutos
+FROM A a
+LEFT JOIN B w ON w.Departamento=a.Departamento AND w.rn=1
+ORDER BY a.PromedioMinutos DESC,a.Departamento;";
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@Desde", SqlDbType.DateTime2).Value = vm.Desde.Date;
+        command.Parameters.Add("@HastaExclusiva", SqlDbType.DateTime2).Value = vm.Hasta.Date.AddDays(1);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            vm.TiemposDepartamentos.Add(new IndicadoresTiempoDepartamentoVm
+            {
+                Departamento = reader["Departamento"]?.ToString() ?? string.Empty,
+                Eventos = Convert.ToInt32(reader["Eventos"]),
+                PromedioMinutos = Convert.ToDecimal(reader["PromedioMinutos"]),
+                MaximoMinutos = Convert.ToDecimal(reader["MaximoMinutos"]),
+                PeorReferencia = reader["PeorReferencia"]?.ToString() ?? string.Empty,
+                PeorDetalle = reader["PeorDetalle"]?.ToString() ?? string.Empty,
+                PeorMinutos = Convert.ToDecimal(reader["PeorMinutos"])
+            });
+        }
     }
 
     private static void AddPeriodo(SqlCommand command, DateTime desde, DateTime hasta)

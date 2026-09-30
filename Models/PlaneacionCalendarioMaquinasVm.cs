@@ -154,6 +154,10 @@ namespace ERP.NSQuell.Models
 
         // NSQ_PRECOMMIT_URGENTE_REFERENCIA_MANUAL_V2
         public string? NumeroParteUrgente { get; set; }
+
+        // NSQ_INTERRUPCION_LIBERAR_MAQUINA_V1_0
+        // Libera fisicamente la maquina sin convertir la OF pausada en terminada/cancelada.
+        public bool LiberarMaquina { get; set; }
     }
     public sealed class PlaneacionCalendarioBloqueVm
     {

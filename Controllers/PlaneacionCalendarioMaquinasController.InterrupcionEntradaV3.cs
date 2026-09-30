@@ -289,11 +289,11 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID AND pp.Activo=1;";
             }
 
             await PausarProduccionPorInterrupcionUrgenteAsync(
-                actual,usuarioId,cn,tx);
+                actual,request.LiberarMaquina,usuarioId,cn,tx);
 
             if(pareja!=null)
                 await PausarProduccionPorInterrupcionUrgenteAsync(
-                    pareja,usuarioId,cn,tx);
+                    pareja,request.LiberarMaquina,usuarioId,cn,tx);
 
             await tx.CommitAsync();
 

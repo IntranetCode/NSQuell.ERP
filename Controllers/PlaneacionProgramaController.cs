@@ -1,4 +1,4 @@
-﻿using ERP.NSQuell.Models;
+using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
@@ -70,7 +70,19 @@ SELECT
     COALESCE(NULLIF(d.MaquinaSugeridaCodigo,''),maq.Codigo) AS MaquinaSugeridaCodigo,
     COALESCE(NULLIF(d.MaquinaSugeridaNombre,''),maq.Nombre) AS MaquinaSugeridaNombre,
     sust.MaquinaSustitutaID,sust.MaquinaSustitutaCodigo,sust.MaquinaSustitutaNombre,
-    t.Ciclo,t.Cavidades,t.ObjetivoHora,t.Color,t.TipoSecado,t.HorasSecado,t.HorasSecadoTexto,
+    t.Ciclo,t.Cavidades,t.ObjetivoHora,
+    COALESCE(
+        NULLIF(LTRIM(RTRIM(t.Color)),N''),
+        (
+            SELECT TOP(1) NULLIF(LTRIM(RTRIM(ppc.Color)),N'')
+            FROM dbo.Planeacion_ProgramaProduccion ppc
+            WHERE ppc.ParteID=d.ParteID
+              AND ppc.Activo=1
+              AND NULLIF(LTRIM(RTRIM(ISNULL(ppc.Color,N''))),N'') IS NOT NULL
+            ORDER BY ISNULL(ppc.FechaModificacion,ppc.FechaCreacion) DESC,ppc.ProgramaProduccionID DESC
+        )
+    ) AS Color,
+    t.TipoSecado,t.HorasSecado,t.HorasSecadoTexto,
     ISNULL(pt.Disponible,0) AS PTDisponible,
     ISNULL(mp.Disponible,0) AS MPDisponible,
     ISNULL(emb.Disponible,0) AS EmbalajeDisponible,
@@ -894,6 +906,9 @@ VALUES
             if (vm == null) { TempData["Error"] = "No se encontró la necesidad seleccionada."; return RedirectToAction(nameof(Index)); }
             // NSQ_SLIDING_CAM_DATOS_CANONICOS_V1
             await AplicarDatosCanonicosProgramaAsync(vm);
+            // NSQ_MOLDES_SELECCION_MULTIPLE_V1_2
+            // Un solo molde relacionado se precarga; con dos o mas Planeacion debe elegirlo explicitamente.
+            await NormalizarMoldeInicialRelacionadoAsync(vm);
             if (vm.PiezasAProducir <= 0) { TempData["Error"] = "La necesidad seleccionada ya no tiene piezas pendientes por producir."; return RedirectToAction(nameof(Index)); }
             vm.CantidadBasePrograma = vm.PiezasAProducir;
             vm.CantidadProgramada = vm.PiezasAProducir;
@@ -1290,6 +1305,135 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
         }
 
 
+        // NSQ_ABASTO_OF_REAL_V1_0
+        private sealed class AbastoGenerarOFResultado
+        {
+            public decimal MpRequeridaKg { get; init; }
+            public decimal MpDisponibleKg { get; init; }
+            public decimal EmbalajeRequerido { get; init; }
+            public decimal EmbalajeDisponible { get; init; }
+            public int PtDisponible { get; init; }
+            public bool TieneMaterialConfigurado { get; init; }
+            public bool TieneEmbalajeConfigurado { get; init; }
+            public bool Permitido =>
+                TieneMaterialConfigurado &&
+                TieneEmbalajeConfigurado &&
+                MpDisponibleKg + 0.0005m >= MpRequeridaKg &&
+                EmbalajeDisponible + 0.0005m >= EmbalajeRequerido;
+
+            public string Mensaje
+            {
+                get
+                {
+                    if (!TieneMaterialConfigurado)
+                        return "No se puede generar la OF porque el programa no tiene materia prima configurada.";
+                    if (!TieneEmbalajeConfigurado)
+                        return "No se puede generar la OF porque el programa no tiene embalaje configurado.";
+                    if (MpDisponibleKg + 0.0005m < MpRequeridaKg)
+                        return $"MP insuficiente. Requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg.";
+                    if (EmbalajeDisponible + 0.0005m < EmbalajeRequerido)
+                        return $"Embalaje insuficiente. Requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}.";
+                    return "Abasto suficiente para generar la OF.";
+                }
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> AbastoGenerarOF(int programaProduccionId)
+        {
+            if (ObtenerUsuarioID() <= 0)
+                return Unauthorized(new { ok = false, mensaje = "La sesión terminó." });
+            if (programaProduccionId <= 0)
+                return BadRequest(new { ok = false, mensaje = "Programa inválido." });
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            var abasto = await ObtenerAbastoGenerarOFAsync(programaProduccionId, cn, null);
+            if (abasto == null)
+                return NotFound(new { ok = false, mensaje = "No se encontró el programa." });
+
+            return Json(new
+            {
+                ok = true,
+                permitido = abasto.Permitido,
+                ptDisponible = abasto.PtDisponible,
+                mpRequeridaKg = abasto.MpRequeridaKg,
+                mpDisponibleKg = abasto.MpDisponibleKg,
+                embalajeRequerido = abasto.EmbalajeRequerido,
+                embalajeDisponible = abasto.EmbalajeDisponible,
+                mensaje = abasto.Mensaje
+            });
+        }
+
+        private static async Task<AbastoGenerarOFResultado?> ObtenerAbastoGenerarOFAsync(
+            int programaProduccionId,
+            SqlConnection cn,
+            SqlTransaction? tx)
+        {
+            const string sql = @"
+SELECT
+    pp.ProgramaProduccionID,
+    COALESCE(pp.MaterialID,t.MaterialID) AS MaterialID,
+    COALESCE(NULLIF(pp.EmbalajeCodigo,N''),NULLIF(t.EmbalajeCodigo,N'')) AS EmbalajeCodigo,
+    CONVERT(decimal(18,4),COALESCE(
+        pp.CantidadMpKg,
+        CONVERT(decimal(18,4),ISNULL(pp.CantidadProgramada,0)) *
+        CONVERT(decimal(18,6),ISNULL(COALESCE(pp.PesoBrutoPieza,t.PesoBrutoPieza),0))
+    )) AS MpRequeridaKg,
+    CONVERT(decimal(18,4),COALESCE(
+        pp.CantidadEmbalajes,
+        CASE
+          WHEN ISNULL(COALESCE(pp.PiezasPorEmbalaje,t.PiezasPorEmbalaje),0)>0
+          THEN CEILING(CONVERT(decimal(18,4),ISNULL(pp.CantidadProgramada,0)) /
+                       CONVERT(decimal(18,4),COALESCE(pp.PiezasPorEmbalaje,t.PiezasPorEmbalaje)))
+          ELSE 0 END
+    )) AS EmbalajeRequerido,
+    CONVERT(decimal(18,4),ISNULL(mp.Disponible,0)) AS MpDisponibleKg,
+    CONVERT(decimal(18,4),ISNULL(emb.Disponible,0)) AS EmbalajeDisponible,
+    CONVERT(int,ISNULL(pt.Disponible,0)) AS PtDisponible
+FROM dbo.Planeacion_ProgramaProduccion pp
+LEFT JOIN dbo.ERP_ParteDatosTecnicos t
+  ON t.ParteID=pp.ParteID AND t.Activo=1
+OUTER APPLY
+(
+    SELECT SUM(CONVERT(decimal(18,4),i.Disponible)) AS Disponible
+    FROM dbo.vw_AlmacenMPInventario i
+    WHERE i.MaterialID=COALESCE(pp.MaterialID,t.MaterialID)
+      AND UPPER(LTRIM(RTRIM(ISNULL(i.TipoMP,N'V')))) IN(N'V',N'VIRGEN')
+) mp
+OUTER APPLY
+(
+    SELECT SUM(CONVERT(decimal(18,4),i.Disponible)) AS Disponible
+    FROM dbo.vw_AlmacenEmbalajesInventario i
+    WHERE UPPER(LTRIM(RTRIM(ISNULL(i.Codigo,N''))))=
+          UPPER(LTRIM(RTRIM(ISNULL(COALESCE(NULLIF(pp.EmbalajeCodigo,N''),t.EmbalajeCodigo),N''))))
+) emb
+OUTER APPLY
+(
+    SELECT SUM(CONVERT(decimal(18,4),i.Disponible)) AS Disponible
+    FROM dbo.vw_AlmacenPTInventario i
+    WHERE i.ParteID=pp.ParteID
+) pt
+WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
+  AND pp.Activo=1;";
+
+            await using var cmd = tx == null ? new SqlCommand(sql, cn) : new SqlCommand(sql, cn, tx);
+            cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaProduccionId;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync()) return null;
+
+            return new AbastoGenerarOFResultado
+            {
+                MpRequeridaKg = rd["MpRequeridaKg"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MpRequeridaKg"]),
+                MpDisponibleKg = rd["MpDisponibleKg"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["MpDisponibleKg"]),
+                EmbalajeRequerido = rd["EmbalajeRequerido"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["EmbalajeRequerido"]),
+                EmbalajeDisponible = rd["EmbalajeDisponible"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["EmbalajeDisponible"]),
+                PtDisponible = rd["PtDisponible"] == DBNull.Value ? 0 : Convert.ToInt32(rd["PtDisponible"]),
+                TieneMaterialConfigurado = rd["MaterialID"] != DBNull.Value,
+                TieneEmbalajeConfigurado = rd["EmbalajeCodigo"] != DBNull.Value && !string.IsNullOrWhiteSpace(rd["EmbalajeCodigo"]?.ToString())
+            };
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> GenerarOF(int programaProduccionId)
@@ -1334,6 +1478,20 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                     await tx.RollbackAsync();
                     TempData["Error"] = "El programa no tiene cantidad programada válida.";
                     return RedirectToAction(nameof(Index));
+                }
+
+                var abasto = await ObtenerAbastoGenerarOFAsync(programaProduccionId, cn, (SqlTransaction)tx);
+                if (abasto == null)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = "No se pudo validar el abasto del programa.";
+                    return RedirectToAction(nameof(Maquinas));
+                }
+                if (!abasto.Permitido)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] = abasto.Mensaje + $" PT disponible de la parte: {abasto.PtDisponible:N0}.";
+                    return RedirectToAction(nameof(Maquinas));
                 }
 
                 var folioOF = await GenerarFolioOFAsync(cn, (SqlTransaction)tx);
@@ -1410,7 +1568,17 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
             const string sql = @"
 SELECT r.ReleaseID,r.FolioRelease,r.ClienteID,ISNULL(c.Nombre,r.ClienteNombre) AS ClienteNombre,d.ReleaseDetalleID,d.ParteID,d.NumeroParte,d.ReferenciaSAP,d.DesignacionDescripcionSAP,d.FechaRequerida,d.CantidadRequerida,d.ProgramaProduccionID,d.SolicitudProduccionID,
 (SELECT TOP(1)sd.SolicitudProduccionDetalleID FROM dbo.SolicitudesProduccionDetalle sd WHERE sd.SolicitudProduccionID=d.SolicitudProduccionID AND sd.Activo=1 AND sd.Renglon=d.Renglon AND(sd.ParteID=d.ParteID OR(sd.ParteID IS NULL AND d.ParteID IS NULL)) ORDER BY sd.SolicitudProduccionDetalleID) AS SolicitudProduccionDetalleID,
-t.Color,COALESCE(d.MaterialID,t.MaterialID) AS MaterialID,COALESCE(NULLIF(d.MaterialCodigo,''),t.MaterialCodigo) AS MaterialCodigo,
+COALESCE(
+    NULLIF(LTRIM(RTRIM(t.Color)),N''),
+    (
+        SELECT TOP(1) NULLIF(LTRIM(RTRIM(ppc.Color)),N'')
+        FROM dbo.Planeacion_ProgramaProduccion ppc
+        WHERE ppc.ParteID=d.ParteID
+          AND ppc.Activo=1
+          AND NULLIF(LTRIM(RTRIM(ISNULL(ppc.Color,N''))),N'') IS NOT NULL
+        ORDER BY ISNULL(ppc.FechaModificacion,ppc.FechaCreacion) DESC,ppc.ProgramaProduccionID DESC
+    )
+) AS Color,COALESCE(d.MaterialID,t.MaterialID) AS MaterialID,COALESCE(NULLIF(d.MaterialCodigo,''),t.MaterialCodigo) AS MaterialCodigo,
 COALESCE(NULLIF(d.MaterialDescripcion,''),t.MaterialDescripcion) AS MaterialDescripcion,COALESCE(d.PesoBrutoPieza,t.PesoBrutoPieza) AS PesoBrutoPieza,t.PesoNetoPieza,
 COALESCE(NULLIF(d.EmbalajeCodigo,''),t.EmbalajeCodigo) AS EmbalajeCodigo,COALESCE(NULLIF(d.EmbalajeDescripcion,''),t.EmbalajeDescripcion) AS EmbalajeDescripcion,
 COALESCE(d.PiezasPorEmbalaje,t.PiezasPorEmbalaje) AS PiezasPorEmbalaje,t.PiezasPorCaja,
@@ -1780,6 +1948,12 @@ N'La OF manual fue vinculada al Programa de Producción ID '+CONVERT(NVARCHAR(20
         {
             // NSQ_SLIDING_CAM_DATOS_CANONICOS_V1
             await AplicarDatosCanonicosProgramaAsync(vm, cn, tx);
+
+            // NSQ_COLOR_MAESTRO_EDITABLE_V1_0
+            // El color capturado/editado en Planeacion se conserva como snapshot del programa
+            // y, cuando no esta vacio, tambien actualiza el maestro tecnico de la parte.
+            await SincronizarColorMaestroParteAsync(vm, cn, tx);
+
             var secuencia = await ObtenerSiguienteSecuenciaMaquinaAsync(vm.MaquinaID, cn, tx);
             const string sql = @"
 DECLARE @NuevoPrograma TABLE(ProgramaProduccionID INT NOT NULL);
@@ -1833,6 +2007,54 @@ SELECT TOP(1)ProgramaProduccionID FROM @NuevoPrograma;";
             cmd.Parameters.Add("@Observaciones", SqlDbType.NVarChar, 500).Value = (object?)vm.Observaciones ?? DBNull.Value;
             cmd.Parameters.Add("@UsuarioCreacionID", SqlDbType.Int).Value = usuarioId;
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
+        }
+        // NSQ_COLOR_MAESTRO_EDITABLE_V1_0
+        private async Task SincronizarColorMaestroParteAsync(
+            PlaneacionProgramaCrearDesdeNecesidadVm vm,
+            SqlConnection cn,
+            SqlTransaction tx)
+        {
+            if (!vm.ParteID.HasValue || vm.ParteID.Value <= 0)
+                return;
+
+            var color = (vm.Color ?? string.Empty).Trim();
+
+            // Dejarlo vacio no borra el color maestro existente. Esto evita eliminar
+            // por accidente un dato tecnico valido; simplemente el programa actual
+            // puede conservar el valor vacio si asi se capturo.
+            if (string.IsNullOrWhiteSpace(color))
+            {
+                vm.Color = null;
+                return;
+            }
+
+            if (color.Length > 100)
+                throw new InvalidOperationException("El color no puede exceder 100 caracteres.");
+
+            vm.Color = color;
+
+            const string sqlColor = @"
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.ERP_ParteDatosTecnicos
+    WHERE ParteID = @ParteID
+      AND Activo = 1
+)
+BEGIN
+    UPDATE dbo.ERP_ParteDatosTecnicos
+    SET
+        Color = @Color,
+        FechaModificacion = GETDATE()
+    WHERE ParteID = @ParteID
+      AND Activo = 1
+      AND ISNULL(LTRIM(RTRIM(Color)), N'') <> @Color;
+END;";
+
+            await using var cmdColor = new SqlCommand(sqlColor, cn, tx);
+            cmdColor.Parameters.Add("@ParteID", SqlDbType.Int).Value = vm.ParteID.Value;
+            cmdColor.Parameters.Add("@Color", SqlDbType.NVarChar, 100).Value = color;
+            await cmdColor.ExecuteNonQueryAsync();
         }
         private async Task<int?> ObtenerSiguienteSecuenciaMaquinaAsync(
             int? maquinaId,
@@ -3635,15 +3857,10 @@ WHERE TransferenciaID=@TransferenciaID
                 mostrarTodasLasMaquinas: true
             );
 
-            vm.Moldes = await CargarSelectAsync(
+            vm.Moldes = await CargarMoldesParteAsync(
                 cn,
-                @"SELECT 
-              MoldeID AS Id,
-              CodigoMolde AS Texto
-          FROM dbo.ERP_Moldes
-          WHERE Activo = 1
-          ORDER BY CodigoMolde;"
-            );
+                vm.ParteID,
+                vm.MoldeID);
 
             vm.Operadores = await CargarSelectAsync(
                 cn,
@@ -4067,6 +4284,147 @@ WHERE pp.Activo = 1
             await cmd.ExecuteNonQueryAsync();
         }
 
+
+        // NSQ_MOLDES_DEFAULT_XLSX_V1_3
+        // Conserva la seleccion automatica. El default sale de ERP_ParteMoldes.EsPrincipal,
+        // que se actualiza con el listado vigente; los demas moldes relacionados siguen disponibles.
+        private async Task NormalizarMoldeInicialRelacionadoAsync(PlaneacionProgramaCrearDesdeNecesidadVm vm)
+        {
+            if (!vm.ParteID.HasValue || vm.ParteID.Value <= 0)
+                return;
+
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+
+            const string sqlExiste = @"SELECT CASE WHEN OBJECT_ID(N'dbo.ERP_ParteMoldes',N'U') IS NULL THEN 0 ELSE 1 END;";
+            await using (var cmdExiste = new SqlCommand(sqlExiste, cn))
+            {
+                if (Convert.ToInt32(await cmdExiste.ExecuteScalarAsync()) != 1)
+                    return;
+            }
+
+            const string sql = @"
+SELECT TOP(1)
+    m.MoldeID,
+    m.CodigoMolde,
+    pm.EsPrincipal
+FROM dbo.ERP_ParteMoldes pm
+INNER JOIN dbo.ERP_Moldes m
+    ON m.MoldeID=pm.MoldeID
+WHERE pm.ParteID=@ParteID
+  AND pm.Activo=1
+  AND m.Activo=1
+ORDER BY pm.EsPrincipal DESC,m.CodigoMolde;";
+
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = vm.ParteID.Value;
+            await using var rd = await cmd.ExecuteReaderAsync();
+            if (!await rd.ReadAsync())
+                return;
+
+            vm.MoldeID = Convert.ToInt32(rd["MoldeID"]);
+            vm.MoldeCodigo = rd["CodigoMolde"] == DBNull.Value
+                ? null
+                : rd["CodigoMolde"]?.ToString()?.Trim();
+        }
+
+        // NSQ_MOLDES_PARTE_UI_V1_1
+        // Usa las relaciones N:M parte <-> molde creadas desde el listado de moldes.
+        // Cuando una parte tiene varias opciones no presenta ninguna como principal para evitar una seleccion implicita.
+        // Si PROD aun no tiene ERP_ParteMoldes, conserva el comportamiento anterior como fallback.
+        private static async Task<List<SelectListItem>> CargarMoldesParteAsync(
+            SqlConnection cn,
+            int? parteId,
+            int? moldeActualId)
+        {
+            const string sqlExiste = @"SELECT CASE WHEN OBJECT_ID(N'dbo.ERP_ParteMoldes',N'U') IS NULL THEN 0 ELSE 1 END;";
+            bool tablaRelacionExiste;
+
+            await using (var cmdExiste = new SqlCommand(sqlExiste, cn))
+            {
+                tablaRelacionExiste = Convert.ToInt32(await cmdExiste.ExecuteScalarAsync()) == 1;
+            }
+
+            const string sqlTodos = @"
+SELECT
+    MoldeID AS Id,
+    CodigoMolde AS Texto
+FROM dbo.ERP_Moldes
+WHERE Activo=1
+ORDER BY CodigoMolde;";
+
+            if (!tablaRelacionExiste || !parteId.HasValue || parteId.Value <= 0)
+                return await CargarSelectAsync(cn, sqlTodos);
+
+            var lista = new List<SelectListItem>();
+
+            const string sqlRelacionados = @"
+SELECT
+    m.MoldeID AS Id,
+    CASE
+        WHEN pm.EsPrincipal=1 THEN CONCAT(m.CodigoMolde,N' (predeterminado)')
+        ELSE m.CodigoMolde
+    END AS Texto
+FROM dbo.ERP_ParteMoldes pm
+INNER JOIN dbo.ERP_Moldes m
+    ON m.MoldeID=pm.MoldeID
+WHERE pm.ParteID=@ParteID
+  AND pm.Activo=1
+  AND m.Activo=1
+ORDER BY pm.EsPrincipal DESC,m.CodigoMolde;";
+
+            await using (var cmd = new SqlCommand(sqlRelacionados, cn))
+            {
+                cmd.Parameters.Add("@ParteID", SqlDbType.Int).Value = parteId.Value;
+
+                await using var rd = await cmd.ExecuteReaderAsync();
+                while (await rd.ReadAsync())
+                {
+                    lista.Add(new SelectListItem
+                    {
+                        Value = rd["Id"].ToString(),
+                        Text = rd["Texto"].ToString()
+                    });
+                }
+            }
+
+            // Compatibilidad con programas/Release historicos cuyo molde actual todavia no
+            // este registrado en ERP_ParteMoldes. No lo pierde ni lo cambia silenciosamente.
+            if (moldeActualId.HasValue &&
+                moldeActualId.Value > 0 &&
+                !lista.Any(x => string.Equals(
+                    x.Value,
+                    moldeActualId.Value.ToString(),
+                    StringComparison.Ordinal)))
+            {
+                const string sqlActual = @"
+SELECT TOP(1)
+    MoldeID AS Id,
+    CONCAT(CodigoMolde,N' (actual)') AS Texto
+FROM dbo.ERP_Moldes
+WHERE MoldeID=@MoldeID
+  AND Activo=1;";
+
+                await using var cmdActual = new SqlCommand(sqlActual, cn);
+                cmdActual.Parameters.Add("@MoldeID", SqlDbType.Int).Value = moldeActualId.Value;
+
+                await using var rdActual = await cmdActual.ExecuteReaderAsync();
+                if (await rdActual.ReadAsync())
+                {
+                    lista.Insert(0, new SelectListItem
+                    {
+                        Value = rdActual["Id"].ToString(),
+                        Text = rdActual["Texto"].ToString()
+                    });
+                }
+            }
+
+            if (lista.Count > 0)
+                return lista;
+
+            // Respaldo controlado para una parte que aun no tenga ninguna relacion cargada.
+            return await CargarSelectAsync(cn, sqlTodos);
+        }
 
         private static async Task<List<SelectListItem>> CargarSelectAsync(SqlConnection cn, string sql)
         {

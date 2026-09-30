@@ -243,6 +243,47 @@ namespace ERP.NSQuell.Controllers
             }
         }
 
+        // NSQ_INTERRUPCION_PARTE_CATALOGO_V1_0
+        [HttpGet("PartesInterrupcionUrgente")]
+        public async Task<IActionResult> PartesInterrupcionUrgente(string? q = null)
+        {
+            if (!UsuarioEnSesion())
+                return Unauthorized(new { ok = false, sesionExpirada = true, mensaje = "La sesión terminó." });
+
+            q = (q ?? string.Empty).Trim();
+            await using var cn = new SqlConnection(ConnectionString);
+            await cn.OpenAsync();
+            const string sql = @"
+SELECT TOP(250) ParteID,NumeroParte,ReferenciaSAP,Descripcion,Designacion
+FROM dbo.ERP_Partes
+WHERE Activo=1
+  AND
+  (
+      @Q=N''
+      OR NumeroParte LIKE N'%'+@Q+N'%'
+      OR ISNULL(ReferenciaSAP,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(Descripcion,N'') LIKE N'%'+@Q+N'%'
+      OR ISNULL(Designacion,N'') LIKE N'%'+@Q+N'%'
+  )
+ORDER BY NumeroParte;";
+            await using var cmd = new SqlCommand(sql, cn);
+            cmd.Parameters.Add("@Q", SqlDbType.NVarChar, 120).Value = q;
+            var items = new List<object>();
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                items.Add(new
+                {
+                    parteID = Convert.ToInt32(rd["ParteID"]),
+                    numeroParte = rd["NumeroParte"]?.ToString()?.Trim() ?? string.Empty,
+                    referenciaSAP = rd["ReferenciaSAP"] == DBNull.Value ? null : rd["ReferenciaSAP"]?.ToString()?.Trim(),
+                    descripcion = rd["Descripcion"] == DBNull.Value ? null : rd["Descripcion"]?.ToString()?.Trim(),
+                    designacion = rd["Designacion"] == DBNull.Value ? null : rd["Designacion"]?.ToString()?.Trim()
+                });
+            }
+            return Json(new { ok = true, items });
+        }
+
         [HttpGet("PrevisualizarInterrupcionUrgente")]
         public async Task<IActionResult> PrevisualizarInterrupcionUrgente(int programaUrgenteId, int maquinaId, bool trabajarDomingo = false, bool autorizaTerminacionParcial = false, string? numeroParteUrgente = null)
         {
@@ -785,6 +826,7 @@ namespace ERP.NSQuell.Controllers
 
                 await PausarProduccionPorInterrupcionUrgenteAsync(
                     programaActual,
+                    request.LiberarMaquina,
                     usuarioId,
                     cn,
                     tx);
@@ -793,6 +835,7 @@ namespace ERP.NSQuell.Controllers
                 {
                     await PausarProduccionPorInterrupcionUrgenteAsync(
                         programaActualPareja,
+                        request.LiberarMaquina,
                         usuarioId,
                         cn,
                         tx);
@@ -2335,12 +2378,13 @@ VALUES
 
             return Convert.ToInt32(result);
         }
-        private static async Task PausarProduccionPorInterrupcionUrgenteAsync(ProgramaActivoInterrupcionUrgente programaActual, int usuarioId, SqlConnection cn, SqlTransaction tx)
+        private static async Task PausarProduccionPorInterrupcionUrgenteAsync(ProgramaActivoInterrupcionUrgente programaActual, bool liberarMaquina, int usuarioId, SqlConnection cn, SqlTransaction tx)
         {
             const string sql = @"
 UPDATE dbo.Produccion_Ejecucion
 SET
     EstatusID=@Pausado,
+    FechaLiberacionMaquina=CASE WHEN @LiberarMaquina=1 THEN COALESCE(FechaLiberacionMaquina,GETDATE()) ELSE FechaLiberacionMaquina END,
     UsuarioModificacionID=@UsuarioID,
     FechaModificacion=GETDATE()
 WHERE EjecucionProduccionID=@EjecucionProduccionID
@@ -2367,6 +2411,7 @@ IF @@ROWCOUNT<>1
             cmd.Parameters.Add("@ProgramaProduccionID", SqlDbType.Int).Value = programaActual.ProgramaProduccionID;
             cmd.Parameters.Add("@EnProduccion", SqlDbType.Int).Value = EstatusPrograma.EnProduccion;
             cmd.Parameters.Add("@Pausado", SqlDbType.Int).Value = EstatusPrograma.Pausado;
+            cmd.Parameters.Add("@LiberarMaquina", SqlDbType.Bit).Value = liberarMaquina;
             cmd.Parameters.Add("@UsuarioID", SqlDbType.Int).Value = usuarioId;
             await cmd.ExecuteNonQueryAsync();
         }

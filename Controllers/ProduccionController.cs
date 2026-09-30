@@ -952,6 +952,37 @@ ORDER BY
 
             try
             {
+                // NSQ_CHECKLIST_MP_CONGRUENCIA_V1_0
+                // El checklist de Produccion no se puede guardar/enviar si la OF requiere MP y aun no existe
+                // ninguna entrega aceptada por Produccion desde Almacen. Una recepcion parcial permite continuar;
+                // no se inventa aqui una regla de cantidad total porque esa decision de negocio no esta definida.
+                const string sqlProgramaChecklist = @"
+SELECT TOP(1) ProgramaProduccionID
+FROM dbo.Produccion_Ejecucion WITH(UPDLOCK,HOLDLOCK)
+WHERE EjecucionProduccionID=@EjecucionProduccionID AND Activo=1;";
+                int programaChecklistId = 0;
+                await using (var cmdProgramaChecklist = new SqlCommand(sqlProgramaChecklist, cn, tx))
+                {
+                    cmdProgramaChecklist.Parameters.Add("@EjecucionProduccionID", SqlDbType.Int).Value = vm.EjecucionProduccionID;
+                    var valorProgramaChecklist = await cmdProgramaChecklist.ExecuteScalarAsync();
+                    programaChecklistId = valorProgramaChecklist == null || valorProgramaChecklist == DBNull.Value
+                        ? 0
+                        : Convert.ToInt32(valorProgramaChecklist);
+                }
+
+                if (programaChecklistId > 0)
+                {
+                    var disponibilidadMp = await ObtenerDisponibilidadMateriaPrimaInicioAsync(programaChecklistId, cn, tx);
+                    if (disponibilidadMp.RequiereMateriaPrima && disponibilidadMp.CantidadConfirmada <= 0.0005m)
+                    {
+                        await tx.RollbackAsync();
+                        TempData["Error"] =
+                            $"No puedes guardar o enviar el checklist porque Almacen aun no ha entregado MP aceptada por Produccion. " +
+                            $"MP requerida: {disponibilidadMp.CantidadRequerida:N3} kg; recibida/aceptada: {disponibilidadMp.CantidadConfirmada:N3} kg.";
+                        return RedirectToAction(nameof(ChecklistFormato), new { id = vm.ChecklistArranqueID });
+                    }
+                }
+
                 var estatusActual =
                     await ObtenerEstatusChecklistAsync(
                         vm.ChecklistArranqueID,
@@ -4476,24 +4507,9 @@ WHERE RecepcionOFID = @RecepcionOFID
                     usuarioId: usuarioId,
                     cn: cn,
                     tx: tx);
-            if (ejecucion.EsCambioMolde)
-            {
-                await ObtenerOCrearChecklistFormatoAsync(
-                    ejecucion: ejecucion,
-                    codigoFormato: "GQ-F-PR01-03",
-                    versionFormato: "Ver.09",
-                    tipoChecklist: "CAMBIO_MOLDE",
-                    momentoProceso: "INICIO_PRODUCCION",
-                    fechaOperacion: fechaOperacion,
-                    turnoId: null,
-                    turnoNombre: null,
-                    esRecurrente: false,
-                    requiereCambioMolde: true,
-                    numeroAplicacion: 1,
-                    usuarioId: usuarioId,
-                    cn: cn,
-                    tx: tx);
-            }
+            // NSQ_CHECKLIST_MP_CONGRUENCIA_V1_0
+            // GQ-F-PR01-03 pertenece al flujo dedicado de Preparacion/SMED.
+            // No se crea nuevamente desde el arranque de Produccion para evitar duplicados.
             await ObtenerOCrearChecklistFormatoAsync(
                 ejecucion: ejecucion,
                 codigoFormato: "GQ-F-PR01-05",
@@ -9627,7 +9643,7 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                 return (false, 0m, 0m);
 
             var requerida = rd["CantidadRequerida"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadRequerida"]);
-            var confirmada = rd["CantidadConfirmimada"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadConfirmada"]);
+            var confirmada = rd["CantidadConfirmada"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["CantidadConfirmada"]);
             return (requerida > 0.0005m, requerida, confirmada);
         }
         private async Task<bool> UsuarioPuedeGestionarCajasAsync(int usuarioId, SqlConnection cn, SqlTransaction? tx = null)

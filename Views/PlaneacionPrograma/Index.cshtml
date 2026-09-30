@@ -1361,6 +1361,20 @@
                                                                                     <span class="need-cell-value">@N0(item.PiezasAProducir)</span>
                                                                                 </div>
                                                                                 <div class="need-cell">
+                                                                                    <span class="need-cell-label">PT disponible</span>
+                                                                                    <span class="need-cell-value">@N0(item.PTDisponibleNeto ?? item.PTDisponibleAlCalcular)</span>
+                                                                                </div>
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">MP actual</span>
+                                                                                    <span class="need-cell-value @(item.TieneMPInsuficiente ? "text-danger" : "text-success")">@((item.MPDisponibleKg ?? 0m).ToString("N3")) kg</span>
+                                                                                    <small class="text-muted d-block">Req. @((item.MPRequeridaKg ?? 0m).ToString("N3")) kg</small>
+                                                                                </div>
+                                                                                <div class="need-cell">
+                                                                                    <span class="need-cell-label">Embalaje actual</span>
+                                                                                    <span class="need-cell-value @(item.TieneEmbalajeInsuficiente ? "text-danger" : "text-success")">@((item.EmbalajeDisponible ?? 0m).ToString("N0"))</span>
+                                                                                    <small class="text-muted d-block">Req. @((item.EmbalajeRequerido ?? 0m).ToString("N0"))</small>
+                                                                                </div>
+                                                                                <div class="need-cell">
                                                                                     <span class="need-cell-label">Máquina</span>
                                                                                     <span class="need-cell-value" title="@Txt(item.MaquinaSugeridaNombre)">
                                                                                         <i class="fa-solid fa-industry me-1"></i>

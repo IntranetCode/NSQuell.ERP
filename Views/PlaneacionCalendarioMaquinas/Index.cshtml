@@ -2855,7 +2855,7 @@ else
                         </a>
                     }
                     @* NSQ_CALENDARIOS_INTERRUPCION_V4 *@
-                    @if (!modoProduccion && (bloque.PuedeMoverCalendario || bloque.EstaProduciendo))
+                    @if ((bloque.PuedeMoverCalendario || bloque.EstaProduciendo) && (!modoProduccion || bloque.EstaProduciendo))
                     {
                         <button type="button"
                                 class="btn btn-danger fw-bold"
@@ -2884,7 +2884,7 @@ else
     </div>
 }
 
-@if (!modoProduccion)
+@if (true)
 {
     <div class="modal fade" id="modalInterrupcionUrgente" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -2939,25 +2939,24 @@ else
 
                     <div id="iuSeleccionUrgenteWrap" class="d-none mb-3">
                         <div class="border border-danger rounded-4 p-3 bg-danger-subtle">
-                            <label for="iuProgramaUrgenteSelect" class="form-label fw-bold">
-                                OF urgente que entrara en esta maquina
-                            </label>
-                            <select id="iuProgramaUrgenteSelect" class="form-select">
-                                <option value="">-- Seleccionar OF urgente --</option>
+                            <select id="iuProgramaUrgenteSelect" class="d-none" aria-hidden="true">
+                                <option value="">-- Sin OF urgente --</option>
                             </select>
-                            <div id="iuProgramaUrgenteInfo" class="form-text">
-                                Puedes seleccionar una OF existente o registrar solamente el número de parte si todavía no existe programación.
+                            <div id="iuProgramaUrgenteInfo" class="form-text mb-2">
+                                La interrupción no exige que la nueva OF exista. Selecciona el número de parte que provocó la interrupción.
                             </div>
-                            <div class="mt-3">
+                            <div>
                                 <label for="iuParteUrgenteManual" class="form-label fw-bold mb-1">
-                                    Número de parte urgente (referencia manual)
+                                    Número de parte que entrará
                                 </label>
                                 <input id="iuParteUrgenteManual"
                                        class="form-control"
+                                       list="iuPartesUrgentesCatalogo"
                                        maxlength="120"
-                                       placeholder="Ej. P09_1381_158" />
+                                       placeholder="Escribe o selecciona un número de parte" />
+                                <datalist id="iuPartesUrgentesCatalogo"></datalist>
                                 <div class="form-text">
-                                    No crea una OF ni inventa horas; sólo deja trazabilidad de la pieza que entrará.
+                                    Se conserva trazabilidad por parte, usuario, fecha, máquina y motivo; no se crea una OF ficticia.
                                 </div>
                             </div>
                         </div>
@@ -3026,6 +3025,15 @@ else
 
                             <div class="form-text">
                                 Esta decisión la toma Planeación. Producción únicamente ejecutará la instrucción.
+                            </div>
+                            <div class="form-check form-switch mt-3">
+                                <input class="form-check-input" type="checkbox" role="switch" id="iuLiberarMaquina">
+                                <label class="form-check-label fw-bold" for="iuLiberarMaquina">
+                                    Liberar máquina al confirmar la interrupción
+                                </label>
+                                <div class="form-text">
+                                    La OF original queda pausada para conservar trazabilidad; solo se libera la ocupación física de la máquina.
+                                </div>
                             </div>
                         </div>
 
@@ -3674,7 +3682,6 @@ else
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const esModoProduccion = @(modoProduccion ? "true" : "false");
-        if (esModoProduccion) return;
 
         const modalEl = document.getElementById('modalInterrupcionUrgente');
         if (!modalEl) return;
@@ -3696,6 +3703,7 @@ else
         const maquinaSelect = document.getElementById('iuMaquina');
         const motivoInput = document.getElementById('iuMotivo');
             const destinoInterrupcion=document.getElementById('iuDestinoInterrupcion');
+        const liberarMaquinaInput=document.getElementById('iuLiberarMaquina');
         const bloqueMotivoTerminacionParcial=document.getElementById('iuBloqueMotivoTerminacionParcial');
         const motivoTerminacionParcialInput=document.getElementById('iuMotivoTerminacionParcial');
         const btnCalcular = document.getElementById('iuCalcular');
@@ -3705,6 +3713,7 @@ else
         const preview = document.getElementById('iuPreview');
         const endpointMaquinas = '@Url.Action("MaquinasCompatibles", "PlaneacionCalendarioMaquinas")';
         const endpointCandidatos = '@Url.Action("CandidatosInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
+        const endpointPartes = '@Url.Action("PartesInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
         const endpointPreview = '@Url.Action("PrevisualizarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
         const endpointConfirmar = '@Url.Action("ConfirmarInterrupcionUrgente", "PlaneacionCalendarioMaquinas")';
         const tokenInterrupcion = document.querySelector('#antiForgeryToken input[name="__RequestVerificationToken"]')?.value || document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
@@ -3878,6 +3887,25 @@ else
             maquinaInicialID = maquinaId;
         }
 
+        async function cargarPartesInterrupcion() {
+            const datalist = document.getElementById('iuPartesUrgentesCatalogo');
+            if (!datalist) return;
+            datalist.innerHTML = '';
+            try {
+                const response = await fetch(endpointPartes, { headers: { 'Accept':'application/json' }, cache:'no-store' });
+                const data = await leerJsonInterrupcionSeguro(response);
+                if (!response.ok || !data?.ok) throw new Error(data?.mensaje || 'No fue posible cargar las partes.');
+                (data.items || []).forEach(x => {
+                    const option = document.createElement('option');
+                    option.value = x.numeroParte || x.referenciaSAP || '';
+                    option.label = [x.referenciaSAP, x.designacion || x.descripcion].filter(Boolean).join(' · ');
+                    datalist.appendChild(option);
+                });
+            } catch (error) {
+                feedbackSet(error.message || 'No fue posible cargar el catálogo de partes.', 'alert-warning');
+            }
+        }
+
         async function cargarCandidatosProduccionActiva(programaInterrumpidoId, maquinaId) {
             candidatosProduccionActiva = [];
             programaUrgenteSelect.innerHTML = '<option value="">Cargando OF urgentes compatibles...</option>';
@@ -3985,6 +4013,7 @@ else
             motivoInput.value = '';
             if (parteUrgenteManual) parteUrgenteManual.value = '';
             if (destinoInterrupcion) destinoInterrupcion.value = 'PAUSA_RETORNO';
+            if (liberarMaquinaInput) liberarMaquinaInput.checked = false;
             if (motivoTerminacionParcialInput) motivoTerminacionParcialInput.value = '';
 
             actualizarDestinoInterrupcion();
@@ -4036,10 +4065,9 @@ else
 
                 configurarMaquinaBloqueada(btn);
 
-                cargarCandidatosProduccionActiva(
-                    programaSeleccionadoId,
-                    Number(btn.dataset.maquinaId || 0)
-                );
+                programaUrgenteSelect.value = '';
+                programaInput.value = '';
+                cargarPartesInterrupcion();
             }
             else {
                 programaEtiqueta.textContent = 'OF URGENTE';
@@ -4325,6 +4353,7 @@ else
                     Motivo:motivo,
                     TrabajarDomingo:!!document.getElementById('trabajarDomingoCalendario')?.checked,
                     AutorizaTerminacionParcial:autorizaTerminacionParcial,
+                    LiberarMaquina:!!liberarMaquinaInput?.checked,
                     MotivoTerminacionParcial:autorizaTerminacionParcial
                         ?motivoTerminacionParcial
                         :null

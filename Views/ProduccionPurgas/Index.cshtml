@@ -1,0 +1,35 @@
+﻿@model ERP.NSQuell.Models.ProduccionPurgaIndexVm
+@{ ViewData["Title"] = "Purgas de máquina"; }
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div><h2 class="fw-bold mb-1"><i class="fa-solid fa-droplet me-2"></i>Purgas de máquina</h2><div class="text-muted">Control independiente de MP para purga. Máximo acumulado: 2.000 kg por programa/cambio y máquina.</div></div>
+        <span class="badge text-bg-light">@Model.FechaConsulta.ToString("dd/MM/yyyy HH:mm")</span>
+    </div>
+    @if (TempData["Error"] != null){<div class="alert alert-danger">@TempData["Error"]</div>}
+    @if (TempData["Success"] != null){<div class="alert alert-success">@TempData["Success"]</div>}
+    @if (!Model.Configurado){<div class="alert alert-warning"><strong>Falta instalar el módulo.</strong> Ejecuta primero NSQ_PURGAS_MP_V1_0.sql en TEST.</div>}
+    else
+    {
+        <div class="card border-0 shadow-sm mb-4"><div class="card-body">
+            <h5 class="fw-bold">Solicitar MP para purga</h5>
+            <form asp-action="Solicitar" method="post" class="row g-3">@Html.AntiForgeryToken()
+                <div class="col-md-3"><label class="form-label fw-semibold">Máquina</label><select name="maquinaId" class="form-select" required><option value="">Seleccionar</option>@foreach(var x in Model.Maquinas){<option value="@x.MaquinaID">@x.Texto</option>}</select></div>
+                <div class="col-md-3"><label class="form-label fw-semibold">Programa / OF del cambio</label><select name="programaProduccionId" class="form-select" required><option value="">Seleccionar</option>@foreach(var x in Model.Programas){<option value="@x.ProgramaProduccionID" data-maquina="@x.MaquinaID">@x.Texto</option>}</select></div>
+                <div class="col-md-3"><label class="form-label fw-semibold">Materia prima</label><select name="materialId" id="purgaMaterial" class="form-select" required><option value="">Seleccionar</option>@foreach(var x in Model.Materiales){<option value="@x.MaterialID" data-tipo="@x.TipoMP">@x.Texto</option>}</select><input type="hidden" name="tipoMP" id="purgaTipoMP" value="V" /></div>
+                <div class="col-md-3"><label class="form-label fw-semibold">Lote previsto</label><input name="lote" maxlength="120" class="form-control" required /></div>
+                <div class="col-md-2"><label class="form-label fw-semibold">Kg</label><input name="cantidadKg" type="number" step="0.001" min="0.001" max="2" class="form-control" value="2.000" required /></div>
+                <div class="col-md-4"><label class="form-label fw-semibold">Motivo</label><input name="motivo" maxlength="250" class="form-control" placeholder="Cambio de material / limpieza / arranque" required /></div>
+                <div class="col-md-4"><label class="form-label fw-semibold">Observaciones</label><input name="observaciones" maxlength="800" class="form-control" /></div>
+                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">Solicitar</button></div>
+            </form>
+        </div></div>
+        <div class="card border-0 shadow-sm"><div class="card-body"><h5 class="fw-bold">Registro de purgas</h5><div class="table-responsive"><table class="table align-middle"><thead><tr><th>#</th><th>Máquina</th><th>OF / parte</th><th>MP</th><th>Kg</th><th>Motivo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+        @foreach(var p in Model.Purgas){<tr><td>@p.PurgaID<br/><small class="text-muted">@p.FechaSolicitud.ToString("dd/MM HH:mm")</small></td><td>@p.Maquina</td><td><strong>@p.OF</strong><br/><small>@p.Parte</small></td><td>@p.Material<br/><small>@p.TipoMP · lote @p.Lote</small></td><td>@p.CantidadSolicitadaKg.ToString("N3")</td><td>@p.Motivo</td><td><span class="badge @(p.Estado=="APLICADA"?"text-bg-success":p.Estado=="ENTREGADA"?"text-bg-primary":"text-bg-warning")">@p.Estado</span></td><td>
+          @if(p.Estado=="SOLICITADA" && Model.PuedeEntregarAlmacen){<form asp-action="Entregar" method="post" class="d-flex gap-1">@Html.AntiForgeryToken()<input type="hidden" name="purgaId" value="@p.PurgaID"/><input name="loteEntrega" class="form-control form-control-sm" placeholder="Lote real" required/><button class="btn btn-sm btn-primary">Entregar MP</button></form>}
+          else if(p.Estado=="ENTREGADA"){<form asp-action="Aplicar" method="post">@Html.AntiForgeryToken()<input type="hidden" name="purgaId" value="@p.PurgaID"/><button class="btn btn-sm btn-success">Confirmar purga</button></form>}
+          else {<span class="text-muted small">-</span>}
+        </td></tr>}
+        </tbody></table></div></div></div>
+    }
+</div>
+<script>document.getElementById('purgaMaterial')?.addEventListener('change',function(){const o=this.selectedOptions[0];document.getElementById('purgaTipoMP').value=o?.dataset?.tipo||'V';});</script>

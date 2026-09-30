@@ -1591,9 +1591,12 @@
                             <select asp-for="MoldeID"
                                     asp-items="Model.Moldes"
                                     class="form-select">
-                                <option value="">-- Selecciona molde --</option>
+                                <option value="">-- Selecciona molde relacionado --</option>
                             </select>
                             <span asp-validation-for="MoldeID" class="text-danger small"></span>
+                            <div class="small text-muted mt-1">
+                                Se muestran los moldes relacionados con la parte. El molde actualizado marcado como predeterminado se precarga automaticamente; puedes seleccionar otro relacionado si corresponde.
+                            </div>
                         </div>
                     </div>
 

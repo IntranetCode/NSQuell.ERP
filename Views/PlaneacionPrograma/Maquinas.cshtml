@@ -269,16 +269,36 @@
         });
 
         let programaSeleccionadoOF = null;
+        const endpointAbastoOF = '@Url.Action("AbastoGenerarOF","PlaneacionPrograma")';
         document.querySelectorAll('.btn-generar-of').forEach(function (btn) {
-            btn.addEventListener('click', function () {
+            btn.addEventListener('click', async function () {
                 programaSeleccionadoOF = this.dataset.programaId;
                 document.getElementById('modalOFReferencia').textContent = this.dataset.referencia || '-';
                 document.getElementById('modalOFDesignacion').textContent = this.dataset.designacion || '-';
                 document.getElementById('modalOFMaquina').textContent = this.dataset.maquina || '-';
                 document.getElementById('modalOFMolde').textContent = this.dataset.molde || '-';
                 document.getElementById('modalOFCantidad').textContent = this.dataset.cantidad || '-';
-                const modal = new bootstrap.Modal(document.getElementById('modalGenerarOF'));
+                const btnConfirmar = document.getElementById('btnConfirmarGenerarOF');
+                const estado = document.getElementById('modalOFAbastoEstado');
+                btnConfirmar.disabled = true;
+                estado.className = 'alert alert-info rounded-4 mt-3 mb-0';
+                estado.textContent = 'Consultando stock actual de PT, MP y embalaje...';
+                const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalGenerarOF'));
                 modal.show();
+                try {
+                    const response = await fetch(`${endpointAbastoOF}?programaProduccionId=${encodeURIComponent(programaSeleccionadoOF)}`, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                    const data = await response.json();
+                    if (!response.ok || !data.ok) throw new Error(data.mensaje || 'No fue posible validar el abasto.');
+                    document.getElementById('modalOFPT').textContent = Number(data.ptDisponible || 0).toLocaleString('es-MX');
+                    document.getElementById('modalOFMP').textContent = `${Number(data.mpDisponibleKg || 0).toLocaleString('es-MX',{minimumFractionDigits:3,maximumFractionDigits:3})} / ${Number(data.mpRequeridaKg || 0).toLocaleString('es-MX',{minimumFractionDigits:3,maximumFractionDigits:3})} kg`;
+                    document.getElementById('modalOFEmbalaje').textContent = `${Number(data.embalajeDisponible || 0).toLocaleString('es-MX')} / ${Number(data.embalajeRequerido || 0).toLocaleString('es-MX')}`;
+                    estado.className = `alert ${data.permitido ? 'alert-success' : 'alert-danger'} rounded-4 mt-3 mb-0`;
+                    estado.textContent = data.mensaje || '';
+                    btnConfirmar.disabled = !data.permitido;
+                } catch (error) {
+                    estado.className = 'alert alert-danger rounded-4 mt-3 mb-0';
+                    estado.textContent = error.message || 'No fue posible consultar el stock.';
+                }
             });
         });
 
@@ -738,6 +758,12 @@
                         <div class="mb-2"><div class="modal-value-label">Referencia SAP</div><div class="fw-bold" id="modalOFReferencia">-</div></div>
                         <div class="mb-2"><div class="modal-value-label">Designación</div><div id="modalOFDesignacion">-</div></div>
                         <div class="row g-2"><div class="col-4"><div class="modal-value-label">Máquina</div><div class="fw-semibold" id="modalOFMaquina">-</div></div><div class="col-4"><div class="modal-value-label">Molde</div><div class="fw-semibold" id="modalOFMolde">-</div></div><div class="col-4"><div class="modal-value-label">Cantidad</div><div class="fw-semibold" id="modalOFCantidad">-</div></div></div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-4"><div class="modal-value-label">PT disponible</div><div class="fw-semibold" id="modalOFPT">-</div></div>
+                            <div class="col-4"><div class="modal-value-label">MP disponible / requerida</div><div class="fw-semibold" id="modalOFMP">-</div></div>
+                            <div class="col-4"><div class="modal-value-label">Embalaje disponible / requerido</div><div class="fw-semibold" id="modalOFEmbalaje">-</div></div>
+                        </div>
+                        <div id="modalOFAbastoEstado" class="alert alert-info rounded-4 mt-3 mb-0">Consulta de abasto pendiente.</div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light-main" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-main" id="btnConfirmarGenerarOF"><i class="fa-solid fa-check me-1"></i>Sí, generar OF</button></div>

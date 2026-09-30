@@ -25,4 +25,31 @@
     </div>
     <aside class="ind-panel"><header class="ind-panel__head"><div><span>EXCEPCIONES</span><h3>Requiere atención</h3></div><small>@Model.Alertas.Count evento(s)</small></header><div class="ind-alerts">@if (!Model.Alertas.Any()){<div class="ind-empty">No hay alertas construidas para el periodo.</div>}else{@foreach(var alerta in Model.Alertas.Take(8)){<article class="ind-alert ind-alert--@alerta.Nivel"><i class="fa-solid @(alerta.Nivel == "danger" ? "fa-circle-exclamation" : alerta.Nivel == "warning" ? "fa-triangle-exclamation" : alerta.Nivel == "success" ? "fa-circle-check" : "fa-circle-info")"></i><div><small>@alerta.Area</small><strong>@alerta.Titulo</strong><p>@alerta.Detalle</p></div></article>}}</div></aside>
 </section>
+@if (Model.TiemposDepartamentos.Any())
+{
+<section class="ind-panel mt-3">
+    <header class="ind-panel__head">
+        <div><span>TIEMPOS DE FLUJO</span><h3>Permanencia por departamento</h3></div>
+        <small>Basado en transiciones reales del periodo</small>
+    </header>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Departamento</th><th>Eventos</th><th>Promedio</th><th>Máximo</th><th>Peor caso del periodo</th></tr></thead>
+            <tbody>
+            @foreach (var t in Model.TiemposDepartamentos)
+            {
+                <tr>
+                    <td><strong>@t.Departamento</strong></td>
+                    <td>@t.Eventos.ToString("N0")</td>
+                    <td>@t.PromedioHoras.ToString("N2") h</td>
+                    <td>@t.MaximoHoras.ToString("N2") h</td>
+                    <td><strong>@t.PeorReferencia</strong><div class="small text-muted">@t.PeorDetalle · @((t.PeorMinutos/60m).ToString("N2")) h</div></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+}
+
 <div class="ind-note"><i class="fa-solid fa-circle-info"></i><span>La vista General no recalcula indicadores: resume los mismos KPI que se detallan dentro de cada gestión.</span></div>
