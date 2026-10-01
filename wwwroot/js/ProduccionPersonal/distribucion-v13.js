@@ -1,4 +1,4 @@
-/* NSQ_PRODUCCION_PERSONAL_DISTRIBUCION_V14_3 */
+﻿/* NSQ_PRODUCCION_PERSONAL_DISTRIBUCION_V14_3 */
 (() => {
     'use strict';
 
@@ -14,6 +14,7 @@
         warning: '/ProduccionPersonal/DistribucionV14/Advertencia',
         save: '/ProduccionPersonal/DistribucionV14/Guardar',
         extra: '/ProduccionPersonal/DistribucionV14/Extra',
+        note: '/ProduccionPersonal/DistribucionV14/Nota',
         pdf: '/ProduccionPersonal/DistribucionV14/Pdf'
     };
 
@@ -261,6 +262,35 @@
             </div>`;
     }
 
+    // NSQ_PRODUCCION_PERSONAL_NOTAS_V1_0
+    function noteArea(row) {
+        const note = row.nota || '';
+
+        return `
+            <div class="ppv14-note-control">
+                <textarea class="ppv14-note-input"
+                          rows="2"
+                          maxlength="500"
+                          data-note-input
+                          data-key="${escapeHtml(centerKey(row))}"
+                          placeholder="Escribe una nota para esta máquina...">${escapeHtml(note)}</textarea>
+                <div class="ppv14-note-actions">
+                    <small class="ppv14-note-status ${note ? 'saved' : ''}"
+                           data-note-status>
+                        ${note ? 'Nota guardada' : 'Sin nota'}
+                    </small>
+                    <button type="button"
+                            class="ppv14-note-save"
+                            data-note-save
+                            data-key="${escapeHtml(centerKey(row))}">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Guardar nota</span>
+                    </button>
+                </div>
+            </div>`;
+    }
+
+
     function renderWarningFromSession() {
         const warning = sessionStorage.getItem('ppv14-warning');
         if (!warning) return '';
@@ -365,6 +395,11 @@
                         <div class="ppv14-operator-wrap">
                             <span class="ppv14-field-label">Operadores</span>
                             ${operatorArea(row)}
+                        </div>
+
+                        <div class="ppv14-note-wrap">
+                            <span class="ppv14-field-label">Notas</span>
+                            ${noteArea(row)}
                         </div>
                     </article>
                 `).join('')}
@@ -740,6 +775,27 @@
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
     }
+
+    async function saveNote(row, note) {
+        const body = new FormData();
+        body.append('__RequestVerificationToken', antiForgery);
+        bodyPeriod(body);
+        body.append('turnoId', String(state.turnoId));
+
+        if (row.maquinaID)
+            body.append('maquinaId', String(row.maquinaID));
+        else
+            body.append('centroEspecial', row.centroClave);
+
+        body.append('nota', note || '');
+
+        return fetchJson(api.note, {
+            method: 'POST',
+            body,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+    }
+
 
     async function saveExtra(row, {
         operatorOldId = null,
@@ -1441,6 +1497,67 @@
                 if (extra) openChangeModal(row, extra);
             });
         });
+
+        root.querySelectorAll('[data-note-input]').forEach(input => {
+            input.addEventListener('input', () => {
+                const card = input.closest('[data-row-key]');
+                const status = card?.querySelector('[data-note-status]');
+
+                if (status) {
+                    status.textContent = 'Cambios sin guardar';
+                    status.classList.remove('saved', 'error');
+                    status.classList.add('pending');
+                }
+            });
+        });
+
+        root.querySelectorAll('[data-note-save]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const card = button.closest('[data-row-key]');
+                const row = findRow(card?.dataset.rowKey);
+                const input = card?.querySelector('[data-note-input]');
+                const status = card?.querySelector('[data-note-status]');
+
+                if (!row || !input)
+                    return;
+
+                if (input.value.length > 500) {
+                    alert('La nota no puede superar 500 caracteres.');
+                    return;
+                }
+
+                const originalHtml = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Guardando...</span>';
+
+                try {
+                    const result = await saveNote(row, input.value);
+                    row.nota = result.nota || '';
+                    input.value = row.nota;
+
+                    if (status) {
+                        const days = Number(result.diasAplicados || 1);
+                        status.textContent = days > 1
+                            ? `Guardada en ${days} días`
+                            : (row.nota ? 'Nota guardada' : 'Nota eliminada');
+                        status.classList.remove('pending', 'error');
+                        status.classList.add('saved');
+                    }
+                } catch (error) {
+                    if (status) {
+                        status.textContent = 'Error al guardar';
+                        status.classList.remove('pending', 'saved');
+                        status.classList.add('error');
+                    }
+
+                    alert(error.message);
+                } finally {
+                    button.disabled = false;
+                    button.innerHTML = originalHtml;
+                }
+            });
+        });
+
 
         root.querySelectorAll('[data-piece-open]').forEach(button => {
             button.addEventListener('click', () => {

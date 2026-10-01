@@ -61,6 +61,7 @@ public sealed partial class ProduccionPersonalController
         public int? OperadorID { get; set; }
         public string OperadorNombre { get; set; } = string.Empty;
         public string NumeroControlOperador { get; set; } = string.Empty;
+        public string Nota { get; set; } = string.Empty;
 
         public DateTime Inicio { get; set; }
         public DateTime Fin { get; set; }
@@ -332,6 +333,7 @@ SELECT
     d.ParteID,
     d.OperadorID,
     ISNULL(d.OrigenPieza,N'') AS OrigenPieza,
+    ISNULL(d.Observaciones,N'') AS Nota,
 
     op.NumeroControl AS NumeroControlOperador,
     LTRIM(RTRIM(CONCAT(
@@ -402,6 +404,7 @@ ORDER BY
                     ReferenciaSAP = rd["ReferenciaSAP"]?.ToString()?.Trim() ?? string.Empty,
                     DescripcionParte = rd["DescripcionParte"]?.ToString()?.Trim() ?? string.Empty,
                     OrigenPieza = rd["OrigenPieza"]?.ToString()?.Trim() ?? string.Empty,
+                    Nota = rd["Nota"]?.ToString()?.Trim() ?? string.Empty,
                     OperadorID = rd["OperadorID"] == DBNull.Value
                         ? null
                         : Convert.ToInt32(rd["OperadorID"]),
@@ -503,6 +506,7 @@ SELECT TOP(1)
     d.ParteID,
     d.OperadorID,
     ISNULL(d.OrigenPieza,N'') AS OrigenPieza,
+    ISNULL(d.Observaciones,N'') AS Nota,
     ISNULL(op.NumeroControl,N'') AS NumeroControl,
     LTRIM(RTRIM(CONCAT(
         ISNULL(op.Nombre,N''),N' ',
@@ -551,6 +555,7 @@ ORDER BY d.DistribucionID DESC;";
                     ? null
                     : Convert.ToInt32(rd["OperadorID"]);
                 tornillo.OrigenPieza = rd["OrigenPieza"]?.ToString()?.Trim() ?? string.Empty;
+                tornillo.Nota = rd["Nota"]?.ToString()?.Trim() ?? string.Empty;
                 tornillo.OperadorNombre = rd["OperadorNombre"]?.ToString()?.Trim() ?? string.Empty;
                 tornillo.NumeroControlOperador = rd["NumeroControl"]?.ToString()?.Trim() ?? string.Empty;
             }
@@ -895,6 +900,7 @@ ORDER BY DistribucionID DESC;";
                 of = x.OF,
                 piezaProgramada = x.PiezaProgramada,
                 origenPieza = x.OrigenPieza,
+                nota = x.Nota,
 
                 operadorID = x.OperadorID,
                 operadorNombre = x.OperadorNombre,
@@ -1141,6 +1147,194 @@ ORDER BY NumeroParte,ParteID;";
         }
     }
 
+    // NSQ_PRODUCCION_PERSONAL_NOTAS_V1_0
+    [HttpPost("DistribucionV14/Nota")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GuardarNotaDistribucionV14(
+        string? vista,
+        DateTime? fechaDesde,
+        DateTime? fechaHasta,
+        DateTime? semanaDesde,
+        int turnoId,
+        int? maquinaId,
+        string? centroEspecial,
+        string? nota)
+    {
+        if (!UsuarioEnSesion())
+            return Unauthorized();
+
+        var periodo = ResolverPeriodoDistribucionV14(
+            vista,
+            fechaDesde,
+            fechaHasta,
+            semanaDesde);
+
+        centroEspecial = string.IsNullOrWhiteSpace(centroEspecial)
+            ? null
+            : centroEspecial.Trim().ToUpperInvariant();
+
+        if (!maquinaId.HasValue && string.IsNullOrWhiteSpace(centroEspecial))
+            return BadRequest(new { ok = false, message = "Debes indicar máquina o centro especial." });
+
+        if (maquinaId.HasValue && centroEspecial != null)
+            return BadRequest(new { ok = false, message = "La nota no puede pertenecer a máquina y centro especial a la vez." });
+
+        var texto = string.IsNullOrWhiteSpace(nota)
+            ? null
+            : nota.Trim();
+
+        if (texto?.Length > 500)
+            return BadRequest(new { ok = false, message = "La nota no puede superar 500 caracteres." });
+
+        await using var cn = new SqlConnection(ConnectionString);
+        await cn.OpenAsync();
+
+        await using var tx =
+            (SqlTransaction)await cn.BeginTransactionAsync(
+                IsolationLevel.Serializable);
+
+        try
+        {
+            if (!await ConfiguradoV14Async(cn, tx))
+                throw new InvalidOperationException("Falta ejecutar la estructura V14.");
+
+            var turno = (await CargarTurnosDistribucionV13Async(cn, tx))
+                .FirstOrDefault(x => x.TurnoID == turnoId)
+                ?? throw new InvalidOperationException("Turno no válido.");
+
+            var usuarioId = UsuarioID();
+
+            foreach (var fecha in FechasPeriodoV14(periodo))
+            {
+                var ventana = VentanaDistribucionV13(fecha, turno);
+
+                var distribucionId = await CargarDistribucionActualV14Async(
+                    fecha,
+                    turnoId,
+                    maquinaId,
+                    centroEspecial,
+                    cn,
+                    tx,
+                    (programaAnterior, parteAnterior, operadorAnterior) => { });
+
+                if (distribucionId.HasValue)
+                {
+                    const string updateSql = @"
+UPDATE dbo.Produccion_DistribucionOperadores
+SET Observaciones=@Nota,
+    UsuarioModificacionID=@Usuario,
+    FechaModificacion=SYSDATETIME()
+WHERE DistribucionID=@ID
+  AND Activo=1;";
+
+                    await using (var update = new SqlCommand(updateSql, cn, tx))
+                    {
+                        update.Parameters.Add("@Nota", SqlDbType.NVarChar, 500).Value =
+                            (object?)texto ?? DBNull.Value;
+                        update.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                        update.Parameters.Add("@ID", SqlDbType.BigInt).Value = distribucionId.Value;
+                        await update.ExecuteNonQueryAsync();
+                    }
+
+                    // Si esta fila existía únicamente por una nota y la nota se borra,
+                    // no dejamos una distribución completamente vacía activa.
+                    if (texto == null)
+                    {
+                        const string cleanupSql = @"
+UPDATE dbo.Produccion_DistribucionOperadores
+SET Activo=0,
+    UsuarioModificacionID=@Usuario,
+    FechaModificacion=SYSDATETIME()
+WHERE DistribucionID=@ID
+  AND Activo=1
+  AND OperadorID IS NULL
+  AND ProgramaProduccionID IS NULL
+  AND ParteID IS NULL
+  AND NULLIF(LTRIM(RTRIM(ISNULL(Observaciones,N''))),N'') IS NULL
+  AND UPPER(ISNULL(OrigenPieza,N''))=N'SIN_PIEZA';";
+
+                        await using var cleanup = new SqlCommand(cleanupSql, cn, tx);
+                        cleanup.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+                        cleanup.Parameters.Add("@ID", SqlDbType.BigInt).Value = distribucionId.Value;
+                        await cleanup.ExecuteNonQueryAsync();
+                    }
+                }
+                else if (texto != null)
+                {
+                    const string insertSql = @"
+INSERT dbo.Produccion_DistribucionOperadores
+(
+    FechaTrabajo,
+    TurnoID,
+    MaquinaID,
+    CentroEspecial,
+    ProgramaProduccionID,
+    ParteID,
+    OperadorID,
+    Inicio,
+    Fin,
+    OrigenPieza,
+    Observaciones,
+    UsuarioCreacionID,
+    FechaCreacion,
+    Activo
+)
+VALUES
+(
+    @Fecha,
+    @TurnoID,
+    @MaquinaID,
+    @CentroEspecial,
+    NULL,
+    NULL,
+    NULL,
+    @Inicio,
+    @Fin,
+    N'SIN_PIEZA',
+    @Nota,
+    @Usuario,
+    SYSDATETIME(),
+    1
+);";
+
+                    await using var insert = new SqlCommand(insertSql, cn, tx);
+                    insert.Parameters.Add("@Fecha", SqlDbType.Date).Value = fecha.Date;
+                    insert.Parameters.Add("@TurnoID", SqlDbType.Int).Value = turnoId;
+                    insert.Parameters.Add("@MaquinaID", SqlDbType.Int).Value =
+                        maquinaId.HasValue ? maquinaId.Value : DBNull.Value;
+                    insert.Parameters.Add("@CentroEspecial", SqlDbType.NVarChar, 50).Value =
+                        centroEspecial == null ? DBNull.Value : centroEspecial;
+                    insert.Parameters.Add("@Inicio", SqlDbType.DateTime2).Value = ventana.Inicio;
+                    insert.Parameters.Add("@Fin", SqlDbType.DateTime2).Value = ventana.Fin;
+                    insert.Parameters.Add("@Nota", SqlDbType.NVarChar, 500).Value = texto;
+                    insert.Parameters.Add("@Usuario", SqlDbType.Int).Value = usuarioId;
+
+                    await insert.ExecuteNonQueryAsync();
+                }
+            }
+
+            await tx.CommitAsync();
+
+            return Json(new
+            {
+                ok = true,
+                nota = texto ?? string.Empty,
+                diasAplicados = (periodo.EdicionHasta - periodo.EdicionDesde).Days + 1
+            });
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(); } catch { }
+
+            return BadRequest(new
+            {
+                ok = false,
+                message = ex.Message
+            });
+        }
+    }
+
+
     [HttpPost("DistribucionV14/Guardar")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> GuardarDistribucionV14(
@@ -1235,7 +1429,13 @@ ORDER BY NumeroParte,ParteID;";
                         operadorAnterior = op;
                     });
 
+                // Una fila de distribucion puede existir con OperadorID=NULL
+                // porque la pieza/maquina/turno ya fueron programados.
+                // NULL -> operador es ASIGNACION INICIAL y no requiere motivo.
+                // Solo un operador previamente asignado que cambia o se retira
+                // debe exigir motivo y justificacion.
                 if (distribucionId.HasValue &&
+                    operadorAnterior.HasValue &&
                     operadorAnterior != operadorId)
                 {
                     requiereMotivo = true;
@@ -2022,10 +2222,11 @@ VALUES
                         {
                             table.ColumnsDefinition(columns =>
                             {
-                                columns.ConstantColumn(82);
-                                columns.RelativeColumn(1.2f);
-                                columns.RelativeColumn(1.65f);
-                                columns.RelativeColumn(2.25f);
+                                columns.ConstantColumn(78);
+                                columns.RelativeColumn(1.0f);
+                                columns.RelativeColumn(1.35f);
+                                columns.RelativeColumn(1.75f);
+                                columns.RelativeColumn(1.55f);
                             });
 
                             table.Header(header =>
@@ -2034,6 +2235,7 @@ VALUES
                                 HeaderCellV143(header.Cell(), "PIEZA / REFERENCIA");
                                 HeaderCellV143(header.Cell(), "DESCRIPCIÓN");
                                 HeaderCellV143(header.Cell(), "OPERADORES");
+                                HeaderCellV143(header.Cell(), "NOTAS");
                             });
 
                             var rowIndex = 0;
@@ -2106,6 +2308,14 @@ VALUES
                                     table.Cell(),
                                     string.Join("\n", operadores),
                                     fila.OperadorID.HasValue || fila.Extras.Count > 0,
+                                    alternate);
+
+                                BodyCellV143(
+                                    table.Cell(),
+                                    string.IsNullOrWhiteSpace(fila.Nota)
+                                        ? "-"
+                                        : fila.Nota,
+                                    false,
                                     alternate);
                             }
                         });
