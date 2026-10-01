@@ -1316,39 +1316,48 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
             public bool TieneMaterialConfigurado { get; init; }
             public bool TieneEmbalajeConfigurado { get; init; }
 
-            // La configuracion incompleta sigue siendo bloqueo.
-            // El stock insuficiente pasa a ser una advertencia confirmable.
-            public bool Permitido =>
-                TieneMaterialConfigurado &&
-                TieneEmbalajeConfigurado;
+            // NSQ_OF_MODAL_CONFIRMAR_SIN_STOCK_V1_1
+            // La existencia de Almacen es informativa para Planeacion.
+            // Nunca bloquea por si misma la creacion de la OF.
+            public bool Permitido => true;
 
             public bool MpSuficiente =>
+                TieneMaterialConfigurado &&
                 MpDisponibleKg + 0.0005m >= MpRequeridaKg;
 
             public bool EmbalajeSuficiente =>
+                TieneEmbalajeConfigurado &&
                 EmbalajeDisponible + 0.0005m >= EmbalajeRequerido;
 
             public bool StockSuficiente =>
                 MpSuficiente && EmbalajeSuficiente;
 
+            public bool RequiereConfirmacion =>
+                !TieneMaterialConfigurado ||
+                !TieneEmbalajeConfigurado ||
+                !StockSuficiente;
+
             public string Mensaje
             {
                 get
                 {
+                    if (!TieneMaterialConfigurado && !TieneEmbalajeConfigurado)
+                        return "El programa no tiene MP ni embalaje configurados. Almacén deberá definir la alternativa de surtido.";
+
                     if (!TieneMaterialConfigurado)
-                        return "No se puede generar la OF porque el programa no tiene materia prima configurada.";
+                        return "El programa no tiene materia prima configurada. Almacén deberá definir la alternativa de MP.";
 
                     if (!TieneEmbalajeConfigurado)
-                        return "No se puede generar la OF porque el programa no tiene embalaje configurado.";
+                        return "El programa no tiene embalaje configurado. Almacén deberá definir la alternativa de embalaje.";
 
                     if (!MpSuficiente && !EmbalajeSuficiente)
-                        return $"Stock insuficiente. MP requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg. Embalaje requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}. Puedes generar la OF de todos modos para que Almacen determine la alternativa de surtido.";
+                        return $"Stock insuficiente. MP requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg. Embalaje requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}.";
 
                     if (!MpSuficiente)
-                        return $"MP insuficiente. Requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg. Puedes generar la OF de todos modos para que Almacen determine la alternativa de surtido.";
+                        return $"MP insuficiente. Requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg.";
 
                     if (!EmbalajeSuficiente)
-                        return $"Embalaje insuficiente. Requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}. Puedes generar la OF de todos modos para que Almacen determine la alternativa de surtido.";
+                        return $"Embalaje insuficiente. Requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}.";
 
                     return "Abasto suficiente para generar la OF.";
                 }
@@ -1372,9 +1381,10 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
             return Json(new
             {
                 ok = true,
-                permitido = abasto.Permitido,
+                permitido = true,
                 stockSuficiente = abasto.StockSuficiente,
-                requiereConfirmacionSinStock = abasto.Permitido && !abasto.StockSuficiente,
+                requiereConfirmacion = abasto.RequiereConfirmacion,
+                requiereConfirmacionSinStock = abasto.RequiereConfirmacion,
                 ptDisponible = abasto.PtDisponible,
                 mpRequeridaKg = abasto.MpRequeridaKg,
                 mpDisponibleKg = abasto.MpDisponibleKg,
@@ -1508,22 +1518,15 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                     TempData["Error"] = "No se pudo validar el abasto del programa.";
                     return RedirectToAction(nameof(Maquinas));
                 }
-                if (!abasto.Permitido)
+                // NSQ_OF_MODAL_CONFIRMAR_SIN_STOCK_V1_1
+                // La validacion de MP/embalaje/stock es una advertencia.
+                // La decision se toma en el modal antes de enviar este POST.
+                if (abasto.RequiereConfirmacion && !aceptarSinStock)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] =
-                        abasto.Mensaje +
-                        $" PT disponible de la parte: {abasto.PtDisponible:N0}.";
-                    return RedirectToAction(nameof(Maquinas));
-                }
-
-                // NSQ_OF_STOCK_ADVERTENCIA_CONFIRMABLE_V1_0
-                if (!abasto.StockSuficiente && !aceptarSinStock)
-                {
-                    await tx.RollbackAsync();
-                    TempData["Error"] =
-                        abasto.Mensaje +
-                        " Revisa el stock y confirma nuevamente si deseas generar la OF aun sin abasto suficiente.";
+                        "La OF requiere confirmacion de Planeacion por falta de abasto. " +
+                        "Abre nuevamente Generar OF y selecciona 'Sí, generar OF de todas formas'.";
                     return RedirectToAction(nameof(Maquinas));
                 }
 
@@ -1581,9 +1584,9 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
 
                 await tx.CommitAsync();
 
-                TempData["Success"] = abasto.StockSuficiente
-                    ? "OF generada correctamente desde el programa de producción."
-                    : "OF generada con advertencia de stock insuficiente. Almacén deberá validar y surtir la alternativa correspondiente.";
+                TempData["Success"] = abasto.RequiereConfirmacion
+                    ? "OF generada con advertencia de abasto. Almacén deberá validar y surtir la alternativa correspondiente."
+                    : "OF generada correctamente desde el programa de producción.";
 
                 return RedirectToAction("Detalle", "Planeacion", new { id = solicitudProduccionId });
             }

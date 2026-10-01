@@ -301,24 +301,26 @@
                     document.getElementById('modalOFMP').textContent = `${Number(data.mpDisponibleKg || 0).toLocaleString('es-MX',{minimumFractionDigits:3,maximumFractionDigits:3})} / ${Number(data.mpRequeridaKg || 0).toLocaleString('es-MX',{minimumFractionDigits:3,maximumFractionDigits:3})} kg`;
                     document.getElementById('modalOFEmbalaje').textContent = `${Number(data.embalajeDisponible || 0).toLocaleString('es-MX')} / ${Number(data.embalajeRequerido || 0).toLocaleString('es-MX')}`;
                     requiereConfirmacionSinStockOF =
-                        data.permitido === true &&
-                        data.stockSuficiente === false;
+                        data.requiereConfirmacion === true ||
+                        data.requiereConfirmacionSinStock === true;
 
-                    if (!data.permitido) {
-                        estado.className = 'alert alert-danger rounded-4 mt-3 mb-0';
-                        estado.textContent = data.mensaje || 'Falta configuración necesaria para generar la OF.';
-                        btnConfirmar.disabled = true;
-                    } else if (requiereConfirmacionSinStockOF) {
+                    if (requiereConfirmacionSinStockOF) {
                         estado.className = 'alert alert-warning rounded-4 mt-3 mb-0';
-                        estado.textContent = data.mensaje || 'El stock es insuficiente. Puedes generar la OF de todos modos.';
+                        estado.textContent =
+                            `${data.mensaje || 'El abasto no es suficiente.'} ` +
+                            '¿Deseas generar la OF de todas formas? Almacén deberá validar y elegir la alternativa de surtido.';
+
                         btnConfirmar.disabled = false;
                         btnConfirmar.className = 'btn btn-warning fw-bold';
                         btnConfirmar.innerHTML =
-                            '<i class="fa-solid fa-triangle-exclamation me-1"></i>Generar OF aun sin stock';
+                            '<i class="fa-solid fa-triangle-exclamation me-1"></i>Sí, generar OF de todas formas';
                     } else {
                         estado.className = 'alert alert-success rounded-4 mt-3 mb-0';
                         estado.textContent = data.mensaje || 'Abasto suficiente para generar la OF.';
                         btnConfirmar.disabled = false;
+                        btnConfirmar.className = 'btn btn-main';
+                        btnConfirmar.innerHTML =
+                            '<i class="fa-solid fa-check me-1"></i>Sí, generar OF';
                     }
                 } catch (error) {
                     estado.className = 'alert alert-danger rounded-4 mt-3 mb-0';
