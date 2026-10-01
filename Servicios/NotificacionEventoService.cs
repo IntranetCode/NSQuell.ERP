@@ -9,17 +9,17 @@ public sealed class NotificacionEventoService
 {
     private readonly string _connectionString;
     private readonly ILogger<NotificacionEventoService> _logger;
-    private readonly NotificacionCorreoErpService _correoErp;
+    private readonly ICorreoErpBackgroundQueue _correoQueue;
 
     public NotificacionEventoService(
         IConfiguration configuration,
-        NotificacionCorreoErpService correoErp,
+        ICorreoErpBackgroundQueue correoQueue,
         ILogger<NotificacionEventoService> logger)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection.");
         _logger = logger;
-        _correoErp = correoErp;
+        _correoQueue = correoQueue;
     }
 
     private sealed record OfCreadaDatos(
@@ -181,38 +181,32 @@ END;
             throw;
         }
 
-        // NSQ_NOTIFICACIONES_CORREO_V10
-        // Solo se envia correo cuando el evento produjo al menos una notificacion nueva.
+        // NSQ_SMTP_BACKGROUND_QUEUE_V1_0
+        // El evento ya hizo COMMIT. El SMTP queda fuera de la peticion HTTP.
         if (insertadas > 0)
         {
-            try
-            {
-                var resultadoCorreo = await _correoErp.EnviarAUsuariosAsync(
-                    destinatarios,
-                    titulo,
-                    mensaje ?? string.Empty,
-                    urlDestino,
-                    codigoEvento,
-                    departamento: null);
+            var trabajoCorreo = new CorreoErpTrabajo(
+                destinatarios.ToArray(),
+                titulo,
+                mensaje ?? string.Empty,
+                urlDestino,
+                codigoEvento,
+                null);
 
+            if (_correoQueue.TryEnqueue(trabajoCorreo))
+            {
                 _logger.LogInformation(
-                    "Correo evento {CodigoEvento}: encontrados={Encontrados}; enviados={Enviados}; bloqueados={Bloqueados}; errores={Errores}.",
+                    "Correo evento {CodigoEvento} encolado para {Usuarios} usuario(s).",
                     codigoEvento,
-                    resultadoCorreo.Encontrados,
-                    resultadoCorreo.Enviados,
-                    resultadoCorreo.FiltradosPorCandados,
-                    resultadoCorreo.Errores);
+                    destinatarios.Count);
             }
-            catch (Exception exCorreo)
+            else
             {
                 _logger.LogError(
-                    exCorreo,
-                    "El evento interno {CodigoEvento}/{IdOrigen} se guardo, pero fallo su correo.",
-                    codigoEvento,
-                    evento.IdOrigen);
+                    "No se pudo encolar correo evento {CodigoEvento}; la cola de correo esta llena.",
+                    codigoEvento);
             }
         }
-
         return insertadas;
     }
 

@@ -114,6 +114,11 @@ builder.Services.AddScoped<ServicioNotificaciones>();
 
 // NSQ_NOTIFICACIONES_CORREO_V10
 builder.Services.AddScoped<NotificacionCorreoErpService>();
+
+// NSQ_SMTP_BACKGROUND_QUEUE_V1_0
+// El SMTP no debe bloquear los POST/PUT/PATCH/DELETE del ERP.
+builder.Services.AddSingleton<ICorreoErpBackgroundQueue, CorreoErpBackgroundQueue>();
+builder.Services.AddHostedService<CorreoErpBackgroundWorker>();
 builder.Services.AddScoped<ProduccionBloqueoCorreoService>();
 builder.Services.AddHostedService<ProduccionBloqueoCorreoHostedService>();
 

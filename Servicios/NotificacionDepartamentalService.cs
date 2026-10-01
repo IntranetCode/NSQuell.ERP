@@ -15,11 +15,11 @@ public sealed class NotificacionDepartamentalService
 {
     private readonly string _connectionString;
     private readonly ILogger<NotificacionDepartamentalService> _logger;
-    private readonly NotificacionCorreoErpService _correoErp;
+    private readonly ICorreoErpBackgroundQueue _correoQueue;
 
     public NotificacionDepartamentalService(
         IConfiguration configuration,
-        NotificacionCorreoErpService correoErp,
+        ICorreoErpBackgroundQueue correoQueue,
         ILogger<NotificacionDepartamentalService> logger)
     {
         _connectionString =
@@ -28,7 +28,7 @@ public sealed class NotificacionDepartamentalService
                 "Falta ConnectionStrings:DefaultConnection.");
 
         _logger = logger;
-        _correoErp = correoErp;
+        _correoQueue = correoQueue;
     }
 
     private sealed record MovimientoMpDatos(
@@ -1221,34 +1221,30 @@ END;
                 return;
             }
 
-            // El correo usa exactamente el titulo/mensaje/UrlDestino ya publicados en el navbar.
-            // Un fallo SMTP nunca revierte la operacion de negocio ni la notificacion interna.
-            try
-            {
-                var resultadoCorreo = await _correoErp.EnviarAUsuariosAsync(
-                    destinatarios,
-                    titulo,
-                    mensaje,
-                    urlDestino,
-                    codigoEvento,
-                    area);
+            // NSQ_SMTP_BACKGROUND_QUEUE_V1_0
+            // La notificacion interna ya fue confirmada. El correo se encola
+            // y la peticion HTTP no espera Connect/Auth/Send de SMTP.
+            var trabajoCorreo = new CorreoErpTrabajo(
+                destinatarios.ToArray(),
+                titulo,
+                mensaje,
+                urlDestino,
+                codigoEvento,
+                area);
 
+            if (_correoQueue.TryEnqueue(trabajoCorreo))
+            {
                 _logger.LogInformation(
-                    "Correo {CodigoEvento}: encontrados={Encontrados}; enviados={Enviados}; bloqueados={Bloqueados}; errores={Errores}.",
+                    "Correo {CodigoEvento} encolado para {Usuarios} usuario(s).",
                     codigoEvento,
-                    resultadoCorreo.Encontrados,
-                    resultadoCorreo.Enviados,
-                    resultadoCorreo.FiltradosPorCandados,
-                    resultadoCorreo.Errores);
+                    destinatarios.Count);
             }
-            catch (Exception exCorreo)
+            else
             {
                 _logger.LogError(
-                    exCorreo,
-                    "La notificacion interna {CodigoEvento} se guardo, pero fallo su correo.",
+                    "No se pudo encolar correo {CodigoEvento}; la cola de correo esta llena.",
                     codigoEvento);
-            }
-        }
+            }        }
         catch
         {
             try
