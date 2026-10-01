@@ -1,4 +1,4 @@
-using ERP.NSQuell.Models;
+﻿using ERP.NSQuell.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Http;
@@ -1315,11 +1315,21 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
             public int PtDisponible { get; init; }
             public bool TieneMaterialConfigurado { get; init; }
             public bool TieneEmbalajeConfigurado { get; init; }
+
+            // La configuracion incompleta sigue siendo bloqueo.
+            // El stock insuficiente pasa a ser una advertencia confirmable.
             public bool Permitido =>
                 TieneMaterialConfigurado &&
-                TieneEmbalajeConfigurado &&
-                MpDisponibleKg + 0.0005m >= MpRequeridaKg &&
+                TieneEmbalajeConfigurado;
+
+            public bool MpSuficiente =>
+                MpDisponibleKg + 0.0005m >= MpRequeridaKg;
+
+            public bool EmbalajeSuficiente =>
                 EmbalajeDisponible + 0.0005m >= EmbalajeRequerido;
+
+            public bool StockSuficiente =>
+                MpSuficiente && EmbalajeSuficiente;
 
             public string Mensaje
             {
@@ -1327,12 +1337,19 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
                 {
                     if (!TieneMaterialConfigurado)
                         return "No se puede generar la OF porque el programa no tiene materia prima configurada.";
+
                     if (!TieneEmbalajeConfigurado)
                         return "No se puede generar la OF porque el programa no tiene embalaje configurado.";
-                    if (MpDisponibleKg + 0.0005m < MpRequeridaKg)
-                        return $"MP insuficiente. Requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg.";
-                    if (EmbalajeDisponible + 0.0005m < EmbalajeRequerido)
-                        return $"Embalaje insuficiente. Requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}.";
+
+                    if (!MpSuficiente && !EmbalajeSuficiente)
+                        return $"Stock insuficiente. MP requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg. Embalaje requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}. Puedes generar la OF de todos modos para que Almacen determine la alternativa de surtido.";
+
+                    if (!MpSuficiente)
+                        return $"MP insuficiente. Requerida: {MpRequeridaKg:N3} kg; disponible: {MpDisponibleKg:N3} kg. Puedes generar la OF de todos modos para que Almacen determine la alternativa de surtido.";
+
+                    if (!EmbalajeSuficiente)
+                        return $"Embalaje insuficiente. Requerido: {EmbalajeRequerido:N0}; disponible: {EmbalajeDisponible:N0}. Puedes generar la OF de todos modos para que Almacen determine la alternativa de surtido.";
+
                     return "Abasto suficiente para generar la OF.";
                 }
             }
@@ -1356,6 +1373,8 @@ WHERE d.ReleaseDetalleID=@ReleaseDetalleID
             {
                 ok = true,
                 permitido = abasto.Permitido,
+                stockSuficiente = abasto.StockSuficiente,
+                requiereConfirmacionSinStock = abasto.Permitido && !abasto.StockSuficiente,
                 ptDisponible = abasto.PtDisponible,
                 mpRequeridaKg = abasto.MpRequeridaKg,
                 mpDisponibleKg = abasto.MpDisponibleKg,
@@ -1436,7 +1455,9 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> GenerarOF(int programaProduccionId)
+        public async Task<IActionResult> GenerarOF(
+            int programaProduccionId,
+            bool aceptarSinStock = false)
         {
             if (programaProduccionId <= 0)
             {
@@ -1490,7 +1511,19 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                 if (!abasto.Permitido)
                 {
                     await tx.RollbackAsync();
-                    TempData["Error"] = abasto.Mensaje + $" PT disponible de la parte: {abasto.PtDisponible:N0}.";
+                    TempData["Error"] =
+                        abasto.Mensaje +
+                        $" PT disponible de la parte: {abasto.PtDisponible:N0}.";
+                    return RedirectToAction(nameof(Maquinas));
+                }
+
+                // NSQ_OF_STOCK_ADVERTENCIA_CONFIRMABLE_V1_0
+                if (!abasto.StockSuficiente && !aceptarSinStock)
+                {
+                    await tx.RollbackAsync();
+                    TempData["Error"] =
+                        abasto.Mensaje +
+                        " Revisa el stock y confirma nuevamente si deseas generar la OF aun sin abasto suficiente.";
                     return RedirectToAction(nameof(Maquinas));
                 }
 
@@ -1548,7 +1581,10 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
 
                 await tx.CommitAsync();
 
-                TempData["Success"] = "OF generada correctamente desde el programa de producción.";
+                TempData["Success"] = abasto.StockSuficiente
+                    ? "OF generada correctamente desde el programa de producción."
+                    : "OF generada con advertencia de stock insuficiente. Almacén deberá validar y surtir la alternativa correspondiente.";
+
                 return RedirectToAction("Detalle", "Planeacion", new { id = solicitudProduccionId });
             }
             catch (Exception ex)

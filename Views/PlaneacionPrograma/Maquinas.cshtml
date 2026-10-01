@@ -269,6 +269,7 @@
         });
 
         let programaSeleccionadoOF = null;
+        let requiereConfirmacionSinStockOF = false;
         const endpointAbastoOF = '@Url.Action("AbastoGenerarOF","PlaneacionPrograma")';
         document.querySelectorAll('.btn-generar-of').forEach(function (btn) {
             btn.addEventListener('click', async function () {
@@ -280,7 +281,14 @@
                 document.getElementById('modalOFCantidad').textContent = this.dataset.cantidad || '-';
                 const btnConfirmar = document.getElementById('btnConfirmarGenerarOF');
                 const estado = document.getElementById('modalOFAbastoEstado');
+
+                requiereConfirmacionSinStockOF = false;
+                document.getElementById('aceptarSinStockGenerarOF').value = 'false';
+
                 btnConfirmar.disabled = true;
+                btnConfirmar.className = 'btn btn-main';
+                btnConfirmar.innerHTML = '<i class="fa-solid fa-check me-1"></i>Sí, generar OF';
+
                 estado.className = 'alert alert-info rounded-4 mt-3 mb-0';
                 estado.textContent = 'Consultando stock actual de PT, MP y embalaje...';
                 const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalGenerarOF'));
@@ -292,9 +300,26 @@
                     document.getElementById('modalOFPT').textContent = Number(data.ptDisponible || 0).toLocaleString('es-MX');
                     document.getElementById('modalOFMP').textContent = `${Number(data.mpDisponibleKg || 0).toLocaleString('es-MX',{minimumFractionDigits:3,maximumFractionDigits:3})} / ${Number(data.mpRequeridaKg || 0).toLocaleString('es-MX',{minimumFractionDigits:3,maximumFractionDigits:3})} kg`;
                     document.getElementById('modalOFEmbalaje').textContent = `${Number(data.embalajeDisponible || 0).toLocaleString('es-MX')} / ${Number(data.embalajeRequerido || 0).toLocaleString('es-MX')}`;
-                    estado.className = `alert ${data.permitido ? 'alert-success' : 'alert-danger'} rounded-4 mt-3 mb-0`;
-                    estado.textContent = data.mensaje || '';
-                    btnConfirmar.disabled = !data.permitido;
+                    requiereConfirmacionSinStockOF =
+                        data.permitido === true &&
+                        data.stockSuficiente === false;
+
+                    if (!data.permitido) {
+                        estado.className = 'alert alert-danger rounded-4 mt-3 mb-0';
+                        estado.textContent = data.mensaje || 'Falta configuración necesaria para generar la OF.';
+                        btnConfirmar.disabled = true;
+                    } else if (requiereConfirmacionSinStockOF) {
+                        estado.className = 'alert alert-warning rounded-4 mt-3 mb-0';
+                        estado.textContent = data.mensaje || 'El stock es insuficiente. Puedes generar la OF de todos modos.';
+                        btnConfirmar.disabled = false;
+                        btnConfirmar.className = 'btn btn-warning fw-bold';
+                        btnConfirmar.innerHTML =
+                            '<i class="fa-solid fa-triangle-exclamation me-1"></i>Generar OF aun sin stock';
+                    } else {
+                        estado.className = 'alert alert-success rounded-4 mt-3 mb-0';
+                        estado.textContent = data.mensaje || 'Abasto suficiente para generar la OF.';
+                        btnConfirmar.disabled = false;
+                    }
                 } catch (error) {
                     estado.className = 'alert alert-danger rounded-4 mt-3 mb-0';
                     estado.textContent = error.message || 'No fue posible consultar el stock.';
@@ -305,6 +330,8 @@
         document.getElementById('btnConfirmarGenerarOF')?.addEventListener('click', function () {
             if (!programaSeleccionadoOF) return;
             document.getElementById('programaProduccionIdGenerarOF').value = programaSeleccionadoOF;
+            document.getElementById('aceptarSinStockGenerarOF').value =
+                requiereConfirmacionSinStockOF ? 'true' : 'false';
             document.getElementById('formGenerarOF').submit();
         });
     </script>
@@ -743,6 +770,7 @@
     <form asp-controller="PlaneacionPrograma" asp-action="GenerarOF" method="post" id="formGenerarOF" class="d-none">
         @Html.AntiForgeryToken()
         <input type="hidden" name="programaProduccionId" id="programaProduccionIdGenerarOF" />
+        <input type="hidden" name="aceptarSinStock" id="aceptarSinStockGenerarOF" value="false" />
     </form>
 
     <div class="modal fade" id="modalGenerarOF" tabindex="-1" aria-labelledby="modalGenerarOFLabel" aria-hidden="true">
