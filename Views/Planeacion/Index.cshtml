@@ -1,4 +1,4 @@
-@model List<ERP.NSQuell.Models.PlaneacionOFIndexVm>
+﻿@model List<ERP.NSQuell.Models.PlaneacionOFIndexVm>
 @using System.Linq
 
 @functions {
@@ -310,6 +310,7 @@
                 : null;
 
             const confirmButton = document.getElementById('btnConfirmarGenerarOF');
+            const endpointAbastoOF = '@Url.Action("AbastoGenerarOF", "PlaneacionPrograma")';
             let pendingForm = null;
 
             const setMachineOpen = (section, open) => {
@@ -390,7 +391,7 @@
             selectTipoOF?.addEventListener('change', applyFilter);
 
             document.querySelectorAll('[data-generar-of]').forEach(button => {
-                button.addEventListener('click', () => {
+                button.addEventListener('click', async () => {
                     const formId = button.dataset.formId;
                     pendingForm = formId ? document.getElementById(formId) : null;
 
@@ -409,18 +410,156 @@
                     document.getElementById('confirmFecha').textContent =
                         button.dataset.fecha || '-';
 
+                    const pt = document.getElementById('confirmPTDisponible');
+                    const mp = document.getElementById('confirmMPStock');
+                    const embalaje = document.getElementById('confirmEmbalajeStock');
+                    const mensaje = document.getElementById('confirmAbastoMensaje');
+                    const aceptarSinStock = pendingForm?.querySelector('[data-aceptar-sin-stock]');
+
+                    if (aceptarSinStock) {
+                        aceptarSinStock.value = 'false';
+                    }
+
+                    if (pt) pt.textContent = 'Consultando...';
+                    if (mp) mp.textContent = 'Consultando...';
+                    if (embalaje) embalaje.textContent = 'Consultando...';
+
+                    if (mensaje) {
+                        mensaje.className = 'alert alert-info rounded-4 mt-3 mb-0';
+                        mensaje.innerHTML =
+                            '<i class="fa-solid fa-circle-notch fa-spin me-1"></i>' +
+                            'Consultando existencias actuales de Almacén...';
+                    }
+
                     if (confirmButton) {
-                        confirmButton.disabled = false;
+                        confirmButton.disabled = true;
+                        confirmButton.className = 'btn-erp btn-erp-primary';
                         confirmButton.innerHTML =
-                            '<i class="fa-solid fa-check"></i> Sí, generar OF';
+                            '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Consultando stock...';
                     }
 
                     modalGenerarOF?.show();
+
+                    try {
+                        const programaId = button.dataset.programa || '';
+
+                        const response = await fetch(
+                            `${endpointAbastoOF}?programaProduccionId=${encodeURIComponent(programaId)}`,
+                            {
+                                cache: 'no-store',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            });
+
+                        const data = await response.json();
+
+                        if (!response.ok || !data.ok) {
+                            throw new Error(
+                                data.mensaje ||
+                                'No fue posible consultar el stock del programa.');
+                        }
+
+                        const nf0 = value =>
+                            Number(value || 0).toLocaleString(
+                                'es-MX',
+                                { maximumFractionDigits: 0 });
+
+                        const nf3 = value =>
+                            Number(value || 0).toLocaleString(
+                                'es-MX',
+                                {
+                                    minimumFractionDigits: 3,
+                                    maximumFractionDigits: 3
+                                });
+
+                        if (pt) {
+                            pt.textContent = nf0(data.ptDisponible);
+                        }
+
+                        if (mp) {
+                            mp.textContent =
+                                `${nf3(data.mpDisponibleKg)} / ${nf3(data.mpRequeridaKg)} kg`;
+                        }
+
+                        if (embalaje) {
+                            embalaje.textContent =
+                                `${nf0(data.embalajeDisponible)} / ${nf0(data.embalajeRequerido)}`;
+                        }
+
+                        const requiereConfirmacion =
+                            data.requiereConfirmacion === true ||
+                            data.requiereConfirmacionSinStock === true ||
+                            data.stockSuficiente === false;
+
+                        if (requiereConfirmacion) {
+                            if (aceptarSinStock) {
+                                aceptarSinStock.value = 'true';
+                            }
+
+                            if (mensaje) {
+                                mensaje.className =
+                                    'alert alert-warning rounded-4 mt-3 mb-0';
+                                mensaje.innerHTML =
+                                    '<div class="fw-bold mb-1">' +
+                                    '<i class="fa-solid fa-triangle-exclamation me-1"></i>' +
+                                    'Abasto insuficiente</div>' +
+                                    `<div>${data.mensaje || 'No hay suficiente existencia en Almacén.'}</div>` +
+                                    '<div class="mt-2 fw-semibold">' +
+                                    '¿Deseas generar la OF de todas formas? ' +
+                                    'Almacén podrá validar y elegir una alternativa de surtido.' +
+                                    '</div>';
+                            }
+
+                            if (confirmButton) {
+                                confirmButton.disabled = false;
+                                confirmButton.className =
+                                    'btn-erp btn-erp-primary';
+                                confirmButton.innerHTML =
+                                    '<i class="fa-solid fa-triangle-exclamation"></i> ' +
+                                    'Sí, generar OF de todas formas';
+                            }
+                        }
+                        else {
+                            if (mensaje) {
+                                mensaje.className =
+                                    'alert alert-success rounded-4 mt-3 mb-0';
+                                mensaje.innerHTML =
+                                    '<i class="fa-solid fa-circle-check me-1"></i>' +
+                                    (data.mensaje || 'Hay abasto suficiente para generar la OF.');
+                            }
+
+                            if (confirmButton) {
+                                confirmButton.disabled = false;
+                                confirmButton.className =
+                                    'btn-erp btn-erp-primary';
+                                confirmButton.innerHTML =
+                                    '<i class="fa-solid fa-check"></i> Sí, generar OF';
+                            }
+                        }
+                    }
+                    catch (error) {
+                        if (mensaje) {
+                            mensaje.className =
+                                'alert alert-danger rounded-4 mt-3 mb-0';
+                            mensaje.innerHTML =
+                                '<i class="fa-solid fa-circle-exclamation me-1"></i>' +
+                                (error.message ||
+                                    'No fue posible consultar el stock.');
+                        }
+
+                        if (confirmButton) {
+                            confirmButton.disabled = true;
+                            confirmButton.innerHTML =
+                                '<i class="fa-solid fa-ban"></i> No disponible';
+                        }
+                    }
                 });
             });
 
             confirmButton?.addEventListener('click', () => {
-                if (!pendingForm) return;
+                if (!pendingForm || confirmButton.disabled) return;
 
                 confirmButton.disabled = true;
                 confirmButton.innerHTML =
@@ -1160,6 +1299,13 @@
                                                             <input type="hidden"
                                                                    name="programaProduccionId"
                                                                    value="@programaProduccionId" />
+                                                            <input type="hidden"
+                                                                   name="aceptarSinStock"
+                                                                   value="false"
+                                                                   data-aceptar-sin-stock />
+                                                            <input type="hidden"
+                                                                   name="volverAPlaneacion"
+                                                                   value="true" />
 
                                                             <button type="button"
                                                                     class="btn-erp btn-erp-primary row-action"
@@ -1277,11 +1423,25 @@
                             <div class="modal-detail-label">Fecha requerida</div>
                             <div class="modal-detail-value" id="confirmFecha">-</div>
                         </div>
+
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">PT disponible</div>
+                            <div class="modal-detail-value" id="confirmPTDisponible">Consultando...</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">MP disponible / requerida</div>
+                            <div class="modal-detail-value" id="confirmMPStock">Consultando...</div>
+                        </div>
+                        <div class="modal-detail-item">
+                            <div class="modal-detail-label">Embalaje disponible / requerido</div>
+                            <div class="modal-detail-value" id="confirmEmbalajeStock">Consultando...</div>
+                        </div>
                     </div>
 
-                    <div class="modal-warning-note">
-                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                        Al confirmar se crearán el encabezado, el detalle y la asignación de máquina de la OF.
+                    <div id="confirmAbastoMensaje"
+                         class="alert alert-info rounded-4 mt-3 mb-0">
+                        <i class="fa-solid fa-circle-notch fa-spin me-1"></i>
+                        Consultando existencias actuales de Almacén...
                     </div>
                 </div>
 

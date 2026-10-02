@@ -1467,12 +1467,22 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> GenerarOF(
             int programaProduccionId,
-            bool aceptarSinStock = false)
+            bool aceptarSinStock = false,
+            bool volverAPlaneacion = false)
         {
+            IActionResult VolverAOrigen(bool preferirMaquinas = false)
+            {
+                if (volverAPlaneacion)
+                    return RedirectToAction("Index", "Planeacion");
+
+                return preferirMaquinas
+                    ? RedirectToAction(nameof(Maquinas))
+                    : RedirectToAction(nameof(Index));
+            }
             if (programaProduccionId <= 0)
             {
                 TempData["Error"] = "No se recibió el programa de producción.";
-                return RedirectToAction(nameof(Index));
+                return VolverAOrigen();
             }
 
             var usuarioId = ObtenerUsuarioID();
@@ -1494,21 +1504,21 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "No se encontró el programa seleccionado.";
-                    return RedirectToAction(nameof(Index));
+                    return VolverAOrigen();
                 }
 
                 if (programa.SolicitudProduccionID.HasValue)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "Este programa ya tiene una OF generada.";
-                    return RedirectToAction(nameof(Index));
+                    return VolverAOrigen();
                 }
 
                 if (programa.CantidadProgramada <= 0)
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "El programa no tiene cantidad programada válida.";
-                    return RedirectToAction(nameof(Index));
+                    return VolverAOrigen();
                 }
 
                 var abasto = await ObtenerAbastoGenerarOFAsync(programaProduccionId, cn, (SqlTransaction)tx);
@@ -1516,7 +1526,7 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                 {
                     await tx.RollbackAsync();
                     TempData["Error"] = "No se pudo validar el abasto del programa.";
-                    return RedirectToAction(nameof(Maquinas));
+                    return VolverAOrigen(preferirMaquinas: true);
                 }
                 // NSQ_OF_MODAL_CONFIRMAR_SIN_STOCK_V1_1
                 // La validacion de MP/embalaje/stock es una advertencia.
@@ -1527,7 +1537,7 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                     TempData["Error"] =
                         "La OF requiere confirmacion de Planeacion por falta de abasto. " +
                         "Abre nuevamente Generar OF y selecciona 'Sí, generar OF de todas formas'.";
-                    return RedirectToAction(nameof(Maquinas));
+                    return VolverAOrigen(preferirMaquinas: true);
                 }
 
                 var folioOF = await GenerarFolioOFAsync(cn, (SqlTransaction)tx);
@@ -1588,14 +1598,20 @@ WHERE pp.ProgramaProduccionID=@ProgramaProduccionID
                     ? "OF generada con advertencia de abasto. Almacén deberá validar y surtir la alternativa correspondiente."
                     : "OF generada correctamente desde el programa de producción.";
 
-                return RedirectToAction("Detalle", "Planeacion", new { id = solicitudProduccionId });
+                if (volverAPlaneacion)
+                    return RedirectToAction("Index", "Planeacion");
+
+                return RedirectToAction(
+                    "Detalle",
+                    "Planeacion",
+                    new { id = solicitudProduccionId });
             }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
 
                 TempData["Error"] = "Error al generar la OF: " + ex.Message;
-                return RedirectToAction(nameof(Index));
+                return VolverAOrigen();
             }
         }
 
